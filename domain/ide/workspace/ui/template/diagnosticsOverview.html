@@ -33,92 +33,61 @@
 
 <body>
   <main class="issues-overview-container">
-    <!-- Tabs Issue Overview Container -->
-    <article class="issues-overview">
-      <div class="main-tabs-nav">
-        <span data-tab="all-issues" id="all-issues-tab"
-          class="tab-item {{if not .DeltaFindingsEnabled}} is-selected {{end}} all-issues-tab">
-          All Issues
-        </span>
-        <span data-tab="net-new-issues" id="net-new-issues-tab"
-          class="tab-item {{if .DeltaFindingsEnabled}} is-selected {{end}} net-new-issues-tab">
-          Net new issues
-        </span>
+    <div class="main-tabs-nav">
+      <span data-tab="all-issues" id="all-issues-tab" class="tab-item is-selected">All Issues</span>
+      <span data-tab="net-new-issues" id="net-new-issues-tab" class="tab-item">Net new issues</span>
+    </div>
+
+    <div class="tab-container">
+      <div id="all-issues-content" class="tab-content is-selected">
+        <section class="issue-overview">
+          <!-- Placeholder for All Issues content -->
+          <p>No issues to display.</p>
+        </section>
       </div>
 
-      <!-- Dynamic Content Sections -->
-      <div class="tab-container">
-        <!-- all-issues content -->
-        <div data-content="all-issues" id="all-issues-content"
-          class="tab-content main-tab-content {{if not .DeltaFindingsEnabled}} is-selected {{end}}">
-          <section class="issue-overview delimiter-top">
-            <div id="issueTree" class="sn-tree">
-              <!--  root nodes-->
-              <ul class="sn-list">
-                {{range $index, $node := .RootNodes}}
-                <li class="sn-list-item is-clickable-{{$node.ProductEnabled}}">
-                  <span class="sn-icon">{{$node.Icon}}</span><span class="sn-label">{{$node.Text}}</span>
-                </li>
-                {{ end }}
-              </ul>
+      <div id="net-new-issues-content" class="tab-content">
+        <!-- Content for Net New Issues -->
+        <section class="issue-overview">
+          {{range .RootNodes}}
+          <div class="sn-list-item {{if .ProductEnabled}}is-clickable-true{{else}}is-clickable-false{{end}}">
+            <span class="sn-icon">{{.Icon}}</span>
+            <span class="sn-label">{{.Text}}</span>
+          </div>
+          {{end}}
 
-              <!--  file nodes -->
-              <ul class="sn-list">
-                {{range $node, $issueNodes := .Issues}}
-                <li class="sn-list-item is-expandable is-clickable-{{$node.ProductEnabled}} is-expanded">
-                  <!-- file node-->
-                  <span class="sn-icon">{{$node.Icon}}</span><span class="sn-label">{{$node.Text}}</span>
-                  <!-- issue tree nodes -->
-                  <ul class="sn-list">
-                    {{range $index, $issue := $issueNodes}}
-                    <li class="sn-list-item is-clickable={{$node.ProductEnabled}}">
-                      <span class="sn-icon">{{$issue.Icon}}</span><span class="sn-label">{{$issue.Text}}</span>
-                    </li>
-                    {{ end }}
-                  </ul>
-                </li>
-                {{ end }}
-              </ul>
+          {{range $file, $issues := .Issues}}
+          <div
+            class="sn-list-item is-expandable {{if (index $issues 0).ProductEnabled}}is-clickable-true{{else}}is-clickable-false{{end}}">
+            <span class="sn-icon"></span>
+            <span class="sn-label">{{$file}}</span>
+            <div class="sn-list">
+              {{range $issues}}
+              <div class="sn-list-item {{if .ProductEnabled}}is-clickable-true{{else}}is-clickable-false{{end}}">
+                <span class="sn-icon">{{.Icon}}</span>
+                <span class="sn-label">{{.Text}}</span>
+              </div>
+              {{end}}
             </div>
-          </section>
-          <!-- Content for Vulnerability Overview -->
-        </div>
-        <!-- End all-issues-content -->
-        <!-- net-new issues content -->
-        <div data-content="net-new-issues" id="net-new-issues-content"
-          class="tab-content {{if .DeltaFindingsEnabled}} is-selected {{end}} main-tab-content">
-        </div>
-        <!-- End net-new-issues-content -->
+          </div>
+          {{end}}
+        </section>
       </div>
-    </article>
+    </div>
   </main>
 
   <script nonce="{{.Nonce}}">
-    const allIssuesTab = document.getElementById("all-issues-tab");
-    const netNewIssuesTab = document.getElementById("net-new-issues-tab");
-    const deltaFindingsEnabled = Boolean("{{.DeltaFindingsEnabled}}");
+    document.querySelectorAll('.tab-item').forEach(tab => {
+      tab.addEventListener('click', function () {
+        // Remove 'is-selected' from all tabs and contents
+        document.querySelectorAll('.tab-item').forEach(item => item.classList.remove('is-selected'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('is-selected'));
 
-    // event listeners for switching tabs
-    netNewIssuesTab.addEventListener("click", () => {
-      retrieveIssues(true)
-    })
-
-    allIssuesTab.addEventListener("click", () => {
-      retrieveIssues(false)
-    })
-
-    function retrieveIssues(deltaFindingsEnabled) {
-      // retrieve issues, injected/overwritten by IDE
-      // this should force a reload & resending to the client.
-      // also the backend must update its config
-      console.log(`i should be retrieving values. delta: ${deltaFindingsEnabled}`)
-    }
-
-    if (deltaFindingsEnabled) {
-      netNewIssuesTab.className.replace(" active", "")
-    } else {
-      allIssuesTab.className += " active"
-    }
+        // Add 'is-selected' to the clicked tab and corresponding content
+        this.classList.add('is-selected');
+        document.getElementById(this.dataset.tab + '-content').classList.add('is-selected');
+      });
+    });
   </script>
 </body>
 

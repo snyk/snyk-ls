@@ -1,47 +1,23 @@
-.issues-overview {}
-
-.main-tabs-nav,
-.tabs-nav {
+.main-tabs-nav {
   display: flex;
-  list-style-type: none;
-  overflow: hidden;
-  padding: 0;
+}
+
+.tab-item {
+  padding: 10px;
+  cursor: pointer;
+}
+
+.tab-item.is-selected {
+  font-weight: bold;
 }
 
 .tab-content {
   display: none;
-  border-top-style: hidden;
 }
 
 .tab-content.is-selected {
   display: block;
 }
-
-.tab-item-icon {
-  vertical-align: middle;
-}
-
-.tab-item {
-  font-weight: 500;
-  float: left;
-  display: block;
-  text-align: center;
-  padding: 10px 16px 8px 16px;
-  text-decoration: none;
-  margin-right: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s, border-color 0.3s;
-}
-
-.tab-item-icon {
-  color: inherit;
-}
-
-.sn-tree {}
-
-.sn-list {}
-
-.sn-list-item {}
 
 .is-clickable-true {
   cursor: pointer;
@@ -49,18 +25,5 @@
 
 .is-clickable-false {
   cursor: not-allowed;
-}
-
-.sn-icon {}
-
-.sn-label {}
-
-.sn-list-item.is-expandable {}
-
-.sn-list-item.is-expanded .sn-list {
-  display: block;
-}
-
-.sn-list-item .sn-list {
-  display: none;
+  opacity: 0.6;
 }
