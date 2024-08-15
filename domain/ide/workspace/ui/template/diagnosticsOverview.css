@@ -40,10 +40,6 @@
   margin-left: 20px;
 }
 
-.issue-node {
-  margin-left: 20px;
-}
-
 .is-clickable {
   cursor: pointer;
 }
@@ -56,8 +52,12 @@
 
 .issue-label {}
 
-.issue-icon,
-.file-icon,
-.sn-icon {
-  margin-right: 8px;
+.issue-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sn-icon svg {
+  width: 16px;
+  height: 16px;
 }
