@@ -21,7 +21,10 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
+	"path/filepath"
 	"sync"
+
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -56,44 +59,18 @@ type Node struct {
 	ProductEnabled bool
 }
 
-func SendDiagnosticsOverview(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile, notifier notification.Notifier) {
+func SendDiagnosticsOverview(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile, folderPath string, notifier notification.Notifier) {
 	logger := c.Logger().With().Str("method", "ui.SendDiagnosticsOverview").Logger()
-	err := initializeTemplate()
+	templateData, err := generateTemplateData(c, p, issuesByFile, folderPath, logger)
+
 	if err != nil {
-		logger.Err(err).Msg("failed to initialize diagnostics overview template. Not sending overview")
+		logger.Err(err).Msg("failed to get diagnostics overview template data")
 		return
 	}
 
-	if p == "" {
-		logger.Warn().Str("method", "ui.sendDiagnosticsOverview").Msg("no product specified, this is unexpected")
-		return
-	}
-
-	rootNodes := getRootNodes(c, p, issuesByFile)
-	nonce, err := html.GenerateSecurityNonce()
-	if err != nil {
-		logger.Err(err).Msgf("Failed to generate nonce")
-		return
-	}
-
-	fileNodes := getFileNodes(issuesByFile)
-
-	data := TemplateData{
-		RootNodes:            rootNodes,
-		Issues:               fileNodes,
-		Styles:               template.CSS(diagnosticsOverviewTemplateCSS),
-		Nonce:                template.HTML(nonce),
-		DeltaFindingsEnabled: c.IsDeltaFindingsEnabled(),
-	}
-
-	var htmlBuffer bytes.Buffer
-	if err = diagnosticsOverviewTemplate.Execute(&htmlBuffer, data); err != nil {
-		logger.Error().Msgf("Failed to generate tree htmlBuffer with tree template: %v", err)
-		return
-	}
-
-	diagnosticsOverviewParams := types.DiagnosticsOverviewParams{Product: p.ToProductCodename(), Html: htmlBuffer.String()}
+	diagnosticsOverviewParams := types.DiagnosticsOverviewParams{Product: p.ToProductCodename(), Html: templateData}
 	notifier.Send(diagnosticsOverviewParams)
+
 	logger.Debug().Msgf("sent diagnostics overview htmlBuffer for product %s", p)
 	logger.Trace().
 		Int("issueCount", len(issuesByFile)).
@@ -119,9 +96,48 @@ func initializeTemplate() error {
 	return nil
 }
 
-func getFileNodes(issuesByFile snyk.IssuesByFile) map[Node][]Node {
+func generateTemplateData(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile, folderPath string, logger zerolog.Logger) (string, error) {
+	err := initializeTemplate()
+	if err != nil {
+		logger.Err(err).Msg("failed to initialize diagnostics overview template. Not sending overview")
+		return "", err
+	}
+
+	if p == "" {
+		logger.Warn().Str("method", "ui.sendDiagnosticsOverview").Msg("no product specified, this is unexpected")
+		return "", fmt.Errorf("no product specified")
+	}
+
+	rootNodes := getRootNodes(c, p, issuesByFile)
+	nonce, err := html.GenerateSecurityNonce()
+	if err != nil {
+		logger.Err(err).Msgf("Failed to generate nonce")
+		return "", err
+	}
+
+	fileNodes := getFileNodes(issuesByFile, folderPath)
+
+	data := TemplateData{
+		RootNodes:            rootNodes,
+		Issues:               fileNodes,
+		Styles:               template.CSS(diagnosticsOverviewTemplateCSS),
+		Nonce:                template.HTML(nonce),
+		DeltaFindingsEnabled: c.IsDeltaFindingsEnabled(),
+	}
+
+	var htmlBuffer bytes.Buffer
+	if err = diagnosticsOverviewTemplate.Execute(&htmlBuffer, data); err != nil {
+		logger.Error().Msgf("Failed to generate tree htmlBuffer with tree template: %v", err)
+		return "", err
+	}
+
+	return htmlBuffer.String(), nil
+}
+
+func getFileNodes(issuesByFile snyk.IssuesByFile, folderPath string) map[Node][]Node {
 	fileNodes := make(map[Node][]Node)
 	for path, issues := range issuesByFile {
+		path = normalizeFilePath(path, folderPath) // Normalize path to be rendered in the UI
 		fileNode := Node{
 			Icon: getFileTypeIcon(),
 			Text: template.HTML(path),
@@ -138,6 +154,7 @@ func getFileNodes(issuesByFile snyk.IssuesByFile) map[Node][]Node {
 	return fileNodes
 }
 
+// TODO: which icon? Like Go, NPM, etc.?
 func getFileTypeIcon() template.HTML {
 	return ""
 }
@@ -174,6 +191,7 @@ func getRootNodes(c *config.Config, p product.Product, issuesByFile snyk.IssuesB
 	return rootNodes
 }
 
+// TODO: add unit test to fix --> "Code Security - 4 unique issues: ,1 high1 medium2 low"
 func getRootNodeText(issuesByFile snyk.IssuesByFile, p product.Product) string {
 	total, critical, high, medium, low := issuesByFile.SeverityCounts()
 
@@ -193,4 +211,16 @@ func getRootNodeText(issuesByFile snyk.IssuesByFile, p product.Product) string {
 		)
 	}
 	return rootNodeTitle
+}
+
+func normalizeFilePath(filePath string, folderPath string) string {
+	filePath = filepath.Clean(filePath)
+	folderPath = filepath.Clean(folderPath)
+
+	relativePath, err := filepath.Rel(folderPath, filePath)
+	if err != nil {
+		return filePath
+	}
+
+	return filepath.Join(filepath.Base(folderPath), relativePath)
 }

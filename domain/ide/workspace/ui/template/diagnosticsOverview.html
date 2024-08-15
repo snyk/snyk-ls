@@ -50,22 +50,21 @@
         <!-- Content for Net New Issues -->
         <section class="issue-overview">
           {{range .RootNodes}}
-          <div class="sn-list-item {{if .ProductEnabled}}is-clickable-true{{else}}is-clickable-false{{end}}">
+          <div class="sn-list-item root-node {{if .ProductEnabled}}is-clickable{{end}}">
             <span class="sn-icon">{{.Icon}}</span>
             <span class="sn-label">{{.Text}}</span>
           </div>
           {{end}}
 
           {{range $file, $issues := .Issues}}
-          <div
-            class="sn-list-item is-expandable {{if (index $issues 0).ProductEnabled}}is-clickable-true{{else}}is-clickable-false{{end}}">
-            <span class="sn-icon"></span>
-            <span class="sn-label">{{$file}}</span>
-            <div class="sn-list">
+          <div class="sn-list-item file-node is-expandable {{if (index $issues 0).ProductEnabled}}is-clickable{{end}}">
+            <span class="sn-icon file-icon">{{$file.Icon}}</span>
+            <span class="sn-label file-path">{{$file.Text}}</span>
+            <div class="sn-list issues-list">
               {{range $issues}}
-              <div class="sn-list-item {{if .ProductEnabled}}is-clickable-true{{else}}is-clickable-false{{end}}">
-                <span class="sn-icon">{{.Icon}}</span>
-                <span class="sn-label">{{.Text}}</span>
+              <div class="sn-list-item issue-node {{if .ProductEnabled}}is-clickable{{end}}">
+                <span class="sn-icon issue-icon">{{.Icon}}</span>
+                <span class="sn-label issue-label">{{.Text}}</span>
               </div>
               {{end}}
             </div>
@@ -79,11 +78,8 @@
   <script nonce="{{.Nonce}}">
     document.querySelectorAll('.tab-item').forEach(tab => {
       tab.addEventListener('click', function () {
-        // Remove 'is-selected' from all tabs and contents
         document.querySelectorAll('.tab-item').forEach(item => item.classList.remove('is-selected'));
         document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('is-selected'));
-
-        // Add 'is-selected' to the clicked tab and corresponding content
         this.classList.add('is-selected');
         document.getElementById(this.dataset.tab + '-content').classList.add('is-selected');
       });

@@ -1,5 +1,6 @@
 .main-tabs-nav {
   display: flex;
+  margin-bottom: 10px;
 }
 
 .tab-item {
@@ -19,11 +20,44 @@
   display: block;
 }
 
-.is-clickable-true {
+.issue-overview {
+  padding: 10px;
+}
+
+.sn-list-item {
+  margin-bottom: 8px;
+}
+
+.root-node {
+  font-weight: bold;
+}
+
+.file-node {
+  margin-left: 20px;
+}
+
+.issues-list {
+  margin-left: 20px;
+}
+
+.issue-node {
+  margin-left: 20px;
+}
+
+.is-clickable {
   cursor: pointer;
 }
 
-.is-clickable-false {
-  cursor: not-allowed;
-  opacity: 0.6;
+.is-clickable:hover {
+  background-color: #f0f0f0;
+}
+
+.file-path {}
+
+.issue-label {}
+
+.issue-icon,
+.file-icon,
+.sn-icon {
+  margin-right: 8px;
 }

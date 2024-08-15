@@ -615,7 +615,7 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendHovers(issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	ui.SendDiagnosticsOverview(f.c, product, issuesByFile, f.notifier)
+	ui.SendDiagnosticsOverview(f.c, product, issuesByFile, f.path, f.notifier)
 	f.sendSuccess(product)
 }
 

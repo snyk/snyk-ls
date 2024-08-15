@@ -45,7 +45,7 @@ func Test_DiagnosticsOverview(t *testing.T) {
 		}
 		notifier.CreateListener(callback)
 
-		SendDiagnosticsOverview(c, product.ProductOpenSource, issuesByFile, notifier)
+		SendDiagnosticsOverview(c, product.ProductOpenSource, issuesByFile, "", notifier)
 
 		require.Eventually(t, func() bool {
 			<-notificationChannel
@@ -72,7 +72,7 @@ func Test_DiagnosticsOverview(t *testing.T) {
 		}
 		notifier.CreateListener(callback)
 
-		SendDiagnosticsOverview(c, product.ProductOpenSource, issuesByFile, notifier)
+		SendDiagnosticsOverview(c, product.ProductOpenSource, issuesByFile, "", notifier)
 
 		require.Eventually(t, func() bool {
 			<-notificationChannel
