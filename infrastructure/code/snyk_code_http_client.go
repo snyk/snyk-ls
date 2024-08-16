@@ -499,8 +499,8 @@ func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOpti
 		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
 		return AutofixResponse{}, err
 	}
-	logger.Debug().Msg("API: Retrieving autofix for bundle")
-	defer logger.Debug().Msg("API: Retrieving autofix done")
+	logger.Info().Msg("API: Retrieving autofix for bundle")
+	defer logger.Info().Msg("API: Retrieving autofix done")
 
 	requestBody, err := s.autofixRequestBody(&options)
 	if err != nil {
