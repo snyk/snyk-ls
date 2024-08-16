@@ -1,3 +1,7 @@
+:root {
+  --default-font: ui-sans-serif, "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+}
+
 .main-tabs-nav {
   display: flex;
   margin-bottom: 10px;
@@ -50,8 +54,6 @@
 
 .file-path {}
 
-.issue-label {}
-
 .issue-icon svg {
   width: 16px;
   height: 16px;
@@ -60,4 +62,18 @@
 .sn-icon svg {
   width: 16px;
   height: 16px;
+}
+
+
+.issue-node {
+  display: flex;
+  align-items: center;
+}
+
+.issue-icon {
+  margin-right: 8px;
+}
+
+.issue-label {
+  flex-grow: 1;
 }

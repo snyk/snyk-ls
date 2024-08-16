@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"html/template"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -191,7 +192,6 @@ func getRootNodes(c *config.Config, p product.Product, issuesByFile snyk.IssuesB
 	return rootNodes
 }
 
-// TODO: add unit test to fix --> "Code Security - 4 unique issues: ,1 high1 medium2 low"
 func getRootNodeText(issuesByFile snyk.IssuesByFile, p product.Product) string {
 	total, critical, high, medium, low := issuesByFile.SeverityCounts()
 
@@ -200,16 +200,33 @@ func getRootNodeText(issuesByFile snyk.IssuesByFile, p product.Product) string {
 		pluralSuffix = "s"
 	}
 
-	var rootNodeTitle = fmt.Sprintf("%s - No issues found", p.ToFilterableIssueType()[0])
+	severityParts := []string{}
+	if critical > 0 {
+		severityParts = append(severityParts, fmt.Sprintf("%d critical", critical))
+	}
+	if high > 0 {
+		severityParts = append(severityParts, fmt.Sprintf("%d high", high))
+	}
+	if medium > 0 {
+		severityParts = append(severityParts, fmt.Sprintf("%d medium", medium))
+	}
+	if low > 0 {
+		severityParts = append(severityParts, fmt.Sprintf("%d low", low))
+	}
+
+	severityString := strings.Join(severityParts, ", ")
+
+	rootNodeTitle := fmt.Sprintf("%s - No issues found", p.ToFilterableIssueType()[0])
 	if total > 0 {
 		rootNodeTitle = fmt.Sprintf(
 			"%s - %d unique issue%s: %s",
 			p.ToFilterableIssueType()[0],
 			total,
 			pluralSuffix,
-			issuesByFile.SeverityCountsAsString(critical, high, medium, low),
+			severityString,
 		)
 	}
+
 	return rootNodeTitle
 }
 
