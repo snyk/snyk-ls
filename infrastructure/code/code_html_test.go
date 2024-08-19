@@ -69,7 +69,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `<table class="data-flow-table">`)
 	assert.Contains(t, codePanelHtml, `main.ts`)
 	assert.Contains(t, codePanelHtml, `line:5`)
-	assert.Contains(t, codePanelHtml, `<td class="data-flow-text">import * as http from &#39;http&#39;;</td>`)
+	assert.Contains(t, codePanelHtml, `<code>import * as http from &#39;http&#39;;</code>`)
 
 	// assert Ignore Details section - Elements should not be present
 	assert.NotContains(t, codePanelHtml, `class=ignore-warning-wrapper`)
