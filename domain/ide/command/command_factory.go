@@ -76,6 +76,8 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 			issueProvider: issueProvider,
 			notifier:      notifier,
 		}, nil
+	case types.ExecuteCLICommand:
+		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

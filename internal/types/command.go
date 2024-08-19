@@ -38,6 +38,7 @@ const (
 	GetFeatureFlagStatus         = "snyk.getFeatureFlagStatus"
 	GetActiveUserCommand         = "snyk.getActiveUser"
 	ReportAnalyticsCommand       = "snyk.reportAnalytics"
+	ExecuteCLICommand            = "snyk.executeCLI"
 
 	// Snyk Code specific commands
 	CodeFixCommand        = "snyk.code.fix"
@@ -100,7 +101,7 @@ func NewCommandServiceMock() *CommandServiceMock {
 	return &CommandServiceMock{}
 }
 
-func (service *CommandServiceMock) ExecuteCommandData(_ context.Context, command CommandData, server Server) (any, error) {
+func (service *CommandServiceMock) ExecuteCommandData(_ context.Context, command CommandData, _ Server) (any, error) {
 	service.m.Lock()
 	service.executedCommands = append(service.executedCommands, command)
 	service.m.Unlock()
