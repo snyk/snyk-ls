@@ -275,6 +275,9 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
 		iac.c.Logger().Err(err).Str("method", "iac.Scan").
 			Msg("Error while extracting file absolutePath")
 	}
+	if uri.IsUriDirectory(u) {
+		path = ""
+	}
 	cmd := iac.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliSettings().Path(), "iac", "test", path, "--json"})
 	iac.c.Logger().Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
