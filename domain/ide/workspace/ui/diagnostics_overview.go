@@ -62,20 +62,20 @@ type Node struct {
 
 func SendDiagnosticsOverview(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile, folderPath string, notifier notification.Notifier) {
 	logger := c.Logger().With().Str("method", "ui.SendDiagnosticsOverview").Logger()
-	templateData, err := generateTemplateData(c, p, issuesByFile, folderPath, logger)
 
+	html, err := generateHtml(c, p, issuesByFile, folderPath, logger)
 	if err != nil {
 		logger.Err(err).Msg("failed to get diagnostics overview template data")
 		return
 	}
 
-	diagnosticsOverviewParams := types.DiagnosticsOverviewParams{Product: p.ToProductCodename(), Html: templateData}
-	notifier.Send(diagnosticsOverviewParams)
+	diagnosticsOverview := types.DiagnosticsOverviewParams{Product: p.ToProductCodename(), Html: html}
+	notifier.Send(diagnosticsOverview)
 
 	logger.Debug().Msgf("sent diagnostics overview htmlBuffer for product %s", p)
 	logger.Trace().
 		Int("issueCount", len(issuesByFile)).
-		Any("diagnosticsOverviewParams", diagnosticsOverviewParams).
+		Any("diagnosticsOverview", diagnosticsOverview).
 		Msg("detailed tree data")
 }
 
@@ -97,7 +97,7 @@ func initializeTemplate() error {
 	return nil
 }
 
-func generateTemplateData(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile, folderPath string, logger zerolog.Logger) (string, error) {
+func generateHtml(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile, folderPath string, logger zerolog.Logger) (string, error) {
 	err := initializeTemplate()
 	if err != nil {
 		logger.Err(err).Msg("failed to initialize diagnostics overview template. Not sending overview")
@@ -105,7 +105,7 @@ func generateTemplateData(c *config.Config, p product.Product, issuesByFile snyk
 	}
 
 	if p == "" {
-		logger.Warn().Str("method", "ui.sendDiagnosticsOverview").Msg("no product specified, this is unexpected")
+		logger.Warn().Str("method", "ui.generateHtml").Msg("no product specified, this is unexpected")
 		return "", fmt.Errorf("no product specified")
 	}
 
