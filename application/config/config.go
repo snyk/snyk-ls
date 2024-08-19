@@ -887,7 +887,7 @@ func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 	var oauthToken oauth2.Token
 	if _, err := uuid.Parse(c.Token()); err == nil {
 		const msg = "creds are legacy, not oauth2"
-		c.Logger().Trace().Msgf(msg)
+		c.Logger().Trace().Msg(msg)
 		return oauthToken, errors.New(msg)
 	}
 	err := json.Unmarshal([]byte(c.Token()), &oauthToken)
