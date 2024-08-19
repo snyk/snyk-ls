@@ -8,7 +8,7 @@ require (
 	github.com/adrg/strutil v0.3.1
 	github.com/adrg/xdg v0.5.0
 	github.com/atotto/clipboard v0.1.4
-	github.com/creachadair/jrpc2 v1.2.0
+	github.com/creachadair/jrpc2 v1.2.1
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/erni27/imcache v1.2.0
 	github.com/getsentry/sentry-go v0.28.1
@@ -51,7 +51,7 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/lipgloss v0.10.0 // indirect
 	github.com/cloudflare/circl v1.3.8 // indirect
-	github.com/creachadair/mds v0.13.4 // indirect
+	github.com/creachadair/mds v0.16.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.5 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/deepmap/oapi-codegen v1.16.3 // indirect

@@ -18,6 +18,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -885,9 +886,9 @@ func (c *Config) Logger() *zerolog.Logger {
 func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 	var oauthToken oauth2.Token
 	if _, err := uuid.Parse(c.Token()); err == nil {
-		msg := "creds are legacy, not oauth2"
+		const msg = "creds are legacy, not oauth2"
 		c.Logger().Trace().Msgf(msg)
-		return oauthToken, fmt.Errorf(msg)
+		return oauthToken, errors.New(msg)
 	}
 	err := json.Unmarshal([]byte(c.Token()), &oauthToken)
 	if err != nil {
