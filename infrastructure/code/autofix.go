@@ -18,6 +18,7 @@ package code
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -92,9 +93,9 @@ func (sc *Scanner) GetAutoFixDiffs(
 	for {
 		select {
 		case <-timeoutTimer.C:
-			msg := "Timeout waiting for code fix diffs."
+			const msg = "Timeout waiting for code fix diffs."
 			logger.Error().Msg(msg)
-			return nil, fmt.Errorf(msg)
+			return nil, errors.New(msg)
 		case <-ticker.C:
 			suggestions, err := codeClient.GetAutoFixDiffs(span.Context(), baseDir, options)
 			if err != nil {

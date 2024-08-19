@@ -27,7 +27,7 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 
 TOOLS_BIN := $(shell pwd)/.bin
 
-OVERRIDE_GOCI_LINT_V := v1.55.2
+OVERRIDE_GOCI_LINT_V := v1.60.1
 PACT_V := 2.4.2
 
 NOCACHE := "-count=1"

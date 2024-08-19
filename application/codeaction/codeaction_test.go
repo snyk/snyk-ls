@@ -209,14 +209,7 @@ func Test_ResolveCodeAction_UnknownCommandIsReported(t *testing.T) {
 	testutil.UnitTest(t)
 	// Arrange
 	service := setupService(t)
-	command.SetService(command.NewService(
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-	))
+	command.SetService(command.NewService(nil, nil, nil, nil, nil, nil, nil))
 
 	id := types.CodeActionData(uuid.New())
 	c := &sglsp.Command{

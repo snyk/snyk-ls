@@ -1,5 +1,5 @@
 /*
- * © 2023-2024 Snyk Limited
+ * © 2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,24 +21,35 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	cli2 "github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func Test_ExecuteCommand(t *testing.T) {
+func Test_executeCLI_callsCli(t *testing.T) {
 	c := testutil.UnitTest(t)
-	authProvider := &authentication.FakeAuthenticationProvider{
-		ExpectedAuthURL: "https://auth.url",
-	}
-	authenticationService := authentication.NewAuthenticationService(c, authProvider, nil, nil)
-	service := NewService(authenticationService, nil, nil, nil, nil, nil, nil)
-	cmd := types.CommandData{
-		CommandId: types.CopyAuthLinkCommand,
+	expected := `{ "outputKey": "outputValue" }`
+	dir := t.TempDir()
+
+	cli := cli2.NewTestExecutorWithResponse(expected)
+
+	args := []any{dir, "iac", "test", "--json"}
+	cut := executeCLICommand{
+		command: types.CommandData{
+			Title:     "testCMD",
+			CommandId: types.ExecuteCLICommand,
+			Arguments: args,
+		},
+		logger: c.Logger(),
+		cli:    cli,
 	}
 
-	url, _ := service.ExecuteCommandData(context.Background(), cmd, nil)
+	response, err := cut.Execute(context.Background())
+	require.NoError(t, err)
 
-	assert.Equal(t, "https://auth.url", url)
+	assert.True(t, cli.WasExecuted())
+	assert.IsType(t, cliScanResult{}, response)
+	assert.Equal(t, expected, response.(cliScanResult).StdOut)
 }
