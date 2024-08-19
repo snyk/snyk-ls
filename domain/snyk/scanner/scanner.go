@@ -252,6 +252,12 @@ func (sc *DelegatingConcurrentScanner) Scan(
 
 	sc.scanNotifier.SendInProgress(folderPath)
 	gitCheckoutHandler := vcs.NewCheckoutHandler()
+	defer func() {
+		if gitCheckoutHandler.CleanupFunc() != nil {
+			logger.Debug().Msg("Calling cleanup func for base folder")
+			gitCheckoutHandler.CleanupFunc()()
+		}
+	}()
 	waitGroup := &sync.WaitGroup{}
 	for _, scanner := range sc.scanners {
 		if scanner.IsEnabled() {
@@ -293,11 +299,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	logger.Debug().Msgf("All product scanners started for %s", path)
 	waitGroup.Wait()
 
-	if gitCheckoutHandler.CleanupFunc() != nil {
-		logger.Debug().Msg("Calling cleanup func for base folder")
-		gitCheckoutHandler.CleanupFunc()()
-	}
-
 	logger.Debug().Msgf("All product scanners finished for %s", path)
 	sc.notifier.Send(types.InlineValueRefresh{})
 	sc.notifier.Send(types.CodeLensRefresh{})
@@ -315,7 +316,8 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.
 	logger := sc.c.Logger().With().Str("method", "ide.workspace.folder.DelegatingConcurrentScanner.internalScan").Logger()
 
 	var foundIssues []snyk.Issue
-	if enabled, _ := isDeltaScanEnabled(s); enabled {
+	isDeltaEnabled, _ := isDeltaScanEnabled(s)
+	if isDeltaEnabled {
 		hasChanges, gitErr := vcs.LocalRepoHasChanges(sc.c.Logger(), folderPath)
 		if gitErr != nil {
 			logger.Error().Err(gitErr).Msg("couldn't check if working dir is clean")
@@ -334,7 +336,7 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.
 		return nil, err
 	}
 
-	if enabled, _ := isDeltaScanEnabled(s); enabled && len(foundIssues) > 0 {
+	if isDeltaEnabled && len(foundIssues) > 0 {
 		err = sc.scanBaseBranch(ctx, s, folderPath, checkoutHandler)
 		if err != nil {
 			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
