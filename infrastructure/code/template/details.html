@@ -62,7 +62,7 @@
       overflow-y: auto;
     }
 
-    .arrow  {
+    .arrow {
       margin: 3px;
       cursor: pointer;
     }
@@ -88,7 +88,7 @@
     .ignore-details-header,
     .data-flow-header,
     .ai-fix-header,
-    .overview-text > h2 {
+    .overview-text>h2 {
       line-height: 1.25rem;
       font-size: 1.2rem;
       margin-bottom: 10px;
@@ -232,8 +232,12 @@
     .data-flow-text {
       margin-right: 8px;
       font-weight: 400;
-      font-size: 1.4rem;
       word-break: break-all;
+    }
+
+    .data-flow-text code {
+      background: none;
+      background-color: transparent;
     }
 
     .data-flow-delimiter {
@@ -322,7 +326,6 @@
       display: inline-block;
       white-space: pre-wrap;
       font-weight: 400;
-      font-size: 1.4rem;
       background-color: transparent;
     }
 
@@ -889,17 +892,19 @@
                 </div>
                 <table class="data-flow-table">
                   <tbody>
-                      {{range $dataFlowItems}}
-                      <tr class="data-flow-row">
-                        <td class="data-flow-number">{{.Number}}</td>
-                        <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
-                          end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
-                          line:{{.StartLineValue}}
-                        </td>
-                        <td class="delimiter data-flow-delimiter">|</td>
-                        <td class="data-flow-text">{{.Content}}</td>
-                      </tr>
-                      {{end}}
+                    {{range $dataFlowItems}}
+                    <tr class="data-flow-row">
+                      <td class="data-flow-number">{{.Number}}</td>
+                      <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
+                        end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
+                        line:{{.StartLineValue}}
+                      </td>
+                      <td class="delimiter data-flow-delimiter">|</td>
+                      <td class="data-flow-text">
+                        <code>{{.Content}}</code>
+                      </td>
+                    </tr>
+                    {{end}}
                   </tbody>
                 </table>
                 {{end}}
