@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -40,16 +41,10 @@ type serviceImpl struct {
 	issueProvider snyk.IssueProvider
 	codeApiClient SnykCodeHttpClient
 	codeScanner   *code.Scanner
+	cli           cli.Executor
 }
 
-func NewService(
-	authService authentication.AuthenticationService,
-	notifier noti.Notifier,
-	learnService learn.Service,
-	issueProvider snyk.IssueProvider,
-	codeApiClient SnykCodeHttpClient,
-	codeScanner *code.Scanner,
-) types.CommandService {
+func NewService(authService authentication.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner, cli cli.Executor) types.CommandService {
 	return &serviceImpl{
 		authService:   authService,
 		notifier:      notifier,
@@ -57,6 +52,7 @@ func NewService(
 		issueProvider: issueProvider,
 		codeApiClient: codeApiClient,
 		codeScanner:   codeScanner,
+		cli:           cli,
 	}
 }
 
@@ -77,7 +73,7 @@ func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData 
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 
-	command, err := CreateFromCommandData(c, commandData, server, service.authService, service.learnService, service.notifier, service.issueProvider, service.codeApiClient, service.codeScanner)
+	command, err := CreateFromCommandData(c, commandData, server, service.authService, service.learnService, service.notifier, service.issueProvider, service.codeApiClient, service.codeScanner, service.cli)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err

@@ -18,10 +18,13 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os/exec"
 
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -36,6 +39,11 @@ type executeCLICommand struct {
 	cli         cli.Executor
 }
 
+type cliScanResult struct {
+	ExitCode int    `json:"exitCode"`
+	StdOut   string `json:"stdOut"`
+}
+
 func (cmd *executeCLICommand) Command() types.CommandData {
 	return cmd.command
 }
@@ -46,13 +54,22 @@ func (cmd *executeCLICommand) Execute(ctx context.Context) (any, error) {
 	}
 	workDir := cmd.command.Arguments[0].(string)
 
-	var args []string
+	args := []string{config.CurrentConfig().CliSettings().Path()}
 	for _, argument := range cmd.command.Arguments[1:] {
 		args = append(args, argument.(string))
 	}
+
+	args = cmd.cli.ExpandParametersFromConfig(args)
+	var exitCode int
 	resp, err := cmd.cli.Execute(ctx, args, workDir)
 	if err != nil {
-		return nil, err
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) {
+			exitCode = exitError.ExitCode()
+		}
 	}
-	return string(resp), nil
+	return cliScanResult{
+		ExitCode: exitCode,
+		StdOut:   string(resp),
+	}, nil
 }

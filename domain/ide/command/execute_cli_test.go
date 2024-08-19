@@ -50,5 +50,6 @@ func Test_executeCLI_callsCli(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, cli.WasExecuted())
-	assert.Equal(t, expected, response)
+	assert.IsType(t, cliScanResult{}, response)
+	assert.Equal(t, expected, response.(cliScanResult).StdOut)
 }
