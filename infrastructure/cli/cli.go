@@ -44,7 +44,6 @@ type SnykCli struct {
 
 var Mutex = &sync.Mutex{}
 
-// minimum 1 cpu, max cores - 4
 var concurrencyLimit = int(math.Max(1, float64(runtime.NumCPU()-4)))
 
 func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) Executor {
@@ -62,7 +61,7 @@ type Executor interface {
 	ExpandParametersFromConfig(base []string) []string
 }
 
-func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
+func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
 	method := "SnykCli.Execute"
 	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", workingDir).Msg("calling Snyk CLI")
 
@@ -70,26 +69,26 @@ func (c SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(c.cliTimeout))
 	defer cancel()
 
-	// handle concurrency limit and cancellations
-	err = c.semaphore.Acquire(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	defer c.semaphore.Release(1)
-
 	output, err := c.doExecute(ctx, cmd, workingDir)
 	c.c.Logger().Trace().Str("method", method).Str("response", string(output))
 	return output, err
 }
 
-func (c SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string) ([]byte, error) {
+func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string) ([]byte, error) {
+	// handle concurrency limit and cancellations
+	err := c.semaphore.Acquire(ctx, 1)
+	if err != nil {
+		return nil, err
+	}
+	defer c.semaphore.Release(1)
+
 	command := c.getCommand(cmd, workingDir, ctx)
 	command.Stderr = c.c.Logger()
 	output, err := command.Output()
 	return output, err
 }
 
-func (c SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context) *exec.Cmd {
+func (c *SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context) *exec.Cmd {
 	if c.c.Logger().GetLevel() < zerolog.InfoLevel {
 		cmd = append(cmd, "-d")
 	}
@@ -122,11 +121,11 @@ func expandParametersFromConfig(base []string) []string {
 
 // ExpandParametersFromConfig adds configuration parameters to the base command
 // todo no need to export that, we could have a simpler interface that looks more like an actual CLI
-func (c SnykCli) ExpandParametersFromConfig(base []string) []string {
+func (c *SnykCli) ExpandParametersFromConfig(base []string) []string {
 	return expandParametersFromConfig(base)
 }
 
-func (c SnykCli) CliVersion() string {
+func (c *SnykCli) CliVersion() string {
 	cmd := []string{"version"}
 	output, err := c.Execute(context.Background(), cmd, "")
 	if err != nil {
