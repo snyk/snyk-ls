@@ -38,7 +38,7 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	config.CurrentConfig().SetCliSettings(&settings)
 	var cmd = []string{"a", "b"}
 
-	cmd = SnykCli{}.ExpandParametersFromConfig(cmd)
+	cmd = (&SnykCli{}).ExpandParametersFromConfig(cmd)
 
 	assert.Contains(t, cmd, "a")
 	assert.Contains(t, cmd, "b")
