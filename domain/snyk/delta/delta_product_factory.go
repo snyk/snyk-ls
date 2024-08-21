@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package snyk
+package delta
 
 import (
 	"github.com/snyk/snyk-ls/internal/delta"
@@ -23,10 +23,10 @@ import (
 
 func NewDeltaFinderForProduct(p product.Product) *delta.Finder {
 	switch p {
-	case product.ProductCode:
+	case product.ProductCode, product.ProductOpenSource, product.ProductInfrastructureAsCode:
 		return delta.NewFinder(
 			delta.WithEnricher(delta.NewFindingsEnricher()),
-			delta.WithMatcher(delta.NewCodeMatcher()),
+			delta.WithMatcher(delta.NewFuzzyMatcher()),
 			delta.WithDiffer(delta.NewFindingsDiffer()))
 	default:
 		return delta.NewFinder(delta.WithDiffer(delta.NewFindingsDiffer()))

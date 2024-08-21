@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"net/url"
 	"os"
 	"os/exec"
@@ -93,6 +94,10 @@ func (iac *Scanner) Product() product.Product {
 
 func (iac *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{}
+}
+
+func (iac *Scanner) DeltaScanningEnabled() bool {
+	return iac.c.IsDeltaFindingsEnabled()
 }
 
 func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue, err error) {
@@ -270,6 +275,9 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
 		iac.c.Logger().Err(err).Str("method", "iac.Scan").
 			Msg("Error while extracting file absolutePath")
 	}
+	if uri.IsUriDirectory(u) {
+		path = ""
+	}
 	cmd := iac.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliSettings().Path(), "iac", "test", path, "--json"})
 	iac.c.Logger().Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
@@ -363,7 +371,7 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		return snyk.Issue{}, errors.Wrap(err, "unable to create IaC issue additional data")
 	}
 
-	iacIssue := snyk.Issue{
+	result := snyk.Issue{
 		ID: issue.PublicID,
 		Range: snyk.Range{
 			Start: snyk.Position{Line: issue.LineNumber, Character: rangeStart},
@@ -380,16 +388,19 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		AdditionalData:      additionalData,
 	}
 
+	fingerprint := utils.CalculateFingerprintFromAdditionalData(result)
+	result.SetFingerPrint(fingerprint)
+
 	htmlRender, err := NewIacHtmlRenderer(iac.c)
 	if err != nil {
 		iac.c.Logger().Err(err).Msg("Cannot create IaC HTML render")
 		return snyk.Issue{}, err
 	}
 
-	additionalData.CustomUIContent = htmlRender.getCustomUIContent(iacIssue)
-	iacIssue.AdditionalData = additionalData
+	additionalData.CustomUIContent = htmlRender.getCustomUIContent(result)
+	result.AdditionalData = additionalData
 
-	return iacIssue, nil
+	return result, nil
 }
 
 func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) (snyk.IaCIssueData, error) {

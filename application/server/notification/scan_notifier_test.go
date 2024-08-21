@@ -18,7 +18,7 @@ package notification_test
 
 import (
 	notification2 "github.com/snyk/snyk-ls/application/server/notification"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -29,7 +29,7 @@ import (
 
 type sendMessageTestCase struct {
 	name           string
-	act            func(scanNotifier snyk.ScanNotifier)
+	act            func(scanNotifier scanner.ScanNotifier)
 	expectedStatus types.ScanStatus
 }
 
@@ -42,21 +42,21 @@ func Test_SendMessage(t *testing.T) {
 	tests := []sendMessageTestCase{
 		{
 			name: "SendInProgressMessage",
-			act: func(scanNotifier snyk.ScanNotifier) {
+			act: func(scanNotifier scanner.ScanNotifier) {
 				scanNotifier.SendInProgress(folderPath)
 			},
 			expectedStatus: types.InProgress,
 		},
 		{
 			name: "SendSuccessMessage",
-			act: func(scanNotifier snyk.ScanNotifier) {
+			act: func(scanNotifier scanner.ScanNotifier) {
 				scanNotifier.SendSuccess(product.ProductCode, folderPath)
 			},
 			expectedStatus: types.Success,
 		},
 		{
 			name: "SendErrorMessage",
-			act: func(scanNotifier snyk.ScanNotifier) {
+			act: func(scanNotifier scanner.ScanNotifier) {
 				scanNotifier.SendError(product.ProductCode, folderPath, "")
 			},
 			expectedStatus: types.ErrorStatus,

@@ -19,6 +19,7 @@ package oss
 import (
 	_ "embed"
 	"fmt"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"strings"
 
 	"github.com/gomarkdown/markdown"
@@ -110,9 +111,10 @@ func toIssue(
 		CVEs:                issue.Identifiers.CVE,
 		AdditionalData:      additionalData,
 	}
-
 	additionalData.Details = getDetailsHtml(d)
 	d.AdditionalData = additionalData
+	fingerprint := utils.CalculateFingerprintFromAdditionalData(d)
+	d.SetFingerPrint(fingerprint)
 
 	return d
 }

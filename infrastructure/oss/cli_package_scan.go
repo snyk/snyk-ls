@@ -18,6 +18,7 @@ package oss
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"path/filepath"
 	"strings"
 
@@ -31,7 +32,7 @@ var (
 		".html": true,
 		".htm":  true,
 	}
-	_ snyk.PackageScanner = (*CLIScanner)(nil)
+	_ scanner.PackageScanner = (*CLIScanner)(nil)
 )
 
 func (cliScanner *CLIScanner) ScanPackages(

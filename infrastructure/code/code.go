@@ -18,15 +18,11 @@ package code
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
-
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/internal/vcs"
 
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
@@ -91,14 +87,13 @@ type Scanner struct {
 	issueCache          *imcache.Cache[string, []snyk.Issue]
 	cacheRemovalHandler func(path string)
 	c                   *config.Config
-	scanPersister       persistence.ScanSnapshotPersister
 }
 
 func (sc *Scanner) DeltaScanningEnabled() bool {
 	return sc.c.IsDeltaFindingsEnabled()
 }
 
-func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner, scanPersister persistence.ScanSnapshotPersister) *Scanner {
+func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
@@ -111,7 +106,6 @@ func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, repor
 		BundleHashes:   map[string]string{},
 		codeScanner:    codeScanner,
 		c:              bundleUploader.c,
-		scanPersister:  scanPersister,
 	}
 	sc.issueCache = imcache.New[string, []snyk.Issue](
 		imcache.WithDefaultExpirationOption[string, []snyk.Issue](time.Hour * 12),
@@ -189,31 +183,9 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
 	sc.changedFilesMutex.Unlock()
 
-	if c.IsDeltaFindingsEnabled() {
-		hasChanges, gitErr := vcs.LocalRepoHasChanges(c.Logger(), folderPath)
-		if gitErr != nil {
-			logger.Error().Err(gitErr).Msg("couldn't check if working dir is clean")
-			return nil, gitErr
-		}
-		if !hasChanges {
-			// If delta is enabled but there are no changes. There can be no delta.
-			// else it should start scanning.
-			logger.Debug().Msg("skipping scanning. working dir is clean")
-			return []snyk.Issue{}, nil // Returning an empty slice implies that no issues were found
-		}
-	}
-
 	results, err := internalScan(ctx, sc, folderPath, logger, filesToBeScanned)
 	if err != nil {
 		return nil, err
-	}
-
-	if c.IsDeltaFindingsEnabled() && len(results) > 0 {
-		err = scanAndPersistBaseBranch(ctx, sc, folderPath)
-		if err != nil {
-			logger.Error().Err(err).Msg("couldn't scan base branch for folder " + folderPath)
-			return nil, err
-		}
 	}
 
 	// Populate HTML template
@@ -241,71 +213,6 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, filesToBeScanned)
 	}
 	return results, err
-}
-
-func scanAndPersistBaseBranch(ctx context.Context, sc *Scanner, folderPath string) error {
-	logger := sc.c.Logger().With().Str("method", "scanAndPersistBaseBranch").Logger()
-
-	baseBranchName := vcs.GetBaseBranchName(folderPath)
-	headRef, err := vcs.HeadRefHashForBranch(&logger, folderPath, baseBranchName)
-
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to fetch commit hash for main branch")
-		return err
-	}
-
-	snapshotExists := sc.scanPersister.Exists(folderPath, headRef, sc.Product())
-	if snapshotExists {
-		return nil
-	}
-
-	tmpFolderName := fmt.Sprintf("snyk_delta_%s", vcs.NormalizeBranchName(baseBranchName))
-	destinationPath, err := os.MkdirTemp("", tmpFolderName)
-	logger.Debug().Msg("Creating tmp directory for base branch")
-
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")
-		return err
-	}
-
-	repo, err := vcs.Clone(&logger, folderPath, destinationPath, baseBranchName)
-
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to clone base branch")
-		return err
-	}
-
-	defer func() {
-		if destinationPath == "" {
-			return
-		}
-		err = os.RemoveAll(destinationPath)
-		logger.Debug().Msg("removing base branch tmp dir " + destinationPath)
-
-		if err != nil {
-			logger.Error().Err(err).Msg("couldn't remove tmp dir " + destinationPath)
-		}
-	}()
-
-	filesToBeScanned := make(map[string]bool)
-	results, err := internalScan(ctx, sc, destinationPath, logger, filesToBeScanned)
-
-	if err != nil {
-		return err
-	}
-
-	commitHash, err := vcs.HeadRefHashForRepo(repo)
-	if err != nil {
-		logger.Error().Err(err).Msg("could not get commit hash for repo in folder " + folderPath)
-		return err
-	}
-
-	err = sc.scanPersister.Add(folderPath, commitHash, results, product.ProductCode)
-	if err != nil {
-		logger.Error().Err(err).Msg("could not persist issue list for folder: " + folderPath)
-	}
-
-	return nil
 }
 
 // Populate HTML template

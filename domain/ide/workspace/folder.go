@@ -20,11 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/snyk/snyk-ls/domain/ide/workspace/ui"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	delta2 "github.com/snyk/snyk-ls/domain/snyk/delta"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"strings"
 	"sync"
 
-	"github.com/snyk/snyk-ls/domain/ide/workspace/ui"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/delta"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -40,7 +43,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -67,10 +69,10 @@ type Folder struct {
 	name                    string
 	status                  FolderStatus
 	documentDiagnosticCache *xsync.MapOf[string, []snyk.Issue]
-	scanner                 snyk.Scanner
+	scanner                 scanner.Scanner
 	hoverService            hover.Service
 	mutex                   sync.Mutex
-	scanNotifier            snyk.ScanNotifier
+	scanNotifier            scanner.ScanNotifier
 	notifier                noti.Notifier
 	c                       *config.Config
 	scanPersister           persistence.ScanSnapshotPersister
@@ -237,9 +239,9 @@ func NewFolder(
 	c *config.Config,
 	path string,
 	name string,
-	scanner snyk.Scanner,
+	scanner scanner.Scanner,
 	hoverService hover.Service,
-	scanNotifier snyk.ScanNotifier,
+	scanNotifier scanner.ScanNotifier,
 	notifier noti.Notifier,
 	scanPersister persistence.ScanSnapshotPersister,
 ) *Folder {
@@ -498,8 +500,7 @@ func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *produc
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
 	currentProduct := *p
 
-	// Delete product check when base scanning is implemented for other products
-	if !f.c.IsDeltaFindingsEnabled() || currentProduct != product.ProductCode {
+	if !f.c.IsDeltaFindingsEnabled() {
 		return productIssueByFile, nil
 	}
 
@@ -524,7 +525,7 @@ func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p *produc
 		currentFindingIdentifiable[i] = &currentFlatIssueList[i]
 	}
 
-	df := snyk.NewDeltaFinderForProduct(currentProduct)
+	df := delta2.NewDeltaFinderForProduct(currentProduct)
 	diff, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
 
 	if err != nil {
@@ -570,8 +571,7 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 	return filteredIssuesByFile
 }
 
-func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.
-	IssuesByFile {
+func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 
 	filteredIssues := snyk.IssuesByFile{}

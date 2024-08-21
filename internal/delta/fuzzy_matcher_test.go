@@ -99,7 +99,7 @@ func convertToFindingsIdentifiable(baseIssueList []mockIdentifiable) []Identifia
 func initDeltaFinder() *Finder {
 	df := NewFinder(
 		WithEnricher(&FindingsEnricher{}),
-		WithMatcher(&CodeMatcher{}),
+		WithMatcher(&FuzzyMatcher{}),
 		WithDiffer(&FindingsDiffer{}))
 	return df
 }

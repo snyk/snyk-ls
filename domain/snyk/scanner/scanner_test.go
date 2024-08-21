@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-package snyk
+package scanner
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"testing"
 	"time"
 
@@ -41,7 +43,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
 	scanner, _ := setupScanner(enabledScanner, disabledScanner)
 
-	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
 
 	assert.Eventually(
 		t,
@@ -53,20 +55,21 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	)
 }
 
-func setupScanner(testProductScanners ...ProductScanner) (
-	scanner Scanner,
+func setupScanner(testProductScanners ...snyk.ProductScanner) (
+	sc Scanner,
 	scanNotifier ScanNotifier,
 ) {
 	c := config.CurrentConfig()
 	scanNotifier = NewMockScanNotifier()
 	notifier := notification.NewNotifier()
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
+	persister := persistence.NewNopScanPersister()
 	er := error_reporting.NewTestErrorReporter()
 	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	authenticationProvider.IsAuthenticated = true
 	authenticationService := authentication.NewAuthenticationService(c, authenticationProvider, er, notifier)
-	scanner = NewDelegatingScanner(c, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, testProductScanners...)
-	return scanner, scanNotifier
+	sc = NewDelegatingScanner(c, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, testProductScanners...)
+	return sc, scanNotifier
 }
 
 func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
@@ -77,7 +80,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	emptyToken := !config.CurrentConfig().NonEmptyToken()
 
 	// Act
-	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
 
 	// Assert
 	assert.True(t, emptyToken)
@@ -94,7 +97,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 
 	// Act
 	go func() {
-		scanner.Scan(context.Background(), "", NoopResultProcessor, "")
+		scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
 		done <- true
 	}()
 	time.Sleep(500 * time.Millisecond) // Wait for the product scanner to start running
@@ -111,10 +114,10 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	testutil.UnitTest(t)
 	config.CurrentConfig().SetSnykCodeEnabled(true)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
-	scanner, scanNotifier := setupScanner(enabledScanner)
+	sc, scanNotifier := setupScanner(enabledScanner)
 	mockScanNotifier := scanNotifier.(*MockScanNotifier)
 
-	scanner.Scan(context.Background(), "", NoopResultProcessor, "")
+	sc.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
 
 	assert.NotEmpty(t, mockScanNotifier.InProgressCalls())
 }

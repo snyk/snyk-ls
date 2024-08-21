@@ -18,12 +18,12 @@ package workspace
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -35,14 +35,14 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	const trustedDummy = "trustedDummy"
 	const untrustedDummy = "untrustedDummy"
-	scanner := &snyk.TestScanner{}
-	scanNotifier := snyk.NewMockScanNotifier()
+	sc := &scanner.TestScanner{}
+	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := New(c, performance.NewInstrumentor(), scanner, nil, nil, notifier, nil)
+	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]string{trustedDummy})
-	w.AddFolder(NewFolder(c, trustedDummy, trustedDummy, scanner, nil, scanNotifier, notifier, nil))
-	w.AddFolder(NewFolder(c, untrustedDummy, untrustedDummy, scanner, nil, scanNotifier, notifier, nil))
+	w.AddFolder(NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil))
+	w.AddFolder(NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil))
 
 	trusted, untrusted := w.GetFolderTrust()
 
@@ -54,14 +54,14 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	c := testutil.UnitTest(t)
 	const trustedDummy = "trustedDummy"
 	const untrustedDummy = "untrustedDummy"
-	scanner := &snyk.TestScanner{}
-	scanNotifier := snyk.NewMockScanNotifier()
+	sc := &scanner.TestScanner{}
+	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := New(c, performance.NewInstrumentor(), scanner, nil, nil, notifier, nil)
+	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
-	trustedFolder := NewFolder(c, trustedDummy, trustedDummy, scanner, nil, scanNotifier, notifier, nil)
+	trustedFolder := NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil)
 	w.AddFolder(trustedFolder)
-	untrustedFolder := NewFolder(c, untrustedDummy, untrustedDummy, scanner, nil, scanNotifier, notifier, nil)
+	untrustedFolder := NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil)
 	w.AddFolder(untrustedFolder)
 
 	w.TrustFoldersAndScan(context.Background(), []*Folder{trustedFolder})
@@ -69,7 +69,7 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	assert.Contains(t, c.TrustedFolders(), trustedFolder.path)
 	assert.NotContains(t, c.TrustedFolders(), untrustedFolder.path)
 	assert.Eventually(t, func() bool {
-		return scanner.Calls() == 1
+		return sc.Calls() == 1
 	}, time.Second, time.Millisecond, "scanner should be called after trust is granted")
 }
 
@@ -81,10 +81,10 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 	trustedPathAfterConversions := uri.PathFromUri(uri.PathToUri(trustedDummy))
 	toBeRemovedAbsolutePathAfterConversions := uri.PathFromUri(uri.PathToUri(toBeRemoved))
 
-	scanner := &snyk.TestScanner{}
-	scanNotifier := snyk.NewMockScanNotifier()
-	w := New(c, performance.NewInstrumentor(), scanner, nil, scanNotifier, notification.NewNotifier(), nil)
-	toBeRemovedFolder := NewFolder(c, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, scanner, nil, scanNotifier, notification.NewNotifier(), nil)
+	sc := &scanner.TestScanner{}
+	scanNotifier := scanner.NewMockScanNotifier()
+	w := New(c, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil)
+	toBeRemovedFolder := NewFolder(c, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, sc, nil, scanNotifier, notification.NewNotifier(), nil)
 	w.AddFolder(toBeRemovedFolder)
 
 	c.SetTrustedFolderFeatureEnabled(true)
@@ -107,7 +107,7 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 
 	// one call for one trusted folder
 	assert.Eventually(t, func() bool {
-		return scanner.Calls() == 1
+		return sc.Calls() == 1
 	}, time.Second, time.Millisecond, "scanner should be called after trust is granted")
 }
 

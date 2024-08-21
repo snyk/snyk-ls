@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"os"
 	"testing"
 	"time"
@@ -29,7 +30,6 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -39,7 +39,7 @@ import (
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	w := workspace.Get()
-	scanner := &snyk.TestScanner{}
+	scanner := &scanner.TestScanner{}
 	c := config.CurrentConfig()
 	c.SetTrustedFolderFeatureEnabled(true)
 	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
@@ -52,7 +52,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.
 func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesting(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	w := workspace.Get()
-	scanner := &snyk.TestScanner{}
+	scanner := &scanner.TestScanner{}
 	c := config.CurrentConfig()
 	c.SetTrustedFolderFeatureEnabled(true)
 	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
@@ -74,7 +74,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 	registerNotifier(c, loc.Server)
 
 	w := workspace.Get()
-	scanner := &snyk.TestScanner{}
+	scanner := &scanner.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
 	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
@@ -95,7 +95,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 	c := config.CurrentConfig()
 	registerNotifier(c, loc.Server)
 	w := workspace.Get()
-	scanner := &snyk.TestScanner{}
+	scanner := &scanner.TestScanner{}
 	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 	c.SetTrustedFolderFeatureEnabled(true)
 

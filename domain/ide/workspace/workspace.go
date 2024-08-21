@@ -18,12 +18,13 @@ package workspace
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -39,9 +40,9 @@ type Workspace struct {
 	mutex               sync.Mutex
 	folders             map[string]*Folder
 	instrumentor        performance.Instrumentor
-	scanner             snyk.Scanner
+	scanner             scanner.Scanner
 	hoverService        hover.Service
-	scanNotifier        snyk.ScanNotifier
+	scanNotifier        scanner.ScanNotifier
 	trustMutex          sync.Mutex
 	trustRequestOngoing bool // for debouncing
 	notifier            noti.Notifier
@@ -72,9 +73,9 @@ func (w *Workspace) Issue(key string) snyk.Issue {
 func New(
 	c *config.Config,
 	instrumentor performance.Instrumentor,
-	scanner snyk.Scanner,
+	scanner scanner.Scanner,
 	hoverService hover.Service,
-	scanNotifier snyk.ScanNotifier,
+	scanNotifier scanner.ScanNotifier,
 	notifier noti.Notifier,
 	scanPersister persistence.ScanSnapshotPersister,
 ) *Workspace {

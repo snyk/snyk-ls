@@ -18,10 +18,10 @@ package command
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"path/filepath"
 	"testing"
-
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/stretchr/testify/assert"
 
@@ -42,7 +42,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	hoverService := hover.NewFakeHoverService()
 	provider.IsAuthenticated = true
-	scanNotifier := snyk.NewMockScanNotifier()
+	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
 	authenticationService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notifier)
 	cmd := logoutCommand{
@@ -51,7 +51,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		logger:      c.Logger(),
 	}
 
-	scanner := snyk.NewTestScanner()
+	scanner := scanner.NewTestScanner()
 
 	w := workspace.New(c, performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier, scanPersister)
 	folder := workspace.NewFolder(

@@ -36,7 +36,7 @@ type Reference struct {
 
 // Issue models a problem, vulnerability, or situation within your code that requires your attention
 type Issue struct {
-	// ID uniquely identifies the issue, it is intended to be human-readable
+	// ID uniquely identifies the issue, it is intended to be human-readable. It's also rule id
 	ID        string
 	Severity  Severity
 	IssueType Type
@@ -120,6 +120,7 @@ func (i *Issue) Path() string {
 func (i *Issue) GetFingerprint() string {
 	return i.Fingerprint
 }
+
 func (i *Issue) SetFingerPrint(fingerprint string) {
 	i.Fingerprint = fingerprint
 }
@@ -129,6 +130,7 @@ func (i *Issue) RuleId() string {
 }
 
 type IssueAdditionalData interface {
+	json.Marshaler
 	GetKey() string
 	GetTitle() string
 	IsFixable() bool
@@ -140,40 +142,6 @@ type IgnoreDetails struct {
 	Expiration string
 	IgnoredOn  time.Time
 	IgnoredBy  string
-}
-
-type CodeIssueData struct {
-	// Unique key identifying an issue in the whole result set
-	Key                string             `json:"key"`
-	Title              string             `json:"title"`
-	Message            string             `json:"message"`
-	Rule               string             `json:"rule"`
-	RuleId             string             `json:"ruleId"`
-	RepoDatasetSize    int                `json:"repoDatasetSize"`
-	ExampleCommitFixes []ExampleCommitFix `json:"exampleCommitFixes"`
-	CWE                []string           `json:"cwe"`
-	Text               string             `json:"text"`
-	Markers            []Marker           `json:"markers,omitempty"`
-	Cols               CodePoint          `json:"cols"`
-	Rows               CodePoint          `json:"rows"`
-	IsSecurityType     bool               `json:"isSecurityType"`
-	IsAutofixable      bool               `json:"isAutofixable"`
-	PriorityScore      int                `json:"priorityScore"`
-	HasAIFix           bool               `json:"hasAIFix"`
-	DataFlow           []DataFlowElement  `json:"dataFlow,omitempty"`
-	Details            string             `json:"details"`
-}
-
-func (c CodeIssueData) IsFixable() bool {
-	return c.HasAIFix
-}
-
-func (c CodeIssueData) GetKey() string {
-	return c.Key
-}
-
-func (c CodeIssueData) GetTitle() string {
-	return c.Title
 }
 
 type ExampleCommitFix struct {
@@ -200,44 +168,6 @@ type MarkerPosition struct {
 	File string    `json:"file"`
 }
 
-type OssIssueData struct {
-	Key                string             `json:"key"`
-	Title              string             `json:"title"`
-	Name               string             `json:"name"`
-	LineNumber         int                `json:"lineNumber"`
-	Identifiers        Identifiers        `jsom:"identifiers"`
-	Description        string             `json:"description"`
-	References         []Reference        `json:"references,omitempty"`
-	Version            string             `json:"version"`
-	License            string             `json:"license,omitempty"`
-	PackageManager     string             `json:"packageManager"`
-	PackageName        string             `json:"packageName"`
-	From               []string           `json:"from"`
-	FixedIn            []string           `json:"fixedIn,omitempty"`
-	UpgradePath        []any              `json:"upgradePath,omitempty"`
-	IsUpgradable       bool               `json:"isUpgradable,omitempty"`
-	CVSSv3             string             `json:"CVSSv3,omitempty"`
-	CvssScore          float64            `json:"cvssScore,omitempty"`
-	Exploit            string             `json:"exploit,omitempty"`
-	IsPatchable        bool               `json:"isPatchable"`
-	ProjectName        string             `json:"projectName"`
-	DisplayTargetFile  string             `json:"displayTargetFile"`
-	Language           string             `json:"language"`
-	Details            string             `json:"details"`
-	MatchingIssues     []OssIssueData     `json:"matchingIssues"`
-	Lesson             string             `json:"lesson,omitempty"`
-	Remediation        string             `json:"remediation"`
-	AppliedPolicyRules AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
-}
-
-func (o OssIssueData) IsFixable() bool {
-	return o.IsUpgradable &&
-		o.IsPatchable &&
-		len(o.UpgradePath) > 1 &&
-		len(o.From) > 1 &&
-		o.UpgradePath[1] != o.From[1]
-}
-
 type SeverityChange struct {
 	OriginalSeverity string `json:"originalSeverity"`
 	NewSeverity      string `json:"newSeverity"`
@@ -257,51 +187,6 @@ type Annotation struct {
 type Identifiers struct {
 	CWE []string `json:"CWE,omitempty"`
 	CVE []string `json:"CVE,omitempty"`
-}
-
-func (o OssIssueData) GetKey() string {
-	return o.Key
-}
-
-func (o OssIssueData) GetTitle() string {
-	return o.Title
-}
-
-type IaCIssueData struct {
-	// Unique key identifying an issue in the whole result set
-	Key string `json:"key"`
-	// Title: title of the issue
-	Title string `json:"title"`
-	// PublicID: unique identifier for the issue; it is the same as the ScanIssue.ID
-	PublicId string `json:"publicId"`
-	// Documentation is a URL which is constructed from the PublicID (e.g. https://security.snyk.io/rules/cloud/SNYK-CC-K8S-13)
-	Documentation string `json:"documentation"`
-	// LineNumber: line number of the issue in the file
-	LineNumber int `json:"lineNumber"`
-	// Issue: will contain the issue description
-	Issue string `json:"issue"`
-	// Impact: will contain the impact description
-	Impact string `json:"impact"`
-	// Resolve: will contain the resolution description (not to be confused with Remediation)
-	Resolve string `json:"resolve"`
-	// Path: path to the issue in the file
-	Path []string `json:"path"`
-	// References: List of reference URLs
-	References []string `json:"references,omitempty"`
-	// CustomUIContent: IaC HTML template
-	CustomUIContent string `json:"customUIContent"`
-}
-
-func (i IaCIssueData) IsFixable() bool {
-	return false
-}
-
-func (i IaCIssueData) GetKey() string {
-	return i.Key
-}
-
-func (i IaCIssueData) GetTitle() string {
-	return i.Title
 }
 
 func (i *Issue) GetFilterableIssueType() product.FilterableIssueType {

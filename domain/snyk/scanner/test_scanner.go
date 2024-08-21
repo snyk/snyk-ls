@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package snyk
+package scanner
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"sync"
 	"time"
 
@@ -30,13 +31,13 @@ import (
 type TestScanner struct {
 	mutex  sync.Mutex
 	calls  int
-	Issues []Issue
+	Issues []snyk.Issue
 }
 
 func NewTestScanner() *TestScanner {
 	return &TestScanner{
 		calls:  0,
-		Issues: []Issue{},
+		Issues: []snyk.Issue{},
 	}
 }
 
@@ -55,12 +56,12 @@ func (s *TestScanner) Product() product.Product {
 func (s *TestScanner) Scan(
 	_ context.Context,
 	_ string,
-	processResults ScanResultProcessor,
+	processResults snyk.ScanResultProcessor,
 	_ string,
 ) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	data := ScanData{
+	data := snyk.ScanData{
 		Product:           product.ProductOpenSource,
 		Issues:            s.Issues,
 		DurationMs:        1234,
@@ -76,9 +77,9 @@ func (s *TestScanner) Calls() int {
 	return s.calls
 }
 
-func (s *TestScanner) AddTestIssue(issue Issue) {
+func (s *TestScanner) AddTestIssue(issue snyk.Issue) {
 	if issue.AdditionalData == nil {
-		issue.AdditionalData = CodeIssueData{
+		issue.AdditionalData = snyk.CodeIssueData{
 			Key: util.Result(uuid.NewUUID()).String(),
 		}
 		issue.Product = product.ProductCode

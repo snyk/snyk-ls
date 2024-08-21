@@ -74,7 +74,7 @@ func TestFind_DifferWithEnricher(t *testing.T) {
 func TestFind_DifferWithEnricherWithMatcher(t *testing.T) {
 	f := NewFinder(
 		WithEnricher(FindingsEnricher{}),
-		WithMatcher(CodeMatcher{}),
+		WithMatcher(FuzzyMatcher{}),
 		WithDiffer(FindingsDiffer{}),
 	)
 
@@ -125,7 +125,7 @@ func TestFind_DifferWithEnricherWithMatcher(t *testing.T) {
 func TestFind_DifferWithEnricherWithMatcher_NoNewIssues(t *testing.T) {
 	f := NewFinder(
 		WithEnricher(FindingsEnricher{}),
-		WithMatcher(CodeMatcher{}),
+		WithMatcher(FuzzyMatcher{}),
 		WithDiffer(FindingsDiffer{}),
 	)
 

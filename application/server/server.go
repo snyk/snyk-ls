@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"os"
 	"runtime"
 	"strings"
@@ -38,7 +39,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
@@ -114,7 +114,7 @@ func textDocumentDidChangeHandler() jrpc2.Handler {
 
 		debouncedCallback := func() {
 			for _, change := range params.ContentChanges {
-				if packageScanner, ok := di.Scanner().(snyk.PackageScanner); ok {
+				if packageScanner, ok := di.Scanner().(scanner.PackageScanner); ok {
 					go packageScanner.ScanPackages(ctx, c, pathFromUri, change.Text)
 				}
 			}
@@ -528,7 +528,7 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 			di.Notifier().Send(diagnosticParams)
 		}
 
-		if scanner, ok := di.Scanner().(snyk.PackageScanner); ok {
+		if scanner, ok := di.Scanner().(scanner.PackageScanner); ok {
 			scanner.ScanPackages(context.Background(), config.CurrentConfig(), filePath, "")
 		}
 		return nil, nil

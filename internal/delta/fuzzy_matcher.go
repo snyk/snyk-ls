@@ -25,7 +25,7 @@ import (
 	"strings"
 )
 
-var _ Matcher = (*CodeMatcher)(nil)
+var _ Matcher = (*FuzzyMatcher)(nil)
 
 type IssueConfidence struct {
 	BaseUUID           string
@@ -65,14 +65,14 @@ var weights = struct {
 	FileExtensionSimilarity: 0.2,
 }
 
-type CodeMatcher struct {
+type FuzzyMatcher struct {
 }
 
-func NewCodeMatcher() *CodeMatcher {
-	return &CodeMatcher{}
+func NewFuzzyMatcher() *FuzzyMatcher {
+	return &FuzzyMatcher{}
 }
 
-func (_ CodeMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]Identifiable, error) {
+func (_ FuzzyMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]Identifiable, error) {
 	if len(currentIssueList) == 0 || len(baseIssueList) == 0 {
 		return nil, errors.New("base or current issue list is empty")
 	}
@@ -123,7 +123,6 @@ func findMatches(currentIssue Identifiable, index int, baseIssues []Identifiable
 		//We will always return 1.
 		hd := historicDistance()
 		fd := fingerprintDistance(baseIssue, currentIssue)
-
 		overallConfidence := fpd*weights.FilePositionDistance +
 			hd*weights.RecentHistoryDistance +
 			fd*weights.FingerprintConfidence
@@ -171,10 +170,17 @@ func fingerprintDistance(baseFingerprints, currentFingerprints Identifiable) flo
 	if !ok {
 		return 0
 	}
-
+	baseFingerprint := baseFingerprintable.GetFingerprint()
+	currentFingerprint := currentFingerprintable.GetFingerprint()
+	if !strings.Contains(baseFingerprint, ".") && !strings.Contains(currentFingerprint, ".") {
+		if baseFingerprint == currentFingerprint {
+			return 1
+		}
+		return 0
+	}
 	// Split into parts and compare
-	parts1 := strings.Split(baseFingerprintable.GetFingerprint(), ".")
-	parts2 := strings.Split(currentFingerprintable.GetFingerprint(), ".")
+	parts1 := strings.Split(baseFingerprint, ".")
+	parts2 := strings.Split(currentFingerprint, ".")
 	similar := 0
 	for i := 0; i < len(parts1) && i < len(parts2); i++ {
 		if parts1[i] == parts2[i] {
@@ -198,15 +204,15 @@ func filePositionDistance(baseIssue, currentIssue Identifiable) float64 {
 		return 0
 	}
 
-	dirSimilarity := checkDirs(basePathable.Path(), currentPathable.Path())
-	fileNameSimilarity := fileNameSimilarity(basePathable.Path(), currentPathable.Path())
-	fileExtSimilarity := fileExtSimilarity(filepath.Ext(basePathable.Path()),
+	ds := checkDirs(basePathable.Path(), currentPathable.Path())
+	fns := fileNameSimilarity(basePathable.Path(), currentPathable.Path())
+	fes := fileExtSimilarity(filepath.Ext(basePathable.Path()),
 		filepath.Ext(currentPathable.Path()))
 
 	pathSimilarity :=
-		dirSimilarity*weights.DirSimilarity +
-			fileNameSimilarity*weights.FileNameSimilarity +
-			fileExtSimilarity*weights.FileExtensionSimilarity
+		ds*weights.DirSimilarity +
+			fns*weights.FileNameSimilarity +
+			fes*weights.FileExtensionSimilarity
 
 	startLineSimilarity, startColumnSimilarity, endColumnSimilarity, endLineSimilarity :=
 		matchDistance(baseIssue, currentIssue)

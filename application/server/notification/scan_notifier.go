@@ -21,7 +21,7 @@ import (
 	"errors"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -32,7 +32,7 @@ type scanNotifier struct {
 	c        *config.Config
 }
 
-func NewScanNotifier(c *config.Config, notifier notification.Notifier) (snyk.ScanNotifier, error) {
+func NewScanNotifier(c *config.Config, notifier notification.Notifier) (scanner.ScanNotifier, error) {
 	if notifier == nil {
 		return nil, errors.New("notifier cannot be null")
 	}

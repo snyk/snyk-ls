@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,7 +44,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
@@ -571,7 +571,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	loc, _ := setupServer(t)
 	c := config.CurrentConfig()
 
-	scanner := &snyk.TestScanner{}
+	scanner := &scanner.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy",
 		"dummy",
 		scanner,
