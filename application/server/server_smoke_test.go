@@ -285,6 +285,39 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	})
 }
 
+func Test_SmokeExecuteCLICommand(t *testing.T) {
+	loc, _ := setupServer(t)
+	c := testutil.SmokeTest(t, false)
+	c.EnableSnykCodeSecurity(false)
+	c.EnableSnykCodeQuality(false)
+	c.SetSnykIacEnabled(false)
+	c.SetSnykOssEnabled(true)
+	di.Init()
+
+	var cloneTargetDirGoof = setupRepoAndInitialize(t, nodejsGoof, "0336589", loc, c)
+	folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
+
+	// wait till the whole workspace is scanned
+	assert.Eventually(t, func() bool {
+		return folderGoof != nil && folderGoof.IsScanned()
+	}, maxIntegTestDuration, time.Millisecond)
+
+	// execute scan cli command
+	response, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   types.ExecuteCLICommand,
+		Arguments: []any{folderGoof.Path(), "test", "--json"},
+	})
+	require.NoError(t, err)
+
+	var resp map[string]any
+	err = response.UnmarshalResult(&resp)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, resp)
+	require.Equal(t, float64(1), resp["exitCode"])
+	require.NotEmpty(t, resp["stdOut"])
+}
+
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) *workspace.Folder {
 	t.Helper()
 	var cloneTargetDirJuice, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())

@@ -584,7 +584,7 @@ func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir string, filePath stri
 		edits := myers.ComputeEdits(span.URIFromPath(baseDir), contentBefore, suggestion.Value)
 		unifiedDiff := fmt.Sprint(gotextdiff.ToUnified(baseDir, baseDir+"-fixed", contentBefore, edits))
 
-		logger.Trace().Msgf(unifiedDiff)
+		logger.Trace().Msg(unifiedDiff)
 
 		if len(edits) == 0 {
 			return fixSuggestions

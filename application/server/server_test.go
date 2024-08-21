@@ -260,6 +260,7 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeFixCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeSubmitFixFeedback)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeFixDiffsCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.ExecuteCLICommand)
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {

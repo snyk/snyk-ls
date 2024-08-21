@@ -5,23 +5,23 @@ type ordered interface {
 }
 
 func Max[T ordered](values ...T) T {
-	max := values[0]
+	m := values[0]
 	for _, v := range values {
-		if v > max {
-			max = v
+		if v > m {
+			m = v
 		}
 	}
 
-	return max
+	return m
 }
 
 func Min[T ordered](values ...T) T {
-	min := values[0]
+	m := values[0]
 	for _, v := range values {
-		if v < min {
-			min = v
+		if v < m {
+			m = v
 		}
 	}
 
-	return min
+	return m
 }

@@ -18,10 +18,11 @@ package di
 
 import (
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"path/filepath"
 	"runtime"
 	"sync"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/adrg/xdg"
 
@@ -76,6 +77,7 @@ var notifier notification.Notifier
 var codeInstrumentor codeClientObservability.Instrumentor
 var codeErrorReporter codeClientObservability.ErrorReporter
 var scanPersister persistence.ScanSnapshotPersister
+var snykCli cli.Executor
 
 func Init() {
 	initMutex.Lock()
@@ -129,7 +131,7 @@ func initInfrastructure(c *config.Config) {
 	// so that the oauth2 provider can use it for its callback
 	authenticationService.ConfigureProviders(c)
 
-	snykCli := cli.NewExecutor(c, errorReporter, notifier)
+	snykCli = cli.NewExecutor(c, errorReporter, notifier)
 
 	if gafConfiguration.GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
 		snykCli = cli.NewExtensionExecutor(c)
@@ -174,14 +176,7 @@ func initApplication(c *config.Config) {
 	workspace.Set(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
-	command.SetService(command.NewService(
-		authenticationService,
-		notifier,
-		learnService,
-		w,
-		snykCodeClient,
-		snykCodeScanner,
-	))
+	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeClient, snykCodeScanner, snykCli))
 }
 
 /*

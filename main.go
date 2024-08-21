@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -90,7 +91,7 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 	}
 
 	if *versionFlag {
-		return buf.String(), fmt.Errorf(config.Version)
+		return buf.String(), errors.New(config.Version)
 	}
 
 	if *licensesFlag {
