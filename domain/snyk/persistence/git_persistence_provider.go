@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -34,8 +35,9 @@ import (
 )
 
 const (
-	CacheFolder   = "snyk"
-	SchemaVersion = "v1"
+	CacheFolder       = "snyk"
+	SchemaVersion     = "v1"
+	ExpirationInHours = 12
 )
 
 var (
@@ -48,7 +50,7 @@ var (
 type hashedFolderPath string
 
 type ScanSnapshotPersister interface {
-	Clear(folderPath string)
+	Clear(folderPath string, checkForExpiration bool)
 	ClearForProduct(folderPath string, commitHash string, p product.Product) error
 	Add(folderPath, commitHash string, issueList []snyk.Issue, p product.Product) error
 	GetPersistedIssueList(folderPath string, p product.Product) ([]snyk.Issue, error)
@@ -93,11 +95,11 @@ func (g *GitPersistenceProvider) init(folderPath string) (string, error) {
 		return "", err
 	}
 	for _, filePath := range filePaths {
-		// file name structure is schema.hashedFolderPath.commitHash.productName.json
-		s := strings.Split(filePath, ".")
-		hash := hashedFolderPath(s[1])
-		commitHash := s[2]
-		p := product.ToProduct(s[3])
+		_, hash, commitHash, p, fileParseErr := g.fileSchema(filePath)
+		if fileParseErr != nil {
+			g.logger.Error().Err(fileParseErr).Send()
+			continue
+		}
 		g.createOrAppendToCache(hash, commitHash, p)
 	}
 
@@ -105,7 +107,20 @@ func (g *GitPersistenceProvider) init(folderPath string) (string, error) {
 	return cacheDir, nil
 }
 
-func (g *GitPersistenceProvider) Clear(folderPath string) {
+func (g *GitPersistenceProvider) fileSchema(filePath string) (string, hashedFolderPath, string, product.Product, error) {
+	// file name structure is schemaVersion.hashedFolderPath.commitHash.productName.json
+	s := strings.Split(filePath, ".")
+	if len(s) != 3 {
+		return "", "", "", "", fmt.Errorf("failed to parse file name %s", filePath)
+	}
+	schemaVersion := s[0]
+	hash := hashedFolderPath(s[1])
+	commitHash := s[2]
+	p := product.ToProduct(s[3])
+	return schemaVersion, hash, commitHash, p, nil
+}
+
+func (g *GitPersistenceProvider) Clear(folderPath string, checkForExpiration bool) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
@@ -121,7 +136,11 @@ func (g *GitPersistenceProvider) Clear(folderPath string) {
 
 	for _, filePath := range filePaths {
 		fullPath := filepath.Join(cacheDir, filePath)
-		err = g.deleteFile(fullPath)
+		if checkForExpiration {
+			err = g.deleteFileIfExpired(fullPath)
+		} else {
+			err = g.deleteFile(fullPath)
+		}
 		if err != nil {
 			g.logger.Error().Err(err).Msg("failed to remove file " + filePath)
 		}
@@ -256,8 +275,30 @@ func (g *GitPersistenceProvider) Exists(folderPath, commitHash string, p product
 	return false
 }
 
+func (g *GitPersistenceProvider) deleteFileIfExpired(fullPath string) error {
+	g.logger.Debug().Msgf("deleting cached scan file %s", fullPath)
+	schemaVersion, _, _, _, _ := g.fileSchema(fullPath)
+	if schemaVersion != SchemaVersion {
+		// if file has incorrect schema we just delete it
+		err := os.Remove(fullPath)
+		return err
+	}
+	// Check last modified date
+	fileInfo, err := os.Stat(fullPath)
+	if err != nil {
+		return err
+	}
+	// If elapsed time is > ExpirationInHours, delete the file
+	if time.Since(fileInfo.ModTime()) > ExpirationInHours*time.Hour {
+		err = os.Remove(fullPath)
+		return err
+	}
+
+	return nil
+}
+
 func (g *GitPersistenceProvider) deleteFile(fullPath string) error {
-	g.logger.Debug().Msg("deleting cached scan file " + fullPath)
+	g.logger.Debug().Msgf("deleting cached scan file %s", fullPath)
 	err := os.Remove(fullPath)
 	if err != nil {
 		return err

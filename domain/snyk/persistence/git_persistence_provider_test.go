@@ -271,7 +271,7 @@ func TestClear_ExistingCache(t *testing.T) {
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
 
-	cut.Clear(folderPath)
+	cut.Clear(folderPath, false)
 
 	assert.Empty(t, cut.cache)
 	assert.False(t, cut.snapshotExistsOnDisk(cacheDir, hash, commitHash, pc))
@@ -296,7 +296,7 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	cut := NewGitPersistenceProvider(c.Logger())
 
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
-	cut.Clear(folderPath)
+	cut.Clear(folderPath, false)
 
 	assert.Nil(t, err)
 	assert.Empty(t, cut.cache)
