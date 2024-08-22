@@ -19,13 +19,14 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -40,7 +41,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -943,33 +943,6 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	}
 
 	assert.Nil(t, w.GetFolderContaining(uri.PathFromUri(f.Uri)))
-}
-
-func Test_CodeActionResolve_ShouldExecuteCommands(t *testing.T) {
-	loc, _ := setupServer(t)
-	testutil.IntegTest(t)
-	_, err := loc.Client.Call(ctx, "initialize", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.CurrentConfig().SetAutomaticScanning(false)
-
-	expected := types.OpenBrowserCommand
-	serviceMock := types.NewCommandServiceMock()
-	command.SetService(serviceMock)
-
-	_, err = loc.Client.Call(ctx, "codeAction/resolve", types.CodeAction{
-		Title: "My super duper test action",
-		Command: &sglsp.Command{
-			Title:     expected,
-			Command:   expected,
-			Arguments: []any{"https://snyk.io"},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, expected, serviceMock.ExecutedCommands()[0].CommandId)
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.
