@@ -571,10 +571,10 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	loc, _ := setupServer(t)
 	c := config.CurrentConfig()
 
-	scanner := &scanner.TestScanner{}
+	sc := &scanner.TestScanner{}
 	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy",
 		"dummy",
-		scanner,
+		sc,
 		di.HoverService(),
 		di.ScanNotifier(),
 		di.Notifier(),
