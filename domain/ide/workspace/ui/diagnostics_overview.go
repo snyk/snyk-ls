@@ -69,7 +69,7 @@ func SendDiagnosticsOverview(c *config.Config, p product.Product, issuesByFile s
 		return
 	}
 
-	diagnosticsOverview := types.DiagnosticsOverviewParams{Product: p.ToProductCodename(), Html: html}
+	diagnosticsOverview := types.DiagnosticsOverviewParams{Product: p.ToProductCodename(), Html: html, FolderPath: folderPath}
 	notifier.Send(diagnosticsOverview)
 
 	logger.Debug().Msgf("sent diagnostics overview htmlBuffer for product %s", p)
