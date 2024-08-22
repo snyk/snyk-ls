@@ -1,7 +1,6 @@
 package codeaction
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -11,7 +10,6 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -31,6 +29,7 @@ type CodeActionsService struct {
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
 	actionsCache  map[uuid.UUID]cachedAction
+	c             *config.Config
 	logger        zerolog.Logger
 	fileWatcher   dirtyFilesWatcher
 	notifier      noti.Notifier
@@ -46,6 +45,7 @@ func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirty
 	return &CodeActionsService{
 		IssuesProvider: provider,
 		actionsCache:   make(map[uuid.UUID]cachedAction),
+		c:              c,
 		logger:         c.Logger().With().Str("service", "CodeActionsService").Logger(),
 		fileWatcher:    fileWatcher,
 		notifier:       notifier,
@@ -154,27 +154,29 @@ func (c *CodeActionsService) cacheCodeAction(action snyk.CodeAction, issue snyk.
 	}
 }
 
-func (c *CodeActionsService) ResolveCodeAction(action types.CodeAction, server types.Server) (types.CodeAction, error) {
+func (c *CodeActionsService) ResolveCodeAction(action types.CodeAction) (types.CodeAction, error) {
 	c.logger.Debug().Msg("Received code action resolve request")
 	t := time.Now()
 
-	if action.Command != nil {
-		codeAction, err := c.handleCommand(action, server)
-		return codeAction, err
+	// If we don't have the data element, our resolution does not work. We then need to return
+	// the action we received, so that a potentially included command can be executed.
+	if action.Command != nil && action.Data == nil {
+		return action, nil
 	}
 
+	// we cannot proceed without action data, so now it would be an error
 	if action.Data == nil {
-		return types.CodeAction{}, missingKeyError{}
+		return action, missingKeyError{}
 	}
 
 	key := uuid.UUID(*action.Data)
 	cached, found := c.actionsCache[key]
-	// only delete cache entry after it's been resolved
-	defer delete(c.actionsCache, key)
 	if !found {
 		return types.CodeAction{}, errors.New(fmt.Sprint("could not find cached action for uuid ", key))
 	}
 
+	// only delete cache entry after it's been resolved
+	defer delete(c.actionsCache, key)
 	edit := (*cached.action.DeferredEdit)()
 	resolvedAction := cached.action
 	resolvedAction.Edit = edit
@@ -184,20 +186,6 @@ func (c *CodeActionsService) ResolveCodeAction(action types.CodeAction, server t
 
 	c.logger.Debug().Msg(fmt.Sprint("Resolved code action in ", elapsedSeconds, " seconds:\n", codeAction))
 	return codeAction, nil
-}
-
-func (c *CodeActionsService) handleCommand(action types.CodeAction, server types.Server) (types.CodeAction, error) {
-	c.logger.Debug().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
-	cmd := types.CommandData{
-		Title:     action.Command.Title,
-		CommandId: action.Command.Command,
-		Arguments: action.Command.Arguments,
-	}
-	_, err := command.Service().ExecuteCommandData(context.Background(), cmd, server)
-	if err != nil {
-		return types.CodeAction{}, err
-	}
-	return types.CodeAction{}, nil
 }
 
 type missingKeyError struct{}
