@@ -28,11 +28,15 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
+	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_NewOAuthProvider_registersStorageCallback(t *testing.T) {
 	c := testutil.UnitTest(t)
+	storageWithCallbacks, err2 := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(t.TempDir() + "testStorage"))
+	assert.NoError(t, err2)
+	c.SetStorage(storageWithCallbacks)
 
 	// a token that's set into the configuration
 	token := oauth2.Token{
