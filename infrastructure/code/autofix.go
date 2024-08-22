@@ -112,9 +112,7 @@ func (sc *Scanner) GetAutoFixDiffs(
 				logger.Err(err).Msg("Error getting autofix suggestions")
 				return nil, err
 			}
-			if len(suggestions) > 0 {
-				return suggestions, nil
-			}
+			return suggestions, nil
 		}
 	}
 }
