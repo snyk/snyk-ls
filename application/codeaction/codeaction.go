@@ -1,7 +1,6 @@
 package codeaction
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -11,7 +10,6 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -188,20 +186,6 @@ func (c *CodeActionsService) ResolveCodeAction(action types.CodeAction) (types.C
 
 	c.logger.Debug().Msg(fmt.Sprint("Resolved code action in ", elapsedSeconds, " seconds:\n", codeAction))
 	return codeAction, nil
-}
-
-func (c *CodeActionsService) handleCommand(action types.CodeAction, server types.Server) error {
-	c.logger.Debug().Str("method", "codeaction.handleCommand").Msgf("handling command %s", action.Command.Command)
-	cmd := types.CommandData{
-		Title:     action.Command.Title,
-		CommandId: action.Command.Command,
-		Arguments: action.Command.Arguments,
-	}
-	_, err := command.Service().ExecuteCommandData(context.Background(), cmd, server)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 type missingKeyError struct{}
