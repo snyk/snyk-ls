@@ -12,7 +12,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func TestDiagnosticOverview_normalizeFilePath(t *testing.T) {
+func Test_diagnosticOverview_normalizeFilePath(t *testing.T) {
 	// Parse file path to be rendered in the UI
 	tests := []struct {
 		name       string
@@ -52,7 +52,7 @@ func TestDiagnosticOverview_normalizeFilePath(t *testing.T) {
 	}
 }
 
-func TestDiagnosticOverview_getRootNodeText(t *testing.T) {
+func Test_diagnosticOverview_getRootNodeText(t *testing.T) {
 	tests := []struct {
 		name           string
 		issuesByFile   snyk.IssuesByFile
@@ -113,6 +113,72 @@ func TestDiagnosticOverview_getRootNodeText(t *testing.T) {
 			assert.Equal(t, tc.expectedOutput, output)
 		})
 	}
+}
+
+func Test_getFileNodes_diagnosticsAreSortedBySeverity(t *testing.T) {
+	tests := []struct {
+		name          string
+		issuesByFile  snyk.IssuesByFile
+		expectedOrder []string
+	}{
+		{
+			name: "Sort issues by severity within a file",
+			issuesByFile: snyk.IssuesByFile{
+				"dex.yaml": []snyk.Issue{
+					createTestIssue(snyk.Low, "(L) Container has no CPU limit"),
+					createTestIssue(snyk.High, "(H) Role or ClusterRole with too wide permissions"),
+					createTestIssue(snyk.Medium, "(M) Container is running without privilege escalation control"),
+					createTestIssue(snyk.Critical, "(C) Container or Pod is running without root user control"),
+				},
+			},
+			expectedOrder: []string{
+				"(C) Container or Pod is running without root user control",
+				"(H) Role or ClusterRole with too wide permissions",
+				"(M) Container is running without privilege escalation control",
+				"(L) Container has no CPU limit",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Assuming getFileNodes is the function that sorts issues within files
+			fileNodes := getFileNodes(tc.issuesByFile, "")
+
+			var actualOrder []string
+			for _, issues := range fileNodes {
+				for _, issue := range issues {
+					actualOrder = append(actualOrder, string(issue.Text))
+				}
+			}
+
+			assert.Equal(t, tc.expectedOrder, actualOrder)
+		})
+	}
+}
+
+func Test_sortIssuesBySeverity(t *testing.T) {
+	issues := []snyk.Issue{
+		createTestIssue(snyk.Low, "(L) Container has no CPU limit"),
+		createTestIssue(snyk.High, "(H) Role or ClusterRole with too wide permissions"),
+		createTestIssue(snyk.Medium, "(M) Container is running without privilege escalation control"),
+		createTestIssue(snyk.Critical, "(C) Container or Pod is running without root user control"),
+	}
+
+	expectedOrder := []string{
+		"(C) Container or Pod is running without root user control",
+		"(H) Role or ClusterRole with too wide permissions",
+		"(M) Container is running without privilege escalation control",
+		"(L) Container has no CPU limit",
+	}
+
+	sortedIssues := sortIssuesBySeverity(issues)
+	var actualOrder []string
+	for _, issue := range sortedIssues {
+		actualOrder = append(actualOrder, issue.AdditionalData.GetTitle())
+	}
+
+	assert.Equal(t, expectedOrder, actualOrder)
 }
 
 func createTestIssue(severity snyk.Severity, title string) snyk.Issue {

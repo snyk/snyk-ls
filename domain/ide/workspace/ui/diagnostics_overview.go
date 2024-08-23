@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"html/template"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -143,8 +144,10 @@ func getFileNodes(issuesByFile snyk.IssuesByFile, folderPath string) map[Node][]
 			Icon: getFileTypeIcon(),
 			Text: template.HTML(path),
 		}
+
+		sortedIssues := sortIssuesBySeverity(issues)
 		issueNodes := []Node{}
-		for _, issue := range issues {
+		for _, issue := range sortedIssues {
 			issueNodes = append(issueNodes, Node{
 				Icon: html.SeverityIcon(issue),
 				Text: template.HTML(issue.AdditionalData.GetTitle()),
@@ -240,4 +243,11 @@ func normalizeFilePath(filePath string, folderPath string) string {
 	}
 
 	return filepath.Join(filepath.Base(folderPath), relativePath)
+}
+
+func sortIssuesBySeverity(issues []snyk.Issue) []snyk.Issue {
+	sort.Slice(issues, func(i, j int) bool {
+		return issues[i].Severity < issues[j].Severity
+	})
+	return issues
 }
