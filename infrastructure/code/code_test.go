@@ -18,7 +18,6 @@ package code
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/internal/vcs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,6 +25,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/snyk/snyk-ls/internal/vcs"
 
 	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
@@ -311,7 +312,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 			// verify that bundle hash has been saved
 			assert.Equal(t, 1, len(scanner.BundleHashes))
-			assert.Equal(t, snykCodeMock.Options.bundleHash, scanner.BundleHashes[path])
+			assert.Equal(t, snykCodeMock.Options[scanner.BundleHashes[path]].bundleHash, scanner.BundleHashes[path])
 		},
 	)
 }
@@ -346,7 +347,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 
 	// verify that bundle hash has been saved
 	assert.Equal(t, 1, len(scanner.BundleHashes))
-	assert.Equal(t, snykCodeMock.Options.bundleHash, scanner.BundleHashes[path])
+	assert.Equal(t, snykCodeMock.Options[scanner.BundleHashes[path]].bundleHash, scanner.BundleHashes[path])
 }
 
 func Test_Scan(t *testing.T) {

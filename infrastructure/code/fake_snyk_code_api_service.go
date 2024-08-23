@@ -130,7 +130,7 @@ type FakeSnykCodeClient struct {
 	maxConcurrentScans     int
 	NoFixSuggestions       bool
 	UnifiedDiffSuggestions []AutofixUnifiedDiffSuggestion
-	Options                AnalysisOptions
+	Options                map[string]AnalysisOptions
 	C                      *config.Config
 }
 
@@ -246,14 +246,19 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	if f.currentConcurrentScans > f.maxConcurrentScans {
 		f.maxConcurrentScans = f.currentConcurrentScans
 	}
+	if f.Options == nil {
+		f.Options = make(map[string]AnalysisOptions)
+	}
 	FakeSnykCodeApiServiceMutex.Unlock()
 	<-time.After(f.AnalysisDuration)
+
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.currentConcurrentScans--
 	params := []any{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
 	FakeSnykCodeApiServiceMutex.Unlock()
 
+	FakeSnykCodeApiServiceMutex.Lock()
 	issues := []snyk.Issue{FakeIssue}
 	if f.NoFixSuggestions {
 		if issueData, ok := issues[0].AdditionalData.(snyk.CodeIssueData); ok {
@@ -261,7 +266,9 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 			issues[0].AdditionalData = issueData
 		}
 	}
-	f.Options = options
+	f.Options[options.bundleHash] = options
+	FakeSnykCodeApiServiceMutex.Unlock()
+
 	f.C.Logger().Trace().Str("method", "RunAnalysis").Interface(
 		"fakeDiagnostic",
 		FakeIssue,
