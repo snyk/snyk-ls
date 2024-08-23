@@ -405,10 +405,10 @@ func (c *Config) SnykUi() string {
 }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string {
-	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_NAME)
+	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_NAME)
 }
 func (c *Config) IntegrationVersion() string {
-	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_VERSION)
+	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_VERSION)
 }
 func (c *Config) FilterSeverity() types.SeverityFilter { return c.filterSeverity }
 func (c *Config) Token() string {
@@ -436,7 +436,7 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		snykApiUrl = DefaultSnykApiUrl
 	}
 
-	c.Engine().GetConfiguration().Set(configuration.API_URL, snykApiUrl)
+	c.engine.GetConfiguration().Set(configuration.API_URL, snykApiUrl)
 
 	if snykApiUrl != c.snykApiUrl {
 		c.snykApiUrl = snykApiUrl
@@ -729,10 +729,10 @@ func (c *Config) SetManageBinariesAutomatically(enabled bool) {
 
 func (c *Config) ManageCliBinariesAutomatically() bool {
 	c.m.RLock()
+	defer c.m.RUnlock()
 	if c.engine.GetConfiguration().GetString(cli_constants.EXECUTION_MODE_KEY) != cli_constants.EXECUTION_MODE_VALUE_STANDALONE {
 		return false
 	}
-	c.m.RUnlock()
 	return c.ManageBinariesAutomatically()
 }
 
@@ -798,24 +798,24 @@ func (c *Config) addDefaults() {
 func (c *Config) SetIntegrationName(integrationName string) {
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_NAME, integrationName)
+	c.engine.GetConfiguration().Set(configuration.INTEGRATION_NAME, integrationName)
 }
 
 func (c *Config) SetIntegrationVersion(integrationVersion string) {
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_VERSION, integrationVersion)
+	c.engine.GetConfiguration().Set(configuration.INTEGRATION_VERSION, integrationVersion)
 }
 
 func (c *Config) SetIdeName(ideName string) {
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, ideName)
+	c.engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, ideName)
 }
 func (c *Config) SetIdeVersion(ideVersion string) {
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, ideVersion)
+	c.engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, ideVersion)
 }
 
 func (c *Config) TrustedFolders() []string {
@@ -1008,18 +1008,18 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 func (c *Config) IdeVersion() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
-	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
+	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
 }
 func (c *Config) IdeName() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
-	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT)
+	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT)
 }
 
 func (c *Config) IsFedramp() bool {
 	c.m.RLock()
 	defer c.m.RUnlock()
-	return c.Engine().GetConfiguration().GetBool(configuration.IS_FEDRAMP)
+	return c.engine.GetConfiguration().GetBool(configuration.IS_FEDRAMP)
 }
 
 func (c *Config) IsAnalyticsPermitted() bool {
@@ -1027,7 +1027,7 @@ func (c *Config) IsAnalyticsPermitted() bool {
 	defer c.m.RUnlock()
 	logger := c.Logger().With().Str("method", "IsAnalyticsPermitted").Logger()
 
-	u, err := url.Parse(c.Engine().GetConfiguration().GetString(configuration.API_URL))
+	u, err := url.Parse(c.engine.GetConfiguration().GetString(configuration.API_URL))
 
 	if err != nil {
 		logger.Error().Err(err).Msg("unable to parse configured API_URL")
