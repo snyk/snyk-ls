@@ -160,7 +160,7 @@ jobs:
           make clean proxy-test
 
   race-tests:
-    name: proxy-test
+    name: race-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -169,7 +169,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
-          make clean race-tests
+          make clean race-test
 
   update-licenses:
     name: update licenses
