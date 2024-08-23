@@ -81,7 +81,6 @@ type Folder struct {
 
 func (f *Folder) Issue(key string) snyk.Issue {
 	var foundIssue snyk.Issue
-	f.mutex.RLock()
 	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
 		for _, i := range issues {
 			if i.AdditionalData.GetKey() == key {
@@ -91,7 +90,6 @@ func (f *Folder) Issue(key string) snyk.Issue {
 		}
 		return true
 	})
-	f.mutex.RUnlock()
 
 	if foundIssue.ID == "" {
 		if scanner, ok := f.scanner.(snyk.IssueProvider); ok {
@@ -105,7 +103,6 @@ func (f *Folder) Issues() snyk.IssuesByFile {
 	// we want both global issues (OSS and IaC at the moment) and scanner-local issues (Code at the moment)
 	// so we get the global issues first, then append the scanner-local issues
 	issues := snyk.IssuesByFile{}
-	f.mutex.RLock()
 	f.documentDiagnosticCache.Range(func(path string, value []snyk.Issue) bool {
 		if f.Contains(path) {
 			issues[path] = value
@@ -114,7 +111,6 @@ func (f *Folder) Issues() snyk.IssuesByFile {
 		}
 		return true
 	})
-	f.mutex.RUnlock()
 	// scanner-local issues: if the scanner is an IssueProvider, we append the issues it knows about
 	issueProvider, scannerIsIssueProvider := f.scanner.(snyk.IssueProvider)
 	if scannerIsIssueProvider {
@@ -154,9 +150,7 @@ func (f *Folder) IssuesForFile(file string) []snyk.Issue {
 	if scanner, ok := f.scanner.(snyk.IssueProvider); ok {
 		issues = append(issues, scanner.IssuesForFile(file)...)
 	}
-	f.mutex.RLock()
 	globalIssues, ok := f.documentDiagnosticCache.Load(file)
-	f.mutex.RUnlock()
 	if ok {
 		issues = append(issues, globalIssues...)
 	}
@@ -184,13 +178,11 @@ func (f *Folder) Clear() {
 
 func (f *Folder) ClearIssues(path string) {
 	// send global cache evictions
-	f.mutex.Lock()
 	f.documentDiagnosticCache.Range(func(path string, _ []snyk.Issue) bool {
 		f.documentDiagnosticCache.Delete(path)
 		f.sendEmptyDiagnosticForFile(path) // this is done automatically by the scanner removal handler (we hope)
 		return true
 	})
-	f.mutex.Unlock()
 	// let scanner-local cache handle its own stuff
 	if cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider); isCacheProvider {
 		if f.Contains(path) {
@@ -209,9 +201,8 @@ func (f *Folder) clearScannedStatus() {
 }
 
 func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssueType) {
-	f.mutex.Lock()
 	f.documentDiagnosticCache.Range(func(filePath string, previousIssues []snyk.Issue) bool {
-		newIssues := []snyk.Issue{}
+		newIssues := make([]snyk.Issue, 0)
 		for _, issue := range previousIssues {
 			if issue.GetFilterableIssueType() != removedType {
 				newIssues = append(newIssues, issue)
@@ -230,7 +221,6 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 
 		return true
 	})
-	f.mutex.Unlock()
 
 	// a scanner is always tied to FilterableIssueTypes. So we get the product, and check if the scanner is a
 	// cacheProvider for the removed issue type. Then we iterate over the issues to remove the paths contained in
