@@ -39,38 +39,41 @@
     </div>
 
     <div class="tab-container">
-      <div id="all-issues-content" class="tab-content is-selected">
-        <section class="issue-overview">
-          <!-- Placeholder for All Issues content -->
-          <p>No issues to display.</p>
-        </section>
-      </div>
+      <div id="{{.FolderHash}}">
+        <p>{{.FolderName}}</p>
+        <div id="all-issues-content" class="tab-content is-selected">
+          <section class="issue-overview">
+            <!-- Placeholder for All Issues content -->
+            <p>No issues to display.</p>
+          </section>
+        </div>
 
-      <div id="net-new-issues-content" class="tab-content">
-        <!-- Content for Net New Issues -->
-        <section class="issue-overview">
-          {{range .RootNodes}}
-          <div class="sn-list-item root-node {{if .ProductEnabled}}is-clickable{{end}}">
-            <span class="sn-icon">{{.Icon}}</span>
-            <span class="sn-label">{{.Text}}</span>
-          </div>
-          {{end}}
-
-          {{range $file, $issues := .Issues}}
-          <div class="sn-list-item file-node is-expandable {{if (index $issues 0).ProductEnabled}}is-clickable{{end}}">
-            <span class="sn-icon file-icon">{{$file.Icon}}</span>
-            <span class="sn-label file-path">{{$file.Text}}</span>
-            <div class="sn-list issues-list">
-              {{range $issues}}
-              <div class="sn-list-item issue-node {{if .ProductEnabled}}is-clickable{{end}}">
-                <span class="sn-icon issue-icon">{{.Icon}}</span>
-                <span class="sn-label issue-label">{{.Text}}</span>
-              </div>
-              {{end}}
+        <div id="net-new-issues-content" class="tab-content">
+          <!-- Content for Net New Issues -->
+          <section class="issue-overview">
+            {{range .RootNodes}}
+            <div class="sn-list-item root-node {{if .ProductEnabled}}is-clickable{{end}}">
+              <span class="sn-icon">{{.Icon}}</span>
+              <span class="sn-label">{{.Text}}</span>
             </div>
-          </div>
-          {{end}}
-        </section>
+            {{end}}
+
+            {{range $file, $issues := .Issues}}
+            <div class="sn-list-item file-node is-expandable {{if (index $issues 0).ProductEnabled}}is-clickable{{end}}">
+              <span class="sn-icon file-icon">{{$file.Icon}}</span>
+              <span class="sn-label file-path">{{$file.Text}}</span>
+              <div class="sn-list issues-list">
+                {{range $issues}}
+                <div class="sn-list-item issue-node {{if .ProductEnabled}}is-clickable{{end}}">
+                  <span class="sn-icon issue-icon">{{.Icon}}</span>
+                  <span class="sn-label issue-label">{{.Text}}</span>
+                </div>
+                {{end}}
+              </div>
+            </div>
+            {{end}}
+          </section>
+        </div>
       </div>
     </div>
   </main>

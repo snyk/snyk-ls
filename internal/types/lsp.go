@@ -1057,7 +1057,7 @@ type SnykScanParams struct {
 type DiagnosticsOverviewParams struct {
 	Product    string `json:"product"`
 	Html       string `json:"html"`
-	FolderPath string `json:"folderPath"` // project folder path
+	FolderHash string `json:"folderHash"`
 }
 
 type ScanIssue struct { // TODO - convert this to a generic type

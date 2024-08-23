@@ -20,6 +20,7 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
+	"github.com/snyk/snyk-ls/internal/util"
 	"html/template"
 	"path/filepath"
 	"sort"
@@ -52,6 +53,8 @@ type TemplateData struct {
 	Styles               template.CSS
 	Nonce                template.HTML
 	DeltaFindingsEnabled bool
+	FolderName           string
+	FolderHash           string
 }
 
 // Node represents a tree node
@@ -64,13 +67,15 @@ type Node struct {
 func SendDiagnosticsOverview(c *config.Config, p product.Product, issuesByFile snyk.IssuesByFile, folderPath string, notifier notification.Notifier) {
 	logger := c.Logger().With().Str("method", "ui.SendDiagnosticsOverview").Logger()
 
+	// folderHash will be used as id for folder container div
+	folderHash := util.Sha256First16Hash(folderPath)
 	html, err := generateHtml(c, p, issuesByFile, folderPath, logger)
 	if err != nil {
 		logger.Err(err).Msg("failed to get diagnostics overview template data")
 		return
 	}
 
-	diagnosticsOverview := types.DiagnosticsOverviewParams{Product: p.ToProductCodename(), Html: html, FolderPath: folderPath}
+	diagnosticsOverview := types.DiagnosticsOverviewParams{Product: p.ToProductCodename(), Html: html, FolderHash: folderHash}
 	notifier.Send(diagnosticsOverview)
 
 	logger.Debug().Msgf("sent diagnostics overview htmlBuffer for product %s", p)
@@ -119,12 +124,19 @@ func generateHtml(c *config.Config, p product.Product, issuesByFile snyk.IssuesB
 
 	fileNodes := getFileNodes(issuesByFile, folderPath)
 
+	// folderName will be used in template show which folder we are on ex: > dex
+	// folderHash will be used as id for folder container div
+	folderName := filepath.Base(folderPath)
+	folderHash := util.Sha256First16Hash(folderPath)
+
 	data := TemplateData{
 		RootNodes:            rootNodes,
 		Issues:               fileNodes,
 		Styles:               template.CSS(diagnosticsOverviewTemplateCSS),
 		Nonce:                template.HTML(nonce),
 		DeltaFindingsEnabled: c.IsDeltaFindingsEnabled(),
+		FolderHash:           folderHash,
+		FolderName:           folderName,
 	}
 
 	var htmlBuffer bytes.Buffer
