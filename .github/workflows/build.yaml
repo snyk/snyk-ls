@@ -159,6 +159,18 @@ jobs:
         run: |
           make clean proxy-test
 
+  race-tests:
+    name: proxy-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run race tests
+        env:
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+        run: |
+          make clean race-tests
+
   update-licenses:
     name: update licenses
     needs: [unit-tests]

@@ -71,7 +71,6 @@ func (t *TestExecutor) GetCommand() []string {
 }
 
 func (t *TestExecutor) Execute(ctx context.Context, cmd []string, _ string) (resp []byte, err error) {
-	t.cmd = cmd
 	err = ctx.Err()
 	if err != nil { // Checking for ctx cancellation before faking CLI execution
 		return resp, err
@@ -79,6 +78,7 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, _ string) (res
 
 	// Increment the number of started scans after checking for ctx cancellation to simulate a running CLI
 	t.counterLock.Lock()
+	t.cmd = cmd
 	t.startedScans++
 	t.counterLock.Unlock()
 

@@ -73,6 +73,7 @@ race-test:
 	@echo "==> Running integration tests with race-detector..."
 	@mkdir -p $(BUILD_DIR)
 	@export INTEG_TESTS=true
+	@export SMOKE_TESTS=true
 	@go test $(NOCACHE) $(TIMEOUT) -race -failfast ./...
 
 .PHONY: proxy-test
