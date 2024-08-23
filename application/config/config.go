@@ -553,7 +553,6 @@ func (c *Config) ConfigureLogging(server types.Server) {
 		}
 	}
 	c.SetLogLevel(logLevel.String())
-	zerolog.TimeFieldFormat = time.RFC3339
 
 	levelWriter := logging.New(server)
 	writers := []io.Writer{levelWriter}
