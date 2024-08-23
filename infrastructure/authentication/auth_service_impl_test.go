@@ -19,6 +19,7 @@ package authentication
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -93,12 +94,15 @@ func Test_Logout(t *testing.T) {
 
 	// act
 	service.Logout(context.Background())
+	mu := sync.RWMutex{}
 	tokenResetReceived := false
 	callback := func(params any) {
 		switch p := params.(type) {
 		case types.AuthenticationParams:
 			require.Empty(t, p.Token)
+			mu.Lock()
 			tokenResetReceived = true
+			mu.Unlock()
 		}
 	}
 	go notifier.CreateListener(callback)
@@ -106,6 +110,8 @@ func Test_Logout(t *testing.T) {
 	// assert
 	assert.False(t, provider.IsAuthenticated)
 	assert.Eventuallyf(t, func() bool {
+		mu.RLock()
+		defer mu.RUnlock()
 		return tokenResetReceived
 	}, time.Second*10, time.Millisecond, "did not receive a token reset")
 }
@@ -119,6 +125,7 @@ func TestHandleInvalidCredentials(t *testing.T) {
 		provider.IsAuthenticated = false
 		c.SetToken("invalidCreds")
 		cut := NewAuthenticationService(c, provider, errorReporter, notifier).(*AuthenticationServiceImpl)
+		mu := sync.RWMutex{}
 		messageRequestReceived := false
 		callback := func(params any) {
 			switch p := params.(type) {
@@ -131,7 +138,9 @@ func TestHandleInvalidCredentials(t *testing.T) {
 				cancelAction, ok := actions.Get(keys[1])
 				require.True(t, ok)
 				require.Empty(t, cancelAction.CommandId)
+				mu.Lock()
 				messageRequestReceived = true
+				mu.Unlock()
 			}
 		}
 		go notifier.CreateListener(callback)
@@ -140,6 +149,8 @@ func TestHandleInvalidCredentials(t *testing.T) {
 
 		maxWait := time.Second * 10
 		assert.Eventuallyf(t, func() bool {
+			mu.RLock()
+			defer mu.RUnlock()
 			return messageRequestReceived
 		}, maxWait, time.Millisecond, "didn't receive show message request to re-authenticate")
 	})
