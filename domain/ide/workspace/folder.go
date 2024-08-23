@@ -20,13 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync"
+
 	"github.com/snyk/snyk-ls/domain/ide/workspace/ui"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	delta2 "github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-	"strings"
-	"sync"
 
 	"github.com/snyk/snyk-ls/internal/delta"
 
@@ -71,7 +72,7 @@ type Folder struct {
 	documentDiagnosticCache *xsync.MapOf[string, []snyk.Issue]
 	scanner                 scanner.Scanner
 	hoverService            hover.Service
-	mutex                   sync.Mutex
+	mutex                   sync.RWMutex
 	scanNotifier            scanner.ScanNotifier
 	notifier                noti.Notifier
 	c                       *config.Config
@@ -80,6 +81,7 @@ type Folder struct {
 
 func (f *Folder) Issue(key string) snyk.Issue {
 	var foundIssue snyk.Issue
+	f.mutex.RLock()
 	f.documentDiagnosticCache.Range(func(filePath string, issues []snyk.Issue) bool {
 		for _, i := range issues {
 			if i.AdditionalData.GetKey() == key {
@@ -89,6 +91,8 @@ func (f *Folder) Issue(key string) snyk.Issue {
 		}
 		return true
 	})
+	f.mutex.RUnlock()
+
 	if foundIssue.ID == "" {
 		if scanner, ok := f.scanner.(snyk.IssueProvider); ok {
 			foundIssue = scanner.Issue(key)
@@ -101,6 +105,7 @@ func (f *Folder) Issues() snyk.IssuesByFile {
 	// we want both global issues (OSS and IaC at the moment) and scanner-local issues (Code at the moment)
 	// so we get the global issues first, then append the scanner-local issues
 	issues := snyk.IssuesByFile{}
+	f.mutex.RLock()
 	f.documentDiagnosticCache.Range(func(path string, value []snyk.Issue) bool {
 		if f.Contains(path) {
 			issues[path] = value
@@ -109,7 +114,7 @@ func (f *Folder) Issues() snyk.IssuesByFile {
 		}
 		return true
 	})
-
+	f.mutex.RUnlock()
 	// scanner-local issues: if the scanner is an IssueProvider, we append the issues it knows about
 	issueProvider, scannerIsIssueProvider := f.scanner.(snyk.IssueProvider)
 	if scannerIsIssueProvider {
@@ -149,7 +154,9 @@ func (f *Folder) IssuesForFile(file string) []snyk.Issue {
 	if scanner, ok := f.scanner.(snyk.IssueProvider); ok {
 		issues = append(issues, scanner.IssuesForFile(file)...)
 	}
+	f.mutex.RLock()
 	globalIssues, ok := f.documentDiagnosticCache.Load(file)
+	f.mutex.RUnlock()
 	if ok {
 		issues = append(issues, globalIssues...)
 	}
@@ -177,12 +184,13 @@ func (f *Folder) Clear() {
 
 func (f *Folder) ClearIssues(path string) {
 	// send global cache evictions
+	f.mutex.Lock()
 	f.documentDiagnosticCache.Range(func(path string, _ []snyk.Issue) bool {
 		f.documentDiagnosticCache.Delete(path)
 		f.sendEmptyDiagnosticForFile(path) // this is done automatically by the scanner removal handler (we hope)
 		return true
 	})
-
+	f.mutex.Unlock()
 	// let scanner-local cache handle its own stuff
 	if cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider); isCacheProvider {
 		if f.Contains(path) {
@@ -201,6 +209,7 @@ func (f *Folder) clearScannedStatus() {
 }
 
 func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssueType) {
+	f.mutex.Lock()
 	f.documentDiagnosticCache.Range(func(filePath string, previousIssues []snyk.Issue) bool {
 		newIssues := []snyk.Issue{}
 		for _, issue := range previousIssues {
@@ -221,6 +230,7 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 
 		return true
 	})
+	f.mutex.Unlock()
 
 	// a scanner is always tied to FilterableIssueTypes. So we get the product, and check if the scanner is a
 	// cacheProvider for the removed issue type. Then we iterate over the issues to remove the paths contained in
@@ -269,8 +279,8 @@ func (f *Folder) sendEmptyDiagnosticForFile(path string) {
 }
 
 func (f *Folder) IsScanned() bool {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
 	return f.status == Scanned
 }
 
@@ -283,8 +293,8 @@ func (f *Folder) SetStatus(status FolderStatus) {
 func (f *Folder) ScanFolder(ctx context.Context) {
 	f.scan(ctx, f.path)
 	f.mutex.Lock()
-	defer f.mutex.Unlock()
 	f.status = Scanned
+	f.mutex.Unlock()
 }
 
 func (f *Folder) ScanFile(ctx context.Context, path string) {
@@ -301,7 +311,6 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		f.c.Logger().Warn().Str("path", path).Str("method", method).Msg("skipping scan of untrusted path")
 		return
 	}
-
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
@@ -349,7 +358,9 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 		}
 
 		// let's first remove the cache entry
+		f.mutex.Lock()
 		f.documentDiagnosticCache.Delete(issue.AffectedFilePath)
+		f.mutex.Unlock()
 
 		// global cache deduplication
 		cachedIssues, found := newCache[issue.AffectedFilePath]
@@ -365,7 +376,9 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 	}
 
 	for path, issues := range newCache {
+		f.mutex.Lock()
 		f.documentDiagnosticCache.Store(path, issues)
+		f.mutex.Unlock()
 	}
 }
 

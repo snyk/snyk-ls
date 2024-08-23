@@ -17,12 +17,16 @@
 package analytics
 
 import (
+	"sync"
+
 	configuration2 "github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 )
+
+var analyticsMu = sync.RWMutex{}
 
 func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 	logger := c.Logger().With().Str("method", "analytics.sendAnalyticsToAPI").Logger()
@@ -37,12 +41,13 @@ func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 	engine := c.Engine()
 	configuration := engine.GetConfiguration().Clone()
 	configuration.Set(configuration2.FLAG_EXPERIMENTAL, true)
-
+	analyticsMu.Lock()
 	_, err := engine.InvokeWithInputAndConfig(
 		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
 		[]workflow.Data{inputData},
 		configuration,
 	)
+	analyticsMu.Unlock()
 
 	// This workflow should fail silently if the endpoint can not be found and write the error to the log.
 	if err != nil {
