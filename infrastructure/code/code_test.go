@@ -311,8 +311,10 @@ func TestUploadAndAnalyze(t *testing.T) {
 			assert.Equal(t, 0, params[2])
 
 			// verify that bundle hash has been saved
-			assert.Equal(t, 1, len(scanner.BundleHashes))
-			assert.Equal(t, snykCodeMock.Options[scanner.BundleHashes[path]].bundleHash, scanner.BundleHashes[path])
+			scanner.bundleHashesMutex.RLock()
+			defer scanner.bundleHashesMutex.RUnlock()
+			assert.Equal(t, 1, len(scanner.bundleHashes))
+			assert.Equal(t, snykCodeMock.Options[scanner.bundleHashes[path]].bundleHash, scanner.bundleHashes[path])
 		},
 	)
 }
@@ -346,8 +348,10 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	assert.Equal(t, "Neil M", issues[1].IgnoreDetails.IgnoredBy)
 
 	// verify that bundle hash has been saved
-	assert.Equal(t, 1, len(scanner.BundleHashes))
-	assert.Equal(t, snykCodeMock.Options[scanner.BundleHashes[path]].bundleHash, scanner.BundleHashes[path])
+	scanner.bundleHashesMutex.RLock()
+	defer scanner.bundleHashesMutex.RUnlock()
+	assert.Equal(t, 1, len(scanner.bundleHashes))
+	assert.Equal(t, snykCodeMock.Options[scanner.bundleHashes[path]].bundleHash, scanner.bundleHashes[path])
 }
 
 func Test_Scan(t *testing.T) {
@@ -561,11 +565,10 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 		Return(&learn.Lesson{Url: expectedLessonUrl}, nil).AnyTimes()
 
 	scanner := &Scanner{
-		learnService:      learnMock,
-		errorReporter:     errorReporterMock,
-		changedPaths:      make(map[string]map[string]bool),
-		changedFilesMutex: sync.Mutex{},
-		c:                 c,
+		learnService:  learnMock,
+		errorReporter: errorReporterMock,
+		changedPaths:  make(map[string]map[string]bool),
+		c:             c,
 	}
 
 	issues := []snyk.Issue{

@@ -69,8 +69,9 @@ type Scanner struct {
 	BundleUploader    *BundleUploader
 	SnykApiClient     snyk_api.SnykApiClient
 	errorReporter     codeClientObservability.ErrorReporter
-	changedFilesMutex sync.Mutex
-	scanStatusMutex   sync.Mutex
+	bundleHashesMutex sync.RWMutex
+	changedFilesMutex sync.RWMutex
+	scanStatusMutex   sync.RWMutex
 	runningScans      map[string]*ScanStatus
 	changedPaths      map[string]map[string]bool // tracks files that were changed since the last scan per workspace folder
 	learnService      learn.Service
@@ -80,13 +81,28 @@ type Scanner struct {
 	// global map to store last used bundle hashes for each workspace folder
 	// these are needed when we want to retrieve auto-fixes for a previously
 	// analyzed folder
-	BundleHashes map[string]string
+	bundleHashes map[string]string
 	codeScanner  codeClient.CodeScanner
 	// this is the local scanner issue cache. In the future, it should be used as source of truth for the issues
 	// the cache in workspace/folder should just delegate to this cache
 	issueCache          *imcache.Cache[string, []snyk.Issue]
 	cacheRemovalHandler func(path string)
 	c                   *config.Config
+}
+
+func (sc *Scanner) BundleHashes() map[string]string {
+	sc.bundleHashesMutex.RLock()
+	defer sc.bundleHashesMutex.RUnlock()
+	return sc.bundleHashes
+}
+
+func (sc *Scanner) AddBundleHash(key, value string) {
+	sc.bundleHashesMutex.Lock()
+	defer sc.bundleHashesMutex.Unlock()
+	if sc.bundleHashes == nil {
+		sc.bundleHashes = make(map[string]string)
+	}
+	sc.bundleHashes[key] = value
 }
 
 func (sc *Scanner) DeltaScanningEnabled() bool {
@@ -103,7 +119,7 @@ func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, repor
 		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
 		learnService:   learnService,
 		notifier:       notifier,
-		BundleHashes:   map[string]string{},
+		bundleHashes:   map[string]string{},
 		codeScanner:    codeScanner,
 		c:              bundleUploader.c,
 	}
@@ -360,7 +376,9 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, pa
 		return issues, nil
 	}
 
-	sc.BundleHashes[path] = uploadedBundle.BundleHash
+	sc.bundleHashesMutex.Lock()
+	sc.bundleHashes[path] = uploadedBundle.BundleHash
+	sc.bundleHashesMutex.Unlock()
 
 	issues, err = uploadedBundle.FetchDiagnosticsData(span.Context())
 	if ctx.Err() != nil {
@@ -395,7 +413,9 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
 	if err != nil {
 		return []snyk.Issue{}, err
 	}
-	sc.BundleHashes[path] = bundleHash
+	sc.bundleHashesMutex.Lock()
+	sc.bundleHashes[path] = bundleHash
+	sc.bundleHashesMutex.Unlock()
 
 	converter := SarifConverter{sarif: *sarif, c: sc.c}
 	issues, err = converter.toIssues(path)
