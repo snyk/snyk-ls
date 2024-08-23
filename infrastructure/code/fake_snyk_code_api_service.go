@@ -134,7 +134,7 @@ type FakeSnykCodeClient struct {
 	C                      *config.Config
 }
 
-func (f *FakeSnykCodeClient) GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
+func (f *FakeSnykCodeClient) GetAutoFixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
 	return f.UnifiedDiffSuggestions, nil
 }
 
@@ -279,7 +279,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 	_ context.Context,
 	options AutofixOptions,
-	baseDir string,
+	_ string,
 ) ([]AutofixSuggestion, AutofixStatus, error) {
 	<-time.After(f.AnalysisDuration)
 	FakeSnykCodeApiServiceMutex.Lock()
@@ -331,6 +331,6 @@ func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
 }
 
-func (f *FakeSnykCodeClient) SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error {
+func (f *FakeSnykCodeClient) SubmitAutofixFeedback(_ context.Context, _ string, _ bool) error {
 	return nil
 }
