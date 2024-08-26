@@ -37,7 +37,7 @@ func ResolveCodeActionHandler(c *config.Config, service *codeaction.CodeActionsS
 		logger = logger.With().Interface("request", params).Logger()
 		logger.Debug().Msg("RECEIVING")
 
-		action, err := service.ResolveCodeAction(params, server)
+		action, err := service.ResolveCodeAction(params)
 		if err != nil {
 			if codeaction.IsMissingKeyError(err) { // If the key is missing, it means that the code action is not a deferred code action
 				logger.Debug().Msg("Skipping code action - missing key")

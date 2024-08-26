@@ -138,6 +138,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 	editFn := func() *snyk.WorkspaceEdit {
 		c := config.CurrentConfig()
 		method := "code.enhanceWithAutofixSuggestionEdits"
+		logger := c.Logger().With().Str("method", method).Logger()
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
 
@@ -149,8 +150,8 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 
 		encodedNormalizedPath, err := ToEncodedNormalizedPath(b.rootPath, issue.AffectedFilePath)
 		if err != nil {
-			c.Logger().
-				Err(err).Str("method", method).
+			logger.
+				Err(err).
 				Str("rootPath", b.rootPath).
 				Str("AffectedFilePath", issue.AffectedFilePath).
 				Msg("error converting to relative file path")
@@ -168,13 +169,13 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 		// Polling function just calls the endpoint and registers result, signaling `done` to the
 		// channel.
 		pollFunc := func() (fix *AutofixSuggestion, complete bool) {
-			b.c.Logger().Info().Msg("polling")
+			logger.Debug().Str("requestId", b.requestId).Msg("polling")
 			fixSuggestions, fixStatus, err := b.SnykCode.GetAutofixSuggestions(s.Context(), autofixOptions, b.rootPath)
 			fix = nil
 			complete = false
 			if err != nil {
-				b.c.Logger().Error().
-					Err(err).Str("method", method).Str("requestId", b.requestId).
+				logger.Error().
+					Err(err).Str("requestId", b.requestId).
 					Str("stage", "requesting autofix").Msg("error requesting autofix")
 				complete = true
 			} else if fixStatus.message == completeStatus {
@@ -182,7 +183,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggestion goes into the fix
 					fix = &fixSuggestions[0]
 				} else {
-					b.c.Logger().Debug().Str("method", method).Str("requestId", b.requestId).Msg("No good fix could be computed.")
+					logger.Debug().Str("requestId", b.requestId).Msg("No good fix could be computed.")
 				}
 				complete = true
 			}
@@ -198,7 +199,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 		for {
 			select {
 			case <-timeoutTimer.C:
-				b.c.Logger().Error().Str("method", "GetAutofixSuggestions").Str("requestId", b.requestId).Msg("timeout requesting autofix")
+				logger.Error().Str("requestId", b.requestId).Msg("timeout requesting autofix")
 				b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please try again. Request ID: "+b.requestId)
 				return nil
 			case <-pollingTicker.C:

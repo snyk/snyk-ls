@@ -19,11 +19,15 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"os"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/adrg/xdg"
+
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	storage2 "github.com/snyk/snyk-ls/internal/storage"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
@@ -207,11 +211,24 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		logger := c.Logger().With().Str("method", method).Logger()
 		// we can only log, after we add the token to the list of forbidden outputs
 		defer logger.Info().Any("params", params).Msg("RECEIVING")
-		InitializeSettings(c, params.InitializationOptions)
 
 		c.SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
+		// update storage
+		file, err := xdg.ConfigFile("snyk/ls-config-" + c.IdeName())
+		if err != nil {
+			return nil, err
+		}
 
+		storage, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(file))
+		if err != nil {
+			return nil, err
+		}
+
+		c.SetStorage(storage)
+		c.Engine().GetConfiguration().SetStorage(c.Storage())
+
+		InitializeSettings(c, params.InitializationOptions)
 		// async processing listener
 		go createProgressListener(progress.Channel, srv, c.Logger())
 		registerNotifier(c, srv)
