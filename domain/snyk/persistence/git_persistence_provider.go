@@ -261,7 +261,7 @@ func (g *GitPersistenceProvider) Exists(folderPath, commitHash string, p product
 func (g *GitPersistenceProvider) fileSchema(filePath string) (string, hashedFolderPath, string, product.Product, error) {
 	// file name structure is schemaVersion.hashedFolderPath.commitHash.productName.json
 	s := strings.Split(filePath, ".")
-	if len(s) != 3 {
+	if len(s) != 5 {
 		return "", "", "", "", fmt.Errorf("failed to parse file name %s", filePath)
 	}
 	schemaVersion := s[0]
