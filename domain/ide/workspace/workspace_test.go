@@ -101,7 +101,7 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 		},
 	}}
 
-	w.ChangeWorkspaceFolders(context.Background(), params)
+	w.ChangeWorkspaceFolders(params)
 
 	assert.Nil(t, w.GetFolderContaining(toBeRemoved))
 

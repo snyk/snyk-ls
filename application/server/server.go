@@ -183,8 +183,13 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 
 		logger.Info().Msg("RECEIVING")
 		defer logger.Info().Msg("SENDING")
-		workspace.Get().ChangeWorkspaceFolders(bgCtx, params)
-		command.HandleFolders(bgCtx, srv, di.Notifier())
+		changedFolders := workspace.Get().ChangeWorkspaceFolders(params)
+		command.HandleFolders(bgCtx, srv, di.Notifier(), di.ScanPersister())
+		if config.CurrentConfig().IsAutoScanEnabled() {
+			for _, f := range changedFolders {
+				f.ScanFolder(ctx)
+			}
+		}
 		return nil, nil
 	})
 }
@@ -369,6 +374,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
 		}
+		command.HandleFolders(context.Background(), srv, di.Notifier(), di.ScanPersister())
 
 		autoScanEnabled := c.IsAutoScanEnabled()
 		if autoScanEnabled {
@@ -383,7 +389,6 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		}
 
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
-		go command.HandleFolders(context.Background(), srv, di.Notifier())
 		return nil, nil
 	})
 }
