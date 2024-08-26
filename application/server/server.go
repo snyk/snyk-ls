@@ -393,7 +393,11 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 			return nil, nil
 		}
 		command.HandleFolders(context.Background(), srv, di.Notifier(), di.ScanPersister())
-		go checkForExpiredPersistedCache()
+
+		// Check once for expired cache in same thread before triggering a scan.
+		// Start a periodic go routine to check for the expired cache afterwards
+		deleteExpiredCache()
+		go periodicallyCheckForExpiredCache()
 
 		autoScanEnabled := c.IsAutoScanEnabled()
 		if autoScanEnabled {
@@ -412,14 +416,18 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 	})
 }
 
-func checkForExpiredPersistedCache() {
+func deleteExpiredCache() {
+	w := workspace.Get()
+	var folderList []string
+	for _, f := range w.Folders() {
+		folderList = append(folderList, f.Path())
+	}
+	di.ScanPersister().Clear(folderList, true)
+}
+
+func periodicallyCheckForExpiredCache() {
 	for {
-		w := workspace.Get()
-		var folderList []string
-		for _, f := range w.Folders() {
-			folderList = append(folderList, f.Path())
-		}
-		di.ScanPersister().Clear(folderList, true)
+		deleteExpiredCache()
 		time.Sleep(time.Duration(persistence.ExpirationInSeconds) * time.Second)
 	}
 }
