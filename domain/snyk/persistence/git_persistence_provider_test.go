@@ -254,7 +254,8 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 	cut := NewGitPersistenceProvider(c.Logger())
-
+	err = cut.Init([]string{folderPath})
+	assert.NoError(t, err)
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
 	err = cut.Add(folderPath, commitHash, existingOssIssues, po)
@@ -282,7 +283,8 @@ func TestClear_ExistingCache(t *testing.T) {
 	assert.NoError(t, err)
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger())
-
+	err = cut.Init([]string{folderPath})
+	assert.NoError(t, err)
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
 
@@ -491,7 +493,8 @@ func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
 
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger())
-
+	err = cut.Init([]string{folderPath})
+	assert.NoError(t, err)
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
 	assert.NoError(t, err)
 	err = os.RemoveAll(cacheDir)
