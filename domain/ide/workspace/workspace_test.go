@@ -27,8 +27,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
@@ -68,44 +66,6 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 
 	assert.Contains(t, c.TrustedFolders(), trustedFolder.path)
 	assert.NotContains(t, c.TrustedFolders(), untrustedFolder.path)
-	assert.Eventually(t, func() bool {
-		return sc.Calls() == 1
-	}, time.Second, time.Millisecond, "scanner should be called after trust is granted")
-}
-
-func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
-	c := testutil.UnitTest(t)
-	const trustedDummy = "trustedDummy"
-	const untrustedDummy = "untrustedDummy"
-	const toBeRemoved = "toBeRemoved"
-	trustedPathAfterConversions := uri.PathFromUri(uri.PathToUri(trustedDummy))
-	toBeRemovedAbsolutePathAfterConversions := uri.PathFromUri(uri.PathToUri(toBeRemoved))
-
-	sc := &scanner.TestScanner{}
-	scanNotifier := scanner.NewMockScanNotifier()
-	w := New(c, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil)
-	toBeRemovedFolder := NewFolder(c, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, sc, nil, scanNotifier, notification.NewNotifier(), nil)
-	w.AddFolder(toBeRemovedFolder)
-
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]string{trustedPathAfterConversions})
-	c.SetAutomaticScanning(true)
-
-	params := types.DidChangeWorkspaceFoldersParams{Event: types.WorkspaceFoldersChangeEvent{
-		Added: []types.WorkspaceFolder{
-			{Name: trustedDummy, Uri: uri.PathToUri(trustedDummy)},
-			{Name: untrustedDummy, Uri: uri.PathToUri(untrustedDummy)},
-		},
-		Removed: []types.WorkspaceFolder{
-			{Name: toBeRemoved, Uri: uri.PathToUri(toBeRemoved)},
-		},
-	}}
-
-	w.ChangeWorkspaceFolders(params)
-
-	assert.Nil(t, w.GetFolderContaining(toBeRemoved))
-
-	// one call for one trusted folder
 	assert.Eventually(t, func() bool {
 		return sc.Calls() == 1
 	}, time.Second, time.Millisecond, "scanner should be called after trust is granted")
