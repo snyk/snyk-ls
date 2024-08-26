@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"os"
 	"runtime"
 	"strings"
@@ -392,6 +393,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 			return nil, nil
 		}
 		command.HandleFolders(context.Background(), srv, di.Notifier(), di.ScanPersister())
+		go checkForExpiredPersistedCache()
 
 		autoScanEnabled := c.IsAutoScanEnabled()
 		if autoScanEnabled {
@@ -408,6 +410,18 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
 		return nil, nil
 	})
+}
+
+func checkForExpiredPersistedCache() {
+	for {
+		w := workspace.Get()
+		var folderList []string
+		for _, f := range w.Folders() {
+			folderList = append(folderList, f.Path())
+		}
+		di.ScanPersister().Clear(folderList, true)
+		time.Sleep(time.Duration(persistence.ExpirationInSeconds) * time.Second)
+	}
 }
 
 func addWorkspaceFolders(c *config.Config, params types.InitializeParams, w *workspace.Workspace) {
@@ -550,8 +564,8 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 			di.Notifier().Send(diagnosticParams)
 		}
 
-		if scanner, ok := di.Scanner().(scanner.PackageScanner); ok {
-			scanner.ScanPackages(context.Background(), config.CurrentConfig(), filePath, "")
+		if sc, ok := di.Scanner().(scanner.PackageScanner); ok {
+			sc.ScanPackages(context.Background(), config.CurrentConfig(), filePath, "")
 		}
 		return nil, nil
 	})

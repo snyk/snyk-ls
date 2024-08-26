@@ -124,8 +124,8 @@ func (g *GitPersistenceProvider) Clear(folders []string, deleteOnlyExpired bool)
 	if len(folders) == 0 {
 		return
 	}
-
 	for _, folderPath := range folders {
+		g.logger.Info().Msgf("checking for expired cache for folder %s", folderPath)
 		cacheDir, err := g.snykCacheFolder(folderPath)
 		if err != nil {
 			continue
