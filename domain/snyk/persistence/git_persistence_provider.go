@@ -35,9 +35,12 @@ import (
 )
 
 const (
-	CacheFolder       = "snyk"
-	SchemaVersion     = "v1"
-	ExpirationInHours = 12
+	CacheFolder   = "snyk"
+	SchemaVersion = "v1"
+)
+
+var (
+	ExpirationInSeconds = 12 * 60 * 60
 )
 
 var (
@@ -258,11 +261,11 @@ func (g *GitPersistenceProvider) Exists(folderPath, commitHash string, p product
 	return false
 }
 
-func (g *GitPersistenceProvider) fileSchema(filePath string) (string, hashedFolderPath, string, product.Product, error) {
+func (g *GitPersistenceProvider) fileSchema(fullPath string) (string, hashedFolderPath, string, product.Product, error) {
 	// file name structure is schemaVersion.hashedFolderPath.commitHash.productName.json
-	s := strings.Split(filePath, ".")
+	s := strings.Split(filepath.Base(fullPath), ".")
 	if len(s) != 5 {
-		return "", "", "", "", fmt.Errorf("failed to parse file name %s", filePath)
+		return "", "", "", "", fmt.Errorf("failed to parse file name %s", fullPath)
 	}
 	schemaVersion := s[0]
 	hash := hashedFolderPath(s[1])
@@ -283,9 +286,8 @@ func (g *GitPersistenceProvider) deleteCacheEntryIfExpired(fullPath string) erro
 	if err != nil {
 		return err
 	}
-
-	// If elapsed time is > ExpirationInHours, delete the file
-	if time.Since(fileInfo.ModTime()) > ExpirationInHours*time.Hour {
+	// If elapsed time is > ExpirationInSeconds, delete the file
+	if time.Since(fileInfo.ModTime()) > time.Duration(ExpirationInSeconds)*time.Second {
 		return g.deleteFromDiskAndCache(fullPath, hash, commitHash, p)
 	}
 

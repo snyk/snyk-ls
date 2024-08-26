@@ -30,6 +30,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestInit_Empty(t *testing.T) {
@@ -305,13 +306,58 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	assert.NoError(t, err)
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger())
-
+	err = cut.Init([]string{folderPath})
+	assert.NoError(t, err)
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
+	assert.NoError(t, err)
 	cut.Clear([]string{folderPath}, false)
 
-	assert.Nil(t, err)
 	assert.Empty(t, cut.cache)
 	assert.False(t, cut.snapshotExistsOnDisk(cacheDir, hash, commitHash, pc))
+}
+
+func TestClear_ExpiredCache(t *testing.T) {
+	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	repo := initGitRepo(t, folderPath, false)
+
+	expiredIssueList := []snyk.Issue{
+		{
+			GlobalIdentity: uuid.New().String(),
+		},
+	}
+	existingIssueList := []snyk.Issue{
+		{
+			GlobalIdentity: uuid.New().String(),
+		},
+	}
+
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+	expiredProduct := product.ProductCode
+	existingProduct := product.ProductOpenSource
+
+	cut := NewGitPersistenceProvider(c.Logger())
+	// override expiration to be 2 seconds instead of 12 hours
+	ExpirationInSeconds = 2
+
+	err = cut.Init([]string{folderPath})
+	assert.NoError(t, err)
+
+	err = cut.Add(folderPath, commitHash, expiredIssueList, expiredProduct)
+	assert.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+	err = cut.Add(folderPath, commitHash, existingIssueList, existingProduct)
+	assert.NoError(t, err)
+	cut.Clear([]string{folderPath}, true)
+
+	expiredActualIssueList, err := cut.GetPersistedIssueList(folderPath, expiredProduct)
+	assert.NoError(t, err)
+	existingActualIssueList, err := cut.GetPersistedIssueList(folderPath, existingProduct)
+	assert.NoError(t, err)
+	assert.Empty(t, expiredActualIssueList)
+	assert.NotEmpty(t, existingActualIssueList)
 }
 
 func TestCreateOrAppendToCache_NewCache(t *testing.T) {
