@@ -223,6 +223,9 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 	p := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger())
 
+	err = cut.Init([]string{folderPath})
+	assert.NoError(t, err)
+
 	err = cut.Add(folderPath, commitHash, issueList, p)
 	assert.NoError(t, err)
 	actualCommitHash, err := cut.getCommitHashForProduct(folderPath, p)
