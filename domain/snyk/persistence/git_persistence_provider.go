@@ -275,13 +275,7 @@ func (g *GitPersistenceProvider) deleteCacheEntryIfExpired(fullPath string) erro
 	g.logger.Debug().Msgf("deleting cached scan file %s", fullPath)
 	schemaVersion, hash, commitHash, p, _ := g.fileSchema(fullPath)
 	if schemaVersion != SchemaVersion {
-		// if file has incorrect schema we just delete it
-		err := os.Remove(fullPath)
-		err = g.deleteFromCache(hash, commitHash, p)
-		if err != nil {
-			g.logger.Debug().Err(err).Msg("failed to remove file from cache: " + fullPath)
-		}
-		return err
+		return g.deleteFromDiskAndCache(fullPath, hash, commitHash, p)
 	}
 
 	// Check last modified date
@@ -289,17 +283,26 @@ func (g *GitPersistenceProvider) deleteCacheEntryIfExpired(fullPath string) erro
 	if err != nil {
 		return err
 	}
+
 	// If elapsed time is > ExpirationInHours, delete the file
 	if time.Since(fileInfo.ModTime()) > ExpirationInHours*time.Hour {
-		err = os.Remove(fullPath)
-		err = g.deleteFromCache(hash, commitHash, p)
-		if err != nil {
-			g.logger.Debug().Err(err).Msg("failed to remove file from cache: " + fullPath)
-		}
-		return err
+		return g.deleteFromDiskAndCache(fullPath, hash, commitHash, p)
 	}
 
 	return nil
+}
+
+func (g *GitPersistenceProvider) deleteFromDiskAndCache(fullPath string, hash hashedFolderPath, commitHash string, p product.Product) error {
+	// if file has incorrect schema we just delete it
+	err := os.Remove(fullPath)
+	if err != nil {
+		g.logger.Debug().Err(err).Msg("could not remove cached file from disk: " + fullPath)
+	}
+	err = g.deleteFromCache(hash, commitHash, p)
+	if err != nil {
+		g.logger.Debug().Err(err).Msg("failed to remove file from cache: " + fullPath)
+	}
+	return err
 }
 
 func (g *GitPersistenceProvider) deleteFile(fullPath string) error {
