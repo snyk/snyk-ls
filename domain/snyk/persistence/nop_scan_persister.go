@@ -34,14 +34,10 @@ func (n NopScanPersister) Exists(_, _ string, _ product.Product) bool {
 	return false
 }
 
-func (n NopScanPersister) Clear(_ string) {
+func (n NopScanPersister) Clear(_ []string, _ bool) {
 }
 
-func (n NopScanPersister) ClearForProduct(_ string, _ string, _ product.Product) error {
-	return nil
-}
-
-func (n NopScanPersister) Init() error {
+func (n NopScanPersister) Init(_ []string) error {
 	return nil
 }
 
