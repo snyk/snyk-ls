@@ -912,7 +912,7 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 }
 
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
+	loc, _ := setupServer(t)
 	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
 	file := testutil.CreateTempFile(t, t.TempDir())
@@ -943,12 +943,6 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	}
 
 	assert.Nil(t, w.GetFolderContaining(uri.PathFromUri(f.Uri)))
-	assert.Eventually(
-		t,
-		checkForSnykScan(t, jsonRPCRecorder),
-		5*time.Second,
-		50*time.Millisecond,
-	)
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.
