@@ -287,8 +287,8 @@ github.com/snyk/code-client-go v1.10.0 h1:t/hBINxj4lKvoo681uGhxHBpMued/j68p2sHbB
 github.com/snyk/code-client-go v1.10.0/go.mod h1:orU911flV1kJQOlxxx0InUQkAfpBrcERsb2olfnlI8s=
 github.com/snyk/error-catalog-golang-public v0.0.0-20240809094525-c48d19c27edb h1:w9tJhpTFxWqAhLeraGsMExDjGK9x5Dwj1NRFwb+t+QE=
 github.com/snyk/error-catalog-golang-public v0.0.0-20240809094525-c48d19c27edb/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
-github.com/snyk/go-application-framework v0.0.0-20240826124824-5c2a3ce98a9f h1:tJ91F1XqJBj0jiEAUpag44BQU2LdS4fPy4a2qbVDx7Q=
-github.com/snyk/go-application-framework v0.0.0-20240826124824-5c2a3ce98a9f/go.mod h1:zgYTVG71nX7zTb3ELeRlnwE/uKQxeOyQmAHtg6bC4uU=
+github.com/snyk/go-application-framework v0.0.0-20240827093100-f92edcc104ec h1:hqrcfg/+5vz/svcws6B42J/5AurXpYCpeRimMVkgJtY=
+github.com/snyk/go-application-framework v0.0.0-20240827093100-f92edcc104ec/go.mod h1:zgYTVG71nX7zTb3ELeRlnwE/uKQxeOyQmAHtg6bC4uU=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 h1:s9PHNkL6ueYRiAKNfd8OVxlUOqU3qY0VDbgCD1f6WQY=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530/go.mod h1:88KbbvGYlmLgee4OcQ19yr0bNpXpOr2kciOthaSzCAg=
 github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd h1:Dq5WSzWsP1TbVi10zPWBI5LKEBDg4Y1OhWEph1wr5WQ=
