@@ -277,10 +277,10 @@ func (g *GitPersistenceProvider) fileSchema(fullPath string) (string, hashedFold
 }
 
 func (g *GitPersistenceProvider) deleteCacheEntryIfExpired(fullPath string) error {
-	g.logger.Debug().Msgf("deleting cached scan file %s", fullPath)
 	schemaVersion, hash, commitHash, p, _ := g.fileSchema(fullPath)
 	isExpired := g.isExpired(schemaVersion, fullPath)
 	if isExpired {
+		g.logger.Debug().Msgf("deleting cached scan file %s", fullPath)
 		return g.deleteFromDiskAndCache(fullPath, hash, commitHash, p)
 	}
 
