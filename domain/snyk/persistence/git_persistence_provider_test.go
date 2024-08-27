@@ -80,6 +80,42 @@ func TestInit_NotEmpty(t *testing.T) {
 	assert.Equal(t, expectedCacheDir, actualCacheDir)
 }
 
+func TestInit_NotEmpty_ExpiredCache(t *testing.T) {
+	c := testutil.UnitTest(t)
+	folderPath := t.TempDir()
+	repo := initGitRepo(t, folderPath, false)
+
+	issueList := []snyk.Issue{
+		{
+			GlobalIdentity: uuid.New().String(),
+		},
+	}
+	expectedCacheDir := filepath.Join(filepath.Join(folderPath, ".git", CacheFolder))
+	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
+
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+	p := product.ProductCode
+
+	cut := NewGitPersistenceProvider(c.Logger())
+	ExpirationInSeconds = 2
+	cacheDir := filepath.Join(folderPath, ".git", CacheFolder)
+	err = os.MkdirAll(cacheDir, 0700)
+	assert.NoError(t, err)
+	err = cut.persistToDisk(cacheDir, hash, commitHash, p, issueList)
+	assert.NoError(t, err)
+	time.Sleep(3 * time.Second)
+
+	err = cut.Init([]string{folderPath})
+	assert.NoError(t, err)
+	actualCacheDir, err := cut.snykCacheDir(folderPath)
+	assert.NoError(t, err)
+	assert.Empty(t, cut.cache)
+	localFilePath := getLocalFilePath(cacheDir, hash, commitHash, p)
+	assert.NoFileExists(t, localFilePath)
+	assert.Equal(t, expectedCacheDir, actualCacheDir)
+}
+
 func TestAdd_NewCommit(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderPath := t.TempDir()

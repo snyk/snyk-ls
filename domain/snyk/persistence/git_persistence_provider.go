@@ -102,9 +102,10 @@ func (g *GitPersistenceProvider) Init(folderPaths []string) error {
 
 		for _, filePath := range filePaths {
 			schemaVersion, hash, commitHash, p, fileParseErr := g.fileSchema(filePath)
-			if fileParseErr != nil || g.isExpired(schemaVersion, filePath) {
+			fullPath := filepath.Join(cacheDir, filePath)
+			if fileParseErr != nil || g.isExpired(schemaVersion, fullPath) {
 				g.logger.Info().Msgf("file %s is expired. attempting to delete", filePath)
-				err = g.deleteFile(filePath)
+				err = g.deleteFile(fullPath)
 				if err != nil {
 					g.logger.Error().Err(err).Msgf("failed to delete file %s", filePath)
 				}
