@@ -130,11 +130,11 @@ type FakeSnykCodeClient struct {
 	maxConcurrentScans     int
 	NoFixSuggestions       bool
 	UnifiedDiffSuggestions []AutofixUnifiedDiffSuggestion
-	Options                AnalysisOptions
+	Options                map[string]AnalysisOptions
 	C                      *config.Config
 }
 
-func (f *FakeSnykCodeClient) GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
+func (f *FakeSnykCodeClient) GetAutoFixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
 	return f.UnifiedDiffSuggestions, nil
 }
 
@@ -246,14 +246,19 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	if f.currentConcurrentScans > f.maxConcurrentScans {
 		f.maxConcurrentScans = f.currentConcurrentScans
 	}
+	if f.Options == nil {
+		f.Options = make(map[string]AnalysisOptions)
+	}
 	FakeSnykCodeApiServiceMutex.Unlock()
 	<-time.After(f.AnalysisDuration)
+
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.currentConcurrentScans--
 	params := []any{options.bundleHash, options.limitToFiles, options.severity}
 	f.addCall(params, RunAnalysisOperation)
 	FakeSnykCodeApiServiceMutex.Unlock()
 
+	FakeSnykCodeApiServiceMutex.Lock()
 	issues := []snyk.Issue{FakeIssue}
 	if f.NoFixSuggestions {
 		if issueData, ok := issues[0].AdditionalData.(snyk.CodeIssueData); ok {
@@ -261,7 +266,9 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 			issues[0].AdditionalData = issueData
 		}
 	}
-	f.Options = options
+	f.Options[options.bundleHash] = options
+	FakeSnykCodeApiServiceMutex.Unlock()
+
 	f.C.Logger().Trace().Str("method", "RunAnalysis").Interface(
 		"fakeDiagnostic",
 		FakeIssue,
@@ -272,7 +279,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 	_ context.Context,
 	options AutofixOptions,
-	baseDir string,
+	_ string,
 ) ([]AutofixSuggestion, AutofixStatus, error) {
 	<-time.After(f.AnalysisDuration)
 	FakeSnykCodeApiServiceMutex.Lock()
@@ -324,6 +331,6 @@ func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
 }
 
-func (f *FakeSnykCodeClient) SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error {
+func (f *FakeSnykCodeClient) SubmitAutofixFeedback(_ context.Context, _ string, _ bool) error {
 	return nil
 }

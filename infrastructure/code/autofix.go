@@ -78,7 +78,9 @@ func (sc *Scanner) GetAutoFixDiffs(
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	codeClient := sc.BundleUploader.SnykCode
-	bundleHash, found := sc.BundleHashes[baseDir]
+	sc.bundleHashesMutex.RLock()
+	bundleHash, found := sc.bundleHashes[baseDir]
+	sc.bundleHashesMutex.RUnlock()
 	if !found {
 		return unifiedDiffSuggestions, fmt.Errorf("bundle hash not found for baseDir: %s", baseDir)
 	}

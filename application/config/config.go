@@ -84,19 +84,21 @@ type CliSettings struct {
 	Insecure                bool
 	AdditionalOssParameters []string
 	cliPath                 string
-	cliPathAccessMutex      sync.Mutex
+	cliPathAccessMutex      sync.RWMutex
 	C                       *Config
 }
 
 func NewCliSettings(c *Config) *CliSettings {
+	c.m.Lock()
+	defer c.m.Unlock()
 	settings := &CliSettings{C: c}
 	settings.SetPath("")
 	return settings
 }
 
 func (c *CliSettings) Installed() bool {
-	c.cliPathAccessMutex.Lock()
-	defer c.cliPathAccessMutex.Unlock()
+	c.cliPathAccessMutex.RLock()
+	defer c.cliPathAccessMutex.RUnlock()
 	stat, err := c.CliPathFileInfo()
 	isDirectory := stat != nil && stat.IsDir()
 	if isDirectory {
@@ -106,6 +108,8 @@ func (c *CliSettings) Installed() bool {
 }
 
 func (c *CliSettings) CliPathFileInfo() (os.FileInfo, error) {
+	c.cliPathAccessMutex.RLock()
+	defer c.cliPathAccessMutex.RUnlock()
 	stat, err := os.Stat(c.cliPath)
 	if err == nil {
 		c.C.Logger().Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
@@ -117,15 +121,15 @@ func (c *CliSettings) CliPathFileInfo() (os.FileInfo, error) {
 }
 
 func (c *CliSettings) IsPathDefined() bool {
-	c.cliPathAccessMutex.Lock()
-	defer c.cliPathAccessMutex.Unlock()
+	c.cliPathAccessMutex.RLock()
+	defer c.cliPathAccessMutex.RUnlock()
 	return c.cliPath != ""
 }
 
 // Path returns the full path to the CLI executable that is stored in the CLI configuration
 func (c *CliSettings) Path() string {
-	c.cliPathAccessMutex.Lock()
-	defer c.cliPathAccessMutex.Unlock()
+	c.cliPathAccessMutex.RLock()
+	defer c.cliPathAccessMutex.RUnlock()
 	return filepath.Clean(c.cliPath)
 }
 
@@ -191,7 +195,7 @@ type Config struct {
 	enableDeltaFindings              bool
 	logger                           *zerolog.Logger
 	storage                          storage.StorageWithCallbacks
-	m                                sync.Mutex
+	m                                sync.RWMutex
 	clientProtocolVersion            string
 	isOpenBrowserActionEnabled       bool
 }
@@ -211,7 +215,11 @@ func SetCurrentConfig(config *Config) {
 	currentConfig = config
 }
 
-func (c *Config) ClientProtocolVersion() string { return c.clientProtocolVersion }
+func (c *Config) ClientProtocolVersion() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.clientProtocolVersion
+}
 
 func IsDevelopment() bool {
 	parseBool, _ := strconv.ParseBool(Development)
@@ -248,6 +256,8 @@ func New() *Config {
 }
 
 func initWorkFlowEngine(c *Config) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	conf := configuration.NewInMemory()
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
@@ -275,6 +285,8 @@ func initWorkFlowEngine(c *Config) {
 }
 
 func getNewScrubbingLogger(c *Config) *zerolog.Logger {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(logging.New(nil), c.scrubbingDict)
 	writer := c.getConsoleWriter(c.scrubbingWriter)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
@@ -282,12 +294,16 @@ func getNewScrubbingLogger(c *Config) *zerolog.Logger {
 }
 
 func (c *Config) AddBinaryLocationsToPath(searchDirectories []string) {
+	c.m.Lock()
 	c.defaultDirs = searchDirectories
+	c.m.Unlock()
 	c.determineJavaHome()
 	c.mavenDefaults()
 }
 
 func (c *Config) determineDeviceId() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	id, machineErr := machineid.ProtectedID("Snyk-LS")
 	if machineErr != nil {
 		c.Logger().Err(machineErr).Str("method", "config.New").Msg("cannot retrieve machine id")
@@ -302,20 +318,27 @@ func (c *Config) determineDeviceId() string {
 }
 
 func (c *Config) IsTrustedFolderFeatureEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.trustedFoldersFeatureEnabled
 }
 
 func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.trustedFoldersFeatureEnabled = enabled
 }
 
 func (c *Config) Load() {
+	c.m.RLock()
 	files := c.configFiles()
+	c.m.RUnlock()
 	for _, fileName := range files {
 		c.loadFile(fileName)
 	}
-
+	c.m.Lock()
 	c.configLoaded.Set(true)
+	c.m.Unlock()
 }
 
 func (c *Config) loadFile(fileName string) {
@@ -382,10 +405,10 @@ func (c *Config) SnykUi() string {
 }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string {
-	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_NAME)
+	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_NAME)
 }
 func (c *Config) IntegrationVersion() string {
-	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_VERSION)
+	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_VERSION)
 }
 func (c *Config) FilterSeverity() types.SeverityFilter { return c.filterSeverity }
 func (c *Config) Token() string {
@@ -413,7 +436,7 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		snykApiUrl = DefaultSnykApiUrl
 	}
 
-	c.Engine().GetConfiguration().Set(configuration.API_URL, snykApiUrl)
+	c.engine.GetConfiguration().Set(configuration.API_URL, snykApiUrl)
 
 	if snykApiUrl != c.snykApiUrl {
 		c.snykApiUrl = snykApiUrl
@@ -537,7 +560,7 @@ func (c *Config) ConfigureLogging(server types.Server) {
 
 	logLevel, err = zerolog.ParseLevel(c.LogLevel())
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
+		_, _ = fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
 		logLevel = zerolog.InfoLevel
 	}
 
@@ -545,15 +568,14 @@ func (c *Config) ConfigureLogging(server types.Server) {
 	envLogLevel := os.Getenv("SNYK_LOG_LEVEL")
 	if envLogLevel != "" {
 		msg := fmt.Sprint("Setting log level from environment variable (SNYK_LOG_LEVEL) \"", envLogLevel, "\"")
-		fmt.Fprintln(os.Stderr, msg)
+		_, _ = fmt.Fprintln(os.Stderr, msg)
 		envLevel, levelErr := zerolog.ParseLevel(envLogLevel)
 		if levelErr == nil {
-			fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
+			_, _ = fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
 			logLevel = envLevel
 		}
 	}
 	c.SetLogLevel(logLevel.String())
-	zerolog.TimeFieldFormat = time.RFC3339
 
 	levelWriter := logging.New(server)
 	writers := []io.Writer{levelWriter}
@@ -561,9 +583,9 @@ func (c *Config) ConfigureLogging(server types.Server) {
 	if c.LogPath() != "" {
 		c.logFile, err = os.OpenFile(c.LogPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "couldn't open logfile")
+			_, _ = fmt.Fprintln(os.Stderr, "couldn't open logfile")
 		} else {
-			fmt.Fprintln(os.Stderr, fmt.Sprint("adding file logger to file ", c.logPath))
+			_, _ = fmt.Fprintln(os.Stderr, fmt.Sprint("adding file logger to file ", c.logPath))
 			writers = append(writers, c.logFile)
 		}
 	}
@@ -657,7 +679,9 @@ func (c *Config) updatePath(pathExtension string) {
 		return
 	}
 	err := os.Setenv("PATH", os.Getenv("PATH")+pathListSeparator+pathExtension)
+	c.m.Lock()
 	c.path += pathListSeparator + pathExtension
+	c.m.Unlock()
 	c.Logger().Debug().Str("method", "updatePath").Msg("updated path with " + pathExtension)
 	c.Logger().Debug().Str("method", "updatePath").Msgf("PATH = %s", os.Getenv("PATH"))
 	if err != nil {
@@ -692,14 +716,20 @@ func (c *Config) SetOrganization(organization string) {
 }
 
 func (c *Config) ManageBinariesAutomatically() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.manageBinariesAutomatically.Get()
 }
 
 func (c *Config) SetManageBinariesAutomatically(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.manageBinariesAutomatically.Set(enabled)
 }
 
 func (c *Config) ManageCliBinariesAutomatically() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	if c.engine.GetConfiguration().GetString(cli_constants.EXECUTION_MODE_KEY) != cli_constants.EXECUTION_MODE_VALUE_STANDALONE {
 		return false
 	}
@@ -707,34 +737,50 @@ func (c *Config) ManageCliBinariesAutomatically() bool {
 }
 
 func (c *Config) DeviceID() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.deviceId
 }
 
 func (c *Config) SetDeviceID(deviceId string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.deviceId = deviceId
 }
 
 func (c *Config) ClientCapabilities() types.ClientCapabilities {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.clientCapabilities
 }
 
 func (c *Config) SetClientCapabilities(capabilities types.ClientCapabilities) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.clientCapabilities = capabilities
 }
 
 func (c *Config) Path() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.path
 }
 
 func (c *Config) AutomaticAuthentication() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.automaticAuthentication
 }
 
 func (c *Config) SetAutomaticAuthentication(value bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.automaticAuthentication = value
 }
 
 func (c *Config) SetAutomaticScanning(value bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.automaticScanning = value
 }
 
@@ -750,115 +796,169 @@ func (c *Config) addDefaults() {
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {
-	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_NAME, integrationName)
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.engine.GetConfiguration().Set(configuration.INTEGRATION_NAME, integrationName)
 }
 
 func (c *Config) SetIntegrationVersion(integrationVersion string) {
-	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_VERSION, integrationVersion)
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.engine.GetConfiguration().Set(configuration.INTEGRATION_VERSION, integrationVersion)
 }
 
 func (c *Config) SetIdeName(ideName string) {
-	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, ideName)
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, ideName)
 }
 func (c *Config) SetIdeVersion(ideVersion string) {
-	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, ideVersion)
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, ideVersion)
 }
 
 func (c *Config) TrustedFolders() []string {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.trustedFolders
 }
 
 func (c *Config) SetTrustedFolders(folderPaths []string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.trustedFolders = folderPaths
 }
 
 func (c *Config) IsSnykCodeSecurityEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.activateSnykCodeSecurity
 }
 
 func (c *Config) EnableSnykCodeSecurity(activate bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.activateSnykCodeSecurity = activate
 }
 
 func (c *Config) IsSnykCodeQualityEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.activateSnykCodeQuality
 }
 
 func (c *Config) EnableSnykCodeQuality(activate bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.activateSnykCodeQuality = activate
 }
 
 func (c *Config) OsPlatform() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.osPlatform
 }
 
 func (c *Config) SetOsPlatform(osPlatform string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.osPlatform = osPlatform
 }
 
 func (c *Config) OsArch() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.osArch
 }
 
 func (c *Config) SetOsArch(osArch string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.osArch = osArch
 }
 
 func (c *Config) RuntimeName() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.runtimeName
 }
 
 func (c *Config) SetRuntimeName(runtimeName string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.runtimeName = runtimeName
 }
 
 func (c *Config) RuntimeVersion() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.runtimeVersion
 }
 
 func (c *Config) SetRuntimeVersion(runtimeVersion string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.runtimeVersion = runtimeVersion
 }
 
 func (c *Config) IsAutoScanEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.automaticScanning
 }
 
 func (c *Config) Engine() workflow.Engine {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.engine
 }
 
 func (c *Config) SetEngine(engine workflow.Engine) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.engine = engine
 }
 
 func (c *Config) IsSnykLearnCodeActionsEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.enableSnykLearnCodeActions
 }
 
 func (c *Config) SetSnykLearnCodeActionsEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.enableSnykLearnCodeActions = enabled
 }
 
 func (c *Config) IsSnykOSSQuickFixCodeActionsEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.enableSnykOSSQuickFixCodeActions
 }
 
 func (c *Config) SetSnykOSSQuickFixCodeActionsEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.enableSnykOSSQuickFixCodeActions = enabled
 }
 
 func (c *Config) IsDeltaFindingsEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.enableDeltaFindings
 }
 
 func (c *Config) SetDeltaFindingsEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.enableDeltaFindings = enabled
 }
 
 func (c *Config) SetLogLevel(level string) {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.m.RLock()
+	defer c.m.RUnlock()
 	parseLevel, err := zerolog.ParseLevel(level)
 	if err == nil {
 		zerolog.SetGlobalLevel(parseLevel)
@@ -866,14 +966,14 @@ func (c *Config) SetLogLevel(level string) {
 }
 
 func (c *Config) LogLevel() string {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return zerolog.GlobalLevel().String()
 }
 
 func (c *Config) Logger() *zerolog.Logger {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.logger
 }
 
@@ -893,8 +993,8 @@ func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 }
 
 func (c *Config) Storage() storage.StorageWithCallbacks {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.storage
 }
 
@@ -906,20 +1006,28 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 }
 
 func (c *Config) IdeVersion() string {
-	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
 }
 func (c *Config) IdeName() string {
-	return c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT)
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT)
 }
 
 func (c *Config) IsFedramp() bool {
-	return c.Engine().GetConfiguration().GetBool(configuration.IS_FEDRAMP)
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.engine.GetConfiguration().GetBool(configuration.IS_FEDRAMP)
 }
 
 func (c *Config) IsAnalyticsPermitted() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	logger := c.Logger().With().Str("method", "IsAnalyticsPermitted").Logger()
 
-	u, err := url.Parse(c.Engine().GetConfiguration().GetString(configuration.API_URL))
+	u, err := url.Parse(c.engine.GetConfiguration().GetString(configuration.API_URL))
 
 	if err != nil {
 		logger.Error().Err(err).Msg("unable to parse configured API_URL")
@@ -932,21 +1040,31 @@ func (c *Config) IsAnalyticsPermitted() bool {
 }
 
 func (c *Config) SetClientProtocolVersion(requiredProtocolVersion string) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.clientProtocolVersion = requiredProtocolVersion
 }
 
 func (c *Config) AuthenticationMethod() types.AuthenticationMethod {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.authenticationMethod
 }
 
 func (c *Config) SetAuthenticationMethod(authMethod types.AuthenticationMethod) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.authenticationMethod = authMethod
 }
 
 func (c *Config) IsSnykOpenBrowserActionEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.isOpenBrowserActionEnabled
 }
 
 func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.isOpenBrowserActionEnabled = enable
 }

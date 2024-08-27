@@ -147,6 +147,7 @@ jobs:
         run: |
           make clean test
 
+
   proxy-test:
     name: proxy-test
     runs-on: ubuntu-latest
@@ -158,6 +159,36 @@ jobs:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
           make clean proxy-test
+
+  race-tests:
+    name: race-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Pact CLI tools
+        shell: bash
+        run: |
+          make tools
+
+      - name: Cache Pact CLI tools
+        id: cache-pact
+        uses: actions/cache@v4
+        with:
+          path: ~/pact
+          key: ${{ runner.os }}-pact
+
+      - name: Run race tests
+        env:
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+        run: |
+          export PATH=$PATH:~/pact/bin
+
+          # this is required to be able to test the clipboard
+          export DISPLAY=:99
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          sudo apt-get install -y xsel xclip wl-clipboard
+
+          make clean race-test
 
   update-licenses:
     name: update licenses

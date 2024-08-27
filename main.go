@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -50,7 +51,7 @@ func main() {
 	if output != "" {
 		entrypoint.PrintLicenseText(output)
 	}
-
+	zerolog.TimeFieldFormat = time.RFC3339
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	server.Start(c)
 	log.Info().Msg("Exiting...")
