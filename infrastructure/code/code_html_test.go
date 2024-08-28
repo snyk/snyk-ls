@@ -117,7 +117,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="">`)
-	assert.Contains(t, codePanelHtml, `Generate fix <span class="wide">using Snyk`)
+	assert.Contains(t, codePanelHtml, `✨ Generate AI fix`)
 	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper" class="hidden">`)
 }
 
