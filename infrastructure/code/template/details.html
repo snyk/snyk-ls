@@ -751,9 +751,11 @@
           class="tab-item {{if not .IsIgnored}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
           Fix Analysis
         </span>
+        {{if .IssueOverview}}
         <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item sn-vuln-overview vuln-overview-tab">
           Vulnerability Overview
         </span>
+        {{end}}
       </div>
 
       <!-- Dynamic Content Sections -->
