@@ -415,9 +415,16 @@
       align-self: stretch;
     }
 
-    button,
-    .button {
+    button.generate-ai-fix,
+    button.sn-apply-fix {
       border-radius: 3px;
+      border: none;
+      cursor: pointer;
+    }
+
+    button.generate-ai-fix:hover,
+    button.sn-apply-fix:hover {
+      opacity: 0.9;
     }
 
     /*AI fix tab */
@@ -453,7 +460,7 @@
     .sn-fix-wrapper {
       padding: 2rem;
       margin-top: 1rem;
-      border-radius: 0.8rem;
+      border-radius: 4px;
       overflow: hidden;
     }
 
@@ -462,7 +469,9 @@
       padding: 8px 16px;
     }
 
-    .sn-apply-fix {}
+    .sn-apply-fix {
+      margin-top: 1rem;
+    }
 
     .sn-readmore {
       margin-top: 1.6rem;
