@@ -60,11 +60,12 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			expected:          "/Users/cata/git/playground/python-goof/poetry-sample/pyproject.toml",
 		},
 		{
-			name:              "Gradle multi-module",
-			displayTargetFile: "build.gradle",
-			workDir:           "/Users/bdoetsch/workspace/gradle-multi-module",
-			path:              "/Users/bdoetsch/workspace/gradle-multi-module/sample-api",
-			expected:          "/Users/bdoetsch/workspace/gradle-multi-module/sample-api/build.gradle",
+			name:                       "Gradle multi-module",
+			displayTargetFile:          "build.gradle",
+			displayTargetFileInWorkDir: "build.gradle",
+			workDir:                    "/Users/bdoetsch/workspace/gradle-multi-module",
+			path:                       "/Users/bdoetsch/workspace/gradle-multi-module/sample-api",
+			expected:                   "/Users/bdoetsch/workspace/gradle-multi-module/sample-api/build.gradle",
 		},
 		{
 			name:              "Go Modules deeply nested",
