@@ -317,15 +317,15 @@ func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir strin
 		// if displayTargetFile is not relative, let's try to join path with basename
 		basePath := filepath.Base(displayTargetFile)
 		scanResultPath := scanResult.Path
-		tryOutPath := filepath.Join(scanResultPath, basePath)
+		tryOutPath := filepath.Join(scanResultPath, displayTargetFile)
 		_, tryOutErr := os.Stat(tryOutPath)
 		if tryOutErr != nil {
-			logger.Trace().Err(err).Msgf("joining basePath: %s to path: %s failed", basePath, scanResultPath)
-			// if that doesn't work, let's try full path and full display target file
-			tryOutPath = filepath.Join(scanResultPath, displayTargetFile)
-			_, tryOutErr = os.Stat(tryOutPath)
+			logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to path: %s failed", displayTargetFile, scanResultPath)
+			tryOutPath = filepath.Join(scanResultPath, basePath)
+			_, tryOutErr := os.Stat(tryOutPath)
 			if tryOutErr != nil {
-				logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to path: %s failed", displayTargetFile, scanResultPath)
+				logger.Trace().Err(err).Msgf("joining basePath: %s to path: %s failed", basePath, scanResultPath)
+				// if that doesn't work, let's try full path and full display target file
 				tryOutPath = filepath.Join(workDir, displayTargetFile)
 				_, tryOutErr = os.Stat(tryOutPath)
 				if tryOutErr != nil {
