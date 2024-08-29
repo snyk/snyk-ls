@@ -30,11 +30,12 @@ import (
 
 func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 	testCases := []struct {
-		name              string
-		displayTargetFile string
-		workDir           string
-		path              string
-		expected          string
+		name                       string
+		displayTargetFile          string
+		workDir                    string
+		displayTargetFileInWorkDir string
+		path                       string
+		expected                   string
 	}{
 		{
 			name:              "NPM root directory",
@@ -42,6 +43,14 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			workDir:           "/Users/cata/git/playground/juice-shop", // if we mock the workDir
 			path:              "/Users/cata/git/playground/juice-shop",
 			expected:          "/Users/cata/git/playground/juice-shop/package.json",
+		},
+		{
+			name:                       "NPM sub directory",
+			displayTargetFile:          "frontend/package.json",
+			displayTargetFileInWorkDir: "package.json",
+			workDir:                    "/Users/cata/git/playground/juice-shop", // if we mock the workDir
+			path:                       "/Users/cata/git/playground/juice-shop",
+			expected:                   "/Users/cata/git/playground/juice-shop/frontend/package.json",
 		},
 		{
 			name:              "Poetry Sub Project (below the working directory)",
@@ -141,6 +150,10 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			dir := filepath.Dir(expected)
 			require.NoError(t, os.MkdirAll(dir, 0770))
 			require.NoError(t, os.WriteFile(expected, []byte(expected), 0666))
+			if tc.displayTargetFileInWorkDir != "" {
+				absFile := filepath.Join(base, adjustedWorkDir, tc.displayTargetFileInWorkDir)
+				require.NoError(t, os.WriteFile(absFile, []byte(tc.displayTargetFileInWorkDir), 0666))
+			}
 
 			actual := getAbsTargetFilePath(c, scanResult{
 				DisplayTargetFile: tc.displayTargetFile,
