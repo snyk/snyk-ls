@@ -55,6 +55,11 @@ var (
 		"Podfile.lock":      "Podfile",
 		"poetry.lock":       "pyproject.toml",
 	}
+
+	allProjectsParamBlacklist = map[string]bool{
+		"--file": true,
+	}
+
 	// Make sure CLIScanner implements the desired interfaces
 	_ snyk.ProductScanner      = (*CLIScanner)(nil)
 	_ snyk.InlineValueProvider = (*CLIScanner)(nil)
@@ -226,6 +231,9 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 }
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool) []string {
+	allProjectsParamAllowed := true
+	allProjectsParam := "--all-projects"
+
 	cmd := cliScanner.cli.ExpandParametersFromConfig([]string{
 		cliScanner.config.CliSettings().Path(),
 		"test",
@@ -234,13 +242,20 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	cmd = append(cmd, "--json")
 	additionalParams := cliScanner.config.CliSettings().AdditionalOssParameters
 	for _, parameter := range additionalParams {
-		if parameterBlacklist[parameter] {
+		p := strings.Split(parameter, "=")[0]
+		if parameterBlacklist[p] {
 			continue
+		}
+		if allProjectsParamBlacklist[p] {
+			allProjectsParamAllowed = false
 		}
 		cmd = append(cmd, parameter)
 	}
-	allProjectsParam := "--all-projects"
-	if !slices.Contains(cmd, allProjectsParam) && !parameterBlacklist[allProjectsParam] {
+
+	// only append --all-projects, if it's not on the global blacklist
+	// and if there is no other parameter interfering (e.g. --file)
+	allProjectsParamAllowed = allProjectsParamAllowed && !slices.Contains(cmd, allProjectsParam)
+	if allProjectsParamAllowed && !parameterBlacklist[allProjectsParam] {
 		cmd = append(cmd, allProjectsParam)
 	}
 

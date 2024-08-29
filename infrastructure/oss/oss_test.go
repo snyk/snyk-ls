@@ -362,6 +362,20 @@ func Test_prepareScanCommand(t *testing.T) {
 		assert.Contains(t, cmd, "-d")
 	})
 
+	t.Run("does not use --all-projects if --file is given", func(t *testing.T) {
+		settings := config.CliSettings{
+			AdditionalOssParameters: []string{"--file=asdf", "-d"},
+			C:                       c,
+		}
+		c.SetCliSettings(&settings)
+
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{})
+
+		assert.NotContains(t, cmd, "--all-projects")
+		assert.Contains(t, cmd, "-d")
+		assert.Contains(t, cmd, "--file=asdf")
+	})
+
 	t.Run("Uses --all-projects by default", func(t *testing.T) {
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"-d"},
