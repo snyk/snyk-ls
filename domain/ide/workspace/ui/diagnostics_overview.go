@@ -20,12 +20,13 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
-	"github.com/snyk/snyk-ls/internal/util"
 	"html/template"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/rs/zerolog"
 
