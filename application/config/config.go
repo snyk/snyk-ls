@@ -17,6 +17,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -346,15 +347,17 @@ func (c *Config) Load() {
 }
 
 func (c *Config) LoadShellEnvironment() {
-	if runtime.GOOS != "windows" {
-		parsedEnv := getParsedEnvFromShell("bash")
-		shell := parsedEnv["SHELL"]
-		fromSpecificShell := getParsedEnvFromShell(shell)
-		if len(fromSpecificShell) > 0 {
-			c.setParsedVariablesToEnv(fromSpecificShell)
-		} else {
-			c.setParsedVariablesToEnv(parsedEnv)
-		}
+	if runtime.GOOS == "windows" {
+		return
+	}
+	parsedEnv := getParsedEnvFromShell("bash")
+	shell := parsedEnv["SHELL"]
+	fromSpecificShell := getParsedEnvFromShell(shell)
+
+	if len(fromSpecificShell) > 0 {
+		c.setParsedVariablesToEnv(fromSpecificShell)
+	} else {
+		c.setParsedVariablesToEnv(parsedEnv)
 	}
 }
 
@@ -374,7 +377,10 @@ func getParsedEnvFromShell(shell string) gotenv.Env {
 		return gotenv.Env{}
 	}
 
-	env, err := exec.Command(shell, "-c", "env").Output()
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancelFunc()
+
+	env, err := exec.CommandContext(ctx, shell, "--login", "-i", "-c", "env && exit").Output()
 	if err != nil {
 		return gotenv.Env{}
 	}
@@ -401,7 +407,7 @@ func (c *Config) setParsedVariablesToEnv(env gotenv.Env) {
 		if !exists {
 			err := os.Setenv(k, v)
 			if err != nil {
-				c.Logger().Warn().Str("method", "loadFile").Msg("Couldn't set environment variable " + k)
+				c.Logger().Warn().Str("method", "setParsedVariablesToEnv").Msg("Couldn't set environment variable " + k)
 			}
 		} else {
 			// add to path, don't ignore additional paths
