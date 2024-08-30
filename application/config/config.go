@@ -349,7 +349,12 @@ func (c *Config) LoadShellEnvironment() {
 	if runtime.GOOS != "windows" {
 		parsedEnv := getParsedEnvFromShell("bash")
 		shell := parsedEnv["SHELL"]
-		c.setParsedVariablesToEnv(getParsedEnvFromShell(shell))
+		fromSpecificShell := getParsedEnvFromShell(shell)
+		if len(fromSpecificShell) > 0 {
+			c.setParsedVariablesToEnv(fromSpecificShell)
+		} else {
+			c.setParsedVariablesToEnv(parsedEnv)
+		}
 	}
 }
 
