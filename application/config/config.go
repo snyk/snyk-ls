@@ -331,9 +331,7 @@ func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
 }
 
 func (c *Config) Load() {
-	c.m.Lock()
 	c.LoadShellEnvironment()
-	c.m.Unlock()
 
 	c.m.RLock()
 	files := c.configFiles()

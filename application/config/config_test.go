@@ -75,6 +75,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, types.TokenAuthentication, c.authenticationMethod)
 }
 
+// this only tests that no error occurs on any os
 func TestConfig_LoadShellEnvironment(t *testing.T) {
 	c := New()
 	c.LoadShellEnvironment()
