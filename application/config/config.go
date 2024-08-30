@@ -17,6 +17,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -376,7 +377,10 @@ func getParsedEnvFromShell(shell string) gotenv.Env {
 		return gotenv.Env{}
 	}
 
-	env, err := exec.Command(shell, "--login", "-i", "-c", "env && exit").Output()
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancelFunc()
+
+	env, err := exec.CommandContext(ctx, shell, "--login", "-i", "-c", "env && exit").Output()
 	if err != nil {
 		return gotenv.Env{}
 	}
