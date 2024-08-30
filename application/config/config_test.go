@@ -75,6 +75,11 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, types.TokenAuthentication, c.authenticationMethod)
 }
 
+func TestConfig_LoadShellEnvironment(t *testing.T) {
+	c := New()
+	c.LoadShellEnvironment()
+}
+
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {
 	// Arrange
 	c := New()

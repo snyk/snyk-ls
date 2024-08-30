@@ -349,12 +349,34 @@ func (c *Config) Load() {
 
 func (c *Config) LoadShellEnvironment() {
 	if runtime.GOOS != "windows" {
-		env, err := exec.Command("bash", "-c", "env").Output()
-		if err == nil {
-			parsedEnv := gotenv.Parse(strings.NewReader(string(env)))
-			c.setParsedVariablesToEnv(parsedEnv)
-		}
+		parsedEnv := getParsedEnvFromShell("bash")
+		shell := parsedEnv["SHELL"]
+		c.setParsedVariablesToEnv(getParsedEnvFromShell(shell))
 	}
+}
+
+func getParsedEnvFromShell(shell string) gotenv.Env {
+	// guard against command injection
+	var shellWhiteList = map[string]bool{
+		"bash":      true,
+		"/bin/zsh":  true,
+		"/bin/sh":   true,
+		"/bin/fish": true,
+		"/bin/csh":  true,
+		"/bin/ksh":  true,
+		"/bin/bash": true,
+	}
+
+	if !shellWhiteList[shell] {
+		return gotenv.Env{}
+	}
+
+	env, err := exec.Command(shell, "-c", "env").Output()
+	if err != nil {
+		return gotenv.Env{}
+	}
+	parsedEnv := gotenv.Parse(strings.NewReader(string(env)))
+	return parsedEnv
 }
 
 func (c *Config) loadFile(fileName string) {
