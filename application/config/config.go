@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -330,15 +331,30 @@ func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
 }
 
 func (c *Config) Load() {
+	c.m.Lock()
+	c.LoadShellEnvironment()
+	c.m.Unlock()
+
 	c.m.RLock()
 	files := c.configFiles()
 	c.m.RUnlock()
 	for _, fileName := range files {
 		c.loadFile(fileName)
 	}
+
 	c.m.Lock()
 	c.configLoaded.Set(true)
 	c.m.Unlock()
+}
+
+func (c *Config) LoadShellEnvironment() {
+	if runtime.GOOS != "windows" {
+		env, err := exec.Command("bash", "-c", "env").Output()
+		if err == nil {
+			parsedEnv := gotenv.Parse(strings.NewReader(string(env)))
+			c.setParsedVariablesToEnv(parsedEnv)
+		}
+	}
 }
 
 func (c *Config) loadFile(fileName string) {
@@ -349,6 +365,12 @@ func (c *Config) loadFile(fileName string) {
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)
 	env := gotenv.Parse(file)
+	c.setParsedVariablesToEnv(env)
+	c.updatePath(".")
+	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
+}
+
+func (c *Config) setParsedVariablesToEnv(env gotenv.Env) {
 	for k, v := range env {
 		_, exists := os.LookupEnv(k)
 		if !exists {
@@ -363,8 +385,6 @@ func (c *Config) loadFile(fileName string) {
 			}
 		}
 	}
-	c.updatePath(".")
-	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
 func (c *Config) NonEmptyToken() bool {
