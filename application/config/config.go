@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -330,15 +331,55 @@ func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
 }
 
 func (c *Config) Load() {
+	c.LoadShellEnvironment()
+
 	c.m.RLock()
 	files := c.configFiles()
 	c.m.RUnlock()
 	for _, fileName := range files {
 		c.loadFile(fileName)
 	}
+
 	c.m.Lock()
 	c.configLoaded.Set(true)
 	c.m.Unlock()
+}
+
+func (c *Config) LoadShellEnvironment() {
+	if runtime.GOOS != "windows" {
+		parsedEnv := getParsedEnvFromShell("bash")
+		shell := parsedEnv["SHELL"]
+		fromSpecificShell := getParsedEnvFromShell(shell)
+		if len(fromSpecificShell) > 0 {
+			c.setParsedVariablesToEnv(fromSpecificShell)
+		} else {
+			c.setParsedVariablesToEnv(parsedEnv)
+		}
+	}
+}
+
+func getParsedEnvFromShell(shell string) gotenv.Env {
+	// guard against command injection
+	var shellWhiteList = map[string]bool{
+		"bash":      true,
+		"/bin/zsh":  true,
+		"/bin/sh":   true,
+		"/bin/fish": true,
+		"/bin/csh":  true,
+		"/bin/ksh":  true,
+		"/bin/bash": true,
+	}
+
+	if !shellWhiteList[shell] {
+		return gotenv.Env{}
+	}
+
+	env, err := exec.Command(shell, "-c", "env").Output()
+	if err != nil {
+		return gotenv.Env{}
+	}
+	parsedEnv := gotenv.Parse(strings.NewReader(string(env)))
+	return parsedEnv
 }
 
 func (c *Config) loadFile(fileName string) {
@@ -349,6 +390,12 @@ func (c *Config) loadFile(fileName string) {
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)
 	env := gotenv.Parse(file)
+	c.setParsedVariablesToEnv(env)
+	c.updatePath(".")
+	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
+}
+
+func (c *Config) setParsedVariablesToEnv(env gotenv.Env) {
 	for k, v := range env {
 		_, exists := os.LookupEnv(k)
 		if !exists {
@@ -363,8 +410,6 @@ func (c *Config) loadFile(fileName string) {
 			}
 		}
 	}
-	c.updatePath(".")
-	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
 func (c *Config) NonEmptyToken() bool {
