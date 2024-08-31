@@ -73,7 +73,7 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	}, time.Second, time.Millisecond, "scanner should be called after trust is granted")
 }
 
-func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
+func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
 	c := testutil.UnitTest(t)
 	const trustedDummy = "trustedDummy"
 	const untrustedDummy = "untrustedDummy"
@@ -101,14 +101,10 @@ func Test_AddAndRemoveFoldersAndTriggerScan(t *testing.T) {
 		},
 	}}
 
-	w.ChangeWorkspaceFolders(context.Background(), params)
-
+	folderList := w.ChangeWorkspaceFolders(params)
 	assert.Nil(t, w.GetFolderContaining(toBeRemoved))
 
-	// one call for one trusted folder
-	assert.Eventually(t, func() bool {
-		return sc.Calls() == 1
-	}, time.Second, time.Millisecond, "scanner should be called after trust is granted")
+	assert.Len(t, folderList, 2)
 }
 
 func Test_Get(t *testing.T) {

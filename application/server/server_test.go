@@ -331,7 +331,7 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	os.Stderr = oldStdErr
+	defer func() { os.Stderr = oldStdErr }()
 	actual, err := os.ReadFile(file.Name())
 	require.NoError(t, err)
 	require.NotContainsf(t, string(actual), toBeRedacted, "token should be redacted")

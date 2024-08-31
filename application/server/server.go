@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"os"
 	"runtime"
 	"strings"
@@ -187,8 +188,13 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 
 		logger.Info().Msg("RECEIVING")
 		defer logger.Info().Msg("SENDING")
-		workspace.Get().ChangeWorkspaceFolders(bgCtx, params)
-		command.HandleFolders(bgCtx, srv, di.Notifier())
+		changedFolders := workspace.Get().ChangeWorkspaceFolders(params)
+		command.HandleFolders(bgCtx, srv, di.Notifier(), di.ScanPersister())
+		if config.CurrentConfig().IsAutoScanEnabled() {
+			for _, f := range changedFolders {
+				f.ScanFolder(ctx)
+			}
+		}
 		return nil, nil
 	})
 }
@@ -386,6 +392,12 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
 		}
+		command.HandleFolders(context.Background(), srv, di.Notifier(), di.ScanPersister())
+
+		// Check once for expired cache in same thread before triggering a scan.
+		// Start a periodic go routine to check for the expired cache afterwards
+		deleteExpiredCache()
+		go periodicallyCheckForExpiredCache()
 
 		autoScanEnabled := c.IsAutoScanEnabled()
 		if autoScanEnabled {
@@ -400,9 +412,24 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		}
 
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
-		go command.HandleFolders(context.Background(), srv, di.Notifier())
 		return nil, nil
 	})
+}
+
+func deleteExpiredCache() {
+	w := workspace.Get()
+	var folderList []string
+	for _, f := range w.Folders() {
+		folderList = append(folderList, f.Path())
+	}
+	di.ScanPersister().Clear(folderList, true)
+}
+
+func periodicallyCheckForExpiredCache() {
+	for {
+		deleteExpiredCache()
+		time.Sleep(time.Duration(persistence.ExpirationInSeconds) * time.Second)
+	}
 }
 
 func addWorkspaceFolders(c *config.Config, params types.InitializeParams, w *workspace.Workspace) {
@@ -545,8 +572,8 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 			di.Notifier().Send(diagnosticParams)
 		}
 
-		if scanner, ok := di.Scanner().(scanner.PackageScanner); ok {
-			scanner.ScanPackages(context.Background(), config.CurrentConfig(), filePath, "")
+		if sc, ok := di.Scanner().(scanner.PackageScanner); ok {
+			sc.ScanPackages(context.Background(), config.CurrentConfig(), filePath, "")
 		}
 		return nil, nil
 	})
