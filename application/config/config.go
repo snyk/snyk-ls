@@ -17,12 +17,14 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -330,15 +332,60 @@ func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
 }
 
 func (c *Config) Load() {
+	c.LoadShellEnvironment()
+
 	c.m.RLock()
 	files := c.configFiles()
 	c.m.RUnlock()
 	for _, fileName := range files {
 		c.loadFile(fileName)
 	}
+
 	c.m.Lock()
 	c.configLoaded.Set(true)
 	c.m.Unlock()
+}
+
+func (c *Config) LoadShellEnvironment() {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	parsedEnv := getParsedEnvFromShell("bash")
+	shell := parsedEnv["SHELL"]
+	fromSpecificShell := getParsedEnvFromShell(shell)
+
+	if len(fromSpecificShell) > 0 {
+		c.setParsedVariablesToEnv(fromSpecificShell)
+	} else {
+		c.setParsedVariablesToEnv(parsedEnv)
+	}
+}
+
+func getParsedEnvFromShell(shell string) gotenv.Env {
+	// guard against command injection
+	var shellWhiteList = map[string]bool{
+		"bash":      true,
+		"/bin/zsh":  true,
+		"/bin/sh":   true,
+		"/bin/fish": true,
+		"/bin/csh":  true,
+		"/bin/ksh":  true,
+		"/bin/bash": true,
+	}
+
+	if !shellWhiteList[shell] {
+		return gotenv.Env{}
+	}
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancelFunc()
+
+	env, err := exec.CommandContext(ctx, shell, "--login", "-i", "-c", "env && exit").Output()
+	if err != nil {
+		return gotenv.Env{}
+	}
+	parsedEnv := gotenv.Parse(strings.NewReader(string(env)))
+	return parsedEnv
 }
 
 func (c *Config) loadFile(fileName string) {
@@ -349,12 +396,18 @@ func (c *Config) loadFile(fileName string) {
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)
 	env := gotenv.Parse(file)
+	c.setParsedVariablesToEnv(env)
+	c.updatePath(".")
+	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
+}
+
+func (c *Config) setParsedVariablesToEnv(env gotenv.Env) {
 	for k, v := range env {
 		_, exists := os.LookupEnv(k)
 		if !exists {
 			err := os.Setenv(k, v)
 			if err != nil {
-				c.Logger().Warn().Str("method", "loadFile").Msg("Couldn't set environment variable " + k)
+				c.Logger().Warn().Str("method", "setParsedVariablesToEnv").Msg("Couldn't set environment variable " + k)
 			}
 		} else {
 			// add to path, don't ignore additional paths
@@ -363,8 +416,6 @@ func (c *Config) loadFile(fileName string) {
 			}
 		}
 	}
-	c.updatePath(".")
-	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
 func (c *Config) NonEmptyToken() bool {
