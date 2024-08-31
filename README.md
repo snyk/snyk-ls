@@ -85,8 +85,7 @@ Right now the language server supports the following actions:
       ]
   }
   ```
-    ```
-- Custom Publish Diagnostics Notification for sending issues to IDEs that don't implement LSP 3.16 
+- Custom Publish Diagnostics Notification
 - method: `$/snyk.publishDiagnostics316`
   - payload:
   ```json5
