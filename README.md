@@ -218,7 +218,7 @@ Right now the language server supports the following actions:
   }
   ```
 - `SettingsSastEnabled` triggers the api call to check if Snyk Code is enabled
-  - command: `snyk.settingsSastEnabled`
+  - command: `snyk.getSettingsSastEnabled`
   - args: empty
   - returns `true` if enabled, `false` if not, or an error and false if an error occurred
 - `GetActiveUser` triggers the api call to get the active logged in user or an error if not logged in
