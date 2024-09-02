@@ -52,7 +52,6 @@ type TemplateData struct {
 	// File node with underlying slice of issue nodes
 	Issues               map[Node][]Node
 	Styles               template.CSS
-	Nonce                template.HTML
 	DeltaFindingsEnabled bool
 	FolderName           string
 	FolderHash           string
@@ -117,11 +116,6 @@ func generateHtml(c *config.Config, p product.Product, issuesByFile snyk.IssuesB
 	}
 
 	rootNodes := getRootNodes(c, p, issuesByFile)
-	nonce, err := html.GenerateSecurityNonce()
-	if err != nil {
-		logger.Err(err).Msgf("Failed to generate nonce")
-		return "", err
-	}
 
 	fileNodes := getFileNodes(issuesByFile, folderPath)
 
@@ -134,7 +128,6 @@ func generateHtml(c *config.Config, p product.Product, issuesByFile snyk.IssuesB
 		RootNodes:            rootNodes,
 		Issues:               fileNodes,
 		Styles:               template.CSS(diagnosticsOverviewTemplateCSS),
-		Nonce:                template.HTML(nonce),
 		DeltaFindingsEnabled: c.IsDeltaFindingsEnabled(),
 		FolderHash:           folderHash,
 		FolderName:           folderName,
