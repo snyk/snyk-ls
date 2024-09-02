@@ -85,6 +85,15 @@ Right now the language server supports the following actions:
       ]
   }
   ```
+- Custom Publish Diagnostics Notification
+- method: `$/snyk.publishDiagnostics316`
+  - payload:
+  ```json5
+  {
+  "uri": "/path/to/file",
+  "diagnostics": [], 
+  }
+  ```
 - Authentication Notification
   - method: `$/snyk.hasAuthenticated`
   - payload:

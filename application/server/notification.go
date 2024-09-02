@@ -108,6 +108,7 @@ func registerNotifier(c *config.Config, srv types.Server) {
 				Msgf("publishing diagnostics overview for %s", params.Product)
 		case types.PublishDiagnosticsParams:
 			notifier(c, srv, "textDocument/publishDiagnostics", params)
+			notifier(c, srv, "$/snyk.publishDiagnostics316", params)
 			source := "LSP"
 			if len(params.Diagnostics) > 0 {
 				source = params.Diagnostics[0].Source
