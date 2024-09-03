@@ -383,8 +383,9 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "/another/trusted/path"
   ], // An array of folder that should be trusted
   "folderConfigs": [{
-    "baseBranch": "main",
-    "folderPath": "a/b/c",
+    "baseBranch": "main", // the base branch for delta scanning
+    "folderPath": "a/b/c", // the workspace folder path
+    "additionalParameters": "--file=pom.xml" // additional parameters for CLI scans
   }], // an array of folder configurations, defining the desired base branch of a workspaceFolder 
 }
 ```
