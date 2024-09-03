@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 	"fmt"
+
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	noti "github.com/snyk/snyk-ls/internal/notification"

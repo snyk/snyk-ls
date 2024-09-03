@@ -200,8 +200,9 @@ func Test_UpdateSettings(t *testing.T) {
 			EnableSnykOpenBrowserActions: "true",
 			FolderConfigs: []types.FolderConfig{
 				{
-					FolderPath: tempDir1,
-					BaseBranch: "testBaseBranch1",
+					FolderPath:           tempDir1,
+					BaseBranch:           "testBaseBranch1",
+					AdditionalParameters: []string{"--file=asdf"},
 				},
 				{
 					FolderPath: tempDir2,
@@ -209,6 +210,12 @@ func Test_UpdateSettings(t *testing.T) {
 				},
 			},
 		}
+
+		err := initTestRepo(t, tempDir1)
+		assert.NoError(t, err)
+
+		err = initTestRepo(t, tempDir2)
+		assert.NoError(t, err)
 
 		UpdateSettings(c, settings)
 
@@ -235,17 +242,16 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
 		assert.Equal(t, true, c.IsSnykOpenBrowserActionEnabled())
 
-		err := initTestRepo(t, tempDir1)
-		assert.NoError(t, err)
 		folderConfig1, err := gitconfig.GetOrCreateFolderConfig(tempDir1)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, folderConfig1.BaseBranch)
+		assert.Equal(t, settings.FolderConfigs[0].AdditionalParameters[0],
+			folderConfig1.AdditionalParameters[0])
 
-		err = initTestRepo(t, tempDir2)
-		assert.NoError(t, err)
 		folderConfig2, err := gitconfig.GetOrCreateFolderConfig(tempDir2)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, folderConfig2.BaseBranch)
+		assert.Empty(t, folderConfig2.AdditionalParameters)
 
 		assert.Eventually(t, func() bool { return "a fancy token" == c.Token() }, time.Second*5, time.Millisecond)
 	})

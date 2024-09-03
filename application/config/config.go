@@ -47,7 +47,6 @@ import (
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
