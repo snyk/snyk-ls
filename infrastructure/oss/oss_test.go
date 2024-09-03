@@ -27,16 +27,19 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const testDataPackageJson = "/testdata/package.json"
@@ -356,9 +359,18 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "")
+		repo, err := testutil.SetupCustomTestRepo(t, t.TempDir(), testutil.NodejsGoof, "", c.Logger())
+		require.NoError(t, err)
+		folderConfigs := []types.FolderConfig{{
+			FolderPath:           repo,
+			AdditionalParameters: []string{"--file=pom.xml"},
+		}}
 
-		assert.Contains(t, cmd, "--all-projects")
+		gitconfig.SetAdditionalParameters(c.Logger(), folderConfigs)
+
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, repo)
+
+		assert.Contains(t, cmd, "--file=pom.xml")
 		assert.Contains(t, cmd, "-d")
 	})
 

@@ -259,7 +259,9 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		if allProjectsParamBlacklist[p] {
 			allProjectsParamAllowed = false
 		}
-		cmd = append(cmd, parameter)
+		if parameter != allProjectsParam {
+			cmd = append(cmd, parameter)
+		}
 	}
 
 	// only append --all-projects, if it's not on the global blacklist
