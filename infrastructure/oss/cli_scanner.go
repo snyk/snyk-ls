@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -156,7 +157,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string) (
 	return cliScanner.scanInternal(ctx, path, cliScanner.prepareScanCommand)
 }
 
-func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool) []string) ([]snyk.Issue, error) {
+func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool, path string) []string) ([]snyk.Issue, error) {
 	method := "cliScanner.Scan"
 	logger := cliScanner.config.Logger().With().Str("method", method).Logger()
 
@@ -203,7 +204,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	cliScanner.runningScans[workDir] = newScan
 	cliScanner.mutex.Unlock()
 
-	cmd := commandFunc([]string{workDir}, map[string]bool{"": true})
+	cmd := commandFunc([]string{workDir}, map[string]bool{"": true}, workDir)
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
@@ -230,7 +231,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool) []string {
+func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string) []string {
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
@@ -240,7 +241,16 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	})
 	cmd = append(cmd, args...)
 	cmd = append(cmd, "--json")
+
 	additionalParams := cliScanner.config.CliSettings().AdditionalOssParameters
+
+	// append folder parameters if set
+	folderConfig, err := gitconfig.GetOrCreateFolderConfig(path)
+	if err == nil {
+		additionalParams = append(additionalParams, folderConfig.AdditionalParameters...)
+	}
+
+	// now add all additional parameters, skipping blacklisted ones
 	for _, parameter := range additionalParams {
 		p := strings.Split(parameter, "=")[0]
 		if parameterBlacklist[p] {

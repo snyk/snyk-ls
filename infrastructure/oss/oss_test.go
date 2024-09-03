@@ -356,7 +356,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{})
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "")
 
 		assert.Contains(t, cmd, "--all-projects")
 		assert.Contains(t, cmd, "-d")
@@ -369,7 +369,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{})
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "")
 
 		assert.NotContains(t, cmd, "--all-projects")
 		assert.Contains(t, cmd, "-d")
@@ -383,7 +383,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{})
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "")
 
 		assert.Contains(t, cmd, "--all-projects")
 		assert.Len(t, cmd, 4)

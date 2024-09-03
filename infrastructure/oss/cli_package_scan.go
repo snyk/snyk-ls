@@ -18,9 +18,10 @@ package oss
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"path/filepath"
 	"strings"
+
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -68,7 +69,7 @@ func (cliScanner *CLIScanner) ScanPackages(
 	notCached := cliScanner.updateCachedDependencies(dependencies)
 
 	if len(notCached) > 0 {
-		commandFunc := func(_ []string, _ map[string]bool) (deps []string) {
+		commandFunc := func(_ []string, _ map[string]bool, path string) (deps []string) {
 			for _, d := range notCached {
 				deps = append(deps, d.ArtifactID+"@"+d.Version)
 			}
@@ -77,9 +78,10 @@ func (cliScanner *CLIScanner) ScanPackages(
 				"":               true,
 				"--all-projects": true,
 				"--dev":          true,
+				"--file":         true,
 			}
 
-			return cliScanner.prepareScanCommand(deps, blacklist)
+			return cliScanner.prepareScanCommand(deps, blacklist, path)
 		}
 		_, err := cliScanner.scanInternal(ctx, path, commandFunc)
 		if err != nil {
