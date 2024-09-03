@@ -33,7 +33,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -242,14 +241,12 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
 		assert.Equal(t, true, c.IsSnykOpenBrowserActionEnabled())
 
-		folderConfig1, err := gitconfig.GetOrCreateFolderConfig(tempDir1)
-		assert.NoError(t, err)
+		folderConfig1 := c.FolderConfig(tempDir1)
 		assert.NotEmpty(t, folderConfig1.BaseBranch)
 		assert.Equal(t, settings.FolderConfigs[0].AdditionalParameters[0],
 			folderConfig1.AdditionalParameters[0])
 
-		folderConfig2, err := gitconfig.GetOrCreateFolderConfig(tempDir2)
-		assert.NoError(t, err)
+		folderConfig2 := c.FolderConfig(tempDir2)
 		assert.NotEmpty(t, folderConfig2.BaseBranch)
 		assert.Empty(t, folderConfig2.AdditionalParameters)
 

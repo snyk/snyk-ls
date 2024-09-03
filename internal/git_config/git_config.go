@@ -18,7 +18,6 @@ package gitconfig
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/rs/zerolog"
 
@@ -32,10 +31,8 @@ import (
 )
 
 const (
-	mainSection                   = "snyk"
-	baseBranchKey                 = "baseBranch"
-	additionalParametersKey       = "additionalParameters"
-	additionalParametersSeparator = "|"
+	mainSection   = "snyk"
+	baseBranchKey = "baseBranch"
 )
 
 // GetOrCreateFolderConfig queries git for the folder config of the given path
@@ -59,22 +56,12 @@ func GetOrCreateFolderConfig(path string) (*types.FolderConfig, error) {
 		return nil, err
 	}
 
-	additionalParameters := getAdditionalParameters(folderSection)
-
 	return &types.FolderConfig{
 		FolderPath:           path,
 		BaseBranch:           baseBranch,
 		LocalBranches:        localBranches,
-		AdditionalParameters: additionalParameters,
+		AdditionalParameters: nil,
 	}, nil
-}
-
-func getAdditionalParameters(folderSection *config.Subsection) []string {
-	var additionalParameters []string
-	if folderSection.HasOption(additionalParametersKey) && len(folderSection.Option(additionalParametersKey)) > 0 {
-		additionalParameters = strings.Split(folderSection.Option(additionalParametersKey), additionalParametersSeparator)
-	}
-	return additionalParameters
 }
 
 func getBaseBranch(repoConfig *config2.Config, folderSection *config.Subsection, localBranches []string) (string, error) {
@@ -132,12 +119,6 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 func SetBaseBranch(logger *zerolog.Logger, config []types.FolderConfig) {
 	for _, folderConfig := range config {
 		SetOption(logger, folderConfig.FolderPath, baseBranchKey, folderConfig.BaseBranch)
-	}
-}
-
-func SetAdditionalParameters(logger *zerolog.Logger, config []types.FolderConfig) {
-	for _, folderConfig := range config {
-		SetOption(logger, folderConfig.FolderPath, additionalParametersKey, strings.Join(folderConfig.AdditionalParameters, additionalParametersSeparator))
 	}
 }
 

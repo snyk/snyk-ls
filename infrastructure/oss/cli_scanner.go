@@ -34,7 +34,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -232,6 +231,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 }
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string) []string {
+	c := config.CurrentConfig()
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
@@ -245,10 +245,8 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	additionalParams := cliScanner.config.CliSettings().AdditionalOssParameters
 
 	// append folder parameters if set
-	folderConfig, err := gitconfig.GetOrCreateFolderConfig(path)
-	if err == nil {
-		additionalParams = append(additionalParams, folderConfig.AdditionalParameters...)
-	}
+	folderConfig := c.FolderConfig(path)
+	additionalParams = append(additionalParams, folderConfig.AdditionalParameters...)
 
 	// now add all additional parameters, skipping blacklisted ones
 	for _, parameter := range additionalParams {

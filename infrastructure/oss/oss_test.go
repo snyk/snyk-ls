@@ -34,7 +34,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -366,7 +365,7 @@ func Test_prepareScanCommand(t *testing.T) {
 			AdditionalParameters: []string{"--file=pom.xml"},
 		}}
 
-		gitconfig.SetAdditionalParameters(c.Logger(), folderConfigs)
+		c.SetAdditionalParameters(repo, folderConfigs[0].AdditionalParameters)
 
 		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, repo)
 
