@@ -819,7 +819,8 @@
               <p>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
 
               <div class="sn-fix-wrapper">
-                <button id="generate-ai-fix" class="generate-ai-fix">✨ Generate AI fix</button>
+                <button id="generate-ai-fix" folder-path="{{.FolderPath}}" file-path="{{.FilePath}}"
+                  issue-id="{{.IssueId}}" class="generate-ai-fix">✨ Generate AI fix</button>
 
                 <div id="fix-loading-indicator" class="sn-loading hidden">
                   <div class="sn-loading-icon">

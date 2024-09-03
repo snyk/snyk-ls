@@ -115,9 +115,9 @@ func getCodeDetailsHtml(issue snyk.Issue, folderPath string) string {
 		"ArrowRightDark":     html.ArrowRightDark(),
 		"ArrowRightLight":    html.ArrowRightLight(),
 		"FileIcon":           html.FileIcon(),
-		"IssueId":            issue.AdditionalData.GetKey(),
 		"FolderPath":         folderPath,
 		"FilePath":           issue.Path(),
+		"IssueId":            issue.AdditionalData.GetKey(),
 	}
 
 	if issue.IsIgnored {
