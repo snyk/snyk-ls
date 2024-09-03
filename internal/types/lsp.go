@@ -520,9 +520,10 @@ type WorkspaceFoldersChangeEvent struct {
 // IDE sends this as part of the settings/initialization
 // LS sends this via the $/snyk.folderConfig notification
 type FolderConfig struct {
-	FolderPath    string   `json:"folderPath"`
-	BaseBranch    string   `json:"baseBranch"`
-	LocalBranches []string `json:"localBranches,omitempty"`
+	FolderPath           string   `json:"folderPath"`
+	BaseBranch           string   `json:"baseBranch"`
+	LocalBranches        []string `json:"localBranches,omitempty"`
+	AdditionalParameters []string `json:"additionalParameters,omitempty"`
 }
 
 type FolderConfigsParam struct {
