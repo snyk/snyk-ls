@@ -87,11 +87,6 @@ func getCodeDetailsHtml(issue snyk.Issue, folderPath string) string {
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits)
 
-	//issueId := issue.AdditionalData.GetKey()
-	//fp := folderPath
-	//filePath := issue.Path()
-	//
-
 	data := map[string]interface{}{
 		"IssueTitle":         additionalData.Title,
 		"IssueMessage":       additionalData.Message,
@@ -120,6 +115,9 @@ func getCodeDetailsHtml(issue snyk.Issue, folderPath string) string {
 		"ArrowRightDark":     html.ArrowRightDark(),
 		"ArrowRightLight":    html.ArrowRightLight(),
 		"FileIcon":           html.FileIcon(),
+		"IssueId":            issue.AdditionalData.GetKey(),
+		"FolderPath":         folderPath,
+		"FilePath":           issue.Path(),
 	}
 
 	if issue.IsIgnored {
