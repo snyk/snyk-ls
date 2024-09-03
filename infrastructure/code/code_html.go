@@ -76,7 +76,7 @@ func init() {
 	}
 }
 
-func getCodeDetailsHtml(issue snyk.Issue) string {
+func getCodeDetailsHtml(issue snyk.Issue, folderPath string) string {
 	c := config.CurrentConfig()
 	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
@@ -86,6 +86,11 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits)
+
+	//issueId := issue.AdditionalData.GetKey()
+	//fp := folderPath
+	//filePath := issue.Path()
+	//
 
 	data := map[string]interface{}{
 		"IssueTitle":         additionalData.Title,

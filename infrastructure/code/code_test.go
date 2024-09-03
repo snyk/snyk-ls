@@ -587,7 +587,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 	}
 
 	// Act
-	scanner.enhanceIssuesDetails(issues)
+	scanner.enhanceIssuesDetails(issues, "")
 
 	// Assert
 	assert.Equal(t, expectedLessonUrl, issues[0].LessonUrl)

@@ -52,7 +52,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	}
 
 	// invoke method under test
-	codePanelHtml := getCodeDetailsHtml(issue)
+	codePanelHtml := getCodeDetailsHtml(issue, "")
 
 	// assert injectable style
 	assert.Contains(t, codePanelHtml, "${ideStyle}")
@@ -113,7 +113,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	}
 
 	// invoke method under test
-	codePanelHtml := getCodeDetailsHtml(issue)
+	codePanelHtml := getCodeDetailsHtml(issue, "")
 
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="">`)
@@ -152,7 +152,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	}
 
 	// invoke method under test
-	codePanelHtml := getCodeDetailsHtml(issue)
+	codePanelHtml := getCodeDetailsHtml(issue, "")
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 0")
@@ -189,7 +189,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	}
 
 	// invoke method under test
-	codePanelHtml := getCodeDetailsHtml(issue)
+	codePanelHtml := getCodeDetailsHtml(issue, "")
 
 	// assert Ignore Details section
 	// Asserting an expired date to prevent the test from breaking in the future as the current date changes
@@ -229,7 +229,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	}
 
 	// invoke method under test
-	codePanelHtml := getCodeDetailsHtml(issue)
+	codePanelHtml := getCodeDetailsHtml(issue, "")
 
 	// assert Ignore Details section - Ignore link must be the custom endpoint
 	assert.Contains(t, codePanelHtml, customEndpoint)
