@@ -156,7 +156,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string) (
 	return cliScanner.scanInternal(ctx, path, cliScanner.prepareScanCommand)
 }
 
-func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool) []string) ([]snyk.Issue, error) {
+func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool, path string) []string) ([]snyk.Issue, error) {
 	method := "cliScanner.Scan"
 	logger := cliScanner.config.Logger().With().Str("method", method).Logger()
 
@@ -203,7 +203,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	cliScanner.runningScans[workDir] = newScan
 	cliScanner.mutex.Unlock()
 
-	cmd := commandFunc([]string{workDir}, map[string]bool{"": true})
+	cmd := commandFunc([]string{workDir}, map[string]bool{"": true}, workDir)
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
@@ -230,7 +230,8 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool) []string {
+func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string) []string {
+	c := config.CurrentConfig()
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
@@ -240,7 +241,14 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	})
 	cmd = append(cmd, args...)
 	cmd = append(cmd, "--json")
+
 	additionalParams := cliScanner.config.CliSettings().AdditionalOssParameters
+
+	// append folder parameters if set
+	folderConfig := c.FolderConfig(path)
+	additionalParams = append(additionalParams, folderConfig.AdditionalParameters...)
+
+	// now add all additional parameters, skipping blacklisted ones
 	for _, parameter := range additionalParams {
 		p := strings.Split(parameter, "=")[0]
 		if parameterBlacklist[p] {
@@ -249,7 +257,9 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		if allProjectsParamBlacklist[p] {
 			allProjectsParamAllowed = false
 		}
-		cmd = append(cmd, parameter)
+		if parameter != allProjectsParam {
+			cmd = append(cmd, parameter)
+		}
 	}
 
 	// only append --all-projects, if it's not on the global blacklist

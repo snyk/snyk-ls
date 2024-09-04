@@ -47,10 +47,10 @@ import (
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -200,6 +200,7 @@ type Config struct {
 	m                                sync.RWMutex
 	clientProtocolVersion            string
 	isOpenBrowserActionEnabled       bool
+	folderAdditionalParameters       map[string][]string
 }
 
 func CurrentConfig() *Config {
@@ -231,6 +232,7 @@ func IsDevelopment() bool {
 // New creates a configuration object with default values
 func New() *Config {
 	c := &Config{}
+	c.folderAdditionalParameters = make(map[string][]string)
 	c.scrubbingDict = frameworkLogging.ScrubbingDict{}
 	c.logger = getNewScrubbingLogger(c)
 	c.cliSettings = NewCliSettings(c)
@@ -1118,4 +1120,27 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.isOpenBrowserActionEnabled = enable
+}
+
+func (c *Config) FolderConfig(path string) *types.FolderConfig {
+	var folderConfig *types.FolderConfig
+	var err error
+	folderConfig, err = gitconfig.GetOrCreateFolderConfig(path)
+	if err != nil {
+		folderConfig = &types.FolderConfig{}
+	}
+	c.m.RLock()
+	addParams, ok := c.folderAdditionalParameters[path]
+	if ok {
+		folderConfig.AdditionalParameters = addParams
+	}
+	c.m.RUnlock()
+	return folderConfig
+}
+
+func (c *Config) SetAdditionalParameters(path string, parameters []string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.folderAdditionalParameters[path] = parameters
 }

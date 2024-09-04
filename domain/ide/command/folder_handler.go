@@ -19,8 +19,8 @@ package command
 import (
 	"context"
 	"fmt"
+
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 
 	"github.com/pkg/errors"
@@ -40,15 +40,11 @@ func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier
 }
 
 func sendFolderConfigsNotification(notifier noti.Notifier) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "HandleFolders").Logger()
+	c := config.CurrentConfig()
 	ws := workspace.Get()
 	var folderConfigs []types.FolderConfig
 	for _, f := range ws.Folders() {
-		folderConfig, err := gitconfig.GetOrCreateFolderConfig(f.Path())
-		if err != nil {
-			logger.Warn().Err(err).Msg("error determining folder config")
-			continue
-		}
+		folderConfig := c.FolderConfig(f.Path())
 		folderConfigs = append(folderConfigs, *folderConfig)
 	}
 	folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
