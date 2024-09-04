@@ -1130,7 +1130,10 @@ func (c *Config) FolderConfig(path string) *types.FolderConfig {
 		folderConfig = &types.FolderConfig{}
 	}
 	c.m.RLock()
-	folderConfig.AdditionalParameters = c.folderAdditionalParameters[path]
+	addParams, ok := c.folderAdditionalParameters[path]
+	if ok {
+		folderConfig.AdditionalParameters = addParams
+	}
 	c.m.RUnlock()
 	return folderConfig
 }
