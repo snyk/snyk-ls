@@ -481,11 +481,14 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams, w *wor
 // from the environment variables.
 func setClientInformation(initParams types.InitializeParams) {
 	var integrationName, integrationVersion string
+	clientInfoName := initParams.ClientInfo.Name
+	clientInfoVersion := initParams.ClientInfo.Version
+
 	if initParams.InitializationOptions.IntegrationName != "" {
 		integrationName = initParams.InitializationOptions.IntegrationName
 		integrationVersion = initParams.InitializationOptions.IntegrationVersion
-	} else if initParams.ClientInfo.Name != "" {
-		integrationName = strings.ToUpper(strings.Replace(initParams.ClientInfo.Name, " ", "_", -1))
+	} else if clientInfoName != "" {
+		integrationName = strings.ToUpper(strings.Replace(clientInfoName, " ", "_", -1))
 	} else if integrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey); integrationNameEnvVar != "" {
 		integrationName = integrationNameEnvVar
 		integrationVersion = os.Getenv(cli.IntegrationVersionEnvVarKey)
@@ -493,11 +496,17 @@ func setClientInformation(initParams types.InitializeParams) {
 		return
 	}
 
+	// Fallback because Visual Studio doesn't send initParams.ClientInfo
+	if clientInfoName == "" && clientInfoVersion == "" {
+		clientInfoName = integrationName
+		clientInfoVersion = integrationVersion
+	}
+
 	c := config.CurrentConfig()
 	c.SetIntegrationName(integrationName)
 	c.SetIntegrationVersion(integrationVersion)
-	c.SetIdeName(initParams.ClientInfo.Name)
-	c.SetIdeVersion(initParams.ClientInfo.Version)
+	c.SetIdeName(clientInfoName)
+	c.SetIdeVersion(clientInfoVersion)
 
 	initNetworkAccessHeaders()
 }
