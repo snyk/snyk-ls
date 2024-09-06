@@ -78,7 +78,6 @@ func (e *TextEdit) SanitizeRange() {
 
 	if e.Range.Start.Line > e.Range.End.Line ||
 		e.Range.Start.Line == e.Range.End.Line && e.Range.Start.Character > e.Range.End.Character {
-
 		e.NewText = ""
 		e.Range = Range{}
 		return
