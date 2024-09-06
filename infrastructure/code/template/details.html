@@ -1025,6 +1025,9 @@
 
     // Utility functions
     function toggleIsSelectedClass(elements, shouldToggle) {
+      if(!elements){
+        return;
+      }
       for (var i = 0; i < elements.length; i++) {
         var el = elements[i];
         if (shouldToggle(el)) {
@@ -1085,6 +1088,9 @@
       var exampleCommitFixes = JSON.parse("{{.CommitFixes}}" || '[]');
 
       function showCurrentExample() {
+        if(!allExamplesDetail){
+          return;
+        }
         for (var i = 0; i < allExamplesDetail.length; i++) {
           var example = allExamplesDetail[i];
           if (i === exampleCount) {
@@ -1095,13 +1101,16 @@
             }
           }
         }
-
-        exampleCounter.textContent = exampleCount + 1;
+        if(exampleCounter){
+          exampleCounter.textContent = exampleCount + 1;
+        }
         var repoName = exampleCommitFixes[exampleCount].RepoName;
         var repoLink = exampleCommitFixes[exampleCount].RepoLink;
 
-        exampleRepoAnchor.textContent = repoName;
-        exampleRepoAnchor.href = repoLink;
+        if(exampleRepoAnchor){
+          exampleRepoAnchor.textContent = repoName;
+          exampleRepoAnchor.href = repoLink;
+        }
       }
 
       function previousExample() {
@@ -1117,24 +1126,28 @@
           showCurrentExample();
         }
       }
+      if(mainTabNav) {
+        mainTabNav.onclick = function (event) {
+          var clickedTab = event.target.closest('.tab-item');
+          if (!clickedTab) return;
 
-      mainTabNav.onclick = function (event) {
-        var clickedTab = event.target.closest('.tab-item');
-        if (!clickedTab) return;
+          var selectedTab = clickedTab.getAttribute('data-tab');
 
-        var selectedTab = clickedTab.getAttribute('data-tab');
-
-        // Toggle selected tab and content
-        toggleIsSelectedClass(mainTabLinks, function (tab) {
-          return tab === clickedTab;
-        });
-        toggleIsSelectedClass(mainTabContents, function (content) {
-          return content.getAttribute('data-content') === selectedTab;
-        });
-      };
-
-      examplePrevious.onclick = previousExample;
-      exampleNext.onclick = nextExample;
+          // Toggle selected tab and content
+          toggleIsSelectedClass(mainTabLinks, function (tab) {
+            return tab === clickedTab;
+          });
+          toggleIsSelectedClass(mainTabContents, function (content) {
+            return content.getAttribute('data-content') === selectedTab;
+          });
+        };
+      }
+      if (examplePrevious){
+        examplePrevious.onclick = previousExample;
+      }
+      if (exampleNext) {
+        exampleNext.onclick = nextExample;
+      }
 
       showCurrentExample();
     });
