@@ -116,9 +116,18 @@ func ToWorkspaceEdit(edit *snyk.WorkspaceEdit) *sglsp.WorkspaceEdit {
 
 func ToTextEdits(edits []snyk.TextEdit) (lspEdits []sglsp.TextEdit) {
 	for _, edit := range edits {
-		lspEdits = append(lspEdits, ToTextEdit(edit))
+		edit.SanitizeRange()
+		if edit.NewText == "" && isEmpty(edit.Range) {
+			continue
+		}
+		textEdit := ToTextEdit(edit)
+		lspEdits = append(lspEdits, textEdit)
 	}
 	return lspEdits
+}
+
+func isEmpty(r snyk.Range) bool {
+	return r.Start == snyk.Position{} && r.End == snyk.Position{}
 }
 
 func ToTextEdit(edit snyk.TextEdit) sglsp.TextEdit {

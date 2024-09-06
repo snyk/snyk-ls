@@ -16,6 +16,11 @@
 
 package snyk
 
+import (
+	"math"
+	"strings"
+)
+
 type TextEdit struct {
 	/**
 	 * The range of the text document to be manipulated. To insert
@@ -28,6 +33,53 @@ type TextEdit struct {
 	 * empty string.
 	 */
 	NewText string
+}
+
+func (e *TextEdit) SanitizeRange() {
+	// check text length and number of lines and adjust range in text edit
+	// to not go out of bounds
+	if e.NewText == "" {
+		e.Range = Range{}
+		return
+	}
+
+	posixLineSeparator := "\n"
+	windowsLineSeparator := "\r\n"
+	normalizedText := strings.Replace(e.NewText, windowsLineSeparator, posixLineSeparator, -1)
+	lines := strings.Split(normalizedText, posixLineSeparator)
+
+	if e.Range.Start.Line > len(lines) {
+		// we can't recover here, reset the edit
+		e.NewText = ""
+		e.Range = Range{}
+		return
+	}
+
+	if e.Range.Start.Character > len(lines[e.Range.Start.Line-1]) {
+		e.NewText = ""
+		e.Range = Range{}
+		return
+	}
+
+	if e.Range.End.Line > len(lines) {
+		e.Range.End.Line = len(lines)
+		e.Range.End.Character = len(lines[e.Range.End.Line-1])
+		return
+	}
+
+	maxEndLineNo := int(math.Max(0, float64(e.Range.End.Line-1)))
+	if e.Range.End.Character >= len(lines[maxEndLineNo]) {
+		e.Range.End.Character = len(lines[maxEndLineNo])
+		return
+	}
+
+	if e.Range.Start.Line > e.Range.End.Line ||
+		e.Range.Start.Line == e.Range.End.Line && e.Range.Start.Character > e.Range.End.Character {
+
+		e.NewText = ""
+		e.Range = Range{}
+		return
+	}
 }
 
 type WorkspaceEdit struct {
