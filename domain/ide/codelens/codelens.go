@@ -21,6 +21,7 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -44,6 +45,9 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	// group by range first
 	lensesByRange := make(map[snyk.Range]*lensesWithIssueCount)
 	for _, issue := range issues {
+		if config.CurrentConfig().IsDeltaFindingsEnabled() && !issue.IsNew {
+			continue
+		}
 		for _, lens := range issue.CodelensCommands {
 			lensesWithIssueCountsForRange := lensesByRange[issue.Range]
 			if lensesWithIssueCountsForRange == nil {
