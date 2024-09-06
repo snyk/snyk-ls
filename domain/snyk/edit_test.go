@@ -17,6 +17,7 @@
 package snyk
 
 import (
+	"math"
 	"testing"
 )
 
@@ -57,8 +58,8 @@ func TestTextEdit_sanitizeRange(t *testing.T) {
 			fields: fields{
 				NewText: "Line 1\nLine 2",
 				Range: Range{
-					Start: Position{Line: 1, Character: 10},
-					End:   Position{Line: 2, Character: 2},
+					Start: Position{Line: 0, Character: 10},
+					End:   Position{Line: 1, Character: 2},
 				},
 			},
 			want: Range{},
@@ -68,13 +69,13 @@ func TestTextEdit_sanitizeRange(t *testing.T) {
 			fields: fields{
 				NewText: "Line 1\nLine 2",
 				Range: Range{
-					Start: Position{Line: 1, Character: 2},
+					Start: Position{Line: 0, Character: 2},
 					End:   Position{Line: 3, Character: 5},
 				},
 			},
 			want: Range{
-				Start: Position{Line: 1, Character: 2},
-				End:   Position{Line: 2, Character: 6},
+				Start: Position{Line: 0, Character: 2},
+				End:   Position{Line: 1, Character: 6},
 			},
 		},
 		{
@@ -82,13 +83,13 @@ func TestTextEdit_sanitizeRange(t *testing.T) {
 			fields: fields{
 				NewText: "Line 1\nLine 2",
 				Range: Range{
-					Start: Position{Line: 2, Character: 2},
-					End:   Position{Line: 2, Character: 10},
+					Start: Position{Line: 0, Character: 2},
+					End:   Position{Line: 1, Character: 10},
 				},
 			},
 			want: Range{
-				Start: Position{Line: 2, Character: 2},
-				End:   Position{Line: 2, Character: 6},
+				Start: Position{Line: 0, Character: 2},
+				End:   Position{Line: 1, Character: 6},
 			},
 		},
 		{
@@ -96,11 +97,25 @@ func TestTextEdit_sanitizeRange(t *testing.T) {
 			fields: fields{
 				NewText: "Line 1\nLine 2",
 				Range: Range{
-					Start: Position{Line: 2, Character: 5},
-					End:   Position{Line: 1, Character: 2},
+					Start: Position{Line: 0, Character: 5},
+					End:   Position{Line: 0, Character: 2},
 				},
 			},
 			want: Range{},
+		},
+		{
+			name: "MaxInt",
+			fields: fields{
+				NewText: "Line 1\nLine 2",
+				Range: Range{
+					Start: Position{Line: 0, Character: 0},
+					End:   Position{Line: math.MaxInt32, Character: math.MaxInt32},
+				},
+			},
+			want: Range{
+				Start: Position{0, 0},
+				End:   Position{1, 6},
+			},
 		},
 	}
 	for _, tt := range tests {

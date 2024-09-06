@@ -48,28 +48,31 @@ func (e *TextEdit) SanitizeRange() {
 	normalizedText := strings.Replace(e.NewText, windowsLineSeparator, posixLineSeparator, -1)
 	lines := strings.Split(normalizedText, posixLineSeparator)
 
-	if e.Range.Start.Line > len(lines) {
+	maxLineIndex := e.ensureGreaterThanZero(len(lines) - 1)
+
+	if e.Range.Start.Line > maxLineIndex {
 		// we can't recover here, reset the edit
 		e.NewText = ""
 		e.Range = Range{}
 		return
 	}
 
-	if e.Range.Start.Character > len(lines[e.Range.Start.Line-1]) {
+	startLine := e.Range.Start.Line
+
+	if e.Range.Start.Character > len(lines[startLine]) {
 		e.NewText = ""
 		e.Range = Range{}
 		return
 	}
 
-	if e.Range.End.Line > len(lines) {
-		e.Range.End.Line = len(lines)
-		e.Range.End.Character = len(lines[e.Range.End.Line-1])
+	if e.Range.End.Line > maxLineIndex {
+		e.Range.End.Line = maxLineIndex
+		e.Range.End.Character = len(lines[maxLineIndex])
 		return
 	}
 
-	maxEndLineNo := int(math.Max(0, float64(e.Range.End.Line-1)))
-	if e.Range.End.Character >= len(lines[maxEndLineNo]) {
-		e.Range.End.Character = len(lines[maxEndLineNo])
+	if e.Range.End.Character > len(lines[e.Range.End.Line]) {
+		e.Range.End.Character = len(lines[e.Range.End.Line])
 		return
 	}
 
@@ -80,6 +83,10 @@ func (e *TextEdit) SanitizeRange() {
 		e.Range = Range{}
 		return
 	}
+}
+
+func (e *TextEdit) ensureGreaterThanZero(i int) int {
+	return int(math.Max(0, float64(i)))
 }
 
 type WorkspaceEdit struct {
