@@ -544,6 +544,10 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([
 
 // createAutofixWorkspaceEdit turns the returned fix into an edit.
 func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
+	fileContent, err := os.ReadFile(absoluteFilePath)
+	if err != nil {
+		return edit
+	}
 	singleTextEdit := snyk.TextEdit{
 		Range: snyk.Range{
 			// TODO(alex.gronskiy): should be changed to an actual hunk-like edit instead of
@@ -555,7 +559,8 @@ func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string)
 				Line:      math.MaxInt32,
 				Character: 0},
 		},
-		NewText: fixedSourceCode,
+		NewText:  fixedSourceCode,
+		FullText: string(fileContent),
 	}
 	edit.Changes = make(map[string][]snyk.TextEdit)
 	edit.Changes[absoluteFilePath] = []snyk.TextEdit{singleTextEdit}
