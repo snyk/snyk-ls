@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
 
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -116,9 +117,20 @@ func ToWorkspaceEdit(edit *snyk.WorkspaceEdit) *sglsp.WorkspaceEdit {
 
 func ToTextEdits(edits []snyk.TextEdit) (lspEdits []sglsp.TextEdit) {
 	for _, edit := range edits {
-		lspEdits = append(lspEdits, ToTextEdit(edit))
+		unsanitized := edit
+		edit.SanitizeRange()
+		if edit.NewText == "" && isEmpty(edit.Range) {
+			config.CurrentConfig().Logger().Warn().Msg("skipping unsanitized edit in range: " + unsanitized.Range.String())
+			continue
+		}
+		textEdit := ToTextEdit(edit)
+		lspEdits = append(lspEdits, textEdit)
 	}
 	return lspEdits
+}
+
+func isEmpty(r snyk.Range) bool {
+	return r.Start == snyk.Position{} && r.End == snyk.Position{}
 }
 
 func ToTextEdit(edit snyk.TextEdit) sglsp.TextEdit {

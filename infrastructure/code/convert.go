@@ -303,6 +303,7 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 						", URI: " +
 						loc.PhysicalLocation.ArtifactLocation.URI)
 				errs = errors.Join(errs, err)
+				continue
 			}
 
 			position := loc.PhysicalLocation.Region
@@ -312,7 +313,12 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 			endLine := util.Max(position.EndLine-1, startLine)
 			startCol := position.StartColumn - 1
 			endCol := util.Max(position.EndColumn-1, 0)
-
+			fileContent, err := os.ReadFile(absPath)
+			if err != nil {
+				s.c.Logger().Err(err).Msgf("failed to read file %s, skipping", absPath)
+				errs = errors.Join(errs, err)
+				continue
+			}
 			myRange := snyk.Range{
 				Start: snyk.Position{
 					Line:      startLine,
@@ -388,6 +394,7 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 				FormattedMessage:    formattedMessage,
 				IssueType:           issueType,
 				AffectedFilePath:    absPath,
+				FileContent:         fileContent,
 				Product:             product.ProductCode,
 				IssueDescriptionURL: ruleLink,
 				References:          s.getReferences(testRule),
@@ -537,6 +544,10 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([
 
 // createAutofixWorkspaceEdit turns the returned fix into an edit.
 func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
+	fileContent, err := os.ReadFile(absoluteFilePath)
+	if err != nil {
+		return edit
+	}
 	singleTextEdit := snyk.TextEdit{
 		Range: snyk.Range{
 			// TODO(alex.gronskiy): should be changed to an actual hunk-like edit instead of
@@ -548,7 +559,8 @@ func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string)
 				Line:      math.MaxInt32,
 				Character: 0},
 		},
-		NewText: fixedSourceCode,
+		NewText:  fixedSourceCode,
+		FullText: string(fileContent),
 	}
 	edit.Changes = make(map[string][]snyk.TextEdit)
 	edit.Changes[absoluteFilePath] = []snyk.TextEdit{singleTextEdit}
