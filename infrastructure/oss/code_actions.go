@@ -31,14 +31,14 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueRange snyk.Range) (actions []snyk.CodeAction) {
+func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueRange snyk.Range, fileContent []byte) (actions []snyk.CodeAction) {
 	c := config.CurrentConfig()
 	if reflect.DeepEqual(issueRange, snyk.Range{}) {
 		c.Logger().Debug().Str("issue", i.Id).Msg("skipping adding code action, as issueRange is empty")
 		return actions
 	}
 
-	quickFixAction := i.AddQuickFixAction(affectedFilePath, issueRange)
+	quickFixAction := i.AddQuickFixAction(affectedFilePath, issueRange, fileContent)
 	if quickFixAction != nil {
 		actions = append(actions, *quickFixAction)
 	}
@@ -95,7 +95,7 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 	return action
 }
 
-func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Range) *snyk.CodeAction {
+func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Range, fileContent []byte) *snyk.CodeAction {
 	logger := config.CurrentConfig().Logger().With().Str("method", "oss.AddQuickFixAction").Logger()
 	if !config.CurrentConfig().IsSnykOSSQuickFixCodeActionsEnabled() {
 		return nil
@@ -109,8 +109,9 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Ra
 	autofixEditCallback := func() *snyk.WorkspaceEdit {
 		edit := &snyk.WorkspaceEdit{}
 		singleTextEdit := snyk.TextEdit{
-			Range:   issueRange,
-			NewText: quickfixEdit,
+			FullText: string(fileContent),
+			Range:    issueRange,
+			NewText:  quickfixEdit,
 		}
 		edit.Changes = make(map[string][]snyk.TextEdit)
 		edit.Changes[affectedFilePath] = []snyk.TextEdit{singleTextEdit}

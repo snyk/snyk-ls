@@ -22,6 +22,7 @@ import (
 )
 
 type TextEdit struct {
+
 	/**
 	 * The range of the text document to be manipulated. To insert
 	 * text into a document create a range where start === end.
@@ -33,6 +34,8 @@ type TextEdit struct {
 	 * empty string.
 	 */
 	NewText string
+
+	FullText string
 }
 
 func (e *TextEdit) SanitizeRange() {
@@ -45,7 +48,7 @@ func (e *TextEdit) SanitizeRange() {
 
 	posixLineSeparator := "\n"
 	windowsLineSeparator := "\r\n"
-	normalizedText := strings.Replace(e.NewText, windowsLineSeparator, posixLineSeparator, -1)
+	normalizedText := strings.Replace(e.FullText, windowsLineSeparator, posixLineSeparator, -1)
 	lines := strings.Split(normalizedText, posixLineSeparator)
 
 	maxLineIndex := e.ensureGreaterThanZero(len(lines) - 1)

@@ -303,6 +303,7 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 						", URI: " +
 						loc.PhysicalLocation.ArtifactLocation.URI)
 				errs = errors.Join(errs, err)
+				continue
 			}
 
 			position := loc.PhysicalLocation.Region
@@ -312,7 +313,12 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 			endLine := util.Max(position.EndLine-1, startLine)
 			startCol := position.StartColumn - 1
 			endCol := util.Max(position.EndColumn-1, 0)
-
+			fileContent, err := os.ReadFile(absPath)
+			if err != nil {
+				s.c.Logger().Err(err).Msgf("failed to read file %s, skipping", absPath)
+				errs = errors.Join(errs, err)
+				continue
+			}
 			myRange := snyk.Range{
 				Start: snyk.Position{
 					Line:      startLine,
@@ -388,6 +394,7 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 				FormattedMessage:    formattedMessage,
 				IssueType:           issueType,
 				AffectedFilePath:    absPath,
+				FileContent:         fileContent,
 				Product:             product.ProductCode,
 				IssueDescriptionURL: ruleLink,
 				References:          s.getReferences(testRule),
