@@ -39,7 +39,8 @@ func (c *exampleCommit) toMarkdown() (msg string) {
 	builder.WriteString("\n```\n")
 	for _, line := range c.fix.Lines {
 		lineChangeChar := c.lineChangeChar(line.LineChange)
-		builder.WriteString(fmt.Sprintf("%s %04d : %s\n", lineChangeChar, line.LineNumber, line.Line))
+		cutLine, _ := strings.CutSuffix(line.Line, "\n")
+		builder.WriteString(fmt.Sprintf("%s %04d : %s\n", lineChangeChar, line.LineNumber, cutLine))
 	}
 	builder.WriteString("\n```\n")
 	return builder.String()
