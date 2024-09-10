@@ -33,9 +33,7 @@ func (c *exampleCommit) toMarkdown() (msg string) {
 	fixDescription := c.description
 	var builder strings.Builder
 	builder.Grow(500)
-	if fixDescription != "" {
-		builder.WriteString(fmt.Sprintf("### [%s](%s)", fixDescription, c.fix.CommitURL))
-	}
+	builder.WriteString(fmt.Sprintf("\n\n [%s](%s)\n\n", fixDescription, c.fix.CommitURL))
 	builder.WriteString("\n```\n")
 	for _, line := range c.fix.Lines {
 		lineChangeChar := c.lineChangeChar(line.LineChange)

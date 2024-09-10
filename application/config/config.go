@@ -201,6 +201,7 @@ type Config struct {
 	clientProtocolVersion            string
 	isOpenBrowserActionEnabled       bool
 	folderAdditionalParameters       map[string][]string
+	hoverVerbosity                   int
 }
 
 func CurrentConfig() *Config {
@@ -238,7 +239,7 @@ func New() *Config {
 	c.cliSettings = NewCliSettings(c)
 	c.automaticAuthentication = true
 	c.configFile = ""
-	c.format = "md"
+	c.format = FormatMd
 	c.isErrorReportingEnabled.Set(true)
 	c.isSnykOssEnabled.Set(true)
 	c.isSnykIacEnabled.Set(true)
@@ -256,6 +257,7 @@ func New() *Config {
 	c.UpdateApiEndpoints(DefaultSnykApiUrl)
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
+	c.hoverVerbosity = 3
 	return c
 }
 
@@ -1143,4 +1145,18 @@ func (c *Config) SetAdditionalParameters(path string, parameters []string) {
 	defer c.m.Unlock()
 
 	c.folderAdditionalParameters[path] = parameters
+}
+
+func (c *Config) HoverVerbosity() int {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.hoverVerbosity
+}
+
+func (c *Config) SetHoverVerbosity(verbosity int) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.hoverVerbosity = verbosity
 }

@@ -717,7 +717,7 @@ func Test_getFormattedMessage(t *testing.T) {
 	testResult := run.Results[0]
 
 	sarifConverter := SarifConverter{sarif: sarifResponse, c: c}
-	msg := sarifConverter.formattedMessage(testResult, sarifConverter.getRule(run, "1"), filepath.Dir(p))
+	msg := sarifConverter.formattedMessageMarkdown(testResult, sarifConverter.getRule(run, "1"), filepath.Dir(p))
 
 	assert.Contains(t, msg, "Example Commit Fixes")
 	assert.Contains(t, msg, "Data Flow")

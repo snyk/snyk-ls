@@ -17,9 +17,11 @@
 package converter
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
+
+	"github.com/gomarkdown/markdown"
+	stripmd "github.com/writeas/go-strip-markdown"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -31,6 +33,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
+
+var htmlEndingRegExp = regexp.MustCompile(`<br\s?/?>`)
 
 func FromRange(lspRange sglsp.Range) snyk.Range {
 	return snyk.Range{
@@ -401,7 +405,11 @@ func ToHoversDocument(path string, issues []snyk.Issue) hover.DocumentHovers {
 }
 
 func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
-	re := regexp.MustCompile(`<br\s?/?>`)
+	c := config.CurrentConfig()
+	if c.HoverVerbosity() == 0 {
+		return hovers
+	}
+
 	for _, i := range issues {
 		var message string
 		if len(i.FormattedMessage) > 0 {
@@ -410,15 +418,16 @@ func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 			message = i.Message
 		}
 
-		if len(i.References) > 0 {
-			message += "\n\nReferences:\n\n"
-			for _, reference := range i.References {
-				message += fmt.Sprintf("[%s](%s)\n\n", reference.Title, reference.Url)
-			}
+		hoverOutputFormat := c.Format()
+		if hoverOutputFormat == config.FormatHtml {
+			message = string(markdown.ToHTML([]byte(message), nil, nil))
+		} else if hoverOutputFormat == config.FormatMd {
+			// sanitize the message, substitute <br> with line break
+			message = htmlEndingRegExp.ReplaceAllString(message, "\n\n")
+		} else {
+			// if anything else (e.g. plain), strip markdown
+			message = stripmd.Strip(message)
 		}
-
-		// sanitize the message, substitute <br> with line break
-		message = re.ReplaceAllString(message, "\n\n")
 
 		hovers = append(hovers, hover.Hover[hover.Context]{
 			Id:      i.ID,
