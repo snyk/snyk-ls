@@ -201,7 +201,7 @@ func (s *SarifConverter) titleWithLeadingPipeOrEmpty(r codeClientSarif.Rule) str
 func (s *SarifConverter) detailsOrEmpty(r codeClientSarif.Rule) string {
 	details := r.Help.Markdown
 	if details != "" {
-		return regexp.MustCompile(`##\sDetails`).ReplaceAllString(details, "### Details")
+		return regexp.MustCompile(`##\s`).ReplaceAllString(details, "### ")
 	}
 	return ""
 }
@@ -212,7 +212,7 @@ func (s *SarifConverter) formattedMessageMarkdown(r codeClientSarif.Result, rule
 	const separator = "\n\n\n\n"
 	if hoverVerbosity >= 1 {
 		builder.Grow(500)
-		builder.WriteString(fmt.Sprintf("### %s", issueSeverityToMarkdown(issueSeverity(r.Level))))
+		builder.WriteString(fmt.Sprintf("## %s", issueSeverityToMarkdown(issueSeverity(r.Level))))
 		builder.WriteString(s.titleWithLeadingPipeOrEmpty(rule))
 		builder.WriteString(s.priorityScore(r))
 		cwe := s.cwe(rule)
@@ -241,6 +241,14 @@ func (s *SarifConverter) formattedMessageMarkdown(r codeClientSarif.Result, rule
 			builder.WriteString(fix.toMarkdown())
 		}
 		builder.WriteString(separator)
+
+		references := s.getReferences(rule)
+		if len(references) > 0 {
+			builder.WriteString("\n\nReferences:\n\n")
+			for _, reference := range references {
+				builder.WriteString(fmt.Sprintf("[%s](%s)\n\n", reference.Title, reference.Url))
+			}
+		}
 	}
 	return builder.String()
 }
@@ -257,7 +265,7 @@ func (s *SarifConverter) getMessage(r codeClientSarif.Result, rule codeClientSar
 	return text
 }
 
-func (s *SarifConverter) getFixDescriptionsForRule(r codeClientSarif.Rule, commitFixIndex int) string {
+func (s *SarifConverter) getFixDescriptionForRule(r codeClientSarif.Rule, commitFixIndex int) string {
 	fixDescriptions := r.Properties.ExampleCommitDescriptions
 	if len(fixDescriptions) > commitFixIndex {
 		return fixDescriptions[commitFixIndex]
@@ -270,9 +278,14 @@ func (s *SarifConverter) getExampleCommits(r codeClientSarif.Rule) (exampleCommi
 		return exampleCommits
 	}
 	for i, fix := range r.Properties.ExampleCommitFixes {
+		fixDescription := s.getFixDescriptionForRule(r, i)
+		if fixDescription == "" {
+			before, _, _ := strings.Cut(fix.CommitURL, "/commit")
+			fixDescription = before
+		}
 		exampleCommits = append(exampleCommits, exampleCommit{
 			index:       i,
-			description: s.getFixDescriptionsForRule(r, i),
+			description: fixDescription,
 			fix: codeClientSarif.ExampleCommitFix{
 				CommitURL: fix.CommitURL,
 				Lines:     fix.Lines,

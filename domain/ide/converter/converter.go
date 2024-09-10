@@ -17,7 +17,6 @@
 package converter
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 
@@ -416,13 +415,6 @@ func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 			message = i.FormattedMessage
 		} else {
 			message = i.Message
-		}
-
-		if len(i.References) > 0 {
-			message += "\n\nReferences:\n\n"
-			for _, reference := range i.References {
-				message += fmt.Sprintf("[%s](%s)\n\n", reference.Title, reference.Url)
-			}
 		}
 
 		hoverOutputFormat := c.Format()
