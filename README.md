@@ -377,7 +377,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "enableDeltaFindings": "false", // only display issues that are not new and thus not on the base branch
   "requiredProtocolVersion": "14", // the protocol version a client needs
   "hoverVerbosity": "1", // 0-3 with 0 the lowest verbosity. 0: off, 1: only description, 2: description & details 3: complete (default)
-  "hoverOutputFormat": "markdown", // plain, markdown (default) or html
+  "outputFormat": "md", // plain = plain, markdown = md (default) or html = HTML
   "additionalParams": "--all-projects", // Any extra params for Open Source scans using the Snyk CLI, separated by spaces
   "additionalEnv": "MAVEN_OPTS=-Djava.awt.headless=true;FOO=BAR", // Additional environment variables, separated by semicolons
   "trustedFolders": [

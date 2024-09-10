@@ -197,6 +197,8 @@ func Test_UpdateSettings(t *testing.T) {
 			AuthenticationMethod:         types.FakeAuthentication,
 			SnykCodeApi:                  sampleSettings.SnykCodeApi,
 			EnableSnykOpenBrowserActions: "true",
+			HoverVerbosity:               1,      // default is 3
+			OutputFormat:                 "html", // default is markdown
 			FolderConfigs: []types.FolderConfig{
 				{
 					FolderPath:           tempDir1,
@@ -240,6 +242,8 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.IsAutoScanEnabled())
 		assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
 		assert.Equal(t, true, c.IsSnykOpenBrowserActionEnabled())
+		assert.Equal(t, settings.HoverVerbosity, c.HoverVerbosity())
+		assert.Equal(t, settings.OutputFormat, c.Format())
 
 		folderConfig1 := c.FolderConfig(tempDir1)
 		assert.NotEmpty(t, folderConfig1.BaseBranch)
@@ -251,6 +255,14 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Empty(t, folderConfig2.AdditionalParameters)
 
 		assert.Eventually(t, func() bool { return "a fancy token" == c.Token() }, time.Second*5, time.Millisecond)
+	})
+
+	t.Run("hover defaults are set", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		UpdateSettings(c, types.Settings{})
+
+		assert.Equal(t, 3, c.HoverVerbosity())
+		assert.Equal(t, c.Format(), config.FormatMd)
 	})
 
 	t.Run("empty snyk code api is ignored and default is used", func(t *testing.T) {

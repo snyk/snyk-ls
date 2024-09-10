@@ -206,33 +206,42 @@ func (s *SarifConverter) detailsOrEmpty(r codeClientSarif.Rule) string {
 	return ""
 }
 
-func (s *SarifConverter) formattedMessage(r codeClientSarif.Result, rule codeClientSarif.Rule, baseDir string) string {
-	const separator = "\n\n\n\n"
+func (s *SarifConverter) formattedMessageMarkdown(r codeClientSarif.Result, rule codeClientSarif.Rule, baseDir string) string {
+	hoverVerbosity := s.c.HoverVerbosity()
 	var builder strings.Builder
-	builder.Grow(500)
-	builder.WriteString(fmt.Sprintf("### %s", issueSeverityToMarkdown(issueSeverity(r.Level))))
-	builder.WriteString(s.titleWithLeadingPipeOrEmpty(rule))
-	builder.WriteString(s.priorityScore(r))
-	cwe := s.cwe(rule)
-	if cwe != "" {
-		builder.WriteString(" | ")
+	const separator = "\n\n\n\n"
+	if hoverVerbosity >= 1 {
+		builder.Grow(500)
+		builder.WriteString(fmt.Sprintf("### %s", issueSeverityToMarkdown(issueSeverity(r.Level))))
+		builder.WriteString(s.titleWithLeadingPipeOrEmpty(rule))
+		builder.WriteString(s.priorityScore(r))
+		cwe := s.cwe(rule)
+		if cwe != "" {
+			builder.WriteString(" | ")
+		}
+		builder.WriteString(cwe)
+		builder.WriteString(separator)
+		builder.WriteString(r.Message.Text)
+		builder.WriteString(separator)
+		builder.WriteString(s.detailsOrEmpty(rule))
 	}
-	builder.WriteString(cwe)
-	builder.WriteString(separator)
-	builder.WriteString(r.Message.Text)
-	builder.WriteString(separator)
-	builder.WriteString(s.detailsOrEmpty(rule))
-	builder.WriteString(separator)
-	builder.WriteString("### Data Flow\n\n")
-	for _, elem := range s.getCodeFlow(r, baseDir) {
-		builder.WriteString(elem.ToMarkDown())
+
+	if hoverVerbosity >= 2 {
+		builder.WriteString(separator)
+		builder.WriteString("### Data Flow\n\n")
+		for _, elem := range s.getCodeFlow(r, baseDir) {
+			builder.WriteString(elem.ToMarkDown())
+		}
 	}
-	builder.WriteString(separator)
-	builder.WriteString("### Example Commit Fixes\n\n")
-	for _, fix := range s.getExampleCommits(rule) {
-		builder.WriteString(fix.toMarkdown())
+
+	if hoverVerbosity == 3 {
+		builder.WriteString(separator)
+		builder.WriteString("### Example Commit Fixes\n\n")
+		for _, fix := range s.getExampleCommits(rule) {
+			builder.WriteString(fix.toMarkdown())
+		}
+		builder.WriteString(separator)
 	}
-	builder.WriteString(separator)
 	return builder.String()
 }
 
@@ -332,7 +341,7 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 
 			testRule := s.getRule(r, result.RuleID)
 			message := s.getMessage(result, testRule)
-			formattedMessage := s.formattedMessage(result, testRule, baseDir)
+			formattedMessage := s.formattedMessageMarkdown(result, testRule, baseDir)
 
 			exampleCommits := s.getExampleCommits(testRule)
 			exampleFixes := make([]snyk.ExampleCommitFix, 0, len(exampleCommits))

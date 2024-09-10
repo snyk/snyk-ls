@@ -130,6 +130,16 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateSnykOpenBrowserCodeActions(c, settings)
 	updateDeltaFindings(c, settings)
 	updateFolderConfig(c, settings)
+	updateHoverVerbosity(c, settings)
+	updateFormat(c, settings)
+}
+
+func updateFormat(c *config.Config, settings types.Settings) {
+	c.SetFormat(settings.OutputFormat)
+}
+
+func updateHoverVerbosity(c *config.Config, settings types.Settings) {
+	c.SetHoverVerbosity(settings.HoverVerbosity)
 }
 
 func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings) {
