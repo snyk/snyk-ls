@@ -34,6 +34,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+var htmlEndingRegExp = regexp.MustCompile(`<br\s?/?>`)
+
 func FromRange(lspRange sglsp.Range) snyk.Range {
 	return snyk.Range{
 		Start: FromPosition(lspRange.Start),
@@ -408,7 +410,6 @@ func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 		return hovers
 	}
 
-	re := regexp.MustCompile(`<br\s?/?>`)
 	for _, i := range issues {
 		var message string
 		if len(i.FormattedMessage) > 0 {
@@ -422,7 +423,7 @@ func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 			message = string(markdown.ToHTML([]byte(message), nil, nil))
 		} else if hoverOutputFormat == config.FormatMd {
 			// sanitize the message, substitute <br> with line break
-			message = re.ReplaceAllString(message, "\n\n")
+			message = htmlEndingRegExp.ReplaceAllString(message, "\n\n")
 		} else {
 			// if anything else (e.g. plain), strip markdown
 			message = stripmd.Strip(message)
