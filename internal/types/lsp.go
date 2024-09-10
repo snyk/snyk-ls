@@ -564,6 +564,7 @@ type Settings struct {
 	EnableSnykOpenBrowserActions     string               `json:"enableSnykOpenBrowserActions,omitempty"`
 	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"` // should this be global?
 	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
+	HoverVerbosity                   string               `json:"hoverVerbosity,omitempty"`
 	// global settings end
 	// folder specific settings start
 	AdditionalParams string         `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
