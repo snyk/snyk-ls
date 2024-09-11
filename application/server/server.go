@@ -19,11 +19,12 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"os"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/adrg/xdg"
 
@@ -386,8 +387,18 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 
 		handleProtocolVersion(c, di.Notifier(), config.LsProtocolVersion, c.ClientProtocolVersion())
 
+		// initialize cache
+		learnService := di.LearnService()
+		_, err := learnService.GetAllLessons()
+		if err != nil {
+			logger.Err(err).Msg("Error initializing lessons cache")
+		}
+
+		// start goroutine that keeps the cache filled
+		go learnService.MaintainCache()
+
 		// CLI & Authentication initialization - returns error if not authenticated
-		err := di.Scanner().Init()
+		err = di.Scanner().Init()
 		if err != nil {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
