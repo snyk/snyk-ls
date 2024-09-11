@@ -17,9 +17,11 @@
 package vcs
 
 import (
-	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestCheckoutHandler_ShouldCheckout(t *testing.T) {
