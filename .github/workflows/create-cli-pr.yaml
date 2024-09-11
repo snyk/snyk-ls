@@ -22,6 +22,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: "true"
 
       - uses: webfactory/ssh-agent@v0.9.0
         with:
