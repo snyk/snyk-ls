@@ -20,10 +20,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/google/uuid"
 
@@ -148,7 +151,13 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []string
 	files := map[string]string{}
-	files[path1] = util.Hash([]byte(content))
+	bytes := []byte(content)
+	files[path1] = util.Hash(bytes)
+	workDir := t.TempDir()
+	err := os.WriteFile(filepath.Join(workDir, path1), bytes, 0660)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(workDir, path2), bytes, 0660)
+	require.NoError(t, err)
 	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := createTestExtendMap()
 	bundleHash, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
@@ -163,7 +172,7 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 			limitToFiles: limitToFiles,
 			severity:     0,
 		}
-		issues, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions, "")
+		issues, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions, workDir)
 		if err != nil {
 			return false
 		}

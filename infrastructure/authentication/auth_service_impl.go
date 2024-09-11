@@ -18,11 +18,21 @@ package authentication
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
 	"reflect"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/erni27/imcache"
+	"github.com/rs/zerolog"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/data_structure"
@@ -135,30 +145,105 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 
 		invalidToken, isLegacyTokenErr := a.c.TokenAsOAuthToken()
 
-		// we always log out
-		logger.Debug().Msg("logging out")
-		a.Logout(context.Background())
-
-		// determine the right error message
-		if isLegacyTokenErr == nil {
-			// it is an oauth token
-			if invalidToken.Expiry.Before(time.Now()) {
-				a.handleFailedRefresh()
-			} else {
-				// access token not expired, but creds still not work
-				a.HandleInvalidCredentials()
-			}
+		if logoutCausingError(a.c, a.errorReporter, err) {
+			a.handleLogoutCausingError(logger, isLegacyTokenErr, invalidToken)
+			return false
 		} else {
-			// legacy token does not work
-			a.HandleInvalidCredentials()
+			// try again
+			time.Sleep(2 * time.Second)
+			retryUser, retryError := a.provider.GetCheckAuthenticationFunction()()
+			if retryUser == "" || retryError != nil {
+				// retry failed again, we gotta logout after all
+				a.handleLogoutCausingError(logger, isLegacyTokenErr, invalidToken)
+				return false
+			}
 		}
-		return false
 	}
-
 	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
 	a.c.Logger().Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	return true
+}
+
+func (a *AuthenticationServiceImpl) handleLogoutCausingError(logger zerolog.Logger, isLegacyTokenErr error, invalidToken oauth2.Token) {
+	logger.Debug().Msg("logging out")
+	a.Logout(context.Background())
+
+	// determine the right error message
+	if isLegacyTokenErr == nil {
+		// it is an oauth token
+		if invalidToken.Expiry.Before(time.Now()) {
+			a.handleFailedRefresh()
+		} else {
+			// access token not expired, but creds still not work
+			a.HandleInvalidCredentials()
+		}
+	} else {
+		// legacy token does not work
+		a.HandleInvalidCredentials()
+	}
+}
+
+func logoutCausingError(c *config.Config, ep error_reporting.ErrorReporter, err error) bool {
+	if err == nil {
+		return true
+	}
+
+	// Check for context cancellation
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+
+	// Check for timeout errors
+	if errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	// Check for URL errors
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return false
+	}
+
+	// Check for network operation errors
+	var netErr *net.OpError
+	if errors.As(err, &netErr) {
+		return false
+	}
+
+	// Check for DNS errors
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return false
+	}
+
+	// Check for system call errors
+	var sysCallErr *os.SyscallError
+	if errors.As(err, &sysCallErr) {
+		return false
+	}
+
+	// Check for connection reset error
+	if errors.Is(err, syscall.ECONNRESET) {
+		return false
+	}
+
+	// Check for EOF error
+	if errors.Is(err, io.EOF) {
+		return false
+	}
+
+	// as we can't enforce correct error reporting, let's do a final check on the internet connection, whether it's there
+	u := c.SnykUi()
+	response, err := http.Get(u)
+	defer func() { _ = response.Body.Close() }()
+
+	if err != nil {
+		msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
+		reportedErr := errors.Join(err, errors.New(msg))
+		ep.CaptureError(reportedErr)
+	}
+	return err == nil
 }
 
 func (a *AuthenticationServiceImpl) handleFailedRefresh() {

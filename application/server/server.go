@@ -19,11 +19,12 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"os"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/adrg/xdg"
 
@@ -381,10 +382,24 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		initialLogger.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
 		initialLogger.Info().Msg("IDE: " + c.IdeName() + "/" + c.IdeVersion())
 		initialLogger.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
+		if token, err := c.TokenAsOAuthToken(); err == nil {
+			initialLogger.Info().Msgf("Truncated token: %s", token.RefreshToken[len(token.RefreshToken)-8:])
+		}
 
 		logger := c.Logger().With().Str("method", "initializedHandler").Logger()
 
 		handleProtocolVersion(c, di.Notifier(), config.LsProtocolVersion, c.ClientProtocolVersion())
+
+		// initialize learn cache
+		go func() {
+			learnService := di.LearnService()
+			_, err := learnService.GetAllLessons()
+			if err != nil {
+				logger.Err(err).Msg("Error initializing lessons cache")
+			}
+			// start goroutine that keeps the cache filled
+			go learnService.MaintainCache()
+		}()
 
 		// CLI & Authentication initialization - returns error if not authenticated
 		err := di.Scanner().Init()
