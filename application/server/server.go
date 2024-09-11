@@ -382,6 +382,9 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		initialLogger.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
 		initialLogger.Info().Msg("IDE: " + c.IdeName() + "/" + c.IdeVersion())
 		initialLogger.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
+		if token, err := c.TokenAsOAuthToken(); err == nil {
+			initialLogger.Info().Msgf("Truncated token: %s", token.RefreshToken[len(token.RefreshToken)-8:])
+		}
 
 		logger := c.Logger().With().Str("method", "initializedHandler").Logger()
 
