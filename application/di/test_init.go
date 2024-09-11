@@ -76,7 +76,7 @@ func TestInit(t *testing.T) {
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
 	// mock Learn Service
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
-	learnMock.EXPECT().GetAllLessons().Return([]learn.Lesson{learn.Lesson{}}, nil).AnyTimes()
+	learnMock.EXPECT().GetAllLessons().Return([]learn.Lesson{{}}, nil).AnyTimes()
 	learnMock.EXPECT().MaintainCache().AnyTimes()
 	learnMock.
 		EXPECT().

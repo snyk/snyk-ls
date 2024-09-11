@@ -18,11 +18,12 @@ package scanner
 
 import (
 	"context"
+	"sync"
+	"time"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/vcs"
-	"sync"
-	"time"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
@@ -166,6 +167,11 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 }
 
 func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config *config.Config, path string, content string) {
+	if config.Offline() {
+		config.Logger().Warn().Str("method", "ScanPackages").Msgf("we are offline, not scanning %s, %s", path, content)
+		return
+	}
+
 	for _, scanner := range sc.scanners {
 		if s, ok := scanner.(PackageScanner); ok {
 			s.ScanPackages(ctx, config, path, content)
@@ -220,6 +226,11 @@ func (sc *DelegatingConcurrentScanner) Scan(
 ) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	logger := sc.c.Logger().With().Str("method", method).Logger()
+
+	if sc.c.Offline() {
+		logger.Warn().Str("method", "ScanPackages").Msgf("we are offline, not scanning %s, %s", folderPath, path)
+		return
+	}
 
 	authenticated := sc.authService.IsAuthenticated()
 

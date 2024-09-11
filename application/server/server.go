@@ -18,7 +18,9 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -390,6 +392,8 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 
 		handleProtocolVersion(c, di.Notifier(), config.LsProtocolVersion, c.ClientProtocolVersion())
 
+		startOfflineDetection(c)
+
 		// initialize learn cache
 		go func() {
 			learnService := di.LearnService()
@@ -429,6 +433,27 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
 		return nil, nil
 	})
+}
+
+func startOfflineDetection(c *config.Config) {
+	go func() {
+		// as we can't enforce correct error reporting, let's do a final check on the internet connection, whether it's there
+		for {
+			u := c.SnykApi()
+			response, err := http.Get(u)
+			_ = response.Body.Close()
+
+			if err != nil {
+				if !c.Offline() {
+					msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
+					reportedErr := errors.Join(err, errors.New(msg))
+					di.ErrorReporter().CaptureError(reportedErr)
+				}
+				c.SetOffline(true)
+			}
+			time.Sleep(time.Second * 2)
+		}
+	}()
 }
 
 func deleteExpiredCache() {

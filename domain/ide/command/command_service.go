@@ -70,6 +70,10 @@ func Service() types.CommandService {
 func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server types.Server) (any, error) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "command.serviceImpl.ExecuteCommandData").Logger()
+	if c.Offline() {
+		logger.Warn().Msgf("we are offline, not executing %s", commandData.CommandId)
+		return nil, nil
+	}
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 

@@ -202,6 +202,7 @@ type Config struct {
 	isOpenBrowserActionEnabled       bool
 	folderAdditionalParameters       map[string][]string
 	hoverVerbosity                   int
+	offline                          bool
 }
 
 func CurrentConfig() *Config {
@@ -1159,4 +1160,18 @@ func (c *Config) SetHoverVerbosity(verbosity int) {
 	defer c.m.Unlock()
 
 	c.hoverVerbosity = verbosity
+}
+
+func (c *Config) SetOffline(b bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.offline = b
+}
+
+func (c *Config) Offline() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.offline
 }
