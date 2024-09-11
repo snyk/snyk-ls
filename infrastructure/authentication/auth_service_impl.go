@@ -19,6 +19,7 @@ package authentication
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -144,7 +145,7 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 
 		invalidToken, isLegacyTokenErr := a.c.TokenAsOAuthToken()
 
-		if logoutCausingError(err) {
+		if logoutCausingError(a.c, a.errorReporter, err) {
 			a.handleLogoutCausingError(logger, isLegacyTokenErr, invalidToken)
 			return false
 		} else {
@@ -183,7 +184,7 @@ func (a *AuthenticationServiceImpl) handleLogoutCausingError(logger zerolog.Logg
 	}
 }
 
-func logoutCausingError(err error) bool {
+func logoutCausingError(c *config.Config, ep error_reporting.ErrorReporter, err error) bool {
 	if err == nil {
 		return true
 	}
@@ -233,7 +234,15 @@ func logoutCausingError(err error) bool {
 	}
 
 	// as we can't enforce correct error reporting, let's do a final check on the internet connection, whether it's there
-	_, err = http.Get("https://www.google.com")
+	u := c.SnykUi()
+	response, err := http.Get(u)
+	defer func() { _ = response.Body.Close() }()
+
+	if err != nil {
+		msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
+		reportedErr := errors.Join(err, errors.New(msg))
+		ep.CaptureError(reportedErr)
+	}
 	return err == nil
 }
 
