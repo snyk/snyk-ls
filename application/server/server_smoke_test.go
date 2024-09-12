@@ -717,7 +717,7 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
-	ensureInitialized(t, nil, loc, initParams)
+	ensureInitialized(t, c, loc, initParams)
 	return cloneTargetDir
 }
 
@@ -829,7 +829,7 @@ func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
-	ensureInitialized(t, nil, loc, initParams)
+	ensureInitialized(t, c, loc, initParams)
 
 	waitForScan(t, cloneTargetDir)
 
@@ -853,7 +853,7 @@ func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
-	ensureInitialized(t, nil, loc, initParams)
+	ensureInitialized(t, c, loc, initParams)
 
 	waitForScan(t, cloneTargetDir)
 
