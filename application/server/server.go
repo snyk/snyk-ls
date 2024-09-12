@@ -437,21 +437,33 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 
 func startOfflineDetection(c *config.Config) {
 	go func() {
-		// as we can't enforce correct error reporting, let's do a final check on the internet connection, whether it's there
+		timeout := time.Second * 2
+		client := &http.Client{
+			Timeout: timeout,
+		}
 		for {
 			u := c.SnykApi()
-			response, err := http.Get(u)
-			_ = response.Body.Close()
-
+			response, err := client.Get(u)
 			if err != nil {
 				if !c.Offline() {
 					msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
 					reportedErr := errors.Join(err, errors.New(msg))
-					di.ErrorReporter().CaptureError(reportedErr)
+					c.Logger().Err(reportedErr).Send()
+					di.Notifier().SendShowMessage(sglsp.Warning, msg)
 				}
 				c.SetOffline(true)
+			} else {
+				if c.Offline() {
+					msg := fmt.Sprintf("Snyk is active again. We were able to reach %s", u)
+					di.Notifier().SendShowMessage(sglsp.Info, msg)
+					c.Logger().Info().Msg(msg)
+				}
+				c.SetOffline(false)
 			}
-			time.Sleep(time.Second * 2)
+			if response != nil {
+				_ = response.Body.Close()
+			}
+			time.Sleep(timeout)
 		}
 	}()
 }

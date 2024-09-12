@@ -90,6 +90,9 @@ func NewSnykApiClient(c *config.Config, client func() *http.Client) SnykApiClien
 }
 
 func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
+	if s.c.Offline() {
+		return SastResponse{}, nil
+	}
 	method := "SastSettings"
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", method).Logger()
@@ -103,7 +106,7 @@ func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
 	}
 	u = s.addOrgToQuery(c, u)
 
-	err = s.processApiResponse(method, u.String(), &response)
+	err = s.getApiResponse(method, u.String(), &response)
 	if err != nil {
 		logger.Err(err).Msg("error when calling sastEnabled endpoint")
 		return SastResponse{}, err
@@ -132,6 +135,9 @@ func (s *SnykApiClientImpl) normalizeAPIPathForV1(c *config.Config, path string)
 }
 
 func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
+	if s.c.Offline() {
+		return FFResponse{}, nil
+	}
 	method := "snyk_api.FeatureFlagStatus"
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", method).Logger()
@@ -146,7 +152,7 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 	u = s.addOrgToQuery(c, u)
 	logger.Debug().Str("path", path).Msg("API: Getting feature flag status")
 
-	err = s.processApiResponse(method, u.String(), &response)
+	err = s.getApiResponse(method, u.String(), &response)
 	if err != nil {
 		if strings.Contains(err.Error(), "403 Forbidden") {
 			logger.Debug().Msgf("Feature flag '%s' is disabled", featureFlagType)
@@ -162,11 +168,13 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 
 func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBody []byte) ([]byte, error) {
 	host := s.c.SnykApi()
+
 	b := bytes.NewBuffer(requestBody)
 	req, requestErr := http.NewRequest(method, host+endpointPath, b)
 	if requestErr != nil {
 		return nil, NewSnykApiError(requestErr.Error(), 0)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-snyk-ide", "snyk-ls-"+config.Version)
 
@@ -196,7 +204,7 @@ func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBo
 	return responseBody, nil
 }
 
-func (s *SnykApiClientImpl) processApiResponse(caller string, path string, v interface{}) error {
+func (s *SnykApiClientImpl) getApiResponse(caller string, path string, v interface{}) error {
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
 		return fmt.Errorf("%s: %v: %v", caller, err, responseBody)
