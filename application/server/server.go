@@ -444,6 +444,14 @@ func startOfflineDetection(c *config.Config) {
 		client := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
 		client.Timeout = timeout
 
+		type logLevelConfigurable interface {
+			SetLogLevel(level zerolog.Level)
+		}
+
+		if loggingRoundTripper, ok := client.Transport.(logLevelConfigurable); ok {
+			loggingRoundTripper.SetLogLevel(zerolog.ErrorLevel)
+		}
+
 		for {
 			u := c.SnykApi()
 			response, err := client.Get(u)
