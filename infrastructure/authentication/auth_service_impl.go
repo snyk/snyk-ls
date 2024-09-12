@@ -18,14 +18,8 @@ package authentication
 
 import (
 	"context"
-	"errors"
-	"io"
-	"net"
-	"net/url"
-	"os"
 	"reflect"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/erni27/imcache"
@@ -144,21 +138,14 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 			Str("method", "AuthenticationService.IsAuthenticated").
 			Msg("Failed to get active user")
 
-		invalidToken, isLegacyTokenErr := a.c.TokenAsOAuthToken()
+		invalidOAuth2Token, isLegacyTokenErr := a.c.TokenAsOAuthToken()
 
-		if logoutCausingError(a.c, err) {
-			a.handleLogoutCausingError(logger, isLegacyTokenErr, invalidToken)
-			return false
-		} else {
-			// try again
-			time.Sleep(2 * time.Second)
-			retryUser, retryError := a.provider.GetCheckAuthenticationFunction()()
-			if retryUser == "" || retryError != nil {
-				// retry failed again, we gotta logout after all
-				a.handleLogoutCausingError(logger, isLegacyTokenErr, invalidToken)
-				return false
-			}
-		}
+		// only logout, if we didn't get an error
+		logout := err == nil
+		isLegacyToken := isLegacyTokenErr != nil
+
+		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token, logout)
+		return false
 	}
 	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
@@ -166,12 +153,14 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	return true
 }
 
-func (a *AuthenticationServiceImpl) handleLogoutCausingError(logger zerolog.Logger, isLegacyTokenErr error, invalidToken oauth2.Token) {
-	logger.Debug().Msg("logging out")
-	a.Logout(context.Background())
+func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token, logout bool) {
+	if logout {
+		logger.Debug().Msg("logging out")
+		a.Logout(context.Background())
+	}
 
 	// determine the right error message
-	if isLegacyTokenErr == nil {
+	if isLegacyToken {
 		// it is an oauth token
 		if invalidToken.Expiry.Before(time.Now()) {
 			a.handleFailedRefresh()
@@ -183,58 +172,6 @@ func (a *AuthenticationServiceImpl) handleLogoutCausingError(logger zerolog.Logg
 		// legacy token does not work
 		a.HandleInvalidCredentials()
 	}
-}
-
-func logoutCausingError(c *config.Config, err error) bool {
-	if c.Offline() || err == nil {
-		return false
-	}
-
-	// Check for context cancellation
-	if errors.Is(err, context.Canceled) {
-		return false
-	}
-
-	// Check for timeout errors
-	if errors.Is(err, context.DeadlineExceeded) {
-		return false
-	}
-
-	// Check for URL errors
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		return false
-	}
-
-	// Check for network operation errors
-	var netErr *net.OpError
-	if errors.As(err, &netErr) {
-		return false
-	}
-
-	// Check for DNS errors
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
-		return false
-	}
-
-	// Check for system call errors
-	var sysCallErr *os.SyscallError
-	if errors.As(err, &sysCallErr) {
-		return false
-	}
-
-	// Check for connection reset error
-	if errors.Is(err, syscall.ECONNRESET) {
-		return false
-	}
-
-	// Check for EOF error
-	if errors.Is(err, io.EOF) {
-		return false
-	}
-
-	return true
 }
 
 func (a *AuthenticationServiceImpl) handleFailedRefresh() {
