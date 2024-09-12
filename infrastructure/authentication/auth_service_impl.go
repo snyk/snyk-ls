@@ -131,9 +131,12 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 		return false
 	}
 
+	if a.provider == nil {
+		a.ConfigureProviders(a.c)
+	}
+
 	var user string
 	var err error
-
 	user, err = a.provider.GetCheckAuthenticationFunction()()
 	if user == "" || err != nil {
 		a.c.Logger().
