@@ -502,7 +502,6 @@ func (c *Config) SetCliSettings(settings *CliSettings) {
 }
 
 func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
-
 	if snykApiUrl == "" {
 		c.m.Lock()
 		snykApiUrl = DefaultSnykApiUrl
