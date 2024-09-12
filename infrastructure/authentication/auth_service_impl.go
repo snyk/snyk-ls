@@ -18,12 +18,14 @@ package authentication
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -132,19 +134,26 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	var user string
 	var err error
 	user, err = a.provider.GetCheckAuthenticationFunction()()
-	if user == "" || err != nil {
-		a.c.Logger().
-			Err(err).
-			Str("method", "AuthenticationService.IsAuthenticated").
-			Msg("Failed to get active user")
+	if user == "" {
+		if err != nil {
+			userMsg := fmt.Sprintf("Could not retrieve authentication status. Most likely this is a temporary error "+
+				"caused by connectivity problems. (%s)", err.Error())
+
+			a.notifier.SendShowMessage(sglsp.MTError, userMsg)
+
+			a.c.Logger().
+				Err(err).
+				Str("method", "AuthenticationService.IsAuthenticated").
+				Msg("error while trying to authenticate user")
+			a.c.Logger().Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
+			return false
+		}
 
 		invalidOAuth2Token, isLegacyTokenErr := a.c.TokenAsOAuthToken()
 
-		// only logout, if we didn't get an error
-		logout := err == nil
 		isLegacyToken := isLegacyTokenErr != nil
 
-		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token, logout)
+		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
 		return false
 	}
 	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
@@ -153,11 +162,10 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	return true
 }
 
-func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token, logout bool) {
-	if logout {
-		logger.Debug().Msg("logging out")
-		a.Logout(context.Background())
-	}
+func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {
+	logger.Info().Msg("could not authenticate user with current credentials, API returned empty user object")
+	logger.Info().Msg("logging out, empty user response")
+	a.Logout(context.Background())
 
 	// determine the right error message
 	if isLegacyToken {
