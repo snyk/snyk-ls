@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -438,9 +437,9 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 func startOfflineDetection(c *config.Config) {
 	go func() {
 		timeout := time.Second * 2
-		client := &http.Client{
-			Timeout: timeout,
-		}
+		client := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
+		client.Timeout = timeout
+
 		for {
 			u := c.SnykApi()
 			response, err := client.Get(u)
