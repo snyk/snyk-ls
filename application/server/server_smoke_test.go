@@ -486,6 +486,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	var testPath string
 	if file1 != "" {
 		testPath = filepath.Join(cloneTargetDir, file1)
+		waitForNetwork(c)
 		textDocumentDidSave(t, &loc, testPath)
 		// serve diagnostics from file scan
 		assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
@@ -493,6 +494,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 
 	jsonRPCRecorder.ClearNotifications()
 	testPath = filepath.Join(cloneTargetDir, file2)
+	waitForNetwork(c)
 	textDocumentDidSave(t, &loc, testPath)
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 
@@ -511,6 +513,12 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 	if c.IsSnykOssEnabled() {
 		checkOnlyOneQuickFixCodeAction(t, jsonRPCRecorder, cloneTargetDir, loc)
 		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDir, loc)
+	}
+}
+
+func waitForNetwork(c *config.Config) {
+	for c.Offline() {
+		time.Sleep(5 * time.Second)
 	}
 }
 
@@ -681,6 +689,7 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIss
 		if !ok || codeIssueData["hasAIFix"] == false || codeIssueData["rule"] != "WebCookieSecureDisabledByDefault" {
 			continue
 		}
+		waitForNetwork(c)
 		call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.CodeFixDiffsCommand,
 			Arguments: []any{uri.PathToUri(folderPath), uri.PathToUri(issue.FilePath), issue.Id},
@@ -708,8 +717,7 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
-	ensureInitialized(t, loc, initParams)
-
+	ensureInitialized(t, nil, loc, initParams)
 	return cloneTargetDir
 }
 
@@ -737,10 +745,11 @@ func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) ty
 
 func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 	t.Helper()
+	// only check on mt-us
 	if isNotStandardRegion(c) {
 		return
 	}
-	// only check on mt-us
+	waitForNetwork(c)
 	call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   types.GetFeatureFlagStatus,
 		Arguments: []any{"bitbucketConnectApp"},
@@ -820,7 +829,7 @@ func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
-	ensureInitialized(t, loc, initParams)
+	ensureInitialized(t, nil, loc, initParams)
 
 	waitForScan(t, cloneTargetDir)
 
@@ -844,7 +853,7 @@ func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
-	ensureInitialized(t, loc, initParams)
+	ensureInitialized(t, nil, loc, initParams)
 
 	waitForScan(t, cloneTargetDir)
 
@@ -870,7 +879,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
-	ensureInitialized(t, loc, initParams)
+	ensureInitialized(t, c, loc, initParams)
 
 	waitForScan(t, cloneTargetDir)
 
@@ -880,11 +889,14 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	assert.Equal(t, len(issueList), 0)
 }
 
-func ensureInitialized(t *testing.T, loc server.Local, initParams types.InitializeParams) {
+func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {
 	t.Helper()
 
 	_, err := loc.Client.Call(ctx, "initialize", initParams)
 	assert.NoError(t, err)
+
+	waitForNetwork(c)
+
 	_, err = loc.Client.Call(ctx, "initialized", nil)
 	assert.NoError(t, err)
 }

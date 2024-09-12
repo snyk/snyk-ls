@@ -232,19 +232,12 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		c.Engine().GetConfiguration().SetStorage(c.Storage())
 
 		InitializeSettings(c, params.InitializationOptions)
-		// async processing listener
+
+		startOfflineDetection(c)
+		startClientMonitor(params, logger)
+
 		go createProgressListener(progress.Channel, srv, c.Logger())
 		registerNotifier(c, srv)
-		go func() {
-			if params.ProcessID == 0 {
-				// if started on its own, no need to exit or to monitor
-				return
-			}
-
-			monitorClientProcess(params.ProcessID)
-			logger.Info().Msgf("Shutting down as client pid %d not running anymore.", params.ProcessID)
-			os.Exit(0)
-		}()
 
 		addWorkspaceFolders(c, params, workspace.Get())
 
@@ -310,6 +303,19 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		logger.Debug().Str("method", method).Any("result", result).Msg("SENDING")
 		return result, nil
 	})
+}
+
+func startClientMonitor(params types.InitializeParams, logger zerolog.Logger) {
+	go func() {
+		if params.ProcessID == 0 {
+			// if started on its own, no need to exit or to monitor
+			return
+		}
+
+		monitorClientProcess(params.ProcessID)
+		logger.Info().Msgf("Shutting down as client pid %d not running anymore.", params.ProcessID)
+		os.Exit(0)
+	}()
 }
 
 func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVersion string, clientProtocolVersion string) {
@@ -390,8 +396,6 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		logger := c.Logger().With().Str("method", "initializedHandler").Logger()
 
 		handleProtocolVersion(c, di.Notifier(), config.LsProtocolVersion, c.ClientProtocolVersion())
-
-		startOfflineDetection(c)
 
 		// initialize learn cache
 		go func() {
