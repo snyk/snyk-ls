@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -135,7 +136,9 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	var err error
 	user, err = a.provider.GetCheckAuthenticationFunction()()
 	if user == "" {
-		if err != nil {
+		if err != nil && !(strings.Contains(err.Error(), "oauth2") ||
+			strings.Contains(err.Error(), "(status: 401)") ||
+			strings.Contains(err.Error(), "(status: 400)")) {
 			userMsg := fmt.Sprintf("Could not retrieve authentication status. Most likely this is a temporary error "+
 				"caused by connectivity problems. (%s)", err.Error())
 

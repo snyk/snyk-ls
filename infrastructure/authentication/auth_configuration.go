@@ -43,6 +43,7 @@ func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) Authen
 func Default(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
 	conf := c.Engine().GetConfiguration()
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	conf.Set(auth.AUTH_STYLE, oauth2.AuthStyleInParams)
 	conf.Unset(configuration.AUTHENTICATION_TOKEN)
 	credentialsUpdateCallback := func(_ string, value any) {
 		// an empty struct marks an empty token, so we stay with empty string if the cast fails

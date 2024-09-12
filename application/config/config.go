@@ -269,6 +269,7 @@ func initWorkFlowEngine(c *Config) {
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, enableOAuth)
+	conf.Set(auth.AUTH_STYLE, oauth2.AuthStyleInParams)
 
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
