@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -231,19 +232,12 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		c.Engine().GetConfiguration().SetStorage(c.Storage())
 
 		InitializeSettings(c, params.InitializationOptions)
-		// async processing listener
+
+		startOfflineDetection(c)
+		startClientMonitor(params, logger)
+
 		go createProgressListener(progress.Channel, srv, c.Logger())
 		registerNotifier(c, srv)
-		go func() {
-			if params.ProcessID == 0 {
-				// if started on its own, no need to exit or to monitor
-				return
-			}
-
-			monitorClientProcess(params.ProcessID)
-			logger.Info().Msgf("Shutting down as client pid %d not running anymore.", params.ProcessID)
-			os.Exit(0)
-		}()
 
 		addWorkspaceFolders(c, params, workspace.Get())
 
@@ -309,6 +303,19 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		logger.Debug().Str("method", method).Any("result", result).Msg("SENDING")
 		return result, nil
 	})
+}
+
+func startClientMonitor(params types.InitializeParams, logger zerolog.Logger) {
+	go func() {
+		if params.ProcessID == 0 {
+			// if started on its own, no need to exit or to monitor
+			return
+		}
+
+		monitorClientProcess(params.ProcessID)
+		logger.Info().Msgf("Shutting down as client pid %d not running anymore.", params.ProcessID)
+		os.Exit(0)
+	}()
 }
 
 func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVersion string, clientProtocolVersion string) {
@@ -382,7 +389,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		initialLogger.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
 		initialLogger.Info().Msg("IDE: " + c.IdeName() + "/" + c.IdeVersion())
 		initialLogger.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
-		if token, err := c.TokenAsOAuthToken(); err == nil {
+		if token, err := c.TokenAsOAuthToken(); err == nil && len(token.RefreshToken) > 10 && c.AuthenticationMethod() == types.OAuthAuthentication {
 			initialLogger.Info().Msgf("Truncated token: %s", token.RefreshToken[len(token.RefreshToken)-8:])
 		}
 
@@ -429,6 +436,47 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
 		return nil, nil
 	})
+}
+
+func startOfflineDetection(c *config.Config) {
+	go func() {
+		timeout := time.Second * 2
+		client := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
+		client.Timeout = timeout
+
+		type logLevelConfigurable interface {
+			SetLogLevel(level zerolog.Level)
+		}
+
+		if loggingRoundTripper, ok := client.Transport.(logLevelConfigurable); ok {
+			loggingRoundTripper.SetLogLevel(zerolog.ErrorLevel)
+		}
+
+		for {
+			u := c.SnykApi()
+			response, err := client.Get(u)
+			if err != nil {
+				if !c.Offline() {
+					msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
+					reportedErr := errors.Join(err, errors.New(msg))
+					c.Logger().Err(reportedErr).Send()
+					di.Notifier().SendShowMessage(sglsp.Warning, msg)
+				}
+				c.SetOffline(true)
+			} else {
+				if c.Offline() {
+					msg := fmt.Sprintf("Snyk is active again. We were able to reach %s", u)
+					di.Notifier().SendShowMessage(sglsp.Info, msg)
+					c.Logger().Info().Msg(msg)
+				}
+				c.SetOffline(false)
+			}
+			if response != nil {
+				_ = response.Body.Close()
+			}
+			time.Sleep(timeout)
+		}
+	}()
 }
 
 func deleteExpiredCache() {

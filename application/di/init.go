@@ -17,10 +17,11 @@
 package di
 
 import (
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"path/filepath"
 	"runtime"
 	"sync"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
 
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
@@ -116,21 +117,20 @@ func initInfrastructure(c *config.Config) {
 	engine := c.Engine()
 	// init NetworkAccess
 	networkAccess := engine.GetNetworkAccess()
+	authorizedClient := networkAccess.GetHttpClient
+	unauthorizedHttpClient := networkAccess.GetUnauthorizedHttpClient
 
 	notifier = domainNotify.NewNotifier()
 	errorReporter = sentry.NewSentryErrorReporter(c, notifier)
-	installer = install.NewInstaller(errorReporter, networkAccess.GetUnauthorizedHttpClient)
-	learnService = learn.New(c, networkAccess.GetUnauthorizedHttpClient, errorReporter)
+	installer = install.NewInstaller(errorReporter, unauthorizedHttpClient)
+	learnService = learn.New(c, unauthorizedHttpClient, errorReporter)
 	instrumentor = performance2.NewInstrumentor()
-	snykApiClient = snyk_api.NewSnykApiClient(c, networkAccess.GetHttpClient)
+	snykApiClient = snyk_api.NewSnykApiClient(c, authorizedClient)
 	gafConfiguration := c.Engine().GetConfiguration()
 	scanPersister = persistence.NewGitPersistenceProvider(c.Logger())
-	// we initialize the service without providers
-	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
-	// after having an instance, we pass it into the default configuration method
-	// so that the oauth2 provider can use it for its callback
-	authenticationService.ConfigureProviders(c)
 
+	// we initialize the service without providers, as we want to wait for initialization to send the auth method
+	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	snykCli = cli.NewExecutor(c, errorReporter, notifier)
 
 	if gafConfiguration.GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
@@ -140,11 +140,11 @@ func initInfrastructure(c *config.Config) {
 	codeInstrumentor = code.NewCodeInstrumentor()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
-	snykCodeClient = code.NewSnykCodeHTTPClient(c, codeInstrumentor, codeErrorReporter, networkAccess.GetHttpClient)
+	snykCodeClient = code.NewSnykCodeHTTPClient(c, codeInstrumentor, codeErrorReporter, authorizedClient)
 	snykCodeBundleUploader = code.NewBundler(c, snykCodeClient, codeInstrumentor)
 
 	httpClient := codeClientHTTP.NewHTTPClient(
-		networkAccess.GetHttpClient,
+		authorizedClient,
 		codeClientHTTP.WithLogger(engine.GetLogger()),
 		codeClientHTTP.WithInstrumentor(codeInstrumentor),
 		codeClientHTTP.WithErrorReporter(codeErrorReporter),

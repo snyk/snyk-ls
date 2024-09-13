@@ -18,20 +18,17 @@ package authentication
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"net/url"
-	"os"
 	"reflect"
+	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -133,31 +130,27 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 		return false
 	}
 
+	if a.provider == nil {
+		a.ConfigureProviders(a.c)
+	}
+
 	var user string
 	var err error
-
 	user, err = a.provider.GetCheckAuthenticationFunction()()
-	if user == "" || err != nil {
-		a.c.Logger().
-			Err(err).
-			Str("method", "AuthenticationService.IsAuthenticated").
-			Msg("Failed to get active user")
-
-		invalidToken, isLegacyTokenErr := a.c.TokenAsOAuthToken()
-
-		if logoutCausingError(a.c, a.errorReporter, err) {
-			a.handleLogoutCausingError(logger, isLegacyTokenErr, invalidToken)
+	if user == "" {
+		if a.c.Offline() || (err != nil && !shouldCauseLogout(err, a.c.Logger())) {
+			userMsg := fmt.Sprintf("Could not retrieve authentication status. Most likely this is a temporary error "+
+				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate (%s)", err.Error())
+			a.notifier.SendShowMessage(sglsp.MTError, userMsg)
+			a.c.Logger().Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
 			return false
-		} else {
-			// try again
-			time.Sleep(2 * time.Second)
-			retryUser, retryError := a.provider.GetCheckAuthenticationFunction()()
-			if retryUser == "" || retryError != nil {
-				// retry failed again, we gotta logout after all
-				a.handleLogoutCausingError(logger, isLegacyTokenErr, invalidToken)
-				return false
-			}
 		}
+
+		invalidOAuth2Token, isLegacyTokenErr := a.c.TokenAsOAuthToken()
+		isLegacyToken := isLegacyTokenErr != nil
+
+		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
+		return false
 	}
 	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
@@ -165,12 +158,41 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	return true
 }
 
-func (a *AuthenticationServiceImpl) handleLogoutCausingError(logger zerolog.Logger, isLegacyTokenErr error, invalidToken oauth2.Token) {
-	logger.Debug().Msg("logging out")
+func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
+	logger.
+		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
+
+	var syntaxError *json.SyntaxError
+	switch {
+	case errors.As(err, &syntaxError):
+		return true
+
+	// string matching where we don't have explicit errors
+	default:
+		errMsg := err.Error()
+		switch {
+		case strings.Contains(errMsg, "oauth2"):
+			return true
+		case strings.Contains(errMsg, "(status: 401)"):
+			return true
+		case strings.Contains(errMsg, "(status: 400)"):
+			return true
+		case strings.Contains(errMsg, "unexpected end of JSON input"):
+			return true
+
+		default:
+			return false
+		}
+	}
+}
+
+func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {
+	logger.Info().Msg("could not authenticate user with current credentials, API returned empty user object")
+	logger.Info().Msg("logging out, empty user response")
 	a.Logout(context.Background())
 
 	// determine the right error message
-	if isLegacyTokenErr == nil {
+	if !isLegacyToken {
 		// it is an oauth token
 		if invalidToken.Expiry.Before(time.Now()) {
 			a.handleFailedRefresh()
@@ -182,68 +204,6 @@ func (a *AuthenticationServiceImpl) handleLogoutCausingError(logger zerolog.Logg
 		// legacy token does not work
 		a.HandleInvalidCredentials()
 	}
-}
-
-func logoutCausingError(c *config.Config, ep error_reporting.ErrorReporter, err error) bool {
-	if err == nil {
-		return true
-	}
-
-	// Check for context cancellation
-	if errors.Is(err, context.Canceled) {
-		return false
-	}
-
-	// Check for timeout errors
-	if errors.Is(err, context.DeadlineExceeded) {
-		return false
-	}
-
-	// Check for URL errors
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		return false
-	}
-
-	// Check for network operation errors
-	var netErr *net.OpError
-	if errors.As(err, &netErr) {
-		return false
-	}
-
-	// Check for DNS errors
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
-		return false
-	}
-
-	// Check for system call errors
-	var sysCallErr *os.SyscallError
-	if errors.As(err, &sysCallErr) {
-		return false
-	}
-
-	// Check for connection reset error
-	if errors.Is(err, syscall.ECONNRESET) {
-		return false
-	}
-
-	// Check for EOF error
-	if errors.Is(err, io.EOF) {
-		return false
-	}
-
-	// as we can't enforce correct error reporting, let's do a final check on the internet connection, whether it's there
-	u := c.SnykUi()
-	response, err := http.Get(u)
-	defer func() { _ = response.Body.Close() }()
-
-	if err != nil {
-		msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
-		reportedErr := errors.Join(err, errors.New(msg))
-		ep.CaptureError(reportedErr)
-	}
-	return err == nil
 }
 
 func (a *AuthenticationServiceImpl) handleFailedRefresh() {

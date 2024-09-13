@@ -202,6 +202,7 @@ type Config struct {
 	isOpenBrowserActionEnabled       bool
 	folderAdditionalParameters       map[string][]string
 	hoverVerbosity                   int
+	offline                          bool
 }
 
 func CurrentConfig() *Config {
@@ -230,8 +231,16 @@ func IsDevelopment() bool {
 	return parseBool
 }
 
-// New creates a configuration object with default values
 func New() *Config {
+	return newConfig(nil)
+}
+
+func NewFromExtension(engine workflow.Engine) *Config {
+	return newConfig(engine)
+}
+
+// New creates a configuration object with default values
+func newConfig(engine workflow.Engine) *Config {
 	c := &Config{}
 	c.folderAdditionalParameters = make(map[string][]string)
 	c.scrubbingDict = frameworkLogging.ScrubbingDict{}
@@ -250,7 +259,11 @@ func New() *Config {
 	c.trustedFoldersFeatureEnabled = true
 	c.automaticScanning = true
 	c.authenticationMethod = types.TokenAuthentication
-	initWorkFlowEngine(c)
+	if engine == nil {
+		initWorkFlowEngine(c)
+	} else {
+		c.engine = engine
+	}
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = types.DefaultSeverityFilter()
@@ -264,6 +277,7 @@ func New() *Config {
 func initWorkFlowEngine(c *Config) {
 	c.m.Lock()
 	defer c.m.Unlock()
+
 	conf := configuration.NewInMemory()
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
@@ -448,9 +462,23 @@ func (c *Config) LogPath() string {
 	defer c.m.Unlock()
 	return c.logPath
 }
-func (c *Config) SnykApi() string     { return c.snykApiUrl }
-func (c *Config) SnykCodeApi() string { return c.snykCodeApiUrl }
+func (c *Config) SnykApi() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.snykApiUrl
+}
+
+func (c *Config) SnykCodeApi() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.snykCodeApiUrl
+}
+
 func (c *Config) SnykUi() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
 	snykUiUrl, err := getCustomEndpointUrlFromSnykApi(c.snykApiUrl, "app")
 	if err != nil || snykUiUrl == "" {
 		return DefaultSnykUiUrl
@@ -488,13 +516,17 @@ func (c *Config) SetCliSettings(settings *CliSettings) {
 
 func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 	if snykApiUrl == "" {
+		c.m.Lock()
 		snykApiUrl = DefaultSnykApiUrl
+		c.m.Unlock()
 	}
 
 	c.engine.GetConfiguration().Set(configuration.API_URL, snykApiUrl)
 
 	if snykApiUrl != c.snykApiUrl {
+		c.m.RLock()
 		c.snykApiUrl = snykApiUrl
+		c.m.RUnlock()
 
 		// Update Code API endpoint
 		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(snykApiUrl)
@@ -513,6 +545,8 @@ func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
 		c.snykCodeApiUrl = DefaultDeeproxyApiUrl
 		return
 	}
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.snykCodeApiUrl = snykCodeApiUrl
 
 	config := c.engine.GetConfiguration()
@@ -1159,4 +1193,18 @@ func (c *Config) SetHoverVerbosity(verbosity int) {
 	defer c.m.Unlock()
 
 	c.hoverVerbosity = verbosity
+}
+
+func (c *Config) SetOffline(b bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.offline = b
+}
+
+func (c *Config) Offline() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.offline
 }

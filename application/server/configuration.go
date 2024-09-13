@@ -135,11 +135,15 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 }
 
 func updateFormat(c *config.Config, settings types.Settings) {
-	c.SetFormat(settings.OutputFormat)
+	if settings.OutputFormat != nil {
+		c.SetFormat(*settings.OutputFormat)
+	}
 }
 
 func updateHoverVerbosity(c *config.Config, settings types.Settings) {
-	c.SetHoverVerbosity(settings.HoverVerbosity)
+	if settings.HoverVerbosity != nil {
+		c.SetHoverVerbosity(*settings.HoverVerbosity)
+	}
 }
 
 func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings) {

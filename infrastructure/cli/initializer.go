@@ -76,6 +76,11 @@ func (i *Initializer) Init() error {
 		return nil
 	}
 
+	// wait for being online
+	for c.Offline() {
+		time.Sleep(2 * time.Second)
+	}
+
 	if cliInstalled {
 		if i.isOutdatedCli() {
 			go i.updateCli()
@@ -86,7 +91,7 @@ func (i *Initializer) Init() error {
 
 	// When the CLI is not installed, try to install it
 	for attempt := 0; !c.CliSettings().Installed(); attempt++ {
-		if attempt > 2 {
+		if attempt > 2 && !c.Offline() {
 			c.SetSnykIacEnabled(false)
 			c.SetSnykOssEnabled(false)
 			logger.Warn().Str("method", "cli.Init").Msg("Disabling Snyk OSS and Snyk Iac as no CLI found after 3 tries")

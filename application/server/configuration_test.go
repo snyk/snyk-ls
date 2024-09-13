@@ -173,6 +173,8 @@ func Test_UpdateSettings(t *testing.T) {
 
 		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
+		hoverVerbosity := 1
+		outputFormat := "html"
 		settings := types.Settings{
 			ActivateSnykOpenSource:       "false",
 			ActivateSnykCode:             "false",
@@ -197,8 +199,8 @@ func Test_UpdateSettings(t *testing.T) {
 			AuthenticationMethod:         types.FakeAuthentication,
 			SnykCodeApi:                  sampleSettings.SnykCodeApi,
 			EnableSnykOpenBrowserActions: "true",
-			HoverVerbosity:               1,      // default is 3
-			OutputFormat:                 "html", // default is markdown
+			HoverVerbosity:               &hoverVerbosity, // default is 3
+			OutputFormat:                 &outputFormat,   // default is markdown
 			FolderConfigs: []types.FolderConfig{
 				{
 					FolderPath:           tempDir1,
@@ -242,8 +244,8 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.IsAutoScanEnabled())
 		assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
 		assert.Equal(t, true, c.IsSnykOpenBrowserActionEnabled())
-		assert.Equal(t, settings.HoverVerbosity, c.HoverVerbosity())
-		assert.Equal(t, settings.OutputFormat, c.Format())
+		assert.Equal(t, *settings.HoverVerbosity, c.HoverVerbosity())
+		assert.Equal(t, *settings.OutputFormat, c.Format())
 
 		folderConfig1 := c.FolderConfig(tempDir1)
 		assert.NotEmpty(t, folderConfig1.BaseBranch)
