@@ -162,8 +162,9 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	logger.
 		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
 
+	var syntaxError *json.SyntaxError
 	switch {
-	case errors.Is(err, &json.SyntaxError{}):
+	case errors.As(err, &syntaxError):
 		return true
 
 	// string matching where we don't have explicit errors

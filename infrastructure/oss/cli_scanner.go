@@ -70,6 +70,7 @@ type CLIScanner struct {
 	errorReporter           error_reporting.ErrorReporter
 	cli                     cli.Executor
 	mutex                   *sync.RWMutex
+	inlineValueMutex        *sync.RWMutex
 	packageScanMutex        *sync.Mutex
 	runningScans            map[string]*scans.ScanProgress
 	refreshScanWaitDuration time.Duration
@@ -90,6 +91,7 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 		errorReporter:           errorReporter,
 		cli:                     cli,
 		mutex:                   &sync.RWMutex{},
+		inlineValueMutex:        &sync.RWMutex{},
 		packageScanMutex:        &sync.Mutex{},
 		scheduledScanMtx:        &sync.Mutex{},
 		runningScans:            map[string]*scans.ScanProgress{},

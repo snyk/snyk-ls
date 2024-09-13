@@ -25,9 +25,9 @@ type inlineValueMap map[string][]snyk.InlineValue
 func (cliScanner *CLIScanner) GetInlineValues(path string, myRange snyk.Range) (result []snyk.InlineValue, err error) {
 	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.GetInlineValues").Logger()
 	logger.Debug().Str("path", path).Msg("called")
-	cliScanner.mutex.RLock()
+	cliScanner.inlineValueMutex.RLock()
 	inlineValues := cliScanner.inlineValues[path]
-	cliScanner.mutex.RUnlock()
+	cliScanner.inlineValueMutex.RUnlock()
 	result = filterInlineValuesForRange(inlineValues, myRange)
 	logger.Debug().Str("path", path).Msgf("%d inlineValues found", len(result))
 	return result, nil
@@ -35,9 +35,9 @@ func (cliScanner *CLIScanner) GetInlineValues(path string, myRange snyk.Range) (
 
 func (cliScanner *CLIScanner) ClearInlineValues(path string) {
 	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.ClearInlineValues").Logger()
-	cliScanner.mutex.Lock()
+	cliScanner.inlineValueMutex.Lock()
 	cliScanner.inlineValues[path] = nil
-	cliScanner.mutex.Unlock()
+	cliScanner.inlineValueMutex.Unlock()
 	logger.Debug().Str("path", path).Msg("called")
 }
 
@@ -55,7 +55,7 @@ func filterInlineValuesForRange(inlineValues []snyk.InlineValue, myRange snyk.Ra
 }
 
 func (cliScanner *CLIScanner) addToCache(iv snyk.InlineValue, cache inlineValueMap) {
-	cliScanner.mutex.Lock()
+	cliScanner.inlineValueMutex.Lock()
 	cache[iv.Path()] = append(cache[iv.Path()], iv)
-	cliScanner.mutex.Unlock()
+	cliScanner.inlineValueMutex.Unlock()
 }
