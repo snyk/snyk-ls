@@ -192,7 +192,7 @@ func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLeg
 	a.Logout(context.Background())
 
 	// determine the right error message
-	if isLegacyToken {
+	if !isLegacyToken {
 		// it is an oauth token
 		if invalidToken.Expiry.Before(time.Now()) {
 			a.handleFailedRefresh()
