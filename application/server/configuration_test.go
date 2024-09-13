@@ -244,8 +244,8 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.IsAutoScanEnabled())
 		assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
 		assert.Equal(t, true, c.IsSnykOpenBrowserActionEnabled())
-		assert.Equal(t, settings.HoverVerbosity, c.HoverVerbosity())
-		assert.Equal(t, settings.OutputFormat, c.Format())
+		assert.Equal(t, *settings.HoverVerbosity, c.HoverVerbosity())
+		assert.Equal(t, *settings.OutputFormat, c.Format())
 
 		folderConfig1 := c.FolderConfig(tempDir1)
 		assert.NotEmpty(t, folderConfig1.BaseBranch)
