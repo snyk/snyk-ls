@@ -440,9 +440,9 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 
 func startOfflineDetection(c *config.Config) {
 	go func() {
-		timeout := time.Second * 2
+		timeout := time.Second * 10
 		client := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
-		client.Timeout = timeout
+		client.Timeout = timeout - 1
 
 		type logLevelConfigurable interface {
 			SetLogLevel(level zerolog.Level)
@@ -453,7 +453,7 @@ func startOfflineDetection(c *config.Config) {
 		}
 
 		for {
-			u := c.SnykApi()
+			u := c.SnykUi()
 			response, err := client.Get(u)
 			if err != nil {
 				if !c.Offline() {
