@@ -138,7 +138,7 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	var err error
 	user, err = a.provider.GetCheckAuthenticationFunction()()
 	if user == "" {
-		if a.c.Offline() || err != nil && shouldNotCauseLogout(err, a.c.Logger()) {
+		if a.c.Offline() || (err != nil && !shouldCauseLogout(err, a.c.Logger())) {
 			userMsg := fmt.Sprintf("Could not retrieve authentication status. Most likely this is a temporary error "+
 				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate (%s)", err.Error())
 			a.notifier.SendShowMessage(sglsp.MTError, userMsg)
@@ -158,29 +158,29 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	return true
 }
 
-func shouldNotCauseLogout(err error, logger *zerolog.Logger) bool {
+func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	logger.
 		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
 
 	switch {
 	case errors.Is(err, &json.SyntaxError{}):
-		return false
+		return true
 
 	// string matching where we don't have explicit errors
 	default:
 		errMsg := err.Error()
 		switch {
 		case strings.Contains(errMsg, "oauth2"):
-			return false
+			return true
 		case strings.Contains(errMsg, "(status: 401)"):
-			return false
+			return true
 		case strings.Contains(errMsg, "(status: 400)"):
-			return false
+			return true
 		case strings.Contains(errMsg, "unexpected end of JSON input"):
-			return false
+			return true
 
 		default:
-			return true
+			return false
 		}
 	}
 }
