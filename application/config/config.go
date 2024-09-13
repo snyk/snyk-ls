@@ -231,8 +231,16 @@ func IsDevelopment() bool {
 	return parseBool
 }
 
-// New creates a configuration object with default values
 func New() *Config {
+	return newConfig(nil)
+}
+
+func NewFromExtension(engine workflow.Engine) *Config {
+	return newConfig(engine)
+}
+
+// New creates a configuration object with default values
+func newConfig(engine workflow.Engine) *Config {
 	c := &Config{}
 	c.folderAdditionalParameters = make(map[string][]string)
 	c.scrubbingDict = frameworkLogging.ScrubbingDict{}
@@ -251,7 +259,11 @@ func New() *Config {
 	c.trustedFoldersFeatureEnabled = true
 	c.automaticScanning = true
 	c.authenticationMethod = types.TokenAuthentication
-	initWorkFlowEngine(c)
+	if engine == nil {
+		initWorkFlowEngine(c)
+	} else {
+		c.engine = engine
+	}
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = types.DefaultSeverityFilter()
@@ -265,6 +277,7 @@ func New() *Config {
 func initWorkFlowEngine(c *Config) {
 	c.m.Lock()
 	defer c.m.Unlock()
+
 	conf := configuration.NewInMemory()
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	enableOAuth := c.authenticationMethod == types.OAuthAuthentication

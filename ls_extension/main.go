@@ -78,17 +78,16 @@ func lsWorkflow(
 	logger.Info().Msgf("LS Version: %s", config.Version)
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	c := config.CurrentConfig()
+	defaultConfig := invocation.GetEngine().GetConfiguration()
+	defaultConfig.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
+
+	c := config.NewFromExtension(invocation.GetEngine())
 	c.SetConfigFile(extensionConfig.GetString("configfile"))
 	c.Load()
 	c.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
 	c.SetLogPath(extensionConfig.GetString("logPathFlag"))
 	c.SetFormat(extensionConfig.GetString("formatFlag"))
-
-	defaultConfig := c.Engine().GetConfiguration()
-	defaultConfig.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
-	c.SetEngine(invocation.GetEngine())
-	c.Engine().SetConfiguration(defaultConfig)
+	config.SetCurrentConfig(c)
 
 	if extensionConfig.GetBool("v") {
 		fmt.Println(config.Version)
