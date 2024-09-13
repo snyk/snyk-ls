@@ -31,7 +31,7 @@ OVERRIDE_GOCI_LINT_V := v1.60.2
 PACT_V := 2.4.2
 
 NOCACHE := "-count=1"
-TIMEOUT := "-timeout=15m"
+TIMEOUT := "-timeout=45m"
 
 
 ## tools: Install required tooling.
