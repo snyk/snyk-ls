@@ -1104,12 +1104,10 @@
         if(exampleCounter){
           exampleCounter.textContent = exampleCount + 1;
         }
-        var repoName = exampleCommitFixes[exampleCount].RepoName;
-        var repoLink = exampleCommitFixes[exampleCount].RepoLink;
 
-        if(exampleRepoAnchor){
-          exampleRepoAnchor.textContent = repoName;
-          exampleRepoAnchor.href = repoLink;
+        if(exampleRepoAnchor && exampleCommitFixes){
+          exampleRepoAnchor.textContent = exampleCommitFixes[exampleCount].RepoName;
+          exampleRepoAnchor.href = exampleCommitFixes[exampleCount].RepoLink;
         }
       }
 
