@@ -18,6 +18,8 @@ package authentication
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -136,24 +138,15 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	var err error
 	user, err = a.provider.GetCheckAuthenticationFunction()()
 	if user == "" {
-		if err != nil && !(strings.Contains(err.Error(), "oauth2") ||
-			strings.Contains(err.Error(), "(status: 401)") ||
-			strings.Contains(err.Error(), "(status: 400)")) {
+		if a.c.Offline() || err != nil && shouldNotCauseLogout(err, a.c.Logger()) {
 			userMsg := fmt.Sprintf("Could not retrieve authentication status. Most likely this is a temporary error "+
-				"caused by connectivity problems. (%s)", err.Error())
-
+				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate (%s)", err.Error())
 			a.notifier.SendShowMessage(sglsp.MTError, userMsg)
-
-			a.c.Logger().
-				Err(err).
-				Str("method", "AuthenticationService.IsAuthenticated").
-				Msg("error while trying to authenticate user")
 			a.c.Logger().Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
 			return false
 		}
 
 		invalidOAuth2Token, isLegacyTokenErr := a.c.TokenAsOAuthToken()
-
 		isLegacyToken := isLegacyTokenErr != nil
 
 		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
@@ -163,6 +156,33 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
 	a.c.Logger().Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	return true
+}
+
+func shouldNotCauseLogout(err error, logger *zerolog.Logger) bool {
+	logger.
+		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
+
+	switch {
+	case errors.Is(err, &json.SyntaxError{}):
+		return false
+
+	// string matching where we don't have explicit errors
+	default:
+		errMsg := err.Error()
+		switch {
+		case strings.Contains(errMsg, "oauth2"):
+			return false
+		case strings.Contains(errMsg, "(status: 401)"):
+			return false
+		case strings.Contains(errMsg, "(status: 400)"):
+			return false
+		case strings.Contains(errMsg, "unexpected end of JSON input"):
+			return false
+
+		default:
+			return true
+		}
+	}
 }
 
 func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {
