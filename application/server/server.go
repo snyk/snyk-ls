@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -443,6 +444,9 @@ func startOfflineDetection(c *config.Config) {
 		timeout := time.Second * 10
 		client := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
 		client.Timeout = timeout - 1
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
 
 		type logLevelConfigurable interface {
 			SetLogLevel(level zerolog.Level)
