@@ -18,8 +18,10 @@ package server
 
 import (
 	"context"
+
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -34,7 +36,6 @@ func textDocumentInlineValueHandler() jrpc2.Handler {
 		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "textDocumentInlineValueHandler").Logger()
 		documentURI := params.TextDocument.URI
-		logger.Debug().Msgf("Request for %s:%s RECEIVED", documentURI, params.Range.String())
 		defer logger.Debug().Msgf("Request for %s:%s DONE", documentURI, params.Range.String())
 		if s, ok := di.Scanner().(snyk.InlineValueProvider); ok {
 			filePath := uri.PathFromUri(documentURI)
@@ -43,7 +44,7 @@ func textDocumentInlineValueHandler() jrpc2.Handler {
 				return nil, err
 			}
 			lspInlineValues := converter.ToInlineValues(values)
-			logger.Debug().Msgf("found %d inline values for %s", len(values), filePath)
+			logger.Trace().Msgf("found %d inline values for %s", len(values), filePath)
 			return lspInlineValues, nil
 		}
 		return nil, nil

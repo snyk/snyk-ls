@@ -24,21 +24,18 @@ type inlineValueMap map[string][]snyk.InlineValue
 
 func (cliScanner *CLIScanner) GetInlineValues(path string, myRange snyk.Range) (result []snyk.InlineValue, err error) {
 	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.GetInlineValues").Logger()
-	logger.Debug().Str("path", path).Msg("called")
 	cliScanner.inlineValueMutex.RLock()
 	inlineValues := cliScanner.inlineValues[path]
 	cliScanner.inlineValueMutex.RUnlock()
 	result = filterInlineValuesForRange(inlineValues, myRange)
-	logger.Debug().Str("path", path).Msgf("%d inlineValues found", len(result))
+	logger.Trace().Str("path", path).Msgf("%d inlineValues found", len(result))
 	return result, nil
 }
 
 func (cliScanner *CLIScanner) ClearInlineValues(path string) {
-	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.ClearInlineValues").Logger()
 	cliScanner.inlineValueMutex.Lock()
 	cliScanner.inlineValues[path] = nil
 	cliScanner.inlineValueMutex.Unlock()
-	logger.Debug().Str("path", path).Msg("called")
 }
 
 func filterInlineValuesForRange(inlineValues []snyk.InlineValue, myRange snyk.Range) (result []snyk.InlineValue) {
