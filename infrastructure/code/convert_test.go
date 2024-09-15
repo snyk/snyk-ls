@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
@@ -716,7 +717,7 @@ func Test_getFormattedMessage(t *testing.T) {
 	testResult := run.Results[0]
 
 	sarifConverter := SarifConverter{sarif: sarifResponse, c: c}
-	msg := sarifConverter.formattedMessage(testResult, sarifConverter.getRule(run, "1"), filepath.Dir(p))
+	msg := sarifConverter.formattedMessageMarkdown(testResult, sarifConverter.getRule(run, "1"), filepath.Dir(p))
 
 	assert.Contains(t, msg, "Example Commit Fixes")
 	assert.Contains(t, msg, "Data Flow")
@@ -888,11 +889,14 @@ func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
 		Value: "test2",
 	}}
 	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
-	filePath := "path/to/file.js"
-	edits := response.toAutofixSuggestions("/users/git", filePath)
+	filePath := "file.js"
+	baseDir := t.TempDir()
+	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("test test test"), 0666)
+	require.NoError(t, err)
+	edits := response.toAutofixSuggestions(baseDir, filePath)
 	editValues := make([]string, 0)
 	for _, edit := range edits {
-		change := edit.AutofixEdit.Changes[ToAbsolutePath("/users/git", filePath)][0]
+		change := edit.AutofixEdit.Changes[ToAbsolutePath(baseDir, filePath)][0]
 		editValues = append(editValues, change.NewText)
 	}
 

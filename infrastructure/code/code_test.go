@@ -329,13 +329,13 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	testutil.UnitTest(t)
 	snykCodeMock := &FakeSnykCodeClient{C: c}
 
-	diagnosticUri, path := TempWorkdirWithIssues(t)
-	defer func(path string) { _ = os.RemoveAll(path) }(path)
-	files := []string{diagnosticUri}
-	fakeCodeScanner := &FakeCodeScannerClient{rootPath: diagnosticUri}
+	filePath, workDir := TempWorkdirWithIssues(t)
+	defer func(path string) { _ = os.RemoveAll(path) }(workDir)
+	files := []string{filePath}
+	fakeCodeScanner := &FakeCodeScannerClient{rootPath: workDir}
 
 	scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), fakeCodeScanner)
-	issues, _ := scanner.UploadAndAnalyzeWithIgnores(context.Background(), "", sliceToChannel(files), map[string]bool{})
+	issues, _ := scanner.UploadAndAnalyzeWithIgnores(context.Background(), workDir, sliceToChannel(files), map[string]bool{})
 
 	assert.True(t, fakeCodeScanner.UploadAndAnalyzeWasCalled)
 	assert.False(t, issues[0].IsIgnored)
@@ -351,7 +351,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	scanner.bundleHashesMutex.RLock()
 	defer scanner.bundleHashesMutex.RUnlock()
 	assert.Equal(t, 1, len(scanner.bundleHashes))
-	assert.Equal(t, snykCodeMock.Options[scanner.bundleHashes[path]].bundleHash, scanner.bundleHashes[path])
+	assert.Equal(t, snykCodeMock.Options[scanner.bundleHashes[workDir]].bundleHash, scanner.bundleHashes[workDir])
 }
 
 func Test_Scan(t *testing.T) {

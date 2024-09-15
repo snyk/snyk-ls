@@ -16,4 +16,6 @@
 
 package server
 
-const nodejsGoof = "https://github.com/snyk-labs/nodejs-goof"
+import "github.com/snyk/snyk-ls/internal/testutil"
+
+const nodejsGoof = testutil.NodejsGoof

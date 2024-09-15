@@ -285,21 +285,25 @@
 
   </div>
   <script nonce="${nonce}">
-    if (document.getElementById("learn--link")) {
-      document.getElementById("learn").className = "learn show"
+    if (document.getElementById("learn--link") && document.getElementById("learn")) {
+      document.getElementById("learn").className = "learn show";
     }
     if (document.getElementById("more-detailed-paths--link")) {
-      document.getElementById("more-detailed-paths--link").addEventListener('click', () => {
-        const paths = document.getElementsByClassName("path");
-        for (const path of paths) {
-          path.classList.remove("hidden");
+      document.getElementById("more-detailed-paths--link").onclick = function() {
+        var paths = document.getElementsByClassName("path");
+        for (var i = 0; i < paths.length; i++) {
+          var path = paths[i];
+          path.className =  path.className.replace(/(?:^|\s)hidden(?!\S)/g, '');
         }
-        const remediations = document.getElementsByClassName("remediation")
-        for (const remediation of remediations) {
-          remediation.classList.remove("hidden");
+        var remediations = document.getElementsByClassName("remediation");
+        for (var i = 0; i < remediations.length; i++) {
+          var remediation = remediations[i];
+          remediation.className =  remediation.className.replace(/(?:^|\s)hidden(?!\S)/g, '');
         }
-        document.getElementById("more-detailed-paths--link").classList.add("hidden");
-      })
+        if(document.getElementById("more-detailed-paths--link")) {
+          document.getElementById("more-detailed-paths--link").className += " hidden";
+        }
+      };
     }
   </script>
 </body>

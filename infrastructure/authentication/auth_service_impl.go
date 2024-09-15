@@ -18,11 +18,18 @@ package authentication
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/erni27/imcache"
+	"github.com/rs/zerolog"
+	sglsp "github.com/sourcegraph/go-lsp"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/data_structure"
@@ -123,42 +130,80 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 		return false
 	}
 
-	var user string
-	var err error
-
-	user, err = a.provider.GetCheckAuthenticationFunction()()
-	if user == "" || err != nil {
-		a.c.Logger().
-			Err(err).
-			Str("method", "AuthenticationService.IsAuthenticated").
-			Msg("Failed to get active user")
-
-		invalidToken, isLegacyTokenErr := a.c.TokenAsOAuthToken()
-
-		// we always log out
-		logger.Debug().Msg("logging out")
-		a.Logout(context.Background())
-
-		// determine the right error message
-		if isLegacyTokenErr == nil {
-			// it is an oauth token
-			if invalidToken.Expiry.Before(time.Now()) {
-				a.handleFailedRefresh()
-			} else {
-				// access token not expired, but creds still not work
-				a.HandleInvalidCredentials()
-			}
-		} else {
-			// legacy token does not work
-			a.HandleInvalidCredentials()
-		}
-		return false
+	if a.provider == nil {
+		a.ConfigureProviders(a.c)
 	}
 
+	var user string
+	var err error
+	user, err = a.provider.GetCheckAuthenticationFunction()()
+	if user == "" {
+		if a.c.Offline() || (err != nil && !shouldCauseLogout(err, a.c.Logger())) {
+			userMsg := fmt.Sprintf("Could not retrieve authentication status. Most likely this is a temporary error "+
+				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate (%s)", err.Error())
+			a.notifier.SendShowMessage(sglsp.MTError, userMsg)
+			a.c.Logger().Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
+			return false
+		}
+
+		invalidOAuth2Token, isLegacyTokenErr := a.c.TokenAsOAuthToken()
+		isLegacyToken := isLegacyTokenErr != nil
+
+		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
+		return false
+	}
 	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
 	a.c.Logger().Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	return true
+}
+
+func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
+	logger.
+		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
+
+	var syntaxError *json.SyntaxError
+	switch {
+	case errors.As(err, &syntaxError):
+		return true
+
+	// string matching where we don't have explicit errors
+	default:
+		errMsg := err.Error()
+		switch {
+		case strings.Contains(errMsg, "oauth2"):
+			return true
+		case strings.Contains(errMsg, "(status: 401)"):
+			return true
+		case strings.Contains(errMsg, "(status: 400)"):
+			return true
+		case strings.Contains(errMsg, "unexpected end of JSON input"):
+			return true
+
+		default:
+			return false
+		}
+	}
+}
+
+func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {
+	logger.Info().Msg("could not authenticate user with current credentials, API returned empty user object")
+	logger.Info().Msg("logging out, empty user response")
+	a.Logout(context.Background())
+
+	// determine the right error message
+	if !isLegacyToken {
+		// it is an oauth token
+		if invalidToken.Expiry.Before(time.Now()) {
+			a.handleFailedRefresh()
+		} else {
+			// access token not expired, but creds still not work
+			a.HandleInvalidCredentials()
+		}
+	} else {
+		// legacy token does not work
+		a.HandleInvalidCredentials()
+	}
 }
 
 func (a *AuthenticationServiceImpl) handleFailedRefresh() {

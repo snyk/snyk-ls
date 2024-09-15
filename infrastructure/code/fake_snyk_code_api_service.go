@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -99,21 +101,26 @@ func TempWorkdirWithIssues(t *testing.T) (filePath string, folderPath string) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 
-	temp := t.TempDir()
-	temp = filepath.Clean(temp)
-	temp, err := filepath.Abs(temp)
-	if err != nil {
-		t.Fatal(err, "couldn't get abs folderPath of tempdir")
-	}
+	folderPath = t.TempDir()
 
-	filePath = filepath.Join(temp, "Dummy"+FakeFileExtension)
+	command := exec.Command("git", "init")
+	command.Dir = folderPath
+	_, err := command.Output()
+	require.NoError(t, err)
+
+	command = exec.Command("git", "remote", "add", "origin", "https://dummy.dummy.io/gitty.git")
+	command.Dir = folderPath
+	_, err = command.Output()
+	require.NoError(t, err)
+
+	filePath = filepath.Join(folderPath, "Dummy"+FakeFileExtension)
 	classWithQualityIssue := "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n};"
 	err = os.WriteFile(filePath, []byte(classWithQualityIssue), 0600)
 	if err != nil {
 		t.Fatal(err, "couldn't create temp file for fake diagnostic")
 	}
 	FakeIssue.AffectedFilePath = filePath
-	return filePath, temp
+	return
 }
 
 type FakeSnykCodeClient struct {
@@ -300,6 +307,7 @@ func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 			AutofixEdit: snyk.WorkspaceEdit{
 				Changes: map[string][]snyk.TextEdit{
 					options.filePath: {snyk.TextEdit{
+						FullText: FakeAutofixSuggestionNewText,
 						Range: snyk.Range{
 							Start: snyk.Position{Line: 0, Character: 0},
 							End:   snyk.Position{Line: 10000, Character: 0},
@@ -315,6 +323,7 @@ func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 			AutofixEdit: snyk.WorkspaceEdit{
 				Changes: map[string][]snyk.TextEdit{
 					options.filePath: {snyk.TextEdit{
+						FullText: "FAKE_AUTOFIX_UNUSED",
 						Range: snyk.Range{
 							Start: snyk.Position{Line: 0, Character: 0},
 							End:   snyk.Position{Line: 10000, Character: 0},

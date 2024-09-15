@@ -85,6 +85,15 @@ Right now the language server supports the following actions:
       ]
   }
   ```
+- Custom Publish Diagnostics Notification
+- method: `$/snyk.publishDiagnostics316`
+  - payload:
+  ```json5
+  {
+  "uri": "/path/to/file",
+  "diagnostics": [], 
+  }
+  ```
 - Authentication Notification
   - method: `$/snyk.hasAuthenticated`
   - payload:
@@ -209,7 +218,7 @@ Right now the language server supports the following actions:
   }
   ```
 - `SettingsSastEnabled` triggers the api call to check if Snyk Code is enabled
-  - command: `snyk.settingsSastEnabled`
+  - command: `snyk.getSettingsSastEnabled`
   - args: empty
   - returns `true` if enabled, `false` if not, or an error and false if an error occurred
 - `GetActiveUser` triggers the api call to get the active logged in user or an error if not logged in
@@ -366,7 +375,9 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "enableSnykOSSQuickFixCodeActions": "true", // show quickfixes for supported OSS package manager issues
   "enableSnykOpenBrowserActions": "false", // show code actions to open issue descriptions
   "enableDeltaFindings": "false", // only display issues that are not new and thus not on the base branch
-  "requiredProtocolVersion": "11",
+  "requiredProtocolVersion": "14", // the protocol version a client needs
+  "hoverVerbosity": "1", // 0-3 with 0 the lowest verbosity. 0: off, 1: only description, 2: description & details 3: complete (default)
+  "outputFormat": "md", // plain = plain, markdown = md (default) or html = HTML
   "additionalParams": "--all-projects", // Any extra params for Open Source scans using the Snyk CLI, separated by spaces
   "additionalEnv": "MAVEN_OPTS=-Djava.awt.headless=true;FOO=BAR", // Additional environment variables, separated by semicolons
   "trustedFolders": [
@@ -374,8 +385,9 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "/another/trusted/path"
   ], // An array of folder that should be trusted
   "folderConfigs": [{
-    "baseBranch": "main",
-    "folderPath": "a/b/c",
+    "baseBranch": "main", // the base branch for delta scanning
+    "folderPath": "a/b/c", // the workspace folder path
+    "additionalParameters": "--file=pom.xml" // additional parameters for CLI scans
   }], // an array of folder configurations, defining the desired base branch of a workspaceFolder 
 }
 ```

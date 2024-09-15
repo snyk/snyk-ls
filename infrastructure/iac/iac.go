@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"net/url"
 	"os"
 	"os/exec"
@@ -30,6 +29,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 
 	"github.com/gomarkdown/markdown"
 	"github.com/pkg/errors"
@@ -322,7 +323,7 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 	impact := issue.IacDescription.Impact
 	resolve := issue.IacDescription.Resolve
 
-	if config.CurrentConfig().Format() == config.FormatHtml {
+	if iac.c.Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
 		impact = string(markdown.ToHTML([]byte(impact), nil, nil))

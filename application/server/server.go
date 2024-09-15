@@ -18,11 +18,14 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/adrg/xdg"
 
@@ -187,8 +190,13 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 
 		logger.Info().Msg("RECEIVING")
 		defer logger.Info().Msg("SENDING")
-		workspace.Get().ChangeWorkspaceFolders(bgCtx, params)
-		command.HandleFolders(bgCtx, srv, di.Notifier())
+		changedFolders := workspace.Get().ChangeWorkspaceFolders(params)
+		command.HandleFolders(bgCtx, srv, di.Notifier(), di.ScanPersister())
+		if config.CurrentConfig().IsAutoScanEnabled() {
+			for _, f := range changedFolders {
+				f.ScanFolder(ctx)
+			}
+		}
 		return nil, nil
 	})
 }
@@ -224,19 +232,12 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		c.Engine().GetConfiguration().SetStorage(c.Storage())
 
 		InitializeSettings(c, params.InitializationOptions)
-		// async processing listener
+
+		startOfflineDetection(c)
+		startClientMonitor(params, logger)
+
 		go createProgressListener(progress.Channel, srv, c.Logger())
 		registerNotifier(c, srv)
-		go func() {
-			if params.ProcessID == 0 {
-				// if started on its own, no need to exit or to monitor
-				return
-			}
-
-			monitorClientProcess(params.ProcessID)
-			logger.Info().Msgf("Shutting down as client pid %d not running anymore.", params.ProcessID)
-			os.Exit(0)
-		}()
 
 		addWorkspaceFolders(c, params, workspace.Get())
 
@@ -302,6 +303,19 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		logger.Debug().Str("method", method).Any("result", result).Msg("SENDING")
 		return result, nil
 	})
+}
+
+func startClientMonitor(params types.InitializeParams, logger zerolog.Logger) {
+	go func() {
+		if params.ProcessID == 0 {
+			// if started on its own, no need to exit or to monitor
+			return
+		}
+
+		monitorClientProcess(params.ProcessID)
+		logger.Info().Msgf("Shutting down as client pid %d not running anymore.", params.ProcessID)
+		os.Exit(0)
+	}()
 }
 
 func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVersion string, clientProtocolVersion string) {
@@ -375,10 +389,24 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		initialLogger.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
 		initialLogger.Info().Msg("IDE: " + c.IdeName() + "/" + c.IdeVersion())
 		initialLogger.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
+		if token, err := c.TokenAsOAuthToken(); err == nil && len(token.RefreshToken) > 10 && c.AuthenticationMethod() == types.OAuthAuthentication {
+			initialLogger.Info().Msgf("Truncated token: %s", token.RefreshToken[len(token.RefreshToken)-8:])
+		}
 
 		logger := c.Logger().With().Str("method", "initializedHandler").Logger()
 
 		handleProtocolVersion(c, di.Notifier(), config.LsProtocolVersion, c.ClientProtocolVersion())
+
+		// initialize learn cache
+		go func() {
+			learnService := di.LearnService()
+			_, err := learnService.GetAllLessons()
+			if err != nil {
+				logger.Err(err).Msg("Error initializing lessons cache")
+			}
+			// start goroutine that keeps the cache filled
+			go learnService.MaintainCache()
+		}()
 
 		// CLI & Authentication initialization - returns error if not authenticated
 		err := di.Scanner().Init()
@@ -386,6 +414,12 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
 		}
+		command.HandleFolders(context.Background(), srv, di.Notifier(), di.ScanPersister())
+
+		// Check once for expired cache in same thread before triggering a scan.
+		// Start a periodic go routine to check for the expired cache afterwards
+		deleteExpiredCache()
+		go periodicallyCheckForExpiredCache()
 
 		autoScanEnabled := c.IsAutoScanEnabled()
 		if autoScanEnabled {
@@ -400,9 +434,65 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		}
 
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
-		go command.HandleFolders(context.Background(), srv, di.Notifier())
 		return nil, nil
 	})
+}
+
+func startOfflineDetection(c *config.Config) {
+	go func() {
+		timeout := time.Second * 10
+		client := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
+		client.Timeout = timeout - 1
+
+		type logLevelConfigurable interface {
+			SetLogLevel(level zerolog.Level)
+		}
+
+		if loggingRoundTripper, ok := client.Transport.(logLevelConfigurable); ok {
+			loggingRoundTripper.SetLogLevel(zerolog.ErrorLevel)
+		}
+
+		for {
+			u := c.SnykUi()
+			response, err := client.Get(u)
+			if err != nil {
+				if !c.Offline() {
+					msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
+					reportedErr := errors.Join(err, errors.New(msg))
+					c.Logger().Err(reportedErr).Send()
+					di.Notifier().SendShowMessage(sglsp.Warning, msg)
+				}
+				c.SetOffline(true)
+			} else {
+				if c.Offline() {
+					msg := fmt.Sprintf("Snyk is active again. We were able to reach %s", u)
+					di.Notifier().SendShowMessage(sglsp.Info, msg)
+					c.Logger().Info().Msg(msg)
+				}
+				c.SetOffline(false)
+			}
+			if response != nil {
+				_ = response.Body.Close()
+			}
+			time.Sleep(timeout)
+		}
+	}()
+}
+
+func deleteExpiredCache() {
+	w := workspace.Get()
+	var folderList []string
+	for _, f := range w.Folders() {
+		folderList = append(folderList, f.Path())
+	}
+	di.ScanPersister().Clear(folderList, true)
+}
+
+func periodicallyCheckForExpiredCache() {
+	for {
+		deleteExpiredCache()
+		time.Sleep(time.Duration(persistence.ExpirationInSeconds) * time.Second)
+	}
 }
 
 func addWorkspaceFolders(c *config.Config, params types.InitializeParams, w *workspace.Workspace) {
@@ -454,11 +544,14 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams, w *wor
 // from the environment variables.
 func setClientInformation(initParams types.InitializeParams) {
 	var integrationName, integrationVersion string
+	clientInfoName := initParams.ClientInfo.Name
+	clientInfoVersion := initParams.ClientInfo.Version
+
 	if initParams.InitializationOptions.IntegrationName != "" {
 		integrationName = initParams.InitializationOptions.IntegrationName
 		integrationVersion = initParams.InitializationOptions.IntegrationVersion
-	} else if initParams.ClientInfo.Name != "" {
-		integrationName = strings.ToUpper(strings.Replace(initParams.ClientInfo.Name, " ", "_", -1))
+	} else if clientInfoName != "" {
+		integrationName = strings.ToUpper(strings.Replace(clientInfoName, " ", "_", -1))
 	} else if integrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey); integrationNameEnvVar != "" {
 		integrationName = integrationNameEnvVar
 		integrationVersion = os.Getenv(cli.IntegrationVersionEnvVarKey)
@@ -466,11 +559,17 @@ func setClientInformation(initParams types.InitializeParams) {
 		return
 	}
 
+	// Fallback because Visual Studio doesn't send initParams.ClientInfo
+	if clientInfoName == "" && clientInfoVersion == "" {
+		clientInfoName = integrationName
+		clientInfoVersion = integrationVersion
+	}
+
 	c := config.CurrentConfig()
 	c.SetIntegrationName(integrationName)
 	c.SetIntegrationVersion(integrationVersion)
-	c.SetIdeName(initParams.ClientInfo.Name)
-	c.SetIdeVersion(initParams.ClientInfo.Version)
+	c.SetIdeName(clientInfoName)
+	c.SetIdeVersion(clientInfoVersion)
 
 	initNetworkAccessHeaders()
 }
@@ -545,8 +644,8 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 			di.Notifier().Send(diagnosticParams)
 		}
 
-		if scanner, ok := di.Scanner().(scanner.PackageScanner); ok {
-			scanner.ScanPackages(context.Background(), config.CurrentConfig(), filePath, "")
+		if sc, ok := di.Scanner().(scanner.PackageScanner); ok {
+			sc.ScanPackages(context.Background(), config.CurrentConfig(), filePath, "")
 		}
 		return nil, nil
 	})

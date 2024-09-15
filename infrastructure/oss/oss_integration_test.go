@@ -35,17 +35,21 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // This is an integration test that downloads and installs the CLI if necessary
 // it uses real CLI output for verification of functionality
 func Test_Scan(t *testing.T) {
-	testutil.IntegTest(t)
+	testutil.SmokeTest(t, false)
 	testutil.CreateDummyProgressListener(t)
 	c := config.CurrentConfig()
 	c.SetFormat(config.FormatHtml)
 	ctx := context.Background()
 	di.Init()
+	c.SetAuthenticationMethod(types.TokenAuthentication)
+	authenticationService := di.AuthenticationService()
+	authenticationService.ConfigureProviders(c)
 
 	// ensure CLI is downloaded if not already existent
 	if !c.CliSettings().Installed() {

@@ -18,10 +18,11 @@ package vcs
 
 import (
 	"fmt"
-	"github.com/go-git/go-git/v5"
-	"github.com/rs/zerolog"
 	"os"
 	"sync"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/rs/zerolog"
 )
 
 type CheckoutHandler struct {

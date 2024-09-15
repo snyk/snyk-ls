@@ -19,7 +19,8 @@ package command
 import (
 	"context"
 	"fmt"
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 
 	"github.com/pkg/errors"
@@ -32,25 +33,35 @@ import (
 const DoTrust = "Trust folders and continue"
 const DontTrust = "Don't trust folders"
 
-func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier) {
+func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister) {
 	go sendFolderConfigsNotification(notifier)
+	initScanPersister(persister)
 	HandleUntrustedFolders(ctx, srv)
 }
 
 func sendFolderConfigsNotification(notifier noti.Notifier) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "HandleFolders").Logger()
+	c := config.CurrentConfig()
 	ws := workspace.Get()
 	var folderConfigs []types.FolderConfig
 	for _, f := range ws.Folders() {
-		folderConfig, err := gitconfig.GetOrCreateFolderConfig(f.Path())
-		if err != nil {
-			logger.Warn().Err(err).Msg("error determining folder config")
-			continue
-		}
+		folderConfig := c.FolderConfig(f.Path())
 		folderConfigs = append(folderConfigs, *folderConfig)
 	}
 	folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
 	notifier.Send(folderConfigsParam)
+}
+
+func initScanPersister(persister persistence.ScanSnapshotPersister) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "initScanPersister").Logger()
+	w := workspace.Get()
+	var folderList []string
+	for _, f := range w.Folders() {
+		folderList = append(folderList, f.Path())
+	}
+	err := persister.Init(folderList)
+	if err != nil {
+		logger.Error().Err(err).Msg("could not initialize scan persister")
+	}
 }
 
 func HandleUntrustedFolders(ctx context.Context, srv types.Server) {

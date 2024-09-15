@@ -520,9 +520,10 @@ type WorkspaceFoldersChangeEvent struct {
 // IDE sends this as part of the settings/initialization
 // LS sends this via the $/snyk.folderConfig notification
 type FolderConfig struct {
-	FolderPath    string   `json:"folderPath"`
-	BaseBranch    string   `json:"baseBranch"`
-	LocalBranches []string `json:"localBranches,omitempty"`
+	FolderPath           string   `json:"folderPath"`
+	BaseBranch           string   `json:"baseBranch"`
+	LocalBranches        []string `json:"localBranches,omitempty"`
+	AdditionalParameters []string `json:"additionalParameters,omitempty"`
 }
 
 type FolderConfigsParam struct {
@@ -563,6 +564,8 @@ type Settings struct {
 	EnableSnykOpenBrowserActions     string               `json:"enableSnykOpenBrowserActions,omitempty"`
 	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"` // should this be global?
 	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
+	HoverVerbosity                   *int                 `json:"hoverVerbosity,omitempty"`
+	OutputFormat                     *string              `json:"outputFormat,omitempty"`
 	// global settings end
 	// folder specific settings start
 	AdditionalParams string         `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config

@@ -18,6 +18,7 @@ package gitconfig
 
 import (
 	"fmt"
+
 	"github.com/rs/zerolog"
 
 	"github.com/go-git/go-git/v5"
@@ -50,6 +51,20 @@ func GetOrCreateFolderConfig(path string) (*types.FolderConfig, error) {
 		return nil, fmt.Errorf("no local branches found")
 	}
 
+	baseBranch, err := getBaseBranch(repoConfig, folderSection, localBranches)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.FolderConfig{
+		FolderPath:           path,
+		BaseBranch:           baseBranch,
+		LocalBranches:        localBranches,
+		AdditionalParameters: nil,
+	}, nil
+}
+
+func getBaseBranch(repoConfig *config2.Config, folderSection *config.Subsection, localBranches []string) (string, error) {
 	// base branch is either overwritten or we return the default branch
 	baseBranch := repoConfig.Init.DefaultBranch
 	if folderSection.HasOption(baseBranchKey) {
@@ -62,15 +77,10 @@ func GetOrCreateFolderConfig(path string) (*types.FolderConfig, error) {
 		} else if slices.Contains(localBranches, "master") {
 			baseBranch = "master"
 		} else {
-			return nil, fmt.Errorf("could not determine base branch")
+			return "", fmt.Errorf("could not determine base branch")
 		}
 	}
-
-	return &types.FolderConfig{
-		FolderPath:    path,
-		BaseBranch:    baseBranch,
-		LocalBranches: localBranches,
-	}, nil
+	return baseBranch, nil
 }
 
 func getConfigSection(path string) (*git.Repository, *config2.Config, *config.Config, *config.Subsection, error) {
@@ -108,15 +118,19 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 
 func SetBaseBranch(logger *zerolog.Logger, config []types.FolderConfig) {
 	for _, folderConfig := range config {
-		repo, repoConfig, _, subsection, err := getConfigSection(folderConfig.FolderPath)
-		if err != nil {
-			logger.Error().Err(err).Msg("could not get git config for folder " + folderConfig.FolderPath)
-			continue
-		}
-		subsection.SetOption(baseBranchKey, folderConfig.BaseBranch)
-		err = repo.Storer.SetConfig(repoConfig)
-		if err != nil {
-			logger.Error().Err(err).Msg("could not store base branch configuration for folder " + folderConfig.FolderPath)
-		}
+		SetOption(logger, folderConfig.FolderPath, baseBranchKey, folderConfig.BaseBranch)
+	}
+}
+
+func SetOption(logger *zerolog.Logger, folderPath, key string, value string) {
+	repo, repoConfig, _, subsection, err := getConfigSection(folderPath)
+	if err != nil {
+		logger.Error().Err(err).Msg("could not get git config for folder " + folderPath)
+		return
+	}
+	subsection.SetOption(key, value)
+	err = repo.Storer.SetConfig(repoConfig)
+	if err != nil {
+		logger.Error().Err(err).Msgf("could not store %s=%s configuration for folder %s", key, value, folderPath)
 	}
 }

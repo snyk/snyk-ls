@@ -31,6 +31,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: "./go.mod"
+          cache: "true"
 
       - name: Set up Snyk CLI
         uses: snyk/actions/setup@master
@@ -47,15 +48,6 @@ jobs:
         if: steps.cache-pact.outputs.cache-hit != 'true'
         run: |
           make tools
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: ${{ runner.os }}-go-
 
       - name: Lint source code
         run: |

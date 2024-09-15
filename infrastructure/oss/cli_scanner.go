@@ -55,6 +55,11 @@ var (
 		"Podfile.lock":      "Podfile",
 		"poetry.lock":       "pyproject.toml",
 	}
+
+	allProjectsParamBlacklist = map[string]bool{
+		"--file": true,
+	}
+
 	// Make sure CLIScanner implements the desired interfaces
 	_ snyk.ProductScanner      = (*CLIScanner)(nil)
 	_ snyk.InlineValueProvider = (*CLIScanner)(nil)
@@ -64,7 +69,8 @@ type CLIScanner struct {
 	instrumentor            performance.Instrumentor
 	errorReporter           error_reporting.ErrorReporter
 	cli                     cli.Executor
-	mutex                   *sync.Mutex
+	mutex                   *sync.RWMutex
+	inlineValueMutex        *sync.RWMutex
 	packageScanMutex        *sync.Mutex
 	runningScans            map[string]*scans.ScanProgress
 	refreshScanWaitDuration time.Duration
@@ -84,7 +90,8 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
 		cli:                     cli,
-		mutex:                   &sync.Mutex{},
+		mutex:                   &sync.RWMutex{},
+		inlineValueMutex:        &sync.RWMutex{},
 		packageScanMutex:        &sync.Mutex{},
 		scheduledScanMtx:        &sync.Mutex{},
 		runningScans:            map[string]*scans.ScanProgress{},
@@ -151,7 +158,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string) (
 	return cliScanner.scanInternal(ctx, path, cliScanner.prepareScanCommand)
 }
 
-func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool) []string) ([]snyk.Issue, error) {
+func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool, path string) []string) ([]snyk.Issue, error) {
 	method := "cliScanner.Scan"
 	logger := cliScanner.config.Logger().With().Str("method", method).Logger()
 
@@ -198,7 +205,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	cliScanner.runningScans[workDir] = newScan
 	cliScanner.mutex.Unlock()
 
-	cmd := commandFunc([]string{workDir}, map[string]bool{"": true})
+	cmd := commandFunc([]string{workDir}, map[string]bool{"": true}, workDir)
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
@@ -225,22 +232,42 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool) []string {
+func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string) []string {
+	c := config.CurrentConfig()
+	allProjectsParamAllowed := true
+	allProjectsParam := "--all-projects"
+
 	cmd := cliScanner.cli.ExpandParametersFromConfig([]string{
 		cliScanner.config.CliSettings().Path(),
 		"test",
 	})
 	cmd = append(cmd, args...)
 	cmd = append(cmd, "--json")
+
 	additionalParams := cliScanner.config.CliSettings().AdditionalOssParameters
+
+	// append folder parameters if set
+	folderConfig := c.FolderConfig(path)
+	additionalParams = append(additionalParams, folderConfig.AdditionalParameters...)
+
+	// now add all additional parameters, skipping blacklisted ones
 	for _, parameter := range additionalParams {
-		if parameterBlacklist[parameter] {
+		p := strings.Split(parameter, "=")[0]
+		if parameterBlacklist[p] {
 			continue
 		}
-		cmd = append(cmd, parameter)
+		if allProjectsParamBlacklist[p] {
+			allProjectsParamAllowed = false
+		}
+		if parameter != allProjectsParam {
+			cmd = append(cmd, parameter)
+		}
 	}
-	allProjectsParam := "--all-projects"
-	if !slices.Contains(cmd, allProjectsParam) && !parameterBlacklist[allProjectsParam] {
+
+	// only append --all-projects, if it's not on the global blacklist
+	// and if there is no other parameter interfering (e.g. --file)
+	allProjectsParamAllowed = allProjectsParamAllowed && !slices.Contains(cmd, allProjectsParam)
+	if allProjectsParamAllowed && !parameterBlacklist[allProjectsParam] {
 		cmd = append(cmd, allProjectsParam)
 	}
 
@@ -302,15 +329,15 @@ func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir strin
 		// if displayTargetFile is not relative, let's try to join path with basename
 		basePath := filepath.Base(displayTargetFile)
 		scanResultPath := scanResult.Path
-		tryOutPath := filepath.Join(scanResultPath, basePath)
+		tryOutPath := filepath.Join(scanResultPath, displayTargetFile)
 		_, tryOutErr := os.Stat(tryOutPath)
 		if tryOutErr != nil {
-			logger.Trace().Err(err).Msgf("joining basePath: %s to path: %s failed", basePath, scanResultPath)
-			// if that doesn't work, let's try full path and full display target file
-			tryOutPath = filepath.Join(scanResultPath, displayTargetFile)
-			_, tryOutErr = os.Stat(tryOutPath)
+			logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to path: %s failed", displayTargetFile, scanResultPath)
+			tryOutPath = filepath.Join(scanResultPath, basePath)
+			_, tryOutErr := os.Stat(tryOutPath)
 			if tryOutErr != nil {
-				logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to path: %s failed", displayTargetFile, scanResultPath)
+				logger.Trace().Err(err).Msgf("joining basePath: %s to path: %s failed", basePath, scanResultPath)
+				// if that doesn't work, let's try full path and full display target file
 				tryOutPath = filepath.Join(workDir, displayTargetFile)
 				_, tryOutErr = os.Stat(tryOutPath)
 				if tryOutErr != nil {

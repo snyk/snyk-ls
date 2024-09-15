@@ -34,6 +34,7 @@ import (
 const (
 	integTestEnvVar = "INTEG_TESTS"
 	smokeTestEnvVar = "SMOKE_TESTS"
+	NodejsGoof      = "https://github.com/snyk-labs/nodejs-goof"
 )
 
 func IntegTest(t *testing.T) *config.Config {

@@ -19,8 +19,9 @@ package oss
 import (
 	_ "embed"
 	"fmt"
-	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"strings"
+
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 
 	"github.com/gomarkdown/markdown"
 
@@ -46,9 +47,10 @@ func toIssue(
 	issueRange snyk.Range,
 	learnService learn.Service,
 	ep error_reporting.ErrorReporter,
+	fileContent []byte,
 ) snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
-	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueRange)
+	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueRange, fileContent)
 
 	var codelensCommands []types.CommandData
 	for _, codeAction := range codeActions {
@@ -101,6 +103,7 @@ func toIssue(
 		Range:               issueRange,
 		Severity:            issue.ToIssueSeverity(),
 		AffectedFilePath:    affectedFilePath,
+		FileContent:         fileContent,
 		Product:             product.ProductOpenSource,
 		IssueDescriptionURL: issue.CreateIssueURL(),
 		IssueType:           snyk.DependencyVulnerability,
@@ -138,7 +141,7 @@ func convertScanResultToIssues(
 			continue
 		}
 		issueRange := findRange(issue, targetFilePath, fileContent)
-		snykIssue := toIssue(targetFilePath, issue, res, issueRange, ls, ep)
+		snykIssue := toIssue(targetFilePath, issue, res, issueRange, ls, ep, fileContent)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true

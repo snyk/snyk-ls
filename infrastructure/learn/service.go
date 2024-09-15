@@ -38,6 +38,7 @@ type Service interface {
 	LearnEndpoint(conf *config.Config) (learnEndpoint string, err error)
 	GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType snyk.Type) (lesson *Lesson, err error)
 	GetAllLessons() (lessons []Lesson, err error)
+	MaintainCache() func()
 }
 
 type Lesson struct {
@@ -127,19 +128,10 @@ func New(c *config.Config, httpClientFunc func() *http.Client, er error_reportin
 			imcache.WithDefaultExpirationOption[string, []Lesson](cacheExpiry),
 		),
 	}
-
-	// initialize cache
-	_, err := s.GetAllLessons()
-	if err != nil {
-		s.er.CaptureError(errors.WithMessage(err, "Error initializing lessons cache"))
-	}
-
-	// start goroutine that keeps the cache filled
-	go s.maintainCache()
 	return s
 }
 
-func (s *serviceImpl) maintainCache() func() {
+func (s *serviceImpl) MaintainCache() func() {
 	return func() {
 		for {
 			if s.lessonsByEcosystemCache.Len() == 0 {

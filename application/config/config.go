@@ -17,12 +17,14 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -45,10 +47,10 @@ import (
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -198,6 +200,9 @@ type Config struct {
 	m                                sync.RWMutex
 	clientProtocolVersion            string
 	isOpenBrowserActionEnabled       bool
+	folderAdditionalParameters       map[string][]string
+	hoverVerbosity                   int
+	offline                          bool
 }
 
 func CurrentConfig() *Config {
@@ -226,15 +231,24 @@ func IsDevelopment() bool {
 	return parseBool
 }
 
-// New creates a configuration object with default values
 func New() *Config {
+	return newConfig(nil)
+}
+
+func NewFromExtension(engine workflow.Engine) *Config {
+	return newConfig(engine)
+}
+
+// New creates a configuration object with default values
+func newConfig(engine workflow.Engine) *Config {
 	c := &Config{}
+	c.folderAdditionalParameters = make(map[string][]string)
 	c.scrubbingDict = frameworkLogging.ScrubbingDict{}
 	c.logger = getNewScrubbingLogger(c)
 	c.cliSettings = NewCliSettings(c)
 	c.automaticAuthentication = true
 	c.configFile = ""
-	c.format = "md"
+	c.format = FormatMd
 	c.isErrorReportingEnabled.Set(true)
 	c.isSnykOssEnabled.Set(true)
 	c.isSnykIacEnabled.Set(true)
@@ -245,19 +259,25 @@ func New() *Config {
 	c.trustedFoldersFeatureEnabled = true
 	c.automaticScanning = true
 	c.authenticationMethod = types.TokenAuthentication
-	initWorkFlowEngine(c)
+	if engine == nil {
+		initWorkFlowEngine(c)
+	} else {
+		c.engine = engine
+	}
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = types.DefaultSeverityFilter()
 	c.UpdateApiEndpoints(DefaultSnykApiUrl)
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
+	c.hoverVerbosity = 3
 	return c
 }
 
 func initWorkFlowEngine(c *Config) {
 	c.m.Lock()
 	defer c.m.Unlock()
+
 	conf := configuration.NewInMemory()
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
@@ -330,15 +350,60 @@ func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
 }
 
 func (c *Config) Load() {
+	c.LoadShellEnvironment()
+
 	c.m.RLock()
 	files := c.configFiles()
 	c.m.RUnlock()
 	for _, fileName := range files {
 		c.loadFile(fileName)
 	}
+
 	c.m.Lock()
 	c.configLoaded.Set(true)
 	c.m.Unlock()
+}
+
+func (c *Config) LoadShellEnvironment() {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	parsedEnv := getParsedEnvFromShell("bash")
+	shell := parsedEnv["SHELL"]
+	fromSpecificShell := getParsedEnvFromShell(shell)
+
+	if len(fromSpecificShell) > 0 {
+		c.setParsedVariablesToEnv(fromSpecificShell)
+	} else {
+		c.setParsedVariablesToEnv(parsedEnv)
+	}
+}
+
+func getParsedEnvFromShell(shell string) gotenv.Env {
+	// guard against command injection
+	var shellWhiteList = map[string]bool{
+		"bash":      true,
+		"/bin/zsh":  true,
+		"/bin/sh":   true,
+		"/bin/fish": true,
+		"/bin/csh":  true,
+		"/bin/ksh":  true,
+		"/bin/bash": true,
+	}
+
+	if !shellWhiteList[shell] {
+		return gotenv.Env{}
+	}
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancelFunc()
+
+	env, err := exec.CommandContext(ctx, shell, "--login", "-i", "-c", "env && exit").Output()
+	if err != nil {
+		return gotenv.Env{}
+	}
+	parsedEnv := gotenv.Parse(strings.NewReader(string(env)))
+	return parsedEnv
 }
 
 func (c *Config) loadFile(fileName string) {
@@ -349,12 +414,18 @@ func (c *Config) loadFile(fileName string) {
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)
 	env := gotenv.Parse(file)
+	c.setParsedVariablesToEnv(env)
+	c.updatePath(".")
+	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
+}
+
+func (c *Config) setParsedVariablesToEnv(env gotenv.Env) {
 	for k, v := range env {
 		_, exists := os.LookupEnv(k)
 		if !exists {
 			err := os.Setenv(k, v)
 			if err != nil {
-				c.Logger().Warn().Str("method", "loadFile").Msg("Couldn't set environment variable " + k)
+				c.Logger().Warn().Str("method", "setParsedVariablesToEnv").Msg("Couldn't set environment variable " + k)
 			}
 		} else {
 			// add to path, don't ignore additional paths
@@ -363,8 +434,6 @@ func (c *Config) loadFile(fileName string) {
 			}
 		}
 	}
-	c.updatePath(".")
-	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
 func (c *Config) NonEmptyToken() bool {
@@ -393,9 +462,23 @@ func (c *Config) LogPath() string {
 	defer c.m.Unlock()
 	return c.logPath
 }
-func (c *Config) SnykApi() string     { return c.snykApiUrl }
-func (c *Config) SnykCodeApi() string { return c.snykCodeApiUrl }
+func (c *Config) SnykApi() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.snykApiUrl
+}
+
+func (c *Config) SnykCodeApi() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.snykCodeApiUrl
+}
+
 func (c *Config) SnykUi() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
 	snykUiUrl, err := getCustomEndpointUrlFromSnykApi(c.snykApiUrl, "app")
 	if err != nil || snykUiUrl == "" {
 		return DefaultSnykUiUrl
@@ -433,13 +516,17 @@ func (c *Config) SetCliSettings(settings *CliSettings) {
 
 func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 	if snykApiUrl == "" {
+		c.m.Lock()
 		snykApiUrl = DefaultSnykApiUrl
+		c.m.Unlock()
 	}
 
 	c.engine.GetConfiguration().Set(configuration.API_URL, snykApiUrl)
 
 	if snykApiUrl != c.snykApiUrl {
+		c.m.RLock()
 		c.snykApiUrl = snykApiUrl
+		c.m.RUnlock()
 
 		// Update Code API endpoint
 		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(snykApiUrl)
@@ -458,6 +545,8 @@ func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
 		c.snykCodeApiUrl = DefaultDeeproxyApiUrl
 		return
 	}
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.snykCodeApiUrl = snykCodeApiUrl
 
 	config := c.engine.GetConfiguration()
@@ -1067,4 +1156,55 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.isOpenBrowserActionEnabled = enable
+}
+
+func (c *Config) FolderConfig(path string) *types.FolderConfig {
+	var folderConfig *types.FolderConfig
+	var err error
+	folderConfig, err = gitconfig.GetOrCreateFolderConfig(path)
+	if err != nil {
+		folderConfig = &types.FolderConfig{}
+	}
+	c.m.RLock()
+	addParams, ok := c.folderAdditionalParameters[path]
+	if ok {
+		folderConfig.AdditionalParameters = addParams
+	}
+	c.m.RUnlock()
+	return folderConfig
+}
+
+func (c *Config) SetAdditionalParameters(path string, parameters []string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.folderAdditionalParameters[path] = parameters
+}
+
+func (c *Config) HoverVerbosity() int {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.hoverVerbosity
+}
+
+func (c *Config) SetHoverVerbosity(verbosity int) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.hoverVerbosity = verbosity
+}
+
+func (c *Config) SetOffline(b bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.offline = b
+}
+
+func (c *Config) Offline() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.offline
 }

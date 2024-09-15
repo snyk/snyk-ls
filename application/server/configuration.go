@@ -130,6 +130,20 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateSnykOpenBrowserCodeActions(c, settings)
 	updateDeltaFindings(c, settings)
 	updateFolderConfig(c, settings)
+	updateHoverVerbosity(c, settings)
+	updateFormat(c, settings)
+}
+
+func updateFormat(c *config.Config, settings types.Settings) {
+	if settings.OutputFormat != nil {
+		c.SetFormat(*settings.OutputFormat)
+	}
+}
+
+func updateHoverVerbosity(c *config.Config, settings types.Settings) {
+	if settings.HoverVerbosity != nil {
+		c.SetHoverVerbosity(*settings.HoverVerbosity)
+	}
 }
 
 func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings) {
@@ -143,6 +157,11 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 
 func updateFolderConfig(c *config.Config, settings types.Settings) {
 	gitconfig.SetBaseBranch(c.Logger(), settings.FolderConfigs)
+	for _, folderConfig := range settings.FolderConfigs {
+		if len(folderConfig.AdditionalParameters) > 0 {
+			c.SetAdditionalParameters(folderConfig.FolderPath, folderConfig.AdditionalParameters)
+		}
+	}
 }
 
 func updateAuthenticationMethod(c *config.Config, settings types.Settings) {

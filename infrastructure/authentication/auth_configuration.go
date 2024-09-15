@@ -55,9 +55,11 @@ func Default(c *config.Config, authenticationService AuthenticationService) Auth
 		types.DefaultOpenBrowserFunc(url)
 	}
 
+	// this doesn't have any effect
 	refresherFunc := func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
 		logger := c.Logger().With().Str("method", "oauth.refresherFunc").Logger()
 		logger.Info().Msg("refreshing oauth2 token")
+		logger.Info().Msgf("used truncated refresh token: %s", token.RefreshToken[len(token.RefreshToken)-8:])
 		refreshToken, err := auth.RefreshToken(ctx, oauthConfig, token)
 		if err != nil {
 			logger.Err(err).Msg("failed to refresh oauth2 token")
