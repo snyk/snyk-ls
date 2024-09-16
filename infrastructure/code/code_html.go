@@ -76,7 +76,7 @@ func init() {
 	}
 }
 
-func getCodeDetailsHtml(issue snyk.Issue) string {
+func getCodeDetailsHtml(issue snyk.Issue, folderPath string) string {
 	c := config.CurrentConfig()
 	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
@@ -115,6 +115,9 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 		"ArrowRightDark":     html.ArrowRightDark(),
 		"ArrowRightLight":    html.ArrowRightLight(),
 		"FileIcon":           html.FileIcon(),
+		"FolderPath":         folderPath,
+		"FilePath":           issue.Path(),
+		"IssueId":            issue.AdditionalData.GetKey(),
 	}
 
 	if issue.IsIgnored {
