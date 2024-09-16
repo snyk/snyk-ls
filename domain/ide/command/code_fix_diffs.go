@@ -85,7 +85,6 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 	suggestions, err := cmd.codeScanner.GetAutoFixDiffs(ctx, folderPath, relPath, issue)
 	if err == nil && len(suggestions) == 0 {
 		logger.Info().Msgf("Autofix run successfully but there were no fixes")
-	// 	return suggestions, err
 	}
 	if err != nil {
 		// as long as the backend service doesn't support good error handling, we'll just log the error

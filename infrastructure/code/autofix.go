@@ -115,9 +115,8 @@ func (sc *Scanner) GetAutoFixDiffs(
 				logger.Err(err).Msg("Error getting autofix suggestions")
 				return nil, err
 			}
-			// Change to status check
-			// if len(suggestions) > 0 {
-			if suggestions != nil {
+			// todo(berkay): Change to status check
+			if len(suggestions) > 0 {
 				return suggestions, err
 			}
 		}

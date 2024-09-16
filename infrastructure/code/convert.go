@@ -605,16 +605,6 @@ func (s *AutofixResponse) toAutofixSuggestions(baseDir string, filePath string) 
 func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir string, filePath string) []AutofixUnifiedDiffSuggestion {
 	logger := config.CurrentConfig().Logger().With().Str("method", "toUnifiedDiffSuggestions").Logger()
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
-	// if len(s.AutofixSuggestions) == 0 {
-	// 	d := AutofixUnifiedDiffSuggestion{
-	// 		FixId:               "berkay",
-	// 		UnifiedDiffsPerFile: map[string]string{},
-	// 	}
-	// 	path := ToAbsolutePath(baseDir, filePath)
-	// 	d.UnifiedDiffsPerFile[path] = "- berabi"
-	// 	fixSuggestions = append(fixSuggestions, d)
-	// 	return fixSuggestions
-	// }
 	for _, suggestion := range s.AutofixSuggestions {
 		path := ToAbsolutePath(baseDir, filePath)
 		fileContent, err := os.ReadFile(path)
