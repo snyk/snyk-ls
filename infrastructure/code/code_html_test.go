@@ -52,7 +52,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	}
 
 	// invoke method under test
-	codePanelHtml := getCodeDetailsHtml(issue, "")
+	codePanelHtml := getCodeDetailsHtml(issue, "./repos/")
 
 	// assert injectable style
 	assert.Contains(t, codePanelHtml, "${ideStyle}")
@@ -79,6 +79,8 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="hidden">`)
 	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper" class="">`)
+	assert.Contains(t, codePanelHtml, `<button id="generate-ai-fix" folder-path="./repos/" file-path=""
+                  issue-id="" class="generate-ai-fix">✨ Generate AI fix</button>`)
 	expectedFixesDescription := fmt.Sprintf(`This type of vulnerability was fixed in %d open source projects.`, repoCount)
 	assert.Regexp(t, regexp.MustCompile(expectedFixesDescription), codePanelHtml)
 	assert.Contains(t, codePanelHtml, `<span id="example-link" class="example-repo-link">`, "GitHub icon preceding the repo name is present")
@@ -113,12 +115,13 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	}
 
 	// invoke method under test
-	codePanelHtml := getCodeDetailsHtml(issue, "")
+	codePanelHtml := getCodeDetailsHtml(issue, "./repos/")
 
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="">`)
 	assert.Contains(t, codePanelHtml, `✨ Generate AI fix`)
 	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper" class="hidden">`)
+	assert.Contains(t, codePanelHtml, ` folder-path="./repos/"`)
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
