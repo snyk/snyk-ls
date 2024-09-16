@@ -58,29 +58,7 @@ func (s *SnykCodeHTTPClient) GetAutoFixDiffs(ctx context.Context, baseDir string
 	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining autofix diffs")
 
 	response, err = s.RunAutofix(span.Context(), options)
-	if err != nil {
-		return unifiedDiffSuggestions, err
-	}
-
-	logger.Debug().Msgf("Status: %s", response.Status)
-
-	if response.Status == failed.message {
-		logger.Err(err).Str("responseStatus", response.Status).Msg("autofix failed")
-		return unifiedDiffSuggestions, err
-	}
-
-	if response.Status == "" {
-		s.c.Logger().Err(err).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
-		return unifiedDiffSuggestions, err
-	}
-
-	// status = AutofixStatus{message: response.Status}
-	if response.Status != completeStatus {
-		return nil, nil
-	}
-
-	// suggestions := response.toAutofixSuggestions(baseDir, options.filePath)
-	// return suggestions, AutofixStatus{message: response.Status}, nil
+	// todo(berkay): burada fixlenebilir. burasi unufied diff flow, code action flow nasil?
 	if err != nil || response.Status == failed.message {
 		logger.Err(err).Msg("error getting autofix suggestions")
 		return unifiedDiffSuggestions, err

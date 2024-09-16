@@ -168,6 +168,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 
 		// Polling function just calls the endpoint and registers result, signaling `done` to the
 		// channel.
+		// todo(berkay): the code action polling, somewhat correct.
 		pollFunc := func() (fix *AutofixSuggestion, complete bool) {
 			logger.Debug().Str("requestId", b.requestId).Msg("polling")
 			fixSuggestions, fixStatus, err := b.SnykCode.GetAutofixSuggestions(s.Context(), autofixOptions, b.rootPath)
