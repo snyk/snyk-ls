@@ -596,11 +596,13 @@ func (c *Config) SetToken(token string) {
 	// propagate token to gaf
 	if !isOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != token {
 		c.Logger().Info().Msg("Setting legacy authentication in GAF")
+		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 		conf.Set(configuration.AUTHENTICATION_TOKEN, token)
 	}
 
 	if isOauthToken && conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN) != token {
 		c.Logger().Info().Err(err).Msg("setting oauth2 authentication in GAF")
+		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
 	}
 
