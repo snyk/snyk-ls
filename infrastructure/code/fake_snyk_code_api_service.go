@@ -143,7 +143,6 @@ type FakeSnykCodeClient struct {
 }
 
 func (f *FakeSnykCodeClient) GetAutoFixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
-	// return f.UnifiedDiffSuggestions, nil, nil
 	return f.UnifiedDiffSuggestions, f.AutofixStatus, nil
 }
 

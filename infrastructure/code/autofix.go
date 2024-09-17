@@ -133,13 +133,12 @@ func (sc *Scanner) GetAutoFixDiffs(
 			suggestions, fixStatus, err := codeClient.GetAutoFixDiffs(span.Context(), baseDir, options)
 			if err != nil {
 				logger.Err(err).Msg("Error getting autofix suggestions")
-				// return nil, err
 				return suggestions, err
 			} else if fixStatus.message == completeStatus {
 				if  len(suggestions) > 0 {
 					return suggestions, nil
 				} else {
-					logger.Debug().Msg("Successful return but empty no good fix could be computed.")
+					logger.Debug().Msg("AI fix returned successfully but no good fix could be computed.")
 					return suggestions, nil
 				}
 			}
