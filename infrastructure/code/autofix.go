@@ -41,7 +41,11 @@ func (a AutofixUnifiedDiffSuggestion) GetUnifiedDiffForFile(filePath string) str
 	return a.UnifiedDiffsPerFile[filePath]
 }
 
-func (s *SnykCodeHTTPClient) GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
+func (s *SnykCodeHTTPClient) GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (
+	unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion,
+	status AutofixStatus,
+	err error,
+) {
 	method := "GetAutoFixDiffs"
 	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
 	span := s.instrumentor.StartSpan(ctx, method)
@@ -51,20 +55,36 @@ func (s *SnykCodeHTTPClient) GetAutoFixDiffs(ctx context.Context, baseDir string
 	requestId, err := performance2.GetTraceId(ctx)
 	if err != nil {
 		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
-		return unifiedDiffSuggestions, err
+		return unifiedDiffSuggestions, status, err
 	}
 
 	logger.Info().Str("requestId", requestId).Msg("Started obtaining autofix diffs")
 	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining autofix diffs")
 
 	response, err = s.RunAutofix(span.Context(), options)
-	// todo(berkay): burada fixlenebilir. burasi unufied diff flow, code action flow nasil?
-	if err != nil || response.Status == failed.message {
-		logger.Err(err).Msg("error getting autofix suggestions")
-		return unifiedDiffSuggestions, err
+	if err != nil {
+		return unifiedDiffSuggestions, status, err
 	}
 
-	return response.toUnifiedDiffSuggestions(baseDir, options.filePath), err
+	logger.Debug().Msgf("Status: %s", response.Status)
+
+	if response.Status == failed.message {
+		logger.Err(err).Str("responseStatus", response.Status).Msg("autofix failed")
+		return nil, failed, err
+	}
+
+	if response.Status == "" {
+		s.c.Logger().Err(err).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		return nil, failed, err
+	}
+
+	status = AutofixStatus{message: response.Status}
+	if response.Status != completeStatus {
+		return nil, status, nil
+	}
+
+	logger.Debug().Msgf("Running toUnifiedDiffSuggestions")
+	return response.toUnifiedDiffSuggestions(baseDir, options.filePath), AutofixStatus{message: response.Status}, err
 }
 
 func (sc *Scanner) GetAutoFixDiffs(
@@ -110,14 +130,18 @@ func (sc *Scanner) GetAutoFixDiffs(
 			logger.Error().Msg(msg)
 			return nil, errors.New(msg)
 		case <-ticker.C:
-			suggestions, err := codeClient.GetAutoFixDiffs(span.Context(), baseDir, options)
+			suggestions, fixStatus, err := codeClient.GetAutoFixDiffs(span.Context(), baseDir, options)
 			if err != nil {
 				logger.Err(err).Msg("Error getting autofix suggestions")
-				return nil, err
-			}
-			// todo(berkay): Change to status check
-			if len(suggestions) > 0 {
+				// return nil, err
 				return suggestions, err
+			} else if fixStatus.message == completeStatus {
+				if  len(suggestions) > 0 {
+					return suggestions, nil
+				} else {
+					logger.Debug().Msg("Successful return but empty no good fix could be computed.")
+					return suggestions, nil
+				}
 			}
 		}
 	}

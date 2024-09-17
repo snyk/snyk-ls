@@ -73,5 +73,9 @@ type SnykCodeClient interface {
 
 	SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error
 
-	GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error)
+	GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (
+		unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion,
+		status AutofixStatus,
+		err error,
+	)
 }
