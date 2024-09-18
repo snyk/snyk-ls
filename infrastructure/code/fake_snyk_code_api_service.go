@@ -340,6 +340,6 @@ func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
 }
 
-func (f *FakeSnykCodeClient) SubmitAutofixFeedback(_ context.Context, _ string, _ bool) error {
+func (f *FakeSnykCodeClient) SubmitAutofixFeedback(_ context.Context, _ string, _ string) error {
 	return nil
 }

@@ -23,7 +23,7 @@ import (
 )
 
 type SnykCodeHttpClient interface {
-	SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error
+	SubmitAutofixFeedback(ctx context.Context, fixId string, positive string) error
 }
 
 type codeFixFeedback struct {
@@ -38,8 +38,8 @@ func (cmd *codeFixFeedback) Command() types.CommandData {
 func (cmd *codeFixFeedback) Execute(ctx context.Context) (any, error) {
 	args := cmd.command.Arguments
 	fixId := args[0].(string)
-	positive := args[1].(bool)
-	err := cmd.apiClient.SubmitAutofixFeedback(ctx, fixId, positive)
+	feedback := args[1].(string)
+	err := cmd.apiClient.SubmitAutofixFeedback(ctx, fixId, feedback)
 	if err != nil {
 		return nil, err
 	}
