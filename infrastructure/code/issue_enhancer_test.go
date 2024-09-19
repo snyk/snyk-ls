@@ -108,12 +108,12 @@ func Test_autofixFunc(t *testing.T) {
 		commandData1 := types.CommandData{
 			Title:     types.CodeSubmitFixFeedback,
 			CommandId: types.CodeSubmitFixFeedback,
-			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", true},
+			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", "FIX_POSITIVE_FEEDBACK"},
 		}
 		commandData2 := types.CommandData{
 			Title:     types.CodeSubmitFixFeedback,
 			CommandId: types.CodeSubmitFixFeedback,
-			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", false},
+			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", "FIX_NEGATIVE_FEEDBACK"},
 		}
 		positiveFeedback := types.MessageAction("👍")
 		negativeFeedback := types.MessageAction("👎")
@@ -156,12 +156,12 @@ func Test_autofixFunc(t *testing.T) {
 		commandData1 := types.CommandData{
 			Title:     types.CodeSubmitFixFeedback,
 			CommandId: types.CodeSubmitFixFeedback,
-			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", true},
+			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", "FIX_POSITIVE_FEEDBACK"},
 		}
 		commandData2 := types.CommandData{
 			Title:     types.CodeSubmitFixFeedback,
 			CommandId: types.CodeSubmitFixFeedback,
-			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", false},
+			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", "FIX_NEGATIVE_FEEDBACK"},
 		}
 		positiveFeedback := types.MessageAction("👍")
 		negativeFeedback := types.MessageAction("👎")

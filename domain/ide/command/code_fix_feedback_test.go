@@ -31,7 +31,7 @@ type fakeCodeHttpClient struct {
 	feedbackSubmitted bool
 }
 
-func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error {
+func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId string, positive string) error {
 	if !c.shouldError {
 		c.feedbackSubmitted = true
 		return nil
@@ -44,7 +44,7 @@ func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 	apiClient := fakeCodeHttpClient{}
 	codeFixFeedbackCmd := codeFixFeedback{
 		command: types.CommandData{
-			Arguments: []any{"fixId", true},
+			Arguments: []any{"fixId", "FIX_POSITIVE_FEEDBACK"},
 		},
 		apiClient: &apiClient,
 	}
@@ -60,7 +60,7 @@ func Test_codeFixFeedback_SubmissionFailed(t *testing.T) {
 	}
 	codeFixFeedbackCmd := codeFixFeedback{
 		command: types.CommandData{
-			Arguments: []any{"fixId", true},
+			Arguments: []any{"fixId", "FIX_POSITIVE_FEEDBACK"},
 		},
 		apiClient: &apiClient,
 	}
