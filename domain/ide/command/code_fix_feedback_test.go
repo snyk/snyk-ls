@@ -19,7 +19,6 @@ package command
 import (
 	"context"
 	"errors"
-
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,12 +29,15 @@ import (
 
 type fakeCodeHttpClient struct {
 	shouldError       bool
-	feedbackSubmitted bool
+	feedbackSubmitted string
+	fixId             string
 }
 
-func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId string, positive string) error {
+func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId string, feedback string) error {
+	c.feedbackSubmitted = feedback
+	c.fixId = fixId
+
 	if !c.shouldError {
-		c.feedbackSubmitted = true
 		return nil
 	}
 
@@ -52,8 +54,10 @@ func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 	}
 
 	_, err := codeFixFeedbackCmd.Execute(context.Background())
+
 	assert.NoError(t, err)
-	assert.True(t, apiClient.feedbackSubmitted)
+	assert.Equal(t, code.FixPositiveFeedback, apiClient.feedbackSubmitted)
+	assert.Equal(t, "fixId", apiClient.fixId)
 }
 
 func Test_codeFixFeedback_SubmissionFailed(t *testing.T) {
@@ -69,5 +73,5 @@ func Test_codeFixFeedback_SubmissionFailed(t *testing.T) {
 
 	_, err := codeFixFeedbackCmd.Execute(context.Background())
 	assert.Error(t, err)
-	assert.False(t, apiClient.feedbackSubmitted)
+	assert.Equal(t, code.FixPositiveFeedback, apiClient.feedbackSubmitted)
 }
