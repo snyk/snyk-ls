@@ -19,10 +19,12 @@ package command
 import (
 	"context"
 	"errors"
+
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -44,7 +46,7 @@ func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 	apiClient := fakeCodeHttpClient{}
 	codeFixFeedbackCmd := codeFixFeedback{
 		command: types.CommandData{
-			Arguments: []any{"fixId", "FIX_POSITIVE_FEEDBACK"},
+			Arguments: []any{"fixId", code.FixPositiveFeedback},
 		},
 		apiClient: &apiClient,
 	}
@@ -60,7 +62,7 @@ func Test_codeFixFeedback_SubmissionFailed(t *testing.T) {
 	}
 	codeFixFeedbackCmd := codeFixFeedback{
 		command: types.CommandData{
-			Arguments: []any{"fixId", "FIX_POSITIVE_FEEDBACK"},
+			Arguments: []any{"fixId", code.FixPositiveFeedback},
 		},
 		apiClient: &apiClient,
 	}

@@ -259,8 +259,8 @@ func (b *IssueEnhancer) autofixFeedbackActions(fixId string) (*data_structure.Or
 		}
 	}
 	actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
-	positiveFeedbackCmd := createCommandData("FIX_POSITIVE_FEEDBACK")
-	negativeFeedbackCmd := createCommandData("FIX_NEGATIVE_FEEDBACK")
+	positiveFeedbackCmd := createCommandData(FixPositiveFeedback)
+	negativeFeedbackCmd := createCommandData(FixNegativeFeedback)
 
 	actionCommandMap.Add("👍", positiveFeedbackCmd)
 	actionCommandMap.Add("👎", negativeFeedbackCmd)
