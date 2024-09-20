@@ -1088,6 +1088,7 @@ type IgnoreDetails struct {
 
 // Snyk Open Source
 type OssIssueData struct {
+	Key               string         `json:"key,omitempty"`
 	RuleId            string         `json:"ruleId"`
 	License           string         `json:"license,omitempty"`
 	Identifiers       OssIdentifiers `json:"identifiers,omitempty"`
@@ -1125,6 +1126,7 @@ type DataflowElement struct {
 }
 
 type CodeIssueData struct {
+	Key                string             `json:"key,omitempty"`
 	Message            string             `json:"message"`
 	LeadURL            string             `json:"leadURL,omitempty"`
 	Rule               string             `json:"rule"`
@@ -1176,6 +1178,7 @@ type CodeActionOptions struct {
 }
 
 type IacIssueData struct {
+	Key             string   `json:"key,omitempty"`
 	PublicId        string   `json:"publicId"`
 	Documentation   string   `json:"documentation"`
 	LineNumber      int      `json:"lineNumber"`

@@ -249,6 +249,7 @@ func getOssIssue(issue snyk.Issue) types.ScanIssue {
 		IsNew:               issue.IsNew,
 		FilterableIssueType: additionalData.GetFilterableIssueType(),
 		AdditionalData: types.OssIssueData{
+			Key:     additionalData.Key,
 			RuleId:  issue.ID,
 			License: additionalData.License,
 			Identifiers: types.OssIdentifiers{
@@ -296,6 +297,7 @@ func getIacIssue(issue snyk.Issue) types.ScanIssue {
 		IsNew:               issue.IsNew,
 		FilterableIssueType: additionalData.GetFilterableIssueType(),
 		AdditionalData: types.IacIssueData{
+			Key:             additionalData.Key,
 			PublicId:        additionalData.PublicId,
 			Documentation:   additionalData.Documentation,
 			LineNumber:      additionalData.LineNumber,
@@ -372,6 +374,7 @@ func getCodeIssue(issue snyk.Issue) types.ScanIssue {
 		IsNew:               issue.IsNew,
 		FilterableIssueType: additionalData.GetFilterableIssueType(),
 		AdditionalData: types.CodeIssueData{
+			Key:                additionalData.Key,
 			Message:            additionalData.Message,
 			Rule:               additionalData.Rule,
 			RuleId:             additionalData.RuleId,
