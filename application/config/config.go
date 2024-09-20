@@ -516,17 +516,15 @@ func (c *Config) SetCliSettings(settings *CliSettings) {
 
 func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 	if snykApiUrl == "" {
-		c.m.Lock()
 		snykApiUrl = DefaultSnykApiUrl
-		c.m.Unlock()
 	}
 
 	c.engine.GetConfiguration().Set(configuration.API_URL, snykApiUrl)
 
 	if snykApiUrl != c.snykApiUrl {
-		c.m.RLock()
+		c.m.Lock()
 		c.snykApiUrl = snykApiUrl
-		c.m.RUnlock()
+		c.m.Unlock()
 
 		// Update Code API endpoint
 		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(snykApiUrl)
@@ -541,12 +539,13 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 }
 
 func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
 	if snykCodeApiUrl == "" {
 		c.snykCodeApiUrl = DefaultDeeproxyApiUrl
 		return
 	}
-	c.m.Lock()
-	defer c.m.Unlock()
 	c.snykCodeApiUrl = snykCodeApiUrl
 
 	config := c.engine.GetConfiguration()
@@ -742,8 +741,8 @@ func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, 
 	if err != nil || !snykApiUrl.IsAbs() {
 		return "", err
 	}
-
 	m := regexp.MustCompile(`^(ap[pi]\.)?`)
+
 	snykApiUrl.Host = m.ReplaceAllString(snykApiUrl.Host, subdomain+".")
 	snykApiUrl.Path = ""
 

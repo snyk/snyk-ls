@@ -135,6 +135,7 @@ type IssueAdditionalData interface {
 	GetKey() string
 	GetTitle() string
 	IsFixable() bool
+	GetFilterableIssueType() product.FilterableIssueType
 }
 
 type IgnoreDetails struct {
