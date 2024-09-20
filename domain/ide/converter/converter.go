@@ -240,11 +240,14 @@ func getOssIssue(issue snyk.Issue) types.ScanIssue {
 	}
 
 	scanIssue := types.ScanIssue{
-		Id:       additionalData.Key,
-		Title:    additionalData.Title,
-		Severity: issue.Severity.String(),
-		FilePath: issue.AffectedFilePath,
-		Range:    ToRange(issue.Range),
+		Id:                  additionalData.Key,
+		Title:               additionalData.Title,
+		Severity:            issue.Severity.String(),
+		FilePath:            issue.AffectedFilePath,
+		Range:               ToRange(issue.Range),
+		IsIgnored:           issue.IsIgnored,
+		IsNew:               issue.IsNew,
+		FilterableIssueType: additionalData.GetFilterableIssueType(),
 		AdditionalData: types.OssIssueData{
 			RuleId:  issue.ID,
 			License: additionalData.License,
@@ -284,11 +287,14 @@ func getIacIssue(issue snyk.Issue) types.ScanIssue {
 	}
 
 	scanIssue := types.ScanIssue{
-		Id:       additionalData.Key,
-		Title:    additionalData.Title,
-		Severity: issue.Severity.String(),
-		FilePath: issue.AffectedFilePath,
-		Range:    ToRange(issue.Range),
+		Id:                  additionalData.Key,
+		Title:               additionalData.Title,
+		Severity:            issue.Severity.String(),
+		FilePath:            issue.AffectedFilePath,
+		Range:               ToRange(issue.Range),
+		IsIgnored:           issue.IsIgnored,
+		IsNew:               issue.IsNew,
+		FilterableIssueType: additionalData.GetFilterableIssueType(),
 		AdditionalData: types.IacIssueData{
 			PublicId:        additionalData.PublicId,
 			Documentation:   additionalData.Documentation,
@@ -357,13 +363,14 @@ func getCodeIssue(issue snyk.Issue) types.ScanIssue {
 	}
 
 	scanIssue := types.ScanIssue{
-		Id:        additionalData.Key,
-		Title:     issue.Message,
-		Severity:  issue.Severity.String(),
-		FilePath:  issue.AffectedFilePath,
-		Range:     ToRange(issue.Range),
-		IsIgnored: issue.IsIgnored,
-		IsNew:     issue.IsNew,
+		Id:                  additionalData.Key,
+		Title:               issue.Message,
+		Severity:            issue.Severity.String(),
+		FilePath:            issue.AffectedFilePath,
+		Range:               ToRange(issue.Range),
+		IsIgnored:           issue.IsIgnored,
+		IsNew:               issue.IsNew,
+		FilterableIssueType: additionalData.GetFilterableIssueType(),
 		AdditionalData: types.CodeIssueData{
 			Message:            additionalData.Message,
 			Rule:               additionalData.Rule,

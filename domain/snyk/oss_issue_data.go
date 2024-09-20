@@ -16,7 +16,11 @@
 
 package snyk
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/snyk/snyk-ls/internal/product"
+)
 
 type OssIssueData struct {
 	Key                string             `json:"key"`
@@ -62,6 +66,10 @@ func (o OssIssueData) IsFixable() bool {
 		len(o.UpgradePath) > 1 &&
 		len(o.From) > 1 &&
 		o.UpgradePath[1] != o.From[1]
+}
+
+func (o OssIssueData) GetFilterableIssueType() product.FilterableIssueType {
+	return product.FilterableIssueTypeOpenSource
 }
 
 func (o OssIssueData) MarshalJSON() ([]byte, error) {

@@ -21,6 +21,8 @@ import (
 
 	"github.com/google/uuid"
 	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 const (
@@ -1064,15 +1066,16 @@ type DiagnosticsOverviewParams struct {
 
 type ScanIssue struct { // TODO - convert this to a generic type
 	// Unique key identifying an issue in the whole result set. Not the same as the Snyk issue ID.
-	Id             string        `json:"id"`
-	Title          string        `json:"title"`
-	Severity       string        `json:"severity"`
-	FilePath       string        `json:"filePath"`
-	Range          sglsp.Range   `json:"range"`
-	IsIgnored      bool          `json:"isIgnored"`
-	IsNew          bool          `json:"isNew"`
-	IgnoreDetails  IgnoreDetails `json:"ignoreDetails"`
-	AdditionalData any           `json:"additionalData,omitempty"`
+	Id                  string                      `json:"id"`
+	Title               string                      `json:"title"`
+	Severity            string                      `json:"severity"`
+	FilePath            string                      `json:"filePath"`
+	Range               sglsp.Range                 `json:"range"`
+	IsIgnored           bool                        `json:"isIgnored"`
+	IsNew               bool                        `json:"isNew"`
+	IgnoreDetails       IgnoreDetails               `json:"ignoreDetails"`
+	FilterableIssueType product.FilterableIssueType `json:"filterableIssueType,omitempty"`
+	AdditionalData      any                         `json:"additionalData,omitempty"`
 }
 
 type IgnoreDetails struct {
