@@ -82,9 +82,10 @@ func Test_DiagnosticsOverview(t *testing.T) {
 }
 
 type mockAddData struct {
-	isFixable bool
-	key       string
-	title     string
+	isFixable           bool
+	key                 string
+	title               string
+	filterableIssueType product.FilterableIssueType
 }
 
 func (m mockAddData) MarshalJSON() ([]byte, error) {
@@ -102,6 +103,9 @@ func (m mockAddData) GetTitle() string {
 func (m mockAddData) IsFixable() bool {
 	return m.isFixable
 }
+func (m mockAddData) GetFilterableIssueType() product.FilterableIssueType {
+	return m.filterableIssueType
+}
 
 func getTestIssues(t *testing.T, isFixable bool, title string) []snyk.Issue {
 	t.Helper()
@@ -111,8 +115,10 @@ func getTestIssues(t *testing.T, isFixable bool, title string) []snyk.Issue {
 			Severity: snyk.Critical,
 			Message:  "message1",
 			AdditionalData: mockAddData{
-				title:     title,
-				key:       uuid.NewString(),
-				isFixable: isFixable},
+				title:               title,
+				key:                 uuid.NewString(),
+				isFixable:           isFixable,
+				filterableIssueType: product.FilterableIssueTypeOpenSource,
+			},
 		}}
 }
