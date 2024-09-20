@@ -18,7 +18,7 @@ package command
 
 import (
 	"context"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -39,10 +39,12 @@ func (cmd *codeFixFeedback) Execute(ctx context.Context) (any, error) {
 	args := cmd.command.Arguments
 	fixId := args[0].(string)
 	feedback := args[1].(string)
-	err := cmd.apiClient.SubmitAutofixFeedback(ctx, fixId, feedback)
-	if err != nil {
-		return nil, err
-	}
+	go func() {
+		err := cmd.apiClient.SubmitAutofixFeedback(ctx, fixId, feedback)
+		if err != nil {
+			config.CurrentConfig().Logger().Err(err).Str("fixId", fixId).Str("feedback", feedback).Msg("failed to submit autofix feedback")
+		}
+	}()
 
 	return nil, nil
 }
