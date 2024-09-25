@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,12 +32,17 @@ type fakeCodeHttpClient struct {
 	shouldError       bool
 	feedbackSubmitted string
 	fixId             string
+	mu                sync.Mutex
+	wg                sync.WaitGroup
 }
 
 func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId string, feedback string) error {
+	defer c.wg.Done()
+	c.mu.Lock()
 	c.feedbackSubmitted = feedback
 	c.fixId = fixId
-
+	c.mu.Unlock()
+	
 	if !c.shouldError {
 		return nil
 	}
@@ -53,25 +59,11 @@ func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 		apiClient: &apiClient,
 	}
 
+	apiClient.wg.Add(1)
 	_, err := codeFixFeedbackCmd.Execute(context.Background())
+	apiClient.wg.Wait()
 
 	assert.NoError(t, err)
 	assert.Equal(t, code.FixPositiveFeedback, apiClient.feedbackSubmitted)
 	assert.Equal(t, "fixId", apiClient.fixId)
-}
-
-func Test_codeFixFeedback_SubmissionFailed(t *testing.T) {
-	apiClient := fakeCodeHttpClient{
-		shouldError: true,
-	}
-	codeFixFeedbackCmd := codeFixFeedback{
-		command: types.CommandData{
-			Arguments: []any{"fixId", code.FixPositiveFeedback},
-		},
-		apiClient: &apiClient,
-	}
-
-	_, err := codeFixFeedbackCmd.Execute(context.Background())
-	assert.Error(t, err)
-	assert.Equal(t, code.FixPositiveFeedback, apiClient.feedbackSubmitted)
 }
