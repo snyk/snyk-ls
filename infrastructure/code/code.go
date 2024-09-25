@@ -449,6 +449,7 @@ func isNoFilesError(err error) bool {
 	_, ok := err.(noFilesError)
 	return ok
 }
+
 func (sc *Scanner) createBundle(ctx context.Context,
 	requestId string,
 	rootPath string,
