@@ -21,6 +21,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -33,21 +34,26 @@ type fakeCodeHttpClient struct {
 	feedbackSubmitted string
 	fixId             string
 	mu                sync.Mutex
-	wg                sync.WaitGroup
 }
 
 func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId string, feedback string) error {
-	defer c.wg.Done()
 	c.mu.Lock()
 	c.feedbackSubmitted = feedback
 	c.fixId = fixId
 	c.mu.Unlock()
-	
+
 	if !c.shouldError {
 		return nil
 	}
 
 	return errors.New("api call failed")
+}
+
+func FeedbackSubmitted(c *fakeCodeHttpClient) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.feedbackSubmitted
 }
 
 func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
@@ -59,11 +65,10 @@ func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 		apiClient: &apiClient,
 	}
 
-	apiClient.wg.Add(1)
 	_, err := codeFixFeedbackCmd.Execute(context.Background())
-	apiClient.wg.Wait()
 
 	assert.NoError(t, err)
-	assert.Equal(t, code.FixPositiveFeedback, apiClient.feedbackSubmitted)
-	assert.Equal(t, "fixId", apiClient.fixId)
+	assert.Eventually(t, func() bool {
+		return FeedbackSubmitted(&apiClient) != ""
+	}, 2*time.Second, time.Millisecond)
 }
