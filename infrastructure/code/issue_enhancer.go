@@ -251,16 +251,16 @@ func ToEncodedNormalizedPath(rootPath string, filePath string) (string, error) {
 }
 
 func (b *IssueEnhancer) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[types.MessageAction, types.CommandData], error) {
-	createCommandData := func(positive bool) types.CommandData {
+	createCommandData := func(feedback string) types.CommandData {
 		return types.CommandData{
 			Title:     types.CodeSubmitFixFeedback,
 			CommandId: types.CodeSubmitFixFeedback,
-			Arguments: []any{fixId, positive},
+			Arguments: []any{fixId, feedback},
 		}
 	}
 	actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
-	positiveFeedbackCmd := createCommandData(true)
-	negativeFeedbackCmd := createCommandData(false)
+	positiveFeedbackCmd := createCommandData(FixPositiveFeedback)
+	negativeFeedbackCmd := createCommandData(FixNegativeFeedback)
 
 	actionCommandMap.Add("👍", positiveFeedbackCmd)
 	actionCommandMap.Add("👎", negativeFeedbackCmd)
