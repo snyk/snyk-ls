@@ -23,9 +23,15 @@
   background: var(--scroll-bar-hover-background-color);
 }
 
+html, body {
+  font-size: 16px;
+}
+
 body {
   background-color: var(--background-color);
   font-family: var(--default-font);
+  font-size: 0.85rem;
+  font-weight: 400;
   color: var(--text-color);
 }
 
@@ -50,7 +56,7 @@ code {
   background-color: var(--code-background-color);
   padding: 1px 3px;
   border-radius: 4px;
-  font-size: 1rem
+  font-size: 0.85rem;
 }
 
 h2 {
@@ -65,7 +71,7 @@ section {
 .styled-link {
   display: inline-block;
   text-decoration: none;
-  font-weight: normal;
+  font-weight: 400;
 }
 
 .styled-link:hover {
@@ -82,10 +88,9 @@ section {
 }
 
 .suggestion .suggestion-text {
-  font-size: larger;
   margin-bottom: 0.8rem;
-  font-size: 1.8rem;
-  font-weight: 500;
+  font-size: 0.85rem;
+  font-weight: 400;
   line-height: 2.4rem;
 }
 
@@ -161,6 +166,7 @@ header {
 
 .severity-title {
   padding-left: 8px;
+  font-size: 1.2rem;
 }
 
 .severity-type-container {

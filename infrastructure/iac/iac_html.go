@@ -28,7 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
-type IacHtmlRender struct {
+type IacHtmlRenderer struct {
 	Config         *config.Config
 	GlobalTemplate *template.Template
 }
@@ -49,14 +49,14 @@ var detailsHtmlTemplate string
 //go:embed template/styles.css
 var stylesCSS string
 
-func NewIacHtmlRenderer(cfg *config.Config) (*IacHtmlRender, error) {
+func NewIacHtmlRenderer(cfg *config.Config) (*IacHtmlRenderer, error) {
 	tmp, err := template.New(string(product.ProductInfrastructureAsCode)).Parse(detailsHtmlTemplate)
 	if err != nil {
 		cfg.Logger().Error().Msgf("Failed to parse IaC template: %s", err)
 		return nil, err
 	}
 
-	return &IacHtmlRender{
+	return &IacHtmlRenderer{
 		Config:         cfg,
 		GlobalTemplate: tmp,
 	}, nil
@@ -67,7 +67,7 @@ func getStyles() template.CSS {
 }
 
 // Function to get the rendered HTML with issue details and CSS
-func (service *IacHtmlRender) getCustomUIContent(issue snyk.Issue) string {
+func (service *IacHtmlRenderer) getCustomUIContent(issue snyk.Issue) string {
 	var htmlTemplate bytes.Buffer
 
 	nonce, err := html.GenerateSecurityNonce()
