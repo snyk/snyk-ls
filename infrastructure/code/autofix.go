@@ -74,7 +74,7 @@ func (s *SnykCodeHTTPClient) GetAutoFixDiffs(ctx context.Context, baseDir string
 	}
 
 	if response.Status == "" {
-		s.c.Logger().Err(err).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		logger.Err(err).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
 		return nil, failed, err
 	}
 
