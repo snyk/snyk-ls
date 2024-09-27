@@ -489,6 +489,31 @@ func (s *SnykCodeHTTPClient) GetAutofixSuggestions(
 	return suggestions, AutofixStatus{message: response.Status}, nil
 }
 
+func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
+	method := "GetAutofixDiffs"
+	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
+
+	var response AutofixResponse
+	requestId, err := performance2.GetTraceId(ctx)
+	if err != nil {
+		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
+		return unifiedDiffSuggestions, err
+	}
+
+	logger.Info().Str("requestId", requestId).Msg("Started obtaining autofix diffs")
+	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining autofix diffs")
+
+	response, err = s.RunAutofix(span.Context(), options)
+	if err != nil || response.Status == failed.message {
+		logger.Err(err).Msg("error getting autofix suggestions")
+		return unifiedDiffSuggestions, err
+	}
+
+	return response.toUnifiedDiffSuggestions(baseDir, options.filePath), err
+}
+
 func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOptions) (AutofixResponse, error) {
 	requestId, err := performance2.GetTraceId(ctx)
 	span := s.instrumentor.StartSpan(ctx, "code.RunAutofix")
