@@ -17,6 +17,7 @@
 package delta
 
 import (
+	"github.com/google/uuid"
 	"golang.org/x/exp/slices"
 	"testing"
 
@@ -159,4 +160,57 @@ func TestFind_DifferWithEnricherWithMatcher_NoNewIssues(t *testing.T) {
 		assert.False(t, enriched.GetIsNew())
 		assert.NotEmpty(t, enriched.GetGlobalIdentity())
 	}
+}
+
+func TestFind_DifferWithEnricherWithMatcher_NewIssue_ExistingId(t *testing.T) {
+	f := NewFinder(
+		WithEnricher(FindingsEnricher{}),
+		WithMatcher(FuzzyMatcher{}),
+		WithDiffer(FindingsDiffer{}),
+	)
+
+	baseIssueList := []mockIdentifiable{
+		{
+			ruleId:      "javascript/UseCsurfForExpress",
+			startLine:   30,
+			endLine:     30,
+			startColumn: 10,
+			endColumn:   17,
+			path:        "/var/folders/qt/rlk4r6d55s1fx7bdr7bg0w3h0000gn/T/snyk_tmp_repo2525628625/app.js",
+			fingerprint: "ae77ea27.4773f344.607187b5.d7919eeb.a1fb1152.5fce695c.fee35010.89d75565.630e4ed1.4773f344.aa4dda5f.d7919eeb.f30fb760.49b28873.85bdc101.83642794",
+		},
+		{
+			ruleId:      "javascript/NoHardcodedPasswords",
+			startLine:   40,
+			endLine:     40,
+			startColumn: 10,
+			endColumn:   17,
+			path:        "/var/folders/qt/rlk4r6d55s1fx7bdr7bg0w3h0000gn/T/snyk_tmp_repo2525628625/db.js",
+			fingerprint: "12567ef6.6d936dbf.bd65d204.fd94bb7c.79a7d027.fcf3002d.81d021f5.91c60b7d.12567ef6.6d936dbf.bd65d204.fd94bb7c.79a7d027.fcf3002d.81d021f5.91c60b7d",
+		},
+	}
+	existingIdentity := uuid.New().String()
+	newIssue := mockIdentifiable{
+		ruleId:         "javascript/NoHardcodedPasswords",
+		startLine:      10,
+		endLine:        50,
+		startColumn:    10,
+		endColumn:      17,
+		path:           "/var/folders/qt/rlk4r6d55s1fx7bdr7bg0w3h0000gn/T/snyk_tmp_repo2525628625/newfile.js",
+		fingerprint:    "1256723f6.6d16dbf.bd25d204.fd9wwb7c.79aff027.fcf30ddd.81d021ss.91c60baad.12567cf6.6d9cc6dbf.bd6cs204.fd94cc7c.79ss027.fcs002d.8dd021f5.91c6ss7d",
+		globalIdentity: existingIdentity,
+	}
+
+	currentIssueList := slices.Clone(baseIssueList)
+	currentIssueList = append(currentIssueList, newIssue)
+	baseFindingIdentifiable := convertToFindingsIdentifiable(baseIssueList)
+	currentFindingIdentifiable := convertToFindingsIdentifiable(currentIssueList)
+	enrichedList, err := f.Enrich(baseFindingIdentifiable, currentFindingIdentifiable)
+
+	assert.NoError(t, err)
+	assert.Len(t, enrichedList, 3)
+
+	assert.True(t, enrichedList[2].GetIsNew())
+	assert.Equal(t, enrichedList[2].GetGlobalIdentity(), currentIssueList[2].GetGlobalIdentity())
+	assert.Equal(t, existingIdentity, enrichedList[2].GetGlobalIdentity())
 }
