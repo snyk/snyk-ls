@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -233,7 +232,6 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 
 		InitializeSettings(c, params.InitializationOptions)
 
-		startOfflineDetection(c)
 		startClientMonitor(params, logger)
 
 		go createProgressListener(progress.Channel, srv, c.Logger())
@@ -436,47 +434,6 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
 		return nil, nil
 	})
-}
-
-func startOfflineDetection(c *config.Config) {
-	go func() {
-		timeout := time.Second * 10
-		client := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
-		client.Timeout = timeout - 1
-
-		type logLevelConfigurable interface {
-			SetLogLevel(level zerolog.Level)
-		}
-
-		if loggingRoundTripper, ok := client.Transport.(logLevelConfigurable); ok {
-			loggingRoundTripper.SetLogLevel(zerolog.ErrorLevel)
-		}
-
-		for {
-			u := c.SnykUi()
-			response, err := client.Get(u)
-			if err != nil {
-				if !c.Offline() {
-					msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
-					reportedErr := errors.Join(err, errors.New(msg))
-					c.Logger().Err(reportedErr).Send()
-					di.Notifier().SendShowMessage(sglsp.Warning, msg)
-				}
-				c.SetOffline(true)
-			} else {
-				if c.Offline() {
-					msg := fmt.Sprintf("Snyk is active again. We were able to reach %s", u)
-					di.Notifier().SendShowMessage(sglsp.Info, msg)
-					c.Logger().Info().Msg(msg)
-				}
-				c.SetOffline(false)
-			}
-			if response != nil {
-				_ = response.Body.Close()
-			}
-			time.Sleep(timeout)
-		}
-	}()
 }
 
 func deleteExpiredCache() {

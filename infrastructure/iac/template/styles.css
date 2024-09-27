@@ -1,5 +1,14 @@
+/* this is the IntelliJ new UI default font, and it's not available on a Mac standard install */
+@import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');
+
 :root {
-  --default-font: ui-sans-serif, "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+  --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+  --background-color: var();
+  --text-color: var();
+  --link-color: var();
+  --scroll-bar-hover-background-color: var(#595a5c);
+  --horizontal-border-color: var();
+  --code-background-color: var();
 }
 
 ::-webkit-scrollbar {
@@ -11,13 +20,37 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #595a5c;
+  background: var(--scroll-bar-hover-background-color);
 }
 
 body {
+  background-color: var(--background-color);
   font-family: var(--default-font);
-  overflow-y: auto;
-  overflow-x: hidden;
+  color: var(--text-color);
+}
+
+section {
+  padding: 20px;
+}
+
+.font-light {
+  font-weight: bold;
+}
+
+a,
+.link {
+  color: var(--link-color);
+}
+
+.delimiter-top {
+  border-top: 1px solid var(--horizontal-border-color);
+}
+
+code {
+  background-color: var(--code-background-color);
+  padding: 1px 3px;
+  border-radius: 4px;
+  font-size: 1rem
 }
 
 h2 {

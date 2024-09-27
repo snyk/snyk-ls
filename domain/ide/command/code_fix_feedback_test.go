@@ -19,53 +19,56 @@ package command
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type fakeCodeHttpClient struct {
 	shouldError       bool
-	feedbackSubmitted bool
+	feedbackSubmitted string
+	fixId             string
+	mu                sync.Mutex
 }
 
-func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error {
+func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId string, feedback string) error {
+	c.mu.Lock()
+	c.feedbackSubmitted = feedback
+	c.fixId = fixId
+	c.mu.Unlock()
+
 	if !c.shouldError {
-		c.feedbackSubmitted = true
 		return nil
 	}
 
 	return errors.New("api call failed")
 }
 
+func FeedbackSubmitted(c *fakeCodeHttpClient) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.feedbackSubmitted
+}
+
 func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 	apiClient := fakeCodeHttpClient{}
 	codeFixFeedbackCmd := codeFixFeedback{
 		command: types.CommandData{
-			Arguments: []any{"fixId", true},
+			Arguments: []any{"fixId", code.FixPositiveFeedback},
 		},
 		apiClient: &apiClient,
 	}
 
 	_, err := codeFixFeedbackCmd.Execute(context.Background())
+
 	assert.NoError(t, err)
-	assert.True(t, apiClient.feedbackSubmitted)
-}
-
-func Test_codeFixFeedback_SubmissionFailed(t *testing.T) {
-	apiClient := fakeCodeHttpClient{
-		shouldError: true,
-	}
-	codeFixFeedbackCmd := codeFixFeedback{
-		command: types.CommandData{
-			Arguments: []any{"fixId", true},
-		},
-		apiClient: &apiClient,
-	}
-
-	_, err := codeFixFeedbackCmd.Execute(context.Background())
-	assert.Error(t, err)
-	assert.False(t, apiClient.feedbackSubmitted)
+	assert.Eventually(t, func() bool {
+		return FeedbackSubmitted(&apiClient) != ""
+	}, 2*time.Second, time.Millisecond)
 }
