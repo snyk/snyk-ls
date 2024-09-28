@@ -82,15 +82,9 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		} else {
 			codeScanner.AddBundleHash("/folderPath", "bundleHash")
 		}
-		// codeScanner.AddBundleHash("\\folderPath", "bundleHashWindows")
-		if runtime.GOOS == "windows" {
-			cut.command = types.CommandData{
-				Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
-			}
-		} else {
-			cut.command = types.CommandData{
-				Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
-			}
+
+		cut.command = types.CommandData{
+			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
 		}
 
 		suggestions, err := cut.Execute(context.Background())
@@ -101,7 +95,11 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 	t.Run("unhappy - file not beneath folder", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		codeScanner.AddBundleHash("/folderPath", "bundleHash")
+		if runtime.GOOS == "windows" {
+			codeScanner.AddBundleHash("\\folderPath", "bundleHash")
+		} else {
+			codeScanner.AddBundleHash("/folderPath", "bundleHash")
+		}
 		cut.command = types.CommandData{
 			Arguments: []any{"file:///folderPath", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -114,7 +112,11 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 	t.Run("unhappy - folder empty", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		codeScanner.AddBundleHash("/folderPath", "bundleHash")
+		if runtime.GOOS == "windows" {
+			codeScanner.AddBundleHash("\\folderPath", "bundleHash")
+		} else {
+			codeScanner.AddBundleHash("/folderPath", "bundleHash")
+		}
 		cut.command = types.CommandData{
 			Arguments: []any{"", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -127,7 +129,11 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 	t.Run("unhappy - file empty", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		codeScanner.AddBundleHash("/folderPath", "bundleHash")
+		if runtime.GOOS == "windows" {
+			codeScanner.AddBundleHash("\\folderPath", "bundleHash")
+		} else {
+			codeScanner.AddBundleHash("/folderPath", "bundleHash")
+		}
 		cut.command = types.CommandData{
 			Arguments: []any{"file://folder", "", "issueId"},
 		}
