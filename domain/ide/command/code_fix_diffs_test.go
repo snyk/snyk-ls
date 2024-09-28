@@ -85,7 +85,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		// codeScanner.AddBundleHash("\\folderPath", "bundleHashWindows")
 		if runtime.GOOS == "windows" {
 			cut.command = types.CommandData{
-				Arguments: []any{"file://\\folderPath", "file://\\folderPath\\issuePath", "issueId"},
+				Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
 			}
 		} else {
 			cut.command = types.CommandData{
