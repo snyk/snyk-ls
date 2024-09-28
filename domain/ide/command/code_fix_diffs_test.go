@@ -18,6 +18,7 @@ package command
 
 import (
 	"context"
+	"runtime"
 	"testing"
 
 	"github.com/google/uuid"
@@ -76,9 +77,20 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		codeScanner.AddBundleHash("/folderPath", "bundleHash")
-		cut.command = types.CommandData{
-			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
+		if runtime.GOOS == "windows" {
+			codeScanner.AddBundleHash("\\folderPath", "bundleHash")
+		} else {
+			codeScanner.AddBundleHash("/folderPath", "bundleHash")
+		}
+		// codeScanner.AddBundleHash("\\folderPath", "bundleHashWindows")
+		if runtime.GOOS == "windows" {
+			cut.command = types.CommandData{
+				Arguments: []any{"file://\\folderPath", "file://\\folderPath\\issuePath", "issueId"},
+			}
+		} else {
+			cut.command = types.CommandData{
+				Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
+			}
 		}
 
 		suggestions, err := cut.Execute(context.Background())
