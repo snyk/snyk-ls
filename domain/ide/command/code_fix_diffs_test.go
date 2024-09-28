@@ -55,10 +55,6 @@ func (m mockIssueProvider) Issue(key string) snyk.Issue {
 }
 
 func Test_codeFixDiffs_Execute(t *testing.T) {
-	if //goland:noinspection GoBoolExpressions
-	runtime.GOOS == "windows" {
-		t.Skip("Skipping test on windows")
-	}
 	c := testutil.UnitTest(t)
 	instrumentor := code.NewCodeInstrumentor()
 	snykCodeClient := &code.FakeSnykCodeClient{
