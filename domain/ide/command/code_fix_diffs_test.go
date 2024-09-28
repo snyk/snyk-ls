@@ -18,7 +18,6 @@ package command
 
 import (
 	"context"
-	"runtime"
 	"testing"
 
 	"github.com/google/uuid"
