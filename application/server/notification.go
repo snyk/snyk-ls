@@ -54,7 +54,6 @@ func createProgressListener(progressChannel chan types.ProgressParams, server ty
 	for {
 		select {
 		case p := <-progressChannel:
-			logger.Debug().Msgf("received %v", p)
 			// on beginning a progress, we need to create it with a callback
 			if _, ok := p.Value.(types.WorkDoneProgressBegin); ok {
 				logger.Debug().Msg("sending create progress msg")
