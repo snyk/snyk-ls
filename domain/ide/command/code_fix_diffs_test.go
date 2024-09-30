@@ -74,14 +74,13 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		notifier:    notification.NewMockNotifier(),
 		codeScanner: codeScanner,
 	}
-
+	if runtime.GOOS == "windows" {
+		codeScanner.AddBundleHash("\\folderPath", "bundleHash")
+	} else {
+		codeScanner.AddBundleHash("/folderPath", "bundleHash")
+	}
 	t.Run("happy path", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		if runtime.GOOS == "windows" {
-			codeScanner.AddBundleHash("\\folderPath", "bundleHash")
-		} else {
-			codeScanner.AddBundleHash("/folderPath", "bundleHash")
-		}
 
 		cut.command = types.CommandData{
 			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
@@ -95,11 +94,6 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 	t.Run("unhappy - file not beneath folder", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		if runtime.GOOS == "windows" {
-			codeScanner.AddBundleHash("\\folderPath", "bundleHash")
-		} else {
-			codeScanner.AddBundleHash("/folderPath", "bundleHash")
-		}
 		cut.command = types.CommandData{
 			Arguments: []any{"file:///folderPath", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -112,11 +106,6 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 	t.Run("unhappy - folder empty", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		if runtime.GOOS == "windows" {
-			codeScanner.AddBundleHash("\\folderPath", "bundleHash")
-		} else {
-			codeScanner.AddBundleHash("/folderPath", "bundleHash")
-		}
 		cut.command = types.CommandData{
 			Arguments: []any{"", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -129,11 +118,6 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 	t.Run("unhappy - file empty", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		if runtime.GOOS == "windows" {
-			codeScanner.AddBundleHash("\\folderPath", "bundleHash")
-		} else {
-			codeScanner.AddBundleHash("/folderPath", "bundleHash")
-		}
 		cut.command = types.CommandData{
 			Arguments: []any{"file://folder", "", "issueId"},
 		}
