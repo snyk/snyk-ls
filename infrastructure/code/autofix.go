@@ -51,36 +51,36 @@ func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	var response AutofixResponse
+	// TODO: Revisit this and check if we really need to return empty slice instead of nil. Make sure upstream can handle nil slices.
+
 	requestId, err := performance2.GetTraceId(ctx)
 	if err != nil {
 		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
-		return unifiedDiffSuggestions, status, err
+		return unifiedDiffSuggestions, failed, err
 	}
 
 	logger.Info().Str("requestId", requestId).Msg("Started obtaining autofix diffs")
 	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining autofix diffs")
 
-	response, err = s.RunAutofix(span.Context(), options)
+	response, err := s.RunAutofix(span.Context(), options)
 	if err != nil {
-		return unifiedDiffSuggestions, status, err
+		return unifiedDiffSuggestions, failed, err
 	}
 
 	logger.Debug().Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
-		logger.Err(err).Str("responseStatus", response.Status).Msg("autofix failed")
-		return nil, failed, err
+		logger.Error().Str("responseStatus", response.Status).Msg("autofix failed")
+		return unifiedDiffSuggestions, failed, nil
 	}
 
 	if response.Status == "" {
-		logger.Err(err).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
-		return nil, failed, err
+		logger.Error().Str("responseStatus", response.Status).Msg("unknown response status (empty)")
+		return unifiedDiffSuggestions, failed, nil
 	}
 
-	status = AutofixStatus{message: response.Status}
 	if response.Status != completeStatus {
-		return nil, status, nil
+		return unifiedDiffSuggestions, failed, nil
 	}
 
 	logger.Debug().Msgf("Running toUnifiedDiffSuggestions")
@@ -130,12 +130,12 @@ func (sc *Scanner) GetAutofixDiffs(
 			logger.Error().Msg(msg)
 			return nil, errors.New(msg)
 		case <-ticker.C:
-			suggestions, fixStatus, err := codeClient.GetAutofixDiffs(span.Context(), baseDir, options)
-			if err != nil {
-				logger.Err(err).Msg("Error getting autofix suggestions")
-				return suggestions, err
+			suggestions, fixStatus, autofixErr := codeClient.GetAutofixDiffs(span.Context(), baseDir, options)
+			if autofixErr != nil {
+				logger.Err(autofixErr).Msg("Error getting autofix suggestions")
+				return suggestions, autofixErr
 			} else if fixStatus.message == completeStatus {
-				if  len(suggestions) > 0 {
+				if len(suggestions) > 0 {
 					return suggestions, nil
 				} else {
 					logger.Debug().Msg("AI fix returned successfully but no good fix could be computed.")
