@@ -41,8 +41,8 @@ func (a AutofixUnifiedDiffSuggestion) GetUnifiedDiffForFile(filePath string) str
 	return a.UnifiedDiffsPerFile[filePath]
 }
 
-func (s *SnykCodeHTTPClient) GetAutoFixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
-	method := "GetAutoFixDiffs"
+func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
+	method := "GetAutofixDiffs"
 	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -66,13 +66,13 @@ func (s *SnykCodeHTTPClient) GetAutoFixDiffs(ctx context.Context, baseDir string
 	return response.toUnifiedDiffSuggestions(baseDir, options.filePath), err
 }
 
-func (sc *Scanner) GetAutoFixDiffs(
+func (sc *Scanner) GetAutofixDiffs(
 	ctx context.Context,
 	baseDir string,
 	filePath string,
 	issue snyk.Issue,
 ) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
-	method := "GetAutoFixDiffs"
+	method := "GetAutofixDiffs"
 	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, method)
 	defer sc.BundleUploader.instrumentor.Finish(span)
@@ -109,7 +109,7 @@ func (sc *Scanner) GetAutoFixDiffs(
 			logger.Error().Msg(msg)
 			return nil, errors.New(msg)
 		case <-ticker.C:
-			suggestions, err := codeClient.GetAutoFixDiffs(span.Context(), baseDir, options)
+			suggestions, err := codeClient.GetAutofixDiffs(span.Context(), baseDir, options)
 			if err != nil {
 				logger.Err(err).Msg("Error getting autofix suggestions")
 				return nil, err
