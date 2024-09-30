@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
 
 	"github.com/erni27/imcache"
@@ -68,6 +70,10 @@ func setupDocs(t *testing.T) (string, lsp.TextDocumentItem, lsp.TextDocumentItem
 
 func TestCreateBundle(t *testing.T) {
 	c := testutil.UnitTest(t)
+	channel := make(chan types.ProgressParams, 10000)
+	cancelChannel := make(chan bool, 1)
+	testTracker := progress.NewTestTracker(channel, cancelChannel)
+
 	t.Run(
 		"when < maxFileSize creates bundle", func(t *testing.T) {
 			snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
@@ -77,11 +83,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			bundle, err := c.createBundle(context.Background(),
-				"testRequestId",
-				dir,
-				sliceToChannel([]string{file}),
-				map[string]bool{})
+			bundle, err := c.createBundle(context.Background(), "testRequestId", dir, sliceToChannel([]string{file}), map[string]bool{}, testTracker)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,11 +101,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			bundle, err := c.createBundle(context.Background(),
-				"testRequestId",
-				dir,
-				sliceToChannel([]string{file}),
-				map[string]bool{})
+			bundle, err := c.createBundle(context.Background(), "testRequestId", dir, sliceToChannel([]string{file}), map[string]bool{}, testTracker)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -125,11 +123,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			bundle, err := c.createBundle(context.Background(),
-				"testRequestId",
-				dir,
-				sliceToChannel([]string{file}),
-				map[string]bool{})
+			bundle, err := c.createBundle(context.Background(), "testRequestId", dir, sliceToChannel([]string{file}), map[string]bool{}, testTracker)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -152,11 +146,7 @@ func TestCreateBundle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			bundle, err := c.createBundle(context.Background(),
-				"testRequestId",
-				dir,
-				sliceToChannel([]string{file}),
-				map[string]bool{})
+			bundle, err := c.createBundle(context.Background(), "testRequestId", dir, sliceToChannel([]string{file}), map[string]bool{}, testTracker)
 			bundleFiles := bundle.Files
 			if err != nil {
 				t.Fatal(err)
@@ -177,11 +167,7 @@ func TestCreateBundle(t *testing.T) {
 		err := os.WriteFile(file, []byte("some content so the file won't be skipped"), 0600)
 		assert.Nil(t, err)
 
-		bundle, err := scanner.createBundle(context.Background(),
-			"testRequestId",
-			tempDir,
-			sliceToChannel([]string{file}),
-			map[string]bool{})
+		bundle, err := scanner.createBundle(context.Background(), "testRequestId", tempDir, sliceToChannel([]string{file}), map[string]bool{}, testTracker)
 		assert.Nil(t, err)
 		relativePath, _ := ToRelativeUnixPath(tempDir, file)
 		assert.Contains(t, bundle.Files, relativePath)
@@ -208,11 +194,7 @@ func TestCreateBundle(t *testing.T) {
 			assert.Nil(t, err)
 		}
 
-		bundle, err := scanner.createBundle(context.Background(),
-			"testRequestId",
-			tempDir,
-			sliceToChannel(filesFullPaths),
-			map[string]bool{})
+		bundle, err := scanner.createBundle(context.Background(), "testRequestId", tempDir, sliceToChannel(filesFullPaths), map[string]bool{}, testTracker)
 
 		// Assert
 		assert.Nil(t, err)
@@ -259,6 +241,9 @@ func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 
 func TestUploadAndAnalyze(t *testing.T) {
 	c := testutil.UnitTest(t)
+	channel := make(chan types.ProgressParams, 10000)
+	cancelChannel := make(chan bool, 1)
+	testTracker := progress.NewTestTracker(channel, cancelChannel)
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.
 		EXPECT().
@@ -272,7 +257,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			fullPath := uri.PathFromUri(firstDoc.URI)
 			docs := sliceToChannel([]string{fullPath})
 
-			_, _ = s.UploadAndAnalyze(context.Background(), docs, baseDir, map[string]bool{})
+			_, _ = s.UploadAndAnalyze(context.Background(), docs, baseDir, map[string]bool{}, testTracker)
 
 			// verify that create bundle has been called on backend service
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
@@ -293,7 +278,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			defer func(path string) { _ = os.RemoveAll(path) }(path)
 			files := []string{filePath}
 
-			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), path, map[string]bool{})
+			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), path, map[string]bool{}, testTracker)
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
@@ -328,14 +313,16 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	testutil.UnitTest(t)
 	snykCodeMock := &FakeSnykCodeClient{C: c}
-
 	filePath, workDir := TempWorkdirWithIssues(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(workDir)
 	files := []string{filePath}
 	fakeCodeScanner := &FakeCodeScannerClient{rootPath: workDir}
+	channel := make(chan types.ProgressParams, 10000)
+	cancelChannel := make(chan bool, 1)
+	testTracker := progress.NewTestTracker(channel, cancelChannel)
 
 	scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), fakeCodeScanner)
-	issues, _ := scanner.UploadAndAnalyzeWithIgnores(context.Background(), workDir, sliceToChannel(files), map[string]bool{})
+	issues, _ := scanner.UploadAndAnalyzeWithIgnores(context.Background(), workDir, sliceToChannel(files), map[string]bool{}, testTracker)
 
 	assert.True(t, fakeCodeScanner.UploadAndAnalyzeWasCalled)
 	assert.False(t, issues[0].IsIgnored)
@@ -688,6 +675,9 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
+	channel := make(chan types.ProgressParams, 10000)
+	cancelChannel := make(chan bool, 1)
+	testTracker := progress.NewTestTracker(channel, cancelChannel)
 
 	t.Run(
 		"should not add autofix after analysis when not enabled", func(t *testing.T) {
@@ -705,7 +695,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			files := []string{diagnosticUri}
 
 			// execute
-			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[string]bool{})
+			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[string]bool{}, testTracker)
 
 			// Default is to have 1 fake action from analysis + 0 from autofix
 			assert.Len(t, issues[0].CodeActions, 1)
@@ -732,7 +722,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			files := []string{diagnosticUri}
 
 			// execute
-			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[string]bool{})
+			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[string]bool{}, testTracker)
 
 			// Default is to have 1 fake action from analysis + 0 from autofix
 			assert.Len(t, issues[0].CodeActions, 1)
@@ -756,7 +746,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			files := []string{diagnosticUri}
 
 			// execute
-			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[string]bool{})
+			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[string]bool{}, testTracker)
 
 			assert.Len(t, issues[0].CodeActions, 2)
 			val, ok := (*issues[0].CodeActions[1].DeferredEdit)().Changes[EncodePath(issues[0].AffectedFilePath)]

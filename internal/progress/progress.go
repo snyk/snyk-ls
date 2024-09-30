@@ -17,28 +17,32 @@
 package progress
 
 import (
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var Channel = make(chan types.ProgressParams, 10000)
-var CancelProgressChannel = make(chan types.ProgressToken, 10000)
+var trackersMutex sync.RWMutex
+var trackers = make(map[types.ProgressToken]*Tracker)
+var ToServerProgressChannel = make(chan types.ProgressParams, 100000)
 
 type Tracker struct {
 	channel              chan types.ProgressParams
-	cancelChannel        chan types.ProgressToken
+	cancelChannel        chan bool
 	token                types.ProgressToken
 	cancellable          bool
 	lastReport           time.Time
 	lastReportPercentage int
 	finished             bool
+	lastMessage          string
 }
 
-func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan types.ProgressToken) *Tracker {
+func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool) *Tracker {
 	return &Tracker{
 		channel:       channel,
 		cancelChannel: cancelChannel,
@@ -50,12 +54,25 @@ func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan types.
 }
 
 func NewTracker(cancellable bool) *Tracker {
-	return &Tracker{
-		channel:       Channel,
-		cancelChannel: CancelProgressChannel,
+	t := &Tracker{
+		channel:       ToServerProgressChannel,
+		cancelChannel: make(chan bool, 1),
 		cancellable:   cancellable,
 		finished:      false,
+		token:         types.ProgressToken(uuid.NewString()),
 	}
+	trackersMutex.Lock()
+	trackers[t.token] = t
+	trackersMutex.Unlock()
+	return t
+}
+
+func (t *Tracker) GetChannel() chan types.ProgressParams {
+	return t.channel
+}
+
+func (t *Tracker) GetCancelChannel() chan bool {
+	return t.cancelChannel
 }
 
 func (t *Tracker) BeginUnquantifiableLength(title, message string) {
@@ -63,16 +80,12 @@ func (t *Tracker) BeginUnquantifiableLength(title, message string) {
 }
 
 func (t *Tracker) begin(title string, message string, unquantifiableLength bool) {
+	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.begin").Logger()
 	params := newProgressParams(title, message, t.cancellable, unquantifiableLength)
-	t.token = params.Token
-
-	t.send(types.ProgressParams{
-		Token: t.token,
-		Value: nil,
-	})
-
-	t.send(params)
+	params.Token = t.token
+	t.send(params, logger)
 	t.lastReport = time.Now()
+	t.setLastMessage(message)
 }
 
 func (t *Tracker) Begin(title string) {
@@ -84,6 +97,7 @@ func (t *Tracker) BeginWithMessage(title, message string) {
 }
 
 func (t *Tracker) ReportWithMessage(percentage int, message string) {
+	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.ReportWithMessage").Logger()
 	if time.Now().Before(t.lastReport.Add(200 * time.Millisecond)) {
 		return
 	}
@@ -95,9 +109,10 @@ func (t *Tracker) ReportWithMessage(percentage int, message string) {
 			Message:              message,
 		},
 	}
-	t.send(progress)
+	t.send(progress, logger)
 	t.lastReport = time.Now()
 	t.lastReportPercentage = percentage
+	t.setLastMessage(message)
 }
 
 func (t *Tracker) Report(percentage int) {
@@ -109,6 +124,7 @@ func (t *Tracker) End() {
 }
 
 func (t *Tracker) EndWithMessage(message string) {
+	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.EndWithMessage").Logger()
 	if t.finished {
 		panic("Called end progress twice. This breaks LSP in Eclipse fix me now and avoid headaches later")
 	}
@@ -121,19 +137,28 @@ func (t *Tracker) EndWithMessage(message string) {
 		},
 	}
 
-	t.send(progress)
+	t.send(progress, logger)
 }
-func (t *Tracker) CancelOrDone(onCancel func(), doneCh chan bool) {
+
+func (t *Tracker) CancelOrDone(onCancel func(), doneCh <-chan struct{}) {
 	for {
 		select {
-		case token := <-t.cancelChannel:
-			if token == t.token {
-				onCancel()
-			}
+		case <-t.cancelChannel:
+			config.CurrentConfig().Logger().Info().Msgf("Canceling Progress %s. Last message: %s", t.token, t.lastMessage)
+			t.deleteTracker()
+			onCancel()
+			return
 		case <-doneCh:
+			t.deleteTracker()
 			return
 		}
 	}
+}
+
+func (t *Tracker) deleteTracker() {
+	trackersMutex.Lock()
+	delete(trackers, t.token)
+	trackersMutex.Unlock()
 }
 
 func (t *Tracker) GetToken() types.ProgressToken {
@@ -141,13 +166,11 @@ func (t *Tracker) GetToken() types.ProgressToken {
 }
 
 func newProgressParams(title, message string, cancellable, unquantifiableLength bool) types.ProgressParams {
-	id := uuid.New().String()
 	percentage := 1
 	if unquantifiableLength {
 		percentage = 0
 	}
 	return types.ProgressParams{
-		Token: types.ProgressToken(id),
 		Value: types.WorkDoneProgressBegin{
 			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressBeginKind},
 			Title:                title,
@@ -158,18 +181,47 @@ func newProgressParams(title, message string, cancellable, unquantifiableLength 
 	}
 }
 
-func (t *Tracker) send(progress types.ProgressParams) {
+func (t *Tracker) send(progress types.ProgressParams, logger zerolog.Logger) {
 	if progress.Token == "" {
-		config.CurrentConfig().Logger().Error().Str("method", "send").Msg("progress has no token")
+		logger.Warn().Msg("progress has no token")
 	}
 	t.channel <- progress
 }
 
+func (t *Tracker) setLastMessage(message string) {
+	if message == "" {
+		return
+	}
+	t.lastMessage = message
+}
+
 func CleanupChannels() {
-	for len(Channel) > 0 {
-		<-Channel
+	for len(ToServerProgressChannel) > 0 {
+		<-ToServerProgressChannel
 	}
-	for len(CancelProgressChannel) > 0 {
-		<-CancelProgressChannel
+
+	trackersMutex.Lock()
+	defer trackersMutex.Unlock()
+	for token := range trackers {
+		Cancel(token)
 	}
+}
+
+func Cancel(token types.ProgressToken) {
+	lockedHere := trackersMutex.TryLock()
+	if lockedHere {
+		defer trackersMutex.Unlock()
+	}
+	t := trackers[token]
+	if t != nil {
+		t.cancelChannel <- true
+	}
+	delete(trackers, token)
+}
+
+func IsCanceled(token types.ProgressToken) bool {
+	trackersMutex.RLock()
+	defer trackersMutex.RUnlock()
+	_, ok := trackers[token]
+	return !ok
 }

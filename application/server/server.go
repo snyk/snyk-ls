@@ -234,7 +234,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 
 		startClientMonitor(params, logger)
 
-		go createProgressListener(progress.Channel, srv, c.Logger())
+		go createProgressListener(progress.ToServerProgressChannel, srv, c.Logger())
 		registerNotifier(c, srv)
 
 		addWorkspaceFolders(c, params, workspace.Get())
@@ -657,7 +657,7 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params types.WorkdoneProgressCancelParams) (any, error) {
 		c := config.CurrentConfig()
 		c.Logger().Debug().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
-		CancelProgress(params.Token)
+		progress.Cancel(params.Token)
 		return nil, nil
 	})
 }

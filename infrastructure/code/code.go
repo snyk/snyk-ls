@@ -215,18 +215,25 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger zerolog.Logger, filesToBeScanned map[string]bool) (results []snyk.Issue, err error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
+	ctx, cancel := context.WithCancel(span.Context())
+	defer cancel()
+
+	t := progress.NewTracker(true)
+	t.BeginWithMessage("Snyk Code: scanning "+folderPath, "starting scan")
+	go func() { t.CancelOrDone(cancel, ctx.Done()) }()
+	defer t.EndWithMessage("Snyk Code: scan of " + folderPath + " done")
 
 	fileFilter, _ := sc.fileFilters.Load(folderPath)
 	if fileFilter == nil {
 		fileFilter = filefilter.NewFileFilter(folderPath, &logger)
 		sc.fileFilters.Store(folderPath, fileFilter)
 	}
-	files := fileFilter.FindNonIgnoredFiles()
+	files := fileFilter.FindNonIgnoredFiles(t)
 
 	if sc.useIgnoresFlow() {
-		results, err = sc.UploadAndAnalyzeWithIgnores(span.Context(), folderPath, files, filesToBeScanned)
+		results, err = sc.UploadAndAnalyzeWithIgnores(ctx, folderPath, files, filesToBeScanned, t)
 	} else {
-		results, err = sc.UploadAndAnalyze(span.Context(), files, folderPath, filesToBeScanned)
+		results, err = sc.UploadAndAnalyze(ctx, files, folderPath, filesToBeScanned, t)
 	}
 	return results, err
 }
@@ -331,8 +338,9 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath string
 	return false
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, path string, changedFiles map[string]bool) (issues []snyk.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, path string, changedFiles map[string]bool, t *progress.Tracker) (issues []snyk.Issue, err error) {
 	if ctx.Err() != nil {
+		progress.Cancel(t.GetToken())
 		sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 		return issues, nil
 	}
@@ -343,7 +351,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, pa
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 	sc.c.Logger().Info().Str("requestId", requestId).Msg("Starting Code analysis.")
 
-	bundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles)
+	bundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles, t)
 	if err != nil {
 		if isNoFilesError(err) {
 			return issues, nil
@@ -353,12 +361,13 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, pa
 			sc.handleCreationAndUploadError(path, err, msg)
 			return issues, err
 		} else {
+			progress.Cancel(t.GetToken())
 			sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 			return issues, nil
 		}
 	}
 
-	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundle.Files)
+	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundle.Files, t)
 	// TODO LSP error handling should be pushed UP to the LSP layer
 	if err != nil {
 		if ctx.Err() != nil { // Only handle errors that are not intentional cancellations
@@ -380,7 +389,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, pa
 	sc.bundleHashes[path] = uploadedBundle.BundleHash
 	sc.bundleHashesMutex.Unlock()
 
-	issues, err = uploadedBundle.FetchDiagnosticsData(span.Context())
+	issues, err = uploadedBundle.FetchDiagnosticsData(span.Context(), t)
 	if ctx.Err() != nil {
 		sc.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 		return []snyk.Issue{}, nil
@@ -388,11 +397,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, pa
 	return issues, err
 }
 
-func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context,
-	path string,
-	files <-chan string,
-	changedFiles map[string]bool,
-) (issues []snyk.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path string, files <-chan string, changedFiles map[string]bool, t *progress.Tracker) (issues []snyk.Issue, err error) {
 	logger := config.CurrentConfig().Logger().With().Str("method", "code.UploadAndAnalyzeWithIgnores").Logger()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
@@ -450,18 +455,11 @@ func isNoFilesError(err error) bool {
 	return ok
 }
 
-func (sc *Scanner) createBundle(ctx context.Context,
-	requestId string,
-	rootPath string,
-	filePaths <-chan string,
-	changedFiles map[string]bool,
-) (Bundle, error) {
+func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath string, filePaths <-chan string, changedFiles map[string]bool, t *progress.Tracker) (Bundle, error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
-	t := progress.NewTracker(false)
-	t.BeginUnquantifiableLength("Creating file bundle", "Checking and adding files for analysis")
-	defer t.End()
+	t.ReportWithMessage(15, "creating file bundle")
 
 	var limitToFiles []string
 	fileHashes := make(map[string]string)

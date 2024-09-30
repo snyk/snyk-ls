@@ -121,7 +121,8 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 	if !iac.isSupported(documentURI) {
 		return issues, nil
 	}
-	p := progress.NewTracker(false) // todo - get progress trackers via DI
+	p := progress.NewTracker(true) // todo - get progress trackers via DI
+	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", path)
 	defer p.EndWithMessage("Snyk Iac Scan completed.")
 

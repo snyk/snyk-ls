@@ -48,18 +48,16 @@ func NewBundler(c *config.Config, SnykCode SnykCodeClient, instrumentor codeClie
 	}
 }
 
-func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[string]BundleFile) (Bundle, error) {
+func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[string]BundleFile, t *progress.Tracker) (Bundle, error) {
 	method := "code.Upload"
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
 
-	// make uploads in batches until no missing files reported anymore
-	t := progress.NewTracker(false)
-	t.BeginWithMessage("Snyk Code analysis for "+bundle.rootPath, "Uploading batches...")
-	defer t.EndWithMessage("Upload done.")
+	t.ReportWithMessage(16, "uploading batches...")
+	defer t.ReportWithMessage(20, "upload done.")
 
 	for len(bundle.missingFiles) > 0 {
-		uploadBatches := b.groupInBatches(s.Context(), bundle, files)
+		uploadBatches := b.groupInBatches(s.Context(), bundle, files, t)
 		if len(uploadBatches) == 0 {
 			return bundle, nil
 		}
@@ -82,18 +80,12 @@ func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[st
 	return bundle, nil
 }
 
-func (b *BundleUploader) groupInBatches(
-	ctx context.Context,
-	bundle Bundle,
-	files map[string]BundleFile,
-) []*UploadBatch {
-	t := progress.NewTracker(false)
-	t.BeginWithMessage("Snyk Code analysis for "+bundle.rootPath, "Creating batches...")
-	defer t.EndWithMessage("Batches created.")
-
+func (b *BundleUploader) groupInBatches(ctx context.Context, bundle Bundle, files map[string]BundleFile, t *progress.Tracker) []*UploadBatch {
 	method := "code.groupInBatches"
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
+	t.ReportWithMessage(21, "creating batches...")
+	defer t.ReportWithMessage(30, "batches created and uploaded")
 
 	var batches []*UploadBatch
 	uploadBatch := NewUploadBatch()

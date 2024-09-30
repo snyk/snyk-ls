@@ -26,7 +26,7 @@ import (
 )
 
 var testProgressChannels = make(chan types.ProgressParams, 10000)
-var testCancelProgressChannel = make(chan types.ProgressToken, 10000)
+var testCancelProgressChannel = make(chan bool, 10000)
 
 func Test_Tracker_Begin(t *testing.T) {
 	tracker := newCodeTracker(testProgressChannels, testCancelProgressChannel)
