@@ -142,7 +142,7 @@ type FakeSnykCodeClient struct {
 	C                      *config.Config
 }
 
-func (f *FakeSnykCodeClient) GetAutoFixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
+func (f *FakeSnykCodeClient) GetAutofixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
 	f.AutofixStatus = AutofixStatus{message: completeStatus }
 	return f.UnifiedDiffSuggestions, f.AutofixStatus, nil
 }

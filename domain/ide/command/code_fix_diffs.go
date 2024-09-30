@@ -82,7 +82,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("failed to find issue")
 	}
 
-	suggestions, err := cmd.codeScanner.GetAutoFixDiffs(ctx, folderPath, relPath, issue)
+	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, folderPath, relPath, issue)
 	if err == nil && len(suggestions) == 0 {
 		logger.Info().Msg("Autofix run successfully but there were no good fixes")
 		return suggestions, nil
