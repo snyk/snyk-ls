@@ -82,7 +82,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("failed to find issue")
 	}
 
-	suggestions, err := cmd.codeScanner.GetAutoFixDiffs(ctx, folderPath, relPath, issue)
+	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, folderPath, relPath, issue)
 	if err != nil {
 		// as long as the backend service doesn't support good error handling, we'll just log the error
 		logger.Err(err).Msgf("received an error from API: %s", err.Error())
