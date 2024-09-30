@@ -548,7 +548,7 @@ func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte
 	return requestBody, err
 }
 
-func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error {
+func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId string, feedback string) error {
 	method := "code.SubmitAutofixFeedback"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -562,25 +562,23 @@ func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 	s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback")
 	defer s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback done")
 
-	var feedback string
-	if positive {
-		feedback = "POSITIVE"
-	} else {
-		feedback = "NEGATIVE"
+	request := map[string]interface{}{
+		"channel":   "IDE",
+		"eventType": feedback,
+		"eventDetails": map[string]string{
+			"fixId": fixId,
+		},
+		"analysisContext": newCodeRequestContext(),
 	}
 
-	request := AutofixFeedback{
-		FixId:           fixId,
-		Feedback:        feedback,
-		AnalysisContext: newCodeRequestContext(),
-	}
 	requestBody, err := json.Marshal(request)
+	s.c.Logger().Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("request body for autofix feedback")
 	if err != nil {
 		s.c.Logger().Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body for autofix feedback")
 		return err
 	}
 
-	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/feedback", requestBody)
+	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/event", requestBody)
 	if err != nil {
 		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response for autofix feedback")
 		return err

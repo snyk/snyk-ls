@@ -18,12 +18,12 @@ package command
 
 import (
 	"context"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type SnykCodeHttpClient interface {
-	SubmitAutofixFeedback(ctx context.Context, fixId string, positive bool) error
+	SubmitAutofixFeedback(ctx context.Context, fixId string, positive string) error
 }
 
 type codeFixFeedback struct {
@@ -38,11 +38,14 @@ func (cmd *codeFixFeedback) Command() types.CommandData {
 func (cmd *codeFixFeedback) Execute(ctx context.Context) (any, error) {
 	args := cmd.command.Arguments
 	fixId := args[0].(string)
-	positive := args[1].(bool)
-	err := cmd.apiClient.SubmitAutofixFeedback(ctx, fixId, positive)
-	if err != nil {
-		return nil, err
-	}
+	feedback := args[1].(string)
+
+	go func() {
+		err := cmd.apiClient.SubmitAutofixFeedback(ctx, fixId, feedback)
+		if err != nil {
+			config.CurrentConfig().Logger().Err(err).Str("fixId", fixId).Str("feedback", feedback).Msg("failed to submit autofix feedback")
+		}
+	}()
 
 	return nil, nil
 }
