@@ -55,10 +55,6 @@ func (m mockIssueProvider) Issue(key string) snyk.Issue {
 }
 
 func Test_codeFixDiffs_Execute(t *testing.T) {
-	if //goland:noinspection GoBoolExpressions
-	runtime.GOOS == "windows" {
-		t.Skip("Skipping test on windows")
-	}
 	c := testutil.UnitTest(t)
 	instrumentor := code.NewCodeInstrumentor()
 	snykCodeClient := &code.FakeSnykCodeClient{
@@ -78,10 +74,14 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		notifier:    notification.NewMockNotifier(),
 		codeScanner: codeScanner,
 	}
-
+	if runtime.GOOS == "windows" {
+		codeScanner.AddBundleHash("\\folderPath", "bundleHash")
+	} else {
+		codeScanner.AddBundleHash("/folderPath", "bundleHash")
+	}
 	t.Run("happy path", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		codeScanner.AddBundleHash("/folderPath", "bundleHash")
+
 		cut.command = types.CommandData{
 			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
 		}
@@ -94,7 +94,6 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 	t.Run("unhappy - file not beneath folder", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		codeScanner.AddBundleHash("/folderPath", "bundleHash")
 		cut.command = types.CommandData{
 			Arguments: []any{"file:///folderPath", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -107,7 +106,6 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 	t.Run("unhappy - folder empty", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		codeScanner.AddBundleHash("/folderPath", "bundleHash")
 		cut.command = types.CommandData{
 			Arguments: []any{"", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -120,7 +118,6 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 	t.Run("unhappy - file empty", func(t *testing.T) {
 		cut.issueProvider = mockIssueProvider{}
-		codeScanner.AddBundleHash("/folderPath", "bundleHash")
 		cut.command = types.CommandData{
 			Arguments: []any{"file://folder", "", "issueId"},
 		}
