@@ -232,7 +232,12 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 	}
 	files := fileFilter.FindNonIgnoredFiles(t)
 
-	if sc.useIgnoresFlow() && !t.IsCanceled() && ctx.Err() == nil {
+	if t.IsCanceled() || ctx.Err() == nil {
+		progress.Cancel(t.GetToken())
+		return results, err
+	}
+
+	if sc.useIgnoresFlow() {
 		results, err = sc.UploadAndAnalyzeWithIgnores(ctx, folderPath, files, filesToBeScanned, t)
 	} else {
 		results, err = sc.UploadAndAnalyze(ctx, files, folderPath, filesToBeScanned, t)
