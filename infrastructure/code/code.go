@@ -232,7 +232,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 	}
 	files := fileFilter.FindNonIgnoredFiles(t)
 
-	if t.IsCanceled() || ctx.Err() == nil {
+	if t.IsCanceled() || ctx.Err() != nil {
 		progress.Cancel(t.GetToken())
 		return results, err
 	}
