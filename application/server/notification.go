@@ -26,7 +26,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -63,9 +62,6 @@ func createProgressListener(progressChannel chan types.ProgressParams, server ty
 						Err(err).
 						Str("method", "window/workDoneProgress/create").
 						Msg("error while sending workDoneProgress request")
-
-					// In case an error occurs a server must not send any progress notification using the token provided in the request.
-					progress.Cancel(p.Token)
 				}
 			}
 			notifyProgress(server, p)
