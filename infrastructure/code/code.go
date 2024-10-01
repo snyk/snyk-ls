@@ -205,7 +205,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	}
 
 	// Populate HTML template
-	sc.enhanceIssuesDetails(results)
+	sc.enhanceIssuesDetails(results, folderPath)
 
 	sc.removeFromCache(filesToBeScanned)
 	sc.addToCache(results)
@@ -232,7 +232,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 }
 
 // Populate HTML template
-func (sc *Scanner) enhanceIssuesDetails(issues []snyk.Issue) {
+func (sc *Scanner) enhanceIssuesDetails(issues []snyk.Issue, folderPath string) {
 	logger := sc.c.Logger().With().Str("method", "issue_enhancer.enhanceIssuesDetails").Logger()
 
 	for i := range issues {
@@ -251,7 +251,7 @@ func (sc *Scanner) enhanceIssuesDetails(issues []snyk.Issue) {
 			issue.LessonUrl = lesson.Url
 		}
 
-		issueData.Details = getCodeDetailsHtml(*issue)
+		issueData.Details = getCodeDetailsHtml(*issue, folderPath)
 		issue.AdditionalData = issueData
 	}
 }
@@ -449,6 +449,7 @@ func isNoFilesError(err error) bool {
 	_, ok := err.(noFilesError)
 	return ok
 }
+
 func (sc *Scanner) createBundle(ctx context.Context,
 	requestId string,
 	rootPath string,

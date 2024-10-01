@@ -21,7 +21,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'self' 'nonce-{{.Nonce}}' 'nonce-ideNonce'; script-src 'nonce-{{.Nonce}}';">
+        content="style-src 'self' 'nonce-{{.Nonce}}' 'nonce-ideNonce' https://fonts.googleapis.com;
+                 script-src 'nonce-{{.Nonce}}';
+                 font-src 'self' https://fonts.gstatic.com;">
   <!--noformat-->
   <!-- @formatter:off -->
   <style nonce="{{.Nonce}}">{{.Styles}}</style>
@@ -33,54 +35,54 @@
 </head>
 
 <body>
-  <div class="suggestion">
-    <!-- Panel header -->
-    <header class="panel-header">
-      <div class="severity-container">
-        {{.SeverityIcon}}
-        <h2 class="severity-title">{{.Issue.AdditionalData.Title}}</h2>
+<div class="suggestion">
+  <!-- Panel header -->
+  <header class="panel-header">
+    <div class="severity-container">
+      {{.SeverityIcon}}
+      <h2 class="severity-title">{{.Issue.AdditionalData.Title}}</h2>
+    </div>
+    <div class="severity-type-container">
+      <div class="severity-type">Issue</div>
+      <span class="delimiter"></span>
+      <a class="styled-link" target="_blank" rel="noopener noreferrer"
+         href="{{.Issue.AdditionalData.Documentation}}">{{.Issue.ID}}</a>
+  </header>
+  <section class="delimiter-top summary">
+    <div class="summary-item description">
+      <div class="label">Description</div>
+      <div class="content">
+        {{.Description}}
       </div>
-      <div class="severity-type-container">
-        <div class="severity-type">Issue</div>
-        <span class="delimiter"></span>
-        <a class="styled-link" target="_blank" rel="noopener noreferrer"
-          href="{{.Issue.AdditionalData.Documentation}}">{{.Issue.ID}}</a>
-    </header>
-    <section class="delimiter-top summary">
-      <div class="summary-item description">
-        <div class="label">Description</div>
-        <div class="content">
-          {{.Description}}
-        </div>
+    </div>
+    <div class="summary-item impact">
+      <div class="label">Impact</div>
+      <div class="content">
+        {{.Issue.AdditionalData.Impact}}
       </div>
-      <div class="summary-item impact">
-        <div class="label">Impact</div>
-        <div class="content">
-          {{.Issue.AdditionalData.Impact}}
-        </div>
+    </div>
+    <div class="summary-item path">
+      <div class="label">Path</div>
+      <div class="content">
+        <pre><code class="path">{{.Path}}</code></pre>
       </div>
-      <div class="summary-item path">
-        <div class="label">Path</div>
-        <div class="content">
-          <pre><code class="path">{{.Path}}</code></pre>
-        </div>
-      </div>
-    </section>
-    <section class="delimiter-top summary">
-      <h2>Remediation</h2>
-      <div class="summary-item sn-fix-wrapper">
-        <div class="remediation">{{.Remediation}}</div>
-      </div>
-    </section>
-    <section class="delimiter-top">
-      <h2>References</h2>
-      <div class="summary-items">
-        {{range .Issue.AdditionalData.References}}
-        <a class="styled-link" target="_blank" rel="noopener noreferrer" href="{{.}}">{{.}}</a>
-        {{end}}
-      </div>
-    </section>
-  </div>
+    </div>
+  </section>
+  <section class="delimiter-top summary">
+    <h2>Remediation</h2>
+    <div class="summary-item sn-fix-wrapper">
+      <div class="remediation">{{.Remediation}}</div>
+    </div>
+  </section>
+  <section class="delimiter-top">
+    <h2>References</h2>
+    <div class="summary-items">
+      {{range .Issue.AdditionalData.References}}
+      <a class="styled-link" target="_blank" rel="noopener noreferrer" href="{{.}}">{{.}}</a>
+      {{end}}
+    </div>
+  </section>
+</div>
 </body>
 
 </html>

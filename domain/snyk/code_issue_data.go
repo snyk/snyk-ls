@@ -16,7 +16,11 @@
 
 package snyk
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/snyk/snyk-ls/internal/product"
+)
 
 type CodeIssueData struct {
 	// Unique key identifying an issue in the whole result set
@@ -50,6 +54,13 @@ func (c CodeIssueData) GetTitle() string {
 
 func (c CodeIssueData) IsFixable() bool {
 	return c.HasAIFix
+}
+
+func (c CodeIssueData) GetFilterableIssueType() product.FilterableIssueType {
+	if c.IsSecurityType {
+		return product.FilterableIssueTypeCodeSecurity
+	}
+	return product.FilterableIssueTypeCodeQuality
 }
 
 func (c CodeIssueData) MarshalJSON() ([]byte, error) {

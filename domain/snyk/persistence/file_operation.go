@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
 func (g *GitPersistenceProvider) persistToDisk(cacheDir string, folderHashedPath hashedFolderPath, commitHash string, p product.Product, inputToCache []snyk.Issue) error {
@@ -75,7 +75,7 @@ func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string
 }
 
 func (g *GitPersistenceProvider) snykCacheDir(folderPath string) (string, error) {
-	gitFolder, err := vcs.GitRepoFolderPath(g.logger, folderPath)
+	gitFolder, err := gitconfig.GitFolderPath(folderPath)
 	if err != nil {
 		return "", err
 	}

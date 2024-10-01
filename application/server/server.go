@@ -234,7 +234,6 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 
 		InitializeSettings(c, params.InitializationOptions)
 
-		startOfflineDetection(c)
 		startClientMonitor(params, logger)
 
 		go createProgressListener(progress.Channel, srv, c.Logger())

@@ -84,7 +84,7 @@ func (t *Tracker) BeginWithMessage(title, message string) {
 }
 
 func (t *Tracker) ReportWithMessage(percentage int, message string) {
-	if time.Now().Before(t.lastReport.Add(time.Second)) || percentage <= t.lastReportPercentage {
+	if time.Now().Before(t.lastReport.Add(200 * time.Millisecond)) {
 		return
 	}
 	progress := types.ProgressParams{
