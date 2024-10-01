@@ -141,15 +141,16 @@ func (t *Tracker) EndWithMessage(message string) {
 }
 
 func (t *Tracker) CancelOrDone(onCancel func(), doneCh <-chan struct{}) {
+	logger := config.CurrentConfig().Logger()
+	defer t.deleteTracker()
+	defer onCancel()
 	for {
 		select {
 		case <-t.cancelChannel:
-			config.CurrentConfig().Logger().Info().Msgf("Canceling Progress %s. Last message: %s", t.token, t.lastMessage)
-			t.deleteTracker()
-			onCancel()
+			logger.Info().Msgf("Canceling Progress %s. Last message: %s", t.token, t.lastMessage)
 			return
 		case <-doneCh:
-			t.deleteTracker()
+			logger.Info().Msgf("Received done from channel for progress %s", t.token)
 			return
 		}
 	}
