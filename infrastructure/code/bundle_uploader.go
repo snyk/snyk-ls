@@ -57,6 +57,11 @@ func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[st
 	defer t.ReportWithMessage(20, "upload done.")
 
 	for len(bundle.missingFiles) > 0 {
+		if s.Context().Err() != nil || t.IsCanceled() {
+			progress.Cancel(t.GetToken())
+			b.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+			return Bundle{}, ctx.Err()
+		}
 		uploadBatches := b.groupInBatches(s.Context(), bundle, files, t)
 		if len(uploadBatches) == 0 {
 			return bundle, nil
@@ -64,8 +69,10 @@ func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[st
 
 		uploadedFiles := 0
 		for i, uploadBatch := range uploadBatches {
-			if err := ctx.Err(); err != nil {
-				return bundle, err
+			if s.Context().Err() != nil || t.IsCanceled() {
+				progress.Cancel(t.GetToken())
+				b.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+				return Bundle{}, ctx.Err()
 			}
 			err := bundle.Upload(s.Context(), uploadBatch)
 			if err != nil {

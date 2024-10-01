@@ -196,6 +196,7 @@ func (t *Tracker) setLastMessage(message string) {
 	t.lastMessage = message
 }
 
+// CleanupChannels is Test-Only. Don't use for non-test code
 func CleanupChannels() {
 	for len(ToServerProgressChannel) > 0 {
 		<-ToServerProgressChannel
@@ -208,16 +209,21 @@ func CleanupChannels() {
 	}
 }
 
+func (t *Tracker) IsCanceled() bool {
+	return IsCanceled(t.token)
+}
+
 func Cancel(token types.ProgressToken) {
 	lockedHere := trackersMutex.TryLock()
 	if lockedHere {
 		defer trackersMutex.Unlock()
 	}
-	t := trackers[token]
-	if t != nil {
+	t, ok := trackers[token]
+	if ok {
 		t.cancelChannel <- true
+		delete(trackers, token)
+		close(t.cancelChannel)
 	}
-	delete(trackers, token)
 }
 
 func IsCanceled(token types.ProgressToken) bool {

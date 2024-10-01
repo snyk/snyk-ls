@@ -111,16 +111,18 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]s
 
 	t.ReportWithMessage(40, "Snyk Code analysis for "+b.rootPath+", Retrieving results...")
 
+	c := config.CurrentConfig()
 	analysisOptions := AnalysisOptions{
 		bundleHash:   b.BundleHash,
-		shardKey:     getShardKey(b.rootPath, config.CurrentConfig().Token()),
+		shardKey:     getShardKey(b.rootPath, c.Token()),
 		limitToFiles: b.limitToFiles,
 		severity:     0,
 	}
 
 	start := time.Now()
 	for {
-		if ctx.Err() != nil { // Cancellation requested
+		if ctx.Err() != nil || t.IsCanceled() { // Cancellation requested
+			progress.Cancel(t.GetToken())
 			return []snyk.Issue{}, nil
 		}
 		issues, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions, b.rootPath)
@@ -147,7 +149,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]s
 			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
 		}
 
-		if time.Since(start) > config.CurrentConfig().SnykCodeAnalysisTimeout() {
+		if time.Since(start) > c.SnykCodeAnalysisTimeout() {
 			err := errors.New("analysis call timed out")
 			b.logger.Error().Err(err).Msg("timeout...")
 			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: b.rootPath})

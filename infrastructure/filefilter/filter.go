@@ -2,6 +2,7 @@ package filefilter
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -109,6 +110,10 @@ func (f *FileFilter) FindNonIgnoredFiles(t *progress.Tracker) <-chan string {
 // processFolders walks through the folder structure recursively and filters files and folders based on the ignore files.
 // It attempts to return cached results if the folder structure hasn't changed.
 func (f *FileFilter) processFolders(folderPath string, progressTracker *progress.Tracker, results chan<- string) error {
+	if progressTracker.IsCanceled() {
+		return errors.New("progress was canceled")
+	}
+
 	progressTracker.ReportWithMessage(10, fmt.Sprintf("collecting files in %s", folderPath))
 	c, err := f.collectFolderFiles(folderPath)
 	if err != nil {
