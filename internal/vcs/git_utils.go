@@ -17,13 +17,10 @@
 package vcs
 
 import (
-	"errors"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/rs/zerolog"
 	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
-	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -57,31 +54,6 @@ func HeadRefHashForBranch(logger *zerolog.Logger, repoPath, branchName string) (
 
 	commitHash := ref.Hash()
 	return commitHash.String(), nil
-}
-
-func GitRepoFolderPath(logger *zerolog.Logger, folderPath string) (string, error) {
-	repo, err := git.PlainOpen(folderPath)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to open repository: " + folderPath)
-		return "", err
-	}
-
-	fsStorer, ok := repo.Storer.(*filesystem.Storage)
-	if !ok {
-		err = errors.New("repository storage is not a filesystem storage")
-		logger.Error().Err(err).Msg("Faild to get fs storage for: " + folderPath)
-		return "", err
-	}
-	repoPath := fsStorer.Filesystem().Root()
-	if repoPath == "" {
-		return "", errors.New("repository path is empty")
-	}
-
-	if !strings.HasSuffix(repoPath, ".git") {
-		repoPath = filepath.Join(repoPath, ".git")
-	}
-
-	return repoPath, nil
 }
 
 func hasUncommitedChanges(repo *git.Repository) bool {
