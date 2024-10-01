@@ -17,16 +17,16 @@
 package gitconfig
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"path/filepath"
-	"strings"
-	"time"
-
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/rs/zerolog"
 	"gopkg.in/ini.v1"
+	"path/filepath"
+	"strings"
+	"sync"
 
 	config2 "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -39,6 +39,10 @@ import (
 const (
 	mainSection   = "snyk"
 	baseBranchKey = "baseBranch"
+)
+
+var (
+	mutex sync.RWMutex
 )
 
 // GetOrCreateFolderConfig queries git for the folder config of the given path
@@ -90,8 +94,10 @@ func getBaseBranch(repoConfig *config2.Config, folderSection *config.Subsection,
 }
 
 func getConfigSection(path string) (*git.Repository, *config2.Config, *config.Config, *config.Subsection, error) {
+	mutex.Lock()
 	// if DeleteEmptySnykSubsection fails, ignore error and attempt to reload config again
 	_ = DeleteEmptySnykSubsection(path)
+	mutex.Unlock()
 	repository, err := git.PlainOpen(path)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -126,7 +132,6 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 }
 
 func SetBaseBranch(logger *zerolog.Logger, config []types.FolderConfig) {
-	time.Sleep(5 * time.Second)
 	for _, folderConfig := range config {
 		SetOption(logger, folderConfig.FolderPath, baseBranchKey, folderConfig.BaseBranch)
 	}
@@ -150,7 +155,7 @@ func SetOption(logger *zerolog.Logger, folderPath, key string, value string) {
 	}
 }
 
-func GitRepoFolderPath(folderPath string) (string, error) {
+func GitFolderPath(folderPath string) (string, error) {
 	repo, err := git.PlainOpen(folderPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open repository: %s %w", folderPath, err)
@@ -174,7 +179,7 @@ func GitRepoFolderPath(folderPath string) (string, error) {
 
 // DeleteEmptySnykSubsection This is a migration function to be executed if empty subsections exists
 func DeleteEmptySnykSubsection(path string) error {
-	gitFolderPath, err := GitRepoFolderPath(path)
+	gitFolderPath, err := GitFolderPath(path)
 	if err != nil {
 		return err
 	}
@@ -184,12 +189,23 @@ func DeleteEmptySnykSubsection(path string) error {
 		return err
 	}
 	// Construct the section name with the empty subsection
-	sectionToDelete := fmt.Sprintf("%s \"\"", mainSection)
-	section := cfg.Section(sectionToDelete)
-	if section == nil {
+	sectionToDelete := fmt.Sprintf(`%s ""`, mainSection)
+	section, err := cfg.GetSection(sectionToDelete)
+	if section == nil || err != nil {
 		return nil
 	}
 	cfg.DeleteSection(sectionToDelete)
+
+	// make sure we are not writing empty config
+	buf := new(bytes.Buffer)
+	_, err = cfg.WriteTo(buf)
+	if err != nil {
+		return err
+	}
+	if buf.Len() == 0 {
+		return nil
+	}
+
 	err = cfg.SaveToIndent(configPath, "\t")
 	if err != nil {
 		return fmt.Errorf("failed to save changes to git config %w", err)

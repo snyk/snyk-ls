@@ -75,7 +75,7 @@ func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string
 }
 
 func (g *GitPersistenceProvider) snykCacheDir(folderPath string) (string, error) {
-	gitFolder, err := gitconfig.GitRepoFolderPath(folderPath)
+	gitFolder, err := gitconfig.GitFolderPath(folderPath)
 	if err != nil {
 		return "", err
 	}
