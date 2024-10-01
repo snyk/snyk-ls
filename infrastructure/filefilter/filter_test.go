@@ -36,14 +36,14 @@ func Test_FindNonIgnoredFiles(t *testing.T) {
 
 			filter := filefilter.NewFileFilter(testCase.repoPath, config.CurrentConfig().Logger())
 			var files []string
-			for f := range filter.FindNonIgnoredFiles() {
+			for f := range filter.FindNonIgnoredFiles(getTestTracker()) {
 				files = append(files, f)
 			}
 			assertFilesFiltered(t, testCase, files)
 
 			t.Run("2nd call should return the same files", func(t *testing.T) {
 				var files2 []string
-				for f := range filter.FindNonIgnoredFiles() {
+				for f := range filter.FindNonIgnoredFiles(getTestTracker()) {
 					files2 = append(files2, f)
 				}
 				assert.ElementsMatch(t, files, files2)
@@ -73,14 +73,20 @@ func Test_FindNonIgnoredFiles_MultipleWorkDirs(t *testing.T) {
 
 	for _, testCase := range cases {
 		// Act
-		progressCh := make(chan types.ProgressParams, 100000)
-		cancelProgressCh := make(chan types.ProgressToken, 1)
-		files := util.ChannelToSlice(
-			filefilter.FindNonIgnoredFiles(testCase.repoPath, config.CurrentConfig().Logger(), progress.NewTestTracker(progressCh, cancelProgressCh)))
+		nonIgnoredFiles := filefilter.FindNonIgnoredFiles(
+			getTestTracker(),
+			testCase.repoPath,
+			config.CurrentConfig().Logger(),
+		)
+		files := util.ChannelToSlice(nonIgnoredFiles)
 
 		// Assert
 		assertFilesFiltered(t, testCase, files)
 	}
+}
+
+func getTestTracker() *progress.Tracker {
+	return progress.NewTestTracker(make(chan types.ProgressParams, 100000), make(chan bool, 1))
 }
 
 func Test_FindNonIgnoredFile_FilesChanged_ReturnsCorrectResults(t *testing.T) {
@@ -103,12 +109,12 @@ func Test_FindNonIgnoredFile_FilesChanged_ReturnsCorrectResults(t *testing.T) {
 	}
 	setupIgnoreFilesTest(t, testCase.ignoreFilesTestCase)
 	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger())
-	originalFilteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles()) // Calling it a first time
+	originalFilteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles(getTestTracker())) // Calling it a first time
 
 	// Act - Changing folder content
 	filesToCreate := append(testCase.expectedAddedFiles, testCase.expectedAddedExcludes...)
 	createFiles(t, repoFolder, filesToCreate)
-	newFilteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles())
+	newFilteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles(getTestTracker()))
 
 	// Assert - Make sure the added files have been filtered correctly
 	assert.NotEqual(t, originalFilteredFiles, newFilteredFiles)
@@ -259,7 +265,7 @@ func Test_FindNonIgnoredFiles_IgnoredFolderContainsNestedNegationRules_NestedRul
 	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger())
 
 	// Act
-	filteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles())
+	filteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles(getTestTracker()))
 
 	// Assert
 	assert.Empty(t, filteredFiles)

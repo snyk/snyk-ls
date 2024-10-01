@@ -2,6 +2,7 @@ package filefilter
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -31,8 +32,8 @@ var parallelism = util.Max(1, util.Min(defaultParallelism, runtime.NumCPU()))
 // It is global because there can be several file filters running concurrently on the same machine.
 var semaphore = make(chan struct{}, parallelism)
 
-func FindNonIgnoredFiles(rootFolder string, logger *zerolog.Logger, progressTracker *progress.Tracker) <-chan string {
-	return NewFileFilter(rootFolder, logger).FindNonIgnoredFiles()
+func FindNonIgnoredFiles(t *progress.Tracker, rootFolder string, logger *zerolog.Logger) <-chan string {
+	return NewFileFilter(rootFolder, logger).FindNonIgnoredFiles(t)
 }
 
 type FileFilter struct {
@@ -91,13 +92,12 @@ func NewFileFilter(rootFolder string, logger *zerolog.Logger) *FileFilter {
 
 // FindNonIgnoredFiles returns a channel of non-ignored files in the repository.
 // The channel is closed when all files have been processed.
-func (f *FileFilter) FindNonIgnoredFiles() <-chan string {
-	t := progress.NewTracker(false)
-	t.BeginWithMessage("Snyk Code: Collecting files in \""+f.repoRoot+"\"", "Evaluating ignores and counting files...")
+func (f *FileFilter) FindNonIgnoredFiles(t *progress.Tracker) <-chan string {
+	t.ReportWithMessage(1, "collecting files in "+f.repoRoot)
 	resultsCh := make(chan string)
 	go func() {
 		defer close(resultsCh)
-		defer t.EndWithMessage("Collected files")
+		defer t.ReportWithMessage(10, "collected files in "+f.repoRoot)
 		err := f.processFolders(f.repoRoot, t, resultsCh)
 		if err != nil {
 			f.logger.Err(err).Msg("Error during filepath.WalkDir")
@@ -110,7 +110,11 @@ func (f *FileFilter) FindNonIgnoredFiles() <-chan string {
 // processFolders walks through the folder structure recursively and filters files and folders based on the ignore files.
 // It attempts to return cached results if the folder structure hasn't changed.
 func (f *FileFilter) processFolders(folderPath string, progressTracker *progress.Tracker, results chan<- string) error {
-	progressTracker.ReportWithMessage(10, fmt.Sprintf("Collecting files in %s", folderPath))
+	if progressTracker.IsCanceled() {
+		return errors.New("progress was canceled")
+	}
+
+	progressTracker.ReportWithMessage(10, fmt.Sprintf("collecting files in %s", folderPath))
 	c, err := f.collectFolderFiles(folderPath)
 	if err != nil {
 		return err
@@ -143,7 +147,7 @@ func (f *FileFilter) processFolders(folderPath string, progressTracker *progress
 	}
 
 	// If results were not cached, filter files and folders, and store the results in the cache.
-	progressTracker.ReportWithMessage(20, fmt.Sprintf("Filtering files in %s", folderPath))
+	progressTracker.ReportWithMessage(10, fmt.Sprintf("filtering files in %s", folderPath))
 	filteredFiles, filteredChildFolders := f.filterFilesInFolder(globs, files, childFolders, results)
 	for _, child := range filteredChildFolders {
 		// Only process child folders that are not ignored

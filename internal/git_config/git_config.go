@@ -20,13 +20,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
+	"sync"
+
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/rs/zerolog"
 	"gopkg.in/ini.v1"
-	"path/filepath"
-	"strings"
-	"sync"
 
 	config2 "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"

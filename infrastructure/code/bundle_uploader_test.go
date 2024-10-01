@@ -27,7 +27,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -45,9 +47,8 @@ func Test_Bundler_Upload(t *testing.T) {
 		bundleFileMap := map[string]BundleFile{}
 		bundleFileMap[documentURI] = bundleFile
 
-		_, err := bundleUploader.Upload(context.Background(),
-			Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}, logger: c.Logger()},
-			bundleFileMap)
+		testTracker := progress.NewTestTracker(make(chan types.ProgressParams, 100000), make(chan bool, 1))
+		_, err := bundleUploader.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}, logger: c.Logger()}, bundleFileMap, testTracker)
 
 		assert.Equal(t, 1, snykCodeService.TotalBundleCount)
 		assert.NoError(t, err)
@@ -75,9 +76,8 @@ func Test_Bundler_Upload(t *testing.T) {
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
 
-		_, err := bundler.Upload(context.Background(),
-			Bundle{SnykCode: snykCodeService, missingFiles: missingFiles, logger: c.Logger()},
-			bundleFileMap)
+		testTracker := progress.NewTestTracker(make(chan types.ProgressParams, 100000), make(chan bool, 1))
+		_, err := bundler.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: missingFiles, logger: c.Logger()}, bundleFileMap, testTracker)
 
 		assert.True(t, snykCodeService.HasExtendedBundle)
 		assert.Equal(t, 2, snykCodeService.TotalBundleCount)

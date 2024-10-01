@@ -481,9 +481,6 @@ func appendTestResults(sic snyk.SeverityIssueCounts, results []json_schemas.Test
 
 func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 	issueByProduct := f.IssuesByProduct()
-	if len(issueByProduct[p]) == 0 {
-		return
-	}
 
 	productIssuesByFile, err := f.getDelta(issueByProduct, p)
 	if err != nil {

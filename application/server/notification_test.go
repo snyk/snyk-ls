@@ -132,8 +132,7 @@ func TestCancelProgress(t *testing.T) {
 	}
 
 	assert.Eventually(t, func() bool {
-		actualToken := <-progress.CancelProgressChannel
-		return expectedWorkdoneProgressCancelParams.Token == actualToken
+		return progress.IsCanceled(expectedWorkdoneProgressCancelParams.Token)
 	}, time.Second*5, time.Millisecond)
 }
 
