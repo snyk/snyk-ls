@@ -438,7 +438,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 	})
 }
 
-func startOfflineDetection(c *config.Config) {
+func startOfflineDetection(c *config.Config) { //nolint:unused // this is gonna be used soon
 	go func() {
 		timeout := time.Second * 10
 		client := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
