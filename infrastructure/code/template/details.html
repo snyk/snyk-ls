@@ -719,7 +719,7 @@
       {{if gt (len .CWEs) 0}}
       <span class="delimiter">|</span>
       {{range $index, $cwe := .CWEs}}
-      <a class="cwe styled-link" target="_blank" rel="noopener noreferrer"
+      <a class="cwe styled-link"  rel="noopener noreferrer"
         href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>
       {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
       {{end}}
@@ -739,7 +739,7 @@
       <div class="lesson-icon">
         {{.LessonIcon}}
       </div>
-      <a class="lesson-link styled-link is-external" target="_blank" rel="noopener noreferrer" href="{{.LessonUrl}}">
+      <a class="lesson-link styled-link is-external"  rel="noopener noreferrer" href="{{.LessonUrl}}">
         Learn about this vulnerability
         {{.ExternalIcon}}
       </a>
@@ -782,7 +782,7 @@
             <div class="ignore-next-step-text">
               Ignores are currently managed in the Snyk web app.
               To edit or remove the ignore please go to:
-              <a class="styled-link" href="{{.SnykWebUrl}}" target="_blank"
+              <a class="styled-link" href="{{.SnykWebUrl}}"
                 rel="noopener noreferrer">{{.SnykWebUrl}}</a>.
             </div>
           </div>
@@ -938,7 +938,7 @@
                 <div id="current-example" class="repo clickable">
                   {{.GitHubIcon}}
                   <span id="example-link" class="example-repo-link">
-                    <a id="example-repo-anchor" href="{{(index .ExampleCommitFixes 0).RepoLink}}" target="_blank"
+                    <a id="example-repo-anchor" href="{{(index .ExampleCommitFixes 0).RepoLink}}"
                       rel="noopener noreferrer">
                       {{(index .ExampleCommitFixes 0).RepoName}}
                     </a>
