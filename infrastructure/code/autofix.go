@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
@@ -51,12 +50,10 @@ func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	// TODO: Revisit this and check if we really need to return empty slice instead of nil. Make sure upstream can handle nil slices.
-
 	requestId, err := performance2.GetTraceId(ctx)
 	if err != nil {
 		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
-		return unifiedDiffSuggestions, failed, err
+		return nil, failed, err
 	}
 
 	logger.Info().Str("requestId", requestId).Msg("Started obtaining autofix diffs")
@@ -64,23 +61,23 @@ func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string
 
 	response, err := s.RunAutofix(span.Context(), options)
 	if err != nil {
-		return unifiedDiffSuggestions, failed, err
+		return nil, failed, err
 	}
 
 	logger.Debug().Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
 		logger.Error().Str("responseStatus", response.Status).Msg("autofix failed")
-		return unifiedDiffSuggestions, failed, nil
+		return nil, failed, errors.New("Autofix failed")
 	}
 
 	if response.Status == "" {
 		logger.Error().Str("responseStatus", response.Status).Msg("unknown response status (empty)")
-		return unifiedDiffSuggestions, failed, nil
+		return nil, failed, errors.New("Unknown response status (empty)")
 	}
 
 	if response.Status != completeStatus {
-		return unifiedDiffSuggestions, failed, nil
+		return nil, status, nil
 	}
 
 	logger.Debug().Msgf("Running toUnifiedDiffSuggestions")
@@ -133,12 +130,12 @@ func (sc *Scanner) GetAutofixDiffs(
 			suggestions, fixStatus, autofixErr := codeClient.GetAutofixDiffs(span.Context(), baseDir, options)
 			if autofixErr != nil {
 				logger.Err(autofixErr).Msg("Error getting autofix suggestions")
-				return suggestions, autofixErr
+				return nil, autofixErr
 			} else if fixStatus.message == completeStatus {
 				if len(suggestions) > 0 {
 					return suggestions, nil
 				} else {
-					logger.Debug().Msg("AI fix returned successfully but no good fix could be computed.")
+					logger.Info().Msg("AI fix returned successfully but no good fix could be computed.")
 					return suggestions, nil
 				}
 			}
