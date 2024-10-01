@@ -43,7 +43,7 @@ type Tracker struct {
 }
 
 func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool) *Tracker {
-	return &Tracker{
+	t := &Tracker{
 		channel:       channel,
 		cancelChannel: cancelChannel,
 		// deepcode ignore HardcodedPassword: false positive
@@ -51,6 +51,10 @@ func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool) 
 		cancellable:          true,
 		lastReportPercentage: -1,
 	}
+	trackersMutex.Lock()
+	trackers[t.token] = t
+	trackersMutex.Unlock()
+	return t
 }
 
 func NewTracker(cancellable bool) *Tracker {
