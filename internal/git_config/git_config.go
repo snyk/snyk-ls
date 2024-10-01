@@ -90,17 +90,14 @@ func getBaseBranch(repoConfig *config2.Config, folderSection *config.Subsection,
 }
 
 func getConfigSection(path string) (*git.Repository, *config2.Config, *config.Config, *config.Subsection, error) {
+	// if DeleteEmptySnykSubsection fails, ignore error and attempt to reload config again
+	_ = DeleteEmptySnykSubsection(path)
 	repository, err := git.PlainOpen(path)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 
 	repoConfig, err := repository.Config()
-	if err != nil && strings.Contains(err.Error(), "empty subsection") {
-		// if DeleteEmptySnykSubsection fails, ignore error and attempt to reload config again
-		_ = DeleteEmptySnykSubsection()
-		repoConfig, err = repository.Config()
-	}
 
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -176,8 +173,8 @@ func GitRepoFolderPath(folderPath string) (string, error) {
 }
 
 // DeleteEmptySnykSubsection This is a migration function to be executed if empty subsections exists
-func DeleteEmptySnykSubsection() error {
-	gitFolderPath, err := GitRepoFolderPath("")
+func DeleteEmptySnykSubsection(path string) error {
+	gitFolderPath, err := GitRepoFolderPath(path)
 	if err != nil {
 		return err
 	}
