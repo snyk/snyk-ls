@@ -17,6 +17,7 @@
 package delta
 
 import (
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 	"testing"
@@ -48,6 +49,37 @@ func Test_New_Issue(t *testing.T) {
 	finding, ok := deltaList[0].(Fingerprintable)
 	assert.True(t, ok)
 	assert.Equal(t, newIssue.GetFingerprint(), finding.GetFingerprint())
+}
+
+func Test_New_Issue_No_IdChange(t *testing.T) {
+	baseIssueList := getIssueList()
+
+	exisingIdentity := uuid.New().String()
+	newIssue := mockIdentifiable{
+		ruleId:         "javascript/NoHardcodedPasswords",
+		startLine:      10,
+		endLine:        50,
+		startColumn:    10,
+		endColumn:      17,
+		path:           "/var/folders/qt/rlk4r6d55s1fx7bdr7bg0w3h0000gn/T/snyk_tmp_repo2525628625/newfile.js",
+		fingerprint:    "1256723f6.6d16dbf.bd25d204.fd9wwb7c.79aff027.fcf30ddd.81d021ss.91c60baad.12567cf6.6d9cc6dbf.bd6cs204.fd94cc7c.79ss027.fcs002d.8dd021f5.91c6ss7d",
+		globalIdentity: exisingIdentity,
+	}
+	df := initDeltaFinder()
+
+	currentIssueList := slices.Clone(baseIssueList)
+	currentIssueList = append(currentIssueList, newIssue)
+
+	baseFindingIdentifiable := convertToFindingsIdentifiable(baseIssueList)
+	currentFindingIdentifiable := convertToFindingsIdentifiable(currentIssueList)
+
+	deltaList, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(deltaList))
+	finding, ok := deltaList[0].(Fingerprintable)
+	assert.True(t, ok)
+	assert.Equal(t, newIssue.GetFingerprint(), finding.GetFingerprint())
+	assert.Equal(t, exisingIdentity, newIssue.GetGlobalIdentity())
 }
 
 func Test_No_New_Issue(t *testing.T) {
