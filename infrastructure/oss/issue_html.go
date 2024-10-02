@@ -155,7 +155,7 @@ type IntroducedThrough struct {
 func getIntroducedThroughs(issue snyk.OssIssueData) []IntroducedThrough {
 	var introducedThroughs []IntroducedThrough
 
-	snykUi := config.CurrentConfig().SnykUi()
+	snykUi := config.CurrentConfig().SnykUI()
 	if len(issue.From) > 0 {
 		for _, v := range issue.MatchingIssues {
 			if len(v.From) > 1 {

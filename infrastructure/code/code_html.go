@@ -102,7 +102,7 @@ func getCodeDetailsHtml(issue snyk.Issue, folderPath string) string {
 		"ExampleCommitFixes": exampleCommits,
 		"CommitFixes":        commitFixes,
 		"PriorityScore":      additionalData.PriorityScore,
-		"SnykWebUrl":         config.CurrentConfig().SnykUi(),
+		"SnykWebUrl":         config.CurrentConfig().SnykUI(),
 		"LessonUrl":          issue.LessonUrl,
 		"LessonIcon":         html.LessonIcon(),
 		"IgnoreLineAction":   getLineToIgnoreAction(issue),

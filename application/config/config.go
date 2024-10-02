@@ -476,7 +476,7 @@ func (c *Config) SnykCodeApi() string {
 	return c.snykCodeApiUrl
 }
 
-func (c *Config) SnykUi() string {
+func (c *Config) SnykUI() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
 
@@ -520,12 +520,15 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		snykApiUrl = DefaultSnykApiUrl
 	}
 
-	c.engine.GetConfiguration().Set(configuration.API_URL, snykApiUrl)
-
 	if snykApiUrl != c.snykApiUrl {
 		c.m.Lock()
 		c.snykApiUrl = snykApiUrl
 		c.m.Unlock()
+
+		// update GAF
+		cfg := c.engine.GetConfiguration()
+		cfg.Set(configuration.API_URL, snykApiUrl)
+		cfg.Set(configuration.WEB_APP_URL, c.SnykUI())
 
 		// Update Code API endpoint
 		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(snykApiUrl)
