@@ -252,7 +252,6 @@ func TestGetCodeApiUrl(t *testing.T) {
 				c.UpdateApiEndpoints(input)
 
 				actual, err := getCodeApiUrl(c)
-				t.Log(input, actual)
 				assert.Nil(t, err)
 				assert.Contains(t, actual, expected)
 			}
