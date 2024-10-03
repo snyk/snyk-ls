@@ -176,7 +176,7 @@
         <span class="delimiter"> </span>
         {{range $index, $cve := .CVEs}}
         <a class="cve styled-link"  rel="noopener noreferrer"
-          href="https://cve.mitre.org/cgi-bin/cvename.cgi?name=$cve">{{$cve}}</a>
+          href="https://cve.mitre.org/cgi-bin/cvename.cgi?name={{$cve}}">{{$cve}}</a>
         {{if ne $index (idxMinusOne (len $.CVEs))}}<span class="delimiter"></span>{{end}}
         {{end}}
         {{end}}
