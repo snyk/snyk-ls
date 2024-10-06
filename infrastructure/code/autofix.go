@@ -80,7 +80,6 @@ func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string
 		return nil, status, nil
 	}
 
-	logger.Debug().Msgf("Running toUnifiedDiffSuggestions")
 	return response.toUnifiedDiffSuggestions(baseDir, options.filePath), AutofixStatus{message: response.Status}, err
 }
 
@@ -139,6 +138,7 @@ func (sc *Scanner) GetAutofixDiffs(
 					return suggestions, nil
 				}
 			}
+			// If err == nil and fixStatus.message != completeStatus, we will keep polling.
 		}
 	}
 }
