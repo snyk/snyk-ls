@@ -34,7 +34,7 @@ func TestDownloader_Download(t *testing.T) {
 	testutil.IntegTest(t)
 	r := getTestAsset()
 	progressCh := make(chan types.ProgressParams, 100000)
-	cancelProgressCh := make(chan types.ProgressToken, 1)
+	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
 		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh),
 		httpClient:      func() *http.Client { return http.DefaultClient },
@@ -63,7 +63,7 @@ func TestDownloader_Download(t *testing.T) {
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	testutil.UnitTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
-	cancelProgressCh := make(chan types.ProgressToken, 1)
+	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
 		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh),
 		httpClient:      func() *http.Client { return http.DefaultClient },
@@ -73,19 +73,15 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 
 	// simulate cancellation when some progress received
 	go func() {
-		prog := <-progressCh
-		cancelProgressCh <- prog.Token
+		cancelProgressCh <- true
 	}()
 
 	err := d.Download(r, false)
-
 	assert.Error(t, err)
 
 	// make sure cancellation cleanup works
 	_, err = os.Stat(config.CurrentConfig().CLIDownloadLockFileName())
-	if err == nil {
-		assert.Error(t, err)
-	}
+	assert.Error(t, err)
 }
 
 func getTestAsset() *Release {

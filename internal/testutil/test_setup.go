@@ -117,7 +117,7 @@ func CreateDummyProgressListener(t *testing.T) {
 	go func() {
 		for {
 			select {
-			case <-progress.Channel:
+			case <-progress.ToServerProgressChannel:
 				continue
 			case <-dummyProgressStopChannel:
 				return

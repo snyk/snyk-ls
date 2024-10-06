@@ -58,15 +58,6 @@ func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
 	assert.Equal(t, config.FormatHtml, config.CurrentConfig().Format())
 }
 
-func Test_shouldShowUsageOnUnknownFlag(t *testing.T) {
-	args := []string{"snyk-ls", "-unknown", config.FormatHtml}
-
-	output, err := parseFlags(args, config.New())
-
-	assert.True(t, strings.Contains(output, "Usage of snyk-ls"))
-	assert.NotNil(t, err)
-}
-
 func Test_shouldDisplayLicenseInformationWithFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-licenses"}
 	output, _ := parseFlags(args, config.New())

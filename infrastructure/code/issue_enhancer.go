@@ -142,7 +142,12 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
 
+		ctx, cancel := context.WithCancel(s.Context())
+		defer cancel()
+
 		p := progress.NewTracker(true)
+		go func() { p.CancelOrDone(cancel, ctx.Done()) }() // make uploads in batches until no missing files reported anymore
+
 		fixMsg := "Attempting to fix " + issueTitle(issue) + " (Snyk)"
 		p.BeginWithMessage(fixMsg, "")
 		defer p.End()

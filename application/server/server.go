@@ -18,7 +18,9 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -234,7 +236,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 
 		startClientMonitor(params, logger)
 
-		go createProgressListener(progress.Channel, srv, c.Logger())
+		go createProgressListener(progress.ToServerProgressChannel, srv, c.Logger())
 		registerNotifier(c, srv)
 
 		addWorkspaceFolders(c, params, workspace.Get())
@@ -434,6 +436,50 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
 		return nil, nil
 	})
+}
+
+func startOfflineDetection(c *config.Config) { //nolint:unused // this is gonna be used soon
+	go func() {
+		timeout := time.Second * 10
+		client := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()
+		client.Timeout = timeout - 1
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+
+		type logLevelConfigurable interface {
+			SetLogLevel(level zerolog.Level)
+		}
+
+		if loggingRoundTripper, ok := client.Transport.(logLevelConfigurable); ok {
+			loggingRoundTripper.SetLogLevel(zerolog.ErrorLevel)
+		}
+
+		for {
+			u := "https://downloads.snyk.io/cli/stable/version" // FIXME: which URL to use?
+			response, err := client.Get(u)
+			if err != nil {
+				if !c.Offline() {
+					msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
+					reportedErr := errors.Join(err, errors.New(msg))
+					c.Logger().Err(reportedErr).Send()
+					di.Notifier().SendShowMessage(sglsp.Warning, msg)
+				}
+				c.SetOffline(true)
+			} else {
+				if c.Offline() {
+					msg := fmt.Sprintf("Snyk is active again. We were able to reach %s", u)
+					di.Notifier().SendShowMessage(sglsp.Info, msg)
+					c.Logger().Info().Msg(msg)
+				}
+				c.SetOffline(false)
+			}
+			if response != nil {
+				_ = response.Body.Close()
+			}
+			time.Sleep(timeout)
+		}
+	}()
 }
 
 func deleteExpiredCache() {
@@ -657,7 +703,7 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	return handler.New(func(_ context.Context, params types.WorkdoneProgressCancelParams) (any, error) {
 		c := config.CurrentConfig()
 		c.Logger().Debug().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
-		CancelProgress(params.Token)
+		progress.Cancel(params.Token)
 		return nil, nil
 	})
 }

@@ -26,7 +26,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -49,41 +48,36 @@ func createProgressListener(progressChannel chan types.ProgressParams, server ty
 		}
 		break
 	}
-	logger.Debug().Msg("started listener")
-	defer logger.Debug().Msg("stopped listener")
+	logger.Debug().Msg("started progress listener")
+	defer logger.Debug().Msg("stopped progress listener")
 	for {
 		select {
 		case p := <-progressChannel:
-			if p.Value == nil {
-				logger.Debug().Msg("sending create progress msg ")
+			// on beginning a progress, we need to create it with a callback
+			if _, ok := p.Value.(types.WorkDoneProgressBegin); ok {
+				logger.Debug().Msg("sending create progress msg")
 				_, err := server.Callback(context.Background(), "window/workDoneProgress/create", p) // response is void, see https://microsoft.github.io/language-server-protocol/specification#window_workDoneProgress_create
-
 				if err != nil {
 					logger.Error().
 						Err(err).
 						Str("method", "window/workDoneProgress/create").
 						Msg("error while sending workDoneProgress request")
-
-					// In case an error occurs a server must not send any progress notification using the token provided in the request.
-					CancelProgress(p.Token)
 				}
-			} else {
-				logger.Debug().Interface("progress", p).Msg("sending create progress report")
-				_ = server.Notify(context.Background(), "$/progress", p)
 			}
+			notifyProgress(server, p)
 		case <-progressStopChan:
-			logger.Debug().Msg("received stop message")
+			logger.Debug().Msg("received stop message for progress listener")
 			return
 		}
 	}
 }
 
-func disposeProgressListener() {
-	progressStopChan <- true
+func notifyProgress(server types.Server, p types.ProgressParams) {
+	_ = server.Notify(context.Background(), "$/progress", p)
 }
 
-func CancelProgress(token types.ProgressToken) {
-	progress.CancelProgressChannel <- token
+func disposeProgressListener() {
+	progressStopChan <- true
 }
 
 func registerNotifier(c *config.Config, srv types.Server) {
@@ -103,9 +97,8 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			notifier(c, srv, "window/showMessage", params)
 			logger.Debug().Interface("message", params).Msg("showing message")
 		case types.DiagnosticsOverviewParams:
-			notifier(c, srv, "$/snyk.diagnosticsOverview", params)
 			logger.Debug().
-				Msgf("publishing diagnostics overview for %s", params.Product)
+				Msgf("received diagnostics overview for %s, discarding", params.Product)
 		case types.PublishDiagnosticsParams:
 			notifier(c, srv, "textDocument/publishDiagnostics", params)
 			notifier(c, srv, "$/snyk.publishDiagnostics316", params)

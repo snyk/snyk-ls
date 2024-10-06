@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/internal/product"
 	"os"
 	"reflect"
 	"strconv"
@@ -395,8 +396,10 @@ func updateSeverityFilter(c *config.Config, s types.SeverityFilter) {
 		}
 
 		for _, folder := range ws.Folders() {
-			// Nil means send for all products found in reported issues.
-			folder.FilterAndPublishDiagnostics(nil)
+			folder.FilterAndPublishDiagnostics(product.ProductOpenSource)
+			folder.FilterAndPublishDiagnostics(product.ProductInfrastructureAsCode)
+			folder.FilterAndPublishDiagnostics(product.ProductCode)
+			folder.FilterAndPublishDiagnostics(product.ProductContainer)
 		}
 	}
 }

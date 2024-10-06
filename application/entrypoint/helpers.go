@@ -12,10 +12,19 @@ import (
 
 func OnPanicRecover() {
 	if err := recover(); err != nil {
-		fmt.Println("🚨 Panicking 🚨")
+		panickingMsg := "🚨 Panicking 🚨"
+		fmt.Println(panickingMsg)
 		fmt.Println(err)
 		debug.PrintStack()
-		er := sentry.NewSentryErrorReporter(config.CurrentConfig(), nil)
+
+		c := config.CurrentConfig()
+		logger := c.Logger()
+
+		logger.Error().Msg(panickingMsg)
+		logger.Error().Any("recovered panic", err).Send()
+		logger.Error().Msg(string(debug.Stack()))
+
+		er := sentry.NewSentryErrorReporter(c, nil)
 		er.CaptureError(fmt.Errorf("%v", err))
 		er.FlushErrorReporting()
 	}

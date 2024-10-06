@@ -106,7 +106,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		d.progressTracker.BeginWithMessage("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
 	}
 
-	doneCh := make(chan bool)
+	doneCh := make(chan struct{}, 1)
 
 	var resp *http.Response
 
@@ -117,11 +117,11 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	}
 
 	go func(body io.ReadCloser) {
-		d.progressTracker.CancelOrDone(func() {
+		cancel := func() {
 			_ = body.Close()
-
 			logger.Debug().Msgf("Cancellation received. Aborting %s.", kindStr)
-		}, doneCh)
+		}
+		d.progressTracker.CancelOrDone(cancel, doneCh)
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
@@ -131,7 +131,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	executableFileName := cliDiscovery.ExecutableName(isUpdate)
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
-		doneCh <- true
+		doneCh <- struct{}{}
 		logger.Debug().Msgf("finished Snyk CLI %s", kindStr)
 	}(resp.Body)
 

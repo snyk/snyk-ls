@@ -34,17 +34,18 @@ func NewCodeTrackerFactory() codeClientScan.TrackerFactory {
 }
 
 func (t trackerFactory) GenerateTracker() codeClientScan.Tracker {
-	return newCodeTracker(progress.Channel, progress.CancelProgressChannel)
+	newTracker := progress.NewTracker(true)
+	return newCodeTracker(newTracker.GetChannel(), newTracker.GetCancelChannel())
 }
 
 type tracker struct {
 	token         types.ProgressToken
 	finished      bool
 	channel       chan types.ProgressParams
-	cancelChannel chan types.ProgressToken
+	cancelChannel chan bool
 }
 
-func newCodeTracker(channel chan types.ProgressParams, cancelChannel chan types.ProgressToken) codeClientScan.Tracker {
+func newCodeTracker(channel chan types.ProgressParams, cancelChannel chan bool) codeClientScan.Tracker {
 	return &tracker{
 		channel:       channel,
 		cancelChannel: cancelChannel,

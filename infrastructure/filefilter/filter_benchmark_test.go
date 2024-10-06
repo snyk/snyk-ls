@@ -21,7 +21,7 @@ func BenchmarkFindNonIgnoredFiles(b *testing.B) {
 	b.ResetTimer() // reset timer to not include the clone time
 	for i := 0; i < b.N; i++ {
 		b.Log("Finding non ignored files in ", repo)
-		filesCh := filter.FindNonIgnoredFiles()
+		filesCh := filter.FindNonIgnoredFiles(getTestTracker())
 		for range filesCh { // drain the channel
 		}
 		b.Log("Finished benchmark iteration ", i)

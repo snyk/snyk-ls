@@ -73,12 +73,7 @@ func dummyProgressListeners(t *testing.T) {
 	t.Cleanup(func() { progress.CleanupChannels() })
 	go func() {
 		for {
-			<-progress.Channel
-		}
-	}()
-	go func() {
-		for {
-			<-progress.CancelProgressChannel
+			<-progress.ToServerProgressChannel
 		}
 	}()
 }

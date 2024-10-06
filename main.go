@@ -58,7 +58,7 @@ func main() {
 }
 
 func parseFlags(args []string, c *config.Config) (string, error) {
-	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
+	flags := flag.NewFlagSet(args[0], flag.ExitOnError)
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
 

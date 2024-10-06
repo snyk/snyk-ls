@@ -25,7 +25,7 @@
 
   <style nonce="${nonce}">
     :root {
-      --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Tahoma, Geneva, Verdana, sans-serif;
+      --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
     }
 
     ::-webkit-scrollbar {
@@ -175,7 +175,7 @@
         {{if gt (len .CVEs) 0}}
         <span class="delimiter"> </span>
         {{range $index, $cve := .CVEs}}
-        <a class="cve styled-link" target="_blank" rel="noopener noreferrer"
+        <a class="cve styled-link"  rel="noopener noreferrer"
           href="https://cve.mitre.org/cgi-bin/cvename.cgi?name=$cve">{{$cve}}</a>
         {{if ne $index (idxMinusOne (len $.CVEs))}}<span class="delimiter"></span>{{end}}
         {{end}}
@@ -184,7 +184,7 @@
         {{if gt (len .CWEs) 0}}
         <span class="delimiter"> </span>
         {{range $index, $cwe := .CWEs}}
-        <a class="cwe styled-link" target="_blank" rel="noopener noreferrer"
+        <a class="cwe styled-link"  rel="noopener noreferrer"
           href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>
         {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
         {{end}}
@@ -192,11 +192,11 @@
 
       {{if gt (len .CvssScore) 0}}
       <span class="delimiter"> </span>
-      <a class="cvssscore styled-link" target="_blank" rel="noopener noreferrer" href="https://www.first.org/cvss/calculator/3.1#{{.CVSSv3}}">CVSS {{.CvssScore}}</a>
+      <a class="cvssscore styled-link"  rel="noopener noreferrer" href="https://www.first.org/cvss/calculator/3.1#{{.CVSSv3}}">CVSS {{.CvssScore}}</a>
       {{end}}
 
         <span class="delimiter"> </span>
-        <a class="styled-link" target="_blank" rel="noopener noreferrer"
+        <a class="styled-link"  rel="noopener noreferrer"
           href="https://snyk.io/vuln/{{.IssueId}}">{{.IssueId}}</a>
       </div>
       {{ if .LessonUrl }}

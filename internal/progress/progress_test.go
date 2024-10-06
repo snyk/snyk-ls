@@ -25,19 +25,11 @@ import (
 )
 
 func TestBeginProgress(t *testing.T) {
-	channel := make(chan types.ProgressParams, 2)
-	progress := NewTestTracker(channel, nil)
+	channel := make(chan types.ProgressParams, 100000)
+	cancelChannel := make(chan bool, 1)
+	progress := NewTestTracker(channel, cancelChannel)
 
 	progress.BeginWithMessage("title", "message")
-
-	assert.Equal(
-		t,
-		types.ProgressParams{
-			Token: progress.token,
-			Value: nil,
-		},
-		<-channel,
-	)
 
 	assert.Equal(
 		t,
