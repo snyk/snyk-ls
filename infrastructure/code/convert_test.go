@@ -932,11 +932,12 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions_FilenameHasSpace(t *testing.T
 		Value: "var x = [];",
 	}}
 	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
-	filePath := "file_with%20space.js"
+	filePath := "file_with space.js"
 	baseDir := t.TempDir()
 	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("var x = new Array();"), 0666)
 	require.NoError(t, err)
-	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir, filePath)
+	// Here we provide HTML encoded path and it should be decoded in the function to access the correct file.
+	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir,  "file_with%20space.js")
 
 	assert.Equal(t, len(unifiedDiffSuggestions), 1)
 	assert.Equal(t, unifiedDiffSuggestions[0].FixId, "123e4567-e89b-12d3-a456-426614174000/1")
