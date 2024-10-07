@@ -127,4 +127,16 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		require.Emptyf(t, suggestions, "suggestions should be empty")
 		require.Error(t, err)
 	})
+
+	t.Run("happy - file has spaces", func(t *testing.T) {
+		cut.issueProvider = mockIssueProvider{}
+		cut.command = types.CommandData{
+			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath space", "issueId"},
+		}
+
+		suggestions, err := cut.Execute(context.Background())
+
+		require.Emptyf(t, suggestions, "suggestions should be empty")
+		require.Error(t, err)
+	})
 }
