@@ -932,7 +932,7 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions_FilenameHasSpace(t *testing.T
 		Value: "var x = [];",
 	}}
 	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
-	filePath := "file_with space.js"
+	filePath := "file_with%20space.js"
 	baseDir := t.TempDir()
 	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("var x = new Array();"), 0666)
 	require.NoError(t, err)
