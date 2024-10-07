@@ -926,7 +926,7 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
 	d.UnifiedDiffsPerFile["filepath"] = "diff"
 	expectedUnifiedDiffs = append(expectedUnifiedDiffs, d)
 
-	assert.Equal(unifiedDiffs, expectedUnifiedDiffs)
+	assert.Equal(t, unifiedDiffs, expectedUnifiedDiffs)
 }
 
 func Test_Result_getMarkers_basic(t *testing.T) {
