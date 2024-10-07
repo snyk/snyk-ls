@@ -918,13 +918,25 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
 	require.NoError(t, err)
 	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir, filePath)
 
-	// var expectedUnifiedDiffs []AutofixUnifiedDiffSuggestion
-	// d := AutofixUnifiedDiffSuggestion{
-		// FixId:               "123e4567-e89b-12d3-a456-426614174000/1",
-		// UnifiedDiffsPerFile: map[string]string{},
-	// }
-	// d.UnifiedDiffsPerFile["filepath"] = "diff"
-	// expectedUnifiedDiffs = append(expectedUnifiedDiffs, d)
+	assert.Equal(t, len(unifiedDiffSuggestions), 1)
+	assert.Equal(t, unifiedDiffSuggestions[0].FixId, "123e4567-e89b-12d3-a456-426614174000/1")
+	assert.NotEqual(t, len(unifiedDiffSuggestions[0].UnifiedDiffsPerFile), 0)
+}
+
+func Test_AutofixResponse_toUnifiedDiffSuggestions_FilenameHasSpace(t *testing.T) {
+	response := AutofixResponse{
+		Status: "COMPLETE",
+	}
+	fixes := []autofixResponseSingleFix{{
+		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
+		Value: "var x = [];",
+	}}
+	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
+	filePath := "file_with space.js"
+	baseDir := t.TempDir()
+	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("var x = new Array();"), 0666)
+	require.NoError(t, err)
+	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir, filePath)
 
 	assert.Equal(t, len(unifiedDiffSuggestions), 1)
 	assert.Equal(t, unifiedDiffSuggestions[0].FixId, "123e4567-e89b-12d3-a456-426614174000/1")
