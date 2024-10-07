@@ -136,7 +136,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 		suggestions, err := cut.Execute(context.Background())
 
-		require.Emptyf(t, suggestions, "suggestions should be empty")
-		require.Error(t, err)
+		require.NotEmptyf(t, suggestions, "suggestions should not be empty")
+		require.NoError(t, err)
 	})
 }
