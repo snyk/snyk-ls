@@ -17,14 +17,12 @@
 package config
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -350,7 +348,7 @@ func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
 }
 
 func (c *Config) Load() {
-	c.LoadShellEnvironment()
+	configuration.LoadShellEnvironment()
 
 	c.m.RLock()
 	files := c.configFiles()
@@ -364,49 +362,6 @@ func (c *Config) Load() {
 	c.m.Unlock()
 }
 
-func (c *Config) LoadShellEnvironment() {
-	if runtime.GOOS == "windows" {
-		return
-	}
-	parsedEnv := getParsedEnvFromShell("bash")
-	shell := parsedEnv["SHELL"]
-	fromSpecificShell := getParsedEnvFromShell(shell)
-
-	if len(fromSpecificShell) > 0 {
-		c.setParsedVariablesToEnv(fromSpecificShell)
-	} else {
-		c.setParsedVariablesToEnv(parsedEnv)
-	}
-}
-
-func getParsedEnvFromShell(shell string) gotenv.Env {
-	// guard against command injection
-	var shellWhiteList = map[string]bool{
-		"bash":      true,
-		"/bin/zsh":  true,
-		"/bin/sh":   true,
-		"/bin/fish": true,
-		"/bin/csh":  true,
-		"/bin/ksh":  true,
-		"/bin/bash": true,
-	}
-
-	if !shellWhiteList[shell] {
-		return gotenv.Env{}
-	}
-
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancelFunc()
-
-	// deepcode ignore CommandInjection: false positive
-	env, err := exec.CommandContext(ctx, shell, "--login", "-i", "-c", "env && exit").Output()
-	if err != nil {
-		return gotenv.Env{}
-	}
-	parsedEnv := gotenv.Parse(strings.NewReader(string(env)))
-	return parsedEnv
-}
-
 func (c *Config) loadFile(fileName string) {
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -415,26 +370,9 @@ func (c *Config) loadFile(fileName string) {
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)
 	env := gotenv.Parse(file)
-	c.setParsedVariablesToEnv(env)
-	c.updatePath(".")
+	configuration.SetParsedVariablesToEnv(env)
+	configuration.UpdatePath(".")
 	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
-}
-
-func (c *Config) setParsedVariablesToEnv(env gotenv.Env) {
-	for k, v := range env {
-		_, exists := os.LookupEnv(k)
-		if !exists {
-			err := os.Setenv(k, v)
-			if err != nil {
-				c.Logger().Warn().Str("method", "setParsedVariablesToEnv").Msg("Couldn't set environment variable " + k)
-			}
-		} else {
-			// add to path, don't ignore additional paths
-			if k == "PATH" {
-				c.updatePath(v)
-			}
-		}
-	}
 }
 
 func (c *Config) NonEmptyToken() bool {
@@ -768,21 +706,6 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	return snykCodeTimeout
 }
 
-func (c *Config) updatePath(pathExtension string) {
-	if pathExtension == "" {
-		return
-	}
-	err := os.Setenv("PATH", os.Getenv("PATH")+pathListSeparator+pathExtension)
-	c.m.Lock()
-	c.path += pathListSeparator + pathExtension
-	c.m.Unlock()
-	c.Logger().Debug().Str("method", "updatePath").Msg("updated path with " + pathExtension)
-	c.Logger().Debug().Str("method", "updatePath").Msgf("PATH = %s", os.Getenv("PATH"))
-	if err != nil {
-		c.Logger().Warn().Str("method", "loadFile").Msg("Couldn't update path ")
-	}
-}
-
 // The order of the files is important - first file variable definitions win!
 func (c *Config) configFiles() []string {
 	var files []string
@@ -881,9 +804,9 @@ func (c *Config) SetAutomaticScanning(value bool) {
 func (c *Config) addDefaults() {
 	if //goland:noinspection GoBoolExpressions
 	runtime.GOOS != windows {
-		c.updatePath("/usr/local/bin")
-		c.updatePath("/bin")
-		c.updatePath(xdg.Home + "/bin")
+		configuration.UpdatePath("/usr/local/bin")
+		configuration.UpdatePath("/bin")
+		configuration.UpdatePath(xdg.Home + "/bin")
 	}
 	c.determineJavaHome()
 	c.mavenDefaults()

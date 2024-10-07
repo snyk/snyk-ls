@@ -34,15 +34,6 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		assert.Contains(t, c.Path(), pathFromEnv)
 	})
 
-	t.Run("add to path from environment", func(t *testing.T) {
-		pathFromEnv := "a"
-		t.Setenv("PATH", pathFromEnv)
-		c := New()
-		c.updatePath("b")
-		assert.Contains(t, c.path, pathListSeparator+"b")
-		assert.Contains(t, c.path, pathFromEnv+pathListSeparator)
-	})
-
 	t.Run("automatically add /usr/local/bin on linux and macOS", func(t *testing.T) {
 		if //goland:noinspection GoBoolExpressions
 		runtime.GOOS == windows {

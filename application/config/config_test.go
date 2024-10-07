@@ -136,7 +136,7 @@ func Test_updatePath(t *testing.T) {
 	t.Setenv("PATH", "a")
 	c := New()
 
-	c.updatePath("b")
+	configuration.UpdatePath("b")
 
 	assert.Contains(t, c.path, string(os.PathListSeparator)+"b")
 	assert.Contains(t, c.path, "a"+string(os.PathListSeparator))
