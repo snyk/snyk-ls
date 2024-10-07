@@ -31,7 +31,6 @@ import (
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
-	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -919,12 +918,13 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
 	require.NoError(t, err)
 	unifiedDiffs := response.toUnifiedDiffSuggestions(baseDir, filePath)
 
-	expectedUnifiedDiffs := []code.AutofixUnifiedDiffSuggestion{
-			{
-				FixId:               "12321",
-				UnifiedDiffsPerFile: nil,
-			},
-		}
+	var expectedUnifiedDiffs []AutofixUnifiedDiffSuggestion
+	d := AutofixUnifiedDiffSuggestion{
+		FixId:               "blabla",
+		UnifiedDiffsPerFile: map[string]string{},
+	}
+	d.UnifiedDiffsPerFile["filepath"] = "diff"
+	expectedUnifiedDiffs = append(expectedUnifiedDiffs, d)
 
 	assert.Equal(unifiedDiffs, expectedUnifiedDiffs)
 }
