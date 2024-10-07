@@ -18,8 +18,6 @@ package types
 
 import (
 	"context"
-	"github.com/pkg/browser"
-	"github.com/snyk/snyk-ls/application/config"
 	"sync"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -49,10 +47,7 @@ const (
 )
 
 var (
-	DefaultOpenBrowserFunc = func(url string) {
-		browser.Stdout = config.CurrentConfig().Logger()
-		auth.OpenBrowser(url)
-	}
+	DefaultOpenBrowserFunc = func(url string) { auth.OpenBrowser(url) }
 )
 
 type Command interface {
