@@ -903,6 +903,31 @@ func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
 	assert.Contains(t, editValues, "test1", "test2")
 }
 
+func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
+	response := AutofixResponse{
+		Status: "COMPLETE",
+	}
+	fixes := []autofixResponseSingleFix{{
+		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
+		Value: "var x = [];",
+	}}
+	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
+	filePath := "file.js"
+	baseDir := t.TempDir()
+	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("var x = new Array();"), 0666)
+	require.NoError(t, err)
+	unifiedDiffs = response.toUnifiedDiffSuggestions(baseDir, filePath)
+
+	expectedUnifiedDiffs := []code.AutofixUnifiedDiffSuggestion{
+			{
+				FixId:               uuid.NewString(),
+				UnifiedDiffsPerFile: nil,
+			},
+		}
+
+	assert.Equal(unifiedDiffs, expectedUnifiedDiffs)
+}
+
 func Test_Result_getMarkers_basic(t *testing.T) {
 	r := codeClientSarif.Result{
 		Message: codeClientSarif.ResultMessage{

@@ -607,8 +607,7 @@ func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir string, filePath stri
 	logger := config.CurrentConfig().Logger().With().Str("method", "toUnifiedDiffSuggestions").Logger()
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
 	for _, suggestion := range s.AutofixSuggestions {
-		// path := ToAbsolutePath(baseDir, filePath)
-		path, err := url.PathUnescape(ToAbsolutePath(baseDir, filePath))
+		path, err := DecodePath(ToAbsolutePath(baseDir, filePath))
 		if err != nil {
 			logger.Err(err).Msgf("cannot decode filePath %s", filePath)
 		}
