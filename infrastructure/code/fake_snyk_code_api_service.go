@@ -137,12 +137,14 @@ type FakeSnykCodeClient struct {
 	maxConcurrentScans     int
 	NoFixSuggestions       bool
 	UnifiedDiffSuggestions []AutofixUnifiedDiffSuggestion
+	AutofixStatus          AutofixStatus
 	Options                map[string]AnalysisOptions
 	C                      *config.Config
 }
 
-func (f *FakeSnykCodeClient) GetAutofixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
-	return f.UnifiedDiffSuggestions, nil
+func (f *FakeSnykCodeClient) GetAutofixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
+	f.AutofixStatus = AutofixStatus{message: completeStatus }
+	return f.UnifiedDiffSuggestions, f.AutofixStatus, nil
 }
 
 func (f *FakeSnykCodeClient) addCall(params []any, op string) {
