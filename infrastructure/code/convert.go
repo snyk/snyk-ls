@@ -608,6 +608,10 @@ func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir string, filePath stri
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
 	for _, suggestion := range s.AutofixSuggestions {
 		path := ToAbsolutePath(baseDir, filePath)
+		path, err := url.PathUnescape(ToAbsolutePath(baseDir, filePath))
+		if err != nil {
+			logger.Err(err).Msgf("cannot decode filePath %s", filePath)
+		}
 		fileContent, err := os.ReadFile(path)
 		if err != nil {
 			logger.Err(err).Msgf("cannot read fileContent %s", baseDir)

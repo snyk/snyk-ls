@@ -113,7 +113,7 @@ func TempWorkdirWithIssues(t *testing.T) (filePath string, folderPath string) {
 	_, err = command.Output()
 	require.NoError(t, err)
 
-	filePath = filepath.Join(folderPath, "Dummy"+FakeFileExtension)
+	filePath = filepath.Join(folderPath, "Dummy_with space"+FakeFileExtension)
 	classWithQualityIssue := "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n};"
 	err = os.WriteFile(filePath, []byte(classWithQualityIssue), 0600)
 	if err != nil {
