@@ -398,6 +398,7 @@ func getParsedEnvFromShell(shell string) gotenv.Env {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelFunc()
 
+	// deepcode ignore CommandInjection: false positive
 	env, err := exec.CommandContext(ctx, shell, "--login", "-i", "-c", "env && exit").Output()
 	if err != nil {
 		return gotenv.Env{}

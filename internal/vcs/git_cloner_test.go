@@ -18,6 +18,7 @@ package vcs
 
 import (
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -38,6 +39,31 @@ func TestClone_ShouldClone(t *testing.T) {
 
 	assert.NotNil(t, repo)
 	assert.NoError(t, err)
+}
+
+func TestClone_ShouldClone_SameOriginRemoteUrl(t *testing.T) {
+	c := testutil.UnitTest(t)
+	repoPath := t.TempDir()
+	srcRepo, _ := initGitRepo(t, repoPath, false)
+
+	tmpFolderPath := t.TempDir()
+	cloneTargetBranchName := "master"
+	clonedRepo, err := Clone(c.Logger(), repoPath, tmpFolderPath, cloneTargetBranchName)
+
+	assert.NotNil(t, clonedRepo)
+	assert.NoError(t, err)
+
+	srcConfig, err := srcRepo.Config()
+	assert.NoError(t, err)
+	remoteSrcConfig := srcConfig.Remotes["origin"]
+	assert.NotNil(t, remoteSrcConfig)
+
+	clonedRepoConfig, err := clonedRepo.Config()
+	assert.NoError(t, err)
+	remoteDstConfig := clonedRepoConfig.Remotes["origin"]
+	assert.NotNil(t, remoteDstConfig)
+
+	assert.Equal(t, remoteSrcConfig.URLs[0], remoteDstConfig.URLs[0])
 }
 
 func TestClone_InvalidBranchName(t *testing.T) {
@@ -73,6 +99,40 @@ func TestClone_DetachedHead_TargetBranchExists(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, cloneRepo)
+}
+
+func TestClone_DetachedHead_TargetBranchExists_SameOriginRemoteUrl(t *testing.T) {
+	c := testutil.UnitTest(t)
+	repoPath := t.TempDir()
+	destinationPath := t.TempDir()
+	srcRepo, currentHead := initGitRepo(t, repoPath, true)
+	worktree, err := srcRepo.Worktree()
+	assert.NoError(t, err)
+	_, err = worktree.Commit("testCommit", &git.CommitOptions{
+		Author: &object.Signature{Name: t.Name()},
+	})
+	assert.NoError(t, err)
+
+	// Now checkout the old head hash
+	err = worktree.Checkout(&git.CheckoutOptions{Hash: currentHead.Hash()})
+	assert.NoError(t, err)
+	cloneTargetBranchName := "master"
+	clonedRepo, err := Clone(c.Logger(), repoPath, destinationPath, cloneTargetBranchName)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, clonedRepo)
+
+	srcConfig, err := srcRepo.Config()
+	assert.NoError(t, err)
+	remoteSrcConfig := srcConfig.Remotes["origin"]
+	assert.NotNil(t, remoteSrcConfig)
+
+	clonedRepoConfig, err := clonedRepo.Config()
+	assert.NoError(t, err)
+	remoteDstConfig := clonedRepoConfig.Remotes["origin"]
+	assert.NotNil(t, remoteDstConfig)
+
+	assert.Equal(t, remoteSrcConfig.URLs[0], remoteDstConfig.URLs[0])
 }
 
 func TestClone_DetachedHead_TargetBranchDoesNotExists(t *testing.T) {
@@ -221,8 +281,18 @@ func initGitRepo(t *testing.T, repoPath string, isModified bool) (*git.Repositor
 		})
 		assert.NoError(t, err)
 	}
+
 	head, err := repo.Head()
 	assert.NoError(t, err)
 
+	repoConfig, err := repo.Config()
+	assert.NoError(t, err)
+
+	repoConfig.Remotes["origin"] = &config.RemoteConfig{
+		Name: "origin",
+		URLs: []string{"git@github.com:snyk/snyk-goof.git"},
+	}
+	err = repo.Storer.SetConfig(repoConfig)
+	assert.NoError(t, err)
 	return repo, head
 }
