@@ -934,7 +934,7 @@ func Test_AutofixResponse_toAutofixSuggestion_HtmlEncodedFilePath(t *testing.T) 
 
 	assert.Contains(t, editValues, "test1", "test2")
 	for _, filePath := range editFilePaths {
-		assert.Contains(t, editFilePaths, "file_with space.js")
+		assert.Contains(t, filePath, "file_with space.js")
 	}
 }
 
