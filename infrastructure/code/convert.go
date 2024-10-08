@@ -592,10 +592,16 @@ func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string)
 
 // toAutofixSuggestionsIssues converts the HTTP json-first payload to the domain type
 func (s *AutofixResponse) toAutofixSuggestions(baseDir string, filePath string) (fixSuggestions []AutofixSuggestion) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "toAutofixSuggestions").Logger()
 	for _, suggestion := range s.AutofixSuggestions {
+		decodedPath, err := DecodePath(ToAbsolutePath(baseDir, filePath))
+		if err != nil {
+			logger.Err(err).Msgf("cannot decode filePath %s", filePath)
+			continue
+		}
 		d := AutofixSuggestion{
 			FixId:       suggestion.Id,
-			AutofixEdit: createAutofixWorkspaceEdit(ToAbsolutePath(baseDir, filePath), suggestion.Value),
+			AutofixEdit: createAutofixWorkspaceEdit(decodedPath, suggestion.Value),
 		}
 		fixSuggestions = append(fixSuggestions, d)
 	}
