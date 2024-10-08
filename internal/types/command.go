@@ -21,8 +21,6 @@ import (
 	"github.com/pkg/browser"
 	"os"
 	"sync"
-
-	"github.com/snyk/go-application-framework/pkg/auth"
 )
 
 const (
@@ -51,7 +49,7 @@ const (
 var (
 	DefaultOpenBrowserFunc = func(url string) {
 		browser.Stdout = os.Stderr
-		auth.OpenBrowser(url)
+		_ = browser.OpenURL(url)
 	}
 )
 
