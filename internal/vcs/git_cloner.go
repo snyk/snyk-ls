@@ -18,6 +18,7 @@ package vcs
 
 import (
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/otiai10/copy"
 	"github.com/rs/zerolog"
@@ -48,7 +49,57 @@ func Clone(logger *zerolog.Logger, srcRepoPath string, destinationPath string, t
 		return targetRepo, nil
 	}
 
+	// Patch Origin Remote for the cloned repo. This is only necessary if we use checkout since the remote origin URL will be the srcRepoPath
+	err = patchClonedRepoRemoteOrigin(logger, srcRepoPath, clonedRepo)
+	if err != nil {
+		logger.Error().Err(err).Msgf("Could not patch origin remote url in cloned repo %s", destinationPath)
+	}
 	return clonedRepo, nil
+}
+
+func patchClonedRepoRemoteOrigin(logger *zerolog.Logger, srcRepoPath string, clonedRepo *git.Repository) error {
+	srcRepo, err := git.PlainOpen(srcRepoPath)
+	if err != nil {
+		logger.Error().Err(err).Msgf("Could not open source repo: %s", srcRepoPath)
+		return err
+	}
+
+	srcConfig, err := srcRepo.Config()
+	if err != nil {
+		logger.Error().Err(err).Msg("Could not get config from source repo")
+		return err
+	}
+
+	var originURLs []string
+	if origin, ok := srcConfig.Remotes["origin"]; ok && len(origin.URLs) > 0 {
+		originURLs = origin.URLs
+	} else {
+		logger.Warn().Msg("Source repo has no origin remote or no URLs. Skipping patching clone origin")
+		return nil
+	}
+
+	clonedConfig, err := clonedRepo.Config()
+	if err != nil {
+		logger.Error().Err(err).Msg("Could not get config from cloned repo")
+		return err
+	}
+
+	if origin, ok := clonedConfig.Remotes["origin"]; ok {
+		origin.URLs = originURLs
+	} else {
+		clonedConfig.Remotes["origin"] = &config.RemoteConfig{
+			Name: "origin",
+			URLs: originURLs,
+		}
+	}
+
+	err = clonedRepo.Storer.SetConfig(clonedConfig)
+	if err != nil {
+		logger.Error().Err(err).Msg("Could not set config for cloned repo")
+		return err
+	}
+
+	return nil
 }
 
 func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath string, destinationRepoPath string, targetBranchReferenceName plumbing.ReferenceName) *git.Repository {
