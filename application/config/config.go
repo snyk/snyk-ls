@@ -379,6 +379,7 @@ func (c *Config) LoadShellEnvironment() {
 	}
 }
 
+// deepcode ignore CommandInjection: false positive
 func getParsedEnvFromShell(shell string) gotenv.Env {
 	// guard against command injection
 	var shellWhiteList = map[string]bool{
