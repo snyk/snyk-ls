@@ -504,6 +504,15 @@ type WorkspaceFolder struct {
 	Name string `json:"name,omitempty"`
 }
 
+type LsSdk struct {
+	Type string `json:"type,omitempty"`
+	Path string `json:"path,omitempty"`
+}
+
+type GetSdk struct {
+	FolderPath string `json:"folder,omitempty"`
+}
+
 type DidChangeWorkspaceFoldersParams struct {
 	// The actual workspace folder change Event.
 	Event WorkspaceFoldersChangeEvent `json:"Event,omitempty"`

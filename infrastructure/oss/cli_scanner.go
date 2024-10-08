@@ -207,6 +207,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	cliScanner.mutex.Unlock()
 
 	cmd := commandFunc([]string{workDir}, map[string]bool{"": true}, workDir)
+	cliScanner.notifier.Send(types.GetSdk{FolderPath: workDir})
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {

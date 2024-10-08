@@ -26,7 +26,9 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/internal/sdk"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func notifier(c *config.Config, srv types.Server, method string, params any) {
@@ -84,6 +86,8 @@ func registerNotifier(c *config.Config, srv types.Server) {
 	logger := c.Logger().With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
 		switch params := params.(type) {
+		case types.GetSdk:
+			handleGetSdks(params, logger, srv)
 		case types.FolderConfigsParam:
 			notifier(c, srv, "$/snyk.folderConfigs", params)
 			logger.Debug().Any("folderConfig", params).Msg("sending folderConfig to client")
@@ -146,6 +150,24 @@ func registerNotifier(c *config.Config, srv types.Server) {
 	}
 	di.Notifier().CreateListener(callbackFunction)
 	logger.Debug().Str("method", "registerNotifier").Msg("registered notifier")
+}
+
+func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server) bool {
+	folder := types.WorkspaceFolder{Uri: uri.PathToUri(params.FolderPath)}
+	logger.Debug().Str("folderPath", params.FolderPath).Msg("retrieving sdk")
+	callback, err := srv.Callback(context.Background(), "workspace/snyk.sdks", folder)
+	if err != nil {
+		logger.Warn().Err(err).Str("folderPath", params.FolderPath).Msg("could not retrieve sdk")
+		return true
+	}
+	var sdks []types.LsSdk
+	err = callback.UnmarshalResult(&sdks)
+	if err != nil {
+		logger.Warn().Err(err).Str("resultString", callback.ResultString()).Msg("could not unmarshal sdk response")
+		return true
+	}
+	sdk.InitSdks(sdks, logger)
+	return false
 }
 
 func handleInlineValueRefresh(srv types.Server, logger *zerolog.Logger) {
