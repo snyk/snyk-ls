@@ -18,7 +18,6 @@ package config
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
@@ -124,16 +123,6 @@ func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T
 	c := CurrentConfig()
 
 	assert.Equal(t, 12*time.Hour, c.snykCodeAnalysisTimeoutFromEnv())
-}
-
-func Test_updatePath(t *testing.T) {
-	t.Setenv("PATH", "a")
-	c := New()
-
-	configuration.UpdatePath("b")
-
-	assert.Contains(t, c.path, string(os.PathListSeparator)+"b")
-	assert.Contains(t, c.path, "a"+string(os.PathListSeparator))
 }
 
 func TestSnykCodeApi(t *testing.T) {

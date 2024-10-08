@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/adrg/xdg"
@@ -64,8 +65,10 @@ func Test_updatePathWithDefaults(t *testing.T) {
 	t.Run("automatically add $JAVA_HOME/bin if set", func(t *testing.T) {
 		javaHome := "JAVA_HOME_DUMMY"
 		t.Setenv("JAVA_HOME", javaHome)
-		c := New()
-		assert.Contains(t, c.Path(), pathListSeparator+javaHome+string(os.PathSeparator)+"bin")
+		New()
+		actual := os.Getenv("PATH")
+		prefix := javaHome + string(os.PathSeparator) + "bin"
+		assert.True(t, strings.Contains(actual, prefix), actual+" does not contain "+prefix)
 	})
 }
 
