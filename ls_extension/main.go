@@ -52,14 +52,14 @@ func Init(engine workflow.Engine) error {
 		configuration.CONFIG_FILE,
 		"c",
 		"",
-		"provide the full path of a config file to use. format VARIABLENAME=VARIABLEVALUE")
+		"provide the full path of a cfg file to use. format VARIABLENAME=VARIABLEVALUE")
 	flags.Bool(
 		"licenses",
 		false,
 		"displays license information")
 
-	config := workflow.ConfigurationOptionsFromFlagset(flags)
-	entry, _ := engine.Register(WORKFLOWID_LS, config, lsWorkflow)
+	cfg := workflow.ConfigurationOptionsFromFlagset(flags)
+	entry, _ := engine.Register(WORKFLOWID_LS, cfg, lsWorkflow)
 	entry.SetVisibility(false)
 
 	return nil

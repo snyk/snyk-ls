@@ -65,8 +65,7 @@ func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir
 	return output, err
 }
 
-func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingDir string) ([]byte, error) {
-	output := []byte{}
+func (c ExtensionExecutor) doExecute(_ context.Context, cmd []string, workingDir string) ([]byte, error) {
 
 	engine := config.CurrentConfig().Engine()
 	engine.GetConfiguration().Set(configuration.TIMEOUT, c.cliTimeout.Seconds())
@@ -79,8 +78,11 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	configuration.LoadConfiguredEnvironment(legacyCLIConfig)
 
 	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
+	var output []byte
 	if len(data) > 0 {
 		output = data[0].GetPayload().([]byte)
+	} else {
+		output = []byte{}
 	}
 
 	return output, err
