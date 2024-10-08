@@ -922,14 +922,14 @@ func Test_AutofixResponse_toAutofixSuggestion_HtmlEncodedFilePath(t *testing.T) 
 	// Here, we provide the HTML encoded path and expect toAutofixSuggestions to decode it.
 	edits := response.toAutofixSuggestions(baseDir, "file_with%20space.js")
 	editValues := make([]string, 0)
+	editFilePaths := make([]string, 0)
 	for _, edit := range edits {
 		change := edit.AutofixEdit.Changes[ToAbsolutePath(baseDir, filePath)][0]
 		editValues = append(editValues, change.NewText)
-	}
 
-	editFilePaths := make([]string, 0)
-	for key := range edit.AutofixEdit.Changes {
-		editFilePaths = append(editFilePaths, key)
+		for key := range edit.AutofixEdit.Changes {
+			editFilePaths = append(editFilePaths, key)
+		}
 	}
 
 	assert.Contains(t, editValues, "test1", "test2")
