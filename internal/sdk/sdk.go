@@ -38,7 +38,13 @@ func InitSdks(sdks []types.LsSdk, logger zerolog.Logger) {
 		case strings.Contains(strings.ToLower(sdk.Type), "java"):
 			env["JAVA_HOME"] = path
 		case strings.Contains(strings.ToLower(sdk.Type), "python"):
-			env["PYTHONHOME"] = path
+			symlinks, err := filepath.EvalSymlinks(path)
+			if err != nil {
+				symlinks = path
+			}
+			env["PYTHONPATH"] = symlinks
+			env["PYTHONHOME"] = filepath.Dir(symlinks)
+			pathExt = filepath.Dir(symlinks)
 		case strings.Contains(strings.ToLower(sdk.Type), "go"):
 			env["GOROOT"] = path
 		}
