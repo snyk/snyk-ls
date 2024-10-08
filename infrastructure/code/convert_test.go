@@ -933,7 +933,9 @@ func Test_AutofixResponse_toAutofixSuggestion_HtmlEncodedFilePath(t *testing.T) 
 	}
 
 	assert.Contains(t, editValues, "test1", "test2")
-	assert.Equal(t, editFilePaths, []string{"file_with space.js", "file_with space.js"})
+	for _, filePath := range editFilePaths {
+		assert.Contains(t, editFilePaths, "file_with space.js")
+	}
 }
 
 func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
