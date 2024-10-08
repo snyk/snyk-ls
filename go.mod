@@ -20,6 +20,7 @@ require (
 	github.com/otiai10/copy v1.14.0
 	github.com/pact-foundation/pact-go v1.10.0
 	github.com/pingcap/errors v0.11.4
+	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/pkg/errors v0.9.1
 	github.com/puzpuzpuz/xsync v1.5.2
 	github.com/puzpuzpuz/xsync/v3 v3.4.0
@@ -98,7 +99,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
-	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
