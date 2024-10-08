@@ -34,7 +34,6 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
-	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
 	"golang.org/x/oauth2"
 
@@ -280,6 +279,7 @@ func initWorkFlowEngine(c *Config) {
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, enableOAuth)
+	conf.Set(configuration.CONFIG_FILE, c.configFile)
 
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
@@ -345,34 +345,6 @@ func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.trustedFoldersFeatureEnabled = enabled
-}
-
-func (c *Config) Load() {
-	configuration.LoadShellEnvironment()
-
-	c.m.RLock()
-	files := c.configFiles()
-	c.m.RUnlock()
-	for _, fileName := range files {
-		c.loadFile(fileName)
-	}
-
-	c.m.Lock()
-	c.configLoaded.Set(true)
-	c.m.Unlock()
-}
-
-func (c *Config) loadFile(fileName string) {
-	file, err := os.Open(fileName)
-	if err != nil {
-		c.Logger().Debug().Str("method", "loadFile").Msg("Couldn't load " + fileName)
-		return
-	}
-	defer func(file *os.File) { _ = file.Close() }(file)
-	env := gotenv.Parse(file)
-	configuration.SetParsedVariablesToEnv(env)
-	configuration.UpdatePath(".")
-	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
 }
 
 func (c *Config) NonEmptyToken() bool {
@@ -704,24 +676,6 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 		}
 	}
 	return snykCodeTimeout
-}
-
-// The order of the files is important - first file variable definitions win!
-func (c *Config) configFiles() []string {
-	var files []string
-	configFile := c.configFile
-	if configFile != "" {
-		files = append(files, configFile)
-	}
-	home := os.Getenv("HOME")
-	if home == "" {
-		home = xdg.Home
-	}
-	stdFiles := []string{
-		".snyk.env",
-		home + "/.snyk.env",
-	}
-	return append(files, stdFiles...)
 }
 
 func (c *Config) Organization() string {

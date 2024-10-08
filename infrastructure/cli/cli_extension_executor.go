@@ -69,11 +69,14 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	output := []byte{}
 
 	engine := config.CurrentConfig().Engine()
+	engine.GetConfiguration().Set(configuration.TIMEOUT, c.cliTimeout.Seconds())
+
 	legacyCLI := workflow.NewWorkflowIdentifier("legacycli")
 	legacyCLIConfig := config.CurrentConfig().Engine().GetConfiguration().Clone()
+	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
-	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
+	configuration.LoadConfiguredEnvironment(legacyCLIConfig)
 
 	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
 	if len(data) > 0 {

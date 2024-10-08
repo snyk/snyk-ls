@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -67,7 +68,11 @@ func (c *Config) normalizePath(foundPath string) (string, bool) {
 func (c *Config) mavenDefaults() {
 	// explicitly and always use headless mode
 	mavenOptsVarName := "MAVEN_OPTS"
-	mavenOpts := fmt.Sprintf("%s %s", os.Getenv(mavenOptsVarName), "-Djava.awt.headless=true")
+	mavenOpts := os.Getenv(mavenOptsVarName)
+	headless := "-Djava.awt.headless=true"
+	if !strings.Contains(mavenOpts, headless) {
+		mavenOpts = fmt.Sprintf("%s %s", mavenOpts, headless)
+	}
 	_ = os.Setenv(mavenOptsVarName, mavenOpts)
 
 	mavenHome := os.Getenv("MAVEN_HOME")

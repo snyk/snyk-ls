@@ -75,12 +75,6 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, types.TokenAuthentication, c.authenticationMethod)
 }
 
-// this only tests that no error occurs on any os
-func TestConfig_LoadShellEnvironment(t *testing.T) {
-	c := New()
-	c.LoadShellEnvironment()
-}
-
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {
 	// Arrange
 	c := New()
@@ -140,34 +134,6 @@ func Test_updatePath(t *testing.T) {
 
 	assert.Contains(t, c.path, string(os.PathListSeparator)+"b")
 	assert.Contains(t, c.path, "a"+string(os.PathListSeparator))
-}
-
-func Test_loadFile(t *testing.T) {
-	t.Setenv("A", "")
-	t.Setenv("C", "")
-	_ = os.Unsetenv("A")
-	_ = os.Unsetenv("C")
-	envData := []byte("A=B\nC=D")
-	file, err := os.CreateTemp(".", "config_test_loadFile")
-	if err != nil {
-		assert.Fail(t, "Couldn't create temp file", err)
-	}
-	defer func(file *os.File) {
-		_ = file.Close()
-		_ = os.Remove(file.Name())
-	}(file)
-	if err != nil {
-		assert.Fail(t, "Couldn't create test file")
-	}
-	_, _ = file.Write(envData)
-	if err != nil {
-		assert.Fail(t, "Couldn't write to test file")
-	}
-
-	CurrentConfig().loadFile(file.Name())
-
-	assert.Equal(t, "B", os.Getenv("A"))
-	assert.Equal(t, "D", os.Getenv("C"))
 }
 
 func TestSnykCodeApi(t *testing.T) {

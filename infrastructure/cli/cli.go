@@ -29,6 +29,7 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/semaphore"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -92,9 +93,14 @@ func (c *SnykCli) getCommand(cmd []string, workingDir string, ctx context.Contex
 	if c.c.Logger().GetLevel() < zerolog.InfoLevel {
 		cmd = append(cmd, "-d")
 	}
+
+	cloneConfig := c.c.Engine().GetConfiguration().Clone()
+	cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
+	configuration.LoadConfiguredEnvironment(cloneConfig)
+	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
+
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 	command.Dir = workingDir
-	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
 	command.Env = cliEnv
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Args", command.Args).Send()
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()
