@@ -903,6 +903,47 @@ func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
 	assert.Contains(t, editValues, "test1", "test2")
 }
 
+func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
+	response := AutofixResponse{
+		Status: "COMPLETE",
+	}
+	fixes := []autofixResponseSingleFix{{
+		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
+		Value: "var x = [];",
+	}}
+	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
+	filePath := "file.js"
+	baseDir := t.TempDir()
+	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("var x = new Array();"), 0666)
+	require.NoError(t, err)
+	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir, filePath)
+
+	assert.Equal(t, len(unifiedDiffSuggestions), 1)
+	assert.Equal(t, unifiedDiffSuggestions[0].FixId, "123e4567-e89b-12d3-a456-426614174000/1")
+	assert.NotEqual(t, len(unifiedDiffSuggestions[0].UnifiedDiffsPerFile), 0)
+}
+
+func Test_AutofixResponse_toUnifiedDiffSuggestions_HtmlEncodedFilePath(t *testing.T) {
+	response := AutofixResponse{
+		Status: "COMPLETE",
+	}
+	fixes := []autofixResponseSingleFix{{
+		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
+		Value: "var x = [];",
+	}}
+	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
+	filePath := "file_with space.js"
+	baseDir := t.TempDir()
+	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("var x = new Array();"), 0666)
+	require.NoError(t, err)
+	// Here we provide the HTML encoded path and it should be decoded in the function to read the correct file.
+	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir,  "file_with%20space.js")
+
+	assert.Equal(t, len(unifiedDiffSuggestions), 1)
+	assert.Equal(t, unifiedDiffSuggestions[0].FixId, "123e4567-e89b-12d3-a456-426614174000/1")
+	assert.NotEqual(t, len(unifiedDiffSuggestions[0].UnifiedDiffsPerFile), 0)
+}
+
 func Test_Result_getMarkers_basic(t *testing.T) {
 	r := codeClientSarif.Result{
 		Message: codeClientSarif.ResultMessage{
