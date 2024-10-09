@@ -208,9 +208,15 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	cliScanner.mutex.Unlock()
 
 	// this asks the client for the current SDK and blocks on it
-	cliScanner.updateSDKs(workDir)
+	additionalParameters := cliScanner.updateSDKs(workDir)
 
-	cmd := commandFunc([]string{workDir}, map[string]bool{"": true}, workDir)
+	// if the sdk needs additional parameters, add them (Python plugin, I look at you. Yes, you)
+	args := []string{workDir}
+	if len(additionalParameters) > 0 {
+		args = append(args, additionalParameters...)
+	}
+
+	cmd := commandFunc(args, map[string]bool{"": true}, workDir)
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
@@ -237,7 +243,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) updateSDKs(workDir string) {
+func (cliScanner *CLIScanner) updateSDKs(workDir string) []string {
 	logger := cliScanner.config.Logger().With().Str("method", "updateSDKs").Logger()
 	sdkChan := make(chan []types.LsSdk)
 	getSdk := types.GetSdk{FolderPath: workDir, Result: sdkChan}
@@ -246,7 +252,7 @@ func (cliScanner *CLIScanner) updateSDKs(workDir string) {
 	// wait for sdk info
 	sdks := <-sdkChan
 	logger.Debug().Msg("received SDKs")
-	sdk.InitSdks(sdks, logger)
+	return sdk.UpdateEnvironment(sdks, logger)
 }
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string) []string {

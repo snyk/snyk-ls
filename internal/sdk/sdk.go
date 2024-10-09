@@ -28,8 +28,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func InitSdks(sdks []types.LsSdk, logger zerolog.Logger) {
-	logger = logger.With().Str("method", "InitSdks").Logger()
+func UpdateEnvironment(sdks []types.LsSdk, logger zerolog.Logger) []string {
+	logger = logger.With().Str("method", "UpdateEnvironment").Logger()
+	var additionalParameters []string
 	for i := 0; i < len(sdks); i++ {
 		sdk := sdks[i]
 		path := sdk.Path
@@ -46,6 +47,7 @@ func InitSdks(sdks []types.LsSdk, logger zerolog.Logger) {
 			env["PYTHONPATH"] = symlinks
 			env["PYTHONHOME"] = filepath.Dir(symlinks)
 			pathExt = filepath.Dir(symlinks)
+			additionalParameters = append(additionalParameters, "--command="+symlinks)
 		case strings.Contains(strings.ToLower(sdk.Type), "go"):
 			env["GOROOT"] = path
 		}
@@ -57,4 +59,5 @@ func InitSdks(sdks []types.LsSdk, logger zerolog.Logger) {
 			logger.Debug().Any("env", env).Msg("added")
 		}
 	}
+	return additionalParameters
 }
