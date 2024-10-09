@@ -17,6 +17,7 @@
 package sdk
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -48,9 +49,12 @@ func InitSdks(sdks []types.LsSdk, logger zerolog.Logger) {
 		case strings.Contains(strings.ToLower(sdk.Type), "go"):
 			env["GOROOT"] = path
 		}
-		configuration.UpdatePath(pathExt)
+
+		configuration.UpdatePath(pathExt, true)
 		logger.Debug().Msg("prepended " + pathExt)
-		configuration.SetParsedVariablesToEnv(env, true)
-		logger.Debug().Any("env", env).Msg("added")
+		for k, v := range env {
+			_ = os.Setenv(k, v)
+			logger.Debug().Any("env", env).Msg("added")
+		}
 	}
 }

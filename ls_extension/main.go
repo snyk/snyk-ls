@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/snyk-ls/application/entrypoint"
 	"github.com/snyk/snyk-ls/application/server"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -49,7 +48,7 @@ func Init(engine workflow.Engine) error {
 		config.FormatMd,
 		"sets format of diagnostics. Accepted values \""+config.FormatMd+"\" and \""+config.FormatHtml+"\"")
 	flags.StringP(
-		configuration.CONFIG_FILE,
+		"configfile",
 		"c",
 		"",
 		"provide the full path of a cfg file to use. format VARIABLENAME=VARIABLEVALUE")
@@ -83,7 +82,7 @@ func lsWorkflow(
 	defaultConfig.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
 
 	c := config.NewFromExtension(invocation.GetEngine())
-	c.SetConfigFile(extensionConfig.GetString(configuration.CONFIG_FILE))
+	c.SetConfigFile(extensionConfig.GetString("configfile"))
 	c.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
 	c.SetLogPath(extensionConfig.GetString("logPathFlag"))
 	c.SetFormat(extensionConfig.GetString("formatFlag"))

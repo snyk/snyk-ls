@@ -279,7 +279,7 @@ func initWorkFlowEngine(c *Config) {
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, enableOAuth)
-	conf.Set(configuration.CONFIG_FILE, c.configFile)
+	conf.Set("configfile", c.configFile)
 
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
@@ -758,9 +758,9 @@ func (c *Config) SetAutomaticScanning(value bool) {
 func (c *Config) addDefaults() {
 	if //goland:noinspection GoBoolExpressions
 	runtime.GOOS != windows {
-		configuration.UpdatePath("/usr/local/bin")
-		configuration.UpdatePath("/bin")
-		configuration.UpdatePath(xdg.Home + "/bin")
+		configuration.UpdatePath("/usr/local/bin", false)
+		configuration.UpdatePath("/bin", false)
+		configuration.UpdatePath(xdg.Home+"/bin", false)
 	}
 	c.determineJavaHome()
 	c.mavenDefaults()
