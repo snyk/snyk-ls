@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/envvars"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -65,19 +66,23 @@ func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir
 	return output, err
 }
 
-func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingDir string) ([]byte, error) {
-	output := []byte{}
-
+func (c ExtensionExecutor) doExecute(_ context.Context, cmd []string, workingDir string) ([]byte, error) {
 	engine := config.CurrentConfig().Engine()
+	engine.GetConfiguration().Set(configuration.TIMEOUT, c.cliTimeout.Seconds())
+
 	legacyCLI := workflow.NewWorkflowIdentifier("legacycli")
 	legacyCLIConfig := config.CurrentConfig().Engine().GetConfiguration().Clone()
+	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
-	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
+	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), workingDir)
 
 	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
+	var output []byte
 	if len(data) > 0 {
 		output = data[0].GetPayload().([]byte)
+	} else {
+		output = []byte{}
 	}
 
 	return output, err

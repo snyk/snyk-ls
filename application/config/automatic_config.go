@@ -23,13 +23,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+
+	"github.com/snyk/go-application-framework/pkg/envvars"
 )
 
 func (c *Config) determineJavaHome() {
 	javaHome := os.Getenv("JAVA_HOME")
 	if javaHome != "" {
 		c.Logger().Debug().Str("method", "determineJavaHome").Msgf("using JAVA_HOME from env %s", javaHome)
-		c.updatePath(javaHome + string(os.PathSeparator) + "bin")
+		envvars.UpdatePath(javaHome+string(os.PathSeparator)+"bin", false)
 		return
 	}
 	foundPath := c.FindBinaryInDirs(getJavaBinaryName())
@@ -43,7 +46,7 @@ func (c *Config) determineJavaHome() {
 	c.Logger().Debug().Str("method", "determineJavaHome").Msgf("detected java binary at %s", path)
 	binDir := filepath.Dir(path)
 	javaHome = filepath.Dir(binDir)
-	c.updatePath(binDir)
+	envvars.UpdatePath(binDir, false)
 	c.Logger().Debug().Str("method", "determineJavaHome").Msgf("setting JAVA_HOME to %s", javaHome)
 	_ = os.Setenv("JAVA_HOME", javaHome)
 }
@@ -65,12 +68,16 @@ func (c *Config) normalizePath(foundPath string) (string, bool) {
 func (c *Config) mavenDefaults() {
 	// explicitly and always use headless mode
 	mavenOptsVarName := "MAVEN_OPTS"
-	mavenOpts := fmt.Sprintf("%s %s", os.Getenv(mavenOptsVarName), "-Djava.awt.headless=true")
+	mavenOpts := os.Getenv(mavenOptsVarName)
+	headless := "-Djava.awt.headless=true"
+	if !strings.Contains(mavenOpts, headless) {
+		mavenOpts = fmt.Sprintf("%s %s", mavenOpts, headless)
+	}
 	_ = os.Setenv(mavenOptsVarName, mavenOpts)
 
 	mavenHome := os.Getenv("MAVEN_HOME")
 	if mavenHome != "" {
-		c.updatePath(mavenHome + string(os.PathSeparator) + "bin")
+		envvars.UpdatePath(mavenHome+string(os.PathSeparator)+"bin", false)
 		return
 	}
 	foundPath := c.findBinary(getMavenBinaryName())
@@ -81,7 +88,7 @@ func (c *Config) mavenDefaults() {
 	if done {
 		return
 	}
-	c.updatePath(filepath.Dir(path))
+	envvars.UpdatePath(filepath.Dir(path), false)
 	c.Logger().Debug().Str("method", "mavenDefaults").Msgf("detected maven binary at %s", path)
 }
 

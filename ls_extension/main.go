@@ -51,14 +51,14 @@ func Init(engine workflow.Engine) error {
 		"configfile",
 		"c",
 		"",
-		"provide the full path of a config file to use. format VARIABLENAME=VARIABLEVALUE")
+		"provide the full path of a cfg file to use. format VARIABLENAME=VARIABLEVALUE")
 	flags.Bool(
 		"licenses",
 		false,
 		"displays license information")
 
-	config := workflow.ConfigurationOptionsFromFlagset(flags)
-	entry, _ := engine.Register(WORKFLOWID_LS, config, lsWorkflow)
+	cfg := workflow.ConfigurationOptionsFromFlagset(flags)
+	entry, _ := engine.Register(WORKFLOWID_LS, cfg, lsWorkflow)
 	entry.SetVisibility(false)
 
 	return nil
@@ -83,7 +83,6 @@ func lsWorkflow(
 
 	c := config.NewFromExtension(invocation.GetEngine())
 	c.SetConfigFile(extensionConfig.GetString("configfile"))
-	c.Load()
 	c.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
 	c.SetLogPath(extensionConfig.GetString("logPathFlag"))
 	c.SetFormat(extensionConfig.GetString("formatFlag"))

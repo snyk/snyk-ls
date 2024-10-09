@@ -18,7 +18,6 @@ package config
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
@@ -75,12 +74,6 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, types.TokenAuthentication, c.authenticationMethod)
 }
 
-// this only tests that no error occurs on any os
-func TestConfig_LoadShellEnvironment(t *testing.T) {
-	c := New()
-	c.LoadShellEnvironment()
-}
-
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {
 	// Arrange
 	c := New()
@@ -130,44 +123,6 @@ func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T
 	c := CurrentConfig()
 
 	assert.Equal(t, 12*time.Hour, c.snykCodeAnalysisTimeoutFromEnv())
-}
-
-func Test_updatePath(t *testing.T) {
-	t.Setenv("PATH", "a")
-	c := New()
-
-	c.updatePath("b")
-
-	assert.Contains(t, c.path, string(os.PathListSeparator)+"b")
-	assert.Contains(t, c.path, "a"+string(os.PathListSeparator))
-}
-
-func Test_loadFile(t *testing.T) {
-	t.Setenv("A", "")
-	t.Setenv("C", "")
-	_ = os.Unsetenv("A")
-	_ = os.Unsetenv("C")
-	envData := []byte("A=B\nC=D")
-	file, err := os.CreateTemp(".", "config_test_loadFile")
-	if err != nil {
-		assert.Fail(t, "Couldn't create temp file", err)
-	}
-	defer func(file *os.File) {
-		_ = file.Close()
-		_ = os.Remove(file.Name())
-	}(file)
-	if err != nil {
-		assert.Fail(t, "Couldn't create test file")
-	}
-	_, _ = file.Write(envData)
-	if err != nil {
-		assert.Fail(t, "Couldn't write to test file")
-	}
-
-	CurrentConfig().loadFile(file.Name())
-
-	assert.Equal(t, "B", os.Getenv("A"))
-	assert.Equal(t, "D", os.Getenv("C"))
 }
 
 func TestSnykCodeApi(t *testing.T) {
@@ -296,56 +251,57 @@ func Test_IsAnalyticsPermitted(t *testing.T) {
 func TestSnykUiEndpoint(t *testing.T) {
 	c := New()
 	t.Run("Default Api Endpoint with /api prefix", func(t *testing.T) {
-		uiEndpoint := c.SnykUi()
+		uiEndpoint := c.SnykUI()
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("API endpoint provided without 'app' prefix", func(t *testing.T) {
 		apiEndpoint := "https://snyk.io/api/v1"
 		c.UpdateApiEndpoints(apiEndpoint)
-		uiEndpoint := c.SnykUi()
+		uiEndpoint := c.SnykUI()
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("API endpoint provided with 'app' prefix with v1 suffix", func(t *testing.T) {
 		apiEndpoint := "https://app.snyk.io/api/v1"
 		c.UpdateApiEndpoints(apiEndpoint)
-		uiEndpoint := c.SnykUi()
+		uiEndpoint := c.SnykUI()
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix without v1 suffix", func(t *testing.T) {
 		apiEndpoint := "https://app.snyk.io/api"
 		c.UpdateApiEndpoints(apiEndpoint)
-		uiEndpoint := c.SnykUi()
+		uiEndpoint := c.SnykUI()
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("Api endpoint provided with 'api' prefix", func(t *testing.T) {
 		apiEndpoint := "https://api.snyk.io"
 		c.UpdateApiEndpoints(apiEndpoint)
-		uiEndpoint := c.SnykUi()
+		uiEndpoint := c.SnykUI()
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("Api endpoint provided with 'api' and 'eu' prefix", func(t *testing.T) {
 		apiEndpoint := "https://api.eu.snyk.io"
 		c.UpdateApiEndpoints(apiEndpoint)
-		uiEndpoint := c.SnykUi()
+		uiEndpoint := c.SnykUI()
 		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
+		assert.Equal(t, c.SnykUI(), c.engine.GetConfiguration().Get(configuration.WEB_APP_URL))
 	})
 
-	t.Run("Empty Api Endpoint should fall back to default and return default SnykUi Url", func(t *testing.T) {
+	t.Run("Empty Api Endpoint should fall back to default and return default SnykUI Url", func(t *testing.T) {
 		apiEndpoint := ""
 		c.UpdateApiEndpoints(apiEndpoint)
-		uiEndpoint := c.SnykUi()
+		uiEndpoint := c.SnykUI()
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("Fedramp API Endpoint provided with 'api' prefix", func(t *testing.T) {
 		apiEndpoint := "https://api.fedramp.snykgov.io"
 		c.UpdateApiEndpoints(apiEndpoint)
-		uiEndpoint := c.SnykUi()
+		uiEndpoint := c.SnykUI()
 		assert.Equal(t, "https://app.fedramp.snykgov.io", uiEndpoint)
 	})
 }

@@ -88,13 +88,13 @@ func getDetailsHtml(issue snyk.Issue) string {
 		"Policy":             buildPolicyMap(additionalData),
 	}
 
-	var html bytes.Buffer
-	if err := globalTemplate.Execute(&html, data); err != nil {
+	var htmlBuffer bytes.Buffer
+	if err := globalTemplate.Execute(&htmlBuffer, data); err != nil {
 		config.CurrentConfig().Logger().Error().Msgf("Failed to execute main details template: %v", err)
 		return ""
 	}
 
-	return html.String()
+	return htmlBuffer.String()
 }
 
 func buildPolicyMap(additionalData snyk.OssIssueData) map[string]interface{} {
@@ -155,7 +155,7 @@ type IntroducedThrough struct {
 func getIntroducedThroughs(issue snyk.OssIssueData) []IntroducedThrough {
 	var introducedThroughs []IntroducedThrough
 
-	snykUi := config.CurrentConfig().SnykUi()
+	snykUi := config.CurrentConfig().SnykUI()
 	if len(issue.From) > 0 {
 		for _, v := range issue.MatchingIssues {
 			if len(v.From) > 1 {

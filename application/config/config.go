@@ -17,14 +17,12 @@
 package config
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -36,13 +34,13 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/denisbrodbeck/machineid"
 	"github.com/rs/zerolog"
-	"github.com/subosito/gotenv"
 	"github.com/xtgo/uuid"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -157,7 +155,6 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 type Config struct {
 	scrubbingDict                    frameworkLogging.ScrubbingDict
 	scrubbingWriter                  zerolog.LevelWriter
-	configLoaded                     concurrency.AtomicBool
 	cliSettings                      *CliSettings
 	configFile                       string
 	format                           string
@@ -282,6 +279,7 @@ func initWorkFlowEngine(c *Config) {
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, enableOAuth)
+	conf.Set("configfile", c.configFile)
 
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
@@ -349,94 +347,6 @@ func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
 	c.trustedFoldersFeatureEnabled = enabled
 }
 
-func (c *Config) Load() {
-	c.LoadShellEnvironment()
-
-	c.m.RLock()
-	files := c.configFiles()
-	c.m.RUnlock()
-	for _, fileName := range files {
-		c.loadFile(fileName)
-	}
-
-	c.m.Lock()
-	c.configLoaded.Set(true)
-	c.m.Unlock()
-}
-
-func (c *Config) LoadShellEnvironment() {
-	if runtime.GOOS == "windows" {
-		return
-	}
-	parsedEnv := getParsedEnvFromShell("bash")
-	shell := parsedEnv["SHELL"]
-	fromSpecificShell := getParsedEnvFromShell(shell)
-
-	if len(fromSpecificShell) > 0 {
-		c.setParsedVariablesToEnv(fromSpecificShell)
-	} else {
-		c.setParsedVariablesToEnv(parsedEnv)
-	}
-}
-
-func getParsedEnvFromShell(shell string) gotenv.Env {
-	// guard against command injection
-	var shellWhiteList = map[string]bool{
-		"bash":      true,
-		"/bin/zsh":  true,
-		"/bin/sh":   true,
-		"/bin/fish": true,
-		"/bin/csh":  true,
-		"/bin/ksh":  true,
-		"/bin/bash": true,
-	}
-
-	if !shellWhiteList[shell] {
-		return gotenv.Env{}
-	}
-
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancelFunc()
-
-	// deepcode ignore CommandInjection: false positive
-	env, err := exec.CommandContext(ctx, shell, "--login", "-i", "-c", "env && exit").Output()
-	if err != nil {
-		return gotenv.Env{}
-	}
-	parsedEnv := gotenv.Parse(strings.NewReader(string(env)))
-	return parsedEnv
-}
-
-func (c *Config) loadFile(fileName string) {
-	file, err := os.Open(fileName)
-	if err != nil {
-		c.Logger().Debug().Str("method", "loadFile").Msg("Couldn't load " + fileName)
-		return
-	}
-	defer func(file *os.File) { _ = file.Close() }(file)
-	env := gotenv.Parse(file)
-	c.setParsedVariablesToEnv(env)
-	c.updatePath(".")
-	c.Logger().Debug().Str("fileName", fileName).Msg("loaded.")
-}
-
-func (c *Config) setParsedVariablesToEnv(env gotenv.Env) {
-	for k, v := range env {
-		_, exists := os.LookupEnv(k)
-		if !exists {
-			err := os.Setenv(k, v)
-			if err != nil {
-				c.Logger().Warn().Str("method", "setParsedVariablesToEnv").Msg("Couldn't set environment variable " + k)
-			}
-		} else {
-			// add to path, don't ignore additional paths
-			if k == "PATH" {
-				c.updatePath(v)
-			}
-		}
-	}
-}
-
 func (c *Config) NonEmptyToken() bool {
 	return c.Token() != ""
 }
@@ -476,7 +386,7 @@ func (c *Config) SnykCodeApi() string {
 	return c.snykCodeApiUrl
 }
 
-func (c *Config) SnykUi() string {
+func (c *Config) SnykUI() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
 
@@ -520,12 +430,15 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		snykApiUrl = DefaultSnykApiUrl
 	}
 
-	c.engine.GetConfiguration().Set(configuration.API_URL, snykApiUrl)
-
 	if snykApiUrl != c.snykApiUrl {
 		c.m.Lock()
 		c.snykApiUrl = snykApiUrl
 		c.m.Unlock()
+
+		// update GAF
+		cfg := c.engine.GetConfiguration()
+		cfg.Set(configuration.API_URL, snykApiUrl)
+		cfg.Set(configuration.WEB_APP_URL, c.SnykUI())
 
 		// Update Code API endpoint
 		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(snykApiUrl)
@@ -765,39 +678,6 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	return snykCodeTimeout
 }
 
-func (c *Config) updatePath(pathExtension string) {
-	if pathExtension == "" {
-		return
-	}
-	err := os.Setenv("PATH", os.Getenv("PATH")+pathListSeparator+pathExtension)
-	c.m.Lock()
-	c.path += pathListSeparator + pathExtension
-	c.m.Unlock()
-	c.Logger().Debug().Str("method", "updatePath").Msg("updated path with " + pathExtension)
-	c.Logger().Debug().Str("method", "updatePath").Msgf("PATH = %s", os.Getenv("PATH"))
-	if err != nil {
-		c.Logger().Warn().Str("method", "loadFile").Msg("Couldn't update path ")
-	}
-}
-
-// The order of the files is important - first file variable definitions win!
-func (c *Config) configFiles() []string {
-	var files []string
-	configFile := c.configFile
-	if configFile != "" {
-		files = append(files, configFile)
-	}
-	home := os.Getenv("HOME")
-	if home == "" {
-		home = xdg.Home
-	}
-	stdFiles := []string{
-		".snyk.env",
-		home + "/.snyk.env",
-	}
-	return append(files, stdFiles...)
-}
-
 func (c *Config) Organization() string {
 	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
@@ -878,9 +758,9 @@ func (c *Config) SetAutomaticScanning(value bool) {
 func (c *Config) addDefaults() {
 	if //goland:noinspection GoBoolExpressions
 	runtime.GOOS != windows {
-		c.updatePath("/usr/local/bin")
-		c.updatePath("/bin")
-		c.updatePath(xdg.Home + "/bin")
+		envvars.UpdatePath("/usr/local/bin", false)
+		envvars.UpdatePath("/bin", false)
+		envvars.UpdatePath(xdg.Home+"/bin", false)
 	}
 	c.determineJavaHome()
 	c.mavenDefaults()

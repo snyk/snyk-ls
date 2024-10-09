@@ -100,7 +100,6 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 	}
 
 	c.SetConfigFile(*configFlag)
-	c.Load()
 	c.SetLogLevel(*logLevelFlag)
 	c.SetLogPath(*logPathFlag)
 	c.SetFormat(*formatFlag)
