@@ -309,7 +309,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	folderPath := workingDir
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Second
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier())
 	wg := sync.WaitGroup{}
 	p, _ := filepath.Abs(workingDir + testDataPackageJson)
 
