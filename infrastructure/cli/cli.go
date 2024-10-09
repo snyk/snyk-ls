@@ -30,6 +30,7 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/envvars"
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -96,7 +97,7 @@ func (c *SnykCli) getCommand(cmd []string, workingDir string, ctx context.Contex
 
 	cloneConfig := c.c.Engine().GetConfiguration().Clone()
 	cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
-	configuration.LoadConfiguredEnvironment(cloneConfig)
+	envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), workingDir)
 	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
 
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)

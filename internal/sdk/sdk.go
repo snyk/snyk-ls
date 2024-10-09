@@ -24,7 +24,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/subosito/gotenv"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/envvars"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -52,7 +52,7 @@ func UpdateEnvironmentAndReturnAdditionalParams(sdks []types.LsSdk, logger zerol
 			env["GOROOT"] = path
 		}
 
-		configuration.UpdatePath(pathExt, true)
+		envvars.UpdatePath(pathExt, true)
 		logger.Debug().Msg("prepended " + pathExt)
 		for k, v := range env {
 			_ = os.Setenv(k, v)

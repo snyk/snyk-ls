@@ -40,6 +40,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -757,9 +758,9 @@ func (c *Config) SetAutomaticScanning(value bool) {
 func (c *Config) addDefaults() {
 	if //goland:noinspection GoBoolExpressions
 	runtime.GOOS != windows {
-		configuration.UpdatePath("/usr/local/bin", false)
-		configuration.UpdatePath("/bin", false)
-		configuration.UpdatePath(xdg.Home+"/bin", false)
+		envvars.UpdatePath("/usr/local/bin", false)
+		envvars.UpdatePath("/bin", false)
+		envvars.UpdatePath(xdg.Home+"/bin", false)
 	}
 	c.determineJavaHome()
 	c.mavenDefaults()

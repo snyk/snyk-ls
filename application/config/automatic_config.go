@@ -25,14 +25,14 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/envvars"
 )
 
 func (c *Config) determineJavaHome() {
 	javaHome := os.Getenv("JAVA_HOME")
 	if javaHome != "" {
 		c.Logger().Debug().Str("method", "determineJavaHome").Msgf("using JAVA_HOME from env %s", javaHome)
-		configuration.UpdatePath(javaHome+string(os.PathSeparator)+"bin", false)
+		envvars.UpdatePath(javaHome+string(os.PathSeparator)+"bin", false)
 		return
 	}
 	foundPath := c.FindBinaryInDirs(getJavaBinaryName())
@@ -46,7 +46,7 @@ func (c *Config) determineJavaHome() {
 	c.Logger().Debug().Str("method", "determineJavaHome").Msgf("detected java binary at %s", path)
 	binDir := filepath.Dir(path)
 	javaHome = filepath.Dir(binDir)
-	configuration.UpdatePath(binDir, false)
+	envvars.UpdatePath(binDir, false)
 	c.Logger().Debug().Str("method", "determineJavaHome").Msgf("setting JAVA_HOME to %s", javaHome)
 	_ = os.Setenv("JAVA_HOME", javaHome)
 }
@@ -77,7 +77,7 @@ func (c *Config) mavenDefaults() {
 
 	mavenHome := os.Getenv("MAVEN_HOME")
 	if mavenHome != "" {
-		configuration.UpdatePath(mavenHome+string(os.PathSeparator)+"bin", false)
+		envvars.UpdatePath(mavenHome+string(os.PathSeparator)+"bin", false)
 		return
 	}
 	foundPath := c.findBinary(getMavenBinaryName())
@@ -88,7 +88,7 @@ func (c *Config) mavenDefaults() {
 	if done {
 		return
 	}
-	configuration.UpdatePath(filepath.Dir(path), false)
+	envvars.UpdatePath(filepath.Dir(path), false)
 	c.Logger().Debug().Str("method", "mavenDefaults").Msgf("detected maven binary at %s", path)
 }
 

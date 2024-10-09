@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/envvars"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -75,7 +76,7 @@ func (c ExtensionExecutor) doExecute(_ context.Context, cmd []string, workingDir
 	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
-	configuration.LoadConfiguredEnvironment(legacyCLIConfig)
+	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), workingDir)
 
 	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
 	var output []byte
