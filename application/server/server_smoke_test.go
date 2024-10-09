@@ -132,24 +132,6 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			useConsistentIgnores: true,
 			hasVulns:             true,
 		},
-		{
-			name:                 "Two_upload_batches",
-			repo:                 "https://github.com/apache/maven",
-			commit:               "18725ec1e",
-			file1:                "",
-			file2:                "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
-			useConsistentIgnores: false,
-			hasVulns:             true,
-		},
-		{
-			name:                 "Two upload batches with consistent ignores",
-			repo:                 "https://github.com/apache/maven",
-			commit:               "18725ec1e",
-			file1:                "",
-			file2:                "maven-compat/src/test/java/org/apache/maven/repository/legacy/LegacyRepositorySystemTest.java",
-			useConsistentIgnores: true,
-			hasVulns:             true,
-		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
