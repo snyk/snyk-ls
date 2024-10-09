@@ -52,14 +52,14 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		logger:      c.Logger(),
 	}
 
-	scanner := scanner.NewTestScanner()
+	sc := scanner.NewTestScanner()
 
-	w := workspace.New(c, performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier, scanPersister)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister)
 	folder := workspace.NewFolder(
 		c,
 		t.TempDir(),
 		t.Name(),
-		scanner,
+		sc,
 		hoverService,
 		scanNotifier,
 		notifier,
@@ -70,7 +70,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 
 	ctx := context.Background()
 	path := filepath.Join(folder.Path(), "path1")
-	scanner.AddTestIssue(snyk.Issue{ID: "issue-1", AffectedFilePath: path})
+	sc.AddTestIssue(snyk.Issue{ID: "issue-1", AffectedFilePath: path})
 
 	folder.ScanFolder(ctx)
 
