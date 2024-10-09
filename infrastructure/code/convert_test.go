@@ -903,6 +903,41 @@ func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
 	assert.Contains(t, editValues, "test1", "test2")
 }
 
+func Test_AutofixResponse_toAutofixSuggestion_HtmlEncodedFilePath(t *testing.T) {
+	response := AutofixResponse{
+		Status: "COMPLETE",
+	}
+	fixes := []autofixResponseSingleFix{{
+		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
+		Value: "test1",
+	}, {
+		Id:    "123e4567-e89b-12d3-a456-426614174000/2",
+		Value: "test2",
+	}}
+	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
+	filePath := "file_with space.js"
+	baseDir := t.TempDir()
+	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("test test test"), 0666)
+	require.NoError(t, err)
+	// Here, we provide the HTML encoded path and expect toAutofixSuggestions to decode it.
+	edits := response.toAutofixSuggestions(baseDir, "file_with%20space.js")
+	editValues := make([]string, 0)
+	editFilePaths := make([]string, 0)
+	for _, edit := range edits {
+		change := edit.AutofixEdit.Changes[ToAbsolutePath(baseDir, filePath)][0]
+		editValues = append(editValues, change.NewText)
+
+		for key := range edit.AutofixEdit.Changes {
+			editFilePaths = append(editFilePaths, key)
+		}
+	}
+
+	assert.Contains(t, editValues, "test1", "test2")
+	for _, filePath := range editFilePaths {
+		assert.Contains(t, filePath, "file_with space.js")
+	}
+}
+
 func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
 	response := AutofixResponse{
 		Status: "COMPLETE",
