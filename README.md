@@ -61,14 +61,15 @@ Right now the language server supports the following actions:
 - window/showMessage
 
 ### Custom additions to Language Server Protocol (server -> client)
-- Diagnostics Overview (tabbed tree view)
-  - method: `$/snyk.diagnosticsOverview`
-  - payload:
+- SDKs callback to retrieve configured SDKs from the client
+  - method: `workspace/snyk.sdks`
+  - payload: WorkspaceFolder
+  - response: 
   ```json5
-  {
-  "product": "oss", // or "code" or "iac"
-  "html": "<html>...</html>", // the html to display the overview tabs/tree
-  }
+  [{
+  	"type": "java", // or python or go
+	  "path": "/path/to/sdk" // JAVA_HOME for java, GOROOT for Go, Python executable for Python
+  }]
   ```
 - Folder Config Notification
   - method: `$/snyk.folderConfigs`
