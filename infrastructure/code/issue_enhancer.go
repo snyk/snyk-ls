@@ -175,7 +175,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 		// channel.
 		pollFunc := func() (fix *AutofixSuggestion, complete bool) {
 			logger.Debug().Str("requestId", b.requestId).Msg("polling")
-			fixSuggestions, fixStatus, err := b.SnykCode.GetAutofixSuggestions(s.Context(), autofixOptions, b.rootPath)
+			autofixResponse, fixStatus, err := b.SnykCode.GetAutofixResponse(s.Context(), b.rootPath, autofixOptions)
 			fix = nil
 			complete = false
 			if err != nil {
@@ -184,6 +184,7 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 					Str("stage", "requesting autofix").Msg("error requesting autofix")
 				complete = true
 			} else if fixStatus.message == completeStatus {
+				fixSuggestions := autofixResponse.toAutofixSuggestions(b.rootPath, autofixOptions.filePath)
 				if len(fixSuggestions) > 0 {
 					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggestion goes into the fix
 					fix = &fixSuggestions[0]

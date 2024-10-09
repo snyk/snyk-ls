@@ -62,19 +62,11 @@ type SnykCodeClient interface {
 		error,
 	)
 
-	GetAutofixSuggestions(
-		ctx context.Context,
-		options AutofixOptions,
-		baseDir string,
-	) ([]AutofixSuggestion,
-		AutofixStatus,
-		error,
-	)
-
 	SubmitAutofixFeedback(ctx context.Context, fixId string, result string) error
 
-	GetAutofixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (
-		unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion,
+	GetAutofixResponse(ctx context.Context, baseDir string, options AutofixOptions) (
+		// unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion,
+		autofixResponse AutofixResponse,
 		status AutofixStatus,
 		err error,
 	)
