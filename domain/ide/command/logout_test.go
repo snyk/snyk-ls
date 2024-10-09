@@ -18,10 +18,11 @@ package command
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"path/filepath"
 	"testing"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
 	"github.com/stretchr/testify/assert"
 
@@ -38,7 +39,7 @@ import (
 
 func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
-	notifier := notification.NewNotifier()
+	notifier := notification.NewMockNotifier()
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	hoverService := hover.NewFakeHoverService()
 	provider.IsAuthenticated = true
@@ -51,14 +52,14 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		logger:      c.Logger(),
 	}
 
-	scanner := scanner.NewTestScanner()
+	sc := scanner.NewTestScanner()
 
-	w := workspace.New(c, performance.NewInstrumentor(), scanner, hoverService, scanNotifier, notifier, scanPersister)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister)
 	folder := workspace.NewFolder(
 		c,
 		t.TempDir(),
 		t.Name(),
-		scanner,
+		sc,
 		hoverService,
 		scanNotifier,
 		notifier,
@@ -69,7 +70,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 
 	ctx := context.Background()
 	path := filepath.Join(folder.Path(), "path1")
-	scanner.AddTestIssue(snyk.Issue{ID: "issue-1", AffectedFilePath: path})
+	sc.AddTestIssue(snyk.Issue{ID: "issue-1", AffectedFilePath: path})
 
 	folder.ScanFolder(ctx)
 
