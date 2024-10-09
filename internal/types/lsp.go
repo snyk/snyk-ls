@@ -510,7 +510,8 @@ type LsSdk struct {
 }
 
 type GetSdk struct {
-	FolderPath string `json:"folder,omitempty"`
+	FolderPath string       `json:"folder,omitempty"`
+	Result     chan []LsSdk `json:"-"`
 }
 
 type DidChangeWorkspaceFoldersParams struct {

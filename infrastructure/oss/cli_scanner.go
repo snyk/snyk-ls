@@ -40,6 +40,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
+	"github.com/snyk/snyk-ls/internal/sdk"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -206,8 +207,10 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	cliScanner.runningScans[workDir] = newScan
 	cliScanner.mutex.Unlock()
 
+	// this asks the client for the current SDK and blocks on it
+	cliScanner.updateSDKs(workDir)
+
 	cmd := commandFunc([]string{workDir}, map[string]bool{"": true}, workDir)
-	cliScanner.notifier.Send(types.GetSdk{FolderPath: workDir})
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
@@ -232,6 +235,18 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 		cliScanner.scheduleRefreshScan(context.Background(), path)
 	}
 	return issues, nil
+}
+
+func (cliScanner *CLIScanner) updateSDKs(workDir string) {
+	logger := cliScanner.config.Logger().With().Str("method", "updateSDKs").Logger()
+	sdkChan := make(chan []types.LsSdk)
+	getSdk := types.GetSdk{FolderPath: workDir, Result: sdkChan}
+	logger.Debug().Msg("asking IDE for SDKS")
+	cliScanner.notifier.Send(getSdk)
+	// wait for sdk info
+	sdks := <-sdkChan
+	logger.Debug().Msg("received SDKs")
+	sdk.InitSdks(sdks, logger)
 }
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string) []string {
