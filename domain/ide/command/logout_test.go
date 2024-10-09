@@ -18,10 +18,11 @@ package command
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"path/filepath"
 	"testing"
+
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
 	"github.com/stretchr/testify/assert"
 
@@ -38,7 +39,7 @@ import (
 
 func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
-	notifier := notification.NewNotifier()
+	notifier := notification.NewMockNotifier()
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	hoverService := hover.NewFakeHoverService()
 	provider.IsAuthenticated = true

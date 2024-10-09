@@ -64,7 +64,7 @@ func setupReportAnalyticsCommand(t *testing.T, c *config.Config, testInput strin
 			c,
 			provider,
 			error_reporting.NewTestErrorReporter(),
-			notification.NewNotifier(),
+			notification.NewMockNotifier(),
 		)}
 	return cmd
 }

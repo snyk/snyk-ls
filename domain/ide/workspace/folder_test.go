@@ -19,13 +19,14 @@ package workspace
 import (
 	"context"
 	"errors"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
@@ -53,7 +54,7 @@ import (
 func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 	hoverRecorder := hover.NewFakeHoverService()
 	c := testutil.UnitTest(t)
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hoverRecorder, scanner.NewMockScanNotifier(), notification.NewNotifier(), persistence.NewNopScanPersister())
+	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hoverRecorder, scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister())
 
 	data := snyk.ScanData{
 		Product: "",
@@ -66,7 +67,7 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 
 func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewNotifier(), persistence.NewNopScanPersister())
+	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister())
 
 	path1 := filepath.Join(f.path, "path1")
 	path2 := filepath.Join(f.path, "path2")
@@ -89,7 +90,7 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 
 func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewNotifier(), persistence.NewNopScanPersister())
+	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister())
 
 	filePath := "dummy/path1"
 	data := snyk.ScanData{
@@ -107,7 +108,7 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 
 func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewNotifier())
+	f := NewMockFolder(c, notification.NewMockNotifier())
 
 	path1 := filepath.Join(f.path, "path1")
 	path2 := filepath.Join(f.path, "path2")
@@ -130,7 +131,7 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 
 func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewNotifier())
+	f := NewMockFolder(c, notification.NewMockNotifier())
 
 	path1 := filepath.Join(f.path, "path1")
 	data := snyk.ScanData{
@@ -151,7 +152,7 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 
 func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewNotifier())
+	f := NewMockFolder(c, notification.NewMockNotifier())
 
 	path1 := filepath.Join(f.path, "path1")
 	path2 := filepath.Join(f.path, "path2")
@@ -278,7 +279,7 @@ func Test_Clear(t *testing.T) {
 func Test_IsTrusted_shouldReturnFalseByDefault(t *testing.T) {
 	c := testutil.UnitTest(t)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewNotifier(), persistence.NewNopScanPersister())
+	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister())
 	assert.False(t, f.IsTrusted())
 }
 
@@ -286,7 +287,7 @@ func Test_IsTrusted_shouldReturnTrueForPathContainedInTrustedFolders(t *testing.
 	c := testutil.UnitTest(t)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 	config.CurrentConfig().SetTrustedFolders([]string{"dummy"})
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewNotifier(), persistence.NewNopScanPersister())
+	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister())
 	assert.True(t, f.IsTrusted())
 }
 
@@ -295,7 +296,7 @@ func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders_Linux(t *testin
 	testutil.NotOnWindows(t, "Unix/macOS file paths are incompatible with Windows")
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 	config.CurrentConfig().SetTrustedFolders([]string{"/dummy"})
-	f := NewFolder(c, "/dummy/dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewNotifier(), persistence.NewNopScanPersister())
+	f := NewFolder(c, "/dummy/dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister())
 	assert.True(t, f.IsTrusted())
 }
 
@@ -303,7 +304,7 @@ func Test_IsTrusted_shouldReturnFalseForDifferentFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 	config.CurrentConfig().SetTrustedFolders([]string{"/dummy"})
-	f := NewFolder(c, "/UntrustedPath", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewNotifier(), persistence.NewNopScanPersister())
+	f := NewFolder(c, "/UntrustedPath", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister())
 	assert.False(t, f.IsTrusted())
 }
 
@@ -312,13 +313,13 @@ func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders(t *testing.T) {
 	testutil.OnlyOnWindows(t, "Windows specific test")
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 	config.CurrentConfig().SetTrustedFolders([]string{"c:\\dummy"})
-	f := NewFolder(c, "c:\\dummy\\dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewNotifier(), persistence.NewNopScanPersister())
+	f := NewFolder(c, "c:\\dummy\\dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister())
 	assert.True(t, f.IsTrusted())
 }
 
 func Test_IsTrusted_shouldReturnTrueIfTrustFeatureDisabled(t *testing.T) {
 	c := testutil.UnitTest(t) // disables trust feature
-	f := NewFolder(c, "c:\\dummy\\dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewNotifier(), persistence.NewNopScanPersister())
+	f := NewFolder(c, "c:\\dummy\\dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister())
 	assert.True(t, f.IsTrusted())
 }
 
@@ -358,7 +359,7 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 		lowIssue,
 	}
 
-	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewNotifier(), persistence.NewNopScanPersister())
+	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister())
 	ctx := context.Background()
 
 	config.CurrentConfig().SetSeverityFilter(types.NewSeverityFilter(true, true, false, false))
@@ -376,7 +377,7 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewNotifier())
+	f := NewMockFolder(c, notification.NewMockNotifier())
 	filePath := filepath.Join(f.path, "path1")
 	mockOpenSourceIssue := NewMockIssue("id1", filePath)
 	removedIssueType := product.FilterableIssueTypeOpenSource
@@ -413,7 +414,7 @@ func Test_processResults_ShouldSendSuccess(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
 
-	f, scanNotifier := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
+	f, scanNotifier := NewMockFolderWithScanNotifier(c, notification.NewMockNotifier())
 	var path = "path1"
 	mockCodeIssue := NewMockIssue("id1", filepath.Join(f.path, path))
 
@@ -432,7 +433,7 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
 
-	f, scanNotifier := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
+	f, scanNotifier := NewMockFolderWithScanNotifier(c, notification.NewMockNotifier())
 	const filePath = "path1"
 	mockCodeIssue := NewMockIssue("id1", filePath)
 

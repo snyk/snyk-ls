@@ -124,7 +124,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	providerMock.On("IssuesForRange", mock.Anything, mock.Anything).Return(issues)
 	fakeClient := &code.FakeSnykCodeClient{C: c}
 	snykCodeClient := fakeClient
-	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewNotifier(), snykCodeClient)
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: documentUriExample,
@@ -241,7 +241,7 @@ func setupService(t *testing.T) *codeaction.CodeActionsService {
 	providerMock.On("IssuesForRange", mock.Anything, mock.Anything).Return([]snyk.Issue{})
 	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
 	snykCodeClient := fakeClient
-	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewNotifier(), snykCodeClient)
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
 	return service
 }
 
@@ -256,7 +256,7 @@ func setupWithSingleIssue(t *testing.T, issue snyk.Issue) (*codeaction.CodeActio
 	fileWatcher := watcher.NewFileWatcher()
 	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
 	snykCodeClient := fakeClient
-	service := codeaction.NewService(config.CurrentConfig(), providerMock, fileWatcher, notification.NewNotifier(), snykCodeClient)
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, fileWatcher, notification.NewMockNotifier(), snykCodeClient)
 
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
