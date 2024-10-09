@@ -55,6 +55,12 @@ func (m *MockNotifier) Send(msg any) {
 	defer m.mutex.Unlock()
 	m.sendCounter++
 	m.sentMessages = append(m.sentMessages, msg)
+	if getSDK, ok := msg.(types.GetSdk); ok {
+		go func() {
+			getSDK.Result <- []types.LsSdk{}
+			close(getSDK.Result)
+		}()
+	}
 }
 
 func (m *MockNotifier) SendError(err error) {
