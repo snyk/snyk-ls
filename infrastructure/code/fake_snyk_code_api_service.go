@@ -146,6 +146,15 @@ type FakeSnykCodeClient struct {
 func (f *FakeSnykCodeClient) GetAutofixResponse(_ context.Context, _ string, _ AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error) {
 	f.AutofixStatus = AutofixStatus{message: completeStatus }
 	f.AutofixResponse.Status = completeStatus
+	// f.AutofixResponse.AutofixSuggestions =
+	fixes := []autofixResponseSingleFix{{
+		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
+		Value: "test1",
+	}, {
+		Id:    "123e4567-e89b-12d3-a456-426614174000/2",
+		Value: "test2",
+	}}
+	f.AutofixResponse.AutofixSuggestions = fixes
 	return f.AutofixResponse, f.AutofixStatus, nil
 }
 
