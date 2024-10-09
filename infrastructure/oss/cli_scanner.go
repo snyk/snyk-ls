@@ -252,7 +252,7 @@ func (cliScanner *CLIScanner) updateSDKs(workDir string) []string {
 	// wait for sdk info
 	sdks := <-sdkChan
 	logger.Debug().Msg("received SDKs")
-	return sdk.UpdateEnvironment(sdks, logger)
+	return sdk.UpdateEnvironmentAndReturnAdditionalParams(sdks, logger)
 }
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string) []string {
@@ -275,13 +275,20 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 
 	// now add all additional parameters, skipping blacklisted ones
 	for _, parameter := range additionalParams {
+		if slices.Contains(cmd, parameter) {
+			continue
+		}
+
 		p := strings.Split(parameter, "=")[0]
+
 		if parameterBlacklist[p] {
 			continue
 		}
+
 		if allProjectsParamBlacklist[p] {
 			allProjectsParamAllowed = false
 		}
+
 		if parameter != allProjectsParam {
 			cmd = append(cmd, parameter)
 		}

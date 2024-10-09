@@ -72,28 +72,6 @@ func Test_shouldReturnErrorWithVersionStringOnFlag(t *testing.T) {
 	assert.Equal(t, config.Version, err.Error())
 }
 
-func Test_shouldSetLoadConfigFromFlag(t *testing.T) {
-	file, err := os.CreateTemp(".", "configFlagTest")
-	if err != nil {
-		assert.Fail(t, "Couldn't create test file")
-	}
-	defer func(file *os.File) {
-		_ = file.Close()
-		_ = os.Remove(file.Name())
-	}(file)
-
-	_, err = file.Write([]byte("AA=Bb"))
-	if err != nil {
-		assert.Fail(t, "Couldn't write to test file")
-	}
-	args := []string{"snyk-ls", "-c", file.Name()}
-
-	t.Setenv("Bb", "")
-
-	_, _ = parseFlags(args, config.New())
-	assert.Equal(t, "Bb", os.Getenv("AA"))
-}
-
 func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
 	testutil.UnitTest(t)
 	args := []string{"snyk-ls"}

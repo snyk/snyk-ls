@@ -154,7 +154,6 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 type Config struct {
 	scrubbingDict                    frameworkLogging.ScrubbingDict
 	scrubbingWriter                  zerolog.LevelWriter
-	configLoaded                     concurrency.AtomicBool
 	cliSettings                      *CliSettings
 	configFile                       string
 	format                           string

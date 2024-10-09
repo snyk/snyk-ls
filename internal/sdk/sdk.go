@@ -28,8 +28,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func UpdateEnvironment(sdks []types.LsSdk, logger zerolog.Logger) []string {
-	logger = logger.With().Str("method", "UpdateEnvironment").Logger()
+func UpdateEnvironmentAndReturnAdditionalParams(sdks []types.LsSdk, logger zerolog.Logger) []string {
+	logger = logger.With().Str("method", "UpdateEnvironmentAndReturnAdditionalParams").Logger()
 	var additionalParameters []string
 	for i := 0; i < len(sdks); i++ {
 		sdk := sdks[i]
