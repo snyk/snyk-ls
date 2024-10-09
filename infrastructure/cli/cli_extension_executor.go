@@ -67,7 +67,6 @@ func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir
 }
 
 func (c ExtensionExecutor) doExecute(_ context.Context, cmd []string, workingDir string) ([]byte, error) {
-
 	engine := config.CurrentConfig().Engine()
 	engine.GetConfiguration().Set(configuration.TIMEOUT, c.cliTimeout.Seconds())
 

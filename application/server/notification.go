@@ -156,26 +156,27 @@ func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server)
 	folder := types.WorkspaceFolder{Uri: uri.PathToUri(params.FolderPath)}
 	logger.Debug().Str("folderPath", params.FolderPath).Msg("retrieving sdk")
 
+	sdks := []types.LsSdk{}
+	defer func([]types.LsSdk) {
+		params.Result <- sdks
+		close(params.Result)
+	}(sdks)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
 	callback, err := srv.Callback(ctx, "workspace/snyk.sdks", folder)
 	if err != nil {
 		logger.Warn().Err(err).Str("folderPath", params.FolderPath).Msg("could not retrieve sdk")
+		return
 	}
 
-	var sdks []types.LsSdk
+	// unmarshall into array that is transferred back via the channel on exit
 	err = callback.UnmarshalResult(&sdks)
 	if err != nil {
 		logger.Warn().Err(err).Str("resultString", callback.ResultString()).Msg("could not unmarshal sdk response")
+		return
 	}
-
-	if sdks == nil {
-		sdks = []types.LsSdk{}
-	}
-
-	params.Result <- sdks
-	close(params.Result)
 }
 
 func handleInlineValueRefresh(srv types.Server, logger *zerolog.Logger) {
