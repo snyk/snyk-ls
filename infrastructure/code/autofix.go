@@ -23,6 +23,7 @@ import (
 	"time"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 )
 
 // AutofixUnifiedDiffSuggestion represents the diff between the original and the fixed source code.
@@ -49,7 +50,11 @@ func (s *SnykCodeHTTPClient) GetAutofixResponse(ctx context.Context, baseDir str
 	defer s.instrumentor.Finish(span)
 	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
 
-	requestId := span.GetTraceId()
+	requestId, err := performance2.GetTraceId(ctx)
+	if err != nil {
+		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
+		return autofixResponse, failed, err
+	}
 	logger.Info().Str("requestId", requestId).Msg("Started obtaining autofix diffs")
 	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining autofix diffs")
 
