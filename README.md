@@ -57,23 +57,117 @@ Right now the language server supports the following actions:
 
 - $/progress
 - textDocument/publishDiagnostics
+  - params: `types.PublishDiagnosticsParams`
+  - example: Snyk Open Source
+  ```json5
+  {
+    "uri": "file:///path/to/file",
+    "diagnostics": [
+      {
+        "range": {
+          "start": { "line": 1, "character": 0 },
+          "end": { "line": 2, "character": 0 },
+        },
+        "severity": 1,
+        "code": "S100",
+        "source": "Snyk",
+        "message": "Message",
+        "tags": ["security"],
+        "data": {
+          "scanIssue": {
+            "id": "123",
+            "issueType": "vulnerability",
+            "packageName": "packageName",
+            "packageVersion": "packageVersion",
+            "issue": "issue",
+            "additionalData": {
+              "ruleId": "ruleId",
+              "identifiers": {
+                "cwe": ["cwe"],
+                "cve": ["cve"]
+              },
+              "description": "description",
+              "language": "language",
+              "packageManager": "packageManager",
+              "packageName": "packageName"
+            }
+          }
+        }
+      }
+    ]
+  }
+  ```
+  - example: Snyk Code
+  ```json5
+  {
+    "uri": "file:///path/to/file",
+    "diagnostics": [
+      {
+        "range": {
+          "start": { "line": 1, "character": 0 },
+          "end": { "line": 2, "character": 0 },
+        },
+        "severity": 1,
+        "code": "S100",
+        "source": "Snyk",
+        "message": "Message",
+        "tags": ["security"],
+        "data": {
+          "scanIssue": {
+            "id": "123",
+            "filePath": "filePath",
+            "range": {
+              "start": { "line": 1, "character": 0 },
+              "end": { "line": 2, "character": 0 },
+            },
+            "additionalData": {
+              "message": "message",
+              "rule": "rule",
+              "ruleId": "ruleId",
+              "dataFlow": [
+                {
+                  "filePath": "filePath",
+                  "range": {
+                    "start": { "line": 1, "character": 0 },
+                    "end": { "line": 2, "character": 0 },
+                  },
+                }
+              ],
+              "exampleCommitFixes": [
+                {
+                  "commit": "commit",
+                  "diff": "diff"
+                }
+              ],
+              "cwe": "cwe",
+              "isSecurityType": true
+            }
+          }
+        }
+      }
+    ]
+  }
+  ```
+
 - window/logMessage
 - window/showMessage
 
 ### Custom additions to Language Server Protocol (server -> client)
 - SDKs callback to retrieve configured SDKs from the client
   - method: `workspace/snyk.sdks`
-  - payload: WorkspaceFolder
-  - response: 
+  - params: `types.WorkspaceFolder`
+  - example:
   ```json5
   [{
-  	"type": "java", // or python or go
-	  "path": "/path/to/sdk" // JAVA_HOME for java, GOROOT for Go, Python executable for Python
+    "type": "java", // or python or go
+    "path": "/path/to/sdk" // JAVA_HOME for java, GOROOT for Go, Python executable for Python
   }]
   ```
+
 - Folder Config Notification
   - method: `$/snyk.folderConfigs`
-  - payload:
+  - params: `types.FolderConfigsParam`
+  - example:
   ```json5
   {
       "folderConfigs":
@@ -86,18 +180,16 @@ Right now the language server supports the following actions:
       ]
   }
   ```
+
 - Custom Publish Diagnostics Notification
-- method: `$/snyk.publishDiagnostics316`
-  - payload:
-  ```json5
-  {
-  "uri": "/path/to/file",
-  "diagnostics": [], 
-  }
-  ```
+  - method: `$/snyk.publishDiagnostics316`
+  - params: `types.PublishDiagnosticsParams`
+  - note: alias for textDocument/publishDiagnostics
+
 - Authentication Notification
   - method: `$/snyk.hasAuthenticated`
-  - payload:
+  - params: `types.AuthenticationParams`
+  - example:
   ```json5
   {
     "token": "the snyk token" // this can be an oauth2.Token string or a legacy token
@@ -105,18 +197,31 @@ Right now the language server supports the following actions:
   ```
   - See https://pkg.go.dev/golang.org/x/oauth2@v0.6.0#Token for more details regarding oauth tokens.
 
-- Cli Path Notification
+- CLI Path Notification
   - method: `$/snyk.isAvailableCli`
-  - payload:
+  - params: `types.SnykIsAvailableCli`
+  - example:
   ```json5
   {
     "cliPath": "/a/path/to/cli-executable"
   }
   ```
 
-- Trust Notification
+- Diagnostics Overview (tabbed tree view)
+  - method: `$/snyk.diagnosticsOverview`
+  - params: `types.DiagnosticsOverviewParams`
+  - example:
+  ```json5
+  {
+  "product": "oss", // or "code" or "iac"
+  "html": "<html>...</html>", // the html to display the overview tabs/tree
+  }
+  ```
+
+- Trusted Folder Notification
   - method: `$/snyk.addTrustedFolders`
-  - payload:
+  - params: `types.SnykTrustedFoldersParams`
+  - example:
   ```json5
   {
     "trustedFolders": ["/a/path/to/trust"]
@@ -125,14 +230,26 @@ Right now the language server supports the following actions:
 
 - Scan Notification
   - method: `$/snyk.scan`
-  - payload:
+  - params: `types.ScanParams`
+  - example: Successful scan
   ```json5
   {
-    "status": "inProgress", // possible values: "error", "inProgress", "success"
+    "status": "success", // possible values: "error", "inProgress", "success"
     "product": "code", // possible values: "code", "oss", "iac"
-    "results" : [
-      // TBD
-    ]
+    "folderPath": "/a/path/to/folder",
+  }
+  ```
+  - example: Failed scan with errors
+  ```json5
+  {
+    "status": "error",
+    "product": "code",
+    "folderPath": "/a/path/to/folder",
+    "errorMessage": "An error occurred",
+    "cliError": {
+      "code": "CLI_ERROR_CODE",
+      "message": "An error occurred"
+    },
   }
   ```
 
@@ -267,19 +384,19 @@ Right now the language server supports the following actions:
   ```
   - Diff Example:
   ```
-  
+
   --- /var/folders/vn/77lwfy3974g7vykcm5lr6mkh0000gn/T/Test_SmokeWorkspaceScanOssAndCode952013010/001/1
   +++ /var/folders/vn/77lwfy3974g7vykcm5lr6mkh0000gn/T/Test_SmokeWorkspaceScanOssAndCode952013010/001/1-fixed
   @@ -32,7 +32,8 @@
-  
+
        test('should set success to OK upon success', function() {
          // GIVEN
-  
+
   -      comp.password = comp.confirmPassword = 'myPassword';
-  
+
   +      comp.password = process.env.TEST_PASSWORD;
   +      comp.confirmPassword = process.env.TEST_PASSWORD;
-  
+
          // WHEN
          comp.changePassword();
   ```
@@ -389,7 +506,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "baseBranch": "main", // the base branch for delta scanning
     "folderPath": "a/b/c", // the workspace folder path
     "additionalParameters": "--file=pom.xml" // additional parameters for CLI scans
-  }], // an array of folder configurations, defining the desired base branch of a workspaceFolder 
+  }], // an array of folder configurations, defining the desired base branch of a workspaceFolder
 }
 ```
 
