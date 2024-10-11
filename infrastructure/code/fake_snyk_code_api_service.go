@@ -138,23 +138,19 @@ type FakeSnykCodeClient struct {
 	NoFixSuggestions       bool
 	UnifiedDiffSuggestions []AutofixUnifiedDiffSuggestion
 	AutofixStatus          AutofixStatus
-	AutofixResponse        AutofixResponse
 	Options                map[string]AnalysisOptions
 	C                      *config.Config
 }
 
+func (f *FakeSnykCodeClient) GetAutofixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
+	f.AutofixStatus = AutofixStatus{message: completeStatus }
+	return f.UnifiedDiffSuggestions, f.AutofixStatus, nil
+}
+
+
 func (f *FakeSnykCodeClient) GetAutofixResponse(_ context.Context, _ string, _ AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error) {
 	f.AutofixStatus = AutofixStatus{message: completeStatus }
-	f.AutofixResponse.Status = completeStatus
-	fixes := []autofixResponseSingleFix{{
-		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
-		Value: "test1",
-	}, {
-		Id:    "123e4567-e89b-12d3-a456-426614174000/2",
-		Value: "test2",
-	}}
-	f.AutofixResponse.AutofixSuggestions = fixes
-	return f.AutofixResponse, f.AutofixStatus, nil
+	return autofixResponse, f.AutofixStatus, nil
 }
 
 func (f *FakeSnykCodeClient) addCall(params []any, op string) {

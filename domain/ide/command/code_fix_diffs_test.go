@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -91,7 +90,6 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 		require.NotEmptyf(t, suggestions, "suggestions should not be empty")
 		require.NoError(t, err)
-		assert.Equal(t, 54, 1)
 	})
 
 	t.Run("unhappy - file not beneath folder", func(t *testing.T) {

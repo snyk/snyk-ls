@@ -40,6 +40,20 @@ func (a AutofixUnifiedDiffSuggestion) GetUnifiedDiffForFile(filePath string) str
 	return a.UnifiedDiffsPerFile[filePath]
 }
 
+func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (
+	unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion,
+	status AutofixStatus,
+	err error,
+) {
+
+	autofixResponse, status, err := s.GetAutofixResponse(ctx, baseDir, options)
+	if err != nil {
+		return nil, status, err
+	}
+	return autofixResponse.toUnifiedDiffSuggestions(baseDir, options.filePath), status, err
+
+}
+
 func (s *SnykCodeHTTPClient) GetAutofixResponse(ctx context.Context, baseDir string, options AutofixOptions) (
 	autofixResponse AutofixResponse,
 	status AutofixStatus,
@@ -126,12 +140,12 @@ func (sc *Scanner) GetAutofixDiffs(
 			logger.Error().Msg(msg)
 			return nil, errors.New(msg)
 		case <-ticker.C:
-			autofixResponse, fixStatus, autofixErr := codeClient.GetAutofixResponse(span.Context(), baseDir, options)
+			suggestions, fixStatus, autofixErr := codeClient.GetAutofixDiffs(span.Context(), baseDir, options)
 			if autofixErr != nil {
 				logger.Err(autofixErr).Msg("Error getting autofix suggestions")
 				return nil, autofixErr
 			} else if fixStatus.message == completeStatus {
-				suggestions := autofixResponse.toUnifiedDiffSuggestions(baseDir, options.filePath)
+				// suggestions := autofixResponse.toUnifiedDiffSuggestions(baseDir, options.filePath)
 				if len(suggestions) == 0 {
 					logger.Info().Msg("AI fix returned successfully but no good fix could be computed.")
 				}

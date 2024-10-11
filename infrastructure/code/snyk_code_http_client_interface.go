@@ -78,4 +78,10 @@ type SnykCodeClient interface {
 		status AutofixStatus,
 		err error,
 	)
+
+	GetAutofixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (
+		unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion,
+		status AutofixStatus,
+		err error,
+	)
 }
