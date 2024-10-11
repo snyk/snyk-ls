@@ -150,7 +150,6 @@ func (sc *Scanner) GetAutofixDiffs(
 				logger.Err(autofixErr).Msg("Error getting autofix suggestions")
 				return nil, autofixErr
 			} else if fixStatus.message == completeStatus {
-				// suggestions := autofixResponse.toUnifiedDiffSuggestions(baseDir, options.filePath)
 				if len(suggestions) == 0 {
 					logger.Info().Msg("AI fix returned successfully but no good fix could be computed.")
 				}

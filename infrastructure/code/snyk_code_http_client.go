@@ -462,31 +462,15 @@ func (s *SnykCodeHTTPClient) GetAutofixSuggestions(
 		Str("method", method).
 		Str("requestId", span.GetTraceId()).Logger()
 
-	var response AutofixResponse
-	response, err = s.RunAutofix(span.Context(), options)
+	logger.Info().Msg("Started obtaining autofix suggestions")
+	defer logger.Info().Msg("Finished obtaining autofix suggestions")
+
+	autofixResponse, status, err := s.GetAutofixResponse(ctx, baseDir, options)
 	if err != nil {
-		return autofixSuggestions, status, err
+		return nil, status, err
 	}
-
-	logger.Debug().Msgf("Status: %s", response.Status)
-
-	if response.Status == failed.message {
-		logger.Err(err).Str("responseStatus", response.Status).Msg("autofix failed")
-		return nil, failed, err
-	}
-
-	if response.Status == "" {
-		s.c.Logger().Err(err).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
-		return nil, failed, err
-	}
-
-	status = AutofixStatus{message: response.Status}
-	if response.Status != completeStatus {
-		return nil, status, nil
-	}
-
-	suggestions := response.toAutofixSuggestions(baseDir, options.filePath)
-	return suggestions, AutofixStatus{message: response.Status}, nil
+	suggestions := autofixResponse.toAutofixSuggestions(baseDir, options.filePath)
+	return suggestions, status, nil
 }
 
 func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOptions) (AutofixResponse, error) {
