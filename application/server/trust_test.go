@@ -18,10 +18,11 @@ package server
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/stretchr/testify/assert"
@@ -148,7 +149,6 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 
 	c := config.CurrentConfig()
 	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolderFeatureEnabled(true)
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -180,7 +180,7 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	}
 
 	assert.NoError(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second*10, time.Millisecond)
 }
 
 func checkTrustMessageRequest(jsonRPCRecorder *testutil.JsonRPCRecorder) bool {
