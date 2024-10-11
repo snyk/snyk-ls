@@ -45,13 +45,16 @@ func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string
 	status AutofixStatus,
 	err error,
 ) {
+	method := "GetAutofixDiffs"
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
+	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
 
 	autofixResponse, status, err := s.GetAutofixResponse(ctx, baseDir, options)
 	if err != nil {
 		return nil, status, err
 	}
 	return autofixResponse.toUnifiedDiffSuggestions(baseDir, options.filePath), status, err
-
 }
 
 func (s *SnykCodeHTTPClient) GetAutofixResponse(ctx context.Context, baseDir string, options AutofixOptions) (
