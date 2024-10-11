@@ -18,7 +18,6 @@ package command
 
 import (
 	"fmt"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -90,6 +89,8 @@ func CreateFromCommandData(
 		}, nil
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
+	case types.ClearCacheCommand:
+		return &clearCache{command: commandData}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

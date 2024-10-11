@@ -100,6 +100,10 @@ func Set(w *Workspace) {
 	instance = w
 }
 
+func (w *Workspace) ScanPersister() persistence.ScanSnapshotPersister {
+	return w.scanPersister
+}
+
 func (w *Workspace) RemoveFolder(folderPath string) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
