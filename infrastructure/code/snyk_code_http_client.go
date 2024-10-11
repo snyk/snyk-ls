@@ -106,12 +106,12 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	responseBody, err := s.doCall(span.Context(), "GET", "/filters", nil)
+	body, err, _ := s.doCall(span.Context(), "GET", "/filters", nil)
 	if err != nil {
 		return FiltersResponse{ConfigFiles: nil, Extensions: nil}, err
 	}
 
-	err = json.Unmarshal(responseBody, &filters)
+	err = json.Unmarshal(body, &filters)
 	if err != nil {
 		return FiltersResponse{ConfigFiles: nil, Extensions: nil}, err
 	}
@@ -134,13 +134,13 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 		return "", nil, err
 	}
 
-	responseBody, err := s.doCall(span.Context(), "POST", "/bundle", requestBody)
+	body, err, _ := s.doCall(span.Context(), "POST", "/bundle", requestBody) //nolint:bodyclose // false positive
 	if err != nil {
 		return "", nil, err
 	}
 
 	var bundle bundleResponse
-	err = json.Unmarshal(responseBody, &bundle)
+	err = json.Unmarshal(body, &bundle)
 	if err != nil {
 		return "", nil, err
 	}
@@ -148,36 +148,33 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
-func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
-	method string,
-	path string,
-	requestBody []byte,
-) (responseBody []byte, _ error) {
+func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path string, requestBody []byte) ([]byte, error, *http.Response) {
 	span := s.instrumentor.StartSpan(ctx, "code.doCall")
 	defer s.instrumentor.Finish(span)
 
 	const retryCount = 3
+	var responseBody []byte
+	var response *http.Response
 	for i := 0; i < retryCount; i++ {
 		requestId, err := performance2.GetTraceId(span.Context())
 		if err != nil {
-			return nil, errors.New("Code request id was not provided. " + err.Error())
+			return nil, errors.New("Code request id was not provided. " + err.Error()), nil
 		}
 
 		bodyBuffer, err := s.encodeIfNeeded(method, requestBody)
 		if err != nil {
-			return nil, err
+			return nil, err, nil
 		}
 
 		c := config.CurrentConfig()
 		req, err := s.newRequest(c, method, path, bodyBuffer, requestId)
 		if err != nil {
-			return nil, err
+			return nil, err, nil
 		}
 
 		s.c.Logger().Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
 
-		response, body, err := s.httpCall(req) //nolint:bodyclose // false positive
-		responseBody = body
+		response, responseBody, err = s.httpCall(req)
 
 		if response != nil && responseBody != nil {
 			s.c.Logger().Trace().Str("response.Status", response.Status).
@@ -191,7 +188,7 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 		}
 
 		if err != nil {
-			return nil, err // no retries for errors
+			return nil, err, response // no retries for errors
 		}
 
 		err = s.checkResponseCode(response)
@@ -203,14 +200,14 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context,
 					continue
 				}
 				// return the error on last try
-				return nil, err
+				return nil, err, response
 			}
-			return nil, err
+			return nil, err, response
 		}
 		// no error, we can break the retry loop
 		break
 	}
-	return responseBody, nil
+	return responseBody, nil, response
 }
 
 func (s *SnykCodeHTTPClient) httpCall(req *http.Request) (*http.Response, []byte, error) {
@@ -313,11 +310,13 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 	removedFiles []string,
 ) (string, []string, error) {
 	method := "code.ExtendBundle"
-	s.c.Logger().Debug().Str("method", method).Msg("API: Extending bundle for " + strconv.Itoa(len(files)) + " files")
-	defer s.c.Logger().Debug().Str("method", method).Msg("API: Extend done")
-
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
+	requestId, _ := performance2.GetTraceId(span.Context())
+
+	logger := s.c.Logger().With().Str("method", method).Str("requestId", requestId).Logger()
+	logger.Debug().Msg("API: Extending bundle for " + strconv.Itoa(len(files)) + " files")
+	defer logger.Debug().Msg("API: Extend done")
 
 	requestBody, err := json.Marshal(extendBundleRequest{
 		Files:        files,
@@ -327,7 +326,13 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 		return "", nil, err
 	}
 
-	responseBody, err := s.doCall(span.Context(), "PUT", "/bundle/"+bundleHash, requestBody)
+	responseBody, err, response := s.doCall(span.Context(), "PUT", "/bundle/"+bundleHash, requestBody)
+	if response != nil && response.StatusCode == http.StatusBadRequest {
+		logger.Err(err).Msg("dumping bundle infos for analysis")
+		logger.Error().Any("fileHashes", files).Send()
+		logger.Error().Any("removedFiles", removedFiles).Send()
+		logger.Error().Any("fileHashes", files).Send()
+	}
 	if err != nil {
 		return "", nil, err
 	}
@@ -364,7 +369,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, AnalysisStatus{}, err
 	}
 
-	responseBody, err := s.doCall(span.Context(), "POST", "/analysis", requestBody)
+	responseBody, err, _ := s.doCall(span.Context(), "POST", "/analysis", requestBody)
 	failed := AnalysisStatus{message: "FAILED"}
 	if err != nil {
 		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")
@@ -435,7 +440,7 @@ func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]by
 }
 
 func (s *SnykCodeHTTPClient) checkResponseCode(r *http.Response) error {
-	if r.StatusCode >= 200 && r.StatusCode <= 299 {
+	if r.StatusCode >= 200 && r.StatusCode <= 400 {
 		return nil
 	}
 	return errors.New("Unexpected response code: " + r.Status)
@@ -508,7 +513,7 @@ func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOpti
 		return AutofixResponse{}, err
 	}
 
-	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody)
+	responseBody, err, _ := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody)
 
 	if err != nil {
 		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error response from autofix")
@@ -578,7 +583,7 @@ func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 		return err
 	}
 
-	responseBody, err := s.doCall(span.Context(), "POST", "/autofix/event", requestBody)
+	responseBody, err, _ := s.doCall(span.Context(), "POST", "/autofix/event", requestBody)
 	if err != nil {
 		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response for autofix feedback")
 		return err
