@@ -74,23 +74,21 @@ Right now the language server supports the following actions:
         "message": "Message",
         "tags": ["security"],
         "data": {
-          "scanIssue": {
-            "id": "123",
-            "issueType": "vulnerability",
-            "packageName": "packageName",
-            "packageVersion": "packageVersion",
-            "issue": "issue",
-            "additionalData": {
-              "ruleId": "ruleId",
-              "identifiers": {
-                "cwe": ["cwe"],
-                "cve": ["cve"]
-              },
-              "description": "description",
-              "language": "language",
-              "packageManager": "packageManager",
-              "packageName": "packageName"
-            }
+          "id": "123",
+          "issueType": "vulnerability",
+          "packageName": "packageName",
+          "packageVersion": "packageVersion",
+          "issue": "issue",
+          "additionalData": {
+            "ruleId": "ruleId",
+            "identifiers": {
+              "cwe": ["cwe"],
+              "cve": ["cve"]
+            },
+            "description": "description",
+            "language": "language",
+            "packageManager": "packageManager",
+            "packageName": "packageName"
           }
         }
       }
@@ -113,35 +111,33 @@ Right now the language server supports the following actions:
         "message": "Message",
         "tags": ["security"],
         "data": {
-          "scanIssue": {
-            "id": "123",
-            "filePath": "filePath",
-            "range": {
-              "start": { "line": 1, "character": 0 },
-              "end": { "line": 2, "character": 0 },
-            },
-            "additionalData": {
-              "message": "message",
-              "rule": "rule",
-              "ruleId": "ruleId",
-              "dataFlow": [
-                {
-                  "filePath": "filePath",
-                  "range": {
-                    "start": { "line": 1, "character": 0 },
-                    "end": { "line": 2, "character": 0 },
-                  },
-                }
-              ],
-              "exampleCommitFixes": [
-                {
-                  "commit": "commit",
-                  "diff": "diff"
-                }
-              ],
-              "cwe": "cwe",
-              "isSecurityType": true
-            }
+          "id": "123",
+          "filePath": "filePath",
+          "range": {
+            "start": { "line": 1, "character": 0 },
+            "end": { "line": 2, "character": 0 },
+          },
+          "additionalData": {
+            "message": "message",
+            "rule": "rule",
+            "ruleId": "ruleId",
+            "dataFlow": [
+              {
+                "filePath": "filePath",
+                "range": {
+                  "start": { "line": 1, "character": 0 },
+                  "end": { "line": 2, "character": 0 },
+                },
+              }
+            ],
+            "exampleCommitFixes": [
+              {
+                "commit": "commit",
+                "diff": "diff"
+              }
+            ],
+            "cwe": "cwe",
+            "isSecurityType": true
           }
         }
       }
