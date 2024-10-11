@@ -119,12 +119,6 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]s
 		severity:     0,
 	}
 
-	logger.Trace().Str("rootPath", b.rootPath).Send()
-	logger.Trace().Int("fileCount", len(b.Files)).Any("fileHashes", b.Files).Send()
-	logger.Trace().Any("missingFiles", b.missingFiles).Send()
-	logger.Trace().Any("limitToFiles", b.limitToFiles).Send()
-	logger.Trace().Any("uploadBatches", b.UploadBatches).Send()
-
 	start := time.Now()
 	for {
 		if ctx.Err() != nil || t.IsCanceled() { // Cancellation requested
