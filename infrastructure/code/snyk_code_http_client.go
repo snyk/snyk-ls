@@ -331,7 +331,6 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 		logger.Err(err).Msg("dumping bundle infos for analysis")
 		logger.Error().Any("fileHashes", files).Send()
 		logger.Error().Any("removedFiles", removedFiles).Send()
-		logger.Error().Any("fileHashes", files).Send()
 	}
 	if err != nil {
 		return "", nil, err
