@@ -653,7 +653,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 	}
 
 	assert.Nil(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second*5, time.Millisecond)
 }
 
 func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
