@@ -49,6 +49,8 @@ func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
+	logger.Info().Msg("Started obtaining autofix diffs")
+	defer logger.Info().Msg("Finished obtaining autofix diffs")
 
 	autofixResponse, status, err := s.GetAutofixResponse(ctx, baseDir, options)
 	if err != nil {
@@ -72,8 +74,8 @@ func (s *SnykCodeHTTPClient) GetAutofixResponse(ctx context.Context, baseDir str
 		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
 		return autofixResponse, failed, err
 	}
-	logger.Info().Str("requestId", requestId).Msg("Started obtaining autofix diffs")
-	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining autofix diffs")
+	logger.Info().Str("requestId", requestId).Msg("Started obtaining autofix Response")
+	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining autofix Response")
 
 	response, err := s.RunAutofix(span.Context(), options)
 	if err != nil {
