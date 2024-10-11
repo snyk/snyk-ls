@@ -108,6 +108,7 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 		a.errorReporter.CaptureError(err)
 	}
 	a.UpdateCredentials("", true)
+	a.ConfigureProviders(a.c)
 }
 
 // IsAuthenticated returns true if the token is verified
