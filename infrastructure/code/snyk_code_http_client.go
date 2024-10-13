@@ -326,7 +326,7 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 		return "", nil, err
 	}
 
-	responseBody, err, response := s.doCall(span.Context(), "PUT", "/bundle/"+bundleHash, requestBody)
+	responseBody, err, response := s.doCall(span.Context(), "PUT", "/bundle/"+bundleHash, requestBody) //nolint:bodyclose // false positive, closed in doCall
 	if response != nil && response.StatusCode == http.StatusBadRequest {
 		logger.Err(err).Msg("dumping bundle infos for analysis")
 		logger.Error().Any("fileHashes", files).Send()
@@ -368,7 +368,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, AnalysisStatus{}, err
 	}
 
-	responseBody, err, _ := s.doCall(span.Context(), "POST", "/analysis", requestBody)
+	responseBody, err, _ := s.doCall(span.Context(), "POST", "/analysis", requestBody) //nolint:bodyclose // false positive, closed in doCall
 	failed := AnalysisStatus{message: "FAILED"}
 	if err != nil {
 		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")
@@ -512,7 +512,7 @@ func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOpti
 		return AutofixResponse{}, err
 	}
 
-	responseBody, err, _ := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody)
+	responseBody, err, _ := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody) //nolint:bodyclose // false positive, closed in doCall
 
 	if err != nil {
 		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error response from autofix")
@@ -582,7 +582,7 @@ func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 		return err
 	}
 
-	responseBody, err, _ := s.doCall(span.Context(), "POST", "/autofix/event", requestBody)
+	responseBody, err, _ := s.doCall(span.Context(), "POST", "/autofix/event", requestBody) //nolint:bodyclose // false positive, closed in doCall
 	if err != nil {
 		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response for autofix feedback")
 		return err
