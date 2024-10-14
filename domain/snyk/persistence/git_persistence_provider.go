@@ -51,7 +51,7 @@ type hashedFolderPath string
 
 type ScanSnapshotPersister interface {
 	Init(folderPath []string) error
-	Clear(folderPath []string, deleteIfExpired bool)
+	Clear(folderPath []string, deleteOnlyExpired bool)
 	Add(folderPath, commitHash string, issueList []snyk.Issue, p product.Product) error
 	GetPersistedIssueList(folderPath string, p product.Product) ([]snyk.Issue, error)
 	Exists(folderPath, commitHash string, p product.Product) bool

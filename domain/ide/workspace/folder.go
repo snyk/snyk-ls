@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/sourcegraph/go-lsp"
 	"strings"
 	"sync"
 
@@ -645,6 +646,8 @@ func (f *Folder) sendHoversForFile(path string, issues []snyk.Issue) {
 }
 
 func (f *Folder) Path() string { return f.path }
+
+func (f *Folder) Uri() lsp.DocumentURI { return uri.PathToUri(f.path) }
 
 func (f *Folder) Name() string { return f.name }
 

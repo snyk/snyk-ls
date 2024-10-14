@@ -39,6 +39,7 @@ const (
 	GetActiveUserCommand         = "snyk.getActiveUser"
 	ReportAnalyticsCommand       = "snyk.reportAnalytics"
 	ExecuteCLICommand            = "snyk.executeCLI"
+	ClearCacheCommand            = "snyk.clearCache"
 
 	// Snyk Code specific commands
 	CodeFixCommand        = "snyk.code.fix"

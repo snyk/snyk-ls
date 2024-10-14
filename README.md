@@ -411,6 +411,11 @@ Right now the language server supports the following actions:
       "userMessage": "Optional message to the user" // present if 'ok' is false
     }
   ```
+- `Clear Cache` Clears either persisted or inMemory Cache or both.
+  - command: `snyk.clearCache`
+  - args: 
+    - `folderUri` string, 
+    - `cacheType` `persisted` or `inMemory`
 
 ## Installation
 
