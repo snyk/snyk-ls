@@ -41,9 +41,9 @@ func (cmd *clearCache) Execute(_ context.Context) (any, error) {
 	logger := config.CurrentConfig().Logger().With().Str("method", "clearCache.Execute").Logger()
 	args := cmd.command.Arguments
 	var parsedFolderUri *lsp.DocumentURI
-	folderURI, ok := args[0].(string)
+	folderURI := args[0].(string)
 
-	if ok && folderURI != "" {
+	if folderURI != "" {
 		decodedPath, err := url.PathUnescape(folderURI)
 		if err == nil {
 			uri := lsp.DocumentURI(decodedPath)
