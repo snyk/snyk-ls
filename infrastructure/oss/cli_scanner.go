@@ -497,6 +497,7 @@ func (cliScanner *CLIScanner) retrieveIssues(
 		cliScanner.learnService,
 		cliScanner.errorReporter,
 		cliScanner.packageIssueCache,
+		cliScanner.config,
 	)
 
 	// repopulate

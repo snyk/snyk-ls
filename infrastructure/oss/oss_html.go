@@ -34,30 +34,44 @@ import (
 //go:embed template/details.html
 var detailsHtmlTemplate string
 
-var globalTemplate *template.Template
+var htmlRendererInstance *HtmlRenderer
 
-func init() {
+type HtmlRenderer struct {
+	c              *config.Config
+	globalTemplate *template.Template
+}
+
+func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
+	if htmlRendererInstance != nil {
+		return htmlRendererInstance, nil
+	}
 	funcMap := template.FuncMap{
 		"trimCWEPrefix": html.TrimCWEPrefix,
 		"idxMinusOne":   html.IdxMinusOne,
 		"join":          join,
 	}
-
-	var err error
-	globalTemplate, err = template.New(string(product.ProductOpenSource)).Funcs(funcMap).Parse(detailsHtmlTemplate)
+	globalTemplate, err := template.New(string(product.ProductOpenSource)).Funcs(funcMap).Parse(detailsHtmlTemplate)
 	if err != nil {
-		config.CurrentConfig().Logger().Error().Msgf("Failed to parse details template: %s", err)
+		c.Logger().Error().Msgf("Failed to parse details template: %s", err)
+		return nil, err
 	}
+
+	htmlRendererInstance = &HtmlRenderer{
+		c:              c,
+		globalTemplate: globalTemplate,
+	}
+
+	return htmlRendererInstance, nil
 }
 
 func join(sep string, s []string) string {
 	return strings.Join(s, sep)
 }
 
-func getDetailsHtml(issue snyk.Issue) string {
+func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 	additionalData, ok := issue.AdditionalData.(snyk.OssIssueData)
 	if !ok {
-		config.CurrentConfig().Logger().Error().Msg("Failed to cast additional data to OssIssueData")
+		renderer.c.Logger().Error().Msg("Failed to cast additional data to OssIssueData")
 		return ""
 	}
 
@@ -79,7 +93,7 @@ func getDetailsHtml(issue snyk.Issue) string {
 		"CVSSv3":             template.URL(additionalData.CVSSv3),
 		"CvssScore":          fmt.Sprintf("%.1f", additionalData.CvssScore),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
-		"IntroducedThroughs": getIntroducedThroughs(additionalData),
+		"IntroducedThroughs": getIntroducedThroughs(additionalData, renderer.c.SnykUI()),
 		"LessonUrl":          additionalData.Lesson,
 		"LessonIcon":         html.LessonIcon(),
 		"FixedIn":            additionalData.FixedIn,
@@ -89,8 +103,8 @@ func getDetailsHtml(issue snyk.Issue) string {
 	}
 
 	var htmlBuffer bytes.Buffer
-	if err := globalTemplate.Execute(&htmlBuffer, data); err != nil {
-		config.CurrentConfig().Logger().Error().Msgf("Failed to execute main details template: %v", err)
+	if err := renderer.globalTemplate.Execute(&htmlBuffer, data); err != nil {
+		renderer.c.Logger().Error().Msgf("Failed to execute main details template: %v", err)
 		return ""
 	}
 
@@ -152,15 +166,14 @@ type IntroducedThrough struct {
 	Module         string
 }
 
-func getIntroducedThroughs(issue snyk.OssIssueData) []IntroducedThrough {
+func getIntroducedThroughs(issue snyk.OssIssueData, snykUI string) []IntroducedThrough {
 	var introducedThroughs []IntroducedThrough
 
-	snykUi := config.CurrentConfig().SnykUI()
 	if len(issue.From) > 0 {
 		for _, v := range issue.MatchingIssues {
 			if len(v.From) > 1 {
 				introducedThroughs = append(introducedThroughs, IntroducedThrough{
-					SnykUI:         snykUi,
+					SnykUI:         snykUI,
 					PackageManager: issue.PackageManager,
 					Module:         v.From[1],
 				})

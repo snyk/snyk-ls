@@ -21,6 +21,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog"
 	"html/template"
 	"path/filepath"
 	"regexp"
@@ -60,32 +61,46 @@ type ExampleCommit struct {
 //go:embed template/details.html
 var detailsHtmlTemplate string
 
-var globalTemplate *template.Template
+var htmlRendererInstance *HtmlRenderer
 
-func init() {
+type HtmlRenderer struct {
+	c              *config.Config
+	globalTemplate *template.Template
+}
+
+func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
+	if htmlRendererInstance != nil {
+		return htmlRendererInstance, nil
+	}
 	funcMap := template.FuncMap{
 		"repoName":      getRepoName,
 		"trimCWEPrefix": html.TrimCWEPrefix,
 		"idxMinusOne":   html.IdxMinusOne,
 	}
 
-	var err error
-	globalTemplate, err = template.New(string(product.ProductCode)).Funcs(funcMap).Parse(detailsHtmlTemplate)
+	globalTemplate, err := template.New(string(product.ProductCode)).Funcs(funcMap).Parse(detailsHtmlTemplate)
 	if err != nil {
-		config.CurrentConfig().Logger().Error().Msgf("Failed to parse details template: %s", err)
+		c.Logger().Error().Msgf("Failed to parse details template: %s", err)
+		return nil, err
 	}
+
+	htmlRendererInstance = &HtmlRenderer{
+		c:              c,
+		globalTemplate: globalTemplate,
+	}
+
+	return htmlRendererInstance, nil
 }
 
-func getCodeDetailsHtml(issue snyk.Issue, folderPath string) string {
-	c := config.CurrentConfig()
+func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue, folderPath string) string {
 	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
-		c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
+		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
 	}
 
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
-	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits)
+	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
 
 	data := map[string]interface{}{
 		"IssueTitle":         additionalData.Title,
@@ -102,7 +117,7 @@ func getCodeDetailsHtml(issue snyk.Issue, folderPath string) string {
 		"ExampleCommitFixes": exampleCommits,
 		"CommitFixes":        commitFixes,
 		"PriorityScore":      additionalData.PriorityScore,
-		"SnykWebUrl":         config.CurrentConfig().SnykUI(),
+		"SnykWebUrl":         renderer.c.SnykUI(),
 		"LessonUrl":          issue.LessonUrl,
 		"LessonIcon":         html.LessonIcon(),
 		"IgnoreLineAction":   getLineToIgnoreAction(issue),
@@ -126,8 +141,8 @@ func getCodeDetailsHtml(issue snyk.Issue, folderPath string) string {
 	}
 
 	var buffer bytes.Buffer
-	if err := globalTemplate.Execute(&buffer, data); err != nil {
-		c.Logger().Error().Msgf("Failed to execute main details template: %v", err)
+	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
+		renderer.c.Logger().Error().Msgf("Failed to execute main details template: %v", err)
 		return ""
 	}
 
@@ -215,10 +230,10 @@ func prepareExampleCommits(fixes []snyk.ExampleCommitFix) []ExampleCommit {
 	return fixData
 }
 
-func parseExampleCommitsToTemplateJS(fixes []ExampleCommit) template.JS {
+func parseExampleCommitsToTemplateJS(fixes []ExampleCommit, logger *zerolog.Logger) template.JS {
 	jsonFixes, err := json.Marshal(fixes)
 	if err != nil {
-		config.CurrentConfig().Logger().Error().Msgf("Failed to marshal example commit fixes: %v", err)
+		logger.Error().Msgf("Failed to marshal example commit fixes: %v", err)
 		return ""
 	}
 	return template.JS(jsonFixes)
