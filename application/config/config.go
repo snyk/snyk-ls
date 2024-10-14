@@ -153,7 +153,6 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 }
 
 type Config struct {
-	scrubbingDict                    frameworkLogging.ScrubbingDict
 	scrubbingWriter                  zerolog.LevelWriter
 	cliSettings                      *CliSettings
 	configFile                       string
@@ -240,7 +239,6 @@ func NewFromExtension(engine workflow.Engine) *Config {
 func newConfig(engine workflow.Engine) *Config {
 	c := &Config{}
 	c.folderAdditionalParameters = make(map[string][]string)
-	c.scrubbingDict = frameworkLogging.ScrubbingDict{}
 	c.logger = getNewScrubbingLogger(c)
 	c.cliSettings = NewCliSettings(c)
 	c.automaticAuthentication = true
@@ -305,7 +303,7 @@ func initWorkFlowEngine(c *Config) {
 func getNewScrubbingLogger(c *Config) *zerolog.Logger {
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(logging.New(nil), c.scrubbingDict)
+	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(logging.New(nil), make(frameworkLogging.ScrubbingDict))
 	writer := c.getConsoleWriter(c.scrubbingWriter)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
 	return &logger
@@ -598,7 +596,7 @@ func (c *Config) ConfigureLogging(server types.Server) {
 	defer c.m.Unlock()
 
 	// overwrite a potential already existing writer, so we have the latest settings
-	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), c.scrubbingDict)
+	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), make(frameworkLogging.ScrubbingDict))
 	writer := c.getConsoleWriter(c.scrubbingWriter)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger().Level(logLevel)
 	c.logger = &logger
