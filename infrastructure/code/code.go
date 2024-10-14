@@ -264,13 +264,6 @@ func (sc *Scanner) enhanceIssuesDetails(issues []snyk.Issue, folderPath string) 
 		} else if lesson != nil && lesson.Url != "" {
 			issue.LessonUrl = lesson.Url
 		}
-
-		renderer, err := NewHtmlRenderer(sc.c)
-		if err != nil {
-			sc.c.Logger().Err(err).Msg("Cannot create Oss HTML render")
-			return
-		}
-		issueData.Details = renderer.GetDetailsHtml(*issue, folderPath)
 		issue.AdditionalData = issueData
 	}
 }
