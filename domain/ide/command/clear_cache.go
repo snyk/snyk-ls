@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ func (cmd *clearCache) Command() types.CommandData {
 }
 
 // Execute Deletes persisted, inMemory Cache or both.
-// Parameters: folderUri either folder Uri or nil for all folders
+// Parameters: folderUri either folder Uri or empty for all folders
 // cacheType: either inMemory or persisted or empty for both.
 func (cmd *clearCache) Execute(_ context.Context) (any, error) {
 	logger := config.CurrentConfig().Logger().With().Str("method", "clearCache.Execute").Logger()
@@ -45,10 +45,12 @@ func (cmd *clearCache) Execute(_ context.Context) (any, error) {
 
 	if folderURI != "" {
 		decodedPath, err := url.PathUnescape(folderURI)
-		if err == nil {
-			uri := lsp.DocumentURI(decodedPath)
-			parsedFolderUri = &uri
+		if err != nil {
+			logger.Error().Err(err).Msgf("could not decode folder Uri %s", folderURI)
+			return nil, err
 		}
+		uri := lsp.DocumentURI(decodedPath)
+		parsedFolderUri = &uri
 	}
 
 	cacheType := args[1].(string)
