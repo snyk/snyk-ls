@@ -81,6 +81,11 @@ func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, folderUri *lsp
 func (cmd *clearCache) purgePersistedCache(logger *zerolog.Logger, folderUri *lsp.DocumentURI) {
 	var folderList []string
 	ws := workspace.Get()
+	scanPersister := ws.ScanPersister()
+	if scanPersister == nil {
+		logger.Error().Msgf("could not find scan persister")
+		return
+	}
 	for _, folder := range ws.Folders() {
 		if folderUri != nil && *folderUri != folder.Uri() {
 			continue
@@ -88,5 +93,5 @@ func (cmd *clearCache) purgePersistedCache(logger *zerolog.Logger, folderUri *ls
 		folderList = append(folderList, folder.Path())
 	}
 	logger.Info().Msgf("deleting perrsisted cache for folders %v", folderList)
-	ws.ScanPersister().Clear(folderList, false)
+	scanPersister.Clear(folderList, false)
 }
