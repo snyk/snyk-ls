@@ -297,6 +297,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						types.CodeFixDiffsCommand,
 						types.ExecuteCLICommand,
 						types.ClearCacheCommand,
+						types.GenerateIssueDescriptionCommand,
 					},
 				},
 			},
