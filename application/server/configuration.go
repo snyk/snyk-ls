@@ -18,11 +18,12 @@ package server
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/internal/product"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/snyk/snyk-ls/internal/product"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -259,7 +260,9 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, initializatio
 	endpointsUpdated := c.UpdateApiEndpoints(snykApiUrl)
 
 	if endpointsUpdated && !initialization {
-		di.AuthenticationService().Logout(context.Background())
+		authService := di.AuthenticationService()
+		authService.Logout(context.Background())
+		authService.ConfigureProviders(c)
 		workspace.Get().Clear()
 	}
 
