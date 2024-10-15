@@ -130,12 +130,6 @@ Right now the language server supports the following actions:
                 },
               }
             ],
-            "exampleCommitFixes": [
-              {
-                "commit": "commit",
-                "diff": "diff"
-              }
-            ],
             "cwe": "cwe",
             "isSecurityType": true
           }
@@ -412,6 +406,10 @@ Right now the language server supports the following actions:
   - args: 
     - `folderUri` string, 
     - `cacheType` `persisted` or `inMemory`
+- `Generate Issue Description` Generates issue description in HTML.
+  - command: `snyk.generateIssueDescription`
+  - args:
+    - `issueId` string
 
 ## Installation
 

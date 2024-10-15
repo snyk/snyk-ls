@@ -67,7 +67,7 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 func getOssHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (string, error) {
 	htmlRender, err := oss.NewHtmlRenderer(c)
 	if err != nil {
-		logger.Err(err).Msg("Cannot create IaC HTML render")
+		logger.Err(err).Msg("Cannot create Oss HTML render")
 		return "", err
 	}
 	html := htmlRender.GetDetailsHtml(issue)
@@ -77,7 +77,7 @@ func getOssHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (stri
 func getCodeHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (string, error) {
 	htmlRender, err := code.NewHtmlRenderer(c)
 	if err != nil {
-		logger.Err(err).Msg("Cannot create IaC HTML render")
+		logger.Err(err).Msg("Cannot create Code HTML render")
 		return "", err
 	}
 	html := htmlRender.GetDetailsHtml(issue)
