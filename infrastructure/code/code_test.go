@@ -598,10 +598,12 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 
 	// Act
 	scanner.enhanceIssuesDetails(issues, "")
-
+	htmlRenderer, err := NewHtmlRenderer(c)
+	assert.Nil(t, err)
+	html := htmlRenderer.GetDetailsHtml(issues[0])
 	// Assert
 	assert.Equal(t, expectedLessonUrl, issues[0].LessonUrl)
-	assert.Contains(t, issues[0].AdditionalData.(snyk.CodeIssueData).Details, `href="https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"`)
+	assert.Contains(t, html, `href="https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"`)
 }
 
 func setupIgnoreWorkspace(t *testing.T) (tempDir string, ignoredFilePath string, notIgnoredFilePath string) {
