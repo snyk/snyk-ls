@@ -95,6 +95,9 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 
 func determineFolderPath(filePath string) string {
 	ws := workspace.Get()
+	if ws == nil {
+		return ""
+	}
 	for _, folder := range ws.Folders() {
 		folderPath := folder.Path()
 		if strings.HasPrefix(filePath, folderPath) {
