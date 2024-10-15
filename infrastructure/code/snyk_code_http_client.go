@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -106,7 +107,7 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
 
-	body, err, _ := s.doCall(span.Context(), "GET", "/filters", nil)
+	body, _, err := s.doCall(span.Context(), "GET", "/filters", nil)
 	if err != nil {
 		return FiltersResponse{ConfigFiles: nil, Extensions: nil}, err
 	}
@@ -134,7 +135,7 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 		return "", nil, err
 	}
 
-	body, err, _ := s.doCall(span.Context(), "POST", "/bundle", requestBody) //nolint:bodyclose // false positive
+	body, _, err := s.doCall(span.Context(), "POST", "/bundle", requestBody)
 	if err != nil {
 		return "", nil, err
 	}
@@ -148,36 +149,36 @@ func (s *SnykCodeHTTPClient) CreateBundle(
 	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
-func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path string, requestBody []byte) ([]byte, error, *http.Response) {
+func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path string, requestBody []byte) ([]byte, int, error) {
 	span := s.instrumentor.StartSpan(ctx, "code.doCall")
 	defer s.instrumentor.Finish(span)
 
 	const retryCount = 3
-	var responseBody []byte
-	var response *http.Response
+
+	// we only retry, if we get a retryable http status code
 	for i := 0; i < retryCount; i++ {
 		requestId, err := performance2.GetTraceId(span.Context())
 		if err != nil {
-			return nil, errors.New("Code request id was not provided. " + err.Error()), nil
+			return nil, 0, errors.New("Code request id was not provided. " + err.Error())
 		}
 
 		bodyBuffer, err := s.encodeIfNeeded(method, requestBody)
 		if err != nil {
-			return nil, err, nil
+			return nil, 0, err
 		}
 
 		c := config.CurrentConfig()
 		req, err := s.newRequest(c, method, path, bodyBuffer, requestId)
 		if err != nil {
-			return nil, err, nil
+			return nil, 0, err
 		}
 
 		s.c.Logger().Trace().Str("requestBody", string(requestBody)).Str("snyk-request-id", requestId).Msg("SEND TO REMOTE")
 
-		response, responseBody, err = s.httpCall(req)
+		responseBody, httpStatusCode, err := s.httpCall(req)
 
-		if response != nil && responseBody != nil {
-			s.c.Logger().Trace().Str("response.Status", response.Status).
+		if responseBody != nil {
+			s.c.Logger().Trace().Int("response.Status", httpStatusCode).
 				Str("responseBody", string(responseBody)).
 				Str("snyk-request-id", requestId).
 				Msg("RECEIVED FROM REMOTE")
@@ -188,51 +189,57 @@ func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path str
 		}
 
 		if err != nil {
-			return nil, err, response // no retries for errors
+			return nil, 0, err // no retries for errors
 		}
 
-		err = s.checkResponseCode(response)
+		err = s.checkResponseCode(httpStatusCode)
 		if err != nil {
-			if retryErrorCodes[response.StatusCode] {
+			if retryErrorCodes[httpStatusCode] {
 				s.c.Logger().Debug().Err(err).Str("method", method).Int("attempts done", i+1).Msgf("retrying")
 				if i < retryCount-1 {
 					time.Sleep(5 * time.Second)
 					continue
 				}
 				// return the error on last try
-				return nil, err, response
+				return nil, httpStatusCode, err
 			}
-			return nil, err, response
+			return nil, httpStatusCode, err
 		}
 		// no error, we can break the retry loop
-		break
+		return responseBody, httpStatusCode, nil
 	}
-	return responseBody, nil, response
+	return nil, 0, nil
 }
 
-func (s *SnykCodeHTTPClient) httpCall(req *http.Request) (*http.Response, []byte, error) {
+func (s *SnykCodeHTTPClient) httpCall(req *http.Request) ([]byte, int, error) {
 	method := "code.httpCall"
-	response, err := s.client().Do(req)
-	if err != nil {
-		s.c.Logger().Err(err).Str("method", method).Msgf("got http error")
-		s.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: req.RequestURI})
-		return nil, nil, err
-	}
+	logger := s.c.Logger().With().Str("method", method).Logger()
+	statusCode := 0
 
+	response, err := s.client().Do(req)
 	defer func() {
-		closeErr := response.Body.Close()
-		if closeErr != nil {
-			s.c.Logger().Err(closeErr).Msg("Couldn't close response body in call to Snyk Code")
+		bodyCloseErr := response.Body.Close()
+		if bodyCloseErr != nil {
+			logger.Err(bodyCloseErr).Msg("failed to close response body")
 		}
 	}()
-	responseBody, err := io.ReadAll(response.Body)
 
 	if err != nil {
-		s.c.Logger().Err(err).Str("method", method).Msgf("error reading response body")
-		s.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: req.RequestURI})
-		return nil, nil, err
+		logger.Err(err).Msgf("got http error")
+		return nil, statusCode, err
 	}
-	return response, responseBody, nil
+
+	if response == nil {
+		return nil, 0, nil
+	}
+	statusCode = response.StatusCode
+	responseBody, readErr := io.ReadAll(response.Body)
+
+	if readErr != nil {
+		logger.Err(readErr).Msg("failed to read response body")
+		return responseBody, statusCode, err
+	}
+	return responseBody, statusCode, nil
 }
 
 func (s *SnykCodeHTTPClient) newRequest(
@@ -326,9 +333,9 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 		return "", nil, err
 	}
 
-	responseBody, err, response := s.doCall(span.Context(), "PUT", "/bundle/"+bundleHash, requestBody) //nolint:bodyclose // false positive, closed in doCall
-	if response != nil && response.StatusCode == http.StatusBadRequest {
-		logger.Err(err).Msg("dumping bundle infos for analysis")
+	responseBody, httpStatus, err := s.doCall(span.Context(), "PUT", "/bundle/"+bundleHash, requestBody)
+	if httpStatus == http.StatusBadRequest {
+		logger.Err(err).Msg("got an HTTP 400 Bad Request, dumping bundle infos for analysis")
 		logger.Error().Any("fileHashes", files).Send()
 		logger.Error().Any("removedFiles", removedFiles).Send()
 	}
@@ -368,7 +375,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, AnalysisStatus{}, err
 	}
 
-	responseBody, err, _ := s.doCall(span.Context(), "POST", "/analysis", requestBody) //nolint:bodyclose // false positive, closed in doCall
+	responseBody, _, err := s.doCall(span.Context(), "POST", "/analysis", requestBody)
 	failed := AnalysisStatus{message: "FAILED"}
 	if err != nil {
 		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")
@@ -438,11 +445,11 @@ func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]by
 	return requestBody, err
 }
 
-func (s *SnykCodeHTTPClient) checkResponseCode(r *http.Response) error {
-	if r.StatusCode >= 200 && r.StatusCode <= 400 {
+func (s *SnykCodeHTTPClient) checkResponseCode(statusCode int) error {
+	if statusCode >= 200 && statusCode <= 400 {
 		return nil
 	}
-	return errors.New("Unexpected response code: " + r.Status)
+	return fmt.Errorf("Unexpected response code: %d", statusCode)
 }
 
 type AutofixStatus struct {
@@ -512,7 +519,7 @@ func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOpti
 		return AutofixResponse{}, err
 	}
 
-	responseBody, err, _ := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody) //nolint:bodyclose // false positive, closed in doCall
+	responseBody, _, err := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody)
 
 	if err != nil {
 		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error response from autofix")
@@ -582,7 +589,7 @@ func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 		return err
 	}
 
-	responseBody, err, _ := s.doCall(span.Context(), "POST", "/autofix/event", requestBody) //nolint:bodyclose // false positive, closed in doCall
+	responseBody, _, err := s.doCall(span.Context(), "POST", "/autofix/event", requestBody)
 	if err != nil {
 		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response for autofix feedback")
 		return err
