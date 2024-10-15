@@ -43,8 +43,6 @@ type TemplateData struct {
 	Nonce        template.HTML
 }
 
-var htmlRendererInstance *HtmlRenderer
-
 //go:embed template/index.html
 var detailsHtmlTemplate string
 
@@ -52,21 +50,16 @@ var detailsHtmlTemplate string
 var stylesCSS string
 
 func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
-	if htmlRendererInstance != nil {
-		return htmlRendererInstance, nil
-	}
 	tmp, err := template.New(string(product.ProductInfrastructureAsCode)).Parse(detailsHtmlTemplate)
 	if err != nil {
 		c.Logger().Error().Msgf("Failed to parse IaC template: %s", err)
 		return nil, err
 	}
 
-	htmlRendererInstance = &HtmlRenderer{
+	return &HtmlRenderer{
 		c:              c,
 		globalTemplate: tmp,
-	}
-
-	return htmlRendererInstance, nil
+	}, nil
 }
 
 func getStyles() template.CSS {

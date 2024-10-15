@@ -106,7 +106,6 @@ func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, is
 		CVEs:                issue.Identifiers.CVE,
 		AdditionalData:      additionalData,
 	}
-
 	d.AdditionalData = additionalData
 	fingerprint := utils.CalculateFingerprintFromAdditionalData(d)
 	d.SetFingerPrint(fingerprint)

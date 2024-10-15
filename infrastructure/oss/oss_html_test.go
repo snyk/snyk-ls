@@ -138,7 +138,7 @@ func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, customEndpoint))
+	assert.Truef(t, strings.Contains(issueDetailsPanelHtml, customEndpoint), issueDetailsPanelHtml)
 }
 
 func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {

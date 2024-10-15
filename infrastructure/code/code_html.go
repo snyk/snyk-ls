@@ -62,17 +62,12 @@ type ExampleCommit struct {
 //go:embed template/details.html
 var detailsHtmlTemplate string
 
-var htmlRendererInstance *HtmlRenderer
-
 type HtmlRenderer struct {
 	c              *config.Config
 	globalTemplate *template.Template
 }
 
 func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
-	if htmlRendererInstance != nil {
-		return htmlRendererInstance, nil
-	}
 	funcMap := template.FuncMap{
 		"repoName":      getRepoName,
 		"trimCWEPrefix": html.TrimCWEPrefix,
@@ -85,12 +80,10 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 		return nil, err
 	}
 
-	htmlRendererInstance = &HtmlRenderer{
+	return &HtmlRenderer{
 		c:              c,
 		globalTemplate: globalTemplate,
-	}
-
-	return htmlRendererInstance, nil
+	}, nil
 }
 
 func determineFolderPath(filePath string) string {

@@ -98,8 +98,6 @@ func Test_introducingPackageAndVersion(t *testing.T) {
 }
 
 func Test_toIssue_LearnParameterConversion(t *testing.T) {
-	_ = testutil.UnitTest(t)
-
 	sampleOssIssue := sampleIssue()
 	scanner := CLIScanner{
 		learnService: getLearnMock(t),
@@ -136,7 +134,6 @@ func Test_toIssue_CodeActions(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_ = testutil.UnitTest(t)
 			config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
 			config.CurrentConfig().SetSnykOpenBrowserActionsEnabled(test.openBrowserEnabled)
 
@@ -167,7 +164,6 @@ func Test_toIssue_CodeActions(t *testing.T) {
 }
 
 func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
-	_ = testutil.UnitTest(t)
 	sampleOssIssue := sampleIssue()
 	scanner := CLIScanner{
 		learnService: getLearnMock(t),
