@@ -217,13 +217,6 @@ func (s *SnykCodeHTTPClient) httpCall(req *http.Request) ([]byte, int, error) {
 	statusCode := 0
 
 	response, err := s.client().Do(req)
-	defer func() {
-		bodyCloseErr := response.Body.Close()
-		if bodyCloseErr != nil {
-			logger.Err(bodyCloseErr).Msg("failed to close response body")
-		}
-	}()
-
 	if err != nil {
 		logger.Err(err).Msgf("got http error")
 		return nil, statusCode, err
@@ -232,6 +225,14 @@ func (s *SnykCodeHTTPClient) httpCall(req *http.Request) ([]byte, int, error) {
 	if response == nil {
 		return nil, 0, nil
 	}
+
+	defer func() {
+		bodyCloseErr := response.Body.Close()
+		if bodyCloseErr != nil {
+			logger.Err(bodyCloseErr).Msg("failed to close response body")
+		}
+	}()
+
 	statusCode = response.StatusCode
 	responseBody, readErr := io.ReadAll(response.Body)
 
