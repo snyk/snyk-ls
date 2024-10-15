@@ -40,7 +40,7 @@ var issuesSeverity = map[string]snyk.Severity{
 	"medium":   snyk.Medium,
 }
 
-func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, issueRange snyk.Range, learnService learn.Service, ep error_reporting.ErrorReporter, fileContent []byte, c *config.Config) snyk.Issue {
+func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, issueRange snyk.Range, learnService learn.Service, ep error_reporting.ErrorReporter, fileContent []byte) snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
 	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueRange, fileContent)
 
@@ -106,12 +106,6 @@ func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, is
 		CVEs:                issue.Identifiers.CVE,
 		AdditionalData:      additionalData,
 	}
-	renderer, err := NewHtmlRenderer(c)
-	if err != nil {
-		c.Logger().Err(err).Msg("Cannot create Oss HTML render")
-		return snyk.Issue{}
-	}
-	additionalData.Details = renderer.GetDetailsHtml(d)
 
 	d.AdditionalData = additionalData
 	fingerprint := utils.CalculateFingerprintFromAdditionalData(d)
