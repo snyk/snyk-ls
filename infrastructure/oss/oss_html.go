@@ -37,7 +37,6 @@ var detailsHtmlTemplate string
 type HtmlRenderer struct {
 	c              *config.Config
 	globalTemplate *template.Template
-	snykUi         string
 }
 
 func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
