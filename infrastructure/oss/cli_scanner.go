@@ -490,15 +490,7 @@ func (cliScanner *CLIScanner) retrieveIssues(
 	// we are updating the cli scanner maps/attributes in parallel, so we need to lock
 	cliScanner.mutex.Lock()
 	defer cliScanner.mutex.Unlock()
-	issues := convertScanResultToIssues(
-		res,
-		targetFilePath,
-		fileContent,
-		cliScanner.learnService,
-		cliScanner.errorReporter,
-		cliScanner.packageIssueCache,
-		cliScanner.config,
-	)
+	issues := convertScanResultToIssues(res, targetFilePath, fileContent, cliScanner.learnService, cliScanner.errorReporter, cliScanner.packageIssueCache)
 
 	// repopulate
 	cliScanner.addVulnerabilityCountsToCache(issues)

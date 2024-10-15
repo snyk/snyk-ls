@@ -114,7 +114,7 @@ func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, is
 	return d
 }
 
-func convertScanResultToIssues(res *scanResult, targetFilePath string, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]snyk.Issue, c *config.Config) []snyk.Issue {
+func convertScanResultToIssues(res *scanResult, targetFilePath string, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]snyk.Issue) []snyk.Issue {
 	var issues []snyk.Issue
 
 	duplicateCheckMap := map[string]bool{}
@@ -126,7 +126,7 @@ func convertScanResultToIssues(res *scanResult, targetFilePath string, fileConte
 			continue
 		}
 		issueRange := findRange(issue, targetFilePath, fileContent)
-		snykIssue := toIssue(targetFilePath, issue, res, issueRange, ls, ep, fileContent, c)
+		snykIssue := toIssue(targetFilePath, issue, res, issueRange, ls, ep, fileContent)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true
