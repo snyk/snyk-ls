@@ -43,12 +43,7 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 	logger := c.Logger().With().Str("method", "generateIssueDescription.Execute").Logger()
 	args := cmd.command.Arguments
 
-	folderPath, ok := args[0].(string)
-	if !ok {
-		return nil, errors.New("failed to parse folderPath")
-	}
-
-	issueId, ok := args[1].(string)
+	issueId, ok := args[0].(string)
 	if !ok {
 		return nil, errors.New("failed to parse issue id")
 	}
@@ -61,7 +56,7 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 	if issue.Product == product.ProductInfrastructureAsCode {
 		return getIacHtml(c, logger, issue)
 	} else if issue.Product == product.ProductCode {
-		return getCodeHtml(c, logger, issue, folderPath)
+		return getCodeHtml(c, logger, issue)
 	} else if issue.Product == product.ProductOpenSource {
 		return getOssHtml(c, logger, issue)
 	}
@@ -79,13 +74,13 @@ func getOssHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (stri
 	return html, nil
 }
 
-func getCodeHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue, folderPath string) (string, error) {
+func getCodeHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (string, error) {
 	htmlRender, err := code.NewHtmlRenderer(c)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create IaC HTML render")
 		return "", err
 	}
-	html := htmlRender.GetDetailsHtml(issue, folderPath)
+	html := htmlRender.GetDetailsHtml(issue)
 	return html, nil
 }
 

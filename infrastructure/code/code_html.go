@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"html/template"
 	"path/filepath"
 	"regexp"
@@ -92,13 +93,24 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 	return htmlRendererInstance, nil
 }
 
-func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue, folderPath string) string {
+func determineFolderPath(filePath string) string {
+	ws := workspace.Get()
+	for _, folder := range ws.Folders() {
+		folderPath := folder.Path()
+		if strings.HasPrefix(filePath, folderPath) {
+			return folderPath
+		}
+	}
+	return ""
+}
+
+func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
 	}
-
+	folderPath := determineFolderPath(issue.AffectedFilePath)
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
 
