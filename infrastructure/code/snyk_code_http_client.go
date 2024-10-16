@@ -320,9 +320,12 @@ func (s *SnykCodeHTTPClient) ExtendBundle(
 	method := "code.ExtendBundle"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
-	requestId, _ := performance2.GetTraceId(span.Context())
-
+	requestId, err := performance2.GetTraceId(span.Context())
 	logger := s.c.Logger().With().Str("method", method).Str("requestId", requestId).Logger()
+	if err != nil {
+		logger.Err(err).Msg("failed to get request id")
+	}
+
 	logger.Debug().Msg("API: Extending bundle for " + strconv.Itoa(len(files)) + " files")
 	defer logger.Debug().Msg("API: Extend done")
 
