@@ -91,6 +91,8 @@ func CreateFromCommandData(
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
 	case types.ClearCacheCommand:
 		return &clearCache{command: commandData}, nil
+	case types.GenerateIssueDescriptionCommand:
+		return &generateIssueDescription{command: commandData, issueProvider: issueProvider}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)
