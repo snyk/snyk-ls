@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"html/template"
 	"path/filepath"
 	"regexp"
@@ -93,7 +94,7 @@ func determineFolderPath(filePath string) string {
 	}
 	for _, folder := range ws.Folders() {
 		folderPath := folder.Path()
-		if strings.HasPrefix(filePath, folderPath) {
+		if uri.FolderContains(folderPath, filePath) {
 			return folderPath
 		}
 	}
