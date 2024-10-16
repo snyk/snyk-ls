@@ -392,14 +392,6 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 
 	fingerprint := utils.CalculateFingerprintFromAdditionalData(result)
 	result.SetFingerPrint(fingerprint)
-
-	htmlRender, err := NewIacHtmlRenderer(iac.c)
-	if err != nil {
-		iac.c.Logger().Err(err).Msg("Cannot create IaC HTML render")
-		return snyk.Issue{}, err
-	}
-
-	additionalData.CustomUIContent = htmlRender.getCustomUIContent(result)
 	result.AdditionalData = additionalData
 
 	return result, nil

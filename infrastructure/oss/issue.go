@@ -40,15 +40,7 @@ var issuesSeverity = map[string]snyk.Severity{
 	"medium":   snyk.Medium,
 }
 
-func toIssue(
-	affectedFilePath string,
-	issue ossIssue,
-	scanResult *scanResult,
-	issueRange snyk.Range,
-	learnService learn.Service,
-	ep error_reporting.ErrorReporter,
-	fileContent []byte,
-) snyk.Issue {
+func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, issueRange snyk.Range, learnService learn.Service, ep error_reporting.ErrorReporter, fileContent []byte) snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
 	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueRange, fileContent)
 
@@ -114,7 +106,6 @@ func toIssue(
 		CVEs:                issue.Identifiers.CVE,
 		AdditionalData:      additionalData,
 	}
-	additionalData.Details = getDetailsHtml(d)
 	d.AdditionalData = additionalData
 	fingerprint := utils.CalculateFingerprintFromAdditionalData(d)
 	d.SetFingerPrint(fingerprint)
@@ -122,14 +113,7 @@ func toIssue(
 	return d
 }
 
-func convertScanResultToIssues(
-	res *scanResult,
-	targetFilePath string,
-	fileContent []byte,
-	ls learn.Service,
-	ep error_reporting.ErrorReporter,
-	packageIssueCache map[string][]snyk.Issue,
-) []snyk.Issue {
+func convertScanResultToIssues(res *scanResult, targetFilePath string, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]snyk.Issue) []snyk.Issue {
 	var issues []snyk.Issue
 
 	duplicateCheckMap := map[string]bool{}
