@@ -638,6 +638,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 	loc, jsonRPCRecorder := setupServer(t)
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
+		CliPath:                     filepath.Join(t.TempDir(), "cli"),
 	}
 	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,
