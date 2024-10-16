@@ -235,7 +235,6 @@ func getOssIssue(issue snyk.Issue) types.ScanIssue {
 			IsUpgradable:      matchingIssue.IsUpgradable,
 			ProjectName:       matchingIssue.ProjectName,
 			DisplayTargetFile: matchingIssue.DisplayTargetFile,
-			Details:           matchingIssue.Details,
 		}
 	}
 
@@ -272,7 +271,6 @@ func getOssIssue(issue snyk.Issue) types.ScanIssue {
 			IsUpgradable:      additionalData.IsUpgradable,
 			ProjectName:       additionalData.ProjectName,
 			DisplayTargetFile: additionalData.DisplayTargetFile,
-			Details:           additionalData.Details,
 			MatchingIssues:    matchingIssues,
 			Lesson:            additionalData.Lesson,
 		},
@@ -297,16 +295,15 @@ func getIacIssue(issue snyk.Issue) types.ScanIssue {
 		IsNew:               issue.IsNew,
 		FilterableIssueType: additionalData.GetFilterableIssueType(),
 		AdditionalData: types.IacIssueData{
-			Key:             additionalData.Key,
-			PublicId:        additionalData.PublicId,
-			Documentation:   additionalData.Documentation,
-			LineNumber:      additionalData.LineNumber,
-			Issue:           additionalData.Issue,
-			Impact:          additionalData.Impact,
-			Resolve:         additionalData.Resolve,
-			Path:            additionalData.Path,
-			References:      additionalData.References,
-			CustomUIContent: additionalData.CustomUIContent,
+			Key:           additionalData.Key,
+			PublicId:      additionalData.PublicId,
+			Documentation: additionalData.Documentation,
+			LineNumber:    additionalData.LineNumber,
+			Issue:         additionalData.Issue,
+			Impact:        additionalData.Impact,
+			Resolve:       additionalData.Resolve,
+			Path:          additionalData.Path,
+			References:    additionalData.References,
 		},
 	}
 
@@ -317,22 +314,6 @@ func getCodeIssue(issue snyk.Issue) types.ScanIssue {
 	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
 		return types.ScanIssue{}
-	}
-
-	exampleCommitFixes := make([]types.ExampleCommitFix, 0, len(additionalData.ExampleCommitFixes))
-	for i := range additionalData.ExampleCommitFixes {
-		lines := make([]types.CommitChangeLine, 0, len(additionalData.ExampleCommitFixes[i].Lines))
-		for j := range additionalData.ExampleCommitFixes[i].Lines {
-			lines = append(lines, types.CommitChangeLine{
-				Line:       additionalData.ExampleCommitFixes[i].Lines[j].Line,
-				LineNumber: additionalData.ExampleCommitFixes[i].Lines[j].LineNumber,
-				LineChange: additionalData.ExampleCommitFixes[i].Lines[j].LineChange,
-			})
-		}
-		exampleCommitFixes = append(exampleCommitFixes, types.ExampleCommitFix{
-			CommitURL: additionalData.ExampleCommitFixes[i].CommitURL,
-			Lines:     lines,
-		})
 	}
 
 	markers := make([]types.Marker, 0, len(additionalData.Markers))
@@ -374,23 +355,21 @@ func getCodeIssue(issue snyk.Issue) types.ScanIssue {
 		IsNew:               issue.IsNew,
 		FilterableIssueType: additionalData.GetFilterableIssueType(),
 		AdditionalData: types.CodeIssueData{
-			Key:                additionalData.Key,
-			Message:            additionalData.Message,
-			Rule:               additionalData.Rule,
-			RuleId:             additionalData.RuleId,
-			RepoDatasetSize:    additionalData.RepoDatasetSize,
-			ExampleCommitFixes: exampleCommitFixes,
-			CWE:                additionalData.CWE,
-			IsSecurityType:     additionalData.IsSecurityType,
-			Text:               additionalData.Text,
-			Cols:               additionalData.Cols,
-			Rows:               additionalData.Rows,
-			PriorityScore:      additionalData.PriorityScore,
-			Markers:            markers,
-			LeadURL:            "",
-			HasAIFix:           additionalData.HasAIFix,
-			DataFlow:           dataFlow,
-			Details:            additionalData.Details,
+			Key:             additionalData.Key,
+			Message:         additionalData.Message,
+			Rule:            additionalData.Rule,
+			RuleId:          additionalData.RuleId,
+			RepoDatasetSize: additionalData.RepoDatasetSize,
+			CWE:             additionalData.CWE,
+			IsSecurityType:  additionalData.IsSecurityType,
+			Text:            additionalData.Text,
+			Cols:            additionalData.Cols,
+			Rows:            additionalData.Rows,
+			PriorityScore:   additionalData.PriorityScore,
+			Markers:         markers,
+			LeadURL:         "",
+			HasAIFix:        additionalData.HasAIFix,
+			DataFlow:        dataFlow,
 		},
 	}
 	if scanIssue.IsIgnored {

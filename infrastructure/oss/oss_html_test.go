@@ -30,7 +30,7 @@ import (
 )
 
 func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
-	_ = testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${ideStyle}", "${nonce}"}
 	slices.Sort(expectedVariables)
 
@@ -58,7 +58,9 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	}
 
 	// invoke methode under test
-	issueDetailsPanelHtml := getDetailsHtml(issue)
+	htmlRenderer, err := NewHtmlRenderer(c)
+	assert.NoError(t, err)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// compare
 	reg := regexp.MustCompile(`\$\{\w+\}`)
@@ -79,7 +81,7 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 }
 
 func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
-	_ = testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	issueAdditionalData := snyk.OssIssueData{
 		Title:       "myTitle",
@@ -98,7 +100,9 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
 
 	// invoke methode under test
-	issueDetailsPanelHtml := getDetailsHtml(issue)
+	htmlRenderer, err := NewHtmlRenderer(c)
+	assert.NoError(t, err)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "Learn about this vulnerability"))
 }
@@ -130,13 +134,15 @@ func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
 
-	issueDetailsPanelHtml := getDetailsHtml(issue)
+	htmlRenderer, err := NewHtmlRenderer(c)
+	assert.NoError(t, err)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, customEndpoint))
+	assert.Truef(t, strings.Contains(issueDetailsPanelHtml, customEndpoint), issueDetailsPanelHtml)
 }
 
 func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
-	_ = testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${ideStyle}", "${nonce}"}
 	slices.Sort(expectedVariables)
 
@@ -180,7 +186,9 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	}
 
 	// invoke methode under test
-	issueDetailsPanelHtml := getDetailsHtml(issue)
+	htmlRenderer, err := NewHtmlRenderer(c)
+	assert.NoError(t, err)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// compare
 	reg := regexp.MustCompile(`\$\{\w+\}`)
@@ -203,7 +211,7 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 }
 
 func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
-	_ = testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Arrange
 	issueAdditionalData := snyk.OssIssueData{
@@ -226,7 +234,9 @@ func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
 	}
 
 	// Act
-	issueDetailsPanelHtml := getDetailsHtml(issue)
+	htmlRenderer, err := NewHtmlRenderer(c)
+	assert.NoError(t, err)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// Assert
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "User note"))
@@ -234,7 +244,7 @@ func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
 }
 
 func Test_OssDetailsPanel_html_withSeverityChangePolicy(t *testing.T) {
-	_ = testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Arrange
 	issueAdditionalData := snyk.OssIssueData{
@@ -258,7 +268,9 @@ func Test_OssDetailsPanel_html_withSeverityChangePolicy(t *testing.T) {
 	}
 
 	// Act
-	issueDetailsPanelHtml := getDetailsHtml(issue)
+	htmlRenderer, err := NewHtmlRenderer(c)
+	assert.NoError(t, err)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// Assert
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "A policy has affected the severity of this issue. It was originally critical severity"))

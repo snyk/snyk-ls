@@ -264,8 +264,6 @@ func (sc *Scanner) enhanceIssuesDetails(issues []snyk.Issue, folderPath string) 
 		} else if lesson != nil && lesson.Url != "" {
 			issue.LessonUrl = lesson.Url
 		}
-
-		issueData.Details = getCodeDetailsHtml(*issue, folderPath)
 		issue.AdditionalData = issueData
 	}
 }

@@ -1118,7 +1118,6 @@ type OssIssueData struct {
 	IsUpgradable      bool           `json:"isUpgradable"`
 	ProjectName       string         `json:"projectName"`
 	DisplayTargetFile string         `json:"displayTargetFile"`
-	Details           string         `json:"details,omitempty"`
 	MatchingIssues    []OssIssueData `json:"matchingIssues"`
 	Lesson            string         `json:"lessonUrl,omitempty"`
 }
@@ -1136,31 +1135,24 @@ type DataflowElement struct {
 }
 
 type CodeIssueData struct {
-	Key                string             `json:"key,omitempty"`
-	Message            string             `json:"message"`
-	LeadURL            string             `json:"leadURL,omitempty"`
-	Rule               string             `json:"rule"`
-	RuleId             string             `json:"ruleId"`
-	RepoDatasetSize    int                `json:"repoDatasetSize"`
-	ExampleCommitFixes []ExampleCommitFix `json:"exampleCommitFixes"`
-	CWE                []string           `json:"cwe"`
-	Text               string             `json:"text"`
-	Markers            []Marker           `json:"markers,omitempty"`
-	Cols               Point              `json:"cols"`
-	Rows               Point              `json:"rows"`
-	IsSecurityType     bool               `json:"isSecurityType"`
-	PriorityScore      int                `json:"priorityScore"`
-	HasAIFix           bool               `json:"hasAIFix"`
-	DataFlow           []DataflowElement  `json:"dataFlow,omitempty"`
-	Details            string             `json:"details,omitempty"`
+	Key             string            `json:"key,omitempty"`
+	Message         string            `json:"message"`
+	LeadURL         string            `json:"leadURL,omitempty"`
+	Rule            string            `json:"rule"`
+	RuleId          string            `json:"ruleId"`
+	RepoDatasetSize int               `json:"repoDatasetSize"`
+	CWE             []string          `json:"cwe"`
+	Text            string            `json:"text"`
+	Markers         []Marker          `json:"markers,omitempty"`
+	Cols            Point             `json:"cols"`
+	Rows            Point             `json:"rows"`
+	IsSecurityType  bool              `json:"isSecurityType"`
+	PriorityScore   int               `json:"priorityScore"`
+	HasAIFix        bool              `json:"hasAIFix"`
+	DataFlow        []DataflowElement `json:"dataFlow,omitempty"`
 }
 
 type Point = [2]int
-
-type ExampleCommitFix struct {
-	CommitURL string             `json:"commitURL"`
-	Lines     []CommitChangeLine `json:"lines"`
-}
 
 type CommitChangeLine struct {
 	Line       string `json:"line"`
@@ -1188,14 +1180,13 @@ type CodeActionOptions struct {
 }
 
 type IacIssueData struct {
-	Key             string   `json:"key,omitempty"`
-	PublicId        string   `json:"publicId"`
-	Documentation   string   `json:"documentation"`
-	LineNumber      int      `json:"lineNumber"`
-	Issue           string   `json:"issue"`
-	Impact          string   `json:"impact"`
-	Resolve         string   `json:"resolve,omitempty"`
-	Path            []string `json:"path"`
-	References      []string `json:"references,omitempty"`
-	CustomUIContent string   `json:"customUIContent,omitempty"`
+	Key           string   `json:"key,omitempty"`
+	PublicId      string   `json:"publicId"`
+	Documentation string   `json:"documentation"`
+	LineNumber    int      `json:"lineNumber"`
+	Issue         string   `json:"issue"`
+	Impact        string   `json:"impact"`
+	Resolve       string   `json:"resolve,omitempty"`
+	Path          []string `json:"path"`
+	References    []string `json:"references,omitempty"`
 }
