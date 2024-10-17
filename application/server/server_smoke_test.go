@@ -203,6 +203,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 3, c)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, c)
 	})
+
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		loc, jsonRPCRecorder := setupServer(t)
 		c := testutil.SmokeTest(t, false)

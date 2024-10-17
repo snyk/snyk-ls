@@ -127,7 +127,7 @@ func TestSnykCodeBackendService_doCall_shouldRetry(t *testing.T) {
 		}
 	}
 	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
-	_, err := s.doCall(context.Background(), "GET", "https://httpstat.us/500", nil)
+	_, _, err := s.doCall(context.Background(), "GET", "https://httpstat.us/500", nil)
 	assert.Error(t, err)
 	assert.Equal(t, 3, d.calls)
 }
@@ -139,7 +139,7 @@ func TestSnykCodeBackendService_doCall_rejected(t *testing.T) {
 	}
 
 	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
-	_, err := s.doCall(context.Background(), "GET", "https://127.0.0.1", nil)
+	_, _, err := s.doCall(context.Background(), "GET", "https://127.0.0.1", nil)
 	assert.Error(t, err)
 }
 

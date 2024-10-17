@@ -353,7 +353,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			Organization:                "fancy org",
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
-			CliPath:                     "",
+			CliPath:                     filepath.Join(t.TempDir(), "cli"),
 			FilterSeverity:              types.DefaultSeverityFilter(),
 			EnableTrustedFoldersFeature: "false",
 		},
@@ -410,7 +410,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 			Organization:                "fancy org",
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
-			CliPath:                     "",
+			CliPath:                     filepath.Join(t.TempDir(), "cli"),
 			FilterSeverity:              types.DefaultSeverityFilter(),
 			EnableTrustedFoldersFeature: "false",
 		},
@@ -638,6 +638,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 	loc, jsonRPCRecorder := setupServer(t)
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
+		CliPath:                     filepath.Join(t.TempDir(), "cli"),
 	}
 	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,
@@ -661,6 +662,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		Token:                       "token",
+		CliPath:                     filepath.Join(t.TempDir(), "cli"),
 	}
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
@@ -687,6 +689,7 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
+		CliPath:                     filepath.Join(t.TempDir(), "cli"),
 	}
 	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,

@@ -217,7 +217,7 @@ func (s *SnykApiClientImpl) getApiResponse(caller string, path string, v interfa
 }
 
 func checkResponseCode(r *http.Response) *SnykApiError {
-	if r.StatusCode >= 200 && r.StatusCode <= 399 {
+	if r.StatusCode >= 200 && r.StatusCode <= 299 {
 		return nil
 	}
 
