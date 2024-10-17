@@ -805,15 +805,14 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	di.Init()
 
 	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
+	if err != nil {
+		t.Fatal(err, "Couldn't setup test repo")
+	}
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 
 	uncPath := "\\\\localhost\\" + strings.Replace(cloneTargetDir, ":", "$", 1)
 	_, err = os.Stat(uncPath)
 	assert.NoError(t, err)
-
-	if err != nil {
-		t.Fatal(err, "Couldn't setup test repo")
-	}
 
 	folder := types.WorkspaceFolder{
 		Name: "Test Repo",
