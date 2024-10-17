@@ -3,8 +3,9 @@ package scanner
 import (
 	"bytes"
 	"fmt"
-	"strings"
 	"testing"
+
+	"strings"
 
 	"github.com/hashicorp/hcl/hcl/token"
 )
