@@ -207,11 +207,11 @@ func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBo
 func (s *SnykApiClientImpl) getApiResponse(caller string, path string, v interface{}) error {
 	responseBody, err := s.doCall("GET", path, nil)
 	if err != nil {
-		return fmt.Errorf("%s: %v: %v", caller, err, responseBody)
+		return fmt.Errorf("%s: %w: %v", caller, err, responseBody)
 	}
 
 	if err := json.Unmarshal(responseBody, v); err != nil {
-		return fmt.Errorf("%s: couldn't unmarshal: %v", caller, err)
+		return fmt.Errorf("%s: couldn't unmarshal: %w", caller, err)
 	}
 	return nil
 }

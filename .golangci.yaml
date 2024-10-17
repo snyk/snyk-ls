@@ -3,15 +3,6 @@ run:
     - integration
   concurrency: 4
   issues-exit-code: 1
-  skip-dirs:
-    - "docs"
-    - "licenses"
-    - "pact"
-    - "ampli"
-    - ".bin"
-    - ".github"
-    - ".vscode"
-    - "build"
   tests: true
   timeout: 5m
 
@@ -40,7 +31,6 @@ linters-settings:
   gosimple:
     checks: ['all']
   govet:
-    check-shadowing: true
     enable-all: true
     disable:
       - fieldalignment
@@ -69,7 +59,6 @@ linters-settings:
       - name: error-strings
       - name: error-naming
       - name: exported
-        disable-stuttering-check: true
       - name: if-return
       - name: increment-decrement
       - name: var-naming
@@ -92,8 +81,6 @@ linters-settings:
   stylecheck:
     checks: ['all']
     http-status-code-whitelist: []
-  varcheck:
-    exported-fields: true
 
 linters:
   enable:
@@ -109,14 +96,11 @@ linters:
     - dupl
     - durationcheck
     - errname
-    # TODO(errorlint): revisit
-    #- errorlint
+    - errorlint
     - exhaustive
-    - exportloopref
-    # TODO(forbidigo): revisit
-    #- forbidigo
-    # TODO(forcetypeassert): revisit this one! beware fragile asserts in this codebase
-    #- forcetypeassert
+    - copyloopvar
+    - forbidigo
+    - forcetypeassert
     # TODO(goconst): revisit
     #- goconst
     # TODO(gocritic): revisit
@@ -127,7 +111,7 @@ linters:
     # TODO(gofumpt): revisit
     #- gofumpt
     # TODO(goimports): revisit
-    #- goimports
+    - goimports
     - goprintffuncname
     # TODO(gosec): revisit; consequences of revoking non-owner file permissions?
     #- gosec
@@ -174,6 +158,16 @@ linters:
     #- wrapcheck
 
 issues:
+  exclude-dirs:
+    - "docs"
+    - "licenses"
+    - "pact"
+    - "ampli"
+    - ".bin"
+    - ".github"
+    - ".vscode"
+    - "build"
+
   exclude-rules:
     - path: _test\.go
       linters:

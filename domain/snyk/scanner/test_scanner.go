@@ -18,9 +18,10 @@ package scanner
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"sync"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
 
 	"github.com/google/uuid"
 

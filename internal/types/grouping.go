@@ -54,8 +54,12 @@ func MaxSemver() GroupingFunction {
 					chosenGroupable = groupable
 				}
 
-				chosenVersion := "v" + chosenGroupable.GetGroupingValue().(string)
+				group, ok := chosenGroupable.GetGroupingValue().(string)
+				if !ok {
+					continue
+				}
 
+				chosenVersion := "v" + group
 				if semver.Compare(chosenVersion, currentVersion) < 0 {
 					chosenGroupable = groupable
 				}

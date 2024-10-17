@@ -33,6 +33,7 @@ import (
 
 	"github.com/snyk/code-client-go/http/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )

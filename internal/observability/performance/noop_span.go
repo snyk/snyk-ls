@@ -23,6 +23,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const traceIdKey = "trace_id"
+
 type NoopSpan struct {
 	Operation  string
 	TxName     string
@@ -82,7 +84,7 @@ func (n *NoopSpan) GetTraceId() string {
 }
 
 func (n *NoopSpan) getTraceIDFromContext(ctx context.Context) (string, bool) {
-	t, ok := ctx.Value(TraceIdContextKey("trace_id")).(string)
+	t, ok := ctx.Value(TraceIdContextKey(traceIdKey)).(string)
 	return t, ok
 }
 func (n *NoopSpan) Context() context.Context {
