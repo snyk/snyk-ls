@@ -234,7 +234,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.True(t, c.IsErrorReportingEnabled())
 		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.False(t, c.ManageBinariesAutomatically())
-		assert.Equal(t, filepath.Join(t.TempDir(), "cli"), c.CliSettings().Path())
+		assert.Equal(t, settings.CliPath, c.CliSettings().Path())
 		assert.Equal(t, types.DefaultSeverityFilter(), c.FilterSeverity())
 		assert.Subset(t, []string{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
 		assert.Equal(t, settings.OsPlatform, c.OsPlatform())
