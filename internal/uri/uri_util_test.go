@@ -17,6 +17,7 @@
 package uri
 
 import (
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -37,12 +38,14 @@ func TestPathFromUri(t *testing.T) {
 }
 
 func TestPathFromUri_UNC(t *testing.T) {
+	testutil.OnlyOnWindows(t, "testing windows UNC file paths")
 	uri := lsp.DocumentURI("file://host/folder/subfolder/subsubfolder")
 	res := PathFromUri(uri)
 	assert.Equal(t, "\\\\host\\folder\\subfolder\\subsubfolder", res)
 }
 
 func TestPathToUri_UNC(t *testing.T) {
+	testutil.OnlyOnWindows(t, "testing windows UNC file paths")
 	res := PathToUri("\\\\host\\folder\\subfolder\\subsubfolder")
 	assert.Equal(t, "file://host/folder/subfolder/subsubfolder", string(res))
 }
