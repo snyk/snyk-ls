@@ -796,6 +796,53 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, 6, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 }
 
+func Test_SmokeUncFilePath(t *testing.T) {
+	testutil.OnlyOnWindows(t, "testing windows UNC file paths")
+	loc, jsonRPCRecorder := setupServer(t)
+	c := testutil.SmokeTest(t, false)
+	c.SetSnykCodeEnabled(true)
+	cleanupChannels()
+	di.Init()
+
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
+	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
+
+	uncPath := "\\\\localhost\\" + strings.Replace(cloneTargetDir, ":", "$", 1)
+	_, err = os.Stat(uncPath)
+	assert.NoError(t, err)
+
+	if err != nil {
+		t.Fatal(err, "Couldn't setup test repo")
+	}
+
+	folder := types.WorkspaceFolder{
+		Name: "Test Repo",
+		Uri:  uri.PathToUri(uncPath),
+	}
+
+	clientParams := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{folder},
+		InitializationOptions: types.Settings{
+			Endpoint:                    os.Getenv("SNYK_API"),
+			Token:                       os.Getenv("SNYK_TOKEN"),
+			EnableTrustedFoldersFeature: "false",
+			FilterSeverity:              types.DefaultSeverityFilter(),
+		},
+	}
+
+	_, _ = loc.Client.Call(ctx, "initialize", clientParams)
+
+	testPath := filepath.Join(uncPath, "app.js")
+
+	w := workspace.Get()
+	f := workspace.NewFolder(c, uncPath, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister())
+	w.AddFolder(f)
+
+	_ = textDocumentDidSave(t, &loc, testPath)
+
+	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, 6, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+}
+
 func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, false)
