@@ -36,7 +36,7 @@ type Discovery struct{}
 func (d *Discovery) LookPath() (string, error) {
 	path, err := exec.LookPath(filename.ExecutableName)
 	if err != nil {
-		return "", fmt.Errorf("unable to find %s in PATH: %s", filename.ExecutableName, err)
+		return "", fmt.Errorf("unable to find %s in PATH: %w", filename.ExecutableName, err)
 	}
 	return path, nil
 }

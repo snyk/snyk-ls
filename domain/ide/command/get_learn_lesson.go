@@ -48,12 +48,30 @@ func (cmd *getLearnLesson) Execute(_ context.Context) (any, error) {
 }
 
 func learnLesson(args []any, learnService learn.Service) (*learn.Lesson, error) {
-	rule := args[0].(string)
-	ecosystem := args[1].(string)
-	cwes := strings.Split(args[2].(string), ",")
-	cves := strings.Split(args[3].(string), ",")
+	rule, ok := args[0].(string)
+	if !ok {
+		return nil, errors.New("learn lesson rule is not a string")
+	}
+	ecosystem, ok := args[1].(string)
+	if !ok {
+		return nil, errors.New("learn lesson ecosystem is not a string")
+	}
+	cwesArg, ok := args[2].(string)
+	if !ok {
+		return nil, errors.New("learn lesson cwes is not a string")
+	}
+	cwes := strings.Split(cwesArg, ",")
+	cvesArg, ok := args[3].(string)
+	if !ok {
+		return nil, errors.New("learn lesson cves is not a string")
+	}
+	cves := strings.Split(cvesArg, ",")
 	// json numbers are mapped to float64 (https://pkg.go.dev/encoding/json#Unmarshal)
-	issueType := snyk.Type(args[4].(float64))
+	issueTypeArg, ok := args[4].(float64)
+	if !ok {
+		return nil, errors.New("learn lesson issueType is not a number")
+	}
+	issueType := snyk.Type(issueTypeArg)
 
 	lesson, err := learnService.GetLesson(ecosystem, rule, cwes, cves, issueType)
 	if err != nil {

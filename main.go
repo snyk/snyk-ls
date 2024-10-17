@@ -45,7 +45,7 @@ func main() {
 	c := config.CurrentConfig()
 	output, err := parseFlags(os.Args, c)
 	if err != nil {
-		fmt.Println(err, output)
+		fmt.Println(err, output) //nolint:forbidigo // we want to output to stdout here
 		os.Exit(1)
 	}
 	if output != "" {

@@ -17,13 +17,14 @@
 package vcs
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/otiai10/copy"
 	"github.com/rs/zerolog"
-	"path/filepath"
-	"strings"
 )
 
 func Clone(logger *zerolog.Logger, srcRepoPath string, destinationPath string, targetBranchName string) (*git.Repository, error) {

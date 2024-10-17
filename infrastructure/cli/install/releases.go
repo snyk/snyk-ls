@@ -30,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 
 	http2 "github.com/snyk/code-client-go/http"
+
 	"github.com/snyk/snyk-ls/application/config"
 )
 

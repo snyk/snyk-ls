@@ -18,6 +18,10 @@ package command
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -25,8 +29,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func Test_ClearCache_DeleteAll_NoError(t *testing.T) {

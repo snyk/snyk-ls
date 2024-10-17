@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -102,7 +104,7 @@ func (g *GitPersistenceProvider) deleteFile(fullPath string) error {
 	g.logger.Debug().Msgf("deleting cached scan file %s", fullPath)
 	err := os.Remove(fullPath)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to delete cached scan file")
 	}
 	return nil
 }

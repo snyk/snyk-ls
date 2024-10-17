@@ -28,6 +28,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
+
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )

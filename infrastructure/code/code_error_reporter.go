@@ -18,6 +18,7 @@ package code
 
 import (
 	codeClient "github.com/snyk/code-client-go/observability"
+
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 )
 
@@ -54,6 +55,6 @@ func newTestCodeErrorReporter() codeClient.ErrorReporter {
 func (s *testCodeErrorReporter) FlushErrorReporting() {
 }
 
-func (s *testCodeErrorReporter) CaptureError(err error, options codeClient.ErrorReporterOptions) bool {
+func (s *testCodeErrorReporter) CaptureError(_ error, _ codeClient.ErrorReporterOptions) bool {
 	return true
 }

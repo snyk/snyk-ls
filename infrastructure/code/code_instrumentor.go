@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	codeClient "github.com/snyk/code-client-go/observability"
+
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 )
 

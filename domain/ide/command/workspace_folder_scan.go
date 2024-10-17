@@ -18,6 +18,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -45,7 +46,10 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error)
 		cmd.logger.Warn().Str("method", method).Err(err).Send()
 		return nil, err
 	}
-	path := args[0].(string)
+	path, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("received WorkspaceFolderScanCommand with invalid path")
+	}
 	f := w.GetFolderContaining(path)
 	if f == nil {
 		err := errors.New("received WorkspaceFolderScanCommand with path not in workspace")

@@ -169,7 +169,11 @@ func (i *ossIssue) getQuickfixEdit(affectedFilePath string) string {
 }
 
 func (i *ossIssue) getUpgradedPathParts() (string, string) {
-	rootDependencyUpgrade := strings.Split(i.UpgradePath[1].(string), "@")
+	s, ok := i.UpgradePath[1].(string)
+	if !ok {
+		return "", ""
+	}
+	rootDependencyUpgrade := strings.Split(s, "@")
 	depName := strings.Join(rootDependencyUpgrade[:len(rootDependencyUpgrade)-1], "@")
 	depVersion := rootDependencyUpgrade[len(rootDependencyUpgrade)-1]
 	return depName, depVersion

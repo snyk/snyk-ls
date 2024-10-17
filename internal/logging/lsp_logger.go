@@ -81,7 +81,7 @@ func (w *lspWriter) startServerSenderRoutine() {
 			_, _ = os.Stderr.Write([]byte(msg.Message))
 		}
 	}
-	fmt.Printf("LSP logger (%p) stopped", w)
+	_, _ = os.Stderr.WriteString(fmt.Sprintf("LSP logger (%p) stopped", w))
 }
 
 func mapLogLevel(level zerolog.Level) (mt types.MessageType) {

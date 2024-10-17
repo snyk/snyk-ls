@@ -76,13 +76,19 @@ func (service *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		return ""
 	}
 
+	issueData, ok := issue.AdditionalData.(snyk.IaCIssueData)
+	if !ok {
+		service.c.Logger().Error().Msgf("Failed to parse IaC issue")
+		return htmlTemplate.String()
+	}
+
 	data := TemplateData{
 		Styles:       getStyles(),
 		Issue:        issue,
 		SeverityIcon: html.SeverityIcon(issue),
 		Description:  html.MarkdownToHTML(issue.Message),
-		Remediation:  html.MarkdownToHTML(issue.AdditionalData.(snyk.IaCIssueData).Resolve),
-		Path:         formatPath(issue.AdditionalData.(snyk.IaCIssueData).Path),
+		Remediation:  html.MarkdownToHTML(issueData.Resolve),
+		Path:         formatPath(issueData.Path),
 		Nonce:        template.HTML(nonce),
 	}
 

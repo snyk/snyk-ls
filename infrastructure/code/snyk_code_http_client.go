@@ -34,6 +34,7 @@ import (
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
+
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 
 	"github.com/snyk/snyk-ls/application/config"

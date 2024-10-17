@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,10 +52,16 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 	args := cmd.command.Arguments
 	codeActionId, err := uuid.Parse(args[0].(string))
 	if err != nil {
-		return nil, errors.New("Failed to parse code action id.")
+		return nil, errors.Join(err, fmt.Errorf("Failed to parse code action id."))
 	}
-	issuePath := args[1].(string)
-	issueRange := cmd.toRange(args[2])
+	issuePath, ok := args[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("Failed to parse issue path.")
+	}
+	issueRange, err := cmd.toRange(args[2])
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("invalid range parameter"))
+	}
 
 	issues := cmd.issueProvider.IssuesForRange(issuePath, issueRange)
 	for i := range issues {
@@ -91,14 +98,39 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 type RangeDto = map[string]interface{}
 type RangePositionDto = map[string]interface{}
 
-func (cmd *fixCodeIssue) toRange(rangeArg any) snyk.Range {
-	dto := rangeArg.(RangeDto)
+func (cmd *fixCodeIssue) toRange(rangeArg any) (snyk.Range, error) {
+	dto, ok := rangeArg.(RangeDto)
+	if !ok {
+		return snyk.Range{}, fmt.Errorf("invalid range parameter")
+	}
 	startPos := dto["Start"]
 	endPos := dto["End"]
-	startLine := startPos.(RangePositionDto)["Line"].(float64)
-	startChar := startPos.(RangePositionDto)["Character"].(float64)
-	endLine := endPos.(RangePositionDto)["Line"].(float64)
-	endChar := endPos.(RangePositionDto)["Character"].(float64)
+	startPosDto, ok := startPos.(RangePositionDto)
+	if !ok {
+		return snyk.Range{}, fmt.Errorf("invalid start position parameter")
+	}
+	startPosLine, ok := startPosDto["Line"].(float64)
+	if !ok {
+		return snyk.Range{}, fmt.Errorf("invalid start position line")
+	}
+	startLine := startPosLine
+	startChar, ok := startPosDto["Character"].(float64)
+	if !ok {
+		return snyk.Range{}, fmt.Errorf("invalid start position character")
+	}
+	endPosDto, ok := endPos.(RangePositionDto)
+	if !ok {
+		return snyk.Range{}, fmt.Errorf("invalid end position parameter")
+	}
+
+	endLine, ok := endPosDto["Line"].(float64)
+	if !ok {
+		return snyk.Range{}, fmt.Errorf("invalid end position line")
+	}
+	endChar, ok := endPosDto["Character"].(float64)
+	if !ok {
+		return snyk.Range{}, fmt.Errorf("invalid end position character")
+	}
 
 	snykRange := snyk.Range{
 		Start: snyk.Position{
@@ -110,5 +142,5 @@ func (cmd *fixCodeIssue) toRange(rangeArg any) snyk.Range {
 			Character: int(endChar),
 		},
 	}
-	return snykRange
+	return snykRange, nil
 }

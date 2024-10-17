@@ -18,9 +18,10 @@ package workspace
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"testing"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
 	"github.com/stretchr/testify/assert"
 

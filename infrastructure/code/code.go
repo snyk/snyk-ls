@@ -31,6 +31,7 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/scan"
+
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"

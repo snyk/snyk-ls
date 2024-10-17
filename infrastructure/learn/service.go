@@ -28,6 +28,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 
 	"github.com/snyk/snyk-ls/application/config"

@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -144,7 +145,8 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 	cmd := setupCommand(mockNotifier)
 
 	filePath := sampleArgs[1]
-	issueRange := cmd.toRange(sampleArgs[2])
+	issueRange, err := cmd.toRange(sampleArgs[2])
+	require.NoError(t, err)
 	mockEdit, deferredMockEdit := setupMockEdit()
 	codeAction := snyk.CodeAction{
 		Uuid:         &codeActionId,
@@ -178,7 +180,10 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	cmd := setupCommand(mockNotifier)
 
 	filePath := sampleArgs[1]
-	issueRange := cmd.toRange(sampleArgs[2])
+	rangeDto, ok := sampleArgs[2].(RangeDto)
+	require.True(t, ok)
+	issueRange, err := cmd.toRange(rangeDto)
+	require.NoError(t, err)
 	deferredMockEdit := func() *snyk.WorkspaceEdit {
 		return nil
 	}
@@ -214,7 +219,10 @@ func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
 	cmd := setupCommand(mockNotifier)
 
 	filePath := sampleArgs[1]
-	issueRange := cmd.toRange(sampleArgs[2])
+	rangeDto, ok := sampleArgs[2].(RangeDto)
+	require.True(t, ok)
+	issueRange, err := cmd.toRange(rangeDto)
+	require.NoError(t, err)
 
 	issueProviderMock := new(issueProviderMock)
 	issueProviderMock.On("IssuesForRange", filePath, issueRange).Return([]snyk.Issue{})

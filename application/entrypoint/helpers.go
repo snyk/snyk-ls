@@ -13,8 +13,8 @@ import (
 func OnPanicRecover() {
 	if err := recover(); err != nil {
 		panickingMsg := "🚨 Panicking 🚨"
-		fmt.Println(panickingMsg)
-		fmt.Println(err)
+		_, _ = os.Stderr.WriteString(panickingMsg)
+		_, _ = os.Stderr.WriteString(fmt.Sprintf("%v", err))
 		debug.PrintStack()
 
 		c := config.CurrentConfig()

@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -78,14 +79,15 @@ func (c ExtensionExecutor) doExecute(_ context.Context, cmd []string, workingDir
 	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), workingDir)
 
 	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
-	var output []byte
 	if len(data) > 0 {
-		output = data[0].GetPayload().([]byte)
+		output, ok := data[0].GetPayload().([]byte)
+		if !ok {
+			return nil, fmt.Errorf("invalid response from extension executor")
+		}
+		return output, err
 	} else {
-		output = []byte{}
+		return []byte{}, err
 	}
-
-	return output, err
 }
 
 func (c ExtensionExecutor) ExpandParametersFromConfig(base []string) []string {

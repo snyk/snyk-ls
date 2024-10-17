@@ -20,9 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/sourcegraph/go-lsp"
 	"strings"
 	"sync"
+
+	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/ide/workspace/ui"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -93,8 +94,8 @@ func (f *Folder) Issue(key string) snyk.Issue {
 	})
 
 	if foundIssue.ID == "" {
-		if scanner, ok := f.scanner.(snyk.IssueProvider); ok {
-			foundIssue = scanner.Issue(key)
+		if issueProvider, ok := f.scanner.(snyk.IssueProvider); ok {
+			foundIssue = issueProvider.Issue(key)
 		}
 	}
 	return foundIssue
@@ -148,8 +149,8 @@ func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
 func (f *Folder) IssuesForFile(file string) []snyk.Issue {
 	// try to delegate to scanners first
 	var issues []snyk.Issue
-	if scanner, ok := f.scanner.(snyk.IssueProvider); ok {
-		issues = append(issues, scanner.IssuesForFile(file)...)
+	if issueProvider, ok := f.scanner.(snyk.IssueProvider); ok {
+		issues = append(issues, issueProvider.IssuesForFile(file)...)
 	}
 	globalIssues, ok := f.documentDiagnosticCache.Load(file)
 	if ok {
@@ -532,7 +533,11 @@ func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p product
 
 	deltaSnykIssues := make([]snyk.Issue, len(diff))
 	for i := range diff {
-		deltaSnykIssues[i] = *diff[i].(*snyk.Issue)
+		issue, ok := diff[i].(*snyk.Issue)
+		if !ok {
+			continue
+		}
+		deltaSnykIssues[i] = *issue
 	}
 	productIssueByFile[p] = getIssuePerFileFromFlatList(deltaSnykIssues)
 

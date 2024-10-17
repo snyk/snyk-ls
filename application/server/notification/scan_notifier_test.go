@@ -17,14 +17,16 @@
 package notification_test
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
 	notification2 "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 type sendMessageTestCase struct {

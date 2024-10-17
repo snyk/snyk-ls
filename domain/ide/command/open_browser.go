@@ -18,6 +18,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/rs/zerolog"
 
@@ -33,8 +34,11 @@ func (cmd *openBrowserCommand) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *openBrowserCommand) Execute(ctx context.Context) (any, error) {
-	url := cmd.command.Arguments[0].(string)
+func (cmd *openBrowserCommand) Execute(_ context.Context) (any, error) {
+	url, ok := cmd.command.Arguments[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid url")
+	}
 	cmd.logger.Debug().Str("method", "openBrowserCommand.Execute").Msgf("opening browser url %s", url)
 	types.DefaultOpenBrowserFunc(url)
 	return nil, nil

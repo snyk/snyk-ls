@@ -10,6 +10,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+const implementMe = "implement me"
+
 var _ Notifier = &MockNotifier{}
 
 type MockNotifier struct {
@@ -23,17 +25,17 @@ type MockNotifier struct {
 
 func (m *MockNotifier) Receive() (payload any, stop bool) {
 	//TODO implement me
-	panic("implement me")
+	panic(implementMe)
 }
 
 func (m *MockNotifier) CreateListener(_ func(params any)) {
 	//TODO implement me
-	panic("implement me")
+	panic(implementMe)
 }
 
 func (m *MockNotifier) DisposeListener() {
 	//TODO implement me
-	panic("implement me")
+	panic(implementMe)
 }
 
 func NewMockNotifier() *MockNotifier { return &MockNotifier{} }

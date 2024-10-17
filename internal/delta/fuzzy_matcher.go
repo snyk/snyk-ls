@@ -18,11 +18,12 @@ package delta
 
 import (
 	"errors"
-	"github.com/adrg/strutil"
-	"github.com/adrg/strutil/metrics"
 	"math"
 	"path/filepath"
 	"strings"
+
+	"github.com/adrg/strutil"
+	"github.com/adrg/strutil/metrics"
 )
 
 var _ Matcher = (*FuzzyMatcher)(nil)

@@ -19,9 +19,10 @@ package utils
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"sort"
 	"strings"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 func CalculateFingerprintFromAdditionalData(issue snyk.Issue) string {

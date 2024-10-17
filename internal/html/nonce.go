@@ -28,7 +28,7 @@ import (
 func GenerateSecurityNonce() (string, error) {
 	nonceBytes := make([]byte, 16)
 	if _, err := rand.Read(nonceBytes); err != nil {
-		return "", fmt.Errorf("error generating nonce: %v", err)
+		return "", fmt.Errorf("error generating nonce: %w", err)
 	}
 	return base64.StdEncoding.EncodeToString(nonceBytes), nil
 }

@@ -18,10 +18,11 @@ package scanner
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"testing"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
