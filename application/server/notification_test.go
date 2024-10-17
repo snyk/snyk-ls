@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -174,7 +175,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var expected = types.SnykIsAvailableCli{CliPath: "path"}
+	var expected = types.SnykIsAvailableCli{CliPath: filepath.Join(t.TempDir(), "cli")}
 
 	di.Notifier().Send(expected)
 	assert.Eventually(

@@ -187,7 +187,7 @@ func Test_UpdateSettings(t *testing.T) {
 			SendErrorReports:             "true",
 			Organization:                 expectedOrgId,
 			ManageBinariesAutomatically:  "false",
-			CliPath:                      "C:\\Users\\CliPath\\snyk-ls.exe",
+			CliPath:                      filepath.Join(t.TempDir(), "cli"),
 			Token:                        "a fancy token",
 			FilterSeverity:               types.DefaultSeverityFilter(),
 			TrustedFolders:               []string{"trustedPath1", "trustedPath2"},
@@ -234,7 +234,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.True(t, c.IsErrorReportingEnabled())
 		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.False(t, c.ManageBinariesAutomatically())
-		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
+		assert.Equal(t, filepath.Join(t.TempDir(), "cli"), c.CliSettings().Path())
 		assert.Equal(t, types.DefaultSeverityFilter(), c.FilterSeverity())
 		assert.Subset(t, []string{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
 		assert.Equal(t, settings.OsPlatform, c.OsPlatform())
