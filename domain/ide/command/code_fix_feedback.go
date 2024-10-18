@@ -18,6 +18,8 @@ package command
 
 import (
 	"context"
+	"fmt"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -37,8 +39,14 @@ func (cmd *codeFixFeedback) Command() types.CommandData {
 
 func (cmd *codeFixFeedback) Execute(ctx context.Context) (any, error) {
 	args := cmd.command.Arguments
-	fixId := args[0].(string)
-	feedback := args[1].(string)
+	fixId, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("fix id should be a string")
+	}
+	feedback, ok := args[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("feedback should be a string")
+	}
 
 	go func() {
 		err := cmd.apiClient.SubmitAutofixFeedback(ctx, fixId, feedback)

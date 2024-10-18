@@ -18,6 +18,7 @@ package maven
 
 import (
 	"encoding/xml"
+	"errors"
 	"io"
 	"strings"
 
@@ -50,7 +51,7 @@ func (p *Parser) Parse(content string, path string) ast.Tree {
 	for {
 		token, err := d.Token()
 		offset = d.InputOffset()
-		if token == nil || err == io.EOF {
+		if token == nil || errors.Is(err, io.EOF) {
 			// EOF means we're done.
 			break
 		} else if err != nil {

@@ -25,6 +25,7 @@ import (
 	"github.com/subosito/gotenv"
 
 	"github.com/snyk/go-application-framework/pkg/envvars"
+
 	"github.com/snyk/snyk-ls/internal/types"
 )
 

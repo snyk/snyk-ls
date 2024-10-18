@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -154,14 +153,6 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testutil.JsonRPCRecor
 	initHandlers(srv, handlers)
 
 	return loc
-}
-
-func Test_serverShouldStart(t *testing.T) {
-	loc, _ := setupServer(t)
-
-	si := loc.Server.ServerInfo()
-
-	fmt.Println(strings.Join(si.Methods, "\n"))
 }
 
 func Test_dummy_shouldNotBeServed(t *testing.T) {

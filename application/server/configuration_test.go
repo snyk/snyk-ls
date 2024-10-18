@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -33,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -59,7 +59,6 @@ var sampleSettings = types.Settings{
 func keyFoundInEnv(key string) bool {
 	found := false
 	env := os.Environ()
-	fmt.Println(env)
 	for _, v := range env {
 		if strings.HasPrefix(v, key+"=") {
 			found = true

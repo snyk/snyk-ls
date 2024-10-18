@@ -39,7 +39,7 @@ func (cmd *navigateToRangeCommand) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *navigateToRangeCommand) Execute(ctx context.Context) (any, error) {
+func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 	method := "navigateToRangeCommand.Execute"
 	if len(cmd.command.Arguments) < 2 {
 		cmd.logger.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
@@ -56,8 +56,12 @@ func (cmd *navigateToRangeCommand) Execute(ctx context.Context) (any, error) {
 		return nil, errors.Wrap(err, "couldn't unmarshal range from json")
 	}
 
+	path, ok := args[0].(string)
+	if !ok {
+		return nil, errors.Errorf("invalid range path: %s", args[0])
+	}
 	params := types.ShowDocumentParams{
-		Uri:       uri.PathToUri(args[0].(string)),
+		Uri:       uri.PathToUri(path),
 		External:  false,
 		TakeFocus: true,
 		Selection: converter.ToRange(myRange),

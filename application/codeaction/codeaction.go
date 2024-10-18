@@ -120,7 +120,7 @@ func (c *CodeActionsService) getQuickFixAction(quickFixGroupables []types.Groupa
 	// right now we can always group by max semver version, as
 	// code only has one quickfix available, and iac none at all
 	var quickFix *snyk.CodeAction
-	qf, ok := types.MaxSemver()(quickFixGroupables).(snyk.CodeAction)
+	qf, ok := types.MaxSemver(c.logger)(quickFixGroupables).(snyk.CodeAction)
 	if !ok {
 		c.logger.Warn().Msg("grouping quick fix actions failed")
 		quickFix = nil

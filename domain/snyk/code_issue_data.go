@@ -19,6 +19,8 @@ package snyk
 import (
 	"encoding/json"
 
+	"github.com/pkg/errors"
+
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -73,5 +75,5 @@ func (c CodeIssueData) MarshalJSON() ([]byte, error) {
 		IssueAlias: (*IssueAlias)(&c),
 	}
 	data, err := json.Marshal(aliasStruct)
-	return data, err
+	return data, errors.Wrap(err, "error marshaling CodeIssueData")
 }

@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"

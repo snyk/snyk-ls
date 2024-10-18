@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"

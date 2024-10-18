@@ -23,6 +23,7 @@ import (
 	"github.com/golang/mock/gomock"
 
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/notification"
