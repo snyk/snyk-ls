@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"reflect"
 	"strings"
 	"sync"
@@ -73,6 +74,9 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 		return token, err
 	}
 	a.UpdateCredentials(token, true)
+	a.c.UpdateApiEndpoints(a.c.Engine().GetConfiguration().GetString(configuration.API_URL))
+	a.ConfigureProviders(a.c)
+
 	return token, err
 }
 
