@@ -235,6 +235,7 @@ func (iac *Scanner) doScan(ctx context.Context,
 					return scanResults, nil // scanResults is empty
 				}
 
+				// FIXME: no gotos!
 			ERR:
 				var exitError *exec.ExitError
 				errors.As(err, &exitError)
