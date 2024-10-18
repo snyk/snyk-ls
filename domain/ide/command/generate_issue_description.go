@@ -19,7 +19,9 @@ package command
 import (
 	"context"
 	"errors"
+
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
+
 	"github.com/snyk/snyk-ls/internal/types"
 
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -307,8 +308,13 @@ func getShardKey(folderPath string, authToken string) string {
 }
 
 func issueTitle(issue snyk.Issue) string {
-	if issue.AdditionalData != nil && issue.AdditionalData.(snyk.CodeIssueData).Title != "" {
-		return issue.AdditionalData.(snyk.CodeIssueData).Title
+	if issue.AdditionalData == nil {
+		return issue.ID
+	}
+
+	codeIssueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	if ok && codeIssueData.Title != "" {
+		return codeIssueData.Title
 	}
 
 	return issue.ID

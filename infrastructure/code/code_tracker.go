@@ -21,6 +21,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	codeClientScan "github.com/snyk/code-client-go/scan"
+
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/internal/progress"

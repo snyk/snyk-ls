@@ -18,12 +18,15 @@ package command
 
 import (
 	"context"
+	"fmt"
+	"net/url"
+
 	"github.com/rs/zerolog"
+	"github.com/sourcegraph/go-lsp"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/sourcegraph/go-lsp"
-	"net/url"
 )
 
 type clearCache struct {
@@ -41,7 +44,10 @@ func (cmd *clearCache) Execute(_ context.Context) (any, error) {
 	logger := config.CurrentConfig().Logger().With().Str("method", "clearCache.Execute").Logger()
 	args := cmd.command.Arguments
 	var parsedFolderUri *lsp.DocumentURI
-	folderURI := args[0].(string)
+	folderURI, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid folder URI")
+	}
 
 	if folderURI != "" {
 		decodedPath, err := url.PathUnescape(folderURI)
@@ -53,7 +59,10 @@ func (cmd *clearCache) Execute(_ context.Context) (any, error) {
 		parsedFolderUri = &uri
 	}
 
-	cacheType := args[1].(string)
+	cacheType, ok := args[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid cache URI")
+	}
 
 	if cacheType == "" {
 		cmd.purgeInMemoryCache(&logger, parsedFolderUri)

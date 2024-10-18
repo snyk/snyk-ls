@@ -23,6 +23,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+
 	"github.com/snyk/snyk-ls/application/config"
 )
 
