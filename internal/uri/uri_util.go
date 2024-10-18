@@ -31,7 +31,7 @@ import (
 )
 
 const fileScheme = "file://"
-const UncFileScheme = "file:////"
+const uncFileScheme = "file:////"
 const eclipseWorkspaceFolderScheme = "file:"
 
 var rangeFragmentRegexp = regexp.MustCompile(`^(.+)://((.*)@)?(.+?)(:(\d*))?/?((.*)\?)?((.*)#)L?(\d+)(?:,(\d+))?(-L?(\d+)(?:,(\d+))?)?`)
@@ -65,13 +65,13 @@ func PathFromUri(documentURI sglsp.DocumentURI) string {
 	return uri.New(u).Filename()
 }
 
-// isUNCFileURI checks if the provided file URI represents a UNC path.
+// pathFromUNCUri checks if the provided file URI represents a UNC path.
 func pathFromUNCUri(uri string) string {
 	if runtime.GOOS != "windows" || !strings.HasPrefix(uri, fileScheme) {
 		return ""
 	}
-	if strings.HasPrefix(uri, UncFileScheme) {
-		uri = strings.Replace(uri, UncFileScheme, fileScheme, 1)
+	if strings.HasPrefix(uri, uncFileScheme) {
+		uri = strings.Replace(uri, uncFileScheme, fileScheme, 1)
 	}
 
 	parsedURI, err := url.Parse(uri)
@@ -99,8 +99,8 @@ func PathToUri(path string) sglsp.DocumentURI {
 	// file://// is still a valid UNC, but we have to replace with file:// for the IDEs to interpret it correctly
 	parsedUri := uri.File(path)
 	uriAsString := string(parsedUri)
-	if strings.HasPrefix(uriAsString, UncFileScheme) {
-		uriAsString = strings.Replace(uriAsString, UncFileScheme, fileScheme, 1)
+	if strings.HasPrefix(uriAsString, uncFileScheme) {
+		uriAsString = strings.Replace(uriAsString, uncFileScheme, fileScheme, 1)
 	}
 	return sglsp.DocumentURI(uriAsString)
 }

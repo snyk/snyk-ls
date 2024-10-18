@@ -763,7 +763,6 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	di.Init()
 
 	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
-	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -797,9 +796,9 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 }
 
 func Test_SmokeUncFilePath(t *testing.T) {
+	c := testutil.IntegTest(t)
 	testutil.OnlyOnWindows(t, "testing windows UNC file paths")
 	loc, jsonRPCRecorder := setupServer(t)
-	c := testutil.SmokeTest(t, false)
 	c.SetSnykCodeEnabled(true)
 	cleanupChannels()
 	di.Init()
@@ -808,7 +807,6 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
-	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 
 	uncPath := "\\\\localhost\\" + strings.Replace(cloneTargetDir, ":", "$", 1)
 	_, err = os.Stat(uncPath)
