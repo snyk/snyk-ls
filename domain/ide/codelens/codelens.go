@@ -19,6 +19,7 @@ package codelens
 import (
 	"fmt"
 
+	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -35,6 +36,8 @@ type lensesWithIssueCount struct {
 }
 
 func GetFor(filePath string) (lenses []sglsp.CodeLens) {
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "codelens.GetFor").Str("filePath", filePath).Logger()
 	f := workspace.Get().GetFolderContaining(filePath)
 	if f == nil {
 		return lenses
@@ -45,7 +48,7 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	// group by range first
 	lensesByRange := make(map[snyk.Range]*lensesWithIssueCount)
 	for _, issue := range issues {
-		if config.CurrentConfig().IsDeltaFindingsEnabled() && !issue.IsNew {
+		if c.IsDeltaFindingsEnabled() && !issue.IsNew {
 			continue
 		}
 		for _, lens := range issue.CodelensCommands {
@@ -64,7 +67,7 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	}
 
 	for r, commands := range lensesByRange {
-		lensCommands := getLensCommands(commands)
+		lensCommands := getLensCommands(commands, logger)
 		for _, command := range lensCommands {
 			lens := getCodeLensFromCommand(r, command)
 			lenses = append(lenses, lens)
@@ -74,7 +77,7 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	return lenses
 }
 
-func getLensCommands(lensesWithIssueCount *lensesWithIssueCount) []types.CommandData {
+func getLensCommands(lensesWithIssueCount *lensesWithIssueCount, logger zerolog.Logger) []types.CommandData {
 	groupableByType := map[types.GroupingType][]types.Groupable{}
 	for _, groupable := range lensesWithIssueCount.lensCommands {
 		commands := groupableByType[groupable.GetGroupingType()]
@@ -90,7 +93,7 @@ func getLensCommands(lensesWithIssueCount *lensesWithIssueCount) []types.Command
 		if groupingType == types.Quickfix {
 			// right now we can always group by max semver version, as
 			// code only has one quickfix available, and iac none at all
-			qf, ok := types.MaxSemver()(lensCommands).(types.CommandData)
+			qf, ok := types.MaxSemver(logger)(lensCommands).(types.CommandData)
 			plural := ""
 			fixable := lensesWithIssueCount.issueCount
 			unfixable := lensesWithIssueCount.totalIssues - fixable

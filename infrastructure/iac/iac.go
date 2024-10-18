@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 
 	"github.com/gomarkdown/markdown"
-	errors2 "github.com/pkg/errors"
+	pkgerrors "github.com/pkg/errors"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -168,7 +168,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []s
 
 	issues, err = iac.retrieveIssues(scanResults, issues, workspacePath)
 	if err != nil {
-		return nil, errors2.Wrap(err, "unable to retrieve IaC issues")
+		return nil, pkgerrors.Wrap(err, "unable to retrieve IaC issues")
 	}
 
 	return issues, nil
@@ -184,7 +184,7 @@ func (iac *Scanner) retrieveIssues(scanResults []iacScanResult,
 			if !isIgnored {
 				analysisIssues, err := iac.retrieveAnalysis(s, workspacePath)
 				if err != nil {
-					return nil, errors2.Wrap(err, "retrieve analysis")
+					return nil, pkgerrors.Wrap(err, "retrieve analysis")
 				}
 
 				issues = append(issues, analysisIssues...)
@@ -240,7 +240,7 @@ func (iac *Scanner) doScan(ctx context.Context,
 				errors.As(err, &exitError)
 				errorOutput := string(res) + "\n\n\nSTDERR output:\n" + string(exitError.Stderr)
 				iac.c.Logger().Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
-				err = errors2.Wrap(err, fmt.Sprintf("Error executing %v.\n%s", cmd, errorOutput))
+				err = pkgerrors.Wrap(err, fmt.Sprintf("Error executing %v.\n%s", cmd, errorOutput))
 				return nil, err
 			}
 		default:
@@ -258,14 +258,14 @@ func (iac *Scanner) unmarshal(res []byte) (scanResults []iacScanResult, err erro
 
 	if strings.HasPrefix(output, "[") {
 		if err = json.Unmarshal(res, &scanResults); err != nil {
-			err = errors2.Wrap(err, fmt.Sprintf("Cannot unmarshal %s", output))
+			err = pkgerrors.Wrap(err, fmt.Sprintf("Cannot unmarshal %s", output))
 			iac.c.Logger().Err(err).Str("method", method).Msg("Cannot unmarshal")
 			return nil, err
 		}
 	} else {
 		var scanResult iacScanResult
 		if err = json.Unmarshal(res, &scanResult); err != nil {
-			err = errors2.Wrap(err, fmt.Sprintf("Cannot unmarshal %s", output))
+			err = pkgerrors.Wrap(err, fmt.Sprintf("Cannot unmarshal %s", output))
 			iac.c.Logger().Err(err).Str("method", method).Msg("Cannot unmarshal")
 			return nil, err
 		}
@@ -296,7 +296,7 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath str
 	if err != nil {
 		errorMessage := "Could not read file content from " + targetFile
 		iac.c.Logger().Err(err).Msg(errorMessage)
-		iac.errorReporter.CaptureErrorAndReportAsIssue(workspacePath, errors2.Wrap(err, errorMessage))
+		iac.errorReporter.CaptureErrorAndReportAsIssue(workspacePath, pkgerrors.Wrap(err, errorMessage))
 	} else {
 		fileContentString = string(rawFileContent)
 	}
@@ -313,7 +313,7 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath str
 
 		iacIssue, err := iac.toIssue(targetFile, issue, fileContentString)
 		if err != nil {
-			return nil, errors2.Wrap(err, "unable to convert IaC issue to Snyk issue")
+			return nil, pkgerrors.Wrap(err, "unable to convert IaC issue to Snyk issue")
 		}
 
 		issues = append(issues, iacIssue)
@@ -374,7 +374,7 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 
 	additionalData, err := iac.toAdditionalData(affectedFilePath, issue)
 	if err != nil {
-		return snyk.Issue{}, errors2.Wrap(err, "unable to create IaC issue additional data")
+		return snyk.Issue{}, pkgerrors.Wrap(err, "unable to create IaC issue additional data")
 	}
 
 	result := snyk.Issue{
@@ -406,7 +406,7 @@ func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) (s
 
 	iacIssuePath, err := parseIacIssuePath(issue.Path)
 	if err != nil {
-		return snyk.IaCIssueData{}, errors2.Wrap(err, "unable to parse IaC issue path")
+		return snyk.IaCIssueData{}, pkgerrors.Wrap(err, "unable to parse IaC issue path")
 	}
 
 	return snyk.IaCIssueData{
@@ -436,7 +436,7 @@ func parseIacIssuePath(path []any) ([]string, error) {
 		case string:
 			pathTokens = append(pathTokens, val)
 		default:
-			return nil, errors2.Errorf("unexpected type %T for IaC issue path token: %v", val, val)
+			return nil, pkgerrors.Errorf("unexpected type %T for IaC issue path token: %v", val, val)
 		}
 	}
 	return pathTokens, nil
@@ -454,7 +454,7 @@ func newIacCommand(codeActionTitle string, issueURL *url.URL) *types.CommandData
 func (iac *Scanner) createIssueURL(id string) *url.URL {
 	parse, err := url.Parse("https://security.snyk.io/rules/cloud/" + id)
 	if err != nil {
-		iac.errorReporter.CaptureError(errors2.Wrap(err, "unable to create issue link for iac issue "+id))
+		iac.errorReporter.CaptureError(pkgerrors.Wrap(err, "unable to create issue link for iac issue "+id))
 	}
 	return parse
 }

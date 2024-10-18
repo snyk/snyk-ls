@@ -118,8 +118,12 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Ra
 		return edit
 	}
 
-	// out grouping key for oss quickfixes is the dependency name
-	groupingKey, groupingValue := i.getUpgradedPathParts()
+	// our grouping key for oss quickfixes is the dependency name
+	groupingKey, groupingValue, err := i.getUpgradedPathParts()
+	if err != nil {
+		logger.Warn().Err(err).Msg("could not get the upgrade path, so cannot add quickfix.")
+		return nil
+	}
 
 	action, err := snyk.NewDeferredCodeAction(upgradeMessage, &autofixEditCallback, nil, types.Key(groupingKey), groupingValue)
 	if err != nil {
@@ -138,7 +142,11 @@ func (i *ossIssue) getQuickfixEdit(affectedFilePath string) string {
 
 	// UpgradePath[0] is the upgrade for the package that was scanned
 	// UpgradePath[1] is the upgrade for the root dependency
-	depName, depVersion := i.getUpgradedPathParts()
+	depName, depVersion, err := i.getUpgradedPathParts()
+	if err != nil {
+		logger.Warn().Err(err).Msg("could not get the upgrade path, so cannot add quickfix.")
+		return ""
+	}
 	logger.Debug().Msgf("comparing %s with %s", i.UpgradePath[1], i.From[1])
 	// from[1] contains the package that caused this issue
 	normalizedCurrentVersion := strings.Split(i.From[1], "@")[1]
@@ -168,13 +176,13 @@ func (i *ossIssue) getQuickfixEdit(affectedFilePath string) string {
 	return ""
 }
 
-func (i *ossIssue) getUpgradedPathParts() (string, string) {
+func (i *ossIssue) getUpgradedPathParts() (string, string, error) {
 	s, ok := i.UpgradePath[1].(string)
 	if !ok {
-		return "", ""
+		return "", "", errors.New("invalid upgrade path, could not cast to string")
 	}
 	rootDependencyUpgrade := strings.Split(s, "@")
 	depName := strings.Join(rootDependencyUpgrade[:len(rootDependencyUpgrade)-1], "@")
 	depVersion := rootDependencyUpgrade[len(rootDependencyUpgrade)-1]
-	return depName, depVersion
+	return depName, depVersion, nil
 }

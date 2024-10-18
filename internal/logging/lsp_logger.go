@@ -34,7 +34,7 @@ type lspWriter struct {
 
 func New(server types.Server) zerolog.LevelWriter {
 	if server != nil {
-		_, _ = os.Stderr.WriteString("LSP logger: starting with non-nil server \n")
+		_, _ = fmt.Fprintln(os.Stderr, "LSP logger: starting with non-nil server")
 	}
 	readyChan := make(chan bool)
 	writeChan := make(chan types.LogMessageParams, 1000000)
@@ -45,9 +45,9 @@ func New(server types.Server) zerolog.LevelWriter {
 	}
 	go w.startServerSenderRoutine()
 	// let the routine startup first
-	_, _ = os.Stderr.WriteString("LSP logger: waiting for ready signal... \n")
+	_, _ = fmt.Fprintln(os.Stderr, "LSP logger: waiting for ready signal...")
 	<-w.readyChan
-	_, _ = os.Stderr.WriteString("LSP logger: started\n")
+	_, _ = fmt.Fprintln(os.Stderr, "LSP logger: started")
 	return w
 }
 
@@ -81,7 +81,7 @@ func (w *lspWriter) startServerSenderRoutine() {
 			_, _ = os.Stderr.Write([]byte(msg.Message))
 		}
 	}
-	_, _ = os.Stderr.WriteString(fmt.Sprintf("LSP logger (%p) stopped", w))
+	_, _ = fmt.Fprintln(os.Stderr, fmt.Sprintf("LSP logger (%p) stopped", w))
 }
 
 func mapLogLevel(level zerolog.Level) (mt types.MessageType) {

@@ -85,9 +85,8 @@ func (c ExtensionExecutor) doExecute(_ context.Context, cmd []string, workingDir
 			return nil, fmt.Errorf("invalid response from extension executor")
 		}
 		return output, err
-	} else {
-		return []byte{}, err
 	}
+	return []byte{}, err
 }
 
 func (c ExtensionExecutor) ExpandParametersFromConfig(base []string) []string {

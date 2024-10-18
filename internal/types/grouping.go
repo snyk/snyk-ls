@@ -16,7 +16,10 @@
 
 package types
 
-import "golang.org/x/mod/semver"
+import (
+	"github.com/rs/zerolog"
+	"golang.org/x/mod/semver"
+)
 
 type Key string
 
@@ -35,7 +38,7 @@ type GroupingType string
 
 const Quickfix GroupingType = "quickfix-grouping"
 
-func MaxSemver() GroupingFunction {
+func MaxSemver(logger zerolog.Logger) GroupingFunction {
 	return func(groupables []Groupable) any {
 		if len(groupables) == 0 {
 			return nil
@@ -56,6 +59,7 @@ func MaxSemver() GroupingFunction {
 
 				group, ok := chosenGroupable.GetGroupingValue().(string)
 				if !ok {
+					logger.Debug().Msgf("could not cast first groupable value %v to string, skipping", chosenGroupable.GetGroupingValue())
 					continue
 				}
 
