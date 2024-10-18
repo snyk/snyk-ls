@@ -64,6 +64,8 @@ h2, h3 {
   margin-block-start: 0;
   margin-block-end: 0.4rem;
   font-weight: 700;
+  padding: 20px;
+  margin: initial;
 }
 
 section {
@@ -167,6 +169,8 @@ header {
 .panel-header {
   display: flex;
   flex-direction: column;
+  background-image: linear-gradient(0, transparent, var(--vscode-tab-activeBackground));
+  margin: inherit;
 }
 
 .severity-container {
