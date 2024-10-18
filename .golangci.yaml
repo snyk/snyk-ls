@@ -137,7 +137,7 @@ linters:
     - predeclared
     - promlinter
     # TODO(revive): revisit in a followup; extensive changes, some breaking. godoc requirement would be good to introduce
-    #- revive
+    # - revive
     - rowserrcheck
     - sqlclosecheck
     # TODO(stylecheck): revisit in a followup; some breaking API changes

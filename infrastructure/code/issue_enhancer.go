@@ -308,11 +308,14 @@ func getShardKey(folderPath string, authToken string) string {
 }
 
 func issueTitle(issue snyk.Issue) string {
-	codeIssueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
-	if ok {
-		if issue.AdditionalData != nil && codeIssueData.Title != "" {
-			return codeIssueData.Title
-		}
+	if issue.AdditionalData == nil {
+		return issue.ID
 	}
+
+	codeIssueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	if ok && codeIssueData.Title != "" {
+		return codeIssueData.Title
+	}
+
 	return issue.ID
 }
