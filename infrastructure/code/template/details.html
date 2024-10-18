@@ -21,11 +21,21 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'nonce-${nonce}';" />
+    content="style-src 'self' 'nonce-${nonce}' 'nonce-ideNonce' https://fonts.googleapis.com;
+             script-src 'nonce-${nonce}' https://fonts.googleapis.com;
+             font-src 'self' https://fonts.gstatic.com;" />
 
   <style nonce="${nonce}">
+    @import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');
     :root {
-      --default-font: ui-sans-serif, "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+      --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+      --background-color: var();
+      --text-color: var();
+      --link-color: var();
+      --scroll-bar-hover-background-color: var(#595a5c);
+      --horizontal-border-color: var();
+      --code-background-color: var();
+      --tab-active-background-color: --vscode-tab-activeBackground;
     }
 
     ::-webkit-scrollbar {
@@ -47,14 +57,22 @@
     }
 
     body {
+      background-color: var(--background-color);
       font-family: var(--default-font);
+      font-size: 0.85rem;
+      font-weight: 400;
+      color: var(--text-color);
       overflow-y: auto;
       overflow-x: hidden;
     }
 
-    h2 {
-      font-weight: 600;
-      margin-bottom: 10px;
+    h2, h3 {
+      font-size: 1.1rem;
+      margin-block-start: 0;
+      margin-block-end: 0.4rem;
+      font-weight: 700;
+      padding: 20px;
+      margin: initial;
     }
 
     main {
@@ -77,6 +95,8 @@
     .panel-header {
       display: flex;
       flex-direction: column;
+      background-image: linear-gradient(0, transparent, var(--vscode-tab-activeBackground));
+      margin: inherit;
     }
 
     .code-issue-panel {
@@ -90,12 +110,13 @@
     .ai-fix-header,
     .overview-text>h2 {
       line-height: 1.25rem;
-      font-size: 1.2rem;
+      font-size: 1.1rem;
       margin-bottom: 10px;
     }
 
     .severity-title {
       padding-left: 8px;
+      font-size: 1.2rem;
     }
 
     .severity-container {
@@ -185,7 +206,7 @@
 
     .data-flow-file {
       font-weight: bold;
-      font-size: 1em;
+      font-size: 0.85rem;
       display: flex;
       align-items: center;
       margin-top: 5px;
