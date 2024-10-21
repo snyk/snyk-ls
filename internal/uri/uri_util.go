@@ -87,7 +87,7 @@ func pathFromUNCUri(uri string) string {
 	if len(parsedURI.Host) > 0 {
 		uncPath := fmt.Sprintf(`\\%s%s`, parsedURI.Host, parsedURI.Path)
 		// Convert slashes to backslashes
-		return filepath.FromSlash(uncPath)
+		return filepath.Clean(uncPath)
 	}
 
 	return ""
