@@ -26,6 +26,14 @@
   <style nonce="${nonce}">
     :root {
       --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+      --background-color: var(--vscode-editor-background);
+      --text-color: var(--vscode-foreground);
+      --link-color: var(--vscode-textLink-foreground);
+      --scroll-bar-hover-background-color: var(#595a5c);
+      --horizontal-border-color: var();
+      --code-background-color: var();
+      --container-background-color: var(--vscode-background);
+      font-size: var(--vscode-font-size);
     }
 
     ::-webkit-scrollbar {
@@ -37,11 +45,20 @@
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: #595a5c;
+      background: var(--scrollbar-thumb-color);
+    }
+
+    a, .link {
+      color: var(--link-color);
+      cursor: pointer;
+      text-decoration: none;
     }
 
     body {
+      background-color: var(--container-background-color);
+      color: var(--text-color);
       font-family: var(--default-font);
+      font-size: 0.85rem;
       overflow-y: auto;
       overflow-x: hidden;
     }
@@ -52,7 +69,7 @@
     }
 
     section {
-      padding: 0px 20px 5px 20px;
+      padding: 0px 20px 20px 20px;
     }
 
     .styled-link {
@@ -74,9 +91,8 @@
 
     .suggestion .suggestion-text {
       margin-bottom: 0.8rem;
-      font-size: 1.8rem;
+      font-size: 1.6rem;
       font-weight: 500;
-      line-height: 2.4rem;
     }
 
     .severity {
@@ -86,6 +102,11 @@
       float: left;
       margin: 0 1rem 0 0;
       text-align: center;
+    }
+
+    .identifiers {
+      font-size: 1rem;
+      line-height: 2rem;
     }
 
     .severity .icon {
@@ -108,11 +129,13 @@
       height: 1.3rem;
       margin: 0 0.8rem 0 0.8rem;
       line-height: 1rem;
+      border-right: 1px solid var(--border-color);
     }
 
     .summary .summary-item {
       display: flex;
       margin: 0.3em 0 0.3em 0;
+      padding-bottom: 0;
     }
 
     .summary .label {
@@ -135,6 +158,7 @@
       padding: 8px 16px;
       overflow-x: auto;
       border-radius: 4px;
+      background-color: var(--container-background-color);
     }
 
     .learn {

@@ -47,13 +47,19 @@
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: #595a5c;
+      background: var(--scroll-bar-hover-background-color);
     }
 
     *,
     *:before,
     *:after {
       box-sizing: border-box;
+    }
+
+    a, .link {
+      color: var(--link-color);
+      cursor: pointer;
+      text-decoration: none;
     }
 
     body {
@@ -66,13 +72,17 @@
       overflow-x: hidden;
     }
 
+    h2 {
+      padding-top: 20px;
+      padding-bottom: 20px;
+      margin: initial;
+    }
+
     h2, h3 {
       font-size: 1.1rem;
       margin-block-start: 0;
       margin-block-end: 0.4rem;
       font-weight: 700;
-      padding: 20px;
-      margin: initial;
     }
 
     main {
@@ -116,7 +126,7 @@
 
     .severity-title {
       padding-left: 8px;
-      font-size: 1.2rem;
+      font-size: 1.6rem;
     }
 
     .severity-container {
@@ -206,7 +216,7 @@
 
     .data-flow-file {
       font-weight: bold;
-      font-size: 0.85rem;
+      font-size: 1rem;
       display: flex;
       align-items: center;
       margin-top: 5px;
@@ -257,8 +267,7 @@
     }
 
     .data-flow-text code {
-      background: none;
-      background-color: transparent;
+      background: transparent none;
     }
 
     .data-flow-delimiter {
