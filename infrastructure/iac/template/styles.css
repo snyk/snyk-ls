@@ -23,8 +23,10 @@
   background: var(--scroll-bar-hover-background-color);
 }
 
-html, body {
-  font-size: 16px;
+*,
+*:before,
+*:after {
+  box-sizing: border-box;
 }
 
 body {
@@ -33,6 +35,26 @@ body {
   font-size: 0.85rem;
   font-weight: 400;
   color: var(--text-color);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+body > *, form > * {
+  margin-block-start: 0;
+}
+
+
+h2 {
+  padding-top: 20px;
+  padding-bottom: 20px;
+  margin: initial;
+}
+
+h2, h3 {
+  font-size: 1.2rem;
+  margin-block-start: 0;
+  margin-block-end: 0.4rem;
+  font-weight: 700;
 }
 
 section {
@@ -59,13 +81,8 @@ code {
   font-size: 0.85rem;
 }
 
-h2 {
-  font-weight: 600;
-  margin-bottom: 10px;
-}
-
 section {
-  padding: 0px 20px 5px 20px;
+  padding: 20px;
 }
 
 .styled-link {
@@ -85,9 +102,11 @@ section {
   flex-direction: column;
   width: 100%;
   height: 100%;
+  margin-block-start: 0;
 }
 
 .suggestion .suggestion-text {
+  margin-top: 0;
   margin-bottom: 0.8rem;
   font-size: 0.85rem;
   font-weight: 400;
@@ -117,17 +136,27 @@ section {
   vertical-align: middle;
 }
 
+.sn-fix-wrapper {
+  background-color: var(--code-background-color);
+}
+
 .summary .summary-item {
   display: flex;
   margin: 0.3em 0 0.3em 0;
 }
 
+.summary-item p {
+  margin: 0 0 2rem 0;
+}
+
 .summary .label {
   width: 160px;
+  margin: inherit;
 }
 
 .summary .content {
   flex: 70%;
+  margin: inherit;
 }
 
 .summary .summary-item.path pre {
@@ -145,7 +174,7 @@ div.remediation {
 }
 
 div.remediation p {
-  margin-bottom: 0;
+  margin: 0;
 }
 
 header {
@@ -155,6 +184,8 @@ header {
 .panel-header {
   display: flex;
   flex-direction: column;
+  background-image: linear-gradient(0, transparent, var(--vscode-tab-activeBackground));
+  margin: inherit;
 }
 
 .severity-container {
@@ -166,7 +197,7 @@ header {
 
 .severity-title {
   padding-left: 8px;
-  font-size: 1.2rem;
+  font-size: 1.6rem;
 }
 
 .severity-type-container {
