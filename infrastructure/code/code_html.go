@@ -252,7 +252,7 @@ func parseExampleCommitsToTemplateJS(fixes []ExampleCommit, logger *zerolog.Logg
 
 func getIssueType(additionalData snyk.CodeIssueData) string {
 	if additionalData.IsSecurityType {
-		return "Vulnerability"
+		return "Issue"
 	}
 	return "Quality Issue"
 }

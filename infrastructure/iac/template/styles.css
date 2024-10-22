@@ -45,13 +45,11 @@ body > *, form > * {
 
 
 h2 {
-  padding-top: 20px;
-  padding-bottom: 20px;
   margin: initial;
 }
 
 h2, h3 {
-  font-size: 1.2rem;
+  font-size: 1rem;
   margin-block-start: 0;
   margin-block-end: 0.4rem;
   font-weight: 700;
@@ -193,11 +191,12 @@ header {
   flex-direction: row;
   align-items: center;
   margin-bottom: 3px;
+  padding-top: 20px;
 }
 
 .severity-title {
   padding-left: 8px;
-  font-size: 1.6rem;
+  font-size: 1.2rem;
 }
 
 .severity-type-container {

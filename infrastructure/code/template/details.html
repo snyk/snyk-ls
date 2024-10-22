@@ -32,10 +32,14 @@
       --background-color: var();
       --text-color: var();
       --link-color: var();
-      --scroll-bar-hover-background-color: var(#595a5c);
+      --scroll-bar-hover-background-color: #595a5c;
       --horizontal-border-color: var();
       --code-background-color: var();
-      --tab-active-background-color: --vscode-tab-activeBackground;
+      --tab-active-background-color: var(--vscode-tab-activeBackground);
+    }
+
+    section {
+      padding: 20px;
     }
 
     ::-webkit-scrollbar {
@@ -55,7 +59,9 @@
     *:after {
       box-sizing: border-box;
     }
-
+    html {
+      font-size: 70%;
+    }
     a, .link {
       color: var(--link-color);
       cursor: pointer;
@@ -65,7 +71,7 @@
     body {
       background-color: var(--background-color);
       font-family: var(--default-font);
-      font-size: 0.85rem;
+      font-size: 1.2rem;
       font-weight: 400;
       color: var(--text-color);
       overflow-y: auto;
@@ -73,8 +79,6 @@
     }
 
     h2 {
-      padding-top: 20px;
-      padding-bottom: 20px;
       margin: initial;
     }
 
@@ -126,14 +130,15 @@
 
     .severity-title {
       padding-left: 8px;
-      font-size: 1.6rem;
+      font-size: 2rem;
     }
 
     .severity-container {
       display: flex;
       flex-direction: row;
       align-items: center;
-      margin-bottom: 3px;
+      padding-bottom: 20px;
+      padding-top: 20px;
     }
 
     .severity-type-container {
@@ -792,7 +797,7 @@
         </span>
         {{if .IssueOverview}}
         <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item sn-vuln-overview vuln-overview-tab">
-          Vulnerability Overview
+          Issue Overview
         </span>
         {{end}}
       </div>

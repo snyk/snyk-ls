@@ -27,6 +27,7 @@
     :root {
       --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
       --background-color: var(--vscode-editor-background);
+      --border-color: var(--vscode-input-border);
       --text-color: var(--vscode-foreground);
       --link-color: var(--vscode-textLink-foreground);
       --scroll-bar-hover-background-color: var(#595a5c);
@@ -48,6 +49,10 @@
       background: var(--scrollbar-thumb-color);
     }
 
+    .delimiter-top {
+      border-top: 1px solid var(--border-color);
+    }
+
     a, .link {
       color: var(--link-color);
       cursor: pointer;
@@ -55,7 +60,6 @@
     }
 
     body {
-      background-color: var(--container-background-color);
       color: var(--text-color);
       font-family: var(--default-font);
       font-size: 0.85rem;
@@ -65,11 +69,10 @@
 
     h2 {
       font-weight: 600;
-      margin-bottom: 10px;
     }
 
     section {
-      padding: 0px 20px 20px 20px;
+      padding: 20px;
     }
 
     .styled-link {
@@ -147,11 +150,16 @@
     }
 
     .summary .remediation {
-      margin-bottom: 1.6rem
     }
 
     .summary .detailed-path:last-child .remediation {
       margin-bottom: 0
+    }
+
+    table td {
+      background: var(--container-background-color);
+      border-top: 1px solid var(--border-color);
+      padding: 3px;
     }
 
     .vulnerability-overview pre {
@@ -226,7 +234,7 @@
       {{ if .LessonUrl }}
       <div class="learn" id="learn">
         {{.LessonIcon}}
-        <a class="learn--link" id="learn--link" href="{{.LessonUrl}}">Learn about this vulnerability</a>
+        <a class="learn--link" id="learn--link" href="{{.LessonUrl}}">Learn about this issue</a>
       </div>
       {{end}}
     </section>
