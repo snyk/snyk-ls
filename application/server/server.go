@@ -64,6 +64,9 @@ func Start(c *config.Config) {
 
 	handlers := handler.Map{}
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
+		Logger: func(text string) {
+			c.Logger().Trace().Str("method", "jrpc-server").Msg(text)
+		},
 		RPCLog:    RPCLogger{c},
 		AllowPush: true,
 	})
@@ -195,7 +198,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 		command.HandleFolders(bgCtx, srv, di.Notifier(), di.ScanPersister())
 		if config.CurrentConfig().IsAutoScanEnabled() {
 			for _, f := range changedFolders {
-				f.ScanFolder(ctx)
+				go f.ScanFolder(ctx)
 			}
 		}
 		return nil, nil
