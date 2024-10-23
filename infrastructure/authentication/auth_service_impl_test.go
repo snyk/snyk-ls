@@ -19,10 +19,11 @@ package authentication
 import (
 	"context"
 	"encoding/json"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
