@@ -128,7 +128,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"ExampleCommitFixes": exampleCommits,
 		"CommitFixes":        commitFixes,
 		"PriorityScore":      additionalData.PriorityScore,
-		"SnykWebUrl":         renderer.c.SnykUI(),
+		"SnykWebUrl":         renderer.c.SnykUiApiUrl(),
 		"LessonUrl":          issue.LessonUrl,
 		"LessonIcon":         html.LessonIcon(),
 		"IgnoreLineAction":   getLineToIgnoreAction(issue),
