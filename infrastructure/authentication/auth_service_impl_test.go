@@ -19,6 +19,7 @@ package authentication
 import (
 	"context"
 	"encoding/json"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"sync"
 	"testing"
 	"time"
@@ -60,6 +61,25 @@ func Test_UpdateCredentials(t *testing.T) {
 		service.UpdateCredentials(token, false)
 
 		assert.Equal(t, token, config.CurrentConfig().Token())
+	})
+}
+
+func Test_Authenticate(t *testing.T) {
+	t.Run("Get endpoint from GAF config and set in snyk-ls configuration ", func(t *testing.T) {
+		apiEndpoint := "https://api.eu.snyk.io"
+		c := testutil.UnitTest(t)
+		c.Engine().GetConfiguration().Set(configuration.API_URL, apiEndpoint)
+
+		provider := FakeAuthenticationProvider{C: c}
+		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+
+		_, err := service.Authenticate(context.Background())
+		if err != nil {
+			return
+		}
+
+		uiEndpoint := c.SnykUiApiUrl()
+		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
 	})
 }
 
