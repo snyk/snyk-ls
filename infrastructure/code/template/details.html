@@ -34,7 +34,7 @@
       --link-color: var();
       --scroll-bar-hover-background-color: #595a5c;
       --horizontal-border-color: var();
-      --code-background-color: var();
+      --code-background-color: var(--vscode-editor-background);
       --tab-active-background-color: var(--vscode-tab-activeBackground);
     }
 
@@ -69,7 +69,7 @@
     body {
       background-color: var(--background-color);
       font-family: var(--default-font);
-      font-size: 0.8rem;
+      font-size: 0.7rem;
       font-weight: 400;
       color: var(--text-color);
       overflow-y: auto;
@@ -81,7 +81,7 @@
     }
 
     h2, h3 {
-      font-size: 1rem;
+      font-size: 0.8rem;
       margin-block-start: 0;
       margin-block-end: 0.4rem;
       font-weight: 700;
@@ -122,7 +122,7 @@
     .ai-fix-header,
     .overview-text>h2 {
       line-height: 1.25rem;
-      font-size: 1rem;
+      font-size: 0.8rem;
       margin-bottom: 10px;
     }
 
@@ -217,6 +217,10 @@
       border: 1px solid #E27122;
     }
 
+    .example {
+      background-color: var(--code-background-color);
+    }
+
     .data-flow-file {
       font-weight: bold;
       display: flex;
@@ -235,6 +239,7 @@
     }
 
     .data-flow-table {
+      background-color: var(--code-background-color);
       margin-top: 5px;
       margin-left: 15px;
     }
@@ -266,6 +271,10 @@
       margin-right: 8px;
       font-weight: 400;
       word-break: break-all;
+    }
+
+    code {
+      background-color: var(--code-background-color);
     }
 
     .data-flow-text code {
