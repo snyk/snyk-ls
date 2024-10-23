@@ -385,6 +385,8 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		c := config.CurrentConfig()
 		initialLogger := c.Logger()
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
+		initialLogger.Info().Msgf("CLI Path: %s", c.CliSettings().Path())
+		initialLogger.Info().Msgf("CLI Installed? %t", c.CliSettings().Installed())
 		initialLogger.Info().Msg("platform: " + runtime.GOOS + "/" + runtime.GOARCH)
 		initialLogger.Info().Msg("https_proxy: " + os.Getenv("HTTPS_PROXY"))
 		initialLogger.Info().Msg("http_proxy: " + os.Getenv("HTTP_PROXY"))

@@ -142,7 +142,7 @@ func getIssueType(issue snyk.OssIssueData) string {
 		return "License"
 	}
 
-	return "Vulnerability"
+	return "Issue"
 }
 
 func getExploitMaturity(issue snyk.OssIssueData) string {
