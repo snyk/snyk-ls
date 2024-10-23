@@ -32,7 +32,7 @@
 body {
   background-color: var(--background-color);
   font-family: var(--default-font);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 400;
   color: var(--text-color);
   overflow-y: auto;
@@ -76,7 +76,7 @@ code {
   background-color: var(--code-background-color);
   padding: 1px 3px;
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 section {
@@ -106,7 +106,7 @@ section {
 .suggestion .suggestion-text {
   margin-top: 0;
   margin-bottom: 0.8rem;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 400;
   line-height: 2.4rem;
 }
@@ -196,13 +196,14 @@ header {
 
 .severity-title {
   padding-left: 8px;
-  font-size: 1.2rem;
+  font-size: 1.4rem;
 }
 
 .severity-type-container {
   display: flex;
   flex-direction: row;
   align-items: center;
-  margin-bottom: 1em;
-  line-height: 1em;
+  margin-bottom: 1rem;
+  line-height: 1rem;
+  font-size: 1rem;
 }
