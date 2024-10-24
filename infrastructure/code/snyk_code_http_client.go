@@ -481,7 +481,7 @@ func (s *SnykCodeHTTPClient) GetAutofixSuggestions(
 	logger.Info().Msg("Started obtaining autofix suggestions")
 	defer logger.Info().Msg("Finished obtaining autofix suggestions")
 
-	autofixResponse, status, err := s.GetAutofixResponse(ctx, baseDir, options)
+	autofixResponse, status, err := s.getAutofixResponse(ctx, options)
 	if err != nil {
 		return nil, status, err
 	}

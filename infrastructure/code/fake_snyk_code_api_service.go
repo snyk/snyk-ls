@@ -147,9 +147,8 @@ func (f *FakeSnykCodeClient) GetAutofixDiffs(_ context.Context, _ string, _ Auto
 	return f.UnifiedDiffSuggestions, f.AutofixStatus, nil
 }
 
-
-func (f *FakeSnykCodeClient) GetAutofixResponse(_ context.Context, _ string, _ AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error) {
-	f.AutofixStatus = AutofixStatus{message: completeStatus }
+func (f *FakeSnykCodeClient) getAutofixResponse(_ context.Context, _ AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error) {
+	f.AutofixStatus = AutofixStatus{message: completeStatus}
 	return autofixResponse, f.AutofixStatus, nil
 }
 
