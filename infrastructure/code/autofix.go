@@ -47,41 +47,56 @@ func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string
 	err error,
 ) {
 	method := "GetAutofixDiffs"
-	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
+	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
+	logger.Info().Msg("Started obtaining autofix diffs")
+	defer logger.Info().Msg("Finished obtaining autofix diffs")
+
+	autofixResponse, status, err := s.getAutofixResponse(ctx, options)
+	if err != nil {
+		return nil, status, err
+	}
+	return autofixResponse.toUnifiedDiffSuggestions(baseDir, options.filePath), status, err
+}
+
+func (s *SnykCodeHTTPClient) getAutofixResponse(ctx context.Context, options AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error) {
+	method := "getAutofixResponse"
+	span := s.instrumentor.StartSpan(ctx, method)
+	defer s.instrumentor.Finish(span)
+	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
 
 	requestId, err := performance2.GetTraceId(ctx)
 	if err != nil {
 		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
-		return nil, failed, err
+		return autofixResponse, failed, err
 	}
-
-	logger.Info().Str("requestId", requestId).Msg("Started obtaining autofix diffs")
-	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining autofix diffs")
+	logger.Info().Str("requestId", requestId).Msg("Started obtaining autofix Response")
+	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining autofix Response")
 
 	response, err := s.RunAutofix(span.Context(), options)
 	if err != nil {
-		return nil, failed, err
+		return response, failed, err
 	}
 
 	logger.Debug().Msgf("Status: %s", response.Status)
 
 	if response.Status == failed.message {
 		logger.Error().Str("responseStatus", response.Status).Msg("autofix failed")
-		return nil, failed, errors.New("Autofix failed")
+		return response, failed, errors.New("Autofix failed")
 	}
 
 	if response.Status == "" {
 		logger.Error().Str("responseStatus", response.Status).Msg("unknown response status (empty)")
-		return nil, failed, errors.New("Unknown response status (empty)")
+		return response, failed, errors.New("Unknown response status (empty)")
 	}
 
+	status = AutofixStatus{message: response.Status}
 	if response.Status != completeStatus {
-		return nil, status, nil
+		return response, status, nil
 	}
 
-	return response.toUnifiedDiffSuggestions(baseDir, options.filePath), AutofixStatus{message: response.Status}, err
+	return response, status, nil
 }
 
 func (sc *Scanner) GetAutofixDiffs(
@@ -132,12 +147,10 @@ func (sc *Scanner) GetAutofixDiffs(
 				logger.Err(autofixErr).Msg("Error getting autofix suggestions")
 				return nil, autofixErr
 			} else if fixStatus.message == completeStatus {
-				if len(suggestions) > 0 {
-					return suggestions, nil
-				} else {
+				if len(suggestions) == 0 {
 					logger.Info().Msg("AI fix returned successfully but no good fix could be computed.")
-					return suggestions, nil
 				}
+				return suggestions, nil
 			}
 			// If err == nil and fixStatus.message != completeStatus, we will keep polling.
 		}

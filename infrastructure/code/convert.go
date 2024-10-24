@@ -617,9 +617,10 @@ func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir string, filePath stri
 		if err != nil {
 			logger.Err(err).Msgf("cannot decode filePath %s", filePath)
 		}
+		logger.Info().Msgf("File path %s", path)
 		fileContent, err := os.ReadFile(path)
 		if err != nil {
-			logger.Err(err).Msgf("cannot read fileContent %s", baseDir)
+			logger.Err(err).Msgf("cannot read fileContent %s", path)
 			return fixSuggestions
 		}
 		contentBefore := string(fileContent)
