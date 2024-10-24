@@ -99,7 +99,8 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	c.SetToken(newToken)
 
 	if sendNotification {
-		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: a.c.SnykApi()})
+		//a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: a.c.SnykApi()})
+		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: "https://api.eu.snyk.io"})
 	}
 }
 

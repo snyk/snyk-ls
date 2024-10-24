@@ -619,7 +619,7 @@ type ConfigurationParams struct {
 
 type AuthenticationParams struct {
 	Token  string `json:"token"`
-	ApiUrl string `json:"url"`
+	ApiUrl string `json:"apiUrl"`
 }
 
 type SnykIsAvailableCli struct {
