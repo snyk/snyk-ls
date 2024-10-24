@@ -168,6 +168,37 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	)
 }
 
+func Test_ApiUrlNotification(t *testing.T) {
+	loc, jsonRPCRecorder := setupServer(t)
+
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var expected = types.ApiUrlParams{ApiUrl: "https://api.snyk.io"}
+
+	di.Notifier().Send(expected)
+	assert.Eventually(
+		t,
+		func() bool {
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.apiUrl")
+			if len(notifications) < 1 {
+				return false
+			}
+			for _, n := range notifications {
+				var actual = types.ApiUrlParams{}
+				_ = n.UnmarshalParams(&actual)
+				if reflect.DeepEqual(expected, actual) {
+					return true
+				}
+			}
+			return false
+		},
+		2*time.Second,
+		10*time.Millisecond,
+	)
+}
+
 func Test_IsAvailableCliNotification(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 

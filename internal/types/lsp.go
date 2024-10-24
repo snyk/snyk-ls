@@ -621,6 +621,10 @@ type AuthenticationParams struct {
 	Token string `json:"token"`
 }
 
+type ApiUrlParams struct {
+	ApiUrl string `json:"url"`
+}
+
 type SnykIsAvailableCli struct {
 	CliPath string `json:"cliPath"`
 }

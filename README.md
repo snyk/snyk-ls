@@ -187,6 +187,16 @@ Right now the language server supports the following actions:
   ```
   - See https://pkg.go.dev/golang.org/x/oauth2@v0.6.0#Token for more details regarding oauth tokens.
 
+- Snyk API URL Notification
+  - method: `$/snyk.apiUrl`
+  - params: `types.ApiUrl`
+  - example:
+  ```json5
+  {
+    "ApiUrl": "https://api.snyk.io"
+  }
+  ```
+
 - CLI Path Notification
   - method: `$/snyk.isAvailableCli`
   - params: `types.SnykIsAvailableCli`
