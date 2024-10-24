@@ -176,3 +176,61 @@ func TestHandleInvalidCredentials(t *testing.T) {
 		}, maxWait, time.Millisecond, "didn't receive show message request to re-authenticate")
 	})
 }
+
+func TestGetApiUrl(t *testing.T) {
+	defaultUrl := config.DefaultSnykUiUrl
+	customUrl := "https://custom.snyk.io"
+	engineUrl := "https://engine.snyk.io"
+
+	tests := []struct {
+		name           string
+		customUrl      string
+		engineUrl      string
+		expectedResult string
+	}{
+		{
+			name:           "Default URL when custom and engine URLs are not set",
+			customUrl:      defaultUrl,
+			engineUrl:      "",
+			expectedResult: defaultUrl,
+		},
+		{
+			name:           "Engine URL when custom URL is default and engine URL is set",
+			customUrl:      defaultUrl,
+			engineUrl:      engineUrl,
+			expectedResult: engineUrl,
+		},
+		{
+			name:           "Custom URL when it's different from default and engine URL",
+			customUrl:      customUrl,
+			engineUrl:      engineUrl,
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL when custom URL equals engine URL",
+			customUrl:      customUrl,
+			engineUrl:      customUrl,
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL when engine URL is empty",
+			customUrl:      customUrl,
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL when it's different from default and engine URL is empty",
+			customUrl:      customUrl,
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getApiUrl(tt.customUrl, tt.engineUrl)
+			assert.Equal(t, tt.expectedResult, result, "getApiUrl(%v, %v) = %v; want %v",
+				tt.customUrl, tt.engineUrl, result, tt.expectedResult)
+		})
+	}
+}

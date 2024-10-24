@@ -21,12 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
@@ -70,15 +69,40 @@ func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
 
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
 	token, err = a.provider.Authenticate(ctx)
+
 	if token == "" || err != nil {
 		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.provider))
 		return token, err
 	}
+
+	customUrl := a.c.SnykApi()
+	//Get url from GAF
+	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL)
+	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
+
 	a.UpdateCredentials(token, true)
-	a.c.UpdateApiEndpoints(a.c.Engine().GetConfiguration().GetString(configuration.API_URL))
+	a.c.UpdateApiEndpoints(prioritizedUrl)
 	a.ConfigureProviders(a.c)
 
 	return token, err
+}
+
+func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
+	defaultUrl := config.DefaultSnykUiUrl
+
+	// If the custom URL is not changed (equals default) and no engine URL is provided,
+	// use the default URL.
+	if customUrl == defaultUrl && engineUrl == "" {
+		return defaultUrl
+	}
+
+	// If the custom URL equals the default but an engine URL is provided, use the engine URL.
+	if customUrl == defaultUrl {
+		return engineUrl
+	}
+
+	// Otherwise, return the custom URL set by the user.
+	return customUrl
 }
 
 func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool) {
@@ -99,8 +123,7 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	c.SetToken(newToken)
 
 	if sendNotification {
-		//a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: a.c.SnykApi()})
-		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: "https://api.eu.snyk.io"})
+		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: a.c.SnykApi()})
 	}
 }
 
