@@ -722,6 +722,8 @@ func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) ty
 			AuthenticationMethod:        types.TokenAuthentication,
 			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
 			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
+			ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
+			ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
 		},
 	}
 	return clientParams
@@ -801,6 +803,8 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	testutil.OnlyOnWindows(t, "testing windows UNC file paths")
 	loc, jsonRPCRecorder := setupServer(t)
 	c.SetSnykCodeEnabled(true)
+	c.SetSnykOssEnabled(false)
+	c.SetSnykIacEnabled(false)
 	cleanupChannels()
 	di.Init()
 
@@ -815,6 +819,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 
 	initializeParams := prepareInitParams(t, uncPath, c)
 	ensureInitialized(t, c, loc, initializeParams)
+	waitForScan(t, uncPath)
 	testPath := filepath.Join(uncPath, "app.js")
 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
