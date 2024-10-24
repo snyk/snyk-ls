@@ -170,7 +170,11 @@ func (r reference) toReference() snyk.Reference {
 func (i *ossIssue) getUpgradeMessage() string {
 	hasUpgradePath := len(i.UpgradePath) > 1
 	if hasUpgradePath {
-		return "Upgrade to " + i.UpgradePath[1].(string)
+		upgradePath, ok := i.UpgradePath[1].(string)
+		if !ok {
+			return ""
+		}
+		return "Upgrade to " + upgradePath
 	}
 	return ""
 }

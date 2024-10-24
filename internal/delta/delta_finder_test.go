@@ -17,9 +17,10 @@
 package delta
 
 import (
+	"testing"
+
 	"github.com/google/uuid"
 	"golang.org/x/exp/slices"
-	"testing"
 
 	"github.com/stretchr/testify/assert" // using testify for assertions
 )

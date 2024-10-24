@@ -203,6 +203,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 3, c)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, c)
 	})
+
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		loc, jsonRPCRecorder := setupServer(t)
 		c := testutil.SmokeTest(t, false)
@@ -720,6 +721,9 @@ func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) ty
 			FilterSeverity:              types.DefaultSeverityFilter(),
 			AuthenticationMethod:        types.TokenAuthentication,
 			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
+			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
+			ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
+			ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
 		},
 	}
 	return clientParams
@@ -762,7 +766,6 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	di.Init()
 
 	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
-	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -793,6 +796,33 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	_ = textDocumentDidSave(t, &loc, testPath)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, 6, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+}
+
+func Test_SmokeUncFilePath(t *testing.T) {
+	c := testutil.IntegTest(t)
+	testutil.OnlyOnWindows(t, "testing windows UNC file paths")
+	loc, jsonRPCRecorder := setupServer(t)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykOssEnabled(false)
+	c.SetSnykIacEnabled(false)
+	cleanupChannels()
+	di.Init()
+
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
+	if err != nil {
+		t.Fatal(err, "Couldn't setup test repo")
+	}
+
+	uncPath := "\\\\localhost\\" + strings.Replace(cloneTargetDir, ":", "$", 1)
+	_, err = os.Stat(uncPath)
+	assert.NoError(t, err)
+
+	initializeParams := prepareInitParams(t, uncPath, c)
+	ensureInitialized(t, c, loc, initializeParams)
+	waitForScan(t, uncPath)
+	testPath := filepath.Join(uncPath, "app.js")
+
+	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {

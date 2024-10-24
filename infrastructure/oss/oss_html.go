@@ -142,7 +142,7 @@ func getIssueType(issue snyk.OssIssueData) string {
 		return "License"
 	}
 
-	return "Vulnerability"
+	return "Issue"
 }
 
 func getExploitMaturity(issue snyk.OssIssueData) string {
@@ -202,7 +202,10 @@ func getRemediationAdvice(issue snyk.OssIssueData) string {
 	upgradeMessage := ""
 	if issue.IsUpgradable || issue.IsPatchable {
 		if hasUpgradePath {
-			upgradeMessage = "Upgrade to " + issue.UpgradePath[1].(string)
+			upgradePath, ok := issue.UpgradePath[1].(string)
+			if ok {
+				upgradeMessage = "Upgrade to " + upgradePath
+			}
 		}
 
 		if isOutdated {

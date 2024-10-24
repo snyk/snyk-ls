@@ -19,9 +19,11 @@ package uri
 import (
 	"fmt"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -29,6 +31,7 @@ import (
 )
 
 const fileScheme = "file://"
+const uncFileScheme = "file:////"
 const eclipseWorkspaceFolderScheme = "file:"
 
 var rangeFragmentRegexp = regexp.MustCompile(`^(.+)://((.*)@)?(.+?)(:(\d*))?/?((.*)\?)?((.*)#)L?(\d+)(?:,(\d+))?(-L?(\d+)(?:,(\d+))?)?`)
@@ -48,15 +51,58 @@ func FolderContains(folderPath string, path string) bool {
 // PathFromUri converts the given uri to a file path
 func PathFromUri(documentURI sglsp.DocumentURI) string {
 	u := string(documentURI)
+
+	// Check if path is UNC file path. In this case return it.
+	uncPath := pathFromUNCUri(u)
+	if uncPath != "" {
+		return uncPath
+	}
+
 	if !strings.HasPrefix(u, fileScheme) && strings.HasPrefix(u, eclipseWorkspaceFolderScheme) {
 		u = strings.Replace(u, eclipseWorkspaceFolderScheme, fileScheme, 1)
 	}
+
 	return uri.New(u).Filename()
+}
+
+// pathFromUNCUri checks if the provided file URI represents a UNC path.
+func pathFromUNCUri(uri string) string {
+	if runtime.GOOS != "windows" || !strings.HasPrefix(uri, fileScheme) {
+		return ""
+	}
+	if strings.HasPrefix(uri, uncFileScheme) {
+		uri = strings.Replace(uri, uncFileScheme, fileScheme, 1)
+	}
+
+	parsedURI, err := url.Parse(uri)
+	if err != nil {
+		return ""
+	}
+
+	if parsedURI.Scheme != "file" {
+		return ""
+	}
+
+	// A non-empty Host indicates a UNC path
+	if len(parsedURI.Host) > 0 {
+		uncPath := fmt.Sprintf(`\\%s%s`, parsedURI.Host, parsedURI.Path)
+		// Convert slashes to backslashes
+		return filepath.Clean(uncPath)
+	}
+
+	return ""
 }
 
 // PathToUri converts a path to a DocumentURI
 func PathToUri(path string) sglsp.DocumentURI {
-	return sglsp.DocumentURI(uri.File(path))
+	// in case of UNC file path. uri.File returns file://// which IDEs can't interpret correctly
+	// file://// is still a valid UNC, but we have to replace with file:// for the IDEs to interpret it correctly
+	parsedUri := uri.File(path)
+	uriAsString := string(parsedUri)
+	if strings.HasPrefix(uriAsString, uncFileScheme) {
+		uriAsString = strings.Replace(uriAsString, uncFileScheme, fileScheme, 1)
+	}
+	return sglsp.DocumentURI(uriAsString)
 }
 
 func IsUriDirectory(documentURI sglsp.DocumentURI) bool {

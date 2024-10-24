@@ -45,6 +45,7 @@ import (
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/concurrency"
@@ -112,7 +113,7 @@ func (c *CliSettings) CliPathFileInfo() (os.FileInfo, error) {
 	defer c.cliPathAccessMutex.RUnlock()
 	stat, err := os.Stat(c.cliPath)
 	if err == nil {
-		c.C.Logger().Debug().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
+		c.C.Logger().Trace().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
 			c.cliPath,
 			stat.Size(),
 			stat.Mode().Perm())

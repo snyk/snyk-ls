@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -33,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -59,7 +59,6 @@ var sampleSettings = types.Settings{
 func keyFoundInEnv(key string) bool {
 	found := false
 	env := os.Environ()
-	fmt.Println(env)
 	for _, v := range env {
 		if strings.HasPrefix(v, key+"=") {
 			found = true
@@ -187,7 +186,7 @@ func Test_UpdateSettings(t *testing.T) {
 			SendErrorReports:             "true",
 			Organization:                 expectedOrgId,
 			ManageBinariesAutomatically:  "false",
-			CliPath:                      "C:\\Users\\CliPath\\snyk-ls.exe",
+			CliPath:                      filepath.Join(t.TempDir(), "cli"),
 			Token:                        "a fancy token",
 			FilterSeverity:               types.DefaultSeverityFilter(),
 			TrustedFolders:               []string{"trustedPath1", "trustedPath2"},
@@ -234,7 +233,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.True(t, c.IsErrorReportingEnabled())
 		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.False(t, c.ManageBinariesAutomatically())
-		assert.Equal(t, "C:\\Users\\CliPath\\snyk-ls.exe", c.CliSettings().Path())
+		assert.Equal(t, settings.CliPath, c.CliSettings().Path())
 		assert.Equal(t, types.DefaultSeverityFilter(), c.FilterSeverity())
 		assert.Subset(t, []string{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
 		assert.Equal(t, settings.OsPlatform, c.OsPlatform())

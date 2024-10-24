@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -154,14 +153,6 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testutil.JsonRPCRecor
 	initHandlers(srv, handlers)
 
 	return loc
-}
-
-func Test_serverShouldStart(t *testing.T) {
-	loc, _ := setupServer(t)
-
-	si := loc.Server.ServerInfo()
-
-	fmt.Println(strings.Join(si.Methods, "\n"))
 }
 
 func Test_dummy_shouldNotBeServed(t *testing.T) {
@@ -353,7 +344,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			Organization:                "fancy org",
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
-			CliPath:                     "",
+			CliPath:                     filepath.Join(t.TempDir(), "cli"),
 			FilterSeverity:              types.DefaultSeverityFilter(),
 			EnableTrustedFoldersFeature: "false",
 		},
@@ -410,7 +401,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 			Organization:                "fancy org",
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
-			CliPath:                     "",
+			CliPath:                     filepath.Join(t.TempDir(), "cli"),
 			FilterSeverity:              types.DefaultSeverityFilter(),
 			EnableTrustedFoldersFeature: "false",
 		},
@@ -638,6 +629,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 	loc, jsonRPCRecorder := setupServer(t)
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
+		CliPath:                     filepath.Join(t.TempDir(), "cli"),
 	}
 	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,
@@ -661,6 +653,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		Token:                       "token",
+		CliPath:                     filepath.Join(t.TempDir(), "cli"),
 	}
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
@@ -687,6 +680,7 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
+		CliPath:                     filepath.Join(t.TempDir(), "cli"),
 	}
 	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,

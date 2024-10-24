@@ -18,9 +18,10 @@ package types
 
 import (
 	"context"
-	"github.com/pkg/browser"
 	"os"
 	"sync"
+
+	"github.com/pkg/browser"
 )
 
 const (

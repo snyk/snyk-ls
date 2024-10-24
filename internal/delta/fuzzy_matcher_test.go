@@ -17,10 +17,11 @@
 package delta
 
 import (
+	"testing"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
-	"testing"
 )
 
 func Test_New_Issue(t *testing.T) {

@@ -98,7 +98,7 @@ func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
 }
 
 func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]snyk.Issue, error) {
-	logger := b.logger.With().Str("method", "retrieveAnalysis").Logger()
+	logger := b.logger.With().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).Logger()
 
 	if b.BundleHash == "" {
 		logger.Warn().Str("rootPath", b.rootPath).Msg("bundle hash is empty")
@@ -129,7 +129,6 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]s
 
 		if err != nil {
 			logger.Error().Err(err).
-				Str("requestId", b.requestId).
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
 			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: b.rootPath})
@@ -138,8 +137,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]s
 		}
 
 		if status.message == completeStatus {
-			logger.Trace().Str("requestId", b.requestId).
-				Msg("sending diagnostics...")
+			logger.Trace().Msg("sending diagnostics...")
 			t.ReportWithMessage(90, "Analysis complete.")
 
 			b.issueEnhancer.addIssueActions(ctx, issues, b.BundleHash)

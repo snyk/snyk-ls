@@ -972,7 +972,7 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions_HtmlEncodedFilePath(t *testin
 	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("var x = new Array();"), 0666)
 	require.NoError(t, err)
 	// Here we provide the HTML encoded path and it should be decoded in the function to read the correct file.
-	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir,  "file_with%20space.js")
+	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir, "file_with%20space.js")
 
 	assert.Equal(t, len(unifiedDiffSuggestions), 1)
 	assert.Equal(t, unifiedDiffSuggestions[0].FixId, "123e4567-e89b-12d3-a456-426614174000/1")

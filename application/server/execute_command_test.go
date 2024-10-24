@@ -18,10 +18,11 @@ package server
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"testing"
 	"time"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -38,8 +39,8 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 	loc, _ := setupServerWithCustomDI(t, false)
 	c := config.CurrentConfig()
 
-	scanner := &scanner.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	s := &scanner.TestScanner{}
+	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -47,7 +48,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 		t.Fatal(err)
 	}
 	assert.Eventually(t, func() bool {
-		return scanner.Calls() > 0
+		return s.Calls() > 0
 	}, 2*time.Second, time.Millisecond)
 }
 
@@ -55,8 +56,8 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 	loc, _ := setupServerWithCustomDI(t, false)
 	c := config.CurrentConfig()
 
-	scanner := &scanner.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	s := &scanner.TestScanner{}
+	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -64,7 +65,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 		t.Fatal(err)
 	}
 	assert.Eventually(t, func() bool {
-		return scanner.Calls() > 0
+		return s.Calls() > 0
 	}, 2*time.Second, time.Millisecond)
 }
 
@@ -105,8 +106,8 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	loc, jsonRPCRecorder := setupServerWithCustomDI(t, false)
 	c := config.CurrentConfig()
 
-	scanner := &scanner.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", scanner, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	s := &scanner.TestScanner{}
+	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 	// explicitly enable folder trust which is disabled by default in tests
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
@@ -116,7 +117,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Eventually(t, func() bool {
-		return scanner.Calls() == 0 && checkTrustMessageRequest(jsonRPCRecorder)
+		return s.Calls() == 0 && checkTrustMessageRequest(jsonRPCRecorder)
 	}, 2*time.Second, time.Millisecond)
 }
 

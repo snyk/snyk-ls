@@ -21,14 +21,16 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/internal/uri"
 	"html/template"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/internal/uri"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -250,7 +252,7 @@ func parseExampleCommitsToTemplateJS(fixes []ExampleCommit, logger *zerolog.Logg
 
 func getIssueType(additionalData snyk.CodeIssueData) string {
 	if additionalData.IsSecurityType {
-		return "Vulnerability"
+		return "Issue"
 	}
 	return "Quality Issue"
 }
