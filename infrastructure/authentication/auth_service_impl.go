@@ -76,8 +76,7 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	}
 
 	customUrl := a.c.SnykApi()
-	//Get url from GAF
-	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL)
+	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL) //Get url from GAF
 	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
 
 	a.UpdateCredentials(token, true)
@@ -97,11 +96,14 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	}
 
 	// If the custom URL equals the default but an engine URL is provided, use the engine URL.
+	// The authentication flow has redirected the user to the correct endpoint.
+	// http://api.eu.snyk.io
 	if customUrl == defaultUrl {
 		return engineUrl
 	}
 
 	// Otherwise, return the custom URL set by the user.
+	// Fedramp and single tenenat environments.
 	return customUrl
 }
 

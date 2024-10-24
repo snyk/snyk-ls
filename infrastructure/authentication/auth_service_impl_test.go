@@ -228,7 +228,7 @@ func TestGetApiUrl(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getApiUrl(tt.customUrl, tt.engineUrl)
+			result := getPrioritizedApiUrl(tt.customUrl, tt.engineUrl)
 			assert.Equal(t, tt.expectedResult, result, "getApiUrl(%v, %v) = %v; want %v",
 				tt.customUrl, tt.engineUrl, result, tt.expectedResult)
 		})
