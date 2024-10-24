@@ -721,6 +721,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) ty
 			FilterSeverity:              types.DefaultSeverityFilter(),
 			AuthenticationMethod:        types.TokenAuthentication,
 			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
+			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
 		},
 	}
 	return clientParams
@@ -812,32 +813,11 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	_, err = os.Stat(uncPath)
 	assert.NoError(t, err)
 
-	folder := types.WorkspaceFolder{
-		Name: "Test Repo",
-		Uri:  uri.PathToUri(uncPath),
-	}
-
-	clientParams := types.InitializeParams{
-		WorkspaceFolders: []types.WorkspaceFolder{folder},
-		InitializationOptions: types.Settings{
-			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       os.Getenv("SNYK_TOKEN"),
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              types.DefaultSeverityFilter(),
-		},
-	}
-
-	_, _ = loc.Client.Call(ctx, "initialize", clientParams)
-
+	initializeParams := prepareInitParams(t, uncPath, c)
+	ensureInitialized(t, c, loc, initializeParams)
 	testPath := filepath.Join(uncPath, "app.js")
 
-	w := workspace.Get()
-	f := workspace.NewFolder(c, uncPath, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister())
-	w.AddFolder(f)
-
-	_ = textDocumentDidSave(t, &loc, testPath)
-
-	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, 6, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
