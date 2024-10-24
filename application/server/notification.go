@@ -94,9 +94,6 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		case types.AuthenticationParams:
 			notifier(c, srv, "$/snyk.hasAuthenticated", params)
 			logger.Debug().Msg("sending token")
-		case types.ApiUrlParams:
-			notifier(c, srv, "$/snyk.apiUrl", params)
-			logger.Debug().Interface("sending Snyk API URL", params.ApiUrl)
 		case types.SnykIsAvailableCli:
 			notifier(c, srv, "$/snyk.isAvailableCli", params)
 			logger.Debug().Msg("sending cli path")

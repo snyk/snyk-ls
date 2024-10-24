@@ -78,9 +78,6 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	a.c.UpdateApiEndpoints(a.c.Engine().GetConfiguration().GetString(configuration.API_URL))
 	a.ConfigureProviders(a.c)
 
-	//Update the IDE clients about the API URL change
-	a.notifier.Send(types.ApiUrlParams{ApiUrl: a.c.SnykApi()})
-
 	return token, err
 }
 
@@ -102,7 +99,7 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	c.SetToken(newToken)
 
 	if sendNotification {
-		a.notifier.Send(types.AuthenticationParams{Token: newToken})
+		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: a.c.SnykApi()})
 	}
 }
 

@@ -182,20 +182,11 @@ Right now the language server supports the following actions:
   - example:
   ```json5
   {
-    "token": "the snyk token" // this can be an oauth2.Token string or a legacy token
+    "token": "the snyk token", // this can be an oauth2.Token string or a legacy token
+   "ApiUrl": "https://api.snyk.io"
   }
   ```
   - See https://pkg.go.dev/golang.org/x/oauth2@v0.6.0#Token for more details regarding oauth tokens.
-
-- Snyk API URL Notification
-  - method: `$/snyk.apiUrl`
-  - params: `types.ApiUrl`
-  - example:
-  ```json5
-  {
-    "ApiUrl": "https://api.snyk.io"
-  }
-  ```
 
 - CLI Path Notification
   - method: `$/snyk.isAvailableCli`

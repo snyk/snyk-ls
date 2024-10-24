@@ -618,10 +618,7 @@ type ConfigurationParams struct {
 }
 
 type AuthenticationParams struct {
-	Token string `json:"token"`
-}
-
-type ApiUrlParams struct {
+	Token  string `json:"token"`
 	ApiUrl string `json:"url"`
 }
 
