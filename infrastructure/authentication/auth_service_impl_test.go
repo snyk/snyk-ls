@@ -79,7 +79,7 @@ func Test_Authenticate(t *testing.T) {
 			return
 		}
 
-		uiEndpoint := c.SnykUiApiUrl()
+		uiEndpoint := c.SnykUi()
 		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
 	})
 }

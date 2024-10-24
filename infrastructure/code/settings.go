@@ -68,5 +68,5 @@ func (cs *codeSettings) SetAutofixEnabled(enabled bool) {
 func getCodeEnablementUrl() string {
 	c := config.CurrentConfig()
 	integrationName := c.IntegrationName()
-	return c.SnykUiApiUrl() + "/manage/snyk-code?from=" + integrationName
+	return c.SnykUi() + "/manage/snyk-code?from=" + integrationName
 }

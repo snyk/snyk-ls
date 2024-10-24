@@ -86,7 +86,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"CVSSv3":             template.URL(additionalData.CVSSv3),
 		"CvssScore":          fmt.Sprintf("%.1f", additionalData.CvssScore),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
-		"IntroducedThroughs": getIntroducedThroughs(additionalData, renderer.c.SnykUiApiUrl()),
+		"IntroducedThroughs": getIntroducedThroughs(additionalData, renderer.c.SnykUi()),
 		"LessonUrl":          additionalData.Lesson,
 		"LessonIcon":         html.LessonIcon(),
 		"FixedIn":            additionalData.FixedIn,
