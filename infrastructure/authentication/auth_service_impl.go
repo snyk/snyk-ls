@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"reflect"
 	"strings"
 	"sync"
@@ -68,12 +69,42 @@ func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
 
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
 	token, err = a.provider.Authenticate(ctx)
+
 	if token == "" || err != nil {
 		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.provider))
 		return token, err
 	}
+
+	customUrl := a.c.SnykApi()
+	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL) //Get url from GAF
+	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
+
 	a.UpdateCredentials(token, true)
+	a.c.UpdateApiEndpoints(prioritizedUrl)
+	a.ConfigureProviders(a.c)
+
 	return token, err
+}
+
+func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
+	defaultUrl := config.DefaultSnykUiUrl
+
+	// If the custom URL is not changed (equals default) and no engine URL is provided,
+	// use the default URL.
+	if customUrl == defaultUrl && engineUrl == "" {
+		return defaultUrl
+	}
+
+	// If the custom URL equals the default but an engine URL is provided, use the engine URL.
+	// The authentication flow has redirected the user to the correct endpoint.
+	// http://api.eu.snyk.io
+	if customUrl == defaultUrl {
+		return engineUrl
+	}
+
+	// Otherwise, return the custom URL set by the user.
+	// Fedramp and single tenenat environments.
+	return customUrl
 }
 
 func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool) {
@@ -94,7 +125,7 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	c.SetToken(newToken)
 
 	if sendNotification {
-		a.notifier.Send(types.AuthenticationParams{Token: newToken})
+		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: a.c.SnykApi()})
 	}
 }
 

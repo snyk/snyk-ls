@@ -144,7 +144,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var expected = types.AuthenticationParams{Token: "test token"}
+	var expected = types.AuthenticationParams{Token: "test token", ApiUrl: "https://api.snyk.io"}
 
 	di.Notifier().Send(expected)
 	assert.Eventually(

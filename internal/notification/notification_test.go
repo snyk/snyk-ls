@@ -26,7 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var params = types.AuthenticationParams{Token: "test event"}
+var params = types.AuthenticationParams{Token: "test event", ApiUrl: "https://api.snyk.io"}
 
 func TestSendReceive(t *testing.T) {
 	n := NewNotifier()

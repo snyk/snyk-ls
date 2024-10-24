@@ -25,7 +25,6 @@ import (
 
 	"github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/ide/workspace/ui"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	delta2 "github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
@@ -614,7 +613,6 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendHovers(issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	ui.SendDiagnosticsOverview(f.c, product, issuesByFile, f.notifier)
 	f.sendSuccess(product)
 }
 
