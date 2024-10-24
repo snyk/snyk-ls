@@ -47,6 +47,10 @@ func sendFolderConfigsNotification(notifier noti.Notifier) {
 		folderConfig := c.FolderConfig(f.Path())
 		folderConfigs = append(folderConfigs, *folderConfig)
 	}
+
+	if folderConfigs == nil {
+		return
+	}
 	folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
 	notifier.Send(folderConfigsParam)
 }

@@ -51,10 +51,6 @@ func NewInitializer(errorReporter error_reporting.ErrorReporter,
 		notifier:      notifier,
 		cli:           cli,
 	}
-	settings := config.CurrentConfig().CliSettings()
-	if settings.Installed() {
-		i.logCliVersion(settings.Path())
-	}
 	return i
 }
 
@@ -66,7 +62,6 @@ func (i *Initializer) Init() error {
 	logger := config.CurrentConfig().Logger().With().Str("method", "cli.Init").Logger()
 	cliSettings := c.CliSettings()
 	cliInstalled := cliSettings.Installed()
-	logger.Debug().Str("cliPath", cliPathInConfig()).Msgf("CLI installed: %v", cliInstalled)
 	if !c.ManageCliBinariesAutomatically() {
 		if !cliSettings.IsPathDefined() {
 			i.notifier.SendShowMessage(sglsp.Warning,
