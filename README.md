@@ -198,17 +198,6 @@ Right now the language server supports the following actions:
   }
   ```
 
-- Diagnostics Overview (tabbed tree view)
-  - method: `$/snyk.diagnosticsOverview`
-  - params: `types.DiagnosticsOverviewParams`
-  - example:
-  ```json5
-  {
-  "product": "oss", // or "code" or "iac"
-  "html": "<html>...</html>", // the html to display the overview tabs/tree
-  }
-  ```
-
 - Trusted Folder Notification
   - method: `$/snyk.addTrustedFolders`
   - params: `types.SnykTrustedFoldersParams`

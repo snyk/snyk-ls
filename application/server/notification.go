@@ -115,9 +115,6 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			// Function blocks on callback, so we need to run it in a separate goroutine
 			go handleShowMessageRequest(srv, params, &logger)
 			logger.Debug().Msg("sending show message request to client")
-		case types.DiagnosticsOverviewParams:
-			logger.Debug().
-				Msgf("received diagnostics overview for %s, discarding", params.Product)
 		case types.PublishDiagnosticsParams:
 			notifier(c, srv, "textDocument/publishDiagnostics", params)
 			notifier(c, srv, "$/snyk.publishDiagnostics316", params)
