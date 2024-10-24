@@ -67,8 +67,9 @@ func Start(c *config.Config) {
 		Logger: func(text string) {
 			c.Logger().Trace().Str("method", "jrpc-server").Msg(text)
 		},
-		RPCLog:    RPCLogger{c},
-		AllowPush: true,
+		RPCLog:      RPCLogger{c},
+		AllowPush:   true,
+		Concurrency: 0, // set concurrency to < 1 causes initialization with number of cores
 	})
 
 	c.ConfigureLogging(srv)

@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 )
 
-const DefaultBaseURL = "https://static.snyk.io"
+const DefaultBaseURL = "https://downloads.snyk.io"
 
 // Release represents a Snyk CLI release with assets.
 type Release struct {
