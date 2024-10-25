@@ -224,6 +224,24 @@ func TestGetApiUrl(t *testing.T) {
 			engineUrl:      "",
 			expectedResult: customUrl,
 		},
+		{
+			name:           "Custom URL with trailing slash",
+			customUrl:      "https://custom.snyk.io/",
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL with trailing spaces",
+			customUrl:      "https://custom.snyk.io   ",
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL with trailing slashes and spaces",
+			customUrl:      "https://custom.snyk.io///   ",
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
 	}
 
 	for _, tt := range tests {
