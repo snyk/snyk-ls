@@ -178,7 +178,7 @@ func TestHandleInvalidCredentials(t *testing.T) {
 }
 
 func TestGetApiUrl(t *testing.T) {
-	defaultUrl := config.DefaultSnykUiUrl
+	defaultUrl := config.DefaultSnykApiUrl
 	customUrl := "https://custom.snyk.io"
 	engineUrl := "https://engine.snyk.io"
 

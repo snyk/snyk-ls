@@ -75,19 +75,19 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 		return token, err
 	}
 
-	customUrl := a.c.SnykApi()
-	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL) //Get url from GAF
+	customUrl := a.c.SnykApi()                                                    //returns https://api.snyk.io/v1
+	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL) //Get url from GAF, https://api.snyk.io
 	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
 
-	a.UpdateCredentials(token, true)
 	a.c.UpdateApiEndpoints(prioritizedUrl)
+	a.UpdateCredentials(token, true)
 	a.ConfigureProviders(a.c)
 
 	return token, err
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
-	defaultUrl := config.DefaultSnykUiUrl
+	defaultUrl := config.DefaultSnykApiUrl
 
 	// If the custom URL is not changed (equals default) and no engine URL is provided,
 	// use the default URL.
@@ -125,8 +125,13 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	c.SetToken(newToken)
 
 	if sendNotification {
+		a.c.Logger().Info().Str("method", "UpdateCredentials").Str(
+			"Sending Url %s",
+			a.c.SnykApi(),
+		)
 		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: a.c.SnykApi()})
 	}
+
 }
 
 func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
