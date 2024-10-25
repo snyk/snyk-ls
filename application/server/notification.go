@@ -100,21 +100,6 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		case sglsp.ShowMessageParams:
 			notifier(c, srv, "window/showMessage", params)
 			logger.Debug().Interface("message", params).Msg("showing message")
-		case types.DiagnosticsOverviewParams:
-			logger.Debug().
-				Msgf("received diagnostics overview for %s, discarding", params.Product)
-		case types.PublishDiagnosticsParams:
-			notifier(c, srv, "textDocument/publishDiagnostics", params)
-			notifier(c, srv, "$/snyk.publishDiagnostics316", params)
-			source := "LSP"
-			if len(params.Diagnostics) > 0 {
-				source = params.Diagnostics[0].Source
-			}
-			logger.Debug().
-				Interface("documentURI", params.URI).
-				Interface("source", source).
-				Interface("diagnosticCount", len(params.Diagnostics)).
-				Msg("publishing diagnostics")
 		case types.SnykTrustedFoldersParams:
 			notifier(c, srv, "$/snyk.addTrustedFolders", params)
 			logger.Info().
@@ -130,6 +115,18 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			// Function blocks on callback, so we need to run it in a separate goroutine
 			go handleShowMessageRequest(srv, params, &logger)
 			logger.Debug().Msg("sending show message request to client")
+		case types.PublishDiagnosticsParams:
+			notifier(c, srv, "textDocument/publishDiagnostics", params)
+			notifier(c, srv, "$/snyk.publishDiagnostics316", params)
+			source := "LSP"
+			if len(params.Diagnostics) > 0 {
+				source = params.Diagnostics[0].Source
+			}
+			logger.Debug().
+				Interface("documentURI", params.URI).
+				Interface("source", source).
+				Interface("diagnosticCount", len(params.Diagnostics)).
+				Msg("publishing diagnostics")
 		case types.ApplyWorkspaceEditParams:
 			handleApplyWorkspaceEdit(srv, params, &logger)
 			logger.Debug().

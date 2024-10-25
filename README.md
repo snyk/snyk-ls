@@ -182,7 +182,8 @@ Right now the language server supports the following actions:
   - example:
   ```json5
   {
-    "token": "the snyk token" // this can be an oauth2.Token string or a legacy token
+    "token": "the snyk token", // this can be an oauth2.Token string or a legacy token
+    "apiUrl": "https://api.snyk.io"
   }
   ```
   - See https://pkg.go.dev/golang.org/x/oauth2@v0.6.0#Token for more details regarding oauth tokens.
@@ -194,17 +195,6 @@ Right now the language server supports the following actions:
   ```json5
   {
     "cliPath": "/a/path/to/cli-executable"
-  }
-  ```
-
-- Diagnostics Overview (tabbed tree view)
-  - method: `$/snyk.diagnosticsOverview`
-  - params: `types.DiagnosticsOverviewParams`
-  - example:
-  ```json5
-  {
-  "product": "oss", // or "code" or "iac"
-  "html": "<html>...</html>", // the html to display the overview tabs/tree
   }
   ```
 

@@ -618,7 +618,8 @@ type ConfigurationParams struct {
 }
 
 type AuthenticationParams struct {
-	Token string `json:"token"`
+	Token  string `json:"token"`
+	ApiUrl string `json:"apiUrl,omitempty"`
 }
 
 type SnykIsAvailableCli struct {
@@ -1067,11 +1068,6 @@ type SnykScanParams struct {
 	ErrorMessage string `json:"errorMessage,omitempty"`
 	// CliError contains structured error information from the CLI
 	CliError *CliError `json:"cliError,omitempty"`
-}
-
-type DiagnosticsOverviewParams struct {
-	Product string `json:"product"`
-	Html    string `json:"html"`
 }
 
 type ScanIssue struct { // TODO - convert this to a generic type
