@@ -21,11 +21,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
