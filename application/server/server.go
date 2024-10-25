@@ -64,8 +64,12 @@ func Start(c *config.Config) {
 
 	handlers := handler.Map{}
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
-		RPCLog:    RPCLogger{c},
-		AllowPush: true,
+		Logger: func(text string) {
+			c.Logger().Trace().Str("method", "jrpc-server").Msg(text)
+		},
+		RPCLog:      RPCLogger{c},
+		AllowPush:   true,
+		Concurrency: 0, // set concurrency to < 1 causes initialization with number of cores
 	})
 
 	c.ConfigureLogging(srv)
@@ -195,7 +199,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler 
 		command.HandleFolders(bgCtx, srv, di.Notifier(), di.ScanPersister())
 		if config.CurrentConfig().IsAutoScanEnabled() {
 			for _, f := range changedFolders {
-				f.ScanFolder(ctx)
+				go f.ScanFolder(ctx)
 			}
 		}
 		return nil, nil
@@ -385,6 +389,8 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		c := config.CurrentConfig()
 		initialLogger := c.Logger()
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
+		initialLogger.Info().Msgf("CLI Path: %s", c.CliSettings().Path())
+		initialLogger.Info().Msgf("CLI Installed? %t", c.CliSettings().Installed())
 		initialLogger.Info().Msg("platform: " + runtime.GOOS + "/" + runtime.GOARCH)
 		initialLogger.Info().Msg("https_proxy: " + os.Getenv("HTTPS_PROXY"))
 		initialLogger.Info().Msg("http_proxy: " + os.Getenv("HTTP_PROXY"))

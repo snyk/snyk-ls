@@ -21,11 +21,25 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'nonce-${nonce}';" />
+    content="style-src 'self' 'nonce-${nonce}' 'nonce-ideNonce' https://fonts.googleapis.com;
+             script-src 'nonce-${nonce}' https://fonts.googleapis.com;
+             font-src 'self' https://fonts.gstatic.com;" />
 
   <style nonce="${nonce}">
+    @import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');
     :root {
-      --default-font: ui-sans-serif, "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+      --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+      --background-color: var();
+      --text-color: var();
+      --link-color: var();
+      --scroll-bar-hover-background-color: #595a5c;
+      --horizontal-border-color: var();
+      --code-background-color: var(--vscode-editor-background);
+      --tab-active-background-color: var(--vscode-tab-activeBackground);
+    }
+
+    section {
+      padding: 20px;
     }
 
     ::-webkit-scrollbar {
@@ -37,7 +51,7 @@
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: #595a5c;
+      background: var(--scroll-bar-hover-background-color);
     }
 
     *,
@@ -46,15 +60,31 @@
       box-sizing: border-box;
     }
 
+    a, .link {
+      color: var(--link-color);
+      cursor: pointer;
+      text-decoration: none;
+    }
+
     body {
+      background-color: var(--background-color);
       font-family: var(--default-font);
+      font-size: 0.8rem;
+      font-weight: 400;
+      color: var(--text-color);
       overflow-y: auto;
       overflow-x: hidden;
     }
 
     h2 {
-      font-weight: 600;
-      margin-bottom: 10px;
+      margin: initial;
+    }
+
+    h2, h3 {
+      font-size: 1rem;
+      margin-block-start: 0;
+      margin-block-end: 0.4rem;
+      font-weight: 700;
     }
 
     main {
@@ -77,6 +107,8 @@
     .panel-header {
       display: flex;
       flex-direction: column;
+      background-image: linear-gradient(0, transparent, var(--vscode-tab-activeBackground));
+      margin: inherit;
     }
 
     .code-issue-panel {
@@ -90,27 +122,30 @@
     .ai-fix-header,
     .overview-text>h2 {
       line-height: 1.25rem;
-      font-size: 1.2rem;
+      font-size: 1rem;
       margin-bottom: 10px;
     }
 
     .severity-title {
       padding-left: 8px;
+      font-size: 1.4rem;
     }
 
     .severity-container {
       display: flex;
       flex-direction: row;
       align-items: center;
-      margin-bottom: 3px;
+      padding-bottom: 20px;
+      padding-top: 20px;
     }
 
     .severity-type-container {
       display: flex;
       flex-direction: row;
       align-items: center;
-      margin-bottom: 1em;
-      line-height: 1em;
+      margin-bottom: 1rem;
+      line-height: 1rem;
+      font-size: 1rem;
     }
 
     .lesson-container {
@@ -183,9 +218,12 @@
       border: 1px solid #E27122;
     }
 
+    .example {
+      background-color: var(--code-background-color);
+    }
+
     .data-flow-file {
       font-weight: bold;
-      font-size: 1em;
       display: flex;
       align-items: center;
       margin-top: 5px;
@@ -202,6 +240,7 @@
     }
 
     .data-flow-table {
+      background-color: var(--code-background-color);
       margin-top: 5px;
       margin-left: 15px;
     }
@@ -235,9 +274,12 @@
       word-break: break-all;
     }
 
+    code {
+      background-color: var(--code-background-color);
+    }
+
     .data-flow-text code {
-      background: none;
-      background-color: transparent;
+      background: transparent none;
     }
 
     .data-flow-delimiter {
@@ -762,7 +804,7 @@
         </span>
         {{if .IssueOverview}}
         <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item sn-vuln-overview vuln-overview-tab">
-          Vulnerability Overview
+          Issue Overview
         </span>
         {{end}}
       </div>

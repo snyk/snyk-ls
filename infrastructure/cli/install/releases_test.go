@@ -154,7 +154,7 @@ func Test_GetCLIDownloadURL(t *testing.T) {
 
 		actual := GetCLIDownloadURL(c, DefaultBaseURL, httpClient)
 
-		assert.Equal(t, "https://static.snyk.io/cli/v1.234/"+name, actual)
+		assert.Equal(t, "https://downloads.snyk.io/cli/v1.234/"+name, actual)
 	})
 	t.Run("CLI, preview, non fips", func(t *testing.T) {
 		c := testutil.UnitTest(t)
@@ -164,7 +164,7 @@ func Test_GetCLIDownloadURL(t *testing.T) {
 
 		actual := GetCLIDownloadURL(c, DefaultBaseURL, httpClient)
 
-		assert.Equal(t, "https://static.snyk.io/cli/v1.234-preview./"+name, actual)
+		assert.Equal(t, "https://downloads.snyk.io/cli/v1.234-preview./"+name, actual)
 	})
 }
 
@@ -176,7 +176,7 @@ func setupCLIDownloadURLTest(t *testing.T, releaseChannel, version string, c *co
 	httpClient := mocks.NewMockHTTPClient(ctrl)
 	httpClient.EXPECT().Do(mock.MatchedBy(func(i interface{}) bool {
 		req := i.(*http.Request)
-		return req.URL.String() == fmt.Sprintf("https://static.snyk.io/cli/%s/ls-protocol-version-%s", releaseChannel, config.LsProtocolVersion) &&
+		return req.URL.String() == fmt.Sprintf("https://downloads.snyk.io/cli/%s/ls-protocol-version-%s", releaseChannel, config.LsProtocolVersion) &&
 			req.Method == http.MethodGet
 	})).Return(&http.Response{
 		StatusCode: http.StatusOK,

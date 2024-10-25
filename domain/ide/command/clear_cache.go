@@ -78,14 +78,15 @@ func (cmd *clearCache) Execute(_ context.Context) (any, error) {
 
 func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, folderUri *lsp.DocumentURI) {
 	ws := workspace.Get()
-	for _, folder := range ws.Folders() {
+	trusted, _ := ws.GetFolderTrust()
+	for _, folder := range trusted {
 		if folderUri != nil && *folderUri != folder.Uri() {
 			continue
 		}
 		logger.Info().Msgf("deleting in-memory cache for folder %s", folder.Path())
 		folder.Clear()
 		if config.CurrentConfig().IsAutoScanEnabled() {
-			folder.ScanFolder(context.Background())
+			go folder.ScanFolder(context.Background())
 		}
 	}
 }

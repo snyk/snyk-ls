@@ -136,7 +136,12 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testutil.JsonRPCRecor
 			},
 		},
 		Server: &jrpc2.ServerOptions{
-			AllowPush: true,
+			AllowPush:   true,
+			Concurrency: 0, // set concurrency to < 1 causes initialization with number of cores
+			Logger: func(text string) {
+				config.CurrentConfig().Logger().Debug().Str("method", "json-rpc").Msg(text)
+			},
+			RPCLog: RPCLogger{c: config.CurrentConfig()},
 		},
 	}
 
