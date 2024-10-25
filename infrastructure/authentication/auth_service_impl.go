@@ -108,6 +108,10 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 		return engineUrl
 	}
 
+	if customUrl == "" && engineUrl != "" {
+		return engineUrl
+	}
+
 	// Otherwise, return the custom URL set by the user.
 	// Fedramp and single tenenat environments.
 	return customUrl

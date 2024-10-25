@@ -219,6 +219,12 @@ func TestGetApiUrl(t *testing.T) {
 			expectedResult: customUrl,
 		},
 		{
+			name:           "Custom URL when engine URL is empty",
+			customUrl:      "",
+			engineUrl:      engineUrl,
+			expectedResult: engineUrl,
+		},
+		{
 			name:           "Custom URL when it's different from default and engine URL is empty",
 			customUrl:      customUrl,
 			engineUrl:      "",
