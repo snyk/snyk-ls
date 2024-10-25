@@ -135,7 +135,7 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	c.SetToken(newToken)
 
 	if sendNotification {
-		a.c.Logger().Info().Str("method", "UpdateCredentials").Str(
+		a.c.Logger().Debug().Str("method", "UpdateCredentials").Str(
 			"Sending Url %s",
 			a.c.SnykApi(),
 		)
