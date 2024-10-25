@@ -77,11 +77,11 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	}
 
 	customUrl := a.c.SnykApi()
-	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL) //Get url from GAF
+	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL)
 	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
 
 	if prioritizedUrl != customUrl {
-		a.notifier.SendShowMessage(sglsp.Info, "The Snyk API Endpoint has been updated.")
+		defer a.notifier.SendShowMessage(sglsp.Info, "The Snyk API Endpoint has been updated.")
 	}
 
 	a.c.UpdateApiEndpoints(prioritizedUrl)
