@@ -86,6 +86,7 @@ jobs:
 
   integration-tests:
     name: integration-tests
+    needs: [lint]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -161,6 +162,7 @@ jobs:
 
   proxy-test:
     name: proxy-test
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -173,6 +175,7 @@ jobs:
 
   race-tests:
     name: race-test
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -235,6 +238,7 @@ jobs:
           push: true
   test-release:
     name: test-release
+    needs: [lint, unit-tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
