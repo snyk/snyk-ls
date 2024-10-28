@@ -18,8 +18,28 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare git
+      - run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "./go.mod"
+          cache: "true"
+
+      - name: Lint source code
+        run: |
+          make tools lint
+
   unit-tests:
     name: unit tests
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
@@ -48,10 +68,6 @@ jobs:
         if: steps.cache-pact.outputs.cache-hit != 'true'
         run: |
           make tools
-
-      - name: Lint source code
-        run: |
-          make tools lint
 
       - name: Run tests
         env:
@@ -99,12 +115,13 @@ jobs:
         run: |
           make tools
 
-      - name: Run integration tests with Pact
+      - name: Run integration & smoke tests with Pact
         if: matrix.os == 'ubuntu-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           INTEG_TESTS: "true"
+          SMOKE_TESTS: "true"
         run: |
           export PATH=$PATH:~/pact/bin
 
@@ -121,6 +138,7 @@ jobs:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           INTEG_TESTS: "true"
+          SMOKE_TESTS: "true"
         run: |
           export PATH=$PATH:~/pact/bin
 
@@ -136,6 +154,7 @@ jobs:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           INTEG_TESTS: "true"
+          SMOKE_TESTS: "true"
         run: |
           make clean test
 
