@@ -33,11 +33,9 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/delta"
 
-	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
-
-	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
+
+	"github.com/snyk/snyk-ls/internal/types"
 
 	gafanalytics "github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
@@ -376,7 +374,6 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 
 func sendAnalytics(data *snyk.ScanData) {
 	c := config.CurrentConfig()
-	gafConfig := c.Engine().GetConfiguration()
 
 	logger := c.Logger().With().Str("method", "folder.sendAnalytics").Logger()
 	if data.Product == "" {
@@ -389,38 +386,29 @@ func sendAnalytics(data *snyk.ScanData) {
 		return
 	}
 
-	ic := gafanalytics.NewInstrumentationCollector()
-
-	//Add to the interaction attribute in the analytics event
-	iid := instrumentation.AssembleUrnFromUUID(uuid.NewString())
-	ic.SetInteractionId(iid)
-	ic.SetTimestamp(data.TimestampFinished)
-	ic.SetStage("dev")
-	ic.SetInteractionType("Scan done")
-
+	// this information is not filled automatically, so we need to collect it
 	categories := setupCategories(data, c)
-	ic.SetCategory(categories)
-	ic.SetStatus(gafanalytics.Success)
-
-	summary := createTestSummary(data, c)
-	ic.SetTestSummary(summary)
-
 	targetId, err := instrumentation.GetTargetId(data.Path, instrumentation.AutoDetectedTargetId)
 	if err != nil {
 		logger.Err(err).Msg("Error creating the Target Id")
 	}
-	ic.SetTargetId(targetId)
+	summary := createTestSummary(data, c)
 
-	ic.AddExtension("device_id", c.DeviceID())
-	ic.AddExtension("is_delta_scan", data.IsDeltaScan)
+	param := types.AnalyticsEventParam{
+		InteractionType: "Scan done",
+		Category:        categories,
+		Status:          string(gafanalytics.Success),
+		TargetId:        targetId,
+		TimestampMs:     data.TimestampFinished.UnixMilli(),
+		DurationMs:      int64(data.DurationMs),
+		Extension:       map[string]any{"is_delta_scan": data.IsDeltaScan},
+	}
 
-	//Populate the runtime attribute of the analytics event
-	ua := util.GetUserAgent(gafConfig, config.Version)
-	ic.SetUserAgent(ua)
-	ic.SetDuration(data.DurationMs)
+	ic := analytics.PayloadForAnalyticsEventParam(c, param)
 
-	//Set the final type attribute of the analytics event
-	ic.SetType("analytics")
+	// test specific data is not handled in the PayloadForAnalytics helper
+	// and must be added explicitly
+	ic.SetTestSummary(summary)
 
 	analyticsData, err := gafanalytics.GetV2InstrumentationObject(ic)
 	if err != nil {

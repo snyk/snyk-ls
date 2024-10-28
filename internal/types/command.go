@@ -119,3 +119,15 @@ func (service *CommandServiceMock) ExecutedCommands() []CommandData {
 	service.m.Unlock()
 	return cmds
 }
+
+type AnalyticsEventParam struct {
+	InteractionType string         `json:"interactionType"`
+	Category        []string       `json:"category"`
+	Status          string         `json:"status"`
+	TargetId        string         `json:"targetId"`
+	TimestampMs     int64          `json:"timestampMs"`
+	DurationMs      int64          `json:"durationMs"`
+	Results         map[string]any `json:"results"`
+	Errors          []any          `json:"errors"`
+	Extension       map[string]any `json:"extension"`
+}
