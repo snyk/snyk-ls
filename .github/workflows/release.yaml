@@ -14,9 +14,6 @@
 name: Release
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - "main"
 
 # Grant an OIDC token which we can exchange for an AWS IAM role
 permissions:
