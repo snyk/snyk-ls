@@ -28,10 +28,12 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
+	analytics2 "github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -70,10 +72,37 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	token, err = a.provider.Authenticate(ctx)
 	if token == "" || err != nil {
 		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.provider))
+		go a.sendAuthenticationAnalytics(analytics.Failure)
 		return token, err
 	}
 	a.UpdateCredentials(token, true)
+	go a.sendAuthenticationAnalytics(analytics.Success)
 	return token, err
+}
+
+func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics.Status) {
+	logger := a.c.Logger().With().Str("method", "sendAuthenticationAnalytics").Logger()
+	event := types.AnalyticsEventParam{
+		InteractionType: "authentication",
+		Category:        []string{"auth", string(a.c.AuthenticationMethod())},
+		Status:          string(status),
+	}
+
+	ic := analytics2.PayloadForAnalyticsEventParam(a.c, event)
+	analyticsRequestBody, err := analytics.GetV2InstrumentationObject(ic)
+	if err != nil {
+		logger.Err(err).Msg("Failed to get analytics request body")
+	}
+
+	bytes, err := json.Marshal(analyticsRequestBody)
+	if err != nil {
+		logger.Err(err).Msg("Failed to marshal analytics request body")
+	}
+
+	err = analytics2.SendAnalyticsToAPI(a.c, bytes)
+	if err != nil {
+		logger.Err(err).Msg("Failed to send analytics")
+	}
 }
 
 func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool) {
