@@ -206,7 +206,7 @@ func createLockFile(d *Downloader) (lockfileName string, err error) {
 	logger := config.CurrentConfig().Logger()
 	lockFileName, err := config.CurrentConfig().CLIDownloadLockFileName()
 	if err != nil {
-		msg := fmt.Sprintf("installer lockfile directory could not be created ")
+		msg := "installer lockfile directory could not be created "
 		logger.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg(msg)
 		return "", errors.New(msg)
 	}
