@@ -79,6 +79,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 			FilterSeverity:              types.DefaultSeverityFilter(),
 			AuthenticationMethod:        types.TokenAuthentication,
 			AutomaticAuthentication:     "false",
+			ManageBinariesAutomatically: "true",
 		},
 	}
 
