@@ -23,7 +23,10 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -181,4 +184,13 @@ func SetupCustomTestRepo(t *testing.T, rootDir string, url string, targetCommit 
 
 	logger.Debug().Msg(string(output))
 	return absoluteCloneRepoDir, err
+}
+
+func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	mockEngine := mocks.NewMockEngine(ctrl)
+	engineConfig := c.Engine().GetConfiguration()
+	c.SetEngine(mockEngine)
+	return mockEngine, engineConfig
 }

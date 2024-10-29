@@ -43,7 +43,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 	testInput := "some data"
 	cmd := setupReportAnalyticsCommand(t, c, testInput)
 
-	mockEngine, engineConfig := setUpEngineMock(t, c)
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS,
 		gomock.Any(), gomock.Any()).Return(nil, nil)
@@ -72,7 +72,7 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 
 	cmd := setupReportAnalyticsCommand(t, c, string(marshal))
 
-	mockEngine, engineConfig := setUpEngineMock(t, c)
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 
 	mockEngine.EXPECT().InvokeWithInputAndConfig(

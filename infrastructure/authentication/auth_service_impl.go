@@ -72,18 +72,18 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	token, err = a.provider.Authenticate(ctx)
 	if token == "" || err != nil {
 		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.provider))
-		go a.sendAuthenticationAnalytics(analytics.Failure, err)
+		a.sendAuthenticationAnalytics(analytics.Failure, err)
 		return token, err
 	}
 	a.UpdateCredentials(token, true)
-	go a.sendAuthenticationAnalytics(analytics.Success, nil)
+	a.sendAuthenticationAnalytics(analytics.Success, nil)
 	return token, err
 }
 
 func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics.Status, err error) {
 	logger := a.c.Logger().With().Str("method", "sendAuthenticationAnalytics").Logger()
 	event := types.AnalyticsEventParam{
-		InteractionType: "authentication",
+		InteractionType: "authenticated",
 		Category:        []string{"auth", string(a.c.AuthenticationMethod())},
 		Status:          string(status),
 	}
