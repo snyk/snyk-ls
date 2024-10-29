@@ -133,6 +133,25 @@ func Test_UpdateCredentials(t *testing.T) {
 	})
 }
 
+func Test_Authenticate(t *testing.T) {
+	t.Run("Get endpoint from GAF config and set in snyk-ls configuration ", func(t *testing.T) {
+		apiEndpoint := "https://api.eu.snyk.io"
+		c := testutil.UnitTest(t)
+		c.Engine().GetConfiguration().Set(configuration.API_URL, apiEndpoint)
+
+		provider := FakeAuthenticationProvider{C: c}
+		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+
+		_, err := service.Authenticate(context.Background())
+		if err != nil {
+			return
+		}
+
+		uiEndpoint := c.SnykUI()
+		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
+	})
+}
+
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
@@ -224,4 +243,86 @@ func TestHandleInvalidCredentials(t *testing.T) {
 			return messageRequestReceived
 		}, maxWait, time.Millisecond, "didn't receive show message request to re-authenticate")
 	})
+}
+
+func TestGetApiUrl(t *testing.T) {
+	defaultUrl := config.DefaultSnykApiUrl
+	customUrl := "https://custom.snyk.io"
+	engineUrl := "https://engine.snyk.io"
+
+	tests := []struct {
+		name           string
+		customUrl      string
+		engineUrl      string
+		expectedResult string
+	}{
+		{
+			name:           "Default URL when custom and engine URLs are not set",
+			customUrl:      defaultUrl,
+			engineUrl:      "",
+			expectedResult: defaultUrl,
+		},
+		{
+			name:           "Engine URL when custom URL is default and engine URL is set",
+			customUrl:      defaultUrl,
+			engineUrl:      engineUrl,
+			expectedResult: engineUrl,
+		},
+		{
+			name:           "Custom URL when it's different from default and engine URL",
+			customUrl:      customUrl,
+			engineUrl:      engineUrl,
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL when custom URL equals engine URL",
+			customUrl:      customUrl,
+			engineUrl:      customUrl,
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL when engine URL is empty",
+			customUrl:      customUrl,
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL when engine URL is empty",
+			customUrl:      "",
+			engineUrl:      engineUrl,
+			expectedResult: engineUrl,
+		},
+		{
+			name:           "Custom URL when it's different from default and engine URL is empty",
+			customUrl:      customUrl,
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL with trailing slash",
+			customUrl:      "https://custom.snyk.io/",
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL with trailing spaces",
+			customUrl:      "https://custom.snyk.io   ",
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL with trailing slashes and spaces",
+			customUrl:      "https://custom.snyk.io///   ",
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getPrioritizedApiUrl(tt.customUrl, tt.engineUrl)
+			assert.Equal(t, tt.expectedResult, result, "getApiUrl(%v, %v) = %v; want %v",
+				tt.customUrl, tt.engineUrl, result, tt.expectedResult)
+		})
+	}
 }

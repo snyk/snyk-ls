@@ -147,7 +147,12 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	assert.NotEmpty(t, tokenResponse.ResultString())
 	assert.True(t, fakeAuthenticationProvider.IsAuthenticated)
 	assert.Eventually(t, func() bool { return len(jsonRPCRecorder.Notifications()) > 0 }, 5*time.Second, 50*time.Millisecond)
-	assert.Equal(t, 1, len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")))
+	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")
+	assert.Equal(t, 1, len(notifications))
+	var hasAuthenticatedNotification types.AuthenticationParams
+	err = notifications[0].UnmarshalParams(&hasAuthenticatedNotification)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, hasAuthenticatedNotification.ApiUrl)
 }
 
 func Test_TrustWorkspaceFolders(t *testing.T) {
