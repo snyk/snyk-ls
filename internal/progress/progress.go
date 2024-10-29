@@ -40,6 +40,7 @@ type Tracker struct {
 	lastReportPercentage int
 	finished             bool
 	lastMessage          string
+	m                    sync.Mutex
 }
 
 func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool) *Tracker {
@@ -101,6 +102,8 @@ func (t *Tracker) BeginWithMessage(title, message string) {
 }
 
 func (t *Tracker) ReportWithMessage(percentage int, message string) {
+	t.m.Lock()
+	defer t.m.Unlock()
 	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.ReportWithMessage").Logger()
 	if time.Now().Before(t.lastReport.Add(200 * time.Millisecond)) {
 		return

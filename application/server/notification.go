@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"reflect"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -32,7 +31,6 @@ import (
 )
 
 func notifier(c *config.Config, srv types.Server, method string, params any) {
-	c.Logger().Debug().Str("method", "notifier").Str("type", reflect.TypeOf(params).String()).Msgf("Notifying")
 	err := srv.Notify(context.Background(), method, params)
 	logError(c.Logger(), err, "notifier")
 }
@@ -99,7 +97,7 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			logger.Debug().Msg("sending cli path")
 		case sglsp.ShowMessageParams:
 			notifier(c, srv, "window/showMessage", params)
-			logger.Debug().Interface("message", params).Msg("showing message")
+			logger.Debug().Interface("message", params.Message).Msg("showing message")
 		case types.SnykTrustedFoldersParams:
 			notifier(c, srv, "$/snyk.addTrustedFolders", params)
 			logger.Info().

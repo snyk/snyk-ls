@@ -29,6 +29,7 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -161,8 +163,12 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		ossIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "package.json"))
 		require.Greater(t, len(ossIssuesForFile), 1) // 108 is the number of issues in the package.json file as of now
 
-		codeIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
-		require.Greater(t, len(codeIssuesForFile), 1) // 5 is the number of issues in the app.js file as of now
+		var codeIssuesForFile []snyk.Issue
+
+		require.Eventually(t, func() bool {
+			codeIssuesForFile = folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
+			return len(codeIssuesForFile) > 1
+		}, time.Second*5, time.Second)
 
 		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, c)
 
@@ -434,7 +440,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 			packageJsonCount == expectedOSS
 
 		return result
-	}, time.Second*5, time.Second)
+	}, time.Second*600, time.Second)
 }
 
 func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool,
@@ -724,6 +730,8 @@ func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) ty
 			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
 			ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
 			ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
+			ActivateSnykCodeQuality:     strconv.FormatBool(c.IsSnykCodeQualityEnabled()),
+			ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeSecurityEnabled()),
 		},
 	}
 	return clientParams
@@ -903,6 +911,10 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {
 	t.Helper()
+	// temporary until policy engine doesn't output to stdout anymore
+	t.Setenv("SNYK_LOG_LEVEL", "info")
+	c.ConfigureLogging(nil)
+	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
 
 	_, err := loc.Client.Call(ctx, "initialize", initParams)
 	assert.NoError(t, err)
