@@ -80,6 +80,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 			AuthenticationMethod:        types.TokenAuthentication,
 			AutomaticAuthentication:     "false",
 			ManageBinariesAutomatically: "true",
+			CliPath:                     c.CliSettings().Path(),
 		},
 	}
 

@@ -59,11 +59,6 @@ func UnitTest(t *testing.T) *config.Config {
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	c.SetTrustedFolderFeatureEnabled(false)
 	config.SetCurrentConfig(c)
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	c.CliSettings().SetPath(filepath.Join(t.TempDir(), "snyk-cli"+ext))
 	CLIDownloadLockFileCleanUp(t)
 	t.Cleanup(func() {
 		cleanupFakeCliFile(c)
@@ -146,11 +141,6 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 	c.SetToken(GetEnvironmentToken(useConsistentIgnores))
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	c.CliSettings().SetPath(filepath.Join(t.TempDir(), "snyk-cli"+ext))
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
 	t.Cleanup(func() {

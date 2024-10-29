@@ -39,6 +39,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -718,6 +719,9 @@ func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) ty
 		Uri:  uri.PathToUri(cloneTargetDir),
 	}
 
+	discovery := install.Discovery{}
+	c.CliSettings().SetPath(filepath.Join(t.TempDir(), discovery.ExecutableName(false)))
+
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.Settings{
@@ -732,6 +736,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) ty
 			ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
 			ActivateSnykCodeQuality:     strconv.FormatBool(c.IsSnykCodeQualityEnabled()),
 			ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeSecurityEnabled()),
+			CliPath:                     c.CliSettings().Path(),
 		},
 	}
 	return clientParams
