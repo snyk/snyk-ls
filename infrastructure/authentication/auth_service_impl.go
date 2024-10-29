@@ -72,15 +72,15 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	token, err = a.provider.Authenticate(ctx)
 	if token == "" || err != nil {
 		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.provider))
-		go a.sendAuthenticationAnalytics(analytics.Failure)
+		go a.sendAuthenticationAnalytics(analytics.Failure, err)
 		return token, err
 	}
 	a.UpdateCredentials(token, true)
-	go a.sendAuthenticationAnalytics(analytics.Success)
+	go a.sendAuthenticationAnalytics(analytics.Success, nil)
 	return token, err
 }
 
-func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics.Status) {
+func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics.Status, err error) {
 	logger := a.c.Logger().With().Str("method", "sendAuthenticationAnalytics").Logger()
 	event := types.AnalyticsEventParam{
 		InteractionType: "authentication",
@@ -89,6 +89,11 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics
 	}
 
 	ic := analytics2.PayloadForAnalyticsEventParam(a.c, event)
+
+	if err != nil {
+		ic.AddError(err)
+	}
+
 	analyticsRequestBody, err := analytics.GetV2InstrumentationObject(ic)
 	if err != nil {
 		logger.Err(err).Msg("Failed to get analytics request body")
