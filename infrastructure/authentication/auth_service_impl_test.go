@@ -42,40 +42,24 @@ import (
 
 func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	c := testutil.UnitTest(t)
-	gafConfig := configuration.New()
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 
-	mockEngine.EXPECT().InvokeWithInputAndConfig(
-		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
-		mock.MatchedBy(func(i interface{}) bool {
-			inputData, ok := i.([]workflow.Data)
-			require.Truef(t, ok, "input should be workflow data")
-			require.Lenf(t, inputData, 1, "should only have one input")
-
-			payload := string(inputData[0].GetPayload().([]byte))
-
-			require.Contains(t, payload, "authenticated")
-			require.Contains(t, payload, "auth")
-			require.Contains(t, payload, analytics.Success)
-			return true
-		}),
-		gomock.Any(),
-	).Return(nil, nil)
-
-	provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
-
-	_, err := service.Authenticate(context.Background())
+	err := runAuthEventTest(t, c, analytics.Success)
 
 	assert.NoError(t, err)
 }
 
 func TestAuthenticateSendsAuthenticationEventOnFailure(t *testing.T) {
 	c := testutil.UnitTest(t)
+
+	err := runAuthEventTest(t, c, analytics.Failure)
+
+	assert.Error(t, err)
+}
+
+func runAuthEventTest(t *testing.T, c *config.Config, status analytics.Status) error {
+	t.Helper()
 	gafConfig := configuration.New()
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, false).(*fakeOauthAuthenticator)
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, status == analytics.Success).(*fakeOauthAuthenticator)
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 
@@ -90,7 +74,7 @@ func TestAuthenticateSendsAuthenticationEventOnFailure(t *testing.T) {
 
 			require.Contains(t, payload, "authenticated")
 			require.Contains(t, payload, "auth")
-			require.Contains(t, payload, analytics.Failure)
+			require.Contains(t, payload, status)
 			return true
 		}),
 		gomock.Any(),
@@ -100,8 +84,7 @@ func TestAuthenticateSendsAuthenticationEventOnFailure(t *testing.T) {
 	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
 	_, err := service.Authenticate(context.Background())
-
-	assert.Error(t, err)
+	return err
 }
 
 func Test_UpdateCredentials(t *testing.T) {
