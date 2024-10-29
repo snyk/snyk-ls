@@ -742,6 +742,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) ty
 }
 
 func setUniqueCliPath(t *testing.T, c *config.Config) {
+	t.Helper()
 	discovery := install.Discovery{}
 	c.CliSettings().SetPath(filepath.Join(t.TempDir(), discovery.ExecutableName(false)))
 }
