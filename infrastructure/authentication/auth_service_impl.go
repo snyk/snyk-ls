@@ -97,11 +97,13 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics
 	analyticsRequestBody, err := analytics.GetV2InstrumentationObject(ic)
 	if err != nil {
 		logger.Err(err).Msg("Failed to get analytics request body")
+		return
 	}
 
 	bytes, err := json.Marshal(analyticsRequestBody)
 	if err != nil {
 		logger.Err(err).Msg("Failed to marshal analytics request body")
+		return
 	}
 
 	err = analytics2.SendAnalyticsToAPI(a.c, bytes)
