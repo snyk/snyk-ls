@@ -719,8 +719,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) ty
 		Uri:  uri.PathToUri(cloneTargetDir),
 	}
 
-	discovery := install.Discovery{}
-	c.CliSettings().SetPath(filepath.Join(t.TempDir(), discovery.ExecutableName(false)))
+	setUniqueCliPath(t, c)
 
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
@@ -740,6 +739,11 @@ func prepareInitParams(t *testing.T, cloneTargetDir string, c *config.Config) ty
 		},
 	}
 	return clientParams
+}
+
+func setUniqueCliPath(t *testing.T, c *config.Config) {
+	discovery := install.Discovery{}
+	c.CliSettings().SetPath(filepath.Join(t.TempDir(), discovery.ExecutableName(false)))
 }
 
 func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {

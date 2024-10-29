@@ -70,6 +70,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	}
 	wg.Wait()
 
+	setUniqueCliPath(t, c)
+
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: workspaceFolders,
 		InitializationOptions: types.Settings{
