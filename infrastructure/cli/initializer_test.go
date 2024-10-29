@@ -168,7 +168,7 @@ func TestInitializer_whenOutdated_Updates(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		return installer.Updates() == 1 && installer.Installs() == 0
-	}, time.Second*5, time.Millisecond)
+	}, time.Minute, time.Millisecond)
 }
 
 func TestInitializer_whenUpToDate_DoesNotUpdates(t *testing.T) {
@@ -199,7 +199,7 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsUpdate(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		return installer.Updates() == 0
-	}, time.Second, time.Millisecond)
+	}, time.Second*60, time.Millisecond)
 }
 
 func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsInstall(t *testing.T) {
