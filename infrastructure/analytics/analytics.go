@@ -41,7 +41,7 @@ func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 	var eventsParam types.AnalyticsEventParam
 	err := json.Unmarshal(payload, &eventsParam)
 	var inputData workflow.Data
-	if err == nil {
+	if err == nil && eventsParam.TimestampMs > 0 {
 		ic := PayloadForAnalyticsEventParam(c, eventsParam)
 		instrumentationObject, icErr := analytics.GetV2InstrumentationObject(ic)
 		if icErr != nil {
@@ -88,8 +88,12 @@ func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 
 func PayloadForAnalyticsEventParam(c *config.Config, param types.AnalyticsEventParam) analytics.InstrumentationCollector {
 	ic := analytics.NewInstrumentationCollector()
-	//Add to the interaction attribute in the analytics event
-	iid := instrumentation.AssembleUrnFromUUID(uuid.NewString())
+	// Add to the interaction attribute in the analytics event
+	if param.InteractionUUID == "" {
+		param.InteractionUUID = uuid.New().String()
+	}
+
+	iid := instrumentation.AssembleUrnFromUUID(param.InteractionUUID)
 
 	//Set the final type attribute of the analytics event
 	ic.SetType("analytics")

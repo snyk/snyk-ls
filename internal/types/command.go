@@ -130,4 +130,5 @@ type AnalyticsEventParam struct {
 	Results         map[string]any `json:"results"`
 	Errors          []any          `json:"errors"`
 	Extension       map[string]any `json:"extension"`
+	InteractionUUID string         `json:"interactionId"`
 }
