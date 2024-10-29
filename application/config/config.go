@@ -359,7 +359,11 @@ func (c *Config) Format() string {
 	return c.format
 }
 func (c *Config) CLIDownloadLockFileName() string {
-	return filepath.Join(c.cliSettings.DefaultBinaryInstallPath(), "snyk-cli-download.lock")
+	path := c.cliSettings.cliPath
+	if path == "" {
+		path = c.cliSettings.DefaultBinaryInstallPath()
+	}
+	return filepath.Join(path, "snyk-cli-download.lock")
 }
 func (c *Config) IsErrorReportingEnabled() bool { return c.isErrorReportingEnabled.Get() }
 func (c *Config) IsSnykOssEnabled() bool        { return c.isSnykOssEnabled.Get() }
