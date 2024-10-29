@@ -105,7 +105,7 @@ func (f *fakeOauthAuthenticator) Authenticate() error {
 	return nil
 }
 
-func (f *fakeOauthAuthenticator) AddAuthenticationHeader(request *http.Request) error {
+func (f *fakeOauthAuthenticator) AddAuthenticationHeader(_ *http.Request) error {
 	f.addCall(nil, "AddAuthenticationHeader")
 	return nil
 }
