@@ -71,7 +71,7 @@ func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
 	progressTracker.Report(int(percentage))
 }
 
-func (d *Downloader) lockFileName() string {
+func (d *Downloader) lockFileName() (string, error) {
 	return config.CurrentConfig().CLIDownloadLockFileName()
 }
 
@@ -189,7 +189,10 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 }
 
 func (d *Downloader) createLockFile() error {
-	lockFile := d.lockFileName()
+	lockFile, err := d.lockFileName()
+	if err != nil {
+		return err
+	}
 
 	file, err := os.Create(lockFile)
 	if err != nil {

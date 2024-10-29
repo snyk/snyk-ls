@@ -84,7 +84,7 @@ func cleanupFakeCliFile(c *config.Config) {
 func CLIDownloadLockFileCleanUp(t *testing.T) {
 	t.Helper()
 	// remove lock file before test and after test
-	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
+	lockFileName, _ := config.CurrentConfig().CLIDownloadLockFileName()
 	file, _ := os.Open(lockFileName)
 	_ = file.Close()
 	_ = os.Remove(lockFileName)

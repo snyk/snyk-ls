@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
@@ -111,7 +112,8 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	go func() { _ = initializer.Init() }()
 
 	// assert
-	lockFileName := c.CLIDownloadLockFileName()
+	lockFileName, err := c.CLIDownloadLockFileName()
+	require.NoError(t, err)
 	expectedCliPath := filepath.Join(c.CliSettings().DefaultBinaryInstallPath(),
 		filename.ExecutableName)
 
