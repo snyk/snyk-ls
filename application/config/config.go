@@ -359,10 +359,10 @@ func (c *Config) Format() string {
 	return c.format
 }
 func (c *Config) CLIDownloadLockFileName() string {
-	path := c.cliSettings.cliPath
-	if path == "" {
-		path = c.cliSettings.DefaultBinaryInstallPath()
+	if c.cliSettings.cliPath == "" {
+		c.cliSettings.cliPath = c.cliSettings.DefaultBinaryInstallPath()
 	}
+	path := filepath.Dir(c.cliSettings.cliPath)
 	return filepath.Join(path, "snyk-cli-download.lock")
 }
 func (c *Config) IsErrorReportingEnabled() bool { return c.isErrorReportingEnabled.Get() }
