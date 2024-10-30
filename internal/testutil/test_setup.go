@@ -161,7 +161,7 @@ func SetupCustomTestRepo(t *testing.T, rootDir string, url string, targetCommit 
 	assert.NoError(t, os.MkdirAll(tempDir, 0755))
 	repoDir := "1"
 	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
-	cmd := []string{"clone", url, repoDir}
+	cmd := []string{"clone", "-v", url, repoDir}
 	logger.Debug().Interface("cmd", cmd).Msg("clone command")
 	clone := exec.Command("git", cmd...)
 	clone.Dir = tempDir

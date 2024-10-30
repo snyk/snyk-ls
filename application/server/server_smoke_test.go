@@ -30,6 +30,7 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -181,6 +182,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Setenv("SNYK_LOG_LEVEL", "trace")
 			c.ConfigureLogging(nil)
+			c.SetLogLevel(zerolog.TraceLevel.String())
 		}
 
 		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc, c)
