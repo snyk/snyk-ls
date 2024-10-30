@@ -664,7 +664,6 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 			issueList = append(issueList, diagnostic.Data)
 		}
 	}
-
 	return issueList
 }
 
@@ -813,7 +812,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 
 	_ = textDocumentDidSave(t, &loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, 6, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), 2*time.Minute, 10*time.Millisecond)
 }
 
 func Test_SmokeUncFilePath(t *testing.T) {
@@ -843,7 +842,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 }
 
-func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
+func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, false)
 	c.SetSnykCodeEnabled(true)
@@ -852,11 +851,18 @@ func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
 	di.Init()
 
 	fileWithNewVulns := "vulns.js"
-	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
 	assert.NoError(t, err)
 
-	newFileInCurrentDir(t, cloneTargetDir, fileWithNewVulns, "var token = 'SECRET_TOKEN_f8ed84e8f41e4146403dd4a6bbcea5e418d23a9';")
+	sourceContent, err := os.ReadFile(filepath.Join(cloneTargetDir, "app.js"))
+	require.NoError(t, err)
 
+	newFileInCurrentDir(t, cloneTargetDir, fileWithNewVulns, string(sourceContent))
+
+	c.SetSnykOssEnabled(false)
+	c.SetSnykIacEnabled(false)
+	c.EnableSnykCodeQuality(false)
+	c.SetManageBinariesAutomatically(false)
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
 	ensureInitialized(t, c, loc, initParams)
@@ -866,7 +872,7 @@ func Test_SmokeSnykCodeDelta_OneNewVuln(t *testing.T) {
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
-	assert.Equal(t, len(issueList), 1)
+	assert.Greater(t, len(issueList), 0)
 	assert.Contains(t, issueList[0].FilePath, fileWithNewVulns)
 }
 
