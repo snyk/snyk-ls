@@ -359,6 +359,8 @@ func (c *Config) Format() string {
 	return c.format
 }
 func (c *Config) CLIDownloadLockFileName() (string, error) {
+	c.cliSettings.cliPathAccessMutex.Lock()
+	defer c.cliSettings.cliPathAccessMutex.Unlock()
 	var path string
 	if c.cliSettings.cliPath == "" {
 		c.cliSettings.cliPath = c.cliSettings.DefaultBinaryInstallPath()
