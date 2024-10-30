@@ -146,6 +146,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 }
 
 func Test_SmokeIssueCaching(t *testing.T) {
+	testutil.NotOnWindows(t, "git clone fails on juiceshop ") // TODO remove & fix
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
 		loc, jsonRPCRecorder := setupServer(t)
 		c := testutil.SmokeTest(t, false)
