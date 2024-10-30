@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -177,6 +178,11 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		jsonRPCRecorder.ClearCallbacks()
 
 		// now we add juice shop as second folder/repo
+		if runtime.GOOS == "windows" {
+			t.Setenv("SNYK_LOG_LEVEL", "trace")
+			c.ConfigureLogging(nil)
+		}
+
 		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc, c)
 
 		// scan both created folders
