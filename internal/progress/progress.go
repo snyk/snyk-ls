@@ -221,10 +221,8 @@ func (t *Tracker) IsCanceled() bool {
 }
 
 func Cancel(token types.ProgressToken) {
-	lockedHere := trackersMutex.TryLock()
-	if lockedHere {
-		defer trackersMutex.Unlock()
-	}
+	trackersMutex.Lock()
+	defer trackersMutex.Unlock()
 	t, ok := trackers[token]
 	if ok {
 		t.cancelChannel <- true
