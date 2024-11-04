@@ -17,6 +17,7 @@
 package progress
 
 import (
+	"maps"
 	"sync"
 	"time"
 
@@ -210,8 +211,11 @@ func CleanupChannels() {
 	}
 
 	trackersMutex.Lock()
-	defer trackersMutex.Unlock()
-	for token := range trackers {
+	tempTrackers := make(map[types.ProgressToken]*Tracker)
+	maps.Copy(tempTrackers, trackers)
+	trackersMutex.Unlock()
+
+	for token := range tempTrackers {
 		Cancel(token)
 	}
 }
