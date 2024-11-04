@@ -49,6 +49,30 @@ func Test_StorageCallsRegisterCallbacksForKeys(t *testing.T) {
 	}, 5*time.Second, time.Millisecond, "callback was not called")
 }
 
+func Test_StorageCallsRegisterCallbacks_InvalidJsonContent_ShouldClean(t *testing.T) {
+	called := make(chan bool, 1)
+	callbacks := map[string]StorageCallbackFunc{}
+	file := filepath.Join(t.TempDir(), t.Name())
+	err := os.WriteFile(file, []byte("{\"INTERNAL_OAUTH_TOKEN_STORAGE\":\"{\\\"access_token\\\":\\\"mytoken\\\",\\\"token_type\\\":\\\"bearer\\\",\\\"refresh_token\\\":\\\"myrefreshtoken\\\",\\\"expiry\\\":\\\"2024-10-01T21:43:26.209852+02:00\\\"}\"}\"snyk_token\":\"\"}"), 0644)
+	assert.NoError(t, err)
+	myCallback := func(_ string, _ any) { called <- true }
+
+	key := "test"
+	value := "test"
+	callbacks[key] = myCallback
+	s, err := NewStorageWithCallbacks(WithCallbacks(callbacks), WithStorageFile(file))
+	require.NoError(t, err)
+
+	err = s.Set(key, value)
+	require.NoError(t, err)
+	content, err := os.ReadFile(file)
+	assert.NoError(t, err)
+	assert.Equal(t, "{\"test\":\"test\"}", string(content))
+	require.Eventuallyf(t, func() bool {
+		return <-called
+	}, 5*time.Second, time.Millisecond, "callback was not called")
+}
+
 func Test_ParallelFileLocking(t *testing.T) {
 	t.Run("should respect locking order", func(t *testing.T) {
 		file := filepath.Join(t.TempDir(), t.Name())

@@ -550,7 +550,7 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.Json
 
 			// "tap": "^11.1.3", 12 fixable, 11 unfixable
 			if issue.Range.Start.Line == 46 && isQuickfixAction {
-				assert.Contains(t, action.Title, "and fix 23 issues")
+				assert.Contains(t, action.Title, "and fix 24 issues")
 			}
 		}
 		// no issues should have more than one quickfix
@@ -602,7 +602,7 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorde
 
 			// "tap": "^11.1.3", 12 fixable, 11 unfixable
 			if lens.Range.Start.Line == 46 {
-				assert.Contains(t, lens.Command.Title, "and fix 23 issues")
+				assert.Contains(t, lens.Command.Title, "and fix 24 issues")
 			}
 		}
 	}
