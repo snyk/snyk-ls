@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -42,11 +43,12 @@ func TestDownloader_Download(t *testing.T) {
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
 	config.CurrentConfig().CliSettings().SetPath(destination)
-	lockFileName := d.lockFileName()
+	lockFileName, err := d.lockFileName()
+	require.NoError(t, err)
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
 
-	err := d.Download(r, false)
+	err = d.Download(r, false)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, progressCh)
@@ -80,7 +82,9 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	assert.Error(t, err)
 
 	// make sure cancellation cleanup works
-	_, err = os.Stat(config.CurrentConfig().CLIDownloadLockFileName())
+	lockFileName, err := config.CurrentConfig().CLIDownloadLockFileName()
+	require.NoError(t, err)
+	_, err = os.Stat(lockFileName)
 	assert.Error(t, err)
 }
 

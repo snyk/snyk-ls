@@ -70,6 +70,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	}
 	wg.Wait()
 
+	setUniqueCliPath(t, c)
+
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: workspaceFolders,
 		InitializationOptions: types.Settings{
@@ -79,6 +81,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 			FilterSeverity:              types.DefaultSeverityFilter(),
 			AuthenticationMethod:        types.TokenAuthentication,
 			AutomaticAuthentication:     "false",
+			ManageBinariesAutomatically: "true",
+			CliPath:                     c.CliSettings().Path(),
 		},
 	}
 

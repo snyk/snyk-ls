@@ -18,8 +18,28 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare git
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "./go.mod"
+          cache: "true"
+
+      - name: Lint source code
+        run: |
+          make tools lint
+
   unit-tests:
     name: unit tests
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
@@ -49,10 +69,6 @@ jobs:
         run: |
           make tools
 
-      - name: Lint source code
-        run: |
-          make tools lint
-
       - name: Run tests
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -70,6 +86,7 @@ jobs:
 
   integration-tests:
     name: integration-tests
+    needs: [lint]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -99,12 +116,13 @@ jobs:
         run: |
           make tools
 
-      - name: Run integration tests with Pact
+      - name: Run integration & smoke tests with Pact
         if: matrix.os == 'ubuntu-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           INTEG_TESTS: "true"
+          SMOKE_TESTS: "true"
         run: |
           export PATH=$PATH:~/pact/bin
 
@@ -121,6 +139,7 @@ jobs:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           INTEG_TESTS: "true"
+          SMOKE_TESTS: "true"
         run: |
           export PATH=$PATH:~/pact/bin
 
@@ -136,12 +155,14 @@ jobs:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           INTEG_TESTS: "true"
+          SMOKE_TESTS: "true"
         run: |
           make clean test
 
 
   proxy-test:
     name: proxy-test
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -154,6 +175,7 @@ jobs:
 
   race-tests:
     name: race-test
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -216,6 +238,7 @@ jobs:
           push: true
   test-release:
     name: test-release
+    needs: [lint, unit-tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -30,10 +30,12 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/application/config"
+	analytics2 "github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -73,6 +75,7 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 
 	if token == "" || err != nil {
 		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.provider))
+		a.sendAuthenticationAnalytics(analytics.Failure, err)
 		return token, err
 	}
 
@@ -87,8 +90,40 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	a.c.UpdateApiEndpoints(prioritizedUrl)
 	a.UpdateCredentials(token, true)
 	a.ConfigureProviders(a.c)
-
+	a.sendAuthenticationAnalytics(analytics.Success, nil)
 	return token, err
+}
+
+func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics.Status, err error) {
+	logger := a.c.Logger().With().Str("method", "sendAuthenticationAnalytics").Logger()
+	event := types.AnalyticsEventParam{
+		InteractionType: "authenticated",
+		Category:        []string{"auth", string(a.c.AuthenticationMethod())},
+		Status:          string(status),
+	}
+
+	ic := analytics2.PayloadForAnalyticsEventParam(a.c, event)
+
+	if err != nil {
+		ic.AddError(err)
+	}
+
+	analyticsRequestBody, err := analytics.GetV2InstrumentationObject(ic)
+	if err != nil {
+		logger.Err(err).Msg("Failed to get analytics request body")
+		return
+	}
+
+	bytes, err := json.Marshal(analyticsRequestBody)
+	if err != nil {
+		logger.Err(err).Msg("Failed to marshal analytics request body")
+		return
+	}
+
+	err = analytics2.SendAnalyticsToAPI(a.c, bytes)
+	if err != nil {
+		logger.Err(err).Msg("Failed to send analytics")
+	}
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {

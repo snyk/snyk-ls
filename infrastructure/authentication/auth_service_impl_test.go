@@ -23,9 +23,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
@@ -35,6 +39,53 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	err := runAuthEventTest(t, c, analytics.Success)
+
+	assert.NoError(t, err)
+}
+
+func TestAuthenticateSendsAuthenticationEventOnFailure(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	err := runAuthEventTest(t, c, analytics.Failure)
+
+	assert.Error(t, err)
+}
+
+func runAuthEventTest(t *testing.T, c *config.Config, status analytics.Status) error {
+	t.Helper()
+	gafConfig := configuration.New()
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, status == analytics.Success).(*fakeOauthAuthenticator)
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
+	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+
+	mockEngine.EXPECT().InvokeWithInputAndConfig(
+		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
+		mock.MatchedBy(func(i interface{}) bool {
+			inputData, ok := i.([]workflow.Data)
+			require.Truef(t, ok, "input should be workflow data")
+			require.Lenf(t, inputData, 1, "should only have one input")
+
+			payload := string(inputData[0].GetPayload().([]byte))
+
+			require.Contains(t, payload, "authenticated")
+			require.Contains(t, payload, "auth")
+			require.Contains(t, payload, status)
+			return true
+		}),
+		gomock.Any(),
+	).Return(nil, nil)
+
+	provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	_, err := service.Authenticate(context.Background())
+	return err
+}
 
 func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
