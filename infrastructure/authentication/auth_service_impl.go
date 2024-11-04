@@ -339,7 +339,7 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 		}
 
 		p = Default(c, a)
-		a.SetProvider(p)
+		a.setProvider(p)
 	case types.TokenAuthentication:
 		// if err == nil, previous token was oauth2. So we had a provider change
 		_, err := c.TokenAsOAuthToken()
@@ -350,7 +350,7 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 		p = Token(c, a.errorReporter)
 		a.setProvider(p)
 	case types.FakeAuthentication:
-		a.SetProvider(NewFakeCliAuthenticationProvider(c))
+		a.setProvider(NewFakeCliAuthenticationProvider(c))
 	case "":
 		// don't do anything
 	}
