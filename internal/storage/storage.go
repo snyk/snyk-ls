@@ -18,6 +18,10 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -36,23 +40,50 @@ type StorageWithCallbacks interface {
 type storage struct {
 	callbacks   map[string]StorageCallbackFunc
 	jsonStorage *configuration.JsonStorage
+	storageFile string
+	mutex       sync.RWMutex
 }
 
 func (s *storage) Refresh(config configuration.Configuration, key string) error {
-	return s.jsonStorage.Refresh(config, key)
+	s.mutex.Lock()
+
+	contents, err := os.ReadFile(s.storageFile)
+	if err != nil {
+		s.mutex.Unlock()
+		return err
+	}
+	doc := map[string]interface{}{}
+	err = json.Unmarshal(contents, &doc)
+	if err != nil {
+		s.mutex.Unlock()
+		return err
+	}
+
+	s.mutex.Unlock()
+	if value, ok := doc[key]; ok {
+		config.Set(key, value)
+	}
+	return nil
 }
 
 func (s *storage) Lock(ctx context.Context, retryDelay time.Duration) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	return s.jsonStorage.Lock(ctx, retryDelay)
 }
 
 func (s *storage) Unlock() error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	return s.jsonStorage.Unlock()
 }
 
 type storageOption func(*storage)
 
 func (s *storage) Set(key string, value any) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	callback := s.callbacks[key]
 
 	if callback != nil {
@@ -60,9 +91,21 @@ func (s *storage) Set(key string, value any) error {
 	}
 
 	err := s.jsonStorage.Set(key, value)
-	if err != nil {
+
+	var syntaxError *json.SyntaxError
+	if errors.As(err, &syntaxError) {
+		err = os.WriteFile(s.storageFile, []byte("{}"), 0666)
+		if err != nil {
+			return err
+		}
+		err = s.jsonStorage.Set(key, value)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -101,5 +144,6 @@ func WithCallbacks(callbacks map[string]StorageCallbackFunc) func(*storage) {
 func WithStorageFile(file string) func(*storage) {
 	return func(s *storage) {
 		s.jsonStorage = configuration.NewJsonStorage(file)
+		s.storageFile = file
 	}
 }

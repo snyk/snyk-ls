@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -68,6 +69,11 @@ func Test_Scan(t *testing.T) {
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(filepath.Join(workingDir, "testdata", "package.json"))
+
+	// temporary until policy engine doesn't output to stdout anymore
+	t.Setenv("SNYK_LOG_LEVEL", "info")
+	c.ConfigureLogging(nil)
+	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
 
 	issues, _ := scanner.Scan(ctx, path, workingDir)
 
