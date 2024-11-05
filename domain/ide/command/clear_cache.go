@@ -41,7 +41,7 @@ func (cmd *clearCache) Command() types.CommandData {
 // Parameters: folderUri either folder Uri or empty for all folders
 // cacheType: either inMemory or persisted or empty for both.
 func (cmd *clearCache) Execute(_ context.Context) (any, error) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "clearCache.Execute").Logger()
+	logger := cmd.c.Logger().With().Str("method", "clearCache.Execute").Logger()
 	args := cmd.command.Arguments
 	var parsedFolderUri *lsp.DocumentURI
 	folderURI, ok := args[0].(string)

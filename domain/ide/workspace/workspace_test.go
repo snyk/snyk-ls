@@ -47,8 +47,8 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 
 	trusted, untrusted := w.GetFolderTrust()
 
-	assert.Equal(t, trustedDummy, trusted[0].Path)
-	assert.Equal(t, untrustedDummy, untrusted[0].Path)
+	assert.Equal(t, trustedDummy, trusted[0].Path())
+	assert.Equal(t, untrustedDummy, untrusted[0].Path())
 }
 
 func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *testing.T) {
