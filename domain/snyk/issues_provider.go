@@ -107,3 +107,8 @@ type CacheProvider interface {
 	ClearIssues(path string)
 	RegisterCacheRemovalHandler(handler func(path string))
 }
+
+type FilteringIssueProvider interface {
+	IssueProvider
+	FilterIssues(issues IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) IssuesByFile
+}

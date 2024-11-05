@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -41,9 +42,9 @@ func Test_ClearCache_DeleteAll_NoError(t *testing.T) {
 	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister)
 	folder := workspace.NewFolder(c, "dummy", "dummy", sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister)
 	w.AddFolder(folder)
-	workspace.Set(w)
+	c.SetWorkspace(w)
 
-	clearCacheCommand := setupClearCacheCommand(t, "", "")
+	clearCacheCommand := setupClearCacheCommand(t, "", "", c)
 
 	// Execute the command
 	_, err := clearCacheCommand.Execute(context.Background())
@@ -52,10 +53,11 @@ func Test_ClearCache_DeleteAll_NoError(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func setupClearCacheCommand(t *testing.T, folderUri, cacheType string) clearCache {
+func setupClearCacheCommand(t *testing.T, folderUri, cacheType string, c *config.Config) clearCache {
 	t.Helper()
 	clearCacheCmd := clearCache{
 		command: types.CommandData{Arguments: []interface{}{folderUri, cacheType}},
+		c:       c,
 	}
 	return clearCacheCmd
 }

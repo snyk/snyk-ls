@@ -24,7 +24,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -38,12 +37,17 @@ type lensesWithIssueCount struct {
 func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "codelens.GetFor").Str("filePath", filePath).Logger()
-	f := workspace.Get().GetFolderContaining(filePath)
+	f := c.Workspace().GetFolderContaining(filePath)
 	if f == nil {
 		return lenses
 	}
 
-	issues := f.IssuesForFile(filePath)
+	ip, ok := f.(snyk.IssueProvider)
+	if !ok {
+		return lenses
+	}
+
+	issues := ip.IssuesForFile(filePath)
 
 	// group by range first
 	lensesByRange := make(map[snyk.Range]*lensesWithIssueCount)
@@ -57,7 +61,7 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 				lensesWithIssueCountsForRange = &lensesWithIssueCount{
 					lensCommands: []types.CommandData{},
 					issueCount:   0,
-					totalIssues:  len(f.IssuesForRange(filePath, issue.Range)),
+					totalIssues:  len(ip.IssuesForRange(filePath, issue.Range)),
 				}
 			}
 			lensesWithIssueCountsForRange.lensCommands = append(lensesWithIssueCountsForRange.lensCommands, lens)

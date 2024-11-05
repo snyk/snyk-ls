@@ -55,7 +55,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 
 	filePath, dir := code.TempWorkdirWithIssues(t)
 	folder := workspace.NewFolder(c, dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister())
-	workspace.Get().AddFolder(folder)
+	c.Workspace().AddFolder(folder)
 	folder.ScanFile(context.Background(), filePath)
 
 	assert.NotNil(t, folder.IssuesForFile(filePath))

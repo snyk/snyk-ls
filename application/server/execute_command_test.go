@@ -23,6 +23,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/internal/testutil"
 
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -36,11 +37,11 @@ import (
 )
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
-	loc, _ := setupServerWithCustomDI(t, false)
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
+	loc, _ := setupServerWithCustomDI(t, c, false)
 
 	s := &scanner.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -53,11 +54,11 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 }
 
 func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceipt(t *testing.T) {
-	loc, _ := setupServerWithCustomDI(t, false)
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
+	loc, _ := setupServerWithCustomDI(t, c, false)
 
 	s := &scanner.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -70,8 +71,8 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 }
 
 func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostics(t *testing.T) {
-	loc, _ := setupServerWithCustomDI(t, false)
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
+	loc, _ := setupServerWithCustomDI(t, c, false)
 
 	scannerForFolder := scanner.NewTestScanner()
 	scannerForDontClear := scanner.NewTestScanner()
@@ -82,8 +83,8 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	scannerForDontClear.AddTestIssue(snyk.Issue{AffectedFilePath: dontClearIssuePath})
 	scannerForFolder.AddTestIssue(snyk.Issue{AffectedFilePath: "dummy/file.txt"})
 
-	workspace.Get().AddFolder(folder)
-	workspace.Get().AddFolder(dontClear)
+	c.Workspace().AddFolder(folder)
+	c.Workspace().AddFolder(dontClear)
 
 	// prepare pre-existent diagnostics for folder
 	folder.ScanFolder(context.Background())
@@ -103,11 +104,11 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 }
 
 func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
-	loc, jsonRPCRecorder := setupServerWithCustomDI(t, false)
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServerWithCustomDI(t, c, false)
 
 	s := &scanner.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 	// explicitly enable folder trust which is disabled by default in tests
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
@@ -117,13 +118,13 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Eventually(t, func() bool {
-		return s.Calls() == 0 && checkTrustMessageRequest(jsonRPCRecorder)
+		return s.Calls() == 0 && checkTrustMessageRequest(jsonRPCRecorder, c)
 	}, 2*time.Second, time.Millisecond)
 }
 
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
-	// Arrange
-	loc, jsonRPCRecorder := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
 
 	// reset to use real service
 	command.SetService(command.NewService(di.AuthenticationService(), nil, nil, nil, nil, nil, nil))
@@ -157,10 +158,10 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 
 func Test_TrustWorkspaceFolders(t *testing.T) {
 	t.Run("Doesn't mutate trusted folders, if trusted folders disabled", func(t *testing.T) {
-		loc, _ := setupServerWithCustomDI(t, false)
-		c := config.CurrentConfig()
+		c := testutil.UnitTest(t)
+		loc, _ := setupServerWithCustomDI(t, c, false)
 
-		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
 		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -168,16 +169,16 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Len(t, config.CurrentConfig().TrustedFolders(), 0)
+		assert.Len(t, c.TrustedFolders(), 0)
 	})
 
 	t.Run("Updates trusted workspace folders", func(t *testing.T) {
-		loc, _ := setupServerWithCustomDI(t, false)
-		c := config.CurrentConfig()
+		c := testutil.UnitTest(t)
+		loc, _ := setupServerWithCustomDI(t, c, false)
 
-		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
-		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
-		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+		c.SetTrustedFolderFeatureEnabled(true)
 
 		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -185,17 +186,17 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Len(t, config.CurrentConfig().TrustedFolders(), 2)
-		assert.Contains(t, config.CurrentConfig().TrustedFolders(), "/path/to/folder1", "/path/to/folder2")
+		assert.Len(t, c.TrustedFolders(), 2)
+		assert.Contains(t, c.TrustedFolders(), "/path/to/folder1", "/path/to/folder2")
 	})
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
-		loc, _ := setupServerWithCustomDI(t, false)
-		c := config.CurrentConfig()
+		c := testutil.UnitTest(t)
+		loc, _ := setupServerWithCustomDI(t, c, false)
 
-		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
-		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-		config.CurrentConfig().SetTrustedFolders([]string{"/path/to/folder2"})
+		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+		c.SetTrustedFolderFeatureEnabled(true)
+		c.SetTrustedFolders([]string{"/path/to/folder2"})
 
 		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)

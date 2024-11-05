@@ -69,9 +69,9 @@ func keyFoundInEnv(key string) bool {
 }
 
 func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
+	c := testutil.UnitTest(t)
 	di.TestInit(t)
-	loc, _ := setupServer(t)
-	c := config.CurrentConfig()
+	loc, _ := setupServer(t, c)
 
 	t.Setenv("a", "")
 	t.Setenv("c", "")
@@ -100,8 +100,8 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 }
 
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
-	loc, _ := setupCustomServer(t, callBackMock)
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
+	loc, _ := setupCustomServer(t, c, callBackMock)
 
 	_, err := loc.Client.Call(ctx, "initialize", types.InitializeParams{
 		Capabilities: types.ClientCapabilities{
@@ -144,9 +144,8 @@ func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
 }
 
 func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
-	testutil.UnitTest(t)
-
-	loc, jsonRPCRecorder := setupCustomServer(t, callBackMock)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupCustomServer(t, c, callBackMock)
 
 	params := types.DidChangeConfigurationParams{Settings: types.Settings{}}
 	var updated = true

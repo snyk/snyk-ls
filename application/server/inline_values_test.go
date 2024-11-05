@@ -33,7 +33,8 @@ import (
 )
 
 func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	rsp, err := loc.Client.Call(ctx, "textDocument/inlineValue", nil)
 	assert.NoError(t, err)
@@ -44,8 +45,8 @@ func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
 }
 
 func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
-	loc, _ := setupServer(t)
-	testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
+	loc, _ := setupServer(t, c)
 	di.Init()
 	dir, err := filepath.Abs("testdata")
 	assert.NoError(t, err)

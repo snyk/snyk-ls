@@ -63,9 +63,9 @@ func getDummyOAuth2Token(expiry time.Time) oauth2.Token {
 
 func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenString string) {
 	t.Helper()
-	srv, jsonRpcRecorder := setupServer(t)
-
 	c := testutil.SmokeTest(t, false)
+	srv, jsonRpcRecorder := setupServer(t, c)
+
 	c.SetSnykIacEnabled(false)
 	c.SetSnykOssEnabled(true)
 	// we have to reset the token, as smoketest automatically grab it from env

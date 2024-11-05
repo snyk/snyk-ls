@@ -50,9 +50,9 @@ func CreateFromCommandData(
 	case types.NavigateToRangeCommand:
 		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger()}, nil
 	case types.WorkspaceScanCommand:
-		return &workspaceScanCommand{command: commandData, srv: srv}, nil
+		return &workspaceScanCommand{command: commandData, srv: srv, c: c}, nil
 	case types.WorkspaceFolderScanCommand:
-		return &workspaceFolderScanCommand{command: commandData, srv: srv, logger: c.Logger()}, nil
+		return &workspaceFolderScanCommand{command: commandData, srv: srv, c: c}, nil
 	case types.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData, logger: c.Logger()}, nil
 	case types.LoginCommand:
@@ -60,9 +60,9 @@ func CreateFromCommandData(
 	case types.CopyAuthLinkCommand:
 		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
 	case types.LogoutCommand:
-		return &logoutCommand{command: commandData, authService: authService, logger: c.Logger()}, nil
+		return &logoutCommand{command: commandData, authService: authService, c: c}, nil
 	case types.TrustWorkspaceFoldersCommand:
-		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, logger: c.Logger()}, nil
+		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, c: c}, nil
 	case types.GetLearnLesson:
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.OpenLearnLesson:
@@ -91,7 +91,7 @@ func CreateFromCommandData(
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
 	case types.ClearCacheCommand:
-		return &clearCache{command: commandData}, nil
+		return &clearCache{command: commandData, c: c}, nil
 	case types.GenerateIssueDescriptionCommand:
 		return &generateIssueDescription{command: commandData, issueProvider: issueProvider}, nil
 	}

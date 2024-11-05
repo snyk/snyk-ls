@@ -52,7 +52,7 @@ type AuthenticationServiceImpl struct {
 	c             *config.Config
 	// key = token, value = isAuthenticated
 	authCache *imcache.Cache[string, bool]
-	m         sync.Mutex
+	m         sync.RWMutex
 }
 
 func NewAuthenticationService(c *config.Config, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
@@ -67,10 +67,20 @@ func NewAuthenticationService(c *config.Config, authProviders AuthenticationProv
 }
 
 func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
+	a.m.RLock()
+	defer a.m.RUnlock()
+
 	return a.provider
 }
 
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
+	a.m.Lock()
+	defer a.m.Unlock()
+
+	return a.authenticate(ctx)
+}
+
+func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
 	token, err = a.provider.Authenticate(ctx)
 
 	if token == "" || err != nil {
@@ -88,8 +98,8 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	}
 
 	a.c.UpdateApiEndpoints(prioritizedUrl)
-	a.UpdateCredentials(token, true)
-	a.ConfigureProviders(a.c)
+	a.updateCredentials(token, true)
+	a.configureProviders(a.c)
 	a.sendAuthenticationAnalytics(analytics.Success, nil)
 	return token, err
 }
@@ -153,21 +163,22 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 }
 
 func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool) {
-	c := config.CurrentConfig()
-	oldToken := c.Token()
+	a.m.Lock()
+	defer a.m.Unlock()
+
+	a.updateCredentials(newToken, sendNotification)
+}
+
+func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool) {
+	oldToken := a.c.Token()
 	if oldToken == newToken {
 		return
-	}
-
-	// unlock when leaving if we locked ourselves
-	if a.m.TryLock() {
-		defer a.m.Unlock()
 	}
 
 	// remove old token from cache, but don't add new token, as we want the entry only when
 	// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
 	a.authCache.Remove(oldToken)
-	c.SetToken(newToken)
+	a.c.SetToken(newToken)
 
 	if sendNotification {
 		a.c.Logger().Debug().Str("method", "UpdateCredentials").Str(
@@ -179,29 +190,37 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 }
 
 func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
-	if a.m.TryLock() {
-		defer a.m.Unlock()
-	}
+	a.m.Lock()
+	defer a.m.Unlock()
+
+	a.logout(ctx)
+}
+
+func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	err := a.provider.ClearAuthentication(ctx)
 	if err != nil {
 		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
 		a.errorReporter.CaptureError(err)
 	}
-	a.UpdateCredentials("", true)
-	a.ConfigureProviders(a.c)
+	a.updateCredentials("", true)
+	a.configureProviders(a.c)
 }
 
 // IsAuthenticated returns true if the token is verified
 // If the token is set, but not valid IsAuthenticated returns false
 func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
+	a.m.RLock()
+	defer a.m.RUnlock()
+
+	return a.isAuthenticated()
+}
+
+func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	logger := a.c.Logger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
-	if a.m.TryLock() {
-		defer a.m.Unlock()
-	}
 
 	_, found := a.authCache.Get(a.c.Token())
 	if found {
-		a.c.Logger().Debug().Msg("IsAuthenticated (found in cache)")
+		logger.Debug().Msg("IsAuthenticated (found in cache)")
 		return true
 	}
 
@@ -212,7 +231,7 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	}
 
 	if a.provider == nil {
-		a.ConfigureProviders(a.c)
+		a.configureProviders(a.c)
 	}
 
 	var user string
@@ -223,7 +242,7 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 			userMsg := fmt.Sprintf("Could not retrieve authentication status. Most likely this is a temporary error "+
 				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate (%s)", err.Error())
 			a.notifier.SendShowMessage(sglsp.MTError, userMsg)
-			a.c.Logger().Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
+			logger.Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
 			return false
 		}
 
@@ -235,7 +254,7 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	}
 	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
-	a.c.Logger().Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
+	logger.Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	return true
 }
 
@@ -270,7 +289,7 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {
 	logger.Info().Msg("could not authenticate user with current credentials, API returned empty user object")
 	logger.Info().Msg("logging out, empty user response")
-	a.Logout(context.Background())
+	a.logout(context.Background())
 
 	// determine the right error message
 	if !isLegacyToken {
@@ -279,11 +298,11 @@ func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLeg
 			a.handleFailedRefresh()
 		} else {
 			// access token not expired, but creds still not work
-			a.HandleInvalidCredentials()
+			a.handleInvalidCredentials()
 		}
 	} else {
 		// legacy token does not work
-		a.HandleInvalidCredentials()
+		a.handleInvalidCredentials()
 	}
 }
 
@@ -293,13 +312,23 @@ func (a *AuthenticationServiceImpl) handleFailedRefresh() {
 }
 
 func (a *AuthenticationServiceImpl) SetProvider(provider AuthenticationProvider) {
+	a.m.Lock()
+	defer a.m.Unlock()
+
+	a.setProvider(provider)
+}
+
+func (a *AuthenticationServiceImpl) setProvider(provider AuthenticationProvider) {
 	a.provider = provider
 }
 
 func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
-	if a.m.TryLock() {
-		defer a.m.Unlock()
-	}
+	a.m.Lock()
+	defer a.m.Unlock()
+
+	a.configureProviders(c)
+}
+func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 	authProviderChange := false
 	var p AuthenticationProvider
 	switch c.AuthenticationMethod() {
@@ -311,7 +340,7 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 		}
 
 		p = Default(c, a)
-		a.SetProvider(p)
+		a.setProvider(p)
 	case types.TokenAuthentication:
 		// if err == nil, previous token was oauth2. So we had a provider change
 		_, err := c.TokenAsOAuthToken()
@@ -320,20 +349,20 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 		}
 
 		p = Token(c, a.errorReporter)
-		a.SetProvider(p)
+		a.setProvider(p)
 	case types.FakeAuthentication:
-		a.SetProvider(NewFakeCliAuthenticationProvider(c))
+		a.setProvider(NewFakeCliAuthenticationProvider(c))
 	case "":
 		// don't do anything
 	}
 
 	if authProviderChange {
-		a.Logout(context.Background())
+		a.logout(context.Background())
 		a.sendAuthenticationRequest("Your authentication method has changed. Please re-authenticate to continue using Snyk.", "Re-authenticate")
 	}
 }
 
-func (a *AuthenticationServiceImpl) HandleInvalidCredentials() {
+func (a *AuthenticationServiceImpl) handleInvalidCredentials() {
 	msg := InvalidCredsMessage
 	a.sendAuthenticationRequest(msg, "Authenticate")
 }

@@ -53,11 +53,9 @@ var (
 	_ snyk.CacheProvider = (*Folder)(nil)
 )
 
-type FolderStatus int
-
 const (
-	Unscanned FolderStatus = iota
-	Scanned   FolderStatus = iota
+	Unscanned types.FolderStatus = iota
+	Scanned   types.FolderStatus = iota
 )
 
 // TODO: 3: Extract reporting logic to a separate service
@@ -67,7 +65,7 @@ const (
 type Folder struct {
 	path                    string
 	name                    string
-	status                  FolderStatus
+	status                  types.FolderStatus
 	documentDiagnosticCache *xsync.MapOf[string, []snyk.Issue]
 	scanner                 scanner.Scanner
 	hoverService            hover.Service
@@ -273,7 +271,7 @@ func (f *Folder) IsScanned() bool {
 	return f.status == Scanned
 }
 
-func (f *Folder) SetStatus(status FolderStatus) {
+func (f *Folder) SetStatus(status types.FolderStatus) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 	f.status = status
@@ -642,7 +640,7 @@ func (f *Folder) Uri() lsp.DocumentURI { return uri.PathToUri(f.path) }
 
 func (f *Folder) Name() string { return f.name }
 
-func (f *Folder) Status() FolderStatus { return f.status }
+func (f *Folder) Status() types.FolderStatus { return f.status }
 
 func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (matchingIssues []snyk.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"

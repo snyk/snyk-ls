@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,29 +14,10 @@
  * limitations under the License.
  */
 
-package command
+package types
 
-import (
-	"context"
-
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/types"
-)
-
-type workspaceScanCommand struct {
-	command types.CommandData
-	srv     types.Server
-	c       *config.Config
-}
-
-func (cmd *workspaceScanCommand) Command() types.CommandData {
-	return cmd.command
-}
-
-func (cmd *workspaceScanCommand) Execute(ctx context.Context) (any, error) {
-	w := cmd.c.Workspace()
-	w.Clear()
-	w.ScanWorkspace(ctx)
-	HandleUntrustedFolders(ctx, cmd.srv)
-	return nil, nil
+type TrustRequester interface {
+	StartRequestTrustCommunication()
+	EndRequestTrustCommunication()
+	IsTrustRequestOngoing() bool
 }

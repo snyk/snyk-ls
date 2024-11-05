@@ -18,6 +18,7 @@ package authentication
 
 import (
 	"context"
+	"sync"
 
 	"github.com/rs/zerolog"
 
@@ -30,6 +31,7 @@ type OAuth2Provider struct {
 	config        configuration.Configuration
 	authURL       string
 	logger        *zerolog.Logger
+	m             sync.Mutex
 }
 
 func (p *OAuth2Provider) GetCheckAuthenticationFunction() AuthenticationFunction {
@@ -42,16 +44,22 @@ func newOAuthProvider(config configuration.Configuration, authenticator auth.Aut
 }
 
 func (p *OAuth2Provider) Authenticate(_ context.Context) (string, error) {
+	p.m.Lock()
+	defer p.m.Unlock()
 	err := p.authenticator.Authenticate()
 	p.logger.Debug().Msg("authenticated with OAuth")
 	return p.config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), err
 }
 
 func (p *OAuth2Provider) SetAuthURL(url string) {
+	p.m.Lock()
+	defer p.m.Unlock()
 	p.authURL = url
 }
 
 func (p *OAuth2Provider) ClearAuthentication(_ context.Context) error {
+	p.m.Lock()
+	defer p.m.Unlock()
 	p.logger.Debug().Msg("clearing authentication")
 	p.config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 	p.config.Set(configuration.AUTHENTICATION_TOKEN, "")
@@ -60,9 +68,13 @@ func (p *OAuth2Provider) ClearAuthentication(_ context.Context) error {
 }
 
 func (p *OAuth2Provider) AuthURL(_ context.Context) string {
+	p.m.Lock()
+	defer p.m.Unlock()
 	return p.authURL
 }
 
 func (p *OAuth2Provider) Authenticator() auth.Authenticator {
+	p.m.Lock()
+	defer p.m.Unlock()
 	return p.authenticator
 }
