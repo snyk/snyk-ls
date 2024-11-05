@@ -50,6 +50,7 @@ import (
 )
 
 func Test_SmokeInstanceTest(t *testing.T) {
+	c := testutil.SmokeTest(t, false)
 	ossFile := "package.json"
 	codeFile := "app.js"
 	testutil.CreateDummyProgressListener(t)
@@ -57,7 +58,7 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	if endpoint == "" {
 		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
-	runSmokeTest(t, nil, nodejsGoof, "0336589", ossFile, codeFile, false, true, endpoint)
+	runSmokeTest(t, c, nodejsGoof, "0336589", ossFile, codeFile, false, true, endpoint)
 }
 
 func Test_SmokeWorkspaceScan(t *testing.T) {
