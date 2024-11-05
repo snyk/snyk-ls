@@ -66,7 +66,7 @@ func (c *Config) productEnablementFromEnv() {
 		if err != nil {
 			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse oss config %s", oss)
 		}
-		c.isSnykOssEnabled.Set(parseBool)
+		c.SetSnykOssEnabled(parseBool)
 	}
 
 	if code != "" {
@@ -74,7 +74,7 @@ func (c *Config) productEnablementFromEnv() {
 		if err != nil {
 			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse code config %s", code)
 		}
-		c.isSnykCodeEnabled.Set(parseBool)
+		c.SetSnykCodeEnabled(parseBool)
 	}
 
 	if iac != "" {
@@ -82,7 +82,7 @@ func (c *Config) productEnablementFromEnv() {
 		if err != nil {
 			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse iac config %s", iac)
 		}
-		c.isSnykIacEnabled.Set(parseBool)
+		c.SetSnykIacEnabled(parseBool)
 	}
 
 	if container != "" {
@@ -90,13 +90,13 @@ func (c *Config) productEnablementFromEnv() {
 		if err != nil {
 			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse container config %s", container)
 		}
-		c.isSnykContainerEnabled.Set(parseBool)
+		c.SetSnykContainerEnabled(parseBool)
 	}
 	if advisor != "" {
 		parseBool, err := strconv.ParseBool(advisor)
 		if err != nil {
 			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse advisor config %s", advisor)
 		}
-		c.isSnykAdvisorEnabled.Set(parseBool)
+		c.SetSnykAdvisorEnabled(parseBool)
 	}
 }
