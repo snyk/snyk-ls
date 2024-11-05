@@ -217,7 +217,7 @@ func TestHandleInvalidCredentials(t *testing.T) {
 		}
 		go notifier.CreateListener(callback)
 
-		cut.HandleInvalidCredentials()
+		cut.handleInvalidCredentials()
 
 		maxWait := time.Second * 10
 		assert.Eventuallyf(t, func() bool {

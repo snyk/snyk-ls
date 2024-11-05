@@ -52,7 +52,7 @@ type AuthenticationServiceImpl struct {
 	c             *config.Config
 	// key = token, value = isAuthenticated
 	authCache *imcache.Cache[string, bool]
-	m         sync.Mutex
+	m         sync.RWMutex
 }
 
 func NewAuthenticationService(c *config.Config, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
@@ -67,8 +67,8 @@ func NewAuthenticationService(c *config.Config, authProviders AuthenticationProv
 }
 
 func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
-	a.m.Lock()
-	defer a.m.Unlock()
+	a.m.RLock()
+	defer a.m.RUnlock()
 
 	return a.provider
 }
@@ -209,8 +209,8 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 // IsAuthenticated returns true if the token is verified
 // If the token is set, but not valid IsAuthenticated returns false
 func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
-	a.m.Lock()
-	defer a.m.Unlock()
+	a.m.RLock()
+	defer a.m.RUnlock()
 
 	return a.isAuthenticated()
 }
@@ -298,11 +298,11 @@ func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLeg
 			a.handleFailedRefresh()
 		} else {
 			// access token not expired, but creds still not work
-			a.HandleInvalidCredentials()
+			a.handleInvalidCredentials()
 		}
 	} else {
 		// legacy token does not work
-		a.HandleInvalidCredentials()
+		a.handleInvalidCredentials()
 	}
 }
 
@@ -362,7 +362,7 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 	}
 }
 
-func (a *AuthenticationServiceImpl) HandleInvalidCredentials() {
+func (a *AuthenticationServiceImpl) handleInvalidCredentials() {
 	msg := InvalidCredsMessage
 	a.sendAuthenticationRequest(msg, "Authenticate")
 }

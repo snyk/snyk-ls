@@ -97,7 +97,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 	handlers["initialized"] = initializedHandler(srv)
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
 	handlers["textDocument/didClose"] = noOpHandler()
-	handlers[textDocumentDidOpenOperation] = textDocumentDidOpenHandler()
+	handlers[textDocumentDidOpenOperation] = textDocumentDidOpenHandler(c)
 	handlers[textDocumentDidSaveOperation] = textDocumentDidSaveHandler()
 	handlers["textDocument/hover"] = textDocumentHover()
 	handlers["textDocument/codeAction"] = textDocumentCodeActionHandler()
@@ -243,7 +243,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		go createProgressListener(progress.ToServerProgressChannel, srv, c.Logger())
 		registerNotifier(c, srv)
 
-		addWorkspaceFolders(c, params, c.Workspace())
+		addWorkspaceFolders(c, params)
 
 		result := types.InitializeResult{
 			ServerInfo: types.ServerInfo{
@@ -506,8 +506,9 @@ func periodicallyCheckForExpiredCache(c *config.Config) {
 	}
 }
 
-func addWorkspaceFolders(c *config.Config, params types.InitializeParams, w types.Workspace) {
+func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 	const method = "addWorkspaceFolders"
+	w := c.Workspace()
 	if len(params.WorkspaceFolders) > 0 {
 		for _, workspaceFolder := range params.WorkspaceFolders {
 			c.Logger().Info().Str("method", method).Msgf("Adding workspaceFolder %v", workspaceFolder)
@@ -631,9 +632,8 @@ func logError(logger *zerolog.Logger, err error, method string) {
 	}
 }
 
-func textDocumentDidOpenHandler() jrpc2.Handler {
+func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidOpenTextDocumentParams) (any, error) {
-		c := config.CurrentConfig()
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 		logger := c.Logger().With().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", filePath).Logger()
 

@@ -77,7 +77,7 @@ func (cmd *clearCache) Execute(_ context.Context) (any, error) {
 }
 
 func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, folderUri *lsp.DocumentURI) {
-	ws := config.CurrentConfig().Workspace()
+	ws := cmd.c.Workspace()
 	trusted, _ := ws.GetFolderTrust()
 	for _, folder := range trusted {
 		if folderUri != nil && *folderUri != folder.Uri() {
