@@ -197,7 +197,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server, c *config.Conf
 		defer logger.Info().Msg("SENDING")
 		changedFolders := c.Workspace().ChangeWorkspaceFolders(params)
 		command.HandleFolders(bgCtx, srv, di.Notifier(), di.ScanPersister())
-		if config.CurrentConfig().IsAutoScanEnabled() {
+		if c.IsAutoScanEnabled() {
 			for _, f := range changedFolders {
 				go f.ScanFolder(ctx)
 			}

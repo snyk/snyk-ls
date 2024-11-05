@@ -69,6 +69,7 @@ func NewAuthenticationService(c *config.Config, authProviders AuthenticationProv
 func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
 	a.m.Lock()
 	defer a.m.Unlock()
+
 	return a.provider
 }
 

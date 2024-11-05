@@ -57,7 +57,7 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	if endpoint == "" {
 		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
-	runSmokeTest(t, nodejsGoof, "0336589", ossFile, codeFile, false, true, endpoint)
+	runSmokeTest(t, nil, nodejsGoof, "0336589", ossFile, codeFile, false, true, endpoint)
 }
 
 func Test_SmokeWorkspaceScan(t *testing.T) {
@@ -140,7 +140,8 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			runSmokeTest(t, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores, tc.hasVulns, "")
+			c := testutil.SmokeTest(t, false)
+			runSmokeTest(t, c, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores, tc.hasVulns, "")
 		})
 	}
 }
@@ -148,8 +149,8 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 func Test_SmokeIssueCaching(t *testing.T) {
 	testutil.NotOnWindows(t, "git clone fails on juiceshop ") // TODO remove & fix
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
-		loc, jsonRPCRecorder := setupServer(t)
 		c := testutil.SmokeTest(t, false)
+		loc, jsonRPCRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(true)
 		c.EnableSnykCodeQuality(false)
 		c.SetSnykOssEnabled(true)
@@ -223,8 +224,8 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	})
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
-		loc, jsonRPCRecorder := setupServer(t)
 		c := testutil.SmokeTest(t, false)
+		loc, jsonRPCRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(true)
 		c.EnableSnykCodeQuality(false)
 		c.SetSnykOssEnabled(true)
@@ -289,8 +290,8 @@ func Test_SmokeIssueCaching(t *testing.T) {
 }
 
 func Test_SmokeExecuteCLICommand(t *testing.T) {
-	loc, _ := setupServer(t)
 	c := testutil.SmokeTest(t, false)
+	loc, _ := setupServer(t, c)
 	c.EnableSnykCodeSecurity(false)
 	c.EnableSnykCodeQuality(false)
 	c.SetSnykIacEnabled(false)
@@ -451,14 +452,12 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 	}, time.Second*600, time.Second)
 }
 
-func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool,
-	hasVulns bool, endpoint string) {
+func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool, hasVulns bool, endpoint string) {
 	t.Helper()
 	if endpoint != "" && endpoint != "/v1" {
 		t.Setenv("SNYK_API", endpoint)
 	}
-	loc, jsonRPCRecorder := setupServer(t)
-	c := testutil.SmokeTest(t, useConsistentIgnores)
+	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(true)
 	c.SetSnykOssEnabled(true)
@@ -783,8 +782,8 @@ func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 }
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, false)
+	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	cleanupChannels()
 	di.Init()
@@ -825,7 +824,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 func Test_SmokeUncFilePath(t *testing.T) {
 	c := testutil.IntegTest(t)
 	testutil.OnlyOnWindows(t, "testing windows UNC file paths")
-	loc, jsonRPCRecorder := setupServer(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykOssEnabled(false)
 	c.SetSnykIacEnabled(false)
@@ -850,8 +849,8 @@ func Test_SmokeUncFilePath(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, false)
+	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
@@ -884,8 +883,8 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, false)
+	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
@@ -907,8 +906,8 @@ func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
 	c := testutil.SmokeTest(t, false)
+	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
