@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/adrg/xdg"
@@ -75,7 +76,7 @@ func Start(c *config.Config) {
 	c.ConfigureLogging(srv)
 	logger := c.Logger().With().Str("method", "server.Start").Logger()
 	di.Init()
-	initHandlers(srv, handlers)
+	initHandlers(srv, handlers, c)
 
 	logger.Info().Msg("Starting up...")
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
@@ -91,7 +92,7 @@ func Start(c *config.Config) {
 const textDocumentDidOpenOperation = "textDocument/didOpen"
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
-func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
+func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 	handlers["initialize"] = initializeHandler(srv)
 	handlers["initialized"] = initializedHandler(srv)
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
@@ -107,8 +108,8 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map) {
 	handlers["codeAction/resolve"] = codeActionResolveHandler(srv)
 	handlers["shutdown"] = shutdown()
 	handlers["exit"] = exit(srv)
-	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(srv)
-	handlers["workspace/willDeleteFiles"] = workspaceWillDeleteFilesHandler()
+	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(srv, c)
+	handlers["workspace/willDeleteFiles"] = workspaceWillDeleteFilesHandler(c)
 	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(srv)
 	handlers["window/workDoneProgress/cancel"] = windowWorkDoneProgressCancelHandler()
 	handlers["workspace/executeCommand"] = executeCommandHandler(srv)
@@ -147,9 +148,9 @@ func textDocumentDidChangeHandler() jrpc2.Handler {
 
 // WorkspaceWillDeleteFilesHandler handles the workspace/willDeleteFiles message that's raised by the client
 // when files are deleted
-func workspaceWillDeleteFilesHandler() jrpc2.Handler {
+func workspaceWillDeleteFilesHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.DeleteFilesParams) (any, error) {
-		ws := workspace.Get()
+		ws := c.Workspace()
 		for _, file := range params.Files {
 			pathFromUri := uri.PathFromUri(file.Uri)
 
@@ -185,17 +186,16 @@ func codeLensHandler() jrpc2.Handler {
 	})
 }
 
-func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server) jrpc2.Handler {
+func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server, c *config.Config) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.DidChangeWorkspaceFoldersParams) (any, error) {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
-		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Logger()
 
 		logger.Info().Msg("RECEIVING")
 		defer logger.Info().Msg("SENDING")
-		changedFolders := workspace.Get().ChangeWorkspaceFolders(params)
+		changedFolders := c.Workspace().ChangeWorkspaceFolders(params)
 		command.HandleFolders(bgCtx, srv, di.Notifier(), di.ScanPersister())
 		if config.CurrentConfig().IsAutoScanEnabled() {
 			for _, f := range changedFolders {
@@ -243,7 +243,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		go createProgressListener(progress.ToServerProgressChannel, srv, c.Logger())
 		registerNotifier(c, srv)
 
-		addWorkspaceFolders(c, params, workspace.Get())
+		addWorkspaceFolders(c, params, c.Workspace())
 
 		result := types.InitializeResult{
 			ServerInfo: types.ServerInfo{
@@ -260,7 +260,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						Save:              &sglsp.SaveOptions{IncludeText: true},
 					},
 				},
-				Workspace: &types.Workspace{
+				Workspace: &types.WorkspaceCapabilities{
 					WorkspaceFolders: &types.WorkspaceFoldersServerCapabilities{
 						Supported:           true,
 						ChangeNotifications: "snyk-ls",
@@ -426,13 +426,13 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 
 		// Check once for expired cache in same thread before triggering a scan.
 		// Start a periodic go routine to check for the expired cache afterwards
-		deleteExpiredCache()
-		go periodicallyCheckForExpiredCache()
+		deleteExpiredCache(c)
+		go periodicallyCheckForExpiredCache(c)
 
 		autoScanEnabled := c.IsAutoScanEnabled()
 		if autoScanEnabled {
 			logger.Info().Msg("triggering workspace scan after successful initialization")
-			workspace.Get().ScanWorkspace(context.Background())
+			c.Workspace().ScanWorkspace(context.Background())
 		} else {
 			msg := fmt.Sprintf(
 				"No automatic workspace scan on initialization: autoScanEnabled=%v",
@@ -490,23 +490,23 @@ func startOfflineDetection(c *config.Config) { //nolint:unused // this is gonna 
 	}()
 }
 
-func deleteExpiredCache() {
-	w := workspace.Get()
+func deleteExpiredCache(c *config.Config) {
+	w := c.Workspace()
 	var folderList []string
 	for _, f := range w.Folders() {
 		folderList = append(folderList, f.Path())
 	}
-	di.ScanPersister().Clear(folderList, true)
+	c.Workspace().GetScanSnapshotClearerExister().Clear(folderList, true)
 }
 
-func periodicallyCheckForExpiredCache() {
+func periodicallyCheckForExpiredCache(c *config.Config) {
 	for {
-		deleteExpiredCache()
+		deleteExpiredCache(c)
 		time.Sleep(time.Duration(persistence.ExpirationInSeconds) * time.Second)
 	}
 }
 
-func addWorkspaceFolders(c *config.Config, params types.InitializeParams, w *workspace.Workspace) {
+func addWorkspaceFolders(c *config.Config, params types.InitializeParams, w types.Workspace) {
 	const method = "addWorkspaceFolders"
 	if len(params.WorkspaceFolders) > 0 {
 		for _, workspaceFolder := range params.WorkspaceFolders {
@@ -638,13 +638,19 @@ func textDocumentDidOpenHandler() jrpc2.Handler {
 		logger := c.Logger().With().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", filePath).Logger()
 
 		logger.Info().Msg("Receiving")
-		folder := workspace.Get().GetFolderContaining(filePath)
+		folder := c.Workspace().GetFolderContaining(filePath)
 		if folder == nil {
 			logger.Warn().Msg("No folder found for file " + filePath)
 			return nil, nil
 		}
 
-		filteredIssues := folder.FilterIssues(folder.Issues(), config.CurrentConfig().DisplayableIssueTypes())
+		fip, ok := folder.(snyk.FilteringIssueProvider)
+		if !ok {
+			logger.Warn().Msg("folder is not a filtering issue provider")
+			return nil, nil
+		}
+
+		filteredIssues := fip.FilterIssues(fip.Issues(), config.CurrentConfig().DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
 			logger.Debug().Msg("Sending cached issues")
@@ -676,7 +682,7 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
-		f := workspace.Get().GetFolderContaining(filePath)
+		f := c.Workspace().GetFolderContaining(filePath)
 
 		if f != nil && autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
 			go f.ScanFolder(bgCtx)

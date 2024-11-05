@@ -29,6 +29,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -51,11 +52,9 @@ var (
 type hashedFolderPath string
 
 type ScanSnapshotPersister interface {
-	Init(folderPath []string) error
-	Clear(folderPath []string, deleteOnlyExpired bool)
+	types.ScanSnapshotClearerExister
 	Add(folderPath, commitHash string, issueList []snyk.Issue, p product.Product) error
 	GetPersistedIssueList(folderPath string, p product.Product) ([]snyk.Issue, error)
-	Exists(folderPath, commitHash string, p product.Product) bool
 }
 
 type productCommitHashMap map[product.Product]string

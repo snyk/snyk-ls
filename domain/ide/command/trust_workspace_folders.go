@@ -19,10 +19,7 @@ package command
 import (
 	"context"
 
-	"github.com/rs/zerolog"
-
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -30,7 +27,7 @@ import (
 type trustWorkspaceFoldersCommand struct {
 	command  types.CommandData
 	notifier noti.Notifier
-	logger   *zerolog.Logger
+	c        *config.Config
 }
 
 func (cmd *trustWorkspaceFoldersCommand) Command() types.CommandData {
@@ -43,9 +40,9 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error)
 	}
 
 	trustedFolderPaths := config.CurrentConfig().TrustedFolders()
-	_, untrusted := workspace.Get().GetFolderTrust()
+	_, untrusted := cmd.c.Workspace().GetFolderTrust()
 	for _, folder := range untrusted {
-		cmd.logger.Debug().Str("method", "trustWorkspaceFoldersCommand").Msgf("adding trusted folder %s", folder.Path())
+		cmd.c.Logger().Debug().Str("method", "trustWorkspaceFoldersCommand").Msgf("adding trusted folder %s", folder.Path())
 		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
 	}
 

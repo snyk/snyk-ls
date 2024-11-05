@@ -47,8 +47,8 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 
 	trusted, untrusted := w.GetFolderTrust()
 
-	assert.Equal(t, trustedDummy, trusted[0].path)
-	assert.Equal(t, untrustedDummy, untrusted[0].path)
+	assert.Equal(t, trustedDummy, trusted[0].Path)
+	assert.Equal(t, untrustedDummy, untrusted[0].Path)
 }
 
 func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *testing.T) {
@@ -65,7 +65,7 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	untrustedFolder := NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil)
 	w.AddFolder(untrustedFolder)
 
-	w.TrustFoldersAndScan(context.Background(), []*Folder{trustedFolder})
+	w.TrustFoldersAndScan(context.Background(), []types.Folder{trustedFolder})
 
 	assert.Contains(t, c.TrustedFolders(), trustedFolder.path)
 	assert.NotContains(t, c.TrustedFolders(), untrustedFolder.path)
@@ -106,17 +106,4 @@ func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
 	assert.Nil(t, w.GetFolderContaining(toBeRemoved))
 
 	assert.Len(t, folderList, 2)
-}
-
-func Test_Get(t *testing.T) {
-	c := testutil.UnitTest(t)
-	New(c, nil, nil, nil, nil, nil, nil)
-	assert.Equal(t, instance, Get())
-}
-
-func Test_Set(t *testing.T) {
-	c := testutil.UnitTest(t)
-	w := New(c, nil, nil, nil, nil, nil, nil)
-	Set(w)
-	assert.Equal(t, w, instance)
 }

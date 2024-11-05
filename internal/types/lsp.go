@@ -197,7 +197,7 @@ type ServerCapabilities struct {
 	RenameProvider                   bool                                   `json:"renameProvider,omitempty"`
 	ExecuteCommandProvider           *sglsp.ExecuteCommandOptions           `json:"executeCommandProvider,omitempty"`
 	SemanticHighlighting             *sglsp.SemanticHighlightingOptions     `json:"semanticHighlighting,omitempty"`
-	Workspace                        *Workspace                             `json:"workspace,omitempty"`
+	Workspace                        *WorkspaceCapabilities                 `json:"workspace,omitempty"`
 	InlineValueProvider              bool                                   `json:"inlineValueProvider,omitempty"`
 }
 
@@ -447,7 +447,7 @@ type WindowClientCapabilities struct {
 	WorkDoneProgress bool `json:"workDoneProgress,omitempty"`
 }
 
-type Workspace struct {
+type WorkspaceCapabilities struct {
 	WorkspaceFolders *WorkspaceFoldersServerCapabilities `json:"workspaceFolders,omitempty"`
 	FileOperations   *FileOperationsServerCapabilities   `json:"fileOperations,omitempty"`
 }

@@ -157,20 +157,22 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		di.Init()
 
 		var cloneTargetDirGoof = setupRepoAndInitialize(t, nodejsGoof, "0336589", loc, c)
-		folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
+		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
+		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
+		require.Truef(t, ok, "Expected to find snyk issue provider")
 
 		// wait till the whole workspace is scanned
-		assert.Eventually(t, func() bool {
+		require.Eventually(t, func() bool {
 			return folderGoof != nil && folderGoof.IsScanned()
 		}, maxIntegTestDuration, time.Millisecond)
 
-		ossIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "package.json"))
+		ossIssuesForFile := folderGoofIssueProvider.IssuesForFile(filepath.Join(cloneTargetDirGoof, "package.json"))
 		require.Greater(t, len(ossIssuesForFile), 1) // 108 is the number of issues in the package.json file as of now
 
 		var codeIssuesForFile []snyk.Issue
 
 		require.Eventually(t, func() bool {
-			codeIssuesForFile = folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
+			codeIssuesForFile = folderGoofIssueProvider.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
 			return len(codeIssuesForFile) > 1
 		}, time.Second*5, time.Second)
 
@@ -208,10 +210,10 @@ func Test_SmokeIssueCaching(t *testing.T) {
 			return folderGoof != nil && folderGoof.IsScanned() && folderJuice != nil && folderJuice.IsScanned()
 		}, maxIntegTestDuration, time.Millisecond)
 
-		ossIssuesForFileSecondScan := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "package.json"))
+		ossIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(filepath.Join(cloneTargetDirGoof, "package.json"))
 		require.Equal(t, len(ossIssuesForFile), len(ossIssuesForFileSecondScan))
 
-		codeIssuesForFileSecondScan := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
+		codeIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
 		require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
 
 		// OSS: empty, package.json goof, package.json juice = 3
@@ -230,7 +232,9 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		di.Init()
 
 		var cloneTargetDirGoof = setupRepoAndInitialize(t, nodejsGoof, "0336589", loc, c)
-		folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
+		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
+		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
+		require.Truef(t, ok, "Expected to find snyk issue provider")
 
 		// wait till the whole workspace is scanned
 		assert.Eventually(t, func() bool {
@@ -238,13 +242,13 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		}, maxIntegTestDuration, time.Millisecond)
 
 		ossFilePath := "package.json"
-		ossIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, ossFilePath))
+		ossIssuesForFile := folderGoofIssueProvider.IssuesForFile(filepath.Join(cloneTargetDirGoof, ossFilePath))
 		require.Greater(t, len(ossIssuesForFile), 1) // 108 is the number of issues in the package.json file as of now
 		codeFilePath := "app.js"
-		codeIssuesForFile := folderGoof.IssuesForFile(filepath.Join(cloneTargetDirGoof, codeFilePath))
+		codeIssuesForFile := folderGoofIssueProvider.IssuesForFile(filepath.Join(cloneTargetDirGoof, codeFilePath))
 		require.Greater(t, len(codeIssuesForFile), 1) // 5 is the number of issues in the app.js file as of now
 		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, c)
-		require.Greater(t, len(folderGoof.Issues()), 0)
+		require.Greater(t, len(folderGoofIssueProvider.Issues()), 0)
 		jsonRPCRecorder.ClearNotifications()
 		jsonRPCRecorder.ClearCallbacks()
 
@@ -269,7 +273,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		}, time.Second*5, time.Second)
 
 		// check issues deleted
-		require.Empty(t, folderGoof.Issues())
+		require.Empty(t, folderGoofIssueProvider.Issues())
 
 		// check hovers deleted
 		response, err := loc.Client.Call(context.Background(), "textDocument/hover", hover.Params{
@@ -294,7 +298,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	di.Init()
 
 	var cloneTargetDirGoof = setupRepoAndInitialize(t, nodejsGoof, "0336589", loc, c)
-	folderGoof := workspace.Get().GetFolderContaining(cloneTargetDirGoof)
+	folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
@@ -317,7 +321,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	require.NotEmpty(t, resp["stdOut"])
 }
 
-func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) *workspace.Folder {
+func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) types.Folder {
 	t.Helper()
 	var cloneTargetDirJuice, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
 	require.NoError(t, err)
@@ -330,20 +334,14 @@ func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Con
 	_, err = loc.Client.Call(context.Background(), "workspace/didChangeWorkspaceFolders", didChangeWorkspaceFoldersParams)
 	require.NoError(t, err)
 
-	folderJuice := workspace.Get().GetFolderContaining(cloneTargetDirJuice)
+	folderJuice := c.Workspace().GetFolderContaining(cloneTargetDirJuice)
 	require.NotNil(t, folderJuice)
 	return folderJuice
 }
 
 // check that $/snyk.scan messages are sent
 // check that they only contain issues that belong to the scanned folder
-func checkScanResultsPublishingForCachingSmokeTest(
-	t *testing.T,
-	jsonRPCRecorder *testutil.JsonRPCRecorder,
-	folderJuice *workspace.Folder,
-	folderGoof *workspace.Folder,
-	c *config.Config,
-) {
+func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, folderJuice types.Folder, folderGoof types.Folder, c *config.Config) {
 	t.Helper()
 
 	require.Eventually(t, func() bool {
@@ -469,7 +467,7 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 
 	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc, c)
 
-	waitForScan(t, cloneTargetDir)
+	waitForScan(t, cloneTargetDir, c)
 
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
 	assert.Len(t, notifications, 1)
@@ -488,14 +486,14 @@ func runSmokeTest(t *testing.T, repo string, commit string, file1 string, file2 
 		waitForNetwork(c)
 		textDocumentDidSave(t, &loc, testPath)
 		// serve diagnostics from file scan
-		assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+		assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 	}
 
 	jsonRPCRecorder.ClearNotifications()
 	testPath = filepath.Join(cloneTargetDir, file2)
 	waitForNetwork(c)
 	textDocumentDidSave(t, &loc, testPath)
-	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 
 	// check for snyk code scan message
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
@@ -625,11 +623,11 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorde
 	assert.Truef(t, atLeastOneOneIssueWithCodeLensFound, "expected to find at least one code lens")
 }
 
-func waitForScan(t *testing.T, cloneTargetDir string) {
+func waitForScan(t *testing.T, cloneTargetDir string, c *config.Config) {
 	t.Helper()
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		f := workspace.Get().GetFolderContaining(cloneTargetDir)
+		f := c.Workspace().GetFolderContaining(cloneTargetDir)
 		return f != nil && f.IsScanned()
 	}, maxIntegTestDuration, 2*time.Millisecond)
 }
@@ -815,13 +813,13 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 
-	w := workspace.Get()
+	w := c.Workspace()
 	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister())
 	w.AddFolder(f)
 
 	_ = textDocumentDidSave(t, &loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), 2*time.Minute, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, 10*time.Millisecond)
 }
 
 func Test_SmokeUncFilePath(t *testing.T) {
@@ -845,10 +843,10 @@ func Test_SmokeUncFilePath(t *testing.T) {
 
 	initializeParams := prepareInitParams(t, uncPath, c)
 	ensureInitialized(t, c, loc, initializeParams)
-	waitForScan(t, uncPath)
+	waitForScan(t, uncPath, c)
 	testPath := filepath.Join(uncPath, "app.js")
 
-	assert.Eventually(t, checkForPublishedDiagnostics(t, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
@@ -876,7 +874,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 	ensureInitialized(t, c, loc, initParams)
 
-	waitForScan(t, cloneTargetDir)
+	waitForScan(t, cloneTargetDir, c)
 
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
@@ -900,7 +898,7 @@ func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
 
 	ensureInitialized(t, c, loc, initParams)
 
-	waitForScan(t, cloneTargetDir)
+	waitForScan(t, cloneTargetDir, c)
 
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
@@ -926,7 +924,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 	ensureInitialized(t, c, loc, initParams)
 
-	waitForScan(t, cloneTargetDir)
+	waitForScan(t, cloneTargetDir, c)
 
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)

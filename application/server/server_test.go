@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
 	"github.com/creachadair/jrpc2"
@@ -155,7 +156,7 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testutil.JsonRPCRecor
 	c.ConfigureLogging(nil)
 
 	// the learn service isnt needed as the smoke tests use it directly
-	initHandlers(srv, handlers)
+	initHandlers(srv, handlers, c)
 
 	return loc
 }
@@ -334,7 +335,7 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 }
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
-	testutil.IntegTest(t) // this needs an authenticated user
+	c := testutil.IntegTest(t) // this needs an authenticated user
 	loc, _ := setupServer(t)
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
@@ -368,7 +369,12 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 		t,
 		func() bool {
 			path := uri.PathFromUri(didOpenParams.TextDocument.URI)
-			return workspace.Get().GetFolderContaining(path).IssuesForFile(path) != nil
+			folder := c.Workspace().GetFolderContaining(path)
+			ip, ok := folder.(snyk.IssueProvider)
+			if !ok {
+				t.FailNow()
+			}
+			return ip.IssuesForFile(path) != nil
 		},
 		50*time.Second,
 		time.Millisecond,
@@ -391,7 +397,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 }
 
 func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
-	testutil.IntegTest(t) // this needs an authenticated user
+	c := testutil.IntegTest(t) // this needs an authenticated user
 	loc, _ := setupServer(t)
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
@@ -425,7 +431,10 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 		t,
 		func() bool {
 			path := uri.PathFromUri(didOpenParams.TextDocument.URI)
-			return workspace.Get().GetFolderContaining(path).IssuesForFile(path) != nil
+			folder := c.Workspace().GetFolderContaining(path)
+			ip, ok := folder.(snyk.IssueProvider)
+			require.Truef(t, ok, "Expected to find snyk issue provider")
+			return ip.IssuesForFile(path) != nil
 		},
 		50*time.Second,
 		time.Millisecond,
@@ -568,7 +577,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	c := config.CurrentConfig()
 
 	sc := &scanner.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy",
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy",
 		"dummy",
 		sc,
 		di.HoverService(),
@@ -632,6 +641,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 
 func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
+	c := config.CurrentConfig()
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -650,11 +660,12 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 	}
 
 	assert.Nil(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second*5, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, c) }, time.Second*5, time.Millisecond)
 }
 
 func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
+	c := config.CurrentConfig()
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		Token:                       "token",
@@ -678,11 +689,12 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	}
 
 	assert.Nil(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second*5, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, c) }, time.Second*5, time.Millisecond)
 }
 
 func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
+	c := config.CurrentConfig()
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -700,12 +712,13 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	}
 
 	assert.NoError(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, c) }, time.Second, time.Millisecond)
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c := config.CurrentConfig()
+	c.SetSnykCodeEnabled(true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
@@ -720,7 +733,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	// wait for publish
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(t, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
 		5*time.Second,
 		50*time.Millisecond,
 	)
@@ -796,7 +809,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 
 	folder := workspace.NewFolder(c, fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
 		di.ScanPersister())
-	workspace.Get().AddFolder(folder)
+	c.Workspace().AddFolder(folder)
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 
@@ -809,7 +822,8 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 
 func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c := config.CurrentConfig()
+	c.SetSnykCodeEnabled(true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 	_, err := loc.Client.Call(ctx, "initialize", nil)
@@ -822,7 +836,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(t, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
 		time.Second,
 		time.Millisecond,
 	)
@@ -844,7 +858,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(t, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
 		5*time.Second,
 		time.Millisecond,
 	)
@@ -852,19 +866,20 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 
 func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c := config.CurrentConfig()
+	c.SetSnykCodeEnabled(true)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	config.CurrentConfig().SetAutomaticScanning(false)
+	c.SetAutomaticScanning(false)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
 
 	assert.Never(
 		t,
-		checkForPublishedDiagnostics(t, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
 		5*time.Second,
 		50*time.Millisecond,
 	)
@@ -876,7 +891,7 @@ func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Loc
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
 	}
-	workspace.Get().AddFolder(workspace.NewFolder(c, fileDir,
+	c.Workspace().AddFolder(workspace.NewFolder(c, fileDir,
 		"Test",
 		di.Scanner(),
 		di.HoverService(),
@@ -912,10 +927,10 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
 	loc, _ := setupServer(t)
-	testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
 	file := testutil.CreateTempFile(t, t.TempDir())
-	w := workspace.Get()
+	w := c.Workspace()
 
 	f := types.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(file.Name())}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
@@ -946,10 +961,10 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 
 // Check if published diagnostics for given testPath match the expectedNumber.
 // If expectedNumber == -1 assume check for expectedNumber > 0
-func checkForPublishedDiagnostics(t *testing.T, testPath string, expectedNumber int, jsonRPCRecorder *testutil.JsonRPCRecorder) func() bool {
+func checkForPublishedDiagnostics(t *testing.T, c *config.Config, testPath string, expectedNumber int, jsonRPCRecorder *testutil.JsonRPCRecorder) func() bool {
 	t.Helper()
 	return func() bool {
-		w := workspace.Get()
+		w := c.Workspace()
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
 		if len(notifications) < 1 {
 			return false
@@ -1008,7 +1023,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		w := workspace.Get()
+		w := c.Workspace()
 		f := w.GetFolderContaining(cloneTargetDir)
 		return f != nil && f.IsScanned()
 	}, maxIntegTestDuration, 100*time.Millisecond)

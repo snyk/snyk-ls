@@ -40,7 +40,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 	c := config.CurrentConfig()
 
 	s := &scanner.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -57,7 +57,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 	c := config.CurrentConfig()
 
 	s := &scanner.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -82,8 +82,8 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	scannerForDontClear.AddTestIssue(snyk.Issue{AffectedFilePath: dontClearIssuePath})
 	scannerForFolder.AddTestIssue(snyk.Issue{AffectedFilePath: "dummy/file.txt"})
 
-	workspace.Get().AddFolder(folder)
-	workspace.Get().AddFolder(dontClear)
+	c.Workspace().AddFolder(folder)
+	c.Workspace().AddFolder(dontClear)
 
 	// prepare pre-existent diagnostics for folder
 	folder.ScanFolder(context.Background())
@@ -107,7 +107,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	c := config.CurrentConfig()
 
 	s := &scanner.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 	// explicitly enable folder trust which is disabled by default in tests
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
@@ -117,7 +117,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Eventually(t, func() bool {
-		return s.Calls() == 0 && checkTrustMessageRequest(jsonRPCRecorder)
+		return s.Calls() == 0 && checkTrustMessageRequest(jsonRPCRecorder, c)
 	}, 2*time.Second, time.Millisecond)
 }
 
@@ -160,7 +160,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		loc, _ := setupServerWithCustomDI(t, false)
 		c := config.CurrentConfig()
 
-		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 
 		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -175,8 +175,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		loc, _ := setupServerWithCustomDI(t, false)
 		c := config.CurrentConfig()
 
-		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
-		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
 		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
@@ -193,7 +193,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		loc, _ := setupServerWithCustomDI(t, false)
 		c := config.CurrentConfig()
 
-		workspace.Get().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
 		config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 		config.CurrentConfig().SetTrustedFolders([]string{"/path/to/folder2"})
 

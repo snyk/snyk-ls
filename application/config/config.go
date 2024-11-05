@@ -200,6 +200,7 @@ type Config struct {
 	folderAdditionalParameters       map[string][]string
 	hoverVerbosity                   int
 	offline                          bool
+	ws                               types.Workspace
 }
 
 func CurrentConfig() *Config {
@@ -1100,4 +1101,18 @@ func (c *Config) Offline() bool {
 	defer c.m.RUnlock()
 
 	return c.offline
+}
+
+func (c *Config) Workspace() types.Workspace {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.ws
+}
+
+func (c *Config) SetWorkspace(workspace types.Workspace) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.ws = workspace
 }

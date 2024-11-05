@@ -25,12 +25,12 @@ import (
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type clearCache struct {
 	command types.CommandData
+	c       *config.Config
 }
 
 func (cmd *clearCache) Command() types.CommandData {
@@ -77,7 +77,7 @@ func (cmd *clearCache) Execute(_ context.Context) (any, error) {
 }
 
 func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, folderUri *lsp.DocumentURI) {
-	ws := workspace.Get()
+	ws := config.CurrentConfig().Workspace()
 	trusted, _ := ws.GetFolderTrust()
 	for _, folder := range trusted {
 		if folderUri != nil && *folderUri != folder.Uri() {
@@ -93,9 +93,9 @@ func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, folderUri *lsp
 
 func (cmd *clearCache) purgePersistedCache(logger *zerolog.Logger, folderUri *lsp.DocumentURI) {
 	var folderList []string
-	ws := workspace.Get()
-	scanPersister := ws.ScanPersister()
-	if scanPersister == nil {
+	ws := cmd.c.Workspace()
+	clearerExister := ws.GetScanSnapshotClearerExister()
+	if clearerExister == nil {
 		logger.Error().Msgf("could not find scan persister")
 		return
 	}
@@ -106,5 +106,5 @@ func (cmd *clearCache) purgePersistedCache(logger *zerolog.Logger, folderUri *ls
 		folderList = append(folderList, folder.Path())
 	}
 	logger.Info().Msgf("deleting perrsisted cache for folders %v", folderList)
-	scanPersister.Clear(folderList, false)
+	clearerExister.Clear(folderList, false)
 }
