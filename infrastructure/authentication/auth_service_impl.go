@@ -46,7 +46,7 @@ const ExpirationMsg = "Your authentication failed due to token expiration. Pleas
 const InvalidCredsMessage = "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
 
 type AuthenticationServiceImpl struct {
-	provider      AuthenticationProvider
+	authProvider  AuthenticationProvider
 	errorReporter error_reporting.ErrorReporter
 	notifier      noti.Notifier
 	c             *config.Config
@@ -58,7 +58,7 @@ type AuthenticationServiceImpl struct {
 func NewAuthenticationService(c *config.Config, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
 	cache := imcache.New[string, bool]()
 	return &AuthenticationServiceImpl{
-		provider:      authProviders,
+		authProvider:  authProviders,
 		errorReporter: errorReporter,
 		notifier:      notifier,
 		c:             c,
@@ -70,7 +70,11 @@ func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
 	a.m.RLock()
 	defer a.m.RUnlock()
 
-	return a.provider
+	return a.authProvider
+}
+
+func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
+	return a.authProvider
 }
 
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
@@ -81,10 +85,10 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 }
 
 func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
-	token, err = a.provider.Authenticate(ctx)
+	token, err = a.authProvider.Authenticate(ctx)
 
 	if token == "" || err != nil {
-		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.provider))
+		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
 		a.sendAuthenticationAnalytics(analytics.Failure, err)
 		return token, err
 	}
@@ -197,7 +201,7 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 }
 
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
-	err := a.provider.ClearAuthentication(ctx)
+	err := a.authProvider.ClearAuthentication(ctx)
 	if err != nil {
 		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
 		a.errorReporter.CaptureError(err)
@@ -230,18 +234,22 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 		return false
 	}
 
-	if a.provider == nil {
+	if a.authProvider == nil {
 		a.configureProviders(a.c)
 	}
 
 	var user string
 	var err error
-	user, err = a.provider.GetCheckAuthenticationFunction()()
+	user, err = a.authProvider.GetCheckAuthenticationFunction()()
 	if user == "" {
 		if a.c.Offline() || (err != nil && !shouldCauseLogout(err, a.c.Logger())) {
-			userMsg := fmt.Sprintf("Could not retrieve authentication status. Most likely this is a temporary error "+
-				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate (%s)", err.Error())
+			userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
+				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
+			if err != nil {
+				userMsg += fmt.Sprintf(" (%s)", err.Error())
+			}
 			a.notifier.SendShowMessage(sglsp.MTError, userMsg)
+
 			logger.Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
 			return false
 		}
@@ -319,7 +327,7 @@ func (a *AuthenticationServiceImpl) SetProvider(provider AuthenticationProvider)
 }
 
 func (a *AuthenticationServiceImpl) setProvider(provider AuthenticationProvider) {
-	a.provider = provider
+	a.authProvider = provider
 }
 
 func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {

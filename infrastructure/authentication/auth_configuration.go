@@ -48,11 +48,11 @@ func Default(c *config.Config, authenticationService AuthenticationService) Auth
 	credentialsUpdateCallback := func(_ string, value any) {
 		// an empty struct marks an empty token, so we stay with empty string if the cast fails
 		newToken, _ := value.(string)
-		go authenticationService.UpdateCredentials(newToken, true)
+		go authenticationService.updateCredentials(newToken, true)
 	}
 
 	openBrowserFunc := func(url string) {
-		authenticationService.Provider().SetAuthURL(url)
+		authenticationService.provider().setAuthUrl(url)
 		types.DefaultOpenBrowserFunc(url)
 	}
 
