@@ -51,9 +51,7 @@ func (p *OAuth2Provider) Authenticate(_ context.Context) (string, error) {
 	return p.config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), err
 }
 
-func (p *OAuth2Provider) SetAuthURL(url string) {
-	p.m.Lock()
-	defer p.m.Unlock()
+func (p *OAuth2Provider) setAuthUrl(url string) {
 	p.authURL = url
 }
 

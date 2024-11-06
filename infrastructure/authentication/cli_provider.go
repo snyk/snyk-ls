@@ -46,7 +46,7 @@ func NewCliAuthenticationProvider(c *config.Config, errorReporter error_reportin
 	return &CliAuthenticationProvider{"", errorReporter, c}
 }
 
-func (a *CliAuthenticationProvider) SetAuthURL(url string) {
+func (a *CliAuthenticationProvider) setAuthUrl(url string) {
 	a.authURL = url
 }
 

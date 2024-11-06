@@ -131,7 +131,7 @@ func TestAuthURL_ShouldReturnURL(t *testing.T) {
 	config := configuration.New()
 	authenticator := NewFakeOauthAuthenticator(time.Now().Add(10*time.Second), true, config, true).(*fakeOauthAuthenticator)
 	provider := newOAuthProvider(config, authenticator, config2.CurrentConfig().Logger())
-	provider.SetAuthURL("https://auth.fake.snyk.io")
+	provider.setAuthUrl("https://auth.fake.snyk.io")
 	url := provider.AuthURL(context.Background())
 
 	assert.NotEmpty(t, url)
