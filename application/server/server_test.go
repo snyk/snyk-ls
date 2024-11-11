@@ -258,6 +258,7 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.LogoutCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.TrustWorkspaceFoldersCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GetLearnLesson)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.ReportAnalyticsCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.OpenLearnLesson)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GetSettingsSastEnabled)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GetFeatureFlagStatus)
