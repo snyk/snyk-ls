@@ -207,3 +207,42 @@ header {
   line-height: 1rem;
   font-size: 1rem;
 }
+
+footer {
+  padding: 0px 20px 5px 20px;
+}
+
+#ignore-actions {
+  margin-top: 10px;
+  margin-bottom: 5px;
+}
+
+.actions {
+  justify-content: space-between;
+  display: flex;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+}
+
+.ignore-button.secondary {
+  color: whitesmoke;
+  cursor: pointer;
+  width: auto;
+  padding: 6px 16px;
+  border-radius: 3px;
+  background: none;
+  line-height: 1;
+}
+
+.ignore-action-container {
+  bottom: 0;
+  width: 100%;
+  margin-block-end: 0;
+}
+.hidden{
+  display: none;
+}
