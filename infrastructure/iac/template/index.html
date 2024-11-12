@@ -83,12 +83,12 @@
       {{end}}
     </div>
   </section>
-  <!-- Ignore In Line Actions -->
+  <!-- Ignore Issue in File -->
   {{if not .Issue.IsIgnored}}
   <footer id="ignore-container" class="ignore-action-container hidden">
     <div id="ignore-actions">
       <div class="actions row">
-        <button id="ignore-file-issue" issue="{{.Issue.ID}}" path="{{.ResourcePath}}" filePath="{{.FilePath}}" class="ignore-button secondary">Ignore in this file</button>
+        <button id="ignore-file-issue" issue="{{.Issue.ID}}" resourcePath="{{.ResourcePath}}" filePath="{{.FilePath}}" class="ignore-button secondary">Ignore in this file</button>
       </div>
     </div>
   </footer>
