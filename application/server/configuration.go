@@ -32,7 +32,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -96,7 +95,7 @@ func UpdateSettings(c *config.Config, settings types.Settings) {
 	writeSettings(c, settings, false)
 
 	// If a product was removed, clear all issues for this product
-	ws := workspace.Get()
+	ws := c.Workspace()
 	if ws != nil {
 		newSupportedProducts := c.DisplayableIssueTypes()
 		for removedIssueType, wasSupported := range previouslyEnabledProducts {
@@ -264,7 +263,7 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, initializatio
 		authService := di.AuthenticationService()
 		authService.Logout(context.Background())
 		authService.ConfigureProviders(c)
-		workspace.Get().Clear()
+		c.Workspace().Clear()
 	}
 
 	// a custom set snyk code api (e.g. for testing) always overwrites automatic config
@@ -394,7 +393,7 @@ func updateSeverityFilter(c *config.Config, s types.SeverityFilter) {
 	modified := c.SetSeverityFilter(s)
 
 	if modified {
-		ws := workspace.Get()
+		ws := c.Workspace()
 		if ws == nil {
 			return
 		}

@@ -47,7 +47,7 @@ type AuthenticationProvider interface {
 	// AuthURL returns the latest provided AuthenticationURL. This can be empty.
 	AuthURL(ctx context.Context) string
 	// SetAuthURL sets the latest provided Authentication URL. This is a temporary URL.
-	SetAuthURL(url string)
+	setAuthUrl(url string)
 
 	GetCheckAuthenticationFunction() AuthenticationFunction
 }

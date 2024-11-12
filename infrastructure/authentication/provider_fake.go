@@ -54,7 +54,7 @@ func (a *FakeAuthenticationProvider) AuthURL(_ context.Context) string {
 	return a.ExpectedAuthURL
 }
 
-func (a *FakeAuthenticationProvider) SetAuthURL(url string) {
+func (a *FakeAuthenticationProvider) setAuthUrl(url string) {
 	a.authURL = url
 }
 

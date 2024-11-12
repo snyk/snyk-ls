@@ -48,7 +48,6 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
-	"github.com/snyk/snyk-ls/internal/concurrency"
 	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
@@ -158,13 +157,13 @@ type Config struct {
 	cliSettings                      *CliSettings
 	configFile                       string
 	format                           string
-	isErrorReportingEnabled          concurrency.AtomicBool
-	isSnykCodeEnabled                concurrency.AtomicBool
-	isSnykOssEnabled                 concurrency.AtomicBool
-	isSnykIacEnabled                 concurrency.AtomicBool
-	isSnykContainerEnabled           concurrency.AtomicBool
-	isSnykAdvisorEnabled             concurrency.AtomicBool
-	manageBinariesAutomatically      concurrency.AtomicBool
+	isErrorReportingEnabled          bool
+	isSnykCodeEnabled                bool
+	isSnykOssEnabled                 bool
+	isSnykIacEnabled                 bool
+	isSnykContainerEnabled           bool
+	isSnykAdvisorEnabled             bool
+	manageBinariesAutomatically      bool
 	logPath                          string
 	logFile                          *os.File
 	snykCodeAnalysisTimeout          time.Duration
@@ -200,6 +199,7 @@ type Config struct {
 	folderAdditionalParameters       map[string][]string
 	hoverVerbosity                   int
 	offline                          bool
+	ws                               types.Workspace
 }
 
 func CurrentConfig() *Config {
@@ -245,10 +245,10 @@ func newConfig(engine workflow.Engine) *Config {
 	c.automaticAuthentication = true
 	c.configFile = ""
 	c.format = FormatMd
-	c.isErrorReportingEnabled.Set(true)
-	c.isSnykOssEnabled.Set(true)
-	c.isSnykIacEnabled.Set(true)
-	c.manageBinariesAutomatically.Set(true)
+	c.isErrorReportingEnabled = true
+	c.isSnykOssEnabled = true
+	c.isSnykIacEnabled = true
+	c.manageBinariesAutomatically = true
 	c.logPath = ""
 	c.snykCodeAnalysisTimeout = c.snykCodeAnalysisTimeoutFromEnv()
 	c.token = ""
@@ -358,23 +358,73 @@ func (c *Config) Format() string {
 	defer c.m.Unlock()
 	return c.format
 }
-func (c *Config) CLIDownloadLockFileName() string {
-	return filepath.Join(c.cliSettings.DefaultBinaryInstallPath(), "snyk-cli-download.lock")
+func (c *Config) CLIDownloadLockFileName() (string, error) {
+	c.cliSettings.cliPathAccessMutex.Lock()
+	defer c.cliSettings.cliPathAccessMutex.Unlock()
+	var path string
+	if c.cliSettings.cliPath == "" {
+		c.cliSettings.cliPath = c.cliSettings.DefaultBinaryInstallPath()
+	}
+	path = filepath.Dir(c.cliSettings.cliPath)
+	err := os.MkdirAll(path, 0755)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(path, "snyk-cli-download.lock"), nil
 }
-func (c *Config) IsErrorReportingEnabled() bool { return c.isErrorReportingEnabled.Get() }
-func (c *Config) IsSnykOssEnabled() bool        { return c.isSnykOssEnabled.Get() }
-func (c *Config) IsSnykCodeEnabled() bool       { return c.isSnykCodeEnabled.Get() }
-func (c *Config) IsSnykIacEnabled() bool        { return c.isSnykIacEnabled.Get() }
-func (c *Config) IsSnykContainerEnabled() bool  { return c.isSnykContainerEnabled.Get() }
-func (c *Config) IsSnykAdvisorEnabled() bool    { return c.isSnykAdvisorEnabled.Get() }
+
+func (c *Config) IsErrorReportingEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.isErrorReportingEnabled
+}
+
+func (c *Config) IsSnykOssEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.isSnykOssEnabled
+}
+
+func (c *Config) IsSnykCodeEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.isSnykCodeEnabled || c.activateSnykCodeSecurity || c.activateSnykCodeQuality
+}
+
+func (c *Config) IsSnykIacEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.isSnykIacEnabled
+}
+
+func (c *Config) IsSnykContainerEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.isSnykContainerEnabled
+}
+
+func (c *Config) IsSnykAdvisorEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.isSnykAdvisorEnabled
+}
+
 func (c *Config) LogPath() string {
 	c.m.Lock()
 	defer c.m.Unlock()
+
 	return c.logPath
 }
 func (c *Config) SnykApi() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
+
 	return c.snykApiUrl
 }
 
@@ -407,6 +457,7 @@ func (c *Config) FilterSeverity() types.SeverityFilter { return c.filterSeverity
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
+
 	return c.token
 }
 
@@ -415,12 +466,16 @@ func (c *Config) Token() string {
 func (c *Config) TokenChangesChannel() <-chan string {
 	c.m.Lock()
 	defer c.m.Unlock()
+
 	channel := make(chan string, 1)
 	c.tokenChangeChannels = append(c.tokenChangeChannels, channel)
 	return channel
 }
 
 func (c *Config) SetCliSettings(settings *CliSettings) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
 	c.cliSettings = settings
 }
 
@@ -467,19 +522,48 @@ func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
 	config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
 }
 
-func (c *Config) SetErrorReportingEnabled(enabled bool) { c.isErrorReportingEnabled.Set(enabled) }
-func (c *Config) SetSnykOssEnabled(enabled bool)        { c.isSnykOssEnabled.Set(enabled) }
-func (c *Config) SetSnykCodeEnabled(enabled bool) {
-	c.isSnykCodeEnabled.Set(enabled)
-	// the general setting overrules the specific one and should be slowly discontinued
-	c.EnableSnykCodeQuality(enabled)
-	c.EnableSnykCodeSecurity(enabled)
+func (c *Config) SetErrorReportingEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.isErrorReportingEnabled = enabled
 }
-func (c *Config) SetSnykIacEnabled(enabled bool) { c.isSnykIacEnabled.Set(enabled) }
 
-func (c *Config) SetSnykContainerEnabled(enabled bool) { c.isSnykContainerEnabled.Set(enabled) }
+func (c *Config) SetSnykOssEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
 
-func (c *Config) SetSnykAdvisorEnabled(enabled bool) { c.isSnykAdvisorEnabled.Set(enabled) }
+	c.isSnykOssEnabled = enabled
+}
+
+func (c *Config) SetSnykCodeEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.isSnykCodeEnabled = enabled
+	// the general setting overrules the specific one and should be slowly discontinued
+	c.activateSnykCodeQuality = enabled
+	c.activateSnykCodeSecurity = enabled
+}
+func (c *Config) SetSnykIacEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.isSnykIacEnabled = enabled
+}
+
+func (c *Config) SetSnykContainerEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.isSnykContainerEnabled = enabled
+}
+
+func (c *Config) SetSnykAdvisorEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.isSnykAdvisorEnabled = enabled
+}
 
 func (c *Config) SetSeverityFilter(severityFilter types.SeverityFilter) bool {
 	emptySeverityFilter := types.SeverityFilter{}
@@ -688,13 +772,13 @@ func (c *Config) SetOrganization(organization string) {
 func (c *Config) ManageBinariesAutomatically() bool {
 	c.m.RLock()
 	defer c.m.RUnlock()
-	return c.manageBinariesAutomatically.Get()
+	return c.manageBinariesAutomatically
 }
 
 func (c *Config) SetManageBinariesAutomatically(enabled bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.manageBinariesAutomatically.Set(enabled)
+	c.manageBinariesAutomatically = enabled
 }
 
 func (c *Config) ManageCliBinariesAutomatically() bool {
@@ -1088,4 +1172,18 @@ func (c *Config) Offline() bool {
 	defer c.m.RUnlock()
 
 	return c.offline
+}
+
+func (c *Config) Workspace() types.Workspace {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.ws
+}
+
+func (c *Config) SetWorkspace(workspace types.Workspace) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.ws = workspace
 }

@@ -33,13 +33,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// todo can we do without a singleton?
-var instance *Workspace
-
 // Workspace represents the highest entity in an IDE that contains code. A workspace may contain multiple folders
 type Workspace struct {
 	mutex               sync.Mutex
-	folders             map[string]*Folder
+	folders             map[string]types.Folder
 	instrumentor        performance.Instrumentor
 	scanner             scanner.Scanner
 	hoverService        hover.Service
@@ -54,8 +51,10 @@ type Workspace struct {
 func (w *Workspace) Issues() snyk.IssuesByFile {
 	issues := make(map[string][]snyk.Issue)
 	for _, folder := range w.folders {
-		for filePath, issueSlice := range folder.Issues() {
-			issues[filePath] = append(issues[filePath], issueSlice...)
+		if issueProvider, ok := folder.(snyk.IssueProvider); ok {
+			for filePath, issueSlice := range issueProvider.Issues() {
+				issues[filePath] = append(issues[filePath], issueSlice...)
+			}
 		}
 	}
 	return issues
@@ -63,9 +62,11 @@ func (w *Workspace) Issues() snyk.IssuesByFile {
 
 func (w *Workspace) Issue(key string) snyk.Issue {
 	for _, folder := range w.folders {
-		issue := folder.Issue(key)
-		if issue.ID != "" {
-			return issue
+		if issueProvider, ok := folder.(snyk.IssueProvider); ok {
+			issue := issueProvider.Issue(key)
+			if issue.ID != "" {
+				return issue
+			}
 		}
 	}
 	return snyk.Issue{}
@@ -81,7 +82,7 @@ func New(
 	scanPersister persistence.ScanSnapshotPersister,
 ) *Workspace {
 	return &Workspace{
-		folders:       make(map[string]*Folder),
+		folders:       make(map[string]types.Folder),
 		instrumentor:  instrumentor,
 		scanner:       scanner,
 		hoverService:  hoverService,
@@ -92,16 +93,7 @@ func New(
 	}
 }
 
-// todo can we move to di?
-func Get() *Workspace {
-	return instance
-}
-
-func Set(w *Workspace) {
-	instance = w
-}
-
-func (w *Workspace) ScanPersister() persistence.ScanSnapshotPersister {
+func (w *Workspace) GetScanSnapshotClearerExister() types.ScanSnapshotClearerExister {
 	return w.scanPersister
 }
 
@@ -112,7 +104,9 @@ func (w *Workspace) RemoveFolder(folderPath string) {
 	if folder == nil {
 		return
 	}
-	folder.Clear()
+	if cacheProvider, ok := folder.(snyk.CacheProvider); ok {
+		cacheProvider.Clear()
+	}
 	delete(w.folders, folderPath)
 }
 
@@ -120,16 +114,18 @@ func (w *Workspace) DeleteFile(filePath string) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	folder := w.GetFolderContaining(filePath)
-	if folder != nil {
-		folder.ClearIssues(filePath)
+	if cacheProvider, ok := folder.(snyk.CacheProvider); ok {
+		if folder != nil {
+			cacheProvider.ClearIssues(filePath)
+		}
 	}
 }
 
-func (w *Workspace) AddFolder(f *Folder) {
+func (w *Workspace) AddFolder(f types.Folder) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	if w.folders == nil {
-		w.folders = map[string]*Folder{}
+		w.folders = map[string]types.Folder{}
 	}
 	w.folders[f.Path()] = f
 }
@@ -139,7 +135,12 @@ func (w *Workspace) IssuesForFile(path string) []snyk.Issue {
 	if folder == nil {
 		return nil
 	}
-	return folder.IssuesForFile(path)
+
+	if issueProvider, ok := folder.(snyk.IssueProvider); ok {
+		return issueProvider.IssuesForFile(path)
+	}
+
+	return nil
 }
 
 func (w *Workspace) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
@@ -148,10 +149,14 @@ func (w *Workspace) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
 		return nil
 	}
 
-	return folder.IssuesForRange(path, r)
+	if issueProvider, ok := folder.(snyk.IssueProvider); ok {
+		return issueProvider.IssuesForRange(path, r)
+	}
+
+	return nil
 }
 
-func (w *Workspace) GetFolderContaining(path string) (folder *Folder) {
+func (w *Workspace) GetFolderContaining(path string) types.Folder {
 	for _, folder := range w.folders {
 		if folder.Contains(path) {
 			return folder
@@ -160,8 +165,8 @@ func (w *Workspace) GetFolderContaining(path string) (folder *Folder) {
 	return nil
 }
 
-func (w *Workspace) Folders() (folder []*Folder) {
-	folders := make([]*Folder, 0, len(w.folders))
+func (w *Workspace) Folders() (folder []types.Folder) {
+	folders := make([]types.Folder, 0, len(w.folders))
 	for _, folder := range w.folders {
 		folders = append(folders, folder)
 	}
@@ -179,11 +184,11 @@ func (w *Workspace) ScanWorkspace(ctx context.Context) {
 
 // ChangeWorkspaceFolders clears the "Removed" folders, adds the "New" folders,
 // and starts an automatic scan if auto-scans are enabled.
-func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFoldersParams) []*Folder {
+func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFoldersParams) []types.Folder {
 	for _, folder := range params.Event.Removed {
 		w.RemoveFolder(uri.PathFromUri(folder.Uri))
 	}
-	var changedWorkspaceFolders []*Folder
+	var changedWorkspaceFolders []types.Folder
 	for _, folder := range params.Event.Added {
 		f := NewFolder(w.c, uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister)
 		w.AddFolder(f)
@@ -194,14 +199,16 @@ func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFolder
 
 func (w *Workspace) Clear() {
 	for _, folder := range w.folders {
-		folder.Clear()
+		if cacheProvider, ok := folder.(snyk.CacheProvider); ok {
+			cacheProvider.Clear()
+		}
 	}
 
 	// this should already be done for each path by the folder.Clear() and is just a fail-safe
 	w.hoverService.ClearAllHovers()
 }
 
-func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []*Folder) {
+func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []types.Folder) {
 	currentConfig := config.CurrentConfig()
 	trustedFolderPaths := currentConfig.TrustedFolders()
 	for _, f := range foldersToBeTrusted {
@@ -213,7 +220,7 @@ func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted 
 	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 }
 
-func (w *Workspace) GetFolderTrust() (trusted []*Folder, untrusted []*Folder) {
+func (w *Workspace) GetFolderTrust() (trusted []types.Folder, untrusted []types.Folder) {
 	for _, folder := range w.folders {
 		if folder.IsTrusted() {
 			trusted = append(trusted, folder)

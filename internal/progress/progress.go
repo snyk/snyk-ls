@@ -17,6 +17,7 @@
 package progress
 
 import (
+	"maps"
 	"sync"
 	"time"
 
@@ -40,6 +41,7 @@ type Tracker struct {
 	lastReportPercentage int
 	finished             bool
 	lastMessage          string
+	m                    sync.Mutex
 }
 
 func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool) *Tracker {
@@ -101,6 +103,8 @@ func (t *Tracker) BeginWithMessage(title, message string) {
 }
 
 func (t *Tracker) ReportWithMessage(percentage int, message string) {
+	t.m.Lock()
+	defer t.m.Unlock()
 	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.ReportWithMessage").Logger()
 	if time.Now().Before(t.lastReport.Add(200 * time.Millisecond)) {
 		return
@@ -207,8 +211,11 @@ func CleanupChannels() {
 	}
 
 	trackersMutex.Lock()
-	defer trackersMutex.Unlock()
-	for token := range trackers {
+	tempTrackers := make(map[types.ProgressToken]*Tracker)
+	maps.Copy(tempTrackers, trackers)
+	trackersMutex.Unlock()
+
+	for token := range tempTrackers {
 		Cancel(token)
 	}
 }
@@ -218,10 +225,8 @@ func (t *Tracker) IsCanceled() bool {
 }
 
 func Cancel(token types.ProgressToken) {
-	lockedHere := trackersMutex.TryLock()
-	if lockedHere {
-		defer trackersMutex.Unlock()
-	}
+	trackersMutex.Lock()
+	defer trackersMutex.Unlock()
 	t, ok := trackers[token]
 	if ok {
 		t.cancelChannel <- true

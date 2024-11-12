@@ -19,6 +19,7 @@ package authentication
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	url2 "net/url"
 	"sync"
@@ -42,13 +43,15 @@ type fakeOauthAuthenticator struct {
 	expiry      time.Time
 	isSupported bool
 	config      configuration.Configuration
+	success     bool
 }
 
-func NewFakeOauthAuthenticator(tokenExpiry time.Time, isSupported bool, config configuration.Configuration) auth.Authenticator {
+func NewFakeOauthAuthenticator(tokenExpiry time.Time, isSupported bool, config configuration.Configuration, success bool) auth.Authenticator {
 	return &fakeOauthAuthenticator{
 		isSupported: isSupported,
 		config:      config,
 		expiry:      tokenExpiry,
+		success:     success,
 	}
 }
 
@@ -88,6 +91,10 @@ func (f *fakeOauthAuthenticator) GetAllCalls(op string) [][]any {
 
 func (f *fakeOauthAuthenticator) Authenticate() error {
 	f.addCall(nil, "Authenticate")
+	if !f.success {
+		return errors.New("fake auth error")
+	}
+
 	token := &oauth2.Token{AccessToken: "a", TokenType: "b", RefreshToken: "c", Expiry: f.expiry}
 
 	tokenString, err := json.Marshal(token)
@@ -98,7 +105,7 @@ func (f *fakeOauthAuthenticator) Authenticate() error {
 	return nil
 }
 
-func (f *fakeOauthAuthenticator) AddAuthenticationHeader(request *http.Request) error {
+func (f *fakeOauthAuthenticator) AddAuthenticationHeader(_ *http.Request) error {
 	f.addCall(nil, "AddAuthenticationHeader")
 	return nil
 }
@@ -109,7 +116,7 @@ func (f *fakeOauthAuthenticator) IsSupported() bool {
 
 func TestAuthenticateUsesAuthenticator(t *testing.T) {
 	config := configuration.New()
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, config).(*fakeOauthAuthenticator)
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, config, true).(*fakeOauthAuthenticator)
 
 	provider := newOAuthProvider(config, authenticator, config2.CurrentConfig().Logger())
 
@@ -122,9 +129,9 @@ func TestAuthenticateUsesAuthenticator(t *testing.T) {
 
 func TestAuthURL_ShouldReturnURL(t *testing.T) {
 	config := configuration.New()
-	authenticator := NewFakeOauthAuthenticator(time.Now().Add(10*time.Second), true, config).(*fakeOauthAuthenticator)
+	authenticator := NewFakeOauthAuthenticator(time.Now().Add(10*time.Second), true, config, true).(*fakeOauthAuthenticator)
 	provider := newOAuthProvider(config, authenticator, config2.CurrentConfig().Logger())
-	provider.SetAuthURL("https://auth.fake.snyk.io")
+	provider.setAuthUrl("https://auth.fake.snyk.io")
 	url := provider.AuthURL(context.Background())
 
 	assert.NotEmpty(t, url)

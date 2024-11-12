@@ -19,9 +19,7 @@ package command
 import (
 	"context"
 
-	"github.com/rs/zerolog"
-
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -29,7 +27,7 @@ import (
 type logoutCommand struct {
 	command     types.CommandData
 	authService authentication.AuthenticationService
-	logger      *zerolog.Logger
+	c           *config.Config
 }
 
 func (cmd *logoutCommand) Command() types.CommandData {
@@ -37,8 +35,8 @@ func (cmd *logoutCommand) Command() types.CommandData {
 }
 
 func (cmd *logoutCommand) Execute(ctx context.Context) (any, error) {
-	cmd.logger.Debug().Str("method", "logoutCommand.Execute").Msgf("logging out")
+	cmd.c.Logger().Debug().Str("method", "logoutCommand.Execute").Msgf("logging out")
 	cmd.authService.Logout(ctx)
-	workspace.Get().Clear()
+	cmd.c.Workspace().Clear()
 	return nil, nil
 }

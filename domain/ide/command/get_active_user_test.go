@@ -43,7 +43,7 @@ func Test_getActiveUser_Execute_User_found(t *testing.T) {
 
 	expectedUser, expectedUserData := whoamiWorkflowResponse(t)
 
-	mockEngine, engineConfig := setUpEngineMock(t, c)
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return(expectedUserData, nil)
 
@@ -76,7 +76,7 @@ func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cmd := setupCommandWithAuthService(t, c)
 
-	mockEngine, engineConfig := setUpEngineMock(t, c)
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return([]workflow.Data{}, nil)
 
@@ -90,7 +90,7 @@ func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cmd := setupCommandWithAuthService(t, c)
 
-	mockEngine, engineConfig := setUpEngineMock(t, c)
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	testError := errors.New("test error")
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return([]workflow.Data{}, testError)

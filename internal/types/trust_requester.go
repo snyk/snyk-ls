@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,10 @@
  * limitations under the License.
  */
 
-package command
+package types
 
-import (
-	"testing"
-
-	"github.com/golang/mock/gomock"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/mocks"
-
-	"github.com/snyk/snyk-ls/application/config"
-)
-
-func setUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {
-	t.Helper()
-	ctrl := gomock.NewController(t)
-	mockEngine := mocks.NewMockEngine(ctrl)
-	engineConfig := c.Engine().GetConfiguration()
-	c.SetEngine(mockEngine)
-	return mockEngine, engineConfig
+type TrustRequester interface {
+	StartRequestTrustCommunication()
+	EndRequestTrustCommunication()
+	IsTrustRequestOngoing() bool
 }

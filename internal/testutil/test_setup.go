@@ -23,7 +23,10 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -81,7 +84,7 @@ func cleanupFakeCliFile(c *config.Config) {
 func CLIDownloadLockFileCleanUp(t *testing.T) {
 	t.Helper()
 	// remove lock file before test and after test
-	lockFileName := config.CurrentConfig().CLIDownloadLockFileName()
+	lockFileName, _ := config.CurrentConfig().CLIDownloadLockFileName()
 	file, _ := os.Open(lockFileName)
 	_ = file.Close()
 	_ = os.Remove(lockFileName)
@@ -158,7 +161,7 @@ func SetupCustomTestRepo(t *testing.T, rootDir string, url string, targetCommit 
 	assert.NoError(t, os.MkdirAll(tempDir, 0755))
 	repoDir := "1"
 	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
-	cmd := []string{"clone", url, repoDir}
+	cmd := []string{"clone", "-v", url, repoDir}
 	logger.Debug().Interface("cmd", cmd).Msg("clone command")
 	clone := exec.Command("git", cmd...)
 	clone.Dir = tempDir
@@ -181,4 +184,13 @@ func SetupCustomTestRepo(t *testing.T, rootDir string, url string, targetCommit 
 
 	logger.Debug().Msg(string(output))
 	return absoluteCloneRepoDir, err
+}
+
+func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	mockEngine := mocks.NewMockEngine(ctrl)
+	engineConfig := c.Engine().GetConfiguration()
+	c.SetEngine(mockEngine)
+	return mockEngine, engineConfig
 }

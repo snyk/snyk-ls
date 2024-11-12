@@ -29,7 +29,6 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/uri"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -89,8 +88,8 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 	}, nil
 }
 
-func determineFolderPath(filePath string) string {
-	ws := workspace.Get()
+func (renderer *HtmlRenderer) determineFolderPath(filePath string) string {
+	ws := renderer.c.Workspace()
 	if ws == nil {
 		return ""
 	}
@@ -109,7 +108,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
 	}
-	folderPath := determineFolderPath(issue.AffectedFilePath)
+	folderPath := renderer.determineFolderPath(issue.AffectedFilePath)
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
 

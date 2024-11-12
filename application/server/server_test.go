@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
 	"github.com/creachadair/jrpc2"
@@ -77,23 +78,25 @@ func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
 	return didOpenParams, dirPath
 }
 
-func setupServer(t *testing.T) (server.Local, *testutil.JsonRPCRecorder) {
+func setupServer(t *testing.T, c *config.Config) (server.Local, *testutil.JsonRPCRecorder) {
 	t.Helper()
-	return setupCustomServer(t, nil)
+	return setupCustomServer(t, c, nil)
 }
 
-func setupServerWithCustomDI(t *testing.T, useMocks bool) (server.Local, *testutil.JsonRPCRecorder) {
+func setupServerWithCustomDI(t *testing.T, c *config.Config, useMocks bool) (server.Local, *testutil.JsonRPCRecorder) {
 	t.Helper()
-	s, jsonRPCRecorder := setupCustomServer(t, nil)
+	s, jsonRPCRecorder := setupCustomServer(t, c, nil)
 	if !useMocks {
 		di.Init()
 	}
 	return s, jsonRPCRecorder
 }
 
-func setupCustomServer(t *testing.T, callBackFn onCallbackFn) (server.Local, *testutil.JsonRPCRecorder) {
+func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) (server.Local, *testutil.JsonRPCRecorder) {
 	t.Helper()
-	c := testutil.UnitTest(t)
+	if c == nil {
+		c = testutil.UnitTest(t)
+	}
 	jsonRPCRecorder := &testutil.JsonRPCRecorder{}
 	loc := startServer(callBackFn, jsonRPCRecorder)
 	di.TestInit(t)
@@ -136,7 +139,12 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testutil.JsonRPCRecor
 			},
 		},
 		Server: &jrpc2.ServerOptions{
-			AllowPush: true,
+			AllowPush:   true,
+			Concurrency: 0, // set concurrency to < 1 causes initialization with number of cores
+			Logger: func(text string) {
+				config.CurrentConfig().Logger().Debug().Str("method", "json-rpc").Msg(text)
+			},
+			RPCLog: RPCLogger{c: config.CurrentConfig()},
 		},
 	}
 
@@ -150,13 +158,14 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testutil.JsonRPCRecor
 	c.ConfigureLogging(nil)
 
 	// the learn service isnt needed as the smoke tests use it directly
-	initHandlers(srv, handlers)
+	initHandlers(srv, handlers, c)
 
 	return loc
 }
 
 func Test_dummy_shouldNotBeServed(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	_, err := loc.Client.Call(ctx, "dummy", nil)
 	if err == nil {
@@ -165,7 +174,8 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 }
 
 func Test_initialize_shouldBeServed(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -178,7 +188,8 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 }
 
 func Test_shutdown_shouldBeServed(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	rsp, err := loc.Client.Call(ctx, "shutdown", nil)
 	assert.NoError(t, err)
@@ -186,7 +197,8 @@ func Test_shutdown_shouldBeServed(t *testing.T) {
 }
 
 func Test_initialize_containsServerInfo(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -200,7 +212,8 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 }
 
 func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
-	loc, jsonRpcRecorder := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, jsonRpcRecorder := setupServer(t, c)
 
 	params := types.InitializeParams{
 		InitializationOptions: types.Settings{RequiredProtocolVersion: "22"},
@@ -224,7 +237,8 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 }
 
 func Test_initialize_shouldSupportAllCommands(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -244,6 +258,7 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.LogoutCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.TrustWorkspaceFoldersCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GetLearnLesson)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.ReportAnalyticsCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.OpenLearnLesson)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GetSettingsSastEnabled)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GetFeatureFlagStatus)
@@ -255,7 +270,8 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -271,7 +287,8 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 }
 
 func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -285,7 +302,8 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 }
 
 func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	settings := types.Settings{ManageBinariesAutomatically: "true", CliPath: filepath.Join(t.TempDir(), "notexistent")}
 
@@ -302,7 +320,8 @@ func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 }
 
 func Test_initialized_shouldRedactToken(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 	oldStdErr := os.Stderr
 	file, err := os.Create(filepath.Join(t.TempDir(), "stderr"))
 	require.NoError(t, err)
@@ -329,8 +348,8 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 }
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
-	testutil.IntegTest(t) // this needs an authenticated user
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -363,7 +382,12 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 		t,
 		func() bool {
 			path := uri.PathFromUri(didOpenParams.TextDocument.URI)
-			return workspace.Get().GetFolderContaining(path).IssuesForFile(path) != nil
+			folder := c.Workspace().GetFolderContaining(path)
+			ip, ok := folder.(snyk.IssueProvider)
+			if !ok {
+				t.FailNow()
+			}
+			return ip.IssuesForFile(path) != nil
 		},
 		50*time.Second,
 		time.Millisecond,
@@ -386,8 +410,8 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 }
 
 func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
-	testutil.IntegTest(t) // this needs an authenticated user
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -420,7 +444,10 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 		t,
 		func() bool {
 			path := uri.PathFromUri(didOpenParams.TextDocument.URI)
-			return workspace.Get().GetFolderContaining(path).IssuesForFile(path) != nil
+			folder := c.Workspace().GetFolderContaining(path)
+			ip, ok := folder.(snyk.IssueProvider)
+			require.Truef(t, ok, "Expected to find snyk issue provider")
+			return ip.IssuesForFile(path) != nil
 		},
 		50*time.Second,
 		time.Millisecond,
@@ -444,7 +471,8 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 }
 
 func Test_initialize_updatesSettings(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	orgUuid, _ := uuid.NewRandom()
 	expectedOrgId := orgUuid.String()
@@ -470,6 +498,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 }
 
 func Test_initialize_integrationInInitializationOptions_readFromInitializationOptions(t *testing.T) {
+	c := testutil.UnitTest(t)
 	// Arrange
 	const expectedIntegrationName = "ECLIPSE"
 	const expectedIntegrationVersion = "0.0.1rc1"
@@ -478,7 +507,7 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 	t.Setenv(cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
 	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
 
-	loc, _ := setupServer(t)
+	loc, _ := setupServer(t, c)
 	clientParams := types.InitializeParams{
 		InitializationOptions: types.Settings{
 			IntegrationName:    expectedIntegrationName,
@@ -503,6 +532,7 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 }
 
 func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
+	c := testutil.UnitTest(t)
 	// Arrange
 	const expectedIntegrationName = "ECLIPSE"
 	const expectedIntegrationVersion = "8.0.0ServicePack92-preview4"
@@ -512,7 +542,7 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 	t.Setenv(cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
 	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIdeVersion)
 
-	loc, _ := setupServer(t)
+	loc, _ := setupServer(t, c)
 	clientParams := types.InitializeParams{
 		ClientInfo: sglsp.ClientInfo{
 			Name:    expectedIntegrationName,
@@ -538,13 +568,14 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 }
 
 func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
+	c := testutil.UnitTest(t)
 	// Arrange
 	const expectedIntegrationName = "ECLIPSE"
 	const expectedIntegrationVersion = "0.0.1rc1"
 
 	t.Setenv(cli.IntegrationNameEnvVarKey, expectedIntegrationName)
 	t.Setenv(cli.IntegrationVersionEnvVarKey, expectedIntegrationVersion)
-	loc, _ := setupServer(t)
+	loc, _ := setupServer(t, c)
 
 	// Act
 	_, err := loc.Client.Call(ctx, "initialize", nil)
@@ -559,11 +590,11 @@ func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
 }
 
 func Test_initialize_shouldOfferAllCommands(t *testing.T) {
-	loc, _ := setupServer(t)
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	sc := &scanner.TestScanner{}
-	workspace.Get().AddFolder(workspace.NewFolder(c, "dummy",
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy",
 		"dummy",
 		sc,
 		di.HoverService(),
@@ -591,7 +622,8 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 
 func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	t.Run("true when not included", func(t *testing.T) {
-		loc, _ := setupServer(t)
+		c := testutil.UnitTest(t)
+		loc, _ := setupServer(t, c)
 		initializationOptions := types.Settings{}
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(ctx, "initialize", params)
@@ -601,7 +633,8 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	})
 
 	t.Run("Parses true value", func(t *testing.T) {
-		loc, _ := setupServer(t)
+		c := testutil.UnitTest(t)
+		loc, _ := setupServer(t, c)
 		initializationOptions := types.Settings{
 			AutomaticAuthentication: "true",
 		}
@@ -613,7 +646,8 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	})
 
 	t.Run("Parses false value", func(t *testing.T) {
-		loc, _ := setupServer(t)
+		c := testutil.UnitTest(t)
+		loc, _ := setupServer(t, c)
 
 		initializationOptions := types.Settings{
 			AutomaticAuthentication: "false",
@@ -626,7 +660,8 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 }
 
 func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -645,11 +680,12 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 	}
 
 	assert.Nil(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second*5, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, c) }, time.Second*5, time.Millisecond)
 }
 
 func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		Token:                       "token",
@@ -673,11 +709,12 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	}
 
 	assert.Nil(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second*5, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, c) }, time.Second*5, time.Millisecond)
 }
 
 func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -695,12 +732,13 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	}
 
 	assert.NoError(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder) }, time.Second, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, c) }, time.Second, time.Millisecond)
 }
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
+	c.SetSnykCodeEnabled(true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
@@ -715,7 +753,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	// wait for publish
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(t, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
 		5*time.Second,
 		50*time.Millisecond,
 	)
@@ -747,8 +785,8 @@ patch: {}
 }
 
 func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(false)
 	c.SetAuthenticationMethod(types.FakeAuthentication)
 	di.AuthenticationService().ConfigureProviders(c)
@@ -775,8 +813,8 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 }
 
 func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
-	loc, _ := setupServer(t)
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -791,7 +829,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 
 	folder := workspace.NewFolder(c, fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
 		di.ScanPersister())
-	workspace.Get().AddFolder(folder)
+	c.Workspace().AddFolder(folder)
 
 	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
 
@@ -803,8 +841,9 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 }
 
 func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
+	c.SetSnykCodeEnabled(true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 	_, err := loc.Client.Call(ctx, "initialize", nil)
@@ -817,7 +856,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(t, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
 		time.Second,
 		time.Millisecond,
 	)
@@ -839,27 +878,28 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(t, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
 		5*time.Second,
 		time.Millisecond,
 	)
 }
 
 func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
-	loc, jsonRPCRecorder := setupServer(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
+	c.SetSnykCodeEnabled(true)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	config.CurrentConfig().SetAutomaticScanning(false)
+	c.SetAutomaticScanning(false)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
 
 	assert.Never(
 		t,
-		checkForPublishedDiagnostics(t, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
 		5*time.Second,
 		50*time.Millisecond,
 	)
@@ -871,7 +911,7 @@ func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Loc
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
 	}
-	workspace.Get().AddFolder(workspace.NewFolder(c, fileDir,
+	c.Workspace().AddFolder(workspace.NewFolder(c, fileDir,
 		"Test",
 		di.Scanner(),
 		di.HoverService(),
@@ -888,7 +928,8 @@ func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Loc
 }
 
 func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSaveWaitUntil", nil)
 	if err != nil {
@@ -897,7 +938,8 @@ func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 }
 
 func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
-	loc, _ := setupServer(t)
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
 
 	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
 	if err != nil {
@@ -906,11 +948,11 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 }
 
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
-	loc, _ := setupServer(t)
-	testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
+	loc, _ := setupServer(t, c)
 	testutil.CreateDummyProgressListener(t)
 	file := testutil.CreateTempFile(t, t.TempDir())
-	w := workspace.Get()
+	w := c.Workspace()
 
 	f := types.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(file.Name())}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
@@ -941,10 +983,10 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 
 // Check if published diagnostics for given testPath match the expectedNumber.
 // If expectedNumber == -1 assume check for expectedNumber > 0
-func checkForPublishedDiagnostics(t *testing.T, testPath string, expectedNumber int, jsonRPCRecorder *testutil.JsonRPCRecorder) func() bool {
+func checkForPublishedDiagnostics(t *testing.T, c *config.Config, testPath string, expectedNumber int, jsonRPCRecorder *testutil.JsonRPCRecorder) func() bool {
 	t.Helper()
 	return func() bool {
-		w := workspace.Get()
+		w := c.Workspace()
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
 		if len(notifications) < 1 {
 			return false
@@ -973,8 +1015,8 @@ func checkForSnykScan(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder) f
 }
 
 func Test_IntegrationHoverResults(t *testing.T) {
-	loc, _ := setupServer(t)
 	c := testutil.IntegTest(t)
+	loc, _ := setupServer(t, c)
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -1003,7 +1045,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		w := workspace.Get()
+		w := c.Workspace()
 		f := w.GetFolderContaining(cloneTargetDir)
 		return f != nil && f.IsScanned()
 	}, maxIntegTestDuration, 100*time.Millisecond)

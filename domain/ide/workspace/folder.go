@@ -25,7 +25,6 @@ import (
 
 	"github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/ide/workspace/ui"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	delta2 "github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
@@ -33,11 +32,9 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/delta"
 
-	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
-
-	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
+
+	"github.com/snyk/snyk-ls/internal/types"
 
 	gafanalytics "github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
@@ -56,11 +53,9 @@ var (
 	_ snyk.CacheProvider = (*Folder)(nil)
 )
 
-type FolderStatus int
-
 const (
-	Unscanned FolderStatus = iota
-	Scanned   FolderStatus = iota
+	Unscanned types.FolderStatus = iota
+	Scanned   types.FolderStatus = iota
 )
 
 // TODO: 3: Extract reporting logic to a separate service
@@ -70,7 +65,7 @@ const (
 type Folder struct {
 	path                    string
 	name                    string
-	status                  FolderStatus
+	status                  types.FolderStatus
 	documentDiagnosticCache *xsync.MapOf[string, []snyk.Issue]
 	scanner                 scanner.Scanner
 	hoverService            hover.Service
@@ -276,7 +271,7 @@ func (f *Folder) IsScanned() bool {
 	return f.status == Scanned
 }
 
-func (f *Folder) SetStatus(status FolderStatus) {
+func (f *Folder) SetStatus(status types.FolderStatus) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 	f.status = status
@@ -376,7 +371,6 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 
 func sendAnalytics(data *snyk.ScanData) {
 	c := config.CurrentConfig()
-	gafConfig := c.Engine().GetConfiguration()
 
 	logger := c.Logger().With().Str("method", "folder.sendAnalytics").Logger()
 	if data.Product == "" {
@@ -389,38 +383,29 @@ func sendAnalytics(data *snyk.ScanData) {
 		return
 	}
 
-	ic := gafanalytics.NewInstrumentationCollector()
-
-	//Add to the interaction attribute in the analytics event
-	iid := instrumentation.AssembleUrnFromUUID(uuid.NewString())
-	ic.SetInteractionId(iid)
-	ic.SetTimestamp(data.TimestampFinished)
-	ic.SetStage("dev")
-	ic.SetInteractionType("Scan done")
-
+	// this information is not filled automatically, so we need to collect it
 	categories := setupCategories(data, c)
-	ic.SetCategory(categories)
-	ic.SetStatus(gafanalytics.Success)
-
-	summary := createTestSummary(data, c)
-	ic.SetTestSummary(summary)
-
 	targetId, err := instrumentation.GetTargetId(data.Path, instrumentation.AutoDetectedTargetId)
 	if err != nil {
 		logger.Err(err).Msg("Error creating the Target Id")
 	}
-	ic.SetTargetId(targetId)
+	summary := createTestSummary(data, c)
 
-	ic.AddExtension("device_id", c.DeviceID())
-	ic.AddExtension("is_delta_scan", data.IsDeltaScan)
+	param := types.AnalyticsEventParam{
+		InteractionType: "Scan done",
+		Category:        categories,
+		Status:          string(gafanalytics.Success),
+		TargetId:        targetId,
+		TimestampMs:     data.TimestampFinished.UnixMilli(),
+		DurationMs:      int64(data.DurationMs),
+		Extension:       map[string]any{"is_delta_scan": data.IsDeltaScan},
+	}
 
-	//Populate the runtime attribute of the analytics event
-	ua := util.GetUserAgent(gafConfig, config.Version)
-	ic.SetUserAgent(ua)
-	ic.SetDuration(data.DurationMs)
+	ic := analytics.PayloadForAnalyticsEventParam(c, param)
 
-	//Set the final type attribute of the analytics event
-	ic.SetType("analytics")
+	// test specific data is not handled in the PayloadForAnalytics helper
+	// and must be added explicitly
+	ic.SetTestSummary(summary)
 
 	analyticsData, err := gafanalytics.GetV2InstrumentationObject(ic)
 	if err != nil {
@@ -614,7 +599,6 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendHovers(issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	ui.SendDiagnosticsOverview(f.c, product, issuesByFile, f.notifier)
 	f.sendSuccess(product)
 }
 
@@ -656,7 +640,7 @@ func (f *Folder) Uri() lsp.DocumentURI { return uri.PathToUri(f.path) }
 
 func (f *Folder) Name() string { return f.name }
 
-func (f *Folder) Status() FolderStatus { return f.status }
+func (f *Folder) Status() types.FolderStatus { return f.status }
 
 func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (matchingIssues []snyk.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"

@@ -99,11 +99,11 @@ func TestInitializeDefaultProductEnablement(t *testing.T) {
 func TestGetEnabledProducts_Oss(t *testing.T) {
 	t.Setenv(ActivateSnykOssKey, "false")
 	CurrentConfig().clientSettingsFromEnv()
-	assert.Equal(t, false, CurrentConfig().isSnykOssEnabled.Get())
+	assert.Equal(t, false, CurrentConfig().isSnykOssEnabled)
 
 	t.Setenv(ActivateSnykOssKey, "true")
 	CurrentConfig().clientSettingsFromEnv()
-	assert.Equal(t, true, CurrentConfig().isSnykOssEnabled.Get())
+	assert.Equal(t, true, CurrentConfig().isSnykOssEnabled)
 }
 
 func TestGetEnabledProducts_Code(t *testing.T) {

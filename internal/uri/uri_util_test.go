@@ -36,6 +36,23 @@ func TestPathFromUri(t *testing.T) {
 	assert.Equal(t, filepath.Clean(dir+"/asdf"), PathFromUri(u)) // Eclipse case
 }
 
+func TestPathFromUri_UNC(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skipf("testing windows UNC file paths")
+	}
+	uri := lsp.DocumentURI("file://host/folder/subfolder/subsubfolder")
+	res := PathFromUri(uri)
+	assert.Equal(t, "\\\\host\\folder\\subfolder\\subsubfolder", res)
+}
+
+func TestPathToUri_UNC(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skipf("testing windows UNC file paths")
+	}
+	res := PathToUri("\\\\host\\folder\\subfolder\\subsubfolder")
+	assert.Equal(t, "file://host/folder/subfolder/subsubfolder", string(res))
+}
+
 func TestFolderContains(t *testing.T) {
 	t.Run("Windows paths", func(t *testing.T) {
 		// we cannot use the testutil function here, as it would cause a cyclical import

@@ -23,7 +23,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/analytics"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
@@ -33,6 +39,53 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	err := runAuthEventTest(t, c, analytics.Success)
+
+	assert.NoError(t, err)
+}
+
+func TestAuthenticateSendsAuthenticationEventOnFailure(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	err := runAuthEventTest(t, c, analytics.Failure)
+
+	assert.Error(t, err)
+}
+
+func runAuthEventTest(t *testing.T, c *config.Config, status analytics.Status) error {
+	t.Helper()
+	gafConfig := configuration.New()
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, status == analytics.Success).(*fakeOauthAuthenticator)
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
+	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+
+	mockEngine.EXPECT().InvokeWithInputAndConfig(
+		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
+		mock.MatchedBy(func(i interface{}) bool {
+			inputData, ok := i.([]workflow.Data)
+			require.Truef(t, ok, "input should be workflow data")
+			require.Lenf(t, inputData, 1, "should only have one input")
+
+			payload := string(inputData[0].GetPayload().([]byte))
+
+			require.Contains(t, payload, "authenticated")
+			require.Contains(t, payload, "auth")
+			require.Contains(t, payload, status)
+			return true
+		}),
+		gomock.Any(),
+	).Return(nil, nil)
+
+	provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	_, err := service.Authenticate(context.Background())
+	return err
+}
 
 func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
@@ -60,6 +113,25 @@ func Test_UpdateCredentials(t *testing.T) {
 		service.UpdateCredentials(token, false)
 
 		assert.Equal(t, token, config.CurrentConfig().Token())
+	})
+}
+
+func Test_Authenticate(t *testing.T) {
+	t.Run("Get endpoint from GAF config and set in snyk-ls configuration ", func(t *testing.T) {
+		apiEndpoint := "https://api.eu.snyk.io"
+		c := testutil.UnitTest(t)
+		c.Engine().GetConfiguration().Set(configuration.API_URL, apiEndpoint)
+
+		provider := FakeAuthenticationProvider{C: c}
+		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+
+		_, err := service.Authenticate(context.Background())
+		if err != nil {
+			return
+		}
+
+		uiEndpoint := c.SnykUI()
+		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
 	})
 }
 
@@ -145,7 +217,7 @@ func TestHandleInvalidCredentials(t *testing.T) {
 		}
 		go notifier.CreateListener(callback)
 
-		cut.HandleInvalidCredentials()
+		cut.handleInvalidCredentials()
 
 		maxWait := time.Second * 10
 		assert.Eventuallyf(t, func() bool {
@@ -154,4 +226,86 @@ func TestHandleInvalidCredentials(t *testing.T) {
 			return messageRequestReceived
 		}, maxWait, time.Millisecond, "didn't receive show message request to re-authenticate")
 	})
+}
+
+func TestGetApiUrl(t *testing.T) {
+	defaultUrl := config.DefaultSnykApiUrl
+	customUrl := "https://custom.snyk.io"
+	engineUrl := "https://engine.snyk.io"
+
+	tests := []struct {
+		name           string
+		customUrl      string
+		engineUrl      string
+		expectedResult string
+	}{
+		{
+			name:           "Default URL when custom and engine URLs are not set",
+			customUrl:      defaultUrl,
+			engineUrl:      "",
+			expectedResult: defaultUrl,
+		},
+		{
+			name:           "Engine URL when custom URL is default and engine URL is set",
+			customUrl:      defaultUrl,
+			engineUrl:      engineUrl,
+			expectedResult: engineUrl,
+		},
+		{
+			name:           "Custom URL when it's different from default and engine URL",
+			customUrl:      customUrl,
+			engineUrl:      engineUrl,
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL when custom URL equals engine URL",
+			customUrl:      customUrl,
+			engineUrl:      customUrl,
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL when engine URL is empty",
+			customUrl:      customUrl,
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL when engine URL is empty",
+			customUrl:      "",
+			engineUrl:      engineUrl,
+			expectedResult: engineUrl,
+		},
+		{
+			name:           "Custom URL when it's different from default and engine URL is empty",
+			customUrl:      customUrl,
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL with trailing slash",
+			customUrl:      "https://custom.snyk.io/",
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL with trailing spaces",
+			customUrl:      "https://custom.snyk.io   ",
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+		{
+			name:           "Custom URL with trailing slashes and spaces",
+			customUrl:      "https://custom.snyk.io///   ",
+			engineUrl:      "",
+			expectedResult: customUrl,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getPrioritizedApiUrl(tt.customUrl, tt.engineUrl)
+			assert.Equal(t, tt.expectedResult, result, "getApiUrl(%v, %v) = %v; want %v",
+				tt.customUrl, tt.engineUrl, result, tt.expectedResult)
+		})
+	}
 }

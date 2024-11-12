@@ -49,7 +49,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	cmd := logoutCommand{
 		command:     types.CommandData{CommandId: types.LogoutCommand},
 		authService: authenticationService,
-		logger:      c.Logger(),
+		c:           c,
 	}
 
 	sc := scanner.NewTestScanner()
@@ -65,7 +65,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		notifier,
 		scanPersister,
 	)
-	workspace.Set(w)
+	c.SetWorkspace(w)
 	w.AddFolder(folder)
 
 	ctx := context.Background()

@@ -26,18 +26,28 @@ type AuthenticationService interface {
 	// Authenticate attempts to authenticate the user, and sends a notification to the client when successful
 	Authenticate(ctx context.Context) (string, error)
 
+	// Provider returns current authentication provider.
 	Provider() AuthenticationProvider
+
+	// provider returns current authentication provider.
+	// doesn't have a mutex lock.
+	provider() AuthenticationProvider
 
 	// UpdateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
 	// client if sendNotification is true
 	UpdateCredentials(newToken string, sendNotification bool)
+
+	// updateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
+	// client if sendNotification is true
+	// doesn't have a mutex lock
+	updateCredentials(newToken string, sendNotification bool)
 
 	Logout(ctx context.Context)
 
 	// IsAuthenticated returns true if the token is verified
 	IsAuthenticated() bool
 
-	// AddProvider sets the authentication provider
+	// SetProvider sets the authentication provider
 	SetProvider(provider AuthenticationProvider)
 
 	// ConfigureProviders updates the providers based on the stored configuration

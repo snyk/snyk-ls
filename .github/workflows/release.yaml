@@ -118,6 +118,7 @@ jobs:
           echo $LICENSES
 
       - name: Build binaries and github release
+        if: github.event_name == 'workflow_dispatch'
         uses: goreleaser/goreleaser-action@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -129,6 +130,7 @@ jobs:
           args: release --clean
 
       - name: Output compiled licenses
+        if: github.event_name == 'workflow_dispatch'
         run: |
           chmod +x build/snyk-ls_linux_amd64_v1/snyk-ls
           build/snyk-ls_linux_amd64_v1/snyk-ls -licenses

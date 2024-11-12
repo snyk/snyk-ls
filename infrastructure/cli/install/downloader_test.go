@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -42,11 +43,12 @@ func TestDownloader_Download(t *testing.T) {
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
 	config.CurrentConfig().CliSettings().SetPath(destination)
-	lockFileName := d.lockFileName()
+	lockFileName, err := d.lockFileName()
+	require.NoError(t, err)
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
 
-	err := d.Download(r, false)
+	err = d.Download(r, false)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, progressCh)
@@ -80,7 +82,9 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	assert.Error(t, err)
 
 	// make sure cancellation cleanup works
-	_, err = os.Stat(config.CurrentConfig().CLIDownloadLockFileName())
+	lockFileName, err := config.CurrentConfig().CLIDownloadLockFileName()
+	require.NoError(t, err)
+	_, err = os.Stat(lockFileName)
 	assert.Error(t, err)
 }
 
@@ -88,23 +92,23 @@ func getTestAsset() *Release {
 	r := &Release{
 		Assets: &ReleaseAssets{
 			MacOS: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.1276.0/snyk-macos",
+				URL:          "https://downloads.snyk.io/cli/v1.1276.0/snyk-macos",
 				ChecksumInfo: "00c7f96ce389cff3f79e920ba345efef2ab78f80ffebd8922082dfca07ed3af0  snyk-macos",
 			},
 			MacOSARM64: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.1276.0/snyk-macos-arm64",
+				URL:          "https://downloads.snyk.io/cli/v1.1276.0/snyk-macos-arm64",
 				ChecksumInfo: "691b455a8fdcfb31089ca460658d060b51c58b2e37dc757e8b5434ca0a9b80cf  snyk-macos-arm64",
 			},
 			Linux: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.1276.0/snyk-linux",
+				URL:          "https://downloads.snyk.io/cli/v1.1276.0/snyk-linux",
 				ChecksumInfo: "4ade26062f3631bf04ca6a75a7c560752585d2aed025a6a4be97517dbb4701ce  snyk-linux",
 			},
 			LinuxARM64: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.1276.0/snyk-linux-arm64",
+				URL:          "https://downloads.snyk.io/cli/v1.1276.0/snyk-linux-arm64",
 				ChecksumInfo: "c26cc7e49354c24d4eeaec41445c612f3b93ad782482fbf9f7d38947815f01a8  snyk-linux-arm64",
 			},
 			Windows: &ReleaseAsset{
-				URL:          "https://static.snyk.io/cli/v1.1276.0/snyk-win.exe",
+				URL:          "https://downloads.snyk.io/cli/v1.1276.0/snyk-win.exe",
 				ChecksumInfo: "76f38b24fe996dcdcb6750f005f2f07044c7a01b7f355d59f88104611a2c9d65  snyk-win.exe",
 			},
 		},

@@ -26,7 +26,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -41,7 +40,7 @@ func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier
 
 func sendFolderConfigsNotification(notifier noti.Notifier) {
 	c := config.CurrentConfig()
-	ws := workspace.Get()
+	ws := c.Workspace()
 	var folderConfigs []types.FolderConfig
 	for _, f := range ws.Folders() {
 		folderConfig := c.FolderConfig(f.Path())
@@ -56,8 +55,9 @@ func sendFolderConfigsNotification(notifier noti.Notifier) {
 }
 
 func initScanPersister(persister persistence.ScanSnapshotPersister) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "initScanPersister").Logger()
-	w := workspace.Get()
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "initScanPersister").Logger()
+	w := c.Workspace()
 	var folderList []string
 	for _, f := range w.Folders() {
 		folderList = append(folderList, f.Path())
@@ -69,7 +69,7 @@ func initScanPersister(persister persistence.ScanSnapshotPersister) {
 }
 
 func HandleUntrustedFolders(ctx context.Context, srv types.Server) {
-	w := workspace.Get()
+	w := config.CurrentConfig().Workspace()
 	// debounce requests from overzealous clients (Eclipse, I'm looking at you)
 	if w.IsTrustRequestOngoing() {
 		return
@@ -90,7 +90,7 @@ func HandleUntrustedFolders(ctx context.Context, srv types.Server) {
 	}
 }
 
-func showTrustDialog(srv types.Server, untrusted []*workspace.Folder, dontTrust string, doTrust string) (types.MessageActionItem, error) {
+func showTrustDialog(srv types.Server, untrusted []types.Folder, dontTrust string, doTrust string) (types.MessageActionItem, error) {
 	method := "showTrustDialog"
 	logger := config.CurrentConfig().Logger()
 	result, err := srv.Callback(context.Background(), "window/showMessageRequest", types.ShowMessageRequestParams{
@@ -114,7 +114,7 @@ func showTrustDialog(srv types.Server, untrusted []*workspace.Folder, dontTrust 
 	return trust, err
 }
 
-func GetTrustMessage(untrusted []*workspace.Folder) string {
+func GetTrustMessage(untrusted []types.Folder) string {
 	var untrustedFolderString string
 	for _, folder := range untrusted {
 		untrustedFolderString += folder.Path() + "\n"
