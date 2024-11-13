@@ -111,10 +111,10 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	var resp *http.Response
 
 	resp, err = d.httpClient().Get(downloadURL) //nolint:bodyclose // body is closed in a longer-lived goroutine
-	logger.Debug().Any("response-headers", resp.Header).Msg("headers")
 	if err != nil {
 		return err
 	}
+	logger.Debug().Any("response-headers", resp.Header).Msg("headers")
 
 	go func(body io.ReadCloser) {
 		cancel := func() {

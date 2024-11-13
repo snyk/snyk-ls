@@ -39,7 +39,8 @@ type TemplateData struct {
 	SeverityIcon template.HTML
 	Description  template.HTML
 	Remediation  template.HTML
-	Path         template.HTML
+	ResourcePath template.HTML
+	FilePath     template.HTML
 	Nonce        template.HTML
 }
 
@@ -88,7 +89,8 @@ func (service *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		SeverityIcon: html.SeverityIcon(issue),
 		Description:  html.MarkdownToHTML(issue.Message),
 		Remediation:  html.MarkdownToHTML(issueData.Resolve),
-		Path:         formatPath(issueData.Path),
+		ResourcePath: formatPath(issueData.Path),
+		FilePath:     template.HTML(issue.Path()),
 		Nonce:        template.HTML(nonce),
 	}
 

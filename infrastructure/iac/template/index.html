@@ -32,6 +32,7 @@
   <!-- The following <style> tag is a placeholder that will be replaced by IDE-specific styles.
     IDEs can inject their own styles dynamically by replacing this tag using the data-ide-style attribute. -->
   <style nonce="ideNonce" data-ide-style></style>
+  ${ideStyle}
 </head>
 
 <body>
@@ -64,7 +65,7 @@
     <div class="summary-item path">
       <div class="label">Path</div>
       <div class="content">
-        <pre><code class="path">{{.Path}}</code></pre>
+        <pre><code class="path">{{.ResourcePath}}</code></pre>
       </div>
     </div>
   </section>
@@ -82,7 +83,17 @@
       {{end}}
     </div>
   </section>
+  <!-- Ignore Issue in File -->
+  {{if not .Issue.IsIgnored}}
+  <footer id="ignore-container" class="ignore-action-container hidden">
+    <div id="ignore-actions">
+      <div class="actions row">
+        <button id="ignore-file-issue" issue="{{.Issue.ID}}" resourcePath="{{.ResourcePath}}" filePath="{{.FilePath}}" class="ignore-button secondary">Ignore in this file</button>
+      </div>
+    </div>
+  </footer>
+  {{end}}
 </div>
 </body>
-
+${ideScript}
 </html>

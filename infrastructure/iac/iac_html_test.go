@@ -27,8 +27,13 @@ func Test_IaC_Html_getIacHtml(t *testing.T) {
 	assert.Contains(t, iacPanelHtml, "Role or ClusterRole with too wide permissions", "HTML should contain the issue title")
 	assert.Contains(t, iacPanelHtml, "The role uses wildcards, which grant the role permissions to the whole cluster", "HTML should contain the issue description")
 	assert.Contains(t, iacPanelHtml, "Set only the necessary permissions required", "HTML should contain the remediation instructions")
+	// If Issue.IsIgnored = true, these will not be present
+	if !createIacIssueSample().IsIgnored {
+		assert.Contains(t, iacPanelHtml, `<footer id="ignore-container" class="ignore-action-container hidden">`, "If Issue is not ignored, hidden footer with ignore options should be present.")
+		assert.Contains(t, iacPanelHtml, `/Users/cata/git/playground/dex/examples/k8s/dex.yaml`, "HTML should contain file path for the ignore functionality")
+	}
 
-	// Path is correctly formatted
+	// ResourcePath is correctly formatted
 	assert.Contains(t, iacPanelHtml, "[DocId: 5] > rules[0] > verbs", "HTML should contain the path to the affected file")
 
 	// Issue ID is present and linked correctly
