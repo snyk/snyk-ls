@@ -30,7 +30,6 @@
   }
 
   // DOM element references
-  const ignoreContainer = document.getElementById("ignore-container");
   const ignoreInFileBtn = document.getElementById('ignore-file-issue')
 
 
@@ -40,7 +39,6 @@
   let filePath =  ignoreInFileBtn.getAttribute('filePath')
 
   ignoreInFileBtn?.addEventListener("click", applyIgnoreInFile);
-  toggleElement(ignoreContainer, "show");
 
   window.receiveIgnoreInFileResponse = function (success){
     console.log('[[receiveIgnoreInFileResponse]]', success);
