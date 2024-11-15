@@ -95,9 +95,9 @@
   {{end}}
 </div>
 </body>
-<script nonce="{{.Nonce}}">
+${ideScript}
+<script nonce="{{.Nonce}}" defer>
     {{.Scripts}}
-    ${ideScript}
-  </script>
+</script>
 
 </html>
