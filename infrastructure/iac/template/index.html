@@ -95,5 +95,10 @@
   {{end}}
 </div>
 </body>
-${ideScript}
+<script nonce="{{.Nonce}}">
+  (function(){
+    {{.Scripts}}
+    ${ideScript}
+  })()
+  </script>
 </html>
