@@ -35,6 +35,7 @@ type HtmlRenderer struct {
 
 type TemplateData struct {
 	Styles       template.CSS
+	Scripts      template.JS
 	Issue        snyk.Issue
 	SeverityIcon template.HTML
 	Description  template.HTML
@@ -49,6 +50,9 @@ var detailsHtmlTemplate string
 
 //go:embed template/styles.css
 var stylesCSS string
+
+//go:embed template/scripts.js
+var scripts string
 
 func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 	tmp, err := template.New(string(product.ProductInfrastructureAsCode)).Parse(detailsHtmlTemplate)
@@ -65,6 +69,10 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 
 func getStyles() template.CSS {
 	return template.CSS(stylesCSS)
+}
+
+func getScripts() template.JS {
+	return template.JS(scripts)
 }
 
 // Function to get the rendered HTML with issue details and CSS
@@ -85,6 +93,7 @@ func (service *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 
 	data := TemplateData{
 		Styles:       getStyles(),
+		Scripts:      getScripts(),
 		Issue:        issue,
 		SeverityIcon: html.SeverityIcon(issue),
 		Description:  html.MarkdownToHTML(issue.Message),

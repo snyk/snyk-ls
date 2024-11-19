@@ -45,6 +45,9 @@ func Test_IaC_Html_getIacHtml(t *testing.T) {
 	// Reference section
 	assert.Contains(t, iacPanelHtml, `<a class="styled-link"  rel="noopener noreferrer" href="https://kubernetes.io/docs/reference/access-authn-authz/rbac/">https://kubernetes.io/docs/reference/access-authn-authz/rbac/</a>`, "HTML should contain the first reference")
 	assert.Contains(t, iacPanelHtml, `<a class="styled-link"  rel="noopener noreferrer" href="https://kubernetes.io/docs/reference/access-authn-authz/rbac/#role-and-clusterrole">https://kubernetes.io/docs/reference/access-authn-authz/rbac/#role-and-clusterrole</a>`, "HTML should contain the second reference")
+
+	// Scripts are loaded
+	assert.Contains(t, iacPanelHtml, "function applyIgnoreInFile()", "Scripts should be injected in HTML template")
 }
 
 func createIacIssueSample() snyk.Issue {
