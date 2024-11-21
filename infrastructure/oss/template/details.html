@@ -18,6 +18,8 @@
 <html lang="en">
 
 <head>
+  <meta http-equiv='Content-Type' content='text/html; charset=unicode' />
+  <meta http-equiv='X-UA-Compatible' content='IE=edge' />
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
@@ -33,10 +35,10 @@
       --scroll-bar-hover-background-color: var(#595a5c);
       --horizontal-border-color: var();
       --code-background-color: var();
+      --tab-is-selected-color : var();
       --container-background-color: var(--vscode-background);
       font-size: var(--vscode-font-size);
     }
-
     ::-webkit-scrollbar {
       width: 8px;
     }
@@ -50,7 +52,7 @@
     }
 
     .delimiter-top {
-      border-top: 1px solid var(--border-color);
+      border-top: 1px solid var(--horizontal-border-color);
     }
 
     a, .link {
@@ -60,6 +62,7 @@
     }
 
     body {
+      background-color: var(--background-color);
       color: var(--text-color);
       font-family: var(--default-font);
       font-size: 0.85rem;

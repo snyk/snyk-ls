@@ -18,6 +18,8 @@
 <html lang="en">
 
 <head>
+  <meta http-equiv='Content-Type' content='text/html; charset=unicode' />
+  <meta http-equiv='X-UA-Compatible' content='IE=edge' />
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
@@ -36,6 +38,11 @@
       --horizontal-border-color: var();
       --code-background-color: var(--vscode-editor-background);
       --tab-active-background-color: var(--vscode-tab-activeBackground);
+      /* This doesn't exist yet in VSCode*/
+      --border-color: var(--vscode-border-color);
+      --example-line-removed-color: var(--vscode-line-removed-color);
+      --example-line-added-color: var(--vscode-line-added-color);
+      --generated-ai-fix-button-background-color: var(--vscode-button-background)
     }
 
     section {
@@ -201,6 +208,7 @@
       justify-content: flex-start;
       line-height: 1.125rem;
       padding: 0.5em;
+      font-size: 0.85rem;
       border-radius: 0.25em;
       width: 100%;
       box-sizing: border-box;
@@ -215,6 +223,7 @@
       margin-left: 1em;
       background: #FFF4ED;
       color: #B6540B;
+      font-size: 0.75rem;
       border: 1px solid #E27122;
     }
 
@@ -258,6 +267,7 @@
     }
 
     .data-flow-clickable-row {
+      color: var(--link-color);
       font-weight: 400;
       width: 3.9375rem;
       text-align: right;
@@ -286,8 +296,7 @@
       opacity: 0.5;
     }
 
-    .main-tabs-nav,
-    .tabs-nav {
+    .main-tabs-nav {
       display: flex;
       list-style-type: none;
       overflow: hidden;
@@ -303,9 +312,6 @@
       display: block;
     }
 
-    .tab-item-icon {
-      vertical-align: middle;
-    }
 
     .tab-item {
       font-weight: 500;
@@ -319,9 +325,6 @@
       transition: background-color 0.3s, border-color 0.3s;
     }
 
-    .tab-item-icon {
-      color: inherit;
-    }
 
     .example-fixes h2 {
       margin-bottom: 0.5em;
@@ -460,9 +463,55 @@
     button.generate-ai-fix,
     button.sn-apply-fix {
       border-radius: 3px;
-      border: none;
+      background-color: var(--generated-ai-fix-button-background-color);
+      color: white;
       cursor: pointer;
     }
+    button.sn-apply-fix{
+      padding: 4px 12px;
+      background: var(--dark-button-default);
+      background-color: var(--generated-ai-fix-button-background-color)
+    }
+
+    .delimiter-top {
+      border-top: 1px solid var(--border-color);
+    }
+    .dark .light-only,
+    .high-contrast:not(.high-contrast-light) .light-only {
+      display: none;
+    }
+    .light .dark-only,
+    .high-contrast.high-contrast-light .dark-only {
+      display: none;
+    }
+
+    .sn-ai-fixes {
+      padding-top: 20px;
+    }
+
+    .sn-ai-fix-error {
+      padding-top: 20px;
+    }
+
+    .tab-item:hover {
+      background-color: var(--tab-item-hover-color);
+    }
+    .tab-item.is-selected {
+      border-bottom: 3px solid #3474f0;
+    }
+
+    .example-line.added {
+      background-color: var(--example-line-added-color);
+    }
+    .example-line.removed {
+      background-color: var(--example-line-removed-color);
+    }
+    .tab-item.is-selected {
+      border-bottom: 3px solid #3474f0;
+    }
+
+
+
 
     button.generate-ai-fix:hover,
     button.sn-apply-fix:hover {
@@ -514,15 +563,9 @@
     .sn-apply-fix {
       margin-top: 1rem;
     }
-
-    .sn-readmore {
-      margin-top: 1.6rem;
-    }
-
     .sn-loading {
       display: flex;
     }
-
     .sn-loading svg {
       inline-size: 6rem;
       block-size: auto;
@@ -739,19 +782,19 @@
 </head>
 
 <body>
-  <!-- Ignore header -->
-  {{if .IsIgnored}}
-  <div class="ignore-warning-wrapper">
-    <div class="ignore-warning ">
-      <svg class="ignore-warning-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
-        <path d="M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" fill="#D68000" />
-      </svg>
-      <span><strong>Ignored.</strong> This issue is currently ignored.</span>
-    </div>
-  </div>
-  {{end}}
   <!-- Panel header -->
   <header class="panel-header">
+    <!-- Ignore header -->
+    {{if .IsIgnored}}
+    <div class="ignore-warning-wrapper">
+      <div class="ignore-warning ">
+        <svg class="ignore-warning-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
+          <path d="M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" fill="#D68000" />
+        </svg>
+        <span><strong>Ignored.</strong> This issue is currently ignored.</span>
+      </div>
+    </div>
+    {{end}}
     <div class="severity-container">
       {{.SeverityIcon}}
       <h2 class="severity-title">{{.IssueTitle}}</h2>
@@ -1036,7 +1079,7 @@
 
   <!-- Ignore In Line Actions -->
   {{if not .IsIgnored}}
-  <footer class="ignore-action-container">
+  <footer class="ignore-action-container hidden">
     <div id="ignore-actions">
       <div class="actions row">
         <button id="ignore-line-issue" class="ignore-button secondary">Ignore on line <span
