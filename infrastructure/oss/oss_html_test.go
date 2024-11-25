@@ -275,3 +275,31 @@ func Test_OssDetailsPanel_html_withSeverityChangePolicy(t *testing.T) {
 	// Assert
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "A policy has affected the severity of this issue. It was originally critical severity"))
 }
+func Test_OssDetailsPanel_html_hasCSS(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	issueAdditionalData := snyk.OssIssueData{
+		Title:       "myTitle",
+		Name:        "myIssue",
+		Description: "- list",
+		From:        []string{"1", "2", "3", "4"},
+		CVSSv3:      "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+	}
+
+	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
+
+	issue := snyk.Issue{
+		ID:             "randomId",
+		Severity:       snyk.Critical,
+		AdditionalData: issueAdditionalData,
+	}
+
+	// invoke methode under test
+	htmlRenderer, err := NewHtmlRenderer(c)
+	assert.NoError(t, err)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	// check if styles are present
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, "--default-font: \"SF Pro Text\", \"Segoe UI\", \"Ubuntu\", Geneva, Verdana, Tahoma, sans-serif;\n"))
+
+}

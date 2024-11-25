@@ -3,13 +3,14 @@
 
 :root {
   --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
-  --background-color: var();
-  --text-color: var();
-  --link-color: var();
+  --background-color: var(--vscode-editor-background);
+  --text-color: var(--vscode-foreground);
+  --link-color: var(--vscode-textLink-foreground);
   --scroll-bar-hover-background-color: var(#595a5c);
   --horizontal-border-color: var();
-  --code-background-color: var();
+  --code-background-color: var(--vscode-editor-background);
 }
+
 
 ::-webkit-scrollbar {
   width: 8px;
@@ -20,7 +21,7 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--scroll-bar-hover-background-color);
+  background: var();
 }
 
 *,
@@ -30,8 +31,9 @@
 }
 
 body {
+  padding: 0;
   background-color: var(--background-color);
-  font-family: var(--default-font);
+  font-family: var(--default-font), sans-serif;
   font-size: 0.8rem;
   font-weight: 400;
   color: var(--text-color);
@@ -59,6 +61,14 @@ section {
   padding: 20px;
 }
 
+.styled-link {
+  text-decoration: none;
+}
+
+.styled-link:hover {
+  cursor: pointer;
+  text-decoration: underline;
+}
 .font-light {
   font-weight: bold;
 }
@@ -89,10 +99,6 @@ section {
   font-weight: 400;
 }
 
-.styled-link:hover {
-  cursor: pointer;
-  text-decoration: underline;
-}
 
 .suggestion {
   position: relative;
@@ -120,10 +126,6 @@ section {
   text-align: center;
 }
 
-.severity .icon {
-  width: 32px;
-  height: 32px;
-}
 
 .delimiter {
   display: inline-block;
@@ -169,6 +171,7 @@ section {
 
 div.remediation {
   padding: 16px 0 16px 8px;
+  background-color: var(--code-background-color);
 }
 
 div.remediation p {
@@ -206,6 +209,11 @@ header {
   margin-bottom: 1rem;
   line-height: 1rem;
   font-size: 1rem;
+}
+
+.severity .icon {
+  width: 32px;
+  height: 32px;
 }
 
 footer {

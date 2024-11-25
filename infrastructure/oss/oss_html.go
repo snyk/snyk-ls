@@ -34,6 +34,9 @@ import (
 //go:embed template/details.html
 var detailsHtmlTemplate string
 
+//go:embed template/styles.css
+var panelStylesTemplate string
+
 type HtmlRenderer struct {
 	c              *config.Config
 	globalTemplate *template.Template
@@ -93,6 +96,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"DetailedPaths":      detailedPaths,
 		"MoreDetailedPaths":  len(detailedPaths) - 3,
 		"Policy":             buildPolicyMap(additionalData),
+		"Styles":             template.CSS(panelStylesTemplate),
 	}
 
 	var htmlBuffer bytes.Buffer

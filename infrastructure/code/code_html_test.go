@@ -280,7 +280,37 @@ func getFixes() []snyk.ExampleCommitFix {
 			},
 		}}
 }
+func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
+	c := testutil.UnitTest(t)
 
+	dataFlow := getDataFlowElements()
+	fixes := getFixes()
+	repoCount := 54387
+	issue := snyk.Issue{
+		Range:     getIssueRange(),
+		CWEs:      []string{"CWE-123", "CWE-456"},
+		ID:        "go/NoHardcodedCredentials/test",
+		Severity:  2,
+		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
+		AdditionalData: snyk.CodeIssueData{
+			Title:              "Allocation of Resources Without Limits or Throttling",
+			DataFlow:           dataFlow,
+			ExampleCommitFixes: fixes,
+			RepoDatasetSize:    repoCount,
+			IsSecurityType:     true,
+			Text:               getVulnerabilityOverviewText(),
+			PriorityScore:      890,
+			HasAIFix:           true,
+		},
+	}
+
+	// invoke method under test
+	htmlRenderer, err := NewHtmlRenderer(c)
+	assert.NoError(t, err)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	// assert Fixes section
+	assert.Contains(t, codePanelHtml, "--default-font: \"SF Pro Text\", \"Segoe UI\", \"Ubuntu\", Geneva, Verdana, Tahoma, sans-serif;\n")
+}
 func getDataFlowElements() []snyk.DataFlowElement {
 	return []snyk.DataFlowElement{
 		{
