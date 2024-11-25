@@ -301,5 +301,4 @@ func Test_OssDetailsPanel_html_hasCSS(t *testing.T) {
 
 	// check if styles are present
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "--default-font: \"SF Pro Text\", \"Segoe UI\", \"Ubuntu\", Geneva, Verdana, Tahoma, sans-serif;\n"))
-
 }
