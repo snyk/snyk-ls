@@ -38,7 +38,7 @@ body {
   padding: 0;
   background-color: var(--background-color);
   color: var(--text-color);
-  font-family: var(--default-font), sans-serif;
+  font-family: var(--default-font);
   font-size: 0.85rem;
   overflow-y: auto;
   overflow-x: hidden;
@@ -137,7 +137,7 @@ section {
   overflow-x: auto;
   border-radius: 4px;
   background-color: var(--container-background-color);
-  font-family: var(--editor-font-family), var(--default-font), sans-serif;
+  font-family: var(--editor-font-family), var(--default-font);
   border: 1px solid var(--border-color);
 }
 

@@ -33,7 +33,7 @@
 body {
   padding: 0;
   background-color: var(--background-color);
-  font-family: var(--default-font), sans-serif;
+  font-family: var(--default-font);
   font-size: 0.8rem;
   font-weight: 400;
   color: var(--text-color);
