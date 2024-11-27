@@ -54,7 +54,7 @@ h2, h3 {
   font-size: 1rem;
   margin-block-start: 0;
   margin-block-end: 0.4rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 section {
@@ -203,7 +203,8 @@ header {
 
 .severity-title {
   padding-left: 8px;
-  font-size: 1.4rem;
+  font-size: 1.3rem;
+  text-transform: capitalize;
 }
 
 .severity-type-container {
