@@ -573,9 +573,11 @@ func setClientInformation(initParams types.InitializeParams) {
 	}
 
 	// Fallback because Visual Studio doesn't send initParams.ClientInfo
-	if clientInfoName == "" && clientInfoVersion == "" {
-		clientInfoName = integrationName
-		clientInfoVersion = integrationVersion
+	if clientInfoName == "" && clientInfoVersion == "" && strings.Contains(integrationName, "@@") && strings.Contains(integrationVersion, "@@") {
+		clientInfoName = strings.Split(integrationName, "@@")[0]
+		integrationName = strings.Split(integrationName, "@@")[1]
+		clientInfoVersion = strings.Split(integrationVersion, "@@")[0]
+		integrationVersion = strings.Split(integrationVersion, "@@")[1]
 	}
 
 	c := config.CurrentConfig()
