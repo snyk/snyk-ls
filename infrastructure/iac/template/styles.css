@@ -3,13 +3,14 @@
 
 :root {
   --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
-  --background-color: var();
-  --text-color: var();
-  --link-color: var();
+  --background-color: var(--vscode-editor-background);
+  --text-color: var(--vscode-foreground);
+  --link-color: var(--vscode-textLink-foreground);
   --scroll-bar-hover-background-color: var(#595a5c);
   --horizontal-border-color: var();
-  --code-background-color: var();
+  --code-background-color: var(--vscode-editor-background);
 }
+
 
 ::-webkit-scrollbar {
   width: 8px;
@@ -20,7 +21,7 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--scroll-bar-hover-background-color);
+  background: var();
 }
 
 *,
@@ -30,6 +31,7 @@
 }
 
 body {
+  padding: 0;
   background-color: var(--background-color);
   font-family: var(--default-font);
   font-size: 0.8rem;
@@ -52,13 +54,21 @@ h2, h3 {
   font-size: 1rem;
   margin-block-start: 0;
   margin-block-end: 0.4rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 section {
   padding: 20px;
 }
 
+.styled-link {
+  text-decoration: none;
+}
+
+.styled-link:hover {
+  cursor: pointer;
+  text-decoration: underline;
+}
 .font-light {
   font-weight: bold;
 }
@@ -71,9 +81,13 @@ a,
 .delimiter-top {
   border-top: 1px solid var(--horizontal-border-color);
 }
+h2, h3{
+  text-transform: uppercase;
+}
 
 code {
   background-color: var(--code-background-color);
+  color: var(--text-color);
   padding: 1px 3px;
   border-radius: 4px;
   font-size: 0.8rem;
@@ -89,10 +103,6 @@ section {
   font-weight: 400;
 }
 
-.styled-link:hover {
-  cursor: pointer;
-  text-decoration: underline;
-}
 
 .suggestion {
   position: relative;
@@ -120,10 +130,6 @@ section {
   text-align: center;
 }
 
-.severity .icon {
-  width: 32px;
-  height: 32px;
-}
 
 .delimiter {
   display: inline-block;
@@ -169,6 +175,7 @@ section {
 
 div.remediation {
   padding: 16px 0 16px 8px;
+  background-color: var(--code-background-color);
 }
 
 div.remediation p {
@@ -196,7 +203,8 @@ header {
 
 .severity-title {
   padding-left: 8px;
-  font-size: 1.4rem;
+  font-size: 1.3rem;
+  text-transform: capitalize;
 }
 
 .severity-type-container {
@@ -206,6 +214,11 @@ header {
   margin-bottom: 1rem;
   line-height: 1rem;
   font-size: 1rem;
+}
+
+.severity .icon {
+  width: 32px;
+  height: 32px;
 }
 
 footer {

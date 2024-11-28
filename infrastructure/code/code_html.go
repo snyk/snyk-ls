@@ -64,6 +64,9 @@ type ExampleCommit struct {
 //go:embed template/details.html
 var detailsHtmlTemplate string
 
+//go:embed template/styles.css
+var panelStylesTemplate string
+
 type HtmlRenderer struct {
 	c              *config.Config
 	globalTemplate *template.Template
@@ -143,6 +146,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"FolderPath":         folderPath,
 		"FilePath":           issue.Path(),
 		"IssueId":            issue.AdditionalData.GetKey(),
+		"Styles":             template.CSS(panelStylesTemplate),
 	}
 
 	if issue.IsIgnored {
