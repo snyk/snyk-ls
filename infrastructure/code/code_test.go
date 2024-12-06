@@ -891,6 +891,65 @@ func TestNormalizeBranchName(t *testing.T) {
 	assert.Equal(t, expectedBranchName, normaliedBranchName)
 }
 
+func TestFilterCodeIssues(t *testing.T) {
+	c := testutil.UnitTest(t)
+	securityIssue := snyk.Issue{
+		AdditionalData: snyk.CodeIssueData{IsSecurityType: true},
+		ID:             "security-1",
+	}
+	qualityIssue := snyk.Issue{
+		AdditionalData: snyk.CodeIssueData{IsSecurityType: false},
+		ID:             "quality-1",
+	}
+
+	testCases := []struct {
+		name                   string
+		isSnykCodeEnabled      bool
+		isCodeSecurityEnabled  bool
+		isCodeQualityEnabled   bool
+		inputIssues            []snyk.Issue
+		expectedFilteredIssues []snyk.Issue
+	}{
+		{
+			name:                   "only security enabled",
+			isCodeSecurityEnabled:  true,
+			isCodeQualityEnabled:   false,
+			inputIssues:            []snyk.Issue{securityIssue, qualityIssue},
+			expectedFilteredIssues: []snyk.Issue{securityIssue},
+		},
+		{
+			name:                   "only quality enabled",
+			isCodeSecurityEnabled:  false,
+			isCodeQualityEnabled:   true,
+			inputIssues:            []snyk.Issue{securityIssue, qualityIssue},
+			expectedFilteredIssues: []snyk.Issue{qualityIssue},
+		},
+		{
+			name:                   "both quality and security enabled",
+			isCodeSecurityEnabled:  true,
+			isCodeQualityEnabled:   true,
+			inputIssues:            []snyk.Issue{securityIssue, qualityIssue},
+			expectedFilteredIssues: []snyk.Issue{securityIssue, qualityIssue},
+		},
+		{
+			name:                   "both disabled",
+			isCodeSecurityEnabled:  false,
+			isCodeQualityEnabled:   false,
+			inputIssues:            []snyk.Issue{securityIssue, qualityIssue},
+			expectedFilteredIssues: []snyk.Issue{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			c.EnableSnykCodeQuality(tc.isCodeQualityEnabled)
+			c.EnableSnykCodeSecurity(tc.isCodeSecurityEnabled)
+			result := filterCodeIssues(c, tc.inputIssues)
+			assert.ElementsMatch(t, tc.expectedFilteredIssues, result)
+		})
+	}
+}
+
 func getInterfileTestCodeIssueData() snyk.CodeIssueData {
 	return snyk.CodeIssueData{
 		DataFlow: []snyk.DataFlowElement{
