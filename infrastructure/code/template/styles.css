@@ -36,7 +36,8 @@
   --border-color: var(--vscode-border-color);
   --example-line-removed-color: var(--vscode-line-removed-color);
   --example-line-added-color: var(--vscode-line-added-color);
-  --generated-ai-fix-button-background-color: var(--vscode-button-background)
+  --generated-ai-fix-button-background-color: var(--vscode-button-background);
+  --disabled-background-color: var(--vscode-foreground);
 }
 
 ::-webkit-scrollbar {
@@ -537,7 +538,9 @@ button.sn-apply-fix{
   background: var(--dark-button-default);
   background-color: var(--generated-ai-fix-button-background-color)
 }
-
+button.sn-apply-fix:disabled{
+  background-color: var(--disabled-background-color);
+}
 .delimiter-top {
   border-top: 1px solid var(--border-color);
 }
