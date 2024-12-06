@@ -204,13 +204,31 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	if err != nil {
 		return nil, err
 	}
-
+	results = filterCodeIssues(c, results)
 	// Populate HTML template
 	sc.enhanceIssuesDetails(results, folderPath)
 
 	sc.removeFromCache(filesToBeScanned)
 	sc.addToCache(results)
 	return results, err
+}
+
+func filterCodeIssues(c *config.Config, issues []snyk.Issue) []snyk.Issue {
+	if c.IsSnykCodeSecurityEnabled() && c.IsSnykCodeQualityEnabled() {
+		return issues
+	}
+	var result []snyk.Issue
+	for _, issue := range issues {
+		additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+		if !ok {
+			continue
+		}
+		shouldAdd := additionalData.IsSecurityType && c.IsSnykCodeSecurityEnabled() || !additionalData.IsSecurityType && c.IsSnykCodeQualityEnabled()
+		if shouldAdd {
+			result = append(result, issue)
+		}
+	}
+	return result
 }
 
 func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger zerolog.Logger, filesToBeScanned map[string]bool) (results []snyk.Issue, err error) {
