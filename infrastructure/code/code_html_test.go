@@ -401,16 +401,10 @@ func getIgnoreReason(version string) string {
 }
 
 func Test_Prepare_DataFlowTable(t *testing.T) {
-
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
 	issue := snyk.Issue{
-		Range:     getIssueRange(),
-		CWEs:      []string{"CWE-123", "CWE-456"},
-		ID:        "go/NoHardcodedCredentials/test",
-		Severity:  2,
-		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",
 			DataFlow:           dataFlow,
