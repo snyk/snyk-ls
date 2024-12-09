@@ -114,7 +114,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 	folderPath := renderer.determineFolderPath(issue.AffectedFilePath)
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
-
+	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
 	data := map[string]interface{}{
 		"IssueTitle":         additionalData.Title,
 		"IssueMessage":       additionalData.Message,
@@ -124,7 +124,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"IssueOverview":      html.MarkdownToHTML(additionalData.Text),
 		"IsIgnored":          issue.IsIgnored,
 		"DataFlow":           additionalData.DataFlow,
-		"DataFlowTable":      prepareDataFlowTable(additionalData),
+		"DataFlowKeys":       dataFlowKeys,
+		"DataFlowTable":      dataFlowTable,
 		"RepoCount":          additionalData.RepoDatasetSize,
 		"ExampleCount":       len(additionalData.ExampleCommitFixes),
 		"ExampleCommitFixes": exampleCommits,
@@ -190,12 +191,13 @@ func parseCategory(category string) string {
 	return category
 }
 
-func prepareDataFlowTable(issue snyk.CodeIssueData) map[string][]DataFlowItem {
+func prepareDataFlowTable(issue snyk.CodeIssueData) ([]string, map[string][]DataFlowItem) {
 	items := make(map[string][]DataFlowItem, 0)
-
+	var dataFlowKeys []string
 	for i, flow := range issue.DataFlow {
 		fileName := filepath.Base(flow.FilePath)
 		if items[fileName] == nil {
+			dataFlowKeys = append(dataFlowKeys, fileName)
 			items[fileName] = []DataFlowItem{}
 		}
 		items[fileName] = append(items[fileName], DataFlowItem{
@@ -210,7 +212,7 @@ func prepareDataFlowTable(issue snyk.CodeIssueData) map[string][]DataFlowItem {
 			StartLineValue: flow.FlowRange.Start.Line + 1,
 		})
 	}
-	return items
+	return dataFlowKeys, items
 }
 
 type ExampleLines struct {
