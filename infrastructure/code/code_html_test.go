@@ -399,3 +399,42 @@ func getIgnoreReason(version string) string {
 	}
 	return `After a comprehensive review, our security team determined that the risk associated with this specific XSS vulnerability is mitigated by additional security measures implemented at the network and application layers.`
 }
+
+func Test_Prepare_DataFlowTable(t *testing.T) {
+
+	dataFlow := getDataFlowElements()
+	fixes := getFixes()
+	repoCount := 54387
+	issue := snyk.Issue{
+		Range:     getIssueRange(),
+		CWEs:      []string{"CWE-123", "CWE-456"},
+		ID:        "go/NoHardcodedCredentials/test",
+		Severity:  2,
+		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
+		AdditionalData: snyk.CodeIssueData{
+			Title:              "Allocation of Resources Without Limits or Throttling",
+			DataFlow:           dataFlow,
+			ExampleCommitFixes: fixes,
+			RepoDatasetSize:    repoCount,
+			IsSecurityType:     true,
+			Text:               getVulnerabilityOverviewText(),
+			PriorityScore:      890,
+			HasAIFix:           true,
+		},
+	}
+	codeIssueData := issue.AdditionalData.(snyk.CodeIssueData)
+	dataFlowKeys, dataFlowItems := prepareDataFlowTable(codeIssueData)
+
+	assert.Equal(t, len(dataFlowKeys), len(dataFlowItems))
+	assert.Contains(t, dataFlowItems, "main.ts")
+	assert.Equal(t, dataFlowKeys[1], "main.ts")
+}
+
+func Test_Prepare_DataFlowTable_Empty(t *testing.T) {
+	var codeIssueData snyk.CodeIssueData
+	dataFlowKeys, dataFlowItems := prepareDataFlowTable(codeIssueData)
+
+	assert.Equal(t, len(dataFlowKeys), len(dataFlowItems))
+	assert.Equal(t, len(dataFlowItems), 0)
+	assert.Equal(t, dataFlowKeys, []string(nil))
+}
