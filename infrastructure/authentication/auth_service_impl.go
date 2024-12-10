@@ -114,6 +114,7 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics
 		InteractionType: "authenticated",
 		Category:        []string{"auth", string(a.c.AuthenticationMethod())},
 		Status:          string(status),
+		TargetId:        "https://none",
 	}
 
 	ic := analytics2.PayloadForAnalyticsEventParam(a.c, event)
