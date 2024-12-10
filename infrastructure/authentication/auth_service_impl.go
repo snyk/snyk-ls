@@ -98,7 +98,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
 
 	if prioritizedUrl != customUrl {
-		defer a.notifier.SendShowMessage(sglsp.Info, "The Snyk API Endpoint has been updated.")
+		defer a.notifier.SendShowMessage(sglsp.Info, fmt.Sprintf("The Snyk API Endpoint has been updated to %s.", prioritizedUrl))
 	}
 
 	a.c.UpdateApiEndpoints(prioritizedUrl)
@@ -143,6 +143,12 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	defaultUrl := config.DefaultSnykApiUrl
 	customUrl = strings.TrimRight(customUrl, "/ ")
+
+	//This case is for testing. In this case pre-prod is the default url, and we want to redirect calls to url
+	//provided by engine.
+	if customUrl == "https://api.pre-prod.snyk.io" && engineUrl != "" {
+		return engineUrl
+	}
 
 	// If the custom URL is not changed (equals default) and no engine URL is provided,
 	// use the default URL.
@@ -221,6 +227,9 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 
 func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	logger := a.c.Logger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
+
+	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL)
+	a.notifier.SendShowMessage(sglsp.Info, fmt.Sprintf("EngineUrl is %s.", engineUrl))
 
 	_, found := a.authCache.Get(a.c.Token())
 	if found {

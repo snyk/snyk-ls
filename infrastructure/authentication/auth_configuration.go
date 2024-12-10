@@ -96,6 +96,7 @@ func NewOAuthProvider(
 		conf,
 		auth.WithOpenBrowserFunc(openBrowserFunc),
 		auth.WithTokenRefresherFunc(customTokenRefresherFunc),
+		auth.WithLogger(c.Logger()),
 	)
 	return newOAuthProvider(conf, authenticator, c.Logger())
 }
