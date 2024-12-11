@@ -24,7 +24,9 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 	err = engine.Init()
 	assert.Nil(t, err)
 
-	engineConfig := configuration.NewInMemory()
+	engineConfig := configuration.NewWithOpts(
+		configuration.WithAutomaticEnv(),
+	)
 	engineConfig.Set(configuration.DEBUG, true)
 	engineConfig.Set("logLevelFlag", expectedLoglevel)
 	engineConfig.Set("logPathFlag", expectedLogPath)
