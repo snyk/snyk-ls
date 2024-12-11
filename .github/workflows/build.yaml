@@ -257,7 +257,7 @@ jobs:
       - name: Create License Report
         id: create_license_report
         run: |
-          go install github.com/google/go-licenses@latest
+          make tools
           LICENSES=$(go-licenses report . --ignore github.com/snyk/snyk-ls)
           echo 'LICENSES<<EOF' >> $GITHUB_OUTPUT
           echo $LICENSES >> $GITHUB_OUTPUT
