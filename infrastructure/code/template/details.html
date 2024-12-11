@@ -144,7 +144,96 @@
               </div>
             </div>
           </section>
+          <!-- Data Flow and Fixed Code Examples -->
+          <div id="no-ai-fix-wrapper">
+            <!-- Data Flow -->
+            <section class="data-flow-section delimiter-top">
+              <h2 class="data-flow-header">
+                Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
+              </h2>
+              <div class="data-flow-body">
+                {{range $fileName := .DataFlowKeys}}
+                <div class="data-flow-file">
+                  {{$.FileIcon}}
+                  <span class="data-flow-file-name">{{$fileName}}</span>
+                </div>
+                <table class="data-flow-table">
+                  <tbody>
+                  {{range index $.DataFlowTable $fileName}}
+                  <tr class="data-flow-row">
+                    <td class="data-flow-number">
+                      <div class="data-flow-circle">{{.Number}}</div>
+                      <div class="data-flow-line"></div>
+                    </td>
+                    <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
+                        end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
+                      {{.StartLineValue}}
+                    </td>
+                    <td class="delimiter data-flow-delimiter">|</td>
+                    <td class="data-flow-text">
+                      <code>{{.Content}}</code>
+                    </td>
+                  </tr>
+                  {{end}}
+                  </tbody>
 
+                </table>
+                {{end}}
+              </div>
+            </section>
+
+            <!-- Fixed Code Examples -->
+            <section class="example-fixes delimiter-top {{if .HasAIFix}}hidden{{end}}">
+              <h2 class="example-fixes-header">Fixed Code Examples</h2>
+              {{if eq (len .ExampleCommitFixes) 0}}
+              <div id="info-no-examples" class="font-light">
+                No example fixes are available.
+              </div>
+              {{else}}
+              <p id="example-fixes-info-top" class="example-fixes-info-top font-light">
+                This type of vulnerability was fixed in {{.RepoCount}} open source projects.
+              </p>
+              <div id="example-top" class="row between">
+                <div id="current-example" class="repo clickable">
+                  {{.GitHubIcon}}
+                  <span id="example-link" class="example-repo-link">
+                    <a id="example-repo-anchor" href="{{(index .ExampleCommitFixes 0).RepoLink}}"
+                       rel="noopener noreferrer">
+                      {{(index .ExampleCommitFixes 0).RepoName}}
+                    </a>
+                  </span>
+                </div>
+                <div class="examples-nav">
+                  <span id="previous-example" class="arrow" title="Previous example">
+                    {{.ArrowLeftDark}}
+                    {{.ArrowLeftLight}}
+                  </span>
+                  <span id="example-text">
+                    Example <strong id="example-counter">1</strong>/<span id="example-number2">{{.ExampleCount}}</span>
+                  </span>
+                  <span id="next-example" class="arrow" title="Next example">
+                    {{.ArrowRightDark}}
+                    {{.ArrowRightLight}}
+                  </span>
+                </div>
+              </div>
+
+              <div id="example" class="example">
+                {{range $index, $element := .ExampleCommitFixes}}
+                <div class="example-detail {{if ne $index 0}}hidden{{end}}" data-index=" {{$index}}">
+                  <div>
+                    {{range $element.ExampleLines}}
+                    <div class="example-line {{.LineChange}}">
+                      <code>{{.Line}}</code>
+                    </div>
+                    {{end}}
+                  </div>
+                </div>
+                {{end}}
+              </div>
+              {{end}}
+            </section>
+          </div>
           <!-- AI Fix -->
           <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
             <!-- AI fix buttons -->
@@ -223,93 +312,6 @@
                 <button id="retry-generate-fix" folder-path="{{.FolderPath}}" file-path="{{.FilePath}}"
                         issue-id="{{.IssueId}}" class="button generate-ai-fix">✨ Retry AI fix</button>
               </div>
-            </section>
-          </div>
-
-          <!-- Data Flow and Fixed Code Examples -->
-          <div id="no-ai-fix-wrapper" class="{{if .HasAIFix}}hidden{{end}}">
-            <!-- Data Flow -->
-            <section class="data-flow-section delimiter-top">
-              <h2 class="data-flow-header">
-                Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
-              </h2>
-              <div class="data-flow-body">
-                {{range $fileName := .DataFlowKeys}}
-                <div class="data-flow-file">
-                  {{$.FileIcon}}
-                  <span class="data-flow-file-name">{{$fileName}}</span>
-                </div>
-                <table class="data-flow-table">
-                  <tbody>
-                    {{range index $.DataFlowTable $fileName}}
-                    <tr class="data-flow-row">
-                      <td class="data-flow-number">{{.Number}}</td>
-                      <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
-                        end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
-                        line:{{.StartLineValue}}
-                      </td>
-                      <td class="delimiter data-flow-delimiter">|</td>
-                      <td class="data-flow-text">
-                        <code>{{.Content}}</code>
-                      </td>
-                    </tr>
-                    {{end}}
-                  </tbody>
-                </table>
-                {{end}}
-              </div>
-            </section>
-
-            <!-- Fixed Code Examples -->
-            <section class="example-fixes delimiter-top">
-              <h2 class="example-fixes-header">Fixed Code Examples</h2>
-              {{if eq (len .ExampleCommitFixes) 0}}
-              <div id="info-no-examples" class="font-light">
-                No example fixes are available.
-              </div>
-              {{else}}
-              <p id="example-fixes-info-top" class="example-fixes-info-top font-light">
-                This type of vulnerability was fixed in {{.RepoCount}} open source projects.
-              </p>
-              <div id="example-top" class="row between">
-                <div id="current-example" class="repo clickable">
-                  {{.GitHubIcon}}
-                  <span id="example-link" class="example-repo-link">
-                    <a id="example-repo-anchor" href="{{(index .ExampleCommitFixes 0).RepoLink}}"
-                      rel="noopener noreferrer">
-                      {{(index .ExampleCommitFixes 0).RepoName}}
-                    </a>
-                  </span>
-                </div>
-                <div class="examples-nav">
-                  <span id="previous-example" class="arrow" title="Previous example">
-                    {{.ArrowLeftDark}}
-                    {{.ArrowLeftLight}}
-                  </span>
-                  <span id="example-text">
-                    Example <strong id="example-counter">1</strong>/<span id="example-number2">{{.ExampleCount}}</span>
-                  </span>
-                  <span id="next-example" class="arrow" title="Next example">
-                    {{.ArrowRightDark}}
-                    {{.ArrowRightLight}}
-                  </span>
-                </div>
-              </div>
-
-              <div id="example" class="example">
-                {{range $index, $element := .ExampleCommitFixes}}
-                <div class="example-detail {{if ne $index 0}}hidden{{end}}" data-index=" {{$index}}">
-                  <div>
-                    {{range $element.ExampleLines}}
-                    <div class="example-line {{.LineChange}}">
-                      <code>{{.Line}}</code>
-                    </div>
-                    {{end}}
-                  </div>
-                </div>
-                {{end}}
-              </div>
-              {{end}}
             </section>
           </div>
         </div>
