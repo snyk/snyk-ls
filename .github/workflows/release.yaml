@@ -111,7 +111,7 @@ jobs:
         id: create_license_report
         run: |
           make tools
-          LICENSES=$(go-licenses report . --ignore github.com/snyk/snyk-ls)
+          LICENSES=$(make licenses)
           echo 'LICENSES<<EOF' >> $GITHUB_OUTPUT
           echo $LICENSES >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
