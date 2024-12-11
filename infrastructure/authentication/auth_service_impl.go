@@ -21,12 +21,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/instrumentation"
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
@@ -110,11 +112,15 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 
 func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics.Status, err error) {
 	logger := a.c.Logger().With().Str("method", "sendAuthenticationAnalytics").Logger()
+	id, err2 := instrumentation.GetTargetId(os.Args[0], instrumentation.FilesystemTargetId)
+	if err2 != nil {
+		id = "pkg:filesystem/dummy/dummy"
+	}
 	event := types.AnalyticsEventParam{
 		InteractionType: "authenticated",
 		Category:        []string{"auth", string(a.c.AuthenticationMethod())},
 		Status:          string(status),
-		TargetId:        "https://none",
+		TargetId:        id,
 	}
 
 	ic := analytics2.PayloadForAnalyticsEventParam(a.c, event)
