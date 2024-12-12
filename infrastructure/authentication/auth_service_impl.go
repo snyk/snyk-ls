@@ -100,7 +100,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
 
 	if prioritizedUrl != customUrl {
-		defer a.notifier.SendShowMessage(sglsp.Info, "The Snyk API Endpoint has been updated.")
+		defer a.notifier.SendShowMessage(sglsp.Info, fmt.Sprintf("The Snyk API Endpoint has been updated to %s.", prioritizedUrl))
 	}
 
 	a.c.UpdateApiEndpoints(prioritizedUrl)
