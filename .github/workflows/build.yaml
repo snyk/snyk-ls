@@ -269,6 +269,7 @@ jobs:
         env:
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:
+          version: "v2.4.7"
           args: release --clean --snapshot
 
       - name: Output compiled licenses
