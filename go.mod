@@ -10,7 +10,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/erni27/imcache v1.2.0
 	github.com/getsentry/sentry-go v0.28.1
-	github.com/go-git/go-git/v5 v5.12.0
+	github.com/go-git/go-git/v5 v5.12.1-0.20241212091622-6d03e408c838
 	github.com/golang/mock v1.6.0
 	github.com/gomarkdown/markdown v0.0.0-20240730141124-034f12af3bf6
 	github.com/google/uuid v1.6.0
@@ -29,7 +29,7 @@ require (
 	github.com/snyk/go-application-framework v0.0.0-20241206091813-21505aec617a
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/subosito/gotenv v1.6.0
 	github.com/writeas/go-strip-markdown v2.0.1+incompatible
 	github.com/xtgo/uuid v0.0.0-20140804021211-a0b114877d4c
