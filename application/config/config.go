@@ -274,7 +274,9 @@ func initWorkFlowEngine(c *Config) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	conf := configuration.NewInMemory()
+	conf := configuration.NewWithOpts(
+		configuration.WithAutomaticEnv(),
+	)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, enableOAuth)

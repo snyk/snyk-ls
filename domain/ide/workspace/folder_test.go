@@ -455,7 +455,9 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	gafConfig := configuration.NewInMemory()
+	gafConfig := configuration.NewWithOpts(
+		configuration.WithAutomaticEnv(),
+	)
 	engineMock := workflow.NewWorkFlowEngine(gafConfig)
 	c.SetEngine(engineMock)
 

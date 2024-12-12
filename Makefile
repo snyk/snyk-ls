@@ -120,7 +120,7 @@ endif
 
 .PHONY: build-release
 build-release: $(TOOLS_BIN)/go-licenses
-	@LICENSES=$(go-licenses report . --ignore github.com/snyk/snyk-ls) goreleaser release --clean --snapshot
+	@LICENSES=$(make licenses) goreleaser release --clean --snapshot
 
 ## run: Compile and run LSP server.
 .PHONY: run
@@ -134,10 +134,14 @@ install:
 	@go install -ldflags=$(LDFLAGS_DEV)
 
 .PHONY: license-update
-license-update:
+license-update: $(TOOLS_BIN)/go-licenses
 	@echo "==> Updating license information..."
 	@rm -rf licenses
 	@$(TOOLS_BIN)/go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
+
+.PHONY: licenses
+licenses: $(TOOLS_BIN)/go-licenses
+	@$(TOOLS_BIN)/go-licenses report . --ignore github.com/snyk/snyk-ls
 
 help: Makefile
 	@echo "Usage: make <command>"

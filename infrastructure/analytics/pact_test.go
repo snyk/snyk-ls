@@ -170,7 +170,9 @@ func testGetAnalyticsV2Payload(t *testing.T) any {
 
 func testPopulateICWithStdValues(t *testing.T, interactionUUID string) analytics.InstrumentationCollector {
 	t.Helper()
-	gafConfig := configuration.NewInMemory()
+	gafConfig := configuration.NewWithOpts(
+		configuration.WithAutomaticEnv(),
+	)
 	conf := config.CurrentConfig()
 	ic := analytics.NewInstrumentationCollector()
 
