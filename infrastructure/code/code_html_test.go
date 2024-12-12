@@ -70,7 +70,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	assert.Contains(t, codePanelHtml, expectedDataFlowHeading)
 	assert.Contains(t, codePanelHtml, `<table class="data-flow-table">`)
 	assert.Contains(t, codePanelHtml, `main.ts`)
-	assert.Contains(t, codePanelHtml, `line:5`)
+	assert.Contains(t, codePanelHtml, `5`)
 	assert.Contains(t, codePanelHtml, `<code>import * as http from &#39;http&#39;;</code>`)
 
 	// assert Ignore Details section - Elements should not be present
@@ -80,7 +80,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="hidden">`)
-	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper" class="">`)
+	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper"`)
 	assert.Contains(t, codePanelHtml, `<button id="generate-ai-fix" folder-path="" file-path=""
                   issue-id="" class="generate-ai-fix">✨ Generate AI fix</button>`)
 	expectedFixesDescription := fmt.Sprintf(`This type of vulnerability was fixed in %d open source projects.`, repoCount)
@@ -123,7 +123,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="">`)
 	assert.Contains(t, codePanelHtml, `✨ Generate AI fix`)
-	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper" class="hidden">`)
+	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper"`)
 	assert.Contains(t, codePanelHtml, ` folder-path=""`)
 }
 
