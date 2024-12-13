@@ -177,11 +177,11 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	return customUrl
 }
 
-func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool) {
+func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.updateCredentials(newToken, sendNotification, false)
+	a.updateCredentials(newToken, sendNotification, updateApiUrl)
 }
 
 func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {

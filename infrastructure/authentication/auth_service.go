@@ -35,7 +35,7 @@ type AuthenticationService interface {
 
 	// UpdateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
 	// client if sendNotification is true
-	UpdateCredentials(newToken string, sendNotification bool)
+	UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
 
 	// updateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
 	// client if sendNotification is true
