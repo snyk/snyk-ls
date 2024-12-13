@@ -138,6 +138,19 @@ func Test_UpdateCredentials(t *testing.T) {
 		expectedNotification := types.AuthenticationParams{Token: token, ApiUrl: config.DefaultSnykApiUrl}
 		assert.Equal(t, expectedNotification, mockNotifier.SentMessages()[0])
 	})
+
+	t.Run("Don't send notification", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
+
+		token := "some_other_token"
+		service.UpdateCredentials(token, false, false)
+		assert.Empty(t, mockNotifier.SentMessages())
+
+		service.UpdateCredentials(token, false, true)
+		assert.Empty(t, mockNotifier.SentMessages())
+	})
 }
 
 func Test_Authenticate(t *testing.T) {
