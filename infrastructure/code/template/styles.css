@@ -31,13 +31,15 @@
   --horizontal-border-color: var();
   --code-background-color: var(--vscode-editor-background);
   --tab-active-background-color: var(--vscode-tab-activeBackground);
-  --input-border: var(--vscode-input-border)
+  --input-border: var(--vscode-input-border);
+  --input-background: var(--vscode-input-background);
   /* This doesn't exist yet in VSCode*/
   --border-color: var(--vscode-border-color);
   --example-line-removed-color: var(--vscode-line-removed-color);
   --example-line-added-color: var(--vscode-line-added-color);
   --generated-ai-fix-button-background-color: var(--vscode-button-background);
   --disabled-background-color: var(--vscode-foreground);
+  --circle-color: var(--vscode-badge-background);
 }
 
 ::-webkit-scrollbar {
@@ -261,14 +263,12 @@ table {
 }
 table td {
   background: var(--container-background-color);
-  border-top: 1px solid var(--border-color);
-  padding: 3px;
+  padding: 8px 8px 0 4px;
 }
 
 .data-flow-table {
   background-color: var(--code-background-color);
-  margin-top: 5px;
-  margin-left: 15px;
+  margin-top: 4px;
 }
 
 .data-flow-row {
@@ -276,17 +276,53 @@ table td {
   vertical-align: baseline;
 }
 
-.data-flow-number {
-  padding-left: 14px;
-  padding-right: 14px;
-  width: 0.9375rem;
-  text-align: right;
+/* Data flow number bubbles */
+tr .data-flow-number {
+  position: relative;
+  background-color: var(--background-color);
+  text-align: center;
+  padding: 4px;
+}
+.data-flow-circle{
+  width: 16px;
+  height: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 50%;
+  background-color: var(--circle-color);
+  color: var(--text-color);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: inherit;
+  left: 0;
+  top: 50%;
+  z-index: 1;
+}
+
+
+.data-flow-line {
+  position: absolute;
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  border-left: 1px dashed var(--text-color);
+  z-index: 0;
+}
+table > tbody > tr:first-child > td:first-child .data-flow-line {
+  top: 50%;
+  height: 50%;
+}
+
+table > tbody > tr:last-child > td:first-child .data-flow-line {
+  top: 0;
+  height: 10%;
 }
 
 .data-flow-clickable-row {
   color: var(--link-color);
   font-weight: 400;
-  width: 3.9375rem;
   text-align: right;
 }
 
@@ -355,13 +391,11 @@ code {
   text-transform: uppercase;
 }
 
-.data-flow-number,
 .data-flow-clickable-row,
 .data-flow-delimiter,
 .data-flow-text {
   background-color: transparent;
   border-color: transparent;
-  padding-top: 0px;
   padding-bottom: 0px;
 }
 
@@ -440,7 +474,7 @@ code {
   background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.075));
   box-shadow: 0 -1px 3px rgba(0, 0, 0, .05);
   border-top: 1px solid var(--border-color);
-
+  z-index: 1;
 }
 
 #ignore-actions {
@@ -528,7 +562,7 @@ button {
 
 button.generate-ai-fix,
 button.sn-apply-fix {
-  border-radius: 3px;
+  border-radius: 4px;
   background-color: var(--generated-ai-fix-button-background-color);
   color: white;
   cursor: pointer;
@@ -614,7 +648,7 @@ button.sn-apply-fix:hover {
 }
 
 .sn-fix-wrapper {
-  padding: 2rem;
+  padding: 16px;
   margin-top: 1rem;
   border-radius: 4px;
   overflow: hidden;
