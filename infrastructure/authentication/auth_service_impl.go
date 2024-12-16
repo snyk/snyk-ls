@@ -151,10 +151,6 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	defaultUrl := config.DefaultSnykApiUrl
 	customUrl = strings.TrimRight(customUrl, "/ ")
 
-	if customUrl == "https://api.pre-prod.snyk.io" && engineUrl != "" {
-		return engineUrl
-	}
-
 	// If the custom URL is not changed (equals default) and no engine URL is provided,
 	// use the default URL.
 	if customUrl == defaultUrl && engineUrl == "" {
