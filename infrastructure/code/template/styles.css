@@ -40,7 +40,6 @@
   --generated-ai-fix-button-background-color: var(--vscode-button-background);
   --disabled-background-color: var(--vscode-foreground);
   --circle-color: var(--vscode-badge-background);
-  --number-td-background-color: var(--vscode-editor-foldBackground);
 }
 
 ::-webkit-scrollbar {
@@ -278,7 +277,7 @@ table td {
 }
 
 /* Data flow number bubbles */
-.data-flow-number {
+tr .data-flow-number {
   position: relative;
   background-color: var(--background-color);
   text-align: center;
