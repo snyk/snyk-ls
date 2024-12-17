@@ -88,6 +88,13 @@ func CreateFromCommandData(
 			issueProvider: issueProvider,
 			notifier:      notifier,
 		}, nil
+	case types.GenerateAIExplanationCommand:
+		return &generateAIExplanation{
+			command:       commandData,
+			codeScanner:   codeScanner,
+			issueProvider: issueProvider,
+			notifier:      notifier,
+		}, nil
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
 	case types.ClearCacheCommand:

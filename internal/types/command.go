@@ -46,6 +46,7 @@ const (
 	CodeFixCommand        = "snyk.code.fix"
 	CodeSubmitFixFeedback = "snyk.code.submitFixFeedback"
 	CodeFixDiffsCommand   = "snyk.code.fixDiffs"
+	GenerateAIExplanationCommand = "snyk.generateAIExplanation"
 )
 
 var (

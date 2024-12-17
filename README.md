@@ -380,6 +380,21 @@ Right now the language server supports the following actions:
          // WHEN
          comp.changePassword();
   ```
+- `Generate AI Explanation` allows to retrieve explainations for various use-cases.
+  - command: `snyk.generateAIExplanation`
+  - args:
+    <!-- TODO(berkay.berabi): update the request and response schema -->
+    - folderURI string
+    - fileURI string
+    - diff string
+    - issueID string (UUID)
+  - returns an array of explanations:
+  ```json5
+  [{
+    "explainId": "123",
+    "explanations": "bla bla explained"
+  }]
+  ```
 - `Feature Flag Status Command` triggers the api call to check if a feature flag is enabled
   - command: `snyk.getFeatureFlagStatus`
   - args:
@@ -393,8 +408,8 @@ Right now the language server supports the following actions:
   ```
 - `Clear Cache` Clears either persisted or inMemory Cache or both.
   - command: `snyk.clearCache`
-  - args: 
-    - `folderUri` string, 
+  - args:
+    - `folderUri` string,
     - `cacheType` `persisted` or `inMemory`
 - `Generate Issue Description` Generates issue description in HTML.
   - command: `snyk.generateIssueDescription`

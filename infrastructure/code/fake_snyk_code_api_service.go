@@ -147,6 +147,10 @@ func (f *FakeSnykCodeClient) GetAutofixDiffs(_ context.Context, _ string, _ Auto
 	return f.UnifiedDiffSuggestions, f.AutofixStatus, nil
 }
 
+func (f *FakeSnykCodeClient) GetAIExplanation(_ context.Context, _ string, _ ExplainOptions) (explanation string, status string, err error) {
+	return "some explanation", "COMPLETED", nil
+}
+
 func (f *FakeSnykCodeClient) getAutofixResponse(_ context.Context, _ AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error) {
 	f.AutofixStatus = AutofixStatus{message: completeStatus}
 	return autofixResponse, f.AutofixStatus, nil

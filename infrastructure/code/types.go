@@ -61,6 +61,11 @@ type AutofixResponse struct {
 	AutofixSuggestions []autofixResponseSingleFix `json:"fixes"`
 }
 
+type ExplainResponse struct {
+	Status string `json:"status"`
+	Explanation string `json:"explanation"`
+}
+
 type autofixResponseSingleFix struct {
 	Id    string `json:"id"`
 	Value string `json:"value"`
@@ -77,8 +82,24 @@ type AutofixRequestKey struct {
 	LineNum int `json:"lineNum"`
 }
 
+type ExplainRequestKey struct {
+	Type     string `json:"type"`
+	Hash     string `json:"hash"`
+	Shard    string `json:"shard"`
+	FilePath string `json:"filePath"`
+	RuleId   string `json:"ruleId"`
+	// 1-based to comply with Sarif and Code API, see
+	// https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Ref493492556
+	LineNum int `json:"lineNum"`
+}
+
 type AutofixRequest struct {
 	Key             AutofixRequestKey  `json:"key"`
+	AnalysisContext codeRequestContext `json:"analysisContext"`
+}
+
+type ExplainRequest struct {
+	Key             ExplainRequestKey  `json:"key"`
 	AnalysisContext codeRequestContext `json:"analysisContext"`
 }
 

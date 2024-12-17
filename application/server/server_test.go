@@ -266,6 +266,8 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeFixCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeSubmitFixFeedback)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeFixDiffsCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GenerateAIExplanationCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.GenerateIssueDescriptionCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.ExecuteCLICommand)
 }
 

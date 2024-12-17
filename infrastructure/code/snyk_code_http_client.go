@@ -524,6 +524,65 @@ func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOpti
 	return response, nil
 }
 
+func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOptions) (ExplainResponse, error) {
+	requestId, err := performance2.GetTraceId(ctx)
+	span := s.instrumentor.StartSpan(ctx, "code.RunExplain")
+	defer span.Finish()
+
+	logger := s.c.Logger().With().Str("method", "code.RunExplain").Str("requestId", requestId).Logger()
+	if err != nil {
+		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
+		return ExplainResponse{}, err
+	}
+	logger.Debug().Msg("API: Retrieving explain for bundle")
+	defer logger.Debug().Msg("API: Retrieving explain done")
+
+	requestBody, err := s.explainRequestBody(&options)
+	if err != nil {
+		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error creating request body")
+		return ExplainResponse{}, err
+	}
+
+	responseBody, _, err := s.doCall(span.Context(), "POST", "/explain", requestBody)
+
+	if err != nil {
+		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error response from explain")
+		return ExplainResponse{}, err
+	}
+
+	var response ExplainResponse
+	err = json.Unmarshal(responseBody, &response)
+	if err != nil {
+		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		return ExplainResponse{}, err
+	}
+	return response, nil
+}
+
+func (s *SnykCodeHTTPClient) explainRequestBody(options *ExplainOptions) ([]byte, error) {
+	_, ruleID, ok := getIssueLangAndRuleId(options.issue)
+	if !ok {
+		return nil, errors.New("Issue's ruleID does not follow <lang>/<ruleKey> format")
+	}
+
+	request := ExplainRequest{
+		Key: ExplainRequestKey{
+			Type:     "file",
+			Hash:     options.bundleHash,
+			FilePath: options.filePath,
+			RuleId:   ruleID,
+			LineNum:  options.issue.Range.Start.Line + 1,
+		},
+		AnalysisContext: newCodeRequestContext(),
+	}
+	if len(options.shardKey) > 0 {
+		request.Key.Shard = options.shardKey
+	}
+
+	requestBody, err := json.Marshal(request)
+	return requestBody, err
+}
+
 func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {
 	_, ruleID, ok := getIssueLangAndRuleId(options.issue)
 	if !ok {

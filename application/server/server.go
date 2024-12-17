@@ -303,6 +303,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						types.ClearCacheCommand,
 						types.GenerateIssueDescriptionCommand,
 						types.ReportAnalyticsCommand,
+						types.GenerateAIExplanationCommand,
 					},
 				},
 			},

@@ -36,6 +36,13 @@ type AutofixOptions struct {
 	issue      snyk.Issue
 }
 
+type ExplainOptions struct {
+	bundleHash string
+	shardKey   string
+	filePath   string
+	issue      snyk.Issue
+}
+
 type SnykCodeClient interface {
 	GetFilters(ctx context.Context) (
 		filters FiltersResponse,
@@ -79,6 +86,12 @@ type SnykCodeClient interface {
 	GetAutofixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (
 		unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion,
 		status AutofixStatus,
+		err error,
+	)
+
+	GetAIExplanation(ctx context.Context, baseDir string, options ExplainOptions) (
+		explanation string,
+		status string,
 		err error,
 	)
 }
