@@ -534,6 +534,7 @@ func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOpti
 		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
 		return ExplainResponse{}, err
 	}
+	// we come until here.
 	logger.Debug().Msg("API: Retrieving explain for bundle")
 	defer logger.Debug().Msg("API: Retrieving explain done")
 
@@ -542,7 +543,7 @@ func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOpti
 		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error creating request body")
 		return ExplainResponse{}, err
 	}
-
+	// fails here because deeproxy does not have explain endpoint. so everything works as expected so far
 	responseBody, _, err := s.doCall(span.Context(), "POST", "/explain", requestBody)
 
 	if err != nil {
