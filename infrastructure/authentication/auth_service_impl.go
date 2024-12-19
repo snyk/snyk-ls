@@ -105,8 +105,8 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		a.c.UpdateApiEndpoints(prioritizedUrl)
 	}
 
-	a.configureProviders(a.c)
 	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
+	a.configureProviders(a.c)
 	a.sendAuthenticationAnalytics(analytics.Success, nil)
 	return token, err
 }
