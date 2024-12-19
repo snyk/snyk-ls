@@ -194,12 +194,11 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.c.SetToken(newToken)
 	}
 
-	apiUrl := ""
-	if updateApiUrl {
-		apiUrl = a.c.SnykApi()
-	}
-
 	if sendNotification {
+		apiUrl := ""
+		if updateApiUrl {
+			apiUrl = a.c.SnykApi()
+		}
 		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: apiUrl})
 	}
 }
