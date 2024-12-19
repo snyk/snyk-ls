@@ -426,7 +426,13 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, pa
 }
 
 func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path string, files <-chan string, changedFiles map[string]bool, t *progress.Tracker) (issues []snyk.Issue, err error) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "code.UploadAndAnalyzeWithIgnores").Logger()
+	if ctx.Err() != nil {
+		progress.Cancel(t.GetToken())
+		sc.c.Logger().Info().Msg("Canceling Code scanner received cancellation signal")
+		return issues, nil
+	}
+
+	logger := sc.c.Logger().With().Str("method", "code.UploadAndAnalyzeWithIgnores").Logger()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
@@ -440,7 +446,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path string,
 	}
 
 	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)
-	if err != nil {
+	if err != nil || ctx.Err() != nil {
 		return []snyk.Issue{}, err
 	}
 	sc.bundleHashesMutex.Lock()
