@@ -33,6 +33,8 @@ import (
 // Token authentication configures token only authentication
 func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) AuthenticationProvider {
 	conf := c.Engine().GetConfiguration()
+	c.Storage().UnRegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN)
+
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 	conf.Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
 	conf.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
