@@ -153,7 +153,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	var hasAuthenticatedNotification types.AuthenticationParams
 	err = notifications[0].UnmarshalParams(&hasAuthenticatedNotification)
 	assert.NoError(t, err)
-	assert.NotEmpty(t, hasAuthenticatedNotification.ApiUrl)
+	assert.Empty(t, hasAuthenticatedNotification.ApiUrl)
 }
 
 func Test_TrustWorkspaceFolders(t *testing.T) {
