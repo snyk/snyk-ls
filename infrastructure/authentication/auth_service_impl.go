@@ -99,12 +99,13 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL)
 	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
 
-	if prioritizedUrl != customUrl {
+	shouldSendUrlUpdatedNotification := prioritizedUrl != customUrl
+	if shouldSendUrlUpdatedNotification {
 		defer a.notifier.SendShowMessage(sglsp.Info, fmt.Sprintf("The Snyk API Endpoint has been updated to %s.", prioritizedUrl))
+		a.c.UpdateApiEndpoints(prioritizedUrl)
 	}
 
-	a.c.UpdateApiEndpoints(prioritizedUrl)
-	a.updateCredentials(token, true, true)
+	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
 	a.configureProviders(a.c)
 	a.sendAuthenticationAnalytics(analytics.Success, nil)
 	return token, err
@@ -182,6 +183,10 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 
 func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	oldToken := a.c.Token()
+	if oldToken == newToken && !updateApiUrl {
+		return
+	}
+
 	if oldToken != newToken {
 		// remove old token from cache, but don't add new token, as we want the entry only when
 		// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
@@ -189,14 +194,12 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.c.SetToken(newToken)
 	}
 
+	apiUrl := ""
+	if updateApiUrl {
+		apiUrl = a.c.SnykApi()
+	}
+
 	if sendNotification {
-		apiUrl := ""
-		logMessage := "Not updating URL"
-		if updateApiUrl {
-			apiUrl = a.c.SnykApi()
-			logMessage = fmt.Sprintf("Sending Url %s", apiUrl)
-		}
-		a.c.Logger().Info().Str("method", "UpdateCredentials").Msg(logMessage)
 		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: apiUrl})
 	}
 }
