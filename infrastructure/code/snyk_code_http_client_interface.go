@@ -37,10 +37,9 @@ type AutofixOptions struct {
 }
 
 type ExplainOptions struct {
-	bundleHash string
-	shardKey   string
-	filePath   string
-	issue      snyk.Issue
+	derivation   string
+	ruleKey string
+	ruleMessage string
 }
 
 type SnykCodeClient interface {
@@ -89,7 +88,7 @@ type SnykCodeClient interface {
 		err error,
 	)
 
-	GetAIExplanation(ctx context.Context, baseDir string, options ExplainOptions) (
+	GetAIExplanation(ctx context.Context, options ExplainOptions) (
 		explanation string,
 		status string,
 		err error,

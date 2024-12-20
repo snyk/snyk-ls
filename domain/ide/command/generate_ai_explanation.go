@@ -20,17 +20,11 @@ package command
 import (
 	"context"
 	"errors"
-	"path/filepath"
-	"strings"
-
-	"github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
-	uri2 "github.com/snyk/snyk-ls/internal/uri"
 )
 
 
@@ -53,40 +47,40 @@ func (cmd *generateAIExplanation) Execute (ctx context.Context) (any, error) {
 		return nil, errors.New("missing required arguments")
 	}
 
-	folderURI, ok := args[0].(string)
+	derivation, ok := args[0].(string)
 	if !ok {
-		return nil, errors.New("failed to parse folder path")
+		return nil, errors.New("failed to parse derivation")
 	}
-	folderPath := uri2.PathFromUri(lsp.DocumentURI(folderURI))
+	// folderPath := uri2.PathFromUri(lsp.DocumentURI(folderURI))
 
-	issueURI, ok := args[1].(string)
+	ruleKey, ok := args[1].(string)
 	if !ok {
-		return nil, errors.New("failed to parse filepath")
+		return nil, errors.New("failed to parse ruleKey")
 	}
 
-	issuePath := uri2.PathFromUri(lsp.DocumentURI(issueURI))
+	// issuePath := uri2.PathFromUri(lsp.DocumentURI(issueURI))
 
-	relPath, err := filepath.Rel(folderPath, issuePath)
-	if err != nil {
-		return nil, err
-	}
+	// relPath, err := filepath.Rel(folderPath, issuePath)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	if strings.HasPrefix(relPath, "..") {
-		return nil, errors.New("issue path is not within the folder path")
-	}
+	// if strings.HasPrefix(relPath, "..") {
+	// 	return nil, errors.New("issue path is not within the folder path")
+	// }
 
-	id, ok := args[2].(string)
+	ruleMessage, ok := args[2].(string)
 	if !ok {
-		return nil, errors.New("failed to parse issue id")
+		return nil, errors.New("failed to parse ruleMessage")
 	}
 
-	issue := cmd.issueProvider.Issue(id)
-	if issue.ID == "" {
-		return nil, errors.New("failed to find issue")
-	}
+	// issue := cmd.issueProvider.Issue(id)
+	// if issue.ID == "" {
+	// 	return nil, errors.New("failed to find issue")
+	// }
 
 	// Now we need to call cmd.codeScanner.GetAIExplanation
-	explanation, err := cmd.codeScanner.GetAIExplanation(ctx, folderPath, relPath, issue)
+	explanation, err := cmd.codeScanner.GetAIExplanation(ctx, derivation, ruleKey, ruleMessage)
 	if err != nil {
 		logger.Err(err).Msgf("received an error from API: %s", err.Error())
 		return explanation, err

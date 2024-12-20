@@ -237,6 +237,19 @@
           <!-- AI Fix -->
           <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
             <!-- AI fix buttons -->
+            <section id="explain-wrapper" class="ai-explain">
+              <h2 class="ai-fix-header">
+                DeepCode AI Explanations
+              </h2>
+              <p>⚡ Explain this particular vulnerability using Snyk DeepCode AI</p>
+              <div class="sn-fix-wrapper">
+                <button id="generate-vulnerability-explanation-button" class="generate-ai-explain">✨ Generate AI explanation </button>
+              </div>
+              <div id="vulnerability-explanation-text" class="font-light">
+                <span id="explain-text">
+              </div>
+            </section>
+
             <section id="fix-wrapper" class="ai-fix delimiter-top">
               <h2 class="ai-fix-header">
                 DeepCode AI Fixes

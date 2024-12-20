@@ -19,11 +19,9 @@ package code
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 )
 
@@ -33,9 +31,9 @@ import (
 
 func (sc *Scanner) GetAIExplanation(
 	ctx context.Context,
-	baseDir string,
-	filePath string,
-	issue snyk.Issue,
+	derivation string,
+	ruleKey string,
+	ruleMessage string,
 ) (explanation string, err error) {
 	method := "GetAIExplanation"
 	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
@@ -43,24 +41,13 @@ func (sc *Scanner) GetAIExplanation(
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	codeClient := sc.BundleUploader.SnykCode
-	sc.bundleHashesMutex.RLock()
-	bundleHash, found := sc.bundleHashes[baseDir]
-	sc.bundleHashesMutex.RUnlock()
-	if !found {
-		return explanation, fmt.Errorf("bundle hash not found for baseDir: %s", baseDir)
-	}
-
-	encodedNormalizedPath, err := ToEncodedNormalizedPath(baseDir, filePath)
-	if err != nil {
-		return explanation, err
-	}
 
 	options := ExplainOptions{
-		bundleHash: bundleHash,
-		shardKey: getShardKey(baseDir, config.CurrentConfig().Token()),
-		filePath: encodedNormalizedPath,
-		issue: issue,
+		derivation: derivation,
+		ruleKey: ruleKey,
+		ruleMessage: ruleMessage,
 	}
+	logger.Info().Str("derivation", derivation).Msg("Started retrieving vuln explanation.")
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -74,20 +61,19 @@ func (sc *Scanner) GetAIExplanation(
 			logger.Error().Msg(msg)
 			return "", errors.New(msg)
 		case <-ticker.C:
-			explanation, explainStatus, explanationErr := codeClient.GetAIExplanation(span.Context(), baseDir, options)
+			explanation, explainStatus, explanationErr := codeClient.GetAIExplanation(span.Context(), options)
 			if explanationErr != nil {
 				logger.Err(explanationErr).Msg("Error getting explanation")
 				return "", explanationErr
 			} else if explainStatus == completeStatus {
 				return explanation, nil
 			}
-			// If err == nil and fixStatus.message != completeStatus, we will keep polling.
 		}
 	}
 }
 
 
-func (s *SnykCodeHTTPClient) GetAIExplanation(ctx context.Context, basedir string, options ExplainOptions) (
+func (s *SnykCodeHTTPClient) GetAIExplanation(ctx context.Context, options ExplainOptions) (
 	explanation string,
 	status string,
 	err error,
@@ -103,7 +89,7 @@ func (s *SnykCodeHTTPClient) GetAIExplanation(ctx context.Context, basedir strin
 	if err != nil {
 		return "", status, err
 	}
-	return explainResponse.Explanation, "COMPLETED", nil
+	return explainResponse.Explanation, completeStatus, nil
 }
 
 func (s *SnykCodeHTTPClient) getExplainResponse(ctx context.Context, options ExplainOptions) (explainResponse ExplainResponse, err error) {
@@ -121,6 +107,7 @@ func (s *SnykCodeHTTPClient) getExplainResponse(ctx context.Context, options Exp
 	logger.Info().Str("requestId", requestId).Msg("Started obtaining explain Response")
 	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining explain Response")
 
+	// we come until here.
 	response, err := s.RunExplain(span.Context(), options)
 	if err != nil {
 		return response, err

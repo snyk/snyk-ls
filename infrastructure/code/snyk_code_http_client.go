@@ -17,6 +17,8 @@
 package code
 
 import (
+	"io/ioutil"
+
 	"bytes"
 	"context"
 	"encoding/json"
@@ -544,41 +546,60 @@ func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOpti
 		return ExplainResponse{}, err
 	}
 	// fails here because deeproxy does not have explain endpoint. so everything works as expected so far
-	responseBody, _, err := s.doCall(span.Context(), "POST", "/explain", requestBody)
+	url := "http://localhost:10000/v1/models"
 
+	// Make the GET request
+	resp, err := http.Get(url)
+	logger.Debug().Msg("API: sent get request")
 	if err != nil {
-		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error response from explain")
+		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error getting response")
+	}
+	defer resp.Body.Close()
+	// Read the response body
+	logger.Debug().Msg("API: before readall")
+	body, err := ioutil.ReadAll(resp.Body)
+	logger.Debug().Msg("API: after readall")
+	if err != nil {
+		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error reading all response")
+	}
+	logger.Debug().Msg("read explain response")
+	logger.Debug().Str("response body: %s\n", string(body)).Msg("Got the response")
+
+	// responseBody, _, err := s.doCall(span.Context(), "POST", "/explain", requestBody)
+	if err != nil {
 		return ExplainResponse{}, err
 	}
 
 	var response ExplainResponse
-	err = json.Unmarshal(responseBody, &response)
-	if err != nil {
-		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
-		return ExplainResponse{}, err
-	}
+	response.Status = completeStatus
+	response.Explanation = "berkay berabi"
+	// err = json.Unmarshal(responseBody, &response)
+	// if err != nil {
+		// logger.Err(err).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		// return ExplainResponse{}, err
+	// }
 	return response, nil
 }
 
 func (s *SnykCodeHTTPClient) explainRequestBody(options *ExplainOptions) ([]byte, error) {
-	_, ruleID, ok := getIssueLangAndRuleId(options.issue)
-	if !ok {
-		return nil, errors.New("Issue's ruleID does not follow <lang>/<ruleKey> format")
-	}
+	// _, ruleID, ok := getIssueLangAndRuleId(options.issue)
+	// if !ok {
+	// 	return nil, errors.New("Issue's ruleID does not follow <lang>/<ruleKey> format")
+	// }
 
 	request := ExplainRequest{
 		Key: ExplainRequestKey{
 			Type:     "file",
-			Hash:     options.bundleHash,
-			FilePath: options.filePath,
-			RuleId:   ruleID,
-			LineNum:  options.issue.Range.Start.Line + 1,
+			Hash:     options.derivation,
+			FilePath: options.ruleKey,
+			RuleId:   options.ruleKey,
+			LineNum:  10,
 		},
 		AnalysisContext: newCodeRequestContext(),
 	}
-	if len(options.shardKey) > 0 {
-		request.Key.Shard = options.shardKey
-	}
+	// if len(options.shardKey) > 0 {
+	// 	request.Key.Shard = options.shardKey
+	// }
 
 	requestBody, err := json.Marshal(request)
 	return requestBody, err
