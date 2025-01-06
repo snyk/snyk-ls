@@ -12,7 +12,7 @@ require (
 	github.com/getsentry/sentry-go v0.28.1
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/golang/mock v1.6.0
-	github.com/gomarkdown/markdown v0.0.0-20240730141124-034f12af3bf6
+	github.com/gomarkdown/markdown v0.0.0-20241205020045-f7e15b2f3e62
 	github.com/google/uuid v1.6.0
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/otiai10/copy v1.14.0
