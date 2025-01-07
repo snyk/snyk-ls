@@ -77,9 +77,17 @@ type AutofixRequestKey struct {
 	LineNum int `json:"lineNum"`
 }
 
+type AutofixIdeExtensionDetails struct {
+	IdeName          string `json:"ideName"`
+	IdeVersion       string `json:"ideVersion"`
+	ExtensionName    string `json:"extensionName"`
+	ExtensionVersion string `json:"extensionVersion"`
+}
+
 type AutofixRequest struct {
-	Key             AutofixRequestKey  `json:"key"`
-	AnalysisContext codeRequestContext `json:"analysisContext"`
+	Key                 AutofixRequestKey          `json:"key"`
+	AnalysisContext     codeRequestContext         `json:"analysisContext"`
+	IdeExtensionDetails AutofixIdeExtensionDetails `json:"ideExtensionDetails"`
 }
 
 // Should implement `error` interface
@@ -95,8 +103,14 @@ type AutofixSuggestion struct {
 	AutofixEdit snyk.WorkspaceEdit
 }
 
-type AutofixFeedback struct {
-	FixId           string             `json:"fixId"`
-	Feedback        string             `json:"feedback"`
-	AnalysisContext codeRequestContext `json:"analysisContext"`
+type AutofixEventDetails struct {
+	FixId string `json:"fixId"`
+}
+
+type AutofixUserEvent struct {
+	AnalysisContext     codeRequestContext         `json:"analysisContext"`
+	Channel             string                     `json:"channel"`
+	EventType           string                     `json:"eventType"`
+	EventDetails        AutofixEventDetails        `json:"eventDetails"`
+	IdeExtensionDetails AutofixIdeExtensionDetails `json:"ideExtensionDetails"`
 }

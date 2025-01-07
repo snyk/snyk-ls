@@ -539,6 +539,12 @@ func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte
 			LineNum:  options.issue.Range.Start.Line + 1,
 		},
 		AnalysisContext: newCodeRequestContext(),
+		IdeExtensionDetails: AutofixIdeExtensionDetails{
+			IdeName:          s.c.IdeName(),
+			IdeVersion:       s.c.IdeVersion(),
+			ExtensionName:    s.c.IntegrationName(),
+			ExtensionVersion: s.c.IntegrationVersion(),
+		},
 	}
 	if len(options.shardKey) > 0 {
 		request.Key.Shard = options.shardKey
@@ -562,13 +568,17 @@ func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId st
 	s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback")
 	defer s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback done")
 
-	request := map[string]interface{}{
-		"channel":   "IDE",
-		"eventType": feedback,
-		"eventDetails": map[string]string{
-			"fixId": fixId,
+	request := AutofixUserEvent{
+		Channel:         "IDE",
+		EventType:       feedback,
+		EventDetails:    AutofixEventDetails{FixId: fixId},
+		AnalysisContext: newCodeRequestContext(),
+		IdeExtensionDetails: AutofixIdeExtensionDetails{
+			IdeName:          s.c.IdeName(),
+			IdeVersion:       s.c.IdeVersion(),
+			ExtensionName:    s.c.IntegrationName(),
+			ExtensionVersion: s.c.IntegrationVersion(),
 		},
-		"analysisContext": newCodeRequestContext(),
 	}
 
 	requestBody, err := json.Marshal(request)
