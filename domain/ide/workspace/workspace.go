@@ -127,7 +127,9 @@ func (w *Workspace) AddFolder(f types.Folder) {
 	if w.folders == nil {
 		w.folders = map[string]types.Folder{}
 	}
-	w.folders[f.Path()] = f
+	if w.folders[f.Path()] == nil {
+		w.folders[f.Path()] = f
+	}
 }
 
 func (w *Workspace) IssuesForFile(path string) []snyk.Issue {
