@@ -41,14 +41,10 @@ func UpdateEnvironmentAndReturnAdditionalParams(sdks []types.LsSdk, logger zerol
 		case strings.Contains(strings.ToLower(sdk.Type), "java"):
 			env["JAVA_HOME"] = path
 		case strings.Contains(strings.ToLower(sdk.Type), "python"):
-			symlinks, err := filepath.EvalSymlinks(path)
-			if err != nil {
-				symlinks = path
-			}
-			env["PYTHONPATH"] = symlinks
-			env["PYTHONHOME"] = filepath.Dir(symlinks)
-			pathExt = filepath.Dir(symlinks)
-			additionalParameters = append(additionalParameters, "--command="+symlinks)
+			env["PYTHONPATH"] = path
+			env["PYTHONHOME"] = filepath.Dir(path)
+			pathExt = filepath.Dir(path)
+			additionalParameters = append(additionalParameters, "--command="+path)
 		case strings.Contains(strings.ToLower(sdk.Type), "go"):
 			env["GOROOT"] = path
 		}
