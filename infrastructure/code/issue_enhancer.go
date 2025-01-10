@@ -223,6 +223,8 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 
 				// send feedback asynchronously, so people can actually see the changes done by the fix
 				go func() {
+					b.SnykCode.SubmitAutofixFeedback(ctx, fix.FixId, FixAppliedUserEvent)
+
 					actionCommandMap, err := b.autofixFeedbackActions(fix.FixId)
 					successMessage := "Congratulations! 🎉 You’ve just fixed this " + issueTitle(issue) + " issue."
 					if err != nil {
