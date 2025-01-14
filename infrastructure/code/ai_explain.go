@@ -34,6 +34,7 @@ func (sc *Scanner) GetAIExplanation(
 	derivation string,
 	ruleKey string,
 	ruleMessage string,
+	diff string,
 ) (explanation string, err error) {
 	method := "GetAIExplanation"
 	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
@@ -46,6 +47,7 @@ func (sc *Scanner) GetAIExplanation(
 		derivation: derivation,
 		ruleKey: ruleKey,
 		ruleMessage: ruleMessage,
+		diff: diff,
 	}
 	logger.Info().Str("derivation", derivation).Msg("Started retrieving vuln explanation.")
 

@@ -51,36 +51,24 @@ func (cmd *generateAIExplanation) Execute (ctx context.Context) (any, error) {
 	if !ok {
 		return nil, errors.New("failed to parse derivation")
 	}
-	// folderPath := uri2.PathFromUri(lsp.DocumentURI(folderURI))
 
 	ruleKey, ok := args[1].(string)
 	if !ok {
 		return nil, errors.New("failed to parse ruleKey")
 	}
 
-	// issuePath := uri2.PathFromUri(lsp.DocumentURI(issueURI))
-
-	// relPath, err := filepath.Rel(folderPath, issuePath)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// if strings.HasPrefix(relPath, "..") {
-	// 	return nil, errors.New("issue path is not within the folder path")
-	// }
-
 	ruleMessage, ok := args[2].(string)
 	if !ok {
 		return nil, errors.New("failed to parse ruleMessage")
 	}
 
-	// issue := cmd.issueProvider.Issue(id)
-	// if issue.ID == "" {
-	// 	return nil, errors.New("failed to find issue")
-	// }
+	diff, ok := args[3].(string)
+	if !ok {
+		return nil, errors.New("failed to parse diff")
+	}
 
 	// Now we need to call cmd.codeScanner.GetAIExplanation
-	explanation, err := cmd.codeScanner.GetAIExplanation(ctx, derivation, ruleKey, ruleMessage)
+	explanation, err := cmd.codeScanner.GetAIExplanation(ctx, derivation, ruleKey, ruleMessage, diff)
 	if err != nil {
 		logger.Err(err).Msgf("received an error from API: %s", err.Error())
 		return explanation, err

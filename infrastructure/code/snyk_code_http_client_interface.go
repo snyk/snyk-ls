@@ -40,6 +40,7 @@ type ExplainOptions struct {
 	derivation   string
 	ruleKey string
 	ruleMessage string
+	diff string
 }
 
 type SnykCodeClient interface {

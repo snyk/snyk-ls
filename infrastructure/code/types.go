@@ -82,15 +82,26 @@ type AutofixRequestKey struct {
 	LineNum int `json:"lineNum"`
 }
 
-type ExplainRequestKey struct {
-	Type     string `json:"type"`
-	Hash     string `json:"hash"`
-	Shard    string `json:"shard"`
-	FilePath string `json:"filePath"`
-	RuleId   string `json:"ruleId"`
-	// 1-based to comply with Sarif and Code API, see
-	// https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Ref493492556
-	LineNum int `json:"lineNum"`
+type ExplanationLength string
+
+const (
+	SHORT ExplanationLength = "SHORT"
+	MEDIUM ExplanationLength = "MEDIUM"
+	LONG ExplanationLength = "LONG"
+)
+
+
+type ExplainVulnerabilityRequest struct {
+	RuleId   string `json:"rule_key"`
+	RuleMessage string `json:"rule_message"`
+	Derivation string `json:"derivation"`
+	ExplanationLength ExplanationLength `json:"explanation_length"`
+}
+
+type ExplainFixRequest struct {
+	RuleId   string `json:"rule_key"`
+	Diff string `json:"diff"`
+	ExplanationLength ExplanationLength `json:"explanation_length"`
 }
 
 type AutofixRequest struct {
@@ -99,8 +110,8 @@ type AutofixRequest struct {
 }
 
 type ExplainRequest struct {
-	Key             ExplainRequestKey  `json:"key"`
-	AnalysisContext codeRequestContext `json:"analysisContext"`
+	VulnExplanation             *ExplainVulnerabilityRequest  `json:"vuln_explanation,omitempty"`
+	FixExplanation *ExplainFixRequest `json:"fix_explanation,omitempty"`
 }
 
 // Should implement `error` interface
