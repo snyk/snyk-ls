@@ -536,7 +536,7 @@ func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOpti
 		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
 		return ExplainResponse{}, err
 	}
-	// we come until here.
+
 	logger.Debug().Msg("API: Retrieving explain for bundle")
 	defer logger.Debug().Msg("API: Retrieving explain done")
 
@@ -546,11 +546,8 @@ func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOpti
 		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error creating request body")
 		return ExplainResponse{}, err
 	}
-	// fails here because deeproxy does not have explain endpoint. so everything works as expected so far
-	url := "http://localhost:50052/explain"
 
-	// Make the GET request
-	// resp, err := http.Get(url)
+	url := "http://localhost:10000/explain"
 	logger.Debug().Str("payload body: %s\n", string(requestBody)).Msg("Marshalled payload")
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
 	logger.Debug().Msg("API: sent get request")
@@ -568,7 +565,6 @@ func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOpti
 	logger.Debug().Msg("read explain response")
 	logger.Debug().Str("response body: %s\n", string(body)).Msg("Got the response")
 
-	// responseBody, _, err := s.doCall(span.Context(), "POST", "/explain", requestBody)
 	if err != nil {
 		return ExplainResponse{}, err
 	}
@@ -593,10 +589,6 @@ func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOpti
 }
 
 func (s *SnykCodeHTTPClient) explainRequestBody(options *ExplainOptions) ([]byte, error) {
-	// _, ruleID, ok := getIssueLangAndRuleId(options.issue)
-	// if !ok {
-	// 	return nil, errors.New("Issue's ruleID does not follow <lang>/<ruleKey> format")
-	// }
 	logger := s.c.Logger().With().Str("method", "code.explainRequestBody").Logger()
 
 	if options.diff == "" {
@@ -608,7 +600,6 @@ func (s *SnykCodeHTTPClient) explainRequestBody(options *ExplainOptions) ([]byte
 				ExplanationLength: SHORT,
 			},
 			FixExplanation: nil,
-			// AnalysisContext: newCodeRequestContext(),
 		}
 		requestBody, err := json.Marshal(request)
 		logger.Debug().Msg("payload for VulnExplanation")
@@ -618,24 +609,14 @@ func (s *SnykCodeHTTPClient) explainRequestBody(options *ExplainOptions) ([]byte
 			VulnExplanation: nil,
 			FixExplanation: &ExplainFixRequest{
 				RuleId:   options.ruleKey,
-				// Derivation: options.derivation
-				// RuleMessage: options.ruleMessage,
 				Diff: options.diff,
 				ExplanationLength: SHORT,
 			},
-			// AnalysisContext: newCodeRequestContext(),
 		}
 		logger.Debug().Msg("payload for FixExplanation")
 		requestBody, err := json.Marshal(request)
 		return requestBody, err
 	}
-
-	// if len(options.shardKey) > 0 {
-	// 	request.Key.Shard = options.shardKey
-	// }
-
-	// requestBody, err := json.Marshal(request)
-	// return requestBody, err
 }
 
 func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {

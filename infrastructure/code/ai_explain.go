@@ -133,10 +133,3 @@ func (s *SnykCodeHTTPClient) getExplainResponse(ctx context.Context, options Exp
 
 	return response, nil
 }
-
-
-
-
-
-
-
