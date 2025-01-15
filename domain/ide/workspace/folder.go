@@ -261,7 +261,7 @@ func NewFolder(
 }
 
 func (f *Folder) sendEmptyDiagnosticForFile(path string) {
-	config.CurrentConfig().Logger().Debug().Str("filePath", path).Msg("sending empty diagnostic for file")
+	f.c.Logger().Debug().Str("filePath", path).Msg("sending empty diagnostic for file")
 	f.sendDiagnosticsForFile(path, []snyk.Issue{})
 }
 
@@ -476,8 +476,20 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 		f.sendScanError(p, deltaErr)
 		return
 	}
+
+	// Trigger publishDiagnostics for all issues in Cache.
+	// Filtered issues will be sent with an empty slice if no issues exist.
 	filteredIssues := f.filterDiagnostics(productIssuesByFile[p])
-	f.publishDiagnostics(p, filteredIssues)
+	filteredIssuesToSend := snyk.IssuesByFile{}
+
+	for path := range f.IssuesByProduct()[p] {
+		filteredIssuesToSend[path] = []snyk.Issue{}
+	}
+
+	for path, issues := range filteredIssues {
+		filteredIssuesToSend[path] = issues
+	}
+	f.publishDiagnostics(p, filteredIssuesToSend)
 }
 
 // Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
@@ -553,7 +565,7 @@ func getIssuePerFileFromFlatList(issueList []snyk.Issue) snyk.IssuesByFile {
 }
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
-	supportedIssueTypes := config.CurrentConfig().DisplayableIssueTypes()
+	supportedIssueTypes := f.c.DisplayableIssueTypes()
 	filteredIssuesByFile := f.FilterIssues(issues, supportedIssueTypes)
 	return filteredIssuesByFile
 }
@@ -666,7 +678,7 @@ func (f *Folder) IssuesForRange(filePath string, requestedRange snyk.Range) (mat
 }
 
 func (f *Folder) IsTrusted() bool {
-	if !config.CurrentConfig().IsTrustedFolderFeatureEnabled() {
+	if !f.c.IsTrustedFolderFeatureEnabled() {
 		return true
 	}
 	for _, path := range config.CurrentConfig().TrustedFolders() {

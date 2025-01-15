@@ -23,8 +23,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/snyk/snyk-ls/internal/product"
-
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 
@@ -33,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -247,7 +246,10 @@ func updateDeltaFindings(c *config.Config, settings types.Settings) {
 		enable = false
 	}
 
-	c.SetDeltaFindingsEnabled(enable)
+	modified := c.SetDeltaFindingsEnabled(enable)
+	if modified {
+		sendDiagnosticsForAllProducts(c)
+	}
 }
 
 func updateToken(token string) {
@@ -393,16 +395,20 @@ func updateSeverityFilter(c *config.Config, s types.SeverityFilter) {
 	modified := c.SetSeverityFilter(s)
 
 	if modified {
-		ws := c.Workspace()
-		if ws == nil {
-			return
-		}
+		sendDiagnosticsForAllProducts(c)
+	}
+}
 
-		for _, folder := range ws.Folders() {
-			folder.FilterAndPublishDiagnostics(product.ProductOpenSource)
-			folder.FilterAndPublishDiagnostics(product.ProductInfrastructureAsCode)
-			folder.FilterAndPublishDiagnostics(product.ProductCode)
-			folder.FilterAndPublishDiagnostics(product.ProductContainer)
-		}
+func sendDiagnosticsForAllProducts(c *config.Config) {
+	ws := c.Workspace()
+	if ws == nil {
+		return
+	}
+
+	for _, folder := range ws.Folders() {
+		folder.FilterAndPublishDiagnostics(product.ProductOpenSource)
+		folder.FilterAndPublishDiagnostics(product.ProductInfrastructureAsCode)
+		folder.FilterAndPublishDiagnostics(product.ProductCode)
+		folder.FilterAndPublishDiagnostics(product.ProductContainer)
 	}
 }

@@ -1006,10 +1006,12 @@ func (c *Config) IsDeltaFindingsEnabled() bool {
 	return c.enableDeltaFindings
 }
 
-func (c *Config) SetDeltaFindingsEnabled(enabled bool) {
+func (c *Config) SetDeltaFindingsEnabled(enabled bool) bool {
 	c.m.Lock()
 	defer c.m.Unlock()
+	modified := c.enableDeltaFindings != enabled
 	c.enableDeltaFindings = enabled
+	return modified
 }
 
 func (c *Config) SetLogLevel(level string) {
