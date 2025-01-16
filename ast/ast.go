@@ -23,13 +23,13 @@ type Node struct {
 	StartChar                  int
 	EndChar                    int
 	DocOffset                  int64
-	Parent                     *Node   `json:"-"`
-	Children                   []*Node `json:"-"`
+	Parent                     *Node
+	Children                   []*Node
 	Name                       string
 	Value                      string
 	Attributes                 map[string]string
-	Tree                       *Tree `json:"-"`
-	LinkedParentDependencyNode *Node ` json:"-"`
+	Tree                       *Tree
+	LinkedParentDependencyNode *Node
 }
 
 type Tree struct {
