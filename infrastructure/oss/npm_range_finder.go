@@ -42,7 +42,7 @@ func (n *NpmRangeFinder) find(introducingPackageName string, introducingVersion 
 			jsonKey := strings.Trim(strings.Trim(elems[0], " "), "\"")
 			if jsonKey == introducingPackageName {
 				node.Line = i
-				node.StartChar = strings.Index(line, introducingVersion) - 1
+				node.StartChar = strings.Index(line, introducingPackageName) - 1
 				node.EndChar = len(strings.ReplaceAll(line, ",", ""))
 				break
 			}
