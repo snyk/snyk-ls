@@ -65,7 +65,6 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 	assert.Equal(t, expected.Line, actual.Line)
 	assert.Equal(t, expected.StartChar, actual.StartChar)
 	assert.Equal(t, expected.EndChar, actual.EndChar)
-
 }
 
 func TestMavenRangeFinder_FindInPomHierarchy(t *testing.T) {
@@ -103,5 +102,4 @@ func TestMavenRangeFinder_FindInPomHierarchy(t *testing.T) {
 	assert.Equal(t, expected.Line, actual.Line)
 	assert.Equal(t, expected.StartChar, actual.StartChar)
 	assert.Equal(t, expected.EndChar, actual.EndChar)
-
 }

@@ -57,8 +57,8 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 
 	issueMap := cmd.issueProvider.Issues()
 	for _, issues := range issueMap {
-		for _, issue := range issues {
-			for _, action := range issue.CodeActions {
+		for i := range issues {
+			for _, action := range issues[i].CodeActions {
 				if action.Uuid == nil || *action.Uuid != codeActionId {
 					continue
 				}
@@ -76,7 +76,7 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 				})
 
 				// reset codelenses
-				issue.CodelensCommands = nil
+				issues[i].CodelensCommands = nil
 
 				// Give client some time to apply edit, then refresh code lenses to hide stale codelens for the fixed issue
 				time.Sleep(1 * time.Second)
