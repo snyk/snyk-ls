@@ -553,33 +553,25 @@ func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOpti
 		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error getting response")
 	}
 	defer resp.Body.Close()
+
 	// Read the response body
-	body, err := ioutil.ReadAll(resp.Body)
+	responseBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error reading all response")
 	}
-	logger.Debug().Str("response body: %s\n", string(body)).Msg("Got the response")
+	logger.Debug().Str("response body: %s\n", string(responseBody)).Msg("Got the response")
 
-	if err != nil {
-		return ExplainResponse{}, err
-	}
-
-	// Variable to hold the parsed data
-	var data map[string]interface{}
-	// Unmarshal the JSON string into the map
-	err = json.Unmarshal(body, &data)
 	if err != nil {
 		return ExplainResponse{}, err
 	}
 
 	var response ExplainResponse
 	response.Status = completeStatus
-	response.Explanation = data["explanation"].(string)
-	// err = json.Unmarshal(responseBody, &response)
-	// if err != nil {
-		// logger.Err(err).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
-		// return ExplainResponse{}, err
-	// }
+	err = json.Unmarshal(responseBody, &response)
+	if err != nil {
+		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
+		return ExplainResponse{}, err
+	}
 	return response, nil
 }
 

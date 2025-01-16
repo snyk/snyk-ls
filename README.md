@@ -383,7 +383,6 @@ Right now the language server supports the following actions:
 - `Generate AI Explanation` allows to retrieve explainations for various use-cases.
   - command: `snyk.generateAIExplanation`
   - args:
-    <!-- TODO(berkay.berabi): update the request and response schema -->
     - derivation string
     - ruleKey string
     - ruleMessage string
