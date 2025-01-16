@@ -54,41 +54,35 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 	if err != nil {
 		return nil, errors.Join(err, fmt.Errorf("Failed to parse code action id."))
 	}
-	issuePath, ok := args[1].(string)
-	if !ok {
-		return nil, fmt.Errorf("Failed to parse issue path.")
-	}
-	issueRange, err := cmd.toRange(args[2])
-	if err != nil {
-		return nil, errors.Join(err, fmt.Errorf("invalid range parameter"))
-	}
 
-	issues := cmd.issueProvider.IssuesForRange(issuePath, issueRange)
-	for i := range issues {
-		for _, action := range issues[i].CodeActions {
-			if action.Uuid == nil || *action.Uuid != codeActionId {
-				continue
-			}
+	issueMap := cmd.issueProvider.Issues()
+	for _, issues := range issueMap {
+		for _, issue := range issues {
+			for _, action := range issue.CodeActions {
+				if action.Uuid == nil || *action.Uuid != codeActionId {
+					continue
+				}
 
-			// execute autofix codeaction
-			edit := (*action.DeferredEdit)()
-			if edit == nil {
-				cmd.logger.Debug().Msg("No fix could be computed.")
+				// execute autofix codeaction
+				edit := (*action.DeferredEdit)()
+				if edit == nil {
+					cmd.logger.Debug().Msg("No fix could be computed.")
+					return nil, nil
+				}
+
+				cmd.notifier.Send(types.ApplyWorkspaceEditParams{
+					Label: "Snyk Code fix",
+					Edit:  converter.ToWorkspaceEdit(edit),
+				})
+
+				// reset codelenses
+				issue.CodelensCommands = nil
+
+				// Give client some time to apply edit, then refresh code lenses to hide stale codelens for the fixed issue
+				time.Sleep(1 * time.Second)
+				cmd.notifier.Send(types.CodeLensRefresh{})
 				return nil, nil
 			}
-
-			cmd.notifier.Send(types.ApplyWorkspaceEditParams{
-				Label: "Snyk Code fix",
-				Edit:  converter.ToWorkspaceEdit(edit),
-			})
-
-			// reset codelenses
-			issues[i].CodelensCommands = nil
-
-			// Give client some time to apply edit, then refresh code lenses to hide stale codelens for the fixed issue
-			time.Sleep(1 * time.Second)
-			cmd.notifier.Send(types.CodeLensRefresh{})
-			return nil, nil
 		}
 	}
 

@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/infrastructure/oss/parser"
 )
 
@@ -30,18 +30,23 @@ type htmlRangeFinder struct {
 	config      *config.Config
 }
 
-func (h htmlRangeFinder) find(issue ossIssue) snyk.Range {
+func (h htmlRangeFinder) find(introducingPackageName string, introducingVersion string) *ast.Node {
 	dependencyParser := parser.NewParser(h.config, h.path)
 	dependencies, err := dependencyParser.Parse(h.path)
 	if err != nil {
-		return snyk.Range{}
+		return nil
 	}
 	for _, dependency := range dependencies {
-		if fmt.Sprintf("%s@%s", dependency.ArtifactID, dependency.Version) == issue.From[0] {
-			return dependency.Range
+		format := "%s@%s"
+		if fmt.Sprintf(format, dependency.ArtifactID, dependency.Version) == fmt.Sprintf(format, introducingPackageName, introducingVersion) {
+			return &ast.Node{
+				Line:      dependency.Range.Start.Line,
+				StartChar: dependency.Range.Start.Character,
+				EndChar:   dependency.Range.End.Character,
+			}
 		}
 	}
-	return snyk.Range{}
+	return nil
 }
 
 var _ RangeFinder = &htmlRangeFinder{}

@@ -16,21 +16,34 @@
 
 package ast
 
+import "fmt"
+
 type Node struct {
 	Line       int
 	StartChar  int
 	EndChar    int
 	DocOffset  int64
-	Parent     *Node
-	Children   []*Node
+	Parent     *Node   `json:"-"`
+	Children   []*Node `json:"-"`
 	Name       string
 	Value      string
 	Attributes map[string]string
+	Tree       *Tree `json:"-"`
+	LinkedNode *Node ` json:"-"`
 }
 
 type Tree struct {
-	Root     *Node
-	Document string
+	ParentTree *Tree
+	Root       *Node
+	Document   string
+}
+
+func (t *Tree) String() string {
+	return fmt.Sprintf("Root=%s, Document=%s, ParentTree=%s", t.Root, t.Document, t.ParentTree)
+}
+
+func (t *Tree) DebugString() string {
+	return t.String()
 }
 
 type Parser interface {
@@ -43,6 +56,14 @@ type Visitor interface {
 
 func (n *Node) Accept(v Visitor) {
 	v.visit(n)
+}
+
+func (n *Node) String() string {
+	return fmt.Sprintf("Name=%s, Value=%s, Position=%d:%d:%d, Tree=%s, Parent=%s, LinkedNode=%s", n.Name, n.Value, n.Line, n.StartChar, n.EndChar, n.Tree, n.Parent, n.LinkedNode)
+}
+
+func (n *Node) DebugString() string {
+	return fmt.Sprintf("%s, DocOffset: %d, ChildrenCount: %d", n.String(), n.DocOffset, len(n.Children))
 }
 
 func (n *Node) Add(child *Node) *Node {

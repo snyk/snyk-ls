@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -50,19 +51,24 @@ func TestNpmRangeFinder_Find(t *testing.T) {
 		fileContent: testContent,
 		myRange:     snyk.Range{},
 	}
-	expectedRange := snyk.Range{
-		Start: snyk.Position{
-			Line:      17,
-			Character: 4,
-		},
-		End: snyk.Position{
-			Line:      17,
-			Character: 22,
-		},
+
+	expected := ast.Node{
+		Line:      17,
+		StartChar: 14,
+		EndChar:   22,
 	}
 
-	actualRange := npmRangeFinder.find(issue)
-	assert.Equal(t, expectedRange, actualRange)
+	executeFinding(t, issue, npmRangeFinder, expected)
+}
+
+func executeFinding(t *testing.T, issue ossIssue, npmRangeFinder NpmRangeFinder, expected ast.Node) {
+	t.Helper()
+	p, v := introducingPackageAndVersion(issue)
+
+	actual := npmRangeFinder.find(p, v)
+	assert.Equal(t, expected.Line, actual.Line)
+	assert.Equal(t, expected.StartChar, actual.StartChar)
+	assert.Equal(t, expected.EndChar, actual.EndChar)
 }
 
 func TestNpmRangeFinder_Find_Scoped_Packages(t *testing.T) {
@@ -88,17 +94,12 @@ func TestNpmRangeFinder_Find_Scoped_Packages(t *testing.T) {
 		fileContent: testContent,
 		myRange:     snyk.Range{},
 	}
-	expectedRange := snyk.Range{
-		Start: snyk.Position{
-			Line:      18,
-			Character: 4,
-		},
-		End: snyk.Position{
-			Line:      18,
-			Character: 27,
-		},
+
+	expected := ast.Node{
+		Line:      18,
+		StartChar: 20,
+		EndChar:   27,
 	}
 
-	actualRange := npmRangeFinder.find(issue)
-	assert.Equal(t, expectedRange, actualRange)
+	executeFinding(t, issue, npmRangeFinder, expected)
 }
