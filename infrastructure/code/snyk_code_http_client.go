@@ -547,7 +547,7 @@ func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOpti
 	}
 
 	url := "http://localhost:10000/explain"
-	logger.Debug().Str("payload body: %s\n", string(requestBody)).Msg("Marshalled payload")
+	logger.Debug().Str("payload body: %s\n", string(requestBody)).Msg("Marshaled payload")
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
 		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error getting response")
