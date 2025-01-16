@@ -61,7 +61,7 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 
 	p, v := introducingPackageAndVersion(issue)
 
-	actual := finder.find(p, v)
+	actual, _ := finder.find(p, v)
 	assert.Equal(t, expected.Line, actual.Line)
 	assert.Equal(t, expected.StartChar, actual.StartChar)
 	assert.Equal(t, expected.EndChar, actual.EndChar)
@@ -82,7 +82,7 @@ func TestMavenRangeFinder_FindInPomHierarchy(t *testing.T) {
 		PackageManager: "maven",
 		From:           []string{"goof@1.0.1", "commons-fileupload:commons-fileupload@1.2.1"},
 	}
-	var testPath, _ = filepath.Abs("testdata/maven-goof/sub/pom.xml")
+	var testPath, _ = filepath.Abs("testdata/maven-goof/sub/subsub/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
 
 	finder := mavenRangeFinder{
@@ -92,14 +92,14 @@ func TestMavenRangeFinder_FindInPomHierarchy(t *testing.T) {
 	}
 
 	expected := ast.Node{
-		Line:      35,
+		Line:      34,
 		StartChar: 18,
 		EndChar:   36,
 	}
 
 	p, v := introducingPackageAndVersion(issue)
 
-	actual := finder.find(p, v)
+	actual, _ := finder.find(p, v)
 	assert.Equal(t, expected.Line, actual.Line)
 	assert.Equal(t, expected.StartChar, actual.StartChar)
 	assert.Equal(t, expected.EndChar, actual.EndChar)

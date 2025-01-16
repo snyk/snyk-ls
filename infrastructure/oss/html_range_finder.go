@@ -30,11 +30,11 @@ type htmlRangeFinder struct {
 	config      *config.Config
 }
 
-func (h htmlRangeFinder) find(introducingPackageName string, introducingVersion string) *ast.Node {
+func (h htmlRangeFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {
 	dependencyParser := parser.NewParser(h.config, h.path)
 	dependencies, err := dependencyParser.Parse(h.path)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	for _, dependency := range dependencies {
 		format := "%s@%s"
@@ -43,10 +43,10 @@ func (h htmlRangeFinder) find(introducingPackageName string, introducingVersion 
 				Line:      dependency.Range.Start.Line,
 				StartChar: dependency.Range.Start.Character,
 				EndChar:   dependency.Range.End.Character,
-			}
+			}, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 var _ RangeFinder = &htmlRangeFinder{}

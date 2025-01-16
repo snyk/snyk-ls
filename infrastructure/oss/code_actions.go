@@ -42,7 +42,7 @@ func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting
 	// value has the version information, so if it's empty, we'll need to look at the parent
 	var quickFixAction *snyk.CodeAction
 	if issueDepNode.Tree != nil && issueDepNode.Value == "" {
-		fixNode := issueDepNode.LinkedNode
+		fixNode := issueDepNode.LinkedParentDependencyNode
 		if fixNode != nil {
 			quickFixAction = i.AddQuickFixAction(fixNode.Tree.Document, getRangeFromNode(fixNode), []byte(fixNode.Tree.Root.Value), true)
 		}

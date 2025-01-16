@@ -19,17 +19,17 @@ package ast
 import "fmt"
 
 type Node struct {
-	Line       int
-	StartChar  int
-	EndChar    int
-	DocOffset  int64
-	Parent     *Node   `json:"-"`
-	Children   []*Node `json:"-"`
-	Name       string
-	Value      string
-	Attributes map[string]string
-	Tree       *Tree `json:"-"`
-	LinkedNode *Node ` json:"-"`
+	Line                       int
+	StartChar                  int
+	EndChar                    int
+	DocOffset                  int64
+	Parent                     *Node   `json:"-"`
+	Children                   []*Node `json:"-"`
+	Name                       string
+	Value                      string
+	Attributes                 map[string]string
+	Tree                       *Tree `json:"-"`
+	LinkedParentDependencyNode *Node ` json:"-"`
 }
 
 type Tree struct {
@@ -59,7 +59,7 @@ func (n *Node) Accept(v Visitor) {
 }
 
 func (n *Node) String() string {
-	return fmt.Sprintf("Name=%s, Value=%s, Position=%d:%d:%d, Tree=%s, Parent=%s, LinkedNode=%s", n.Name, n.Value, n.Line, n.StartChar, n.EndChar, n.Tree, n.Parent, n.LinkedNode)
+	return fmt.Sprintf("Name=%s, Value=%s, Position=%d:%d:%d, Tree=%s, Parent=%s, LinkedParentDependencyNode=%s", n.Name, n.Value, n.Line, n.StartChar, n.EndChar, n.Tree, n.Parent, n.LinkedParentDependencyNode)
 }
 
 func (n *Node) DebugString() string {

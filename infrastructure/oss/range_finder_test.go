@@ -54,7 +54,7 @@ func TestDefaultFinder_Find(t *testing.T) {
 
 	p, v := introducingPackageAndVersion(issue)
 
-	actualRange := defaultFinder.find(p, v)
+	actualRange, _ := defaultFinder.find(p, v)
 	assert.Equal(t, expectedRange, getRangeFromNode(actualRange))
 }
 

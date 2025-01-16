@@ -30,7 +30,7 @@ type NpmRangeFinder struct {
 	myRange     snyk.Range
 }
 
-func (n *NpmRangeFinder) find(introducingPackageName string, introducingVersion string) *ast.Node {
+func (n *NpmRangeFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {
 	var lines = strings.Split(strings.ReplaceAll(string(n.fileContent), "\r\n", "\n"), "\n")
 
 	node := ast.Node{}
@@ -49,7 +49,7 @@ func (n *NpmRangeFinder) find(introducingPackageName string, introducingVersion 
 		}
 	}
 
-	return &node
+	return &node, nil
 }
 
 func introducingPackageAndVersion(issue ossIssue) (string, string) {
