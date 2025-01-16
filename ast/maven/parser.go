@@ -20,6 +20,8 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -27,15 +29,22 @@ import (
 )
 
 type Parser struct {
-	tree   ast.Tree
 	config *config.Config
 }
 
-type dependency struct {
+type Parent struct {
+	Group        string `xml:"group"`
+	ArtifactId   string `xml:"artifactId"`
+	Version      string `xml:"version"`
+	RelativePath string `xml:"relativePath"`
+}
+
+type Dependency struct {
 	Group      string `xml:"group"`
 	ArtifactId string `xml:"artifactId"`
 	Version    string `xml:"version"`
 	Scope      string `xml:"scope"`
+	Type       string `xml:"type"`
 }
 
 func New(c *config.Config) Parser {
@@ -44,10 +53,11 @@ func New(c *config.Config) Parser {
 	}
 }
 
-func (p *Parser) Parse(content string, path string) ast.Tree {
+func (p *Parser) Parse(content string, path string) *ast.Tree {
 	tree := p.initTree(path, content)
 	d := xml.NewDecoder(strings.NewReader(content))
 	var offset int64
+	pomDir := filepath.Dir(path)
 	for {
 		token, err := d.Token()
 		offset = d.InputOffset()
@@ -61,13 +71,44 @@ func (p *Parser) Parse(content string, path string) ast.Tree {
 		switch xmlType := token.(type) {
 		case xml.StartElement:
 			if xmlType.Name.Local == "dependency" {
-				var dep dependency
+				var dep Dependency
 				if err = d.DecodeElement(&dep, &xmlType); err != nil {
-					p.config.Logger().Err(err).Msg("Couldn't decode dependency")
+					p.config.Logger().Err(err).Msg("Couldn't decode Dependency")
+					continue
 				}
+
+				if strings.ToLower(dep.Type) == "bom" {
+					addDepsFromBOM(path, tree, dep)
+				}
+
 				offsetAfter := d.InputOffset()
 				node := p.addNewNodeTo(tree.Root, offset, offsetAfter, dep)
-				p.config.Logger().Debug().Interface("nodeName", node.Name).Str("path", p.tree.Document).Msg("Added dependency node")
+				p.config.Logger().Debug().Interface("nodeName", node.Name).Str("path", tree.Document).Msg("Added Dependency node")
+			}
+			if xmlType.Name.Local == "parent" {
+				// parse Parent pom
+				var parentPOM Parent
+				if err = d.DecodeElement(&parentPOM, &xmlType); err != nil {
+					p.config.Logger().Err(err).Msg("Couldn't decode Parent")
+					continue
+				}
+
+				if parentPOM.RelativePath == "" {
+					parentPOM.RelativePath = filepath.Join("..", "pom.xml")
+				}
+
+				parentAbsPath, err := filepath.Abs(filepath.Join(pomDir, parentPOM.RelativePath))
+				if err != nil {
+					p.config.Logger().Err(err).Msg("Couldn't resolve Parent path")
+					continue
+				}
+				content, err := os.ReadFile(parentAbsPath)
+				if err != nil {
+					p.config.Logger().Err(err).Msg("Couldn't read Parent file")
+					continue
+				}
+				parentTree := p.Parse(string(content), parentAbsPath)
+				tree.ParentTree = parentTree
 			}
 		default:
 		}
@@ -75,7 +116,11 @@ func (p *Parser) Parse(content string, path string) ast.Tree {
 	return tree
 }
 
-func (p *Parser) initTree(path string, content string) ast.Tree {
+func addDepsFromBOM(path string, tree *ast.Tree, dep Dependency) {
+	// todo retrieve, potentially from configured repos (not parsed yet)
+}
+
+func (p *Parser) initTree(path string, content string) *ast.Tree {
 	var currentLine = 0
 	root := ast.Node{
 		Line:      currentLine,
@@ -87,35 +132,49 @@ func (p *Parser) initTree(path string, content string) ast.Tree {
 		Name:      path,
 		Value:     content,
 	}
-	p.tree = ast.Tree{
+
+	root.Tree = &ast.Tree{
 		Root:     &root,
 		Document: path,
 	}
-	return p.tree
+	return root.Tree
 }
 
-func (p *Parser) addNewNodeTo(parent *ast.Node, offsetBefore int64, offsetAfter int64, dep dependency) *ast.Node {
-	content := p.tree.Root.Value
-	contentInclusive := content[0:offsetAfter]
+func (p *Parser) addNewNodeTo(parent *ast.Node, offsetBefore int64, offsetAfter int64, dep Dependency) *ast.Node {
+	var startChar int
+	var endChar int
+	var line int
+	content := parent.Tree.Root.Value
+	contentInclusiveDep := content[0:offsetAfter]
+
 	startTag := "<version>"
-	endTag := "</version"
-	versionStartOffset := strings.LastIndex(contentInclusive, startTag)
-	contentUntilVersion := content[0:versionStartOffset]
-	line := strings.Count(contentUntilVersion, "\n")
-	lineStartOffset := strings.LastIndex(contentUntilVersion, "\n")
-	versionValueStartOffset := versionStartOffset + len(startTag) - lineStartOffset - 1
-	versionValueEndOffset := strings.LastIndex(contentInclusive, endTag) - lineStartOffset - 1
+	endTag := "</version>"
+
+	if dep.Version == "" {
+		// highlight artifact, if version is not there (bom/parent pom)
+		startTag = "<artifactId>"
+		endTag = "</artifactId>"
+	}
+
+	startTagOffset := strings.LastIndex(contentInclusiveDep, startTag)
+	contentToVersionStart := content[0:startTagOffset]
+	line = strings.Count(contentToVersionStart, "\n")
+	lineStartOffset := strings.LastIndex(contentToVersionStart, "\n") + 1
+	startChar = startTagOffset + len(startTag) - lineStartOffset
+	versionEndOffset := strings.LastIndex(contentInclusiveDep, endTag)
+	endChar = versionEndOffset - lineStartOffset
 
 	node := ast.Node{
 		Line:       line,
-		StartChar:  versionValueStartOffset,
-		EndChar:    versionValueEndOffset,
+		StartChar:  startChar,
+		EndChar:    endChar,
 		DocOffset:  offsetBefore,
 		Parent:     parent,
 		Children:   nil,
 		Name:       dep.ArtifactId,
 		Value:      dep.Version,
 		Attributes: make(map[string]string),
+		Tree:       parent.Tree,
 	}
 	parent.Add(&node)
 	return &node

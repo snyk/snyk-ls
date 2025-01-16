@@ -18,8 +18,8 @@ package oss
 
 import (
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/ast/maven"
-	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type mavenRangeFinder struct {
@@ -28,17 +28,14 @@ type mavenRangeFinder struct {
 	c           *config.Config
 }
 
-func (m *mavenRangeFinder) find(issue ossIssue) snyk.Range {
-	searchPackage, _ := introducingPackageAndVersion(issue)
+func (m *mavenRangeFinder) find(introducingPackageName string, _ string) *ast.Node {
 	parser := maven.New(m.c)
 	tree := parser.Parse(string(m.fileContent), m.path)
 	for _, depNode := range tree.Root.Children {
-		if searchPackage == depNode.Name {
-			return snyk.Range{
-				Start: snyk.Position{Line: depNode.Line, Character: depNode.StartChar},
-				End:   snyk.Position{Line: depNode.Line, Character: depNode.EndChar},
-			}
+		if introducingPackageName == depNode.Name {
+			// mark, where the dep is mentioned in the file, regardless of parent pom/bom
+			return depNode
 		}
 	}
-	return snyk.Range{}
+	return nil
 }

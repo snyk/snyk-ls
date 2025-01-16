@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 
 	"github.com/gomarkdown/markdown"
@@ -40,9 +41,9 @@ var issuesSeverity = map[string]snyk.Severity{
 	"medium":   snyk.Medium,
 }
 
-func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, issueRange snyk.Range, learnService learn.Service, ep error_reporting.ErrorReporter, fileContent []byte) snyk.Issue {
+func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, fileContent []byte) snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
-	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueRange, fileContent)
+	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueDepNode, fileContent)
 
 	var codelensCommands []types.CommandData
 	for _, codeAction := range codeActions {
@@ -53,7 +54,7 @@ func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, is
 				Arguments: []any{
 					codeAction.Uuid,
 					affectedFilePath,
-					issueRange,
+					getRangeFromNode(issueDepNode),
 				},
 				GroupingKey:   codeAction.GroupingKey,
 				GroupingType:  codeAction.GroupingType,
@@ -88,11 +89,12 @@ func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, is
 	if len(message) > maxLength {
 		message = message[:maxLength] + "... (Snyk)"
 	}
+
 	d := snyk.Issue{
 		ID:                  issue.Id,
 		Message:             message,
 		FormattedMessage:    issue.GetExtendedMessage(issue),
-		Range:               issueRange,
+		Range:               getRangeFromNode(issueDepNode),
 		Severity:            issue.ToIssueSeverity(),
 		AffectedFilePath:    affectedFilePath,
 		FileContent:         fileContent,
@@ -113,7 +115,18 @@ func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, is
 	return d
 }
 
-func convertScanResultToIssues(res *scanResult, targetFilePath string, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]snyk.Issue) []snyk.Issue {
+func getRangeFromNode(issueDepNode *ast.Node) snyk.Range {
+	if issueDepNode == nil {
+		return snyk.Range{}
+	}
+	r := snyk.Range{
+		Start: snyk.Position{Line: issueDepNode.Line, Character: issueDepNode.StartChar},
+		End:   snyk.Position{Line: issueDepNode.Line, Character: issueDepNode.EndChar},
+	}
+	return r
+}
+
+func convertScanResultToIssues(c *config.Config, res *scanResult, targetFilePath string, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]snyk.Issue) []snyk.Issue {
 	var issues []snyk.Issue
 
 	duplicateCheckMap := map[string]bool{}
@@ -124,8 +137,8 @@ func convertScanResultToIssues(res *scanResult, targetFilePath string, fileConte
 		if duplicateCheckMap[duplicateKey] {
 			continue
 		}
-		issueRange := findRange(issue, targetFilePath, fileContent)
-		snykIssue := toIssue(targetFilePath, issue, res, issueRange, ls, ep, fileContent)
+		node := getDependencyNode(c, targetFilePath, issue, fileContent)
+		snykIssue := toIssue(targetFilePath, issue, res, node, ls, ep, fileContent)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true
