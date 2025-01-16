@@ -140,6 +140,7 @@ type FakeSnykCodeClient struct {
 	AutofixStatus          AutofixStatus
 	Options                map[string]AnalysisOptions
 	C                      *config.Config
+	FeedbackSent           string
 }
 
 func (f *FakeSnykCodeClient) GetAutofixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
@@ -347,6 +348,9 @@ func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
 }
 
-func (f *FakeSnykCodeClient) SubmitAutofixFeedback(_ context.Context, _ string, _ string) error {
+func (f *FakeSnykCodeClient) SubmitAutofixFeedback(_ context.Context, _ string, feedback string) error {
+	FakeSnykCodeApiServiceMutex.Lock()
+	f.FeedbackSent = feedback
+	FakeSnykCodeApiServiceMutex.Unlock()
 	return nil
 }
