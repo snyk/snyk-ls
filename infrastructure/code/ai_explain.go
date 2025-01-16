@@ -26,9 +26,6 @@ import (
 )
 
 
-
-
-
 func (sc *Scanner) GetAIExplanation(
 	ctx context.Context,
 	derivation string,
@@ -59,13 +56,13 @@ func (sc *Scanner) GetAIExplanation(
 	for {
 		select {
 		case <-timeoutTimer.C:
-			const msg = "Timeout waiting for explanation."
+			const msg = "Timeout waiting for an explanation."
 			logger.Error().Msg(msg)
 			return "", errors.New(msg)
 		case <-ticker.C:
 			explanation, explainStatus, explanationErr := codeClient.GetAIExplanation(span.Context(), options)
 			if explanationErr != nil {
-				logger.Err(explanationErr).Msg("Error getting explanation")
+				logger.Err(explanationErr).Msg("Error getting an explanation")
 				return "", explanationErr
 			} else if explainStatus == completeStatus {
 				return explanation, nil
@@ -109,7 +106,6 @@ func (s *SnykCodeHTTPClient) getExplainResponse(ctx context.Context, options Exp
 	logger.Info().Str("requestId", requestId).Msg("Started obtaining explain Response")
 	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining explain Response")
 
-	// we come until here.
 	response, err := s.RunExplain(span.Context(), options)
 	if err != nil {
 		return response, err

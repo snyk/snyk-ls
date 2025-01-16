@@ -140,6 +140,7 @@ type FakeSnykCodeClient struct {
 	AutofixStatus          AutofixStatus
 	Options                map[string]AnalysisOptions
 	C                      *config.Config
+	Explanation            string
 }
 
 func (f *FakeSnykCodeClient) GetAutofixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
@@ -148,7 +149,7 @@ func (f *FakeSnykCodeClient) GetAutofixDiffs(_ context.Context, _ string, _ Auto
 }
 
 func (f *FakeSnykCodeClient) GetAIExplanation(_ context.Context, _ ExplainOptions) (explanation string, status string, err error) {
-	return "some explanation", "COMPLETED", nil
+	return f.Explanation, completeStatus, nil
 }
 
 func (f *FakeSnykCodeClient) getAutofixResponse(_ context.Context, _ AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error) {

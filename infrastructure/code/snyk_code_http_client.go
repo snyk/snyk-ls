@@ -18,7 +18,6 @@ package code
 
 import (
 	"io/ioutil"
-
 	"bytes"
 	"context"
 	"encoding/json"
@@ -550,19 +549,15 @@ func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOpti
 	url := "http://localhost:10000/explain"
 	logger.Debug().Str("payload body: %s\n", string(requestBody)).Msg("Marshalled payload")
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
-	logger.Debug().Msg("API: sent get request")
 	if err != nil {
 		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error getting response")
 	}
 	defer resp.Body.Close()
 	// Read the response body
-	logger.Debug().Msg("API: before readall")
 	body, err := ioutil.ReadAll(resp.Body)
-	logger.Debug().Msg("API: after readall")
 	if err != nil {
 		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error reading all response")
 	}
-	logger.Debug().Msg("read explain response")
 	logger.Debug().Str("response body: %s\n", string(body)).Msg("Got the response")
 
 	if err != nil {
@@ -591,32 +586,25 @@ func (s *SnykCodeHTTPClient) RunExplain(ctx context.Context, options ExplainOpti
 func (s *SnykCodeHTTPClient) explainRequestBody(options *ExplainOptions) ([]byte, error) {
 	logger := s.c.Logger().With().Str("method", "code.explainRequestBody").Logger()
 
+	var request ExplainRequest
 	if options.diff == "" {
-		request := ExplainRequest{
-			VulnExplanation: &ExplainVulnerabilityRequest{
+		request.VulnExplanation = &ExplainVulnerabilityRequest{
 				RuleId:   options.ruleKey,
 				Derivation: options.derivation,
 				RuleMessage: options.ruleMessage,
 				ExplanationLength: SHORT,
-			},
-			FixExplanation: nil,
-		}
-		requestBody, err := json.Marshal(request)
+			}
 		logger.Debug().Msg("payload for VulnExplanation")
-		return requestBody, err
 	} else{
-		request := ExplainRequest{
-			VulnExplanation: nil,
-			FixExplanation: &ExplainFixRequest{
+		request.FixExplanation = &ExplainFixRequest{
 				RuleId:   options.ruleKey,
 				Diff: options.diff,
 				ExplanationLength: SHORT,
-			},
-		}
+			}
 		logger.Debug().Msg("payload for FixExplanation")
-		requestBody, err := json.Marshal(request)
-		return requestBody, err
 	}
+	requestBody, err := json.Marshal(request)
+	return requestBody, err
 }
 
 func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {

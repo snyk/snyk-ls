@@ -384,11 +384,11 @@ Right now the language server supports the following actions:
   - command: `snyk.generateAIExplanation`
   - args:
     <!-- TODO(berkay.berabi): update the request and response schema -->
-    - folderURI string
-    - fileURI string
+    - derivation string
+    - ruleKey string
+    - ruleMessage string
     - diff string
-    - issueID string (UUID)
-  - returns an array of explanations:
+  - returns an explanations as string:
   ```json5
   [{
     "explainId": "123",

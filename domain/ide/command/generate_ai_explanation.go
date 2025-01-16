@@ -43,7 +43,7 @@ func (cmd *generateAIExplanation) Execute (ctx context.Context) (any, error) {
 	logger := config.CurrentConfig().Logger().With().Str("method", "generateAIExplanation.Execute").Logger()
 
 	args := cmd.command.Arguments
-	if len(args) < 3 {
+	if len(args) < 4 {
 		return nil, errors.New("missing required arguments")
 	}
 
@@ -67,7 +67,6 @@ func (cmd *generateAIExplanation) Execute (ctx context.Context) (any, error) {
 		return nil, errors.New("failed to parse diff")
 	}
 
-	// Now we need to call cmd.codeScanner.GetAIExplanation
 	explanation, err := cmd.codeScanner.GetAIExplanation(ctx, derivation, ruleKey, ruleMessage, diff)
 	if err != nil {
 		logger.Err(err).Msgf("received an error from API: %s", err.Error())
