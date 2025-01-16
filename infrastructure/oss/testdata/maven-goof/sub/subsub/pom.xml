@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.mycompany.app</groupId>
-  <artifactId>my-child-app</artifactId>
+  <artifactId>my-child-child-app</artifactId>
   <version>1.0-SNAPSHOT</version>
 
 
@@ -15,9 +15,8 @@
 
   <parent>
     <groupId>com.mycompany.app</groupId>
-    <artifactId>my-app</artifactId>
+    <artifactId>my-child-app</artifactId>
     <version>1.0-SNAPSHOT</version>
-<!--    <relativePath/>-->
   </parent>
 
   <properties>
@@ -25,6 +24,17 @@
     <maven.compiler.source>1.7</maven.compiler.source>
     <maven.compiler.target>1.7</maven.compiler.target>
   </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>commons-fileupload</groupId>
+      <artifactId>commons-fileupload</artifactId>
+    </dependency>
+  </dependencies>
 
   <build>
     <pluginManagement><!-- lock down plugins versions to avoid using Maven defaults (may be moved to parent pom) -->

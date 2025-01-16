@@ -65,7 +65,7 @@ func executeFinding(t *testing.T, issue ossIssue, npmRangeFinder NpmRangeFinder,
 	t.Helper()
 	p, v := introducingPackageAndVersion(issue)
 
-	actual := npmRangeFinder.find(p, v)
+	actual, _ := npmRangeFinder.find(p, v)
 	assert.Equal(t, expected.Line, actual.Line)
 	assert.Equal(t, expected.StartChar, actual.StartChar)
 	assert.Equal(t, expected.EndChar, actual.EndChar)

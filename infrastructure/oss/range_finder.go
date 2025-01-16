@@ -26,7 +26,7 @@ import (
 )
 
 type RangeFinder interface {
-	find(introducingPackageName string, introducingVersion string) *ast.Node
+	find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree)
 }
 
 type DefaultFinder struct {
@@ -63,19 +63,25 @@ func getDependencyNode(c *config.Config, path string, issue ossIssue, fileConten
 
 	introducingPackageName, introducingVersion := introducingPackageAndVersion(issue)
 
-	dep := finder.find(introducingPackageName, introducingVersion)
+	currentDep, parsedTree := finder.find(introducingPackageName, introducingVersion)
 
-	// todo deeper hierarchy needs iteration until version is found
-	// add loop traversing linkedNode until version is found
-	if dep.Value == "" && dep.Tree != nil && dep.Tree.ParentTree != nil {
-		tree := dep.Tree.ParentTree
-		dep.LinkedNode = getDependencyNode(c, tree.Document, issue, []byte(tree.Root.Value))
+	// if an intermediate manifest file does not have a dependency section
+	// we go recurse to the parent of it
+	if currentDep == nil && parsedTree != nil && parsedTree.ParentTree != nil {
+		tree := parsedTree.ParentTree
+		currentDep = getDependencyNode(c, tree.Document, issue, []byte(tree.Root.Value))
 	}
 
-	return dep
+	// recurse until a dependency with version was found
+	if currentDep.Value == "" && currentDep.Tree != nil && currentDep.Tree.ParentTree != nil {
+		tree := currentDep.Tree.ParentTree
+		currentDep.LinkedParentDependencyNode = getDependencyNode(c, tree.Document, issue, []byte(tree.Root.Value))
+	}
+
+	return currentDep
 }
 
-func (f *DefaultFinder) find(introducingPackageName string, introducingVersion string) *ast.Node {
+func (f *DefaultFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {
 	lines := strings.Split(strings.ReplaceAll(string(f.fileContent), "\r", ""), "\n")
 	for i, line := range lines {
 		if isComment(line) {
@@ -92,10 +98,10 @@ func (f *DefaultFinder) find(introducingPackageName string, introducingVersion s
 				Str("version", introducingVersion).
 				Str("path", f.path).
 				Interface("range", r).Msg("found range")
-			return &ast.Node{Line: r.Start.Line, StartChar: r.Start.Character, EndChar: r.End.Character}
+			return &ast.Node{Line: r.Start.Line, StartChar: r.Start.Character, EndChar: r.End.Character}, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 func isComment(line string) bool {

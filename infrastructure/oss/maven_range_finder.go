@@ -28,14 +28,14 @@ type mavenRangeFinder struct {
 	c           *config.Config
 }
 
-func (m *mavenRangeFinder) find(introducingPackageName string, _ string) *ast.Node {
+func (m *mavenRangeFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {
 	parser := maven.New(m.c)
 	tree := parser.Parse(string(m.fileContent), m.path)
 	for _, depNode := range tree.Root.Children {
 		if introducingPackageName == depNode.Name {
 			// mark, where the dep is mentioned in the file, regardless of parent pom/bom
-			return depNode
+			return depNode, tree
 		}
 	}
-	return nil
+	return nil, tree
 }
