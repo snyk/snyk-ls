@@ -99,7 +99,10 @@ func Test_autofixFunc(t *testing.T) {
 					break
 				}
 			}
-			return types.Info == feedbackMessageReq.Type &&
+			FakeSnykCodeApiServiceMutex.Lock()
+			eventSent := fakeSnykCode.FeedbackSent == FixAppliedUserEvent
+			FakeSnykCodeApiServiceMutex.Unlock()
+			return eventSent && types.Info == feedbackMessageReq.Type &&
 				"Congratulations! 🎉 You’ve just fixed this SNYK-123 issue. Was this fix helpful?" == feedbackMessageReq.Message
 		}, 10*time.Second, 1*time.Second)
 
@@ -147,7 +150,10 @@ func Test_autofixFunc(t *testing.T) {
 					break
 				}
 			}
-			return types.Info == feedbackMessageReq.Type &&
+			FakeSnykCodeApiServiceMutex.Lock()
+			eventSent := fakeSnykCode.FeedbackSent == FixAppliedUserEvent
+			FakeSnykCodeApiServiceMutex.Unlock()
+			return eventSent && types.Info == feedbackMessageReq.Type &&
 				"Congratulations! 🎉 You’ve just fixed this SNYK-123 issue. Was this fix helpful?" == feedbackMessageReq.Message
 		}, 10*time.Second, 1*time.Second)
 

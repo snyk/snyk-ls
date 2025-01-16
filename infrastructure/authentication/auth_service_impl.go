@@ -99,12 +99,13 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL)
 	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
 
-	if prioritizedUrl != customUrl {
-		defer a.notifier.SendShowMessage(sglsp.Info, "The Snyk API Endpoint has been updated.")
+	shouldSendUrlUpdatedNotification := prioritizedUrl != customUrl
+	if shouldSendUrlUpdatedNotification {
+		defer a.notifier.SendShowMessage(sglsp.Info, fmt.Sprintf("The Snyk API Endpoint has been updated to %s.", prioritizedUrl))
+		a.c.UpdateApiEndpoints(prioritizedUrl)
 	}
 
-	a.c.UpdateApiEndpoints(prioritizedUrl)
-	a.updateCredentials(token, true)
+	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
 	a.configureProviders(a.c)
 	a.sendAuthenticationAnalytics(analytics.Success, nil)
 	return token, err
@@ -173,30 +174,32 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	return customUrl
 }
 
-func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool) {
+func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.updateCredentials(newToken, sendNotification)
+	a.updateCredentials(newToken, sendNotification, updateApiUrl)
 }
 
-func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool) {
+func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	oldToken := a.c.Token()
-	if oldToken == newToken {
+	if oldToken == newToken && !updateApiUrl {
 		return
 	}
 
-	// remove old token from cache, but don't add new token, as we want the entry only when
-	// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
-	a.authCache.Remove(oldToken)
-	a.c.SetToken(newToken)
+	if oldToken != newToken {
+		// remove old token from cache, but don't add new token, as we want the entry only when
+		// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
+		a.authCache.Remove(oldToken)
+		a.c.SetToken(newToken)
+	}
 
 	if sendNotification {
-		a.c.Logger().Debug().Str("method", "UpdateCredentials").Str(
-			"Sending Url %s",
-			a.c.SnykApi(),
-		)
-		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: a.c.SnykApi()})
+		apiUrl := ""
+		if updateApiUrl {
+			apiUrl = a.c.SnykApi()
+		}
+		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: apiUrl})
 	}
 }
 
@@ -213,7 +216,7 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
 		a.errorReporter.CaptureError(err)
 	}
-	a.updateCredentials("", true)
+	a.updateCredentials("", true, false)
 	a.configureProviders(a.c)
 }
 

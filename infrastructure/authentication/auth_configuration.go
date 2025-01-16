@@ -33,6 +33,10 @@ import (
 // Token authentication configures token only authentication
 func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) AuthenticationProvider {
 	conf := c.Engine().GetConfiguration()
+	if c.Storage() != nil {
+		c.Storage().UnRegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN)
+	}
+
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 	conf.Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
 	conf.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
@@ -48,7 +52,7 @@ func Default(c *config.Config, authenticationService AuthenticationService) Auth
 	credentialsUpdateCallback := func(_ string, value any) {
 		// an empty struct marks an empty token, so we stay with empty string if the cast fails
 		newToken, _ := value.(string)
-		go authenticationService.updateCredentials(newToken, true)
+		go authenticationService.updateCredentials(newToken, true, false)
 	}
 
 	openBrowserFunc := func(url string) {
