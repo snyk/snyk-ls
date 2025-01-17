@@ -196,9 +196,12 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 		DeferredEdit: &deferredMockEdit,
 	}
 	issues := setupSampleIssues(issueRange, codeAction, cmd.command)
+	issueMap := snyk.IssuesByFile{
+		filePath.(string): issues,
+	}
 
 	issueProviderMock := new(issueProviderMock)
-	issueProviderMock.On("IssuesForRange", filePath, issueRange).Return(issues)
+	issueProviderMock.On("Issues").Return(issueMap)
 	cmd.issueProvider = issueProviderMock
 
 	// act
@@ -222,14 +225,9 @@ func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
 
-	filePath := sampleArgs[1]
-	rangeDto, ok := sampleArgs[2].(RangeDto)
-	require.True(t, ok)
-	issueRange, err := cmd.toRange(rangeDto)
-	require.NoError(t, err)
-
 	issueProviderMock := new(issueProviderMock)
-	issueProviderMock.On("IssuesForRange", filePath, issueRange).Return([]snyk.Issue{})
+	issueProviderMock.On("Issues").Return(snyk.IssuesByFile{})
+
 	cmd.issueProvider = issueProviderMock
 
 	// act
