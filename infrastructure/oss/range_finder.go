@@ -89,7 +89,8 @@ func (f *DefaultFinder) find(introducingPackageName string, introducingVersion s
 		}
 
 		if strings.Contains(line, introducingPackageName) {
-			endChar := len(strings.TrimRight(strings.TrimRight(strings.TrimRight(line, " "), "\""), "'"))
+			// length of line is ignoring some trailing characters
+			endChar := len(strings.TrimRight(line, " \"',)"))
 			r := snyk.Range{
 				Start: snyk.Position{Line: i, Character: strings.Index(line, introducingPackageName)},
 				End:   snyk.Position{Line: i, Character: endChar},
