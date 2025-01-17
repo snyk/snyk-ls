@@ -29,12 +29,13 @@ import (
 )
 
 func Test_DefaultFinder_FindRange(t *testing.T) {
+	c := testutil.UnitTest(t)
 	issue, testPath, testContent := setupDefaultFinderEnvForTesting()
 	expectedRange := getExpectedRangeForDefaultFinderTests()
 
-	actualRange := findRange(issue, testPath, testContent)
+	actualRange := getDependencyNode(c, testPath, issue, testContent)
 
-	assert.Equal(t, expectedRange, actualRange)
+	assert.Equal(t, expectedRange, getRangeFromNode(actualRange))
 }
 
 func TestDefaultFinder_Find(t *testing.T) {
@@ -51,8 +52,10 @@ func TestDefaultFinder_Find(t *testing.T) {
 
 	expectedRange := getExpectedRangeForDefaultFinderTests()
 
-	actualRange := defaultFinder.find(issue)
-	assert.Equal(t, expectedRange, actualRange)
+	p, v := introducingPackageAndVersion(issue)
+
+	actualRange, _ := defaultFinder.find(p, v)
+	assert.Equal(t, expectedRange, getRangeFromNode(actualRange))
 }
 
 func getExpectedRangeForDefaultFinderTests() snyk.Range {

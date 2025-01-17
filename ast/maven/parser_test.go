@@ -43,3 +43,15 @@ func TestCreateDependencyTree(t *testing.T) {
 	assert.Equal(t, 15, children[1].StartChar)
 	assert.Equal(t, 21, children[1].EndChar)
 }
+
+func TestCreateHierarchicalDependencyTree(t *testing.T) {
+	c := testutil.UnitTest(t)
+	var testPath, _ = filepath.Abs("testdata/maven-goof/sub/pom.xml")
+	var testContent, _ = os.ReadFile(testPath)
+	parser := Parser{config: c}
+	tree := parser.Parse(string(testContent), testPath)
+
+	assert.NotNilf(t, tree.ParentTree, "Should have returned a Parent tree")
+
+	assert.Len(t, tree.ParentTree.Root.Children, 2)
+}

@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -67,11 +68,13 @@ func Test_determineTargetFile(t *testing.T) {
 }
 
 func Test_FindRange(t *testing.T) {
+	c := testutil.UnitTest(t)
 	issue := mavenTestIssue()
 	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
 	var p = "build.gradle"
-	foundRange := findRange(issue, p, []byte(content))
+	node := getDependencyNode(c, p, issue, []byte(content))
+	foundRange := getRangeFromNode(node)
 
 	assert.Equal(t, 3, foundRange.Start.Line)
 	assert.Equal(t, 20, foundRange.Start.Character)
@@ -103,7 +106,7 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 		learnService: getLearnMock(t),
 	}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{Start: snyk.Position{Line: 1}}, scanner.learnService, scanner.errorReporter, nil)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, nil)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
@@ -112,8 +115,8 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 	assert.Equal(t, "url", (issue.AdditionalData).(snyk.OssIssueData).Lesson)
 }
 
-func nonEmptyRange() snyk.Range {
-	return snyk.Range{Start: snyk.Position{Line: 1}}
+func nonEmptyNode() *ast.Node {
+	return &ast.Node{Line: 1}
 }
 
 func Test_toIssue_CodeActions(t *testing.T) {
@@ -144,7 +147,7 @@ func Test_toIssue_CodeActions(t *testing.T) {
 			sampleOssIssue.PackageManager = test.packageManager
 			sampleOssIssue.UpgradePath = []any{"false", test.packageName}
 
-			issue := toIssue("testPath", sampleOssIssue, &scanResult{}, snyk.Range{Start: snyk.Position{Line: 1}}, scanner.learnService, scanner.errorReporter, nil)
+			issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, nil)
 
 			assert.Equal(t, sampleOssIssue.Id, issue.ID)
 			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].Title)
@@ -170,7 +173,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	}
 	sampleOssIssue.UpgradePath = []any{"*"}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyRange(), scanner.learnService, scanner.errorReporter, nil)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, nil)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 2, len(issue.CodeActions))

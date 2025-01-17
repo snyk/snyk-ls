@@ -18,27 +18,37 @@ package oss
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/mod/semver"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueRange snyk.Range, fileContent []byte) (actions []snyk.CodeAction) {
+func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueDepNode *ast.Node, fileContent []byte) (actions []snyk.CodeAction) {
 	c := config.CurrentConfig()
-	if reflect.DeepEqual(issueRange, snyk.Range{}) {
-		c.Logger().Debug().Str("issue", i.Id).Msg("skipping adding code action, as issueRange is empty")
+	if issueDepNode == nil {
+		c.Logger().Debug().Str("issue", i.Id).Msg("skipping adding code action, as issueDepNode is empty")
 		return actions
 	}
 
-	quickFixAction := i.AddQuickFixAction(affectedFilePath, issueRange, fileContent)
+	// let's see if we can offer a quickfix here
+	// value has the version information, so if it's empty, we'll need to look at the parent
+	var quickFixAction *snyk.CodeAction
+	if issueDepNode.Tree != nil && issueDepNode.Value == "" {
+		fixNode := issueDepNode.LinkedParentDependencyNode
+		if fixNode != nil {
+			quickFixAction = i.AddQuickFixAction(fixNode.Tree.Document, getRangeFromNode(fixNode), []byte(fixNode.Tree.Root.Value), true)
+		}
+	} else {
+		quickFixAction = i.AddQuickFixAction(affectedFilePath, getRangeFromNode(issueDepNode), fileContent, false)
+	}
 	if quickFixAction != nil {
 		actions = append(actions, *quickFixAction)
 	}
@@ -95,7 +105,7 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 	return action
 }
 
-func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Range, fileContent []byte) *snyk.CodeAction {
+func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Range, fileContent []byte, addFileNameToFixTitle bool) *snyk.CodeAction {
 	logger := config.CurrentConfig().Logger().With().Str("method", "oss.AddQuickFixAction").Logger()
 	if !config.CurrentConfig().IsSnykOSSQuickFixCodeActionsEnabled() {
 		return nil
@@ -106,6 +116,9 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Ra
 		return nil
 	}
 	upgradeMessage := "⚡️ Upgrade to " + quickfixEdit
+	if addFileNameToFixTitle {
+		upgradeMessage += " [ in file: " + affectedFilePath + " ]"
+	}
 	autofixEditCallback := func() *snyk.WorkspaceEdit {
 		edit := &snyk.WorkspaceEdit{}
 		singleTextEdit := snyk.TextEdit{

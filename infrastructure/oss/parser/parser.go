@@ -20,10 +20,12 @@ import (
 	"path/filepath"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type Dependency struct {
+	Tree       *ast.Tree
 	GroupID    string
 	ArtifactID string
 	Version    string
