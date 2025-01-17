@@ -54,7 +54,7 @@ func TestNpmRangeFinder_Find(t *testing.T) {
 
 	expected := ast.Node{
 		Line:      17,
-		StartChar: 14,
+		StartChar: 4,
 		EndChar:   22,
 	}
 
@@ -97,7 +97,7 @@ func TestNpmRangeFinder_Find_Scoped_Packages(t *testing.T) {
 
 	expected := ast.Node{
 		Line:      18,
-		StartChar: 20,
+		StartChar: 4,
 		EndChar:   27,
 	}
 
