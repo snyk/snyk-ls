@@ -626,6 +626,10 @@ type SnykIsAvailableCli struct {
 	CliPath string `json:"cliPath"`
 }
 
+type ScanSummary struct {
+	ScanSummary string `json:"scanSummary"`
+}
+
 type ProgressToken string
 
 type ProgressParams struct {
