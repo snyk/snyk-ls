@@ -27,9 +27,16 @@ import (
 
 func CalculateFingerprintFromAdditionalData(issue snyk.Issue) string {
 	var preHash string
+	var dependencyChainHash string
 	switch additionalData := issue.AdditionalData.(type) {
 	case snyk.OssIssueData:
-		dependencyChainHash := normalizeArray(additionalData.From)
+		if additionalData.PackageManager == "pip" {
+			// Pip has base directory name in from data-flow at index 0, this should not be considered for the fingerprint
+			dependencyChainHash = normalizeArray(additionalData.From[1:])
+		} else {
+			dependencyChainHash = normalizeArray(additionalData.From)
+		}
+		dependencyChainHash = normalizeArray(additionalData.From)
 		// Fingerprint for OSS Issues is: name@version@fromArrayHash
 		preHash = fmt.Sprintf("%s|%s|%s", additionalData.PackageName, additionalData.Version, dependencyChainHash)
 	case snyk.IaCIssueData:
