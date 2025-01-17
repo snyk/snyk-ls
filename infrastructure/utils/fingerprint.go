@@ -36,7 +36,6 @@ func CalculateFingerprintFromAdditionalData(issue snyk.Issue) string {
 		} else {
 			dependencyChainHash = normalizeArray(additionalData.From)
 		}
-		dependencyChainHash = normalizeArray(additionalData.From)
 		// Fingerprint for OSS Issues is: name@version@fromArrayHash
 		preHash = fmt.Sprintf("%s|%s|%s", additionalData.PackageName, additionalData.Version, dependencyChainHash)
 	case snyk.IaCIssueData:
