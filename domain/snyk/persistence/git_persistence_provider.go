@@ -170,8 +170,12 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p prod
 	}
 
 	commitHash, err := g.getCommitHashForProduct(folderPath, p)
-	if commitHash == "" || err != nil {
+	if err != nil {
 		return nil, err
+	}
+
+	if commitHash == "" {
+		return nil, errors.New("no commit hash found in cache")
 	}
 
 	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))

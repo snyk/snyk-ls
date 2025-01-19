@@ -32,7 +32,7 @@ type ScanData struct {
 	IsDeltaScan       bool
 }
 
-type ScanResultProcessor = func(scanData ScanData)
+type ScanResultProcessor = func(scanData ScanData, sendAnalytics bool, updateGlobalCache bool)
 
 type SeverityIssueCounts map[Severity]IssueCount
 type IssueCount struct {

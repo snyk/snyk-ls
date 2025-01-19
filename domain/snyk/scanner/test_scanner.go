@@ -68,7 +68,7 @@ func (s *TestScanner) Scan(
 		DurationMs:        1234,
 		TimestampFinished: time.Now().UTC(),
 	}
-	processResults(data)
+	processResults(data, true, true)
 	s.calls++
 }
 

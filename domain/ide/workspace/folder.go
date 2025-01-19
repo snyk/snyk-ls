@@ -301,17 +301,21 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
-func (f *Folder) processResults(scanData snyk.ScanData) {
+func (f *Folder) processResults(scanData snyk.ScanData, triggerSendAnalytics bool, updateGlobalCache bool) {
 	if scanData.Err != nil {
 		f.sendScanError(scanData.Product, scanData.Err)
 		return
 	}
-	// this also updates the severity counts in scan data, therefore we pass a pointer
-	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
-	go sendAnalytics(&scanData)
+	if updateGlobalCache {
+		// this also updates the severity counts in scan data, therefore we pass a pointer
+		f.updateGlobalCacheAndSeverityCounts(&scanData)
+	}
 
-	// Filter and publish cached diagnostics
+	if triggerSendAnalytics {
+		go sendAnalytics(&scanData)
+	}
+
 	f.FilterAndPublishDiagnostics(scanData.Product)
 }
 
@@ -472,9 +476,7 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 	productIssuesByFile, err := f.getDelta(issueByProduct, p)
 	if err != nil {
 		// Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
-		deltaErr := fmt.Errorf("couldn't determine the difference between current and base branch for %s scan. %w", p.ToProductNamesString(), err)
-		f.sendScanError(p, deltaErr)
-		return
+		err = fmt.Errorf("couldn't determine the difference between current and base branch for %s scan. %w", p.ToProductNamesString(), err)
 	}
 
 	// Trigger publishDiagnostics for all issues in Cache.
@@ -489,7 +491,7 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 	for path, issues := range filteredIssues {
 		filteredIssuesToSend[path] = issues
 	}
-	f.publishDiagnostics(p, filteredIssuesToSend)
+	f.publishDiagnostics(p, filteredIssuesToSend, err)
 }
 
 // Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
@@ -608,10 +610,14 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 	return false
 }
 
-func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile) {
+func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile, filterError error) {
 	f.sendHovers(issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	f.sendSuccess(product)
+	if filterError != nil {
+		f.sendScanError(product, filterError)
+	} else {
+		f.sendSuccess(product)
+	}
 }
 
 func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {
