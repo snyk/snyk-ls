@@ -61,7 +61,7 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 		Product: "",
 		Issues:  []snyk.Issue{},
 	}
-	f.processResults(data)
+	f.processResults(data, true, true)
 
 	assert.Equal(t, 0, hoverRecorder.Calls())
 }
@@ -80,7 +80,7 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 		},
 	}
 	f.ScanFolder(context.Background())
-	f.processResults(data)
+	f.processResults(data, true, true)
 
 	assert.Equal(t, 2, f.documentDiagnosticCache.Size())
 	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, path1))
@@ -101,7 +101,7 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 			NewMockIssue("id2", filePath),
 		},
 	}
-	f.processResults(data)
+	f.processResults(data, true, true)
 
 	assert.Equal(t, 1, len(f.Issues()))
 	assert.Len(t, f.IssuesForFile(filePath), 2)
@@ -122,7 +122,7 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 			NewMockIssue("id3", path3),
 		},
 	}
-	f.processResults(data)
+	f.processResults(data, true, true)
 
 	assert.Len(t, f.Issues(), 3)
 	assert.Len(t, f.IssuesForFile(path1), 1)
@@ -143,7 +143,7 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 			NewMockIssue("id3", path1),
 		},
 	}
-	f.processResults(data)
+	f.processResults(data, true, true)
 
 	assert.Len(t, f.Issues(), 1)
 	issuesForFile := f.IssuesForFile(path1)
@@ -174,7 +174,7 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 			issue5,
 		},
 	}
-	f.processResults(data)
+	f.processResults(data, true, true)
 
 	assert.Len(t, f.Issues(), 2)
 	issuesForFile := f.IssuesForFile(path1)
@@ -201,7 +201,7 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 			NewMockIssueWithSeverity("id5", filepath.Join(f.path, path1), snyk.Critical),
 		},
 	}
-	f.processResults(data)
+	f.processResults(data, true, true)
 
 	mtx := &sync.Mutex{}
 	var diagnostics []types.Diagnostic
@@ -243,7 +243,7 @@ func Test_Clear(t *testing.T) {
 			NewMockIssue("id2", path2),
 		},
 	}
-	f.processResults(data)
+	f.processResults(data, true, true)
 	mtx := &sync.Mutex{}
 	clearDiagnosticNotifications := 0
 
@@ -392,7 +392,7 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 			mockOpenSourceIssue,
 		},
 	}
-	f.processResults(data)
+	f.processResults(data, true, true)
 	const expectedIssuesCountAfterRemoval = 1
 
 	// Act
@@ -424,7 +424,7 @@ func Test_processResults_ShouldSendSuccess(t *testing.T) {
 		Issues:  []snyk.Issue{mockCodeIssue},
 	}
 	// Act
-	f.processResults(data)
+	f.processResults(data, true, true)
 
 	// Assert
 	assert.Len(t, scanNotifier.SuccessCalls(), 1)
@@ -445,7 +445,7 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 		},
 		Err: errors.New("test error"),
 	} // Act
-	f.processResults(data)
+	f.processResults(data, true, true)
 
 	// Assert
 	assert.Empty(t, scanNotifier.SuccessCalls())
@@ -509,7 +509,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Act
-	f.processResults(data)
+	f.processResults(data, true, true)
 	maxWaitTime := 10 * time.Second
 
 	select {
@@ -544,7 +544,7 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 		gomock.Any()).Times(1)
 
 	// Act
-	f.processResults(scanData)
+	f.processResults(scanData, true, true)
 
 	// Assert
 	require.NotEmpty(t, scanData.GetSeverityIssueCounts())

@@ -316,6 +316,7 @@ func (f *Folder) processResults(scanData snyk.ScanData, triggerSendAnalytics boo
 		go sendAnalytics(&scanData)
 	}
 
+	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(scanData.Product)
 }
 
