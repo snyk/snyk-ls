@@ -19,6 +19,7 @@ package aggregator
 import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type ScanStateChangeEmitter interface {
@@ -32,8 +33,6 @@ type SummaryEmitter struct {
 }
 
 func (s *SummaryEmitter) Emit() {
-	// Generate HTML
-	// Send notification to LS
-	//generatedHtml := "foobar"
-	//s.notifier.Send()
+	generatedHtml := "<html>test</html>"
+	s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
 }
