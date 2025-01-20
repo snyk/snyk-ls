@@ -232,6 +232,15 @@ Right now the language server supports the following actions:
     },
   }
   ```
+  - Summary Panel Status Notification
+  - method: `$/snyk.scanSummary`
+  - params: `types.ScanSummary`
+  - example:
+  ```json5
+  {
+    "scanSummary": "<html><body<p> Summary </p></body></html>"
+  }
+  ```
 
 ### Commands
 
