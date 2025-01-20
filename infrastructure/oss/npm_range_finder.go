@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
@@ -29,33 +30,26 @@ type NpmRangeFinder struct {
 	myRange     snyk.Range
 }
 
-func (n *NpmRangeFinder) find(issue ossIssue) snyk.Range {
-	searchPackage, _ := introducingPackageAndVersion(issue)
+func (n *NpmRangeFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {
 	var lines = strings.Split(strings.ReplaceAll(string(n.fileContent), "\r\n", "\n"), "\n")
 
-	var start snyk.Position
-	var end snyk.Position
+	node := ast.Node{}
 
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
 		elems := strings.Split(line, ":")
 		if len(elems) > 1 {
 			jsonKey := strings.Trim(strings.Trim(elems[0], " "), "\"")
-			if jsonKey == searchPackage {
-				start.Line = i
-				start.Character = strings.Index(line, searchPackage) - 1
-				end.Line = i
-				end.Character = len(strings.ReplaceAll(line, ",", ""))
+			if jsonKey == introducingPackageName {
+				node.Line = i
+				node.StartChar = strings.Index(line, introducingPackageName) - 1
+				node.EndChar = len(strings.ReplaceAll(line, ",", ""))
 				break
 			}
 		}
 	}
 
-	n.myRange = snyk.Range{
-		Start: start,
-		End:   end,
-	}
-	return n.myRange
+	return &node, nil
 }
 
 func introducingPackageAndVersion(issue ossIssue) (string, string) {

@@ -21,25 +21,27 @@ import (
 	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type RangeFinder interface {
-	find(issue ossIssue) snyk.Range
+	find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree)
 }
+
 type DefaultFinder struct {
 	path        string
 	fileContent []byte
 	c           *config.Config
 }
 
-func findRange(issue ossIssue, path string, fileContent []byte) snyk.Range {
-	var foundRange snyk.Range
+// getDependencyNode will return the dependency node with range information
+// in case of maven, the node will also contain tree links information for the whole dep tree
+func getDependencyNode(c *config.Config, path string, issue ossIssue, fileContent []byte) *ast.Node {
 	var finder RangeFinder
-	c := config.CurrentConfig()
 
 	if len(fileContent) == 0 {
-		return snyk.Range{Start: snyk.Position{}, End: snyk.Position{}}
+		return nil
 	}
 
 	switch issue.PackageManager {
@@ -59,33 +61,48 @@ func findRange(issue ossIssue, path string, fileContent []byte) snyk.Range {
 		finder = &DefaultFinder{path: path, fileContent: fileContent, c: c}
 	}
 
-	foundRange = finder.find(issue)
-	return foundRange
+	introducingPackageName, introducingVersion := introducingPackageAndVersion(issue)
+
+	currentDep, parsedTree := finder.find(introducingPackageName, introducingVersion)
+
+	// if an intermediate manifest file does not have a dependency section
+	// we go recurse to the parent of it
+	if currentDep == nil && parsedTree != nil && parsedTree.ParentTree != nil {
+		tree := parsedTree.ParentTree
+		currentDep = getDependencyNode(c, tree.Document, issue, []byte(tree.Root.Value))
+	}
+
+	// recurse until a dependency with version was found
+	if currentDep.Value == "" && currentDep.Tree != nil && currentDep.Tree.ParentTree != nil {
+		tree := currentDep.Tree.ParentTree
+		currentDep.LinkedParentDependencyNode = getDependencyNode(c, tree.Document, issue, []byte(tree.Root.Value))
+	}
+
+	return currentDep
 }
 
-func (f *DefaultFinder) find(issue ossIssue) snyk.Range {
-	searchPackage, version := introducingPackageAndVersion(issue)
+func (f *DefaultFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {
 	lines := strings.Split(strings.ReplaceAll(string(f.fileContent), "\r", ""), "\n")
 	for i, line := range lines {
 		if isComment(line) {
 			continue
 		}
 
-		if strings.Contains(line, searchPackage) {
-			endChar := len(strings.TrimRight(strings.TrimRight(strings.TrimRight(line, " "), "\""), "'"))
+		if strings.Contains(line, introducingPackageName) {
+			// length of line is ignoring some trailing characters
+			endChar := len(strings.TrimRight(line, " \"',)"))
 			r := snyk.Range{
-				Start: snyk.Position{Line: i, Character: strings.Index(line, searchPackage)},
+				Start: snyk.Position{Line: i, Character: strings.Index(line, introducingPackageName)},
 				End:   snyk.Position{Line: i, Character: endChar},
 			}
-			f.c.Logger().Debug().Str("package", searchPackage).
-				Str("version", version).
-				Str("issueId", issue.Id).
+			f.c.Logger().Debug().Str("package", introducingPackageName).
+				Str("version", introducingVersion).
 				Str("path", f.path).
 				Interface("range", r).Msg("found range")
-			return r
+			return &ast.Node{Line: r.Start.Line, StartChar: r.Start.Character, EndChar: r.End.Character}, nil
 		}
 	}
-	return snyk.Range{}
+	return nil, nil
 }
 
 func isComment(line string) bool {
