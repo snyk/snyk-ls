@@ -41,7 +41,7 @@ type IssueCount struct {
 	Ignored int
 }
 
-func NoopResultProcessor(_ ScanData) {}
+func NoopResultProcessor(_ ScanData, _ bool, _ bool) {}
 
 func (s ScanData) GetSeverityIssueCounts() SeverityIssueCounts {
 	sic := make(SeverityIssueCounts)

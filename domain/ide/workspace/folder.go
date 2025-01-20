@@ -472,9 +472,7 @@ func appendTestResults(sic snyk.SeverityIssueCounts, results []json_schemas.Test
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
-	issueByProduct := f.IssuesByProduct()
-
-	productIssuesByFile, err := f.getDelta(issueByProduct, p)
+	productIssuesByFile, err := f.GetDelta(p)
 	if err != nil {
 		// Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
 		err = fmt.Errorf("couldn't determine the difference between current and base branch for %s scan. %w", p.ToProductNamesString(), err)
@@ -495,9 +493,9 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 	f.publishDiagnostics(p, filteredIssuesToSend, err)
 }
 
-// Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
-func (f *Folder) getDelta(productIssueByFile snyk.ProductIssuesByFile, p product.Product) (snyk.ProductIssuesByFile, error) {
+func (f *Folder) GetDelta(p product.Product) (snyk.ProductIssuesByFile, error) {
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
+	productIssueByFile := f.IssuesByProduct()
 	if !f.c.IsDeltaFindingsEnabled() {
 		return productIssueByFile, nil
 	}

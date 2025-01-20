@@ -300,6 +300,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				processResults(data, true, true)
 				go func() {
 					defer referenceBranchScanWaitGroup.Done()
+					// TODO: implement proper context handling
 					err := sc.scanBaseBranch(context.Background(), s, folderPath, gitCheckoutHandler)
 					// TODO: is this a good idea?
 					data = snyk.ScanData{
