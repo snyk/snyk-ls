@@ -305,7 +305,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 					// TODO: is this a good idea?
 					data = snyk.ScanData{
 						Product: s.Product(),
-						Err:     err,
 						Path:    gitCheckoutHandler.BaseFolderPath(),
 					}
 					processResults(data, false, false)
