@@ -24,9 +24,9 @@ type StateAggregator interface {
 	SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState ScanState)
 	SetScanDone(folderPath string, p product.Product, isReferenceScan bool, scanErr error)
 	SetScanInProgress(folderPath string, p product.Product, isReferenceScan bool)
-	AreAllScansNotStarted(isReference bool) bool
-	HasAnyScanInProgress(isReference bool) bool
-	HasAnyScanSucceeded(isReference bool) bool
-	HaveAllScansSucceeded(isReference bool) bool
-	HasAnyScanError(isReference bool) bool
+	AllScansStarted(isReference bool) bool
+	AnyScanInProgress(isReference bool) bool
+	AnyScanSucceeded(isReference bool) bool
+	AllScansSucceeded(isReference bool) bool
+	AnyScanError(isReference bool) bool
 }

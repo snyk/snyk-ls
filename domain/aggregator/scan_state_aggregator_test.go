@@ -30,14 +30,14 @@ func TestScanStateAggregator_Init(t *testing.T) {
 	agg := NewScanStateAggregator(emitter, c)
 
 	// 3) Validate initial states
-	assert.True(t, agg.AreAllScansNotStarted(true))
-	assert.True(t, agg.AreAllScansNotStarted(false))
-	assert.False(t, agg.HasAnyScanInProgress(true))
-	assert.False(t, agg.HasAnyScanInProgress(false))
-	assert.False(t, agg.HaveAllScansSucceeded(true))
-	assert.False(t, agg.HaveAllScansSucceeded(false))
-	assert.False(t, agg.HasAnyScanError(true))
-	assert.False(t, agg.HasAnyScanError(false))
+	assert.True(t, agg.AllScansStarted(true))
+	assert.True(t, agg.AllScansStarted(false))
+	assert.False(t, agg.AnyScanInProgress(true))
+	assert.False(t, agg.AnyScanInProgress(false))
+	assert.False(t, agg.AllScansSucceeded(true))
+	assert.False(t, agg.AllScansSucceeded(false))
+	assert.False(t, agg.AnyScanError(true))
+	assert.False(t, agg.AnyScanError(false))
 }
 
 func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
@@ -64,8 +64,8 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	// Emitter should have been called once
 	assert.Equal(t, 1, emitter.Calls)
 
-	assert.False(t, agg.AreAllScansNotStarted(false))
-	assert.True(t, agg.HasAnyScanInProgress(false))
+	assert.False(t, agg.AllScansStarted(false))
+	assert.True(t, agg.AnyScanInProgress(false))
 }
 
 func TestScanStateAggregator_SetState_Done(t *testing.T) {
@@ -91,8 +91,8 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 
 	assert.Equal(t, 1, emitter.Calls)
 
-	assert.False(t, agg.HaveAllScansSucceeded(false))
-	assert.False(t, agg.HasAnyScanError(false))
+	assert.False(t, agg.AllScansSucceeded(false))
+	assert.False(t, agg.AnyScanError(false))
 }
 
 func TestScanStateAggregator_SetState_Error(t *testing.T) {
@@ -118,8 +118,8 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 
 	assert.Equal(t, 1, emitter.Calls, "Emit called again")
 
-	assert.True(t, agg.HasAnyScanError(false), "At least one working scan is in ERROR")
-	assert.False(t, agg.HaveAllScansSucceeded(false))
+	assert.True(t, agg.AnyScanError(false), "At least one working scan is in ERROR")
+	assert.False(t, agg.AllScansSucceeded(false))
 }
 
 func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
@@ -152,10 +152,10 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	// Emitter called 3 times total
 	assert.Equal(t, 6, emitter.Calls)
 
-	assert.True(t, agg.HaveAllScansSucceeded(true))
-	assert.True(t, agg.HaveAllScansSucceeded(false))
-	assert.False(t, agg.HasAnyScanError(true))
-	assert.False(t, agg.HasAnyScanError(false))
+	assert.True(t, agg.AllScansSucceeded(true))
+	assert.True(t, agg.AllScansSucceeded(false))
+	assert.False(t, agg.AnyScanError(true))
+	assert.False(t, agg.AnyScanError(false))
 }
 
 func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
@@ -180,6 +180,6 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	agg.SetScanState("/non/existing/folder", product.ProductOpenSource, true, doneState)
 	assert.Equal(t, 0, emitter.Calls)
 
-	assert.True(t, agg.AreAllScansNotStarted(true))
-	assert.True(t, agg.AreAllScansNotStarted(false))
+	assert.True(t, agg.AllScansStarted(true))
+	assert.True(t, agg.AllScansStarted(false))
 }

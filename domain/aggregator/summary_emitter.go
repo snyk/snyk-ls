@@ -50,5 +50,5 @@ func NewSummaryEmitter(n notification.Notifier, c *config.Config) *Emitter {
 
 func (s *Emitter) Emit(aggregator StateAggregator) {
 	generatedHtml := s.renderer.GetSummaryHtml(aggregator)
-	s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
+	go s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
 }

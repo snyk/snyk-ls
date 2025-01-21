@@ -24,6 +24,7 @@
 </head>
 <body>
 <div class="snx-header ">
+  {{if or .AnyScanInProgressReference .AnyScanInProgressWorkingDirectory}}
   <div class="snx-content">
     <h2 class="snx-title snx-h2">Snyk is scanning for issues...</h2>
     <p class="snx-message is-dimmed">
@@ -31,38 +32,25 @@
       <strong class="snx-highlight"> 4/8 </strong> base &amp; reference scans
     </p>
   </div>
+  {{end}}
+
+  {{if or .AnyScanSucceededReference .AnyScanSucceededWorkingDirectory}}
   <div class="snx-actions">
     <div class="snx-toggle">
       {{.IssuesFound}} total issues
     </div>
   </div>
-</div>
-
-<div class="snx-summary ">
-  <p class="snx-message">⚠️ Scanning for issues in your project.</p>
-  <p class="snx-message">⚡ Identifying fixable issues.</p>
-</div>
-
-<hr/>
-
-<div class="snx-header ">
-  <div class="snx-content">
-    <h2 class="snx-title snx-h2">Snyk is scanning for issues...</h2>
-    <p class="snx-message is-dimmed">
-      <span class="snx-loader size-s"></span>
-      <strong class="snx-highlight"> 4/8 </strong> base &amp; reference scans
-    </p>
-  </div>
-  <div class="snx-actions">
-    <div class="snx-toggle">
-      {{.IssuesFound}} total issues
-    </div>
-  </div>
+  {{end}}
 </div>
 
 <div class="snx-summary">
+  {{if or .AnyScanSucceededReference .AnyScanSucceededWorkingDirectory }}
   <p class="snx-message">⚠️ <span class="snx-highlight">{{.IssuesFound}} issues</span> found in your project</p>
   <p class="snx-message">⚡ <span class="snx-highlight">{{.FixableIssueCount}} issues</span> are fixable.</p>
+  {{else}}
+  <p class="snx-message">⚠️ Scanning for issues in your project.</p>
+  <p class="snx-message">⚡ Identifying fixable issues.</p>
+  {{end}}
 </div>
 
 <!-- Scripts -->

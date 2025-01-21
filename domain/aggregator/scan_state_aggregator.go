@@ -148,7 +148,7 @@ func (agg *ScanStateAggregator) SetScanInProgress(folderPath string, p product.P
 	agg.setScanState(folderPath, p, isReferenceScan, state)
 }
 
-func (agg *ScanStateAggregator) AreAllScansNotStarted(isReference bool) bool {
+func (agg *ScanStateAggregator) AllScansStarted(isReference bool) bool {
 	agg.mu.RLock()
 	defer agg.mu.RUnlock()
 
@@ -160,14 +160,14 @@ func (agg *ScanStateAggregator) AreAllScansNotStarted(isReference bool) bool {
 	}
 
 	for _, st := range stateMap {
-		if st.Status != NotStarted {
+		if st.Status == NotStarted {
 			return false
 		}
 	}
 	return true
 }
 
-func (agg *ScanStateAggregator) HasAnyScanInProgress(isReference bool) bool {
+func (agg *ScanStateAggregator) AnyScanInProgress(isReference bool) bool {
 	agg.mu.RLock()
 	defer agg.mu.RUnlock()
 
@@ -186,7 +186,7 @@ func (agg *ScanStateAggregator) HasAnyScanInProgress(isReference bool) bool {
 	return false
 }
 
-func (agg *ScanStateAggregator) HasAnyScanSucceeded(isReference bool) bool {
+func (agg *ScanStateAggregator) AnyScanSucceeded(isReference bool) bool {
 	agg.mu.RLock()
 	defer agg.mu.RUnlock()
 
@@ -205,7 +205,7 @@ func (agg *ScanStateAggregator) HasAnyScanSucceeded(isReference bool) bool {
 	return false
 }
 
-func (agg *ScanStateAggregator) HaveAllScansSucceeded(isReference bool) bool {
+func (agg *ScanStateAggregator) AllScansSucceeded(isReference bool) bool {
 	agg.mu.RLock()
 	defer agg.mu.RUnlock()
 
@@ -224,7 +224,7 @@ func (agg *ScanStateAggregator) HaveAllScansSucceeded(isReference bool) bool {
 	return true
 }
 
-func (agg *ScanStateAggregator) HasAnyScanError(isReference bool) bool {
+func (agg *ScanStateAggregator) AnyScanError(isReference bool) bool {
 	agg.mu.RLock()
 	defer agg.mu.RUnlock()
 

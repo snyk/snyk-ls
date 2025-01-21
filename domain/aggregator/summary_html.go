@@ -19,6 +19,7 @@ package aggregator
 import (
 	"bytes"
 	_ "embed"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"html/template"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -49,13 +50,22 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 }
 
 func (renderer *HtmlRenderer) GetSummaryHtml(stateAggregator StateAggregator) string {
+	issueCount := renderer.getIssuesFromFolders()
 	data := map[string]interface{}{
-		"Styles":            template.CSS(panelStylesTemplate),
-		"IssuesFound":       22,
-		"FixableIssueCount": 7,
-		"IsScanning":        true,
+		"Styles":                            template.CSS(panelStylesTemplate),
+		"IssuesFound":                       issueCount,
+		"FixableIssueCount":                 7,
+		"AllScansStartedReference":          stateAggregator.AllScansStarted(true),
+		"AllScansStartedWorkingDirectory":   stateAggregator.AllScansStarted(false),
+		"AnyScanInProgressReference":        stateAggregator.AnyScanInProgress(true),
+		"AnyScanInProgressWorkingDirectory": stateAggregator.AnyScanInProgress(false),
+		"AnyScanSucceededReference":         stateAggregator.AnyScanSucceeded(true),
+		"AnyScanSucceededWorkingDirectory":  stateAggregator.AnyScanSucceeded(false),
+		"AllScansSucceededReference":        stateAggregator.AllScansSucceeded(true),
+		"AllScansSucceededWorkingDirectory": stateAggregator.AllScansSucceeded(false),
+		"AnyScanErrorReference":             stateAggregator.AnyScanError(true),
+		"AnyScanErrorWorkingDirectory":      stateAggregator.AnyScanError(false),
 	}
-
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
 		renderer.c.Logger().Error().Msgf("Failed to execute main summary template: %v", err)
@@ -63,4 +73,22 @@ func (renderer *HtmlRenderer) GetSummaryHtml(stateAggregator StateAggregator) st
 	}
 
 	return buffer.String()
+}
+
+func (renderer *HtmlRenderer) getIssuesFromFolders() int {
+	var allIssues []snyk.Issue
+	//var deltaIssues []snyk.Issue
+
+	for _, f := range renderer.c.Workspace().Folders() {
+		ip, ok := f.(snyk.IssueProvider)
+		if !ok {
+			return 0
+		}
+
+		for _, issues := range ip.Issues() {
+			allIssues = append(allIssues, issues...)
+		}
+	}
+
+	return len(allIssues)
 }

@@ -44,22 +44,22 @@ func (n NoopStateAggregator) SetScanDone(_ string, _ product.Product, _ bool, _ 
 func (n NoopStateAggregator) SetScanInProgress(_ string, _ product.Product, _ bool) {
 }
 
-func (n NoopStateAggregator) AreAllScansNotStarted(_ bool) bool {
+func (n NoopStateAggregator) AllScansStarted(_ bool) bool {
 	return false
 }
 
-func (n NoopStateAggregator) HasAnyScanInProgress(_ bool) bool {
+func (n NoopStateAggregator) AnyScanInProgress(_ bool) bool {
 	return false
 }
 
-func (n NoopStateAggregator) HasAnyScanSucceeded(_ bool) bool {
+func (n NoopStateAggregator) AnyScanSucceeded(_ bool) bool {
 	return false
 }
 
-func (n NoopStateAggregator) HaveAllScansSucceeded(_ bool) bool {
+func (n NoopStateAggregator) AllScansSucceeded(_ bool) bool {
 	return false
 }
 
-func (n NoopStateAggregator) HasAnyScanError(_ bool) bool {
+func (n NoopStateAggregator) AnyScanError(_ bool) bool {
 	return false
 }
