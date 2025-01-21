@@ -23,7 +23,7 @@ import (
 )
 
 type ScanStateChangeEmitter interface {
-	Emit(aggregator *ScanStateAggregator)
+	Emit(aggregator StateAggregator)
 }
 
 type SummaryEmitter struct {
@@ -38,7 +38,7 @@ func NewSummaryEmitter(n notification.Notifier, c *config.Config) *SummaryEmitte
 	}
 }
 
-func (s *SummaryEmitter) Emit(aggregator *ScanStateAggregator) {
+func (s *SummaryEmitter) Emit(aggregator StateAggregator) {
 	generatedHtml := "<html>test</html>"
 	s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
 }

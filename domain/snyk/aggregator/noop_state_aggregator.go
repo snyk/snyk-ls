@@ -25,6 +25,9 @@ var _ StateAggregator = (*NoopStateAggregator)(nil)
 type NoopStateAggregator struct {
 }
 
+func (n NoopStateAggregator) Init(_ []string) {
+}
+
 func NewNoopStateAggregator() StateAggregator {
 	return &NoopStateAggregator{}
 }

@@ -20,11 +20,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pkg/errors"
+
+	"github.com/snyk/snyk-ls/domain/snyk/aggregator"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	noti "github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/summary"
-
-	"github.com/pkg/errors"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -33,23 +33,22 @@ import (
 const DoTrust = "Trust folders and continue"
 const DontTrust = "Don't trust folders"
 
-func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister) {
+func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg aggregator.StateAggregator) {
 	go sendFolderConfigsNotification(notifier)
-	go sendInitialSummaryPanelNotification(notifier)
+	initScanStateAggregator(agg)
 	initScanPersister(persister)
 	HandleUntrustedFolders(ctx, srv)
 }
-func sendInitialSummaryPanelNotification(notifier noti.Notifier) {
+
+func initScanStateAggregator(agg aggregator.StateAggregator) {
 	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "sendInitialSummaryPanelNotification").Logger()
-	renderer, err := summary.NewHtmlRenderer(c)
-	if err != nil {
-		logger.Error().Err(err).Msg("could not create html renderer")
-		return
+	var folderPaths []string
+	for _, f := range c.Workspace().Folders() {
+		folderPaths = append(folderPaths, f.Path())
 	}
-	scanSummaryParams := types.ScanSummary{ScanSummary: renderer.GetSummaryHtml()}
-	notifier.Send(scanSummaryParams)
+	agg.Init(folderPaths)
 }
+
 func sendFolderConfigsNotification(notifier noti.Notifier) {
 	c := config.CurrentConfig()
 	ws := c.Workspace()

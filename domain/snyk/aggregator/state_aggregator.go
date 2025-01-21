@@ -19,6 +19,7 @@ package aggregator
 import "github.com/snyk/snyk-ls/internal/product"
 
 type StateAggregator interface {
+	Init(folders []string)
 	AddNewFolder(folderPath string)
 	SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState ScanState)
 	SetScanDone(folderPath string, p product.Product, isReferenceScan bool, scanErr error)

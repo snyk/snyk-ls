@@ -80,7 +80,7 @@ var notifier notification.Notifier
 var codeInstrumentor codeClientObservability.Instrumentor
 var codeErrorReporter codeClientObservability.ErrorReporter
 var scanPersister persistence.ScanSnapshotPersister
-var scanStateAggregator aggregator.StateAggregator
+var stateAggregator aggregator.StateAggregator
 var scanStateChangeEmitter aggregator.ScanStateChangeEmitter
 var snykCli cli.Executor
 
@@ -95,7 +95,7 @@ func Init() {
 
 func initDomain(c *config.Config) {
 	hoverService = hover.NewDefaultService(c)
-	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, stateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 }
 
 func initInfrastructure(c *config.Config) {
@@ -132,6 +132,8 @@ func initInfrastructure(c *config.Config) {
 	snykApiClient = snyk_api.NewSnykApiClient(c, authorizedClient)
 	gafConfiguration := c.Engine().GetConfiguration()
 	scanPersister = persistence.NewGitPersistenceProvider(c.Logger())
+	scanStateChangeEmitter = aggregator.NewSummaryEmitter(notifier, c)
+	stateAggregator = aggregator.NewScanStateAggregator(scanStateChangeEmitter, c)
 	// we initialize the service without providers, as we want to wait for initialization to send the auth method
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	snykCli = cli.NewExecutor(c, errorReporter, notifier)
@@ -180,8 +182,6 @@ func initApplication(c *config.Config) {
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
 	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeClient, snykCodeScanner, snykCli))
-	scanStateChangeEmitter = aggregator.NewSummaryEmitter(notifier, c)
-	scanStateAggregator = aggregator.NewScanStateAggregator(scanStateChangeEmitter, c)
 }
 
 /*
@@ -217,6 +217,12 @@ func ScanPersister() persistence.ScanSnapshotPersister {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return scanPersister
+}
+
+func StateAggregator() aggregator.StateAggregator {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return stateAggregator
 }
 
 func ScanNotifier() scanner2.ScanNotifier {

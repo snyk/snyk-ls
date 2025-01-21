@@ -95,6 +95,11 @@ func (agg *ScanStateAggregator) AddNewFolder(folderPath string) {
 func (agg *ScanStateAggregator) SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState ScanState) {
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
+
+	agg.setScanState(folderPath, p, isReferenceScan, newState)
+}
+
+func (agg *ScanStateAggregator) setScanState(folderPath string, p product.Product, isReferenceScan bool, newState ScanState) {
 	logger := agg.c.Logger().With().Str("method", "SetScanState").Logger()
 
 	key := FolderProductKey{FolderPath: folderPath, Product: p}
@@ -129,7 +134,7 @@ func (agg *ScanStateAggregator) SetScanDone(folderPath string, p product.Product
 		state.Status = Success
 	}
 
-	agg.SetScanState(folderPath, p, isReferenceScan, state)
+	agg.setScanState(folderPath, p, isReferenceScan, state)
 }
 
 func (agg *ScanStateAggregator) SetScanInProgress(folderPath string, p product.Product, isReferenceScan bool) {
@@ -140,7 +145,7 @@ func (agg *ScanStateAggregator) SetScanInProgress(folderPath string, p product.P
 		Status: InProgress,
 	}
 
-	agg.SetScanState(folderPath, p, isReferenceScan, state)
+	agg.setScanState(folderPath, p, isReferenceScan, state)
 }
 
 func (agg *ScanStateAggregator) AreAllScansNotStarted(isReference bool) bool {
