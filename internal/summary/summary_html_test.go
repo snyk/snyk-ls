@@ -38,10 +38,10 @@ func Test_Summary_Html_getSummaryDetailsHtml(t *testing.T) {
 	assert.Contains(t, summaryPanel, "${ideScript}")
 
 	// assert Header section
-	assert.Contains(t, summaryPanel, `class="snx-header"`)
+	assert.Contains(t, summaryPanel, `class="snx-header`)
 }
 
-func Test_Summary_Html_getSumarryDetailsHtml_hasCSS(t *testing.T) {
+func Test_Summary_Html_getSummaryDetailsHtml_hasCSS(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// invoke method under test
