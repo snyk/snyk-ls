@@ -1,0 +1,41 @@
+/*
+ * © 2025 Snyk Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+:root { font-size:10px; }
+p { font-size:1.3rem; margin: .8rem 0;  }
+hr { margin: 2rem 0; }
+body { background-color:#212121; color: #ddd; font-family: sans-serif; }
+.snx-loader { display:inline-block; width: 12px; height: 12px; border: 2px solid rgba(125,125,125,.65); border-bottom-color: transparent; border-radius: 50%; margin-right:.8rem; animation: spin 1s linear infinite;
+}
+.size-s { width: 12px; height: 12px; border-width:2px }
+.size-m { width: 16px; height: 16px; border-width:3px; }
+.size-l { width: 24px; height: 24px; border-width:4px; }
+.hidden {display: none}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.snx-h1 { font-size: 2rem; font-weight: 600; margin: .8rem 0; }
+.snx-h2 { font-size: 1.6rem; font-weight:400; margin: .4rem 0; }
+
+.snx-status { display:flex; align-items:center; padding: .4rem 1.2rem; background-color: rgba(255,255,255,.1); border-radius: 1rem; }
+.is-dimmed { opacity:.75 }
+
+.snx-header { display: flex; gap:1.6rem; }
+.snx-message { display: flex; align-items: center }
+.snx-highlight { display:inline-block; cursor:pointer; padding:0 .4rem; text-decoration: underline; font-weight:600 }
+strong.snx-highlight { text-decoration: none; cursor: unset; }

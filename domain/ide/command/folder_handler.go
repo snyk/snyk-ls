@@ -22,6 +22,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/summary"
 
 	"github.com/pkg/errors"
 
@@ -34,10 +35,21 @@ const DontTrust = "Don't trust folders"
 
 func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister) {
 	go sendFolderConfigsNotification(notifier)
+	go sendInitialSummaryPanelNotification(notifier)
 	initScanPersister(persister)
 	HandleUntrustedFolders(ctx, srv)
 }
-
+func sendInitialSummaryPanelNotification(notifier noti.Notifier) {
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "sendInitialSummaryPanelNotification").Logger()
+	renderer, err := summary.NewHtmlRenderer(c)
+	if err != nil {
+		logger.Error().Err(err).Msg("could not create html renderer")
+		return
+	}
+	scanSummaryParams := types.ScanSummary{ScanSummary: renderer.GetSummaryHtml()}
+	notifier.Send(scanSummaryParams)
+}
 func sendFolderConfigsNotification(notifier noti.Notifier) {
 	c := config.CurrentConfig()
 	ws := c.Workspace()
