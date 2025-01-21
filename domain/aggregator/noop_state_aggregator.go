@@ -25,6 +25,10 @@ var _ StateAggregator = (*NoopStateAggregator)(nil)
 type NoopStateAggregator struct {
 }
 
+func (n NoopStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
+	return nil
+}
+
 func (n NoopStateAggregator) Init(_ []string) {
 }
 

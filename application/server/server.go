@@ -521,7 +521,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.HoverService(),
 				di.ScanNotifier(),
 				di.Notifier(),
-				di.ScanPersister())
+				di.ScanPersister(),
+				di.StateAggregator())
 			w.AddFolder(f)
 		}
 	} else {
@@ -534,7 +535,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.HoverService(),
 				di.ScanNotifier(),
 				di.Notifier(),
-				di.ScanPersister())
+				di.ScanPersister(),
+				di.StateAggregator())
 			w.AddFolder(f)
 		} else if params.RootPath != "" {
 			f := workspace.NewFolder(
@@ -545,7 +547,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.HoverService(),
 				di.ScanNotifier(),
 				di.Notifier(),
-				di.ScanPersister())
+				di.ScanPersister(),
+				di.StateAggregator())
 			w.AddFolder(f)
 		}
 	}

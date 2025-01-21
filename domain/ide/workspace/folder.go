@@ -25,6 +25,7 @@ import (
 
 	"github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/domain/aggregator"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	delta2 "github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
@@ -74,6 +75,7 @@ type Folder struct {
 	notifier                noti.Notifier
 	c                       *config.Config
 	scanPersister           persistence.ScanSnapshotPersister
+	stateAggregator         aggregator.StateAggregator
 }
 
 func (f *Folder) Issue(key string) snyk.Issue {
@@ -241,17 +243,19 @@ func NewFolder(
 	scanNotifier scanner.ScanNotifier,
 	notifier noti.Notifier,
 	scanPersister persistence.ScanSnapshotPersister,
+	stateAggregator aggregator.StateAggregator,
 ) *Folder {
 	folder := Folder{
-		scanner:       scanner,
-		path:          strings.TrimSuffix(path, "/"),
-		name:          name,
-		status:        Unscanned,
-		hoverService:  hoverService,
-		scanNotifier:  scanNotifier,
-		notifier:      notifier,
-		c:             c,
-		scanPersister: scanPersister,
+		scanner:         scanner,
+		path:            strings.TrimSuffix(path, "/"),
+		name:            name,
+		status:          Unscanned,
+		hoverService:    hoverService,
+		scanNotifier:    scanNotifier,
+		notifier:        notifier,
+		c:               c,
+		scanPersister:   scanPersister,
+		stateAggregator: stateAggregator,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[string, []snyk.Issue]()
 	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
@@ -477,7 +481,7 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 		// Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
 		err = fmt.Errorf("couldn't determine the difference between current and base branch for %s scan. %w", p.ToProductNamesString(), err)
 	}
-
+	f.Issues()
 	// Trigger publishDiagnostics for all issues in Cache.
 	// Filtered issues will be sent with an empty slice if no issues exist.
 	filteredIssues := f.filterDiagnostics(productIssuesByFile[p])
@@ -610,6 +614,7 @@ func isVisibleSeverity(issue snyk.Issue) bool {
 }
 
 func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile, filterError error) {
+	f.stateAggregator.SummaryEmitter().Emit(f.stateAggregator)
 	f.sendHovers(issuesByFile)
 	f.sendDiagnostics(issuesByFile)
 	if filterError != nil {

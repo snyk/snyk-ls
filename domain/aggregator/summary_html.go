@@ -19,8 +19,9 @@ package aggregator
 import (
 	"bytes"
 	_ "embed"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"html/template"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
 
 	"github.com/snyk/snyk-ls/application/config"
 )
@@ -77,18 +78,15 @@ func (renderer *HtmlRenderer) GetSummaryHtml(stateAggregator StateAggregator) st
 
 func (renderer *HtmlRenderer) getIssuesFromFolders() int {
 	var allIssues []snyk.Issue
-	//var deltaIssues []snyk.Issue
 
-	for _, f := range renderer.c.Workspace().Folders() {
-		ip, ok := f.(snyk.IssueProvider)
-		if !ok {
-			return 0
-		}
-
-		for _, issues := range ip.Issues() {
-			allIssues = append(allIssues, issues...)
-		}
+	ip, ok := renderer.c.Workspace().(snyk.IssueProvider)
+	if !ok {
+		return 0
 	}
 
+	for _, issues := range ip.Issues() {
+		allIssues = append(allIssues, issues...)
+	}
 	return len(allIssues)
+
 }

@@ -29,4 +29,5 @@ type StateAggregator interface {
 	AnyScanSucceeded(isReference bool) bool
 	AllScansSucceeded(isReference bool) bool
 	AnyScanError(isReference bool) bool
+	SummaryEmitter() ScanStateChangeEmitter
 }

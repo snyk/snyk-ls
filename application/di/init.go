@@ -176,7 +176,7 @@ func initInfrastructure(c *config.Config) {
 }
 
 func initApplication(c *config.Config) {
-	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister) // don't use getters or it'll deadlock
+	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, stateAggregator) // don't use getters or it'll deadlock
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)

@@ -98,7 +98,7 @@ func TestInit(t *testing.T) {
 	hoverService = hover.NewDefaultService(c)
 	command.SetService(&types.CommandServiceMock{})
 	// don't use getters or it'll deadlock
-	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister)
+	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, stateAggregator)
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
