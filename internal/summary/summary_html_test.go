@@ -30,7 +30,7 @@ func Test_Summary_Html_getSummaryDetailsHtml(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	summaryPanel := htmlRenderer.GetDetailsHtml()
+	summaryPanel := htmlRenderer.GetSummaryHtml()
 
 	// assert injectable style
 	assert.Contains(t, summaryPanel, "${ideStyle}")
@@ -47,7 +47,7 @@ func Test_Summary_Html_getSumarryDetailsHtml_hasCSS(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	summaryPanel := htmlRenderer.GetDetailsHtml()
+	summaryPanel := htmlRenderer.GetSummaryHtml()
 	// assert css section
 	assert.Contains(t, summaryPanel, ":root { font-size:10px; }")
 }
