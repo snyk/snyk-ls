@@ -80,7 +80,7 @@ var notifier notification.Notifier
 var codeInstrumentor codeClientObservability.Instrumentor
 var codeErrorReporter codeClientObservability.ErrorReporter
 var scanPersister persistence.ScanSnapshotPersister
-var scanStateAggregator *aggregator.ScanStateAggregator
+var scanStateAggregator aggregator.StateAggregator
 var scanStateChangeEmitter aggregator.ScanStateChangeEmitter
 var snykCli cli.Executor
 

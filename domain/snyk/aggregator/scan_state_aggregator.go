@@ -56,7 +56,7 @@ type ScanStateAggregator struct {
 }
 
 // NewScanStateAggregator constructs a new aggregator.
-func NewScanStateAggregator(ssce ScanStateChangeEmitter, c *config.Config) *ScanStateAggregator {
+func NewScanStateAggregator(ssce ScanStateChangeEmitter, c *config.Config) StateAggregator {
 	return &ScanStateAggregator{
 		referenceScanStates:        make(ScanStateMap),
 		workingDirectoryScanStates: make(ScanStateMap),

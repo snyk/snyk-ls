@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	aggregator2 "github.com/snyk/snyk-ls/domain/snyk/aggregator"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/google/uuid"
@@ -65,11 +66,12 @@ func setupScanner(testProductScanners ...snyk.ProductScanner) (
 	notifier := notification.NewNotifier()
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
 	persister := persistence.NewNopScanPersister()
+	aggregator := aggregator2.NewNoopStateAggregator()
 	er := error_reporting.NewTestErrorReporter()
 	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	authenticationProvider.IsAuthenticated = true
 	authenticationService := authentication.NewAuthenticationService(c, authenticationProvider, er, notifier)
-	sc = NewDelegatingScanner(c, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, testProductScanners...)
+	sc = NewDelegatingScanner(c, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, aggregator, testProductScanners...)
 	return sc, scanNotifier
 }
 

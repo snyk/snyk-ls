@@ -89,7 +89,7 @@ func TestInit(t *testing.T) {
 	learnService = learnMock
 	codeClientScanner := &code.FakeCodeScannerClient{}
 	scanPersister = persistence.NopScanPersister{}
-	scanStateAggregator = aggregator.NewScanStateAggregator(nil, c)
+	scanStateAggregator = aggregator.NewNoopStateAggregator()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)

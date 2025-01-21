@@ -69,7 +69,7 @@ type DelegatingConcurrentScanner struct {
 	notifier            notification.Notifier
 	c                   *config.Config
 	scanPersister       persistence.ScanSnapshotPersister
-	scanStateAggregator *aggregator.ScanStateAggregator
+	scanStateAggregator aggregator.StateAggregator
 }
 
 func (sc *DelegatingConcurrentScanner) Issue(key string) snyk.Issue {
@@ -181,7 +181,7 @@ func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config 
 	}
 }
 
-func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator *aggregator.ScanStateAggregator, scanners ...snyk.ProductScanner) Scanner {
+func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator aggregator.StateAggregator, scanners ...snyk.ProductScanner) Scanner {
 	return &DelegatingConcurrentScanner{
 		instrumentor:        instrumentor,
 		initializer:         initializer,
