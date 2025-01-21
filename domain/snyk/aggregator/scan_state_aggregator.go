@@ -19,8 +19,7 @@ package aggregator
 import (
 	"sync"
 
-	"github.com/rs/zerolog"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -54,15 +53,16 @@ type ScanStateAggregator struct {
 	referenceScanStates        ScanStateMap
 	workingDirectoryScanStates ScanStateMap
 	scanStateChangeEmitter     ScanStateChangeEmitter
-	logger                     *zerolog.Logger
+	c                          *config.Config
 }
 
 // NewScanStateAggregator constructs a new aggregator.
-func NewScanStateAggregator(ssce ScanStateChangeEmitter, ws *workspace.Workspace) *ScanStateAggregator {
+func NewScanStateAggregator(ssce ScanStateChangeEmitter, ws *workspace.Workspace, c *config.Config) *ScanStateAggregator {
 	res := &ScanStateAggregator{
 		referenceScanStates:        make(ScanStateMap),
 		workingDirectoryScanStates: make(ScanStateMap),
 		scanStateChangeEmitter:     ssce,
+		c:                          c,
 	}
 	for _, f := range ws.Folders() {
 		res.referenceScanStates[FolderProductKey{Product: product.ProductOpenSource, FolderPath: f.Path()}] = &ScanState{Status: NotStarted}
@@ -92,7 +92,7 @@ func (agg *ScanStateAggregator) SetScanState(folderPath string, p product.Produc
 	}
 
 	if !exists {
-		agg.logger.Warn().Msgf("Scan State for folder path%s and product %s doesn't exist in state aggregator", folderPath, p.ToProductNamesString())
+		agg.c.Logger().Error().Msgf("Scan State for folder path%s and product %s doesn't exist in state aggregator", folderPath, p.ToProductNamesString())
 		return
 	}
 

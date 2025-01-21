@@ -32,6 +32,14 @@ type SummaryEmitter struct {
 	c                   *config.Config
 }
 
+func NewSummaryEmitter(n notification.Notifier, ssa *ScanStateAggregator, c *config.Config) *SummaryEmitter {
+	return &SummaryEmitter{
+		notifier:            n,
+		scanStateAggregator: ssa,
+		c:                   c,
+	}
+}
+
 func (s *SummaryEmitter) Emit() {
 	generatedHtml := "<html>test</html>"
 	s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
