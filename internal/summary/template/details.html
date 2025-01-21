@@ -1,0 +1,85 @@
+<!--
+  ~ © 2024-2025 Snyk Limited
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<!DOCTYPE html>
+<html>
+<head>
+  <style nonce="${nonce}">
+    {{.Styles}}
+  </style>
+  <!-- Custom styles will be replaced here-->
+  ${ideStyle}
+</head>
+<body>
+
+<div class="snx-header">
+  <h1 class="snx-title snx-h1">Snyk Security is loading...</h1>
+</div>
+<div class="snx-summary">
+  <div class="snx-status">
+    <span class="snx-loader size-s"></span>
+    <p class="snx-message">Waiting for the Snyk CLI to be downloaded and the Language Server to be initialized. </p>
+  </div>
+</div>
+
+<hr />
+
+<div class="snx-header">
+  <div class="snx-content">
+    <h2 class="snx-title snx-h2">Snyk is scanning for issues...</h2>
+    <p class="snx-message is-dimmed">
+      <span class="snx-loader size-s"></span>
+      <strong class="snx-highlight"> 4/8 </strong> base &amp; reference scans
+    </p>
+  </div>
+  <div class="snx-actions">
+    <div class="snx-toggle">
+      {{.IssuesFound}} total issues
+    </div>
+  </div>
+</div>
+
+<div class="snx-summary">
+  <p class="snx-message">⚠️ Scanning for issues in your project.</p>
+  <p class="snx-message">⚡ Identifying fixable issues.</p>
+</div>
+
+<hr />
+
+<div class="snx-header">
+  <div class="snx-content">
+    <h2 class="snx-title snx-h2">Snyk is scanning for issues...</h2>
+    <p class="snx-message is-dimmed">
+      <span class="snx-loader size-s"></span>
+      <strong class="snx-highlight"> 4/8 </strong> base &amp; reference scans
+    </p>
+  </div>
+  <div class="snx-actions">
+    <div class="snx-toggle">
+      {{.IssuesFound}} total issues
+    </div>
+  </div>
+</div>
+
+<div class="snx-summary">
+  <p class="snx-message">⚠️ <span class="snx-highlight">{{.IssuesFound}} issues</span> found in your project</p>
+  <p class="snx-message">⚡ <span class="snx-highlight">{{.FixableIssueCount}} issues</span> are fixable.</p>
+</div>
+
+<!-- Scripts -->
+<!-- Custom scripts will be replaced here-->
+${ideScript}
+</body>
+</html>
