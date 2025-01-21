@@ -19,10 +19,9 @@ package command
 import (
 	"context"
 	"fmt"
-	"github.com/snyk/snyk-ls/internal/summary"
-
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/summary"
 
 	"github.com/pkg/errors"
 
@@ -47,7 +46,7 @@ func sendInitialSummaryPanelNotification(notifier noti.Notifier) {
 		logger.Error().Err(err).Msg("could not create html renderer")
 		return
 	}
-	scanSummaryParams := types.ScanSummary{ScanSummary: renderer.GetDetailsHtml()}
+	scanSummaryParams := types.ScanSummary{ScanSummary: renderer.GetSummaryHtml()}
 	notifier.Send(scanSummaryParams)
 }
 func sendFolderConfigsNotification(notifier noti.Notifier) {

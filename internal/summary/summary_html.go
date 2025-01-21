@@ -22,12 +22,11 @@ import (
 	"html/template"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
 //go:embed template/details.html
-var detailsHtmlTemplate string
+var summaryHtmlTemplate string
 
 //go:embed template/styles.css
 var panelStylesTemplate string
@@ -38,12 +37,7 @@ type HtmlRenderer struct {
 }
 
 func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
-	funcMap := template.FuncMap{
-		"trimCWEPrefix": html.TrimCWEPrefix,
-		"idxMinusOne":   html.IdxMinusOne,
-	}
-
-	globalTemplate, err := template.New(string(product.ProductCode)).Funcs(funcMap).Parse(detailsHtmlTemplate)
+	globalTemplate, err := template.New(string(product.ProductCode)).Parse(summaryHtmlTemplate)
 	if err != nil {
 		c.Logger().Error().Msgf("Failed to parse details template: %s", err)
 		return nil, err
@@ -55,16 +49,17 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 	}, nil
 }
 
-func (renderer *HtmlRenderer) GetDetailsHtml() string {
+func (renderer *HtmlRenderer) GetSummaryHtml() string {
 	data := map[string]interface{}{
 		"Styles":            template.CSS(panelStylesTemplate),
 		"IssuesFound":       22,
 		"FixableIssueCount": 7,
+		"IsScanning":        true,
 	}
 
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
-		renderer.c.Logger().Error().Msgf("Failed to execute main details template: %v", err)
+		renderer.c.Logger().Error().Msgf("Failed to execute main summary template: %v", err)
 		return ""
 	}
 
