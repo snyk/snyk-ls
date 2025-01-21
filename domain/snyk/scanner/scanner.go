@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/aggregator"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/vcs"
 
@@ -59,15 +60,16 @@ type PackageScanner interface {
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
-	scanners      []snyk.ProductScanner
-	initializer   initialize.Initializer
-	instrumentor  performance.Instrumentor
-	scanNotifier  ScanNotifier
-	snykApiClient snyk_api.SnykApiClient
-	authService   authentication.AuthenticationService
-	notifier      notification.Notifier
-	c             *config.Config
-	scanPersister persistence.ScanSnapshotPersister
+	scanners            []snyk.ProductScanner
+	initializer         initialize.Initializer
+	instrumentor        performance.Instrumentor
+	scanNotifier        ScanNotifier
+	snykApiClient       snyk_api.SnykApiClient
+	authService         authentication.AuthenticationService
+	notifier            notification.Notifier
+	c                   *config.Config
+	scanPersister       persistence.ScanSnapshotPersister
+	scanStateAggregator *aggregator.ScanStateAggregator
 }
 
 func (sc *DelegatingConcurrentScanner) Issue(key string) snyk.Issue {
@@ -179,17 +181,18 @@ func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config 
 	}
 }
 
-func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanners ...snyk.ProductScanner) Scanner {
+func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator *aggregator.ScanStateAggregator, scanners ...snyk.ProductScanner) Scanner {
 	return &DelegatingConcurrentScanner{
-		instrumentor:  instrumentor,
-		initializer:   initializer,
-		scanNotifier:  scanNotifier,
-		snykApiClient: snykApiClient,
-		scanners:      scanners,
-		authService:   authService,
-		notifier:      notifier,
-		scanPersister: scanPersister,
-		c:             c,
+		instrumentor:        instrumentor,
+		initializer:         initializer,
+		scanNotifier:        scanNotifier,
+		snykApiClient:       snykApiClient,
+		scanners:            scanners,
+		authService:         authService,
+		notifier:            notifier,
+		scanPersister:       scanPersister,
+		c:                   c,
+		scanStateAggregator: scanStateAggregator,
 	}
 }
 
@@ -276,11 +279,13 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				defer sc.instrumentor.Finish(span)
 				logger.Info().Msgf("Scanning %s with %T: STARTED", path, s)
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
+				sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), false)
 
 				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
 				foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, path, folderPath)
 				sc.instrumentor.Finish(scanSpan)
+				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, scanError)
 
 				// now process
 				data := snyk.ScanData{
@@ -301,7 +306,9 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				go func() {
 					defer referenceBranchScanWaitGroup.Done()
 					// TODO: implement proper context handling
+					sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
 					err := sc.scanBaseBranch(context.Background(), s, folderPath, gitCheckoutHandler)
+					sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
 					// TODO: is this a good idea?
 					data = snyk.ScanData{
 						Product: s.Product(),

@@ -27,7 +27,7 @@ func TestScanStateAggregator_Init(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, w, c)
+	agg := NewScanStateAggregator(emitter, c)
 
 	// 3) Validate initial states
 	assert.True(t, agg.AreAllScansNotStarted(true))
@@ -53,7 +53,7 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, w, c)
+	agg := NewScanStateAggregator(emitter, c)
 
 	newState := ScanState{
 		Status: InProgress,
@@ -81,10 +81,10 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, w, c)
+	agg := NewScanStateAggregator(emitter, c)
 
 	doneState := ScanState{
-		Status: Done,
+		Status: Success,
 		Err:    nil,
 	}
 	agg.SetScanState(folderPath, product.ProductOpenSource, false, doneState)
@@ -108,7 +108,7 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, w, c)
+	agg := NewScanStateAggregator(emitter, c)
 
 	errState := ScanState{
 		Status: Error,
@@ -135,10 +135,10 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, w, c)
+	agg := NewScanStateAggregator(emitter, c)
 
 	doneState := ScanState{
-		Status: Done,
+		Status: Success,
 		Err:    nil,
 	}
 	agg.SetScanState(folderPath, product.ProductOpenSource, true, doneState)
@@ -171,10 +171,10 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, w, c)
+	agg := NewScanStateAggregator(emitter, c)
 
 	doneState := ScanState{
-		Status: Done,
+		Status: Success,
 		Err:    nil,
 	}
 	agg.SetScanState("/non/existing/folder", product.ProductOpenSource, true, doneState)
