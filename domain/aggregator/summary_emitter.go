@@ -17,6 +17,8 @@
 package aggregator
 
 import (
+	"fmt"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -26,19 +28,27 @@ type ScanStateChangeEmitter interface {
 	Emit(aggregator StateAggregator)
 }
 
-type SummaryEmitter struct {
+type Emitter struct {
 	notifier notification.Notifier
 	c        *config.Config
+	renderer *HtmlRenderer
 }
 
-func NewSummaryEmitter(n notification.Notifier, c *config.Config) *SummaryEmitter {
-	return &SummaryEmitter{
+func NewSummaryEmitter(n notification.Notifier, c *config.Config) *Emitter {
+	emitter := &Emitter{
 		notifier: n,
 		c:        c,
 	}
+
+	renderer, err := NewHtmlRenderer(c)
+	if err != nil {
+		panic(fmt.Sprintf("Couldn't initialize HtmlRenderer: %v", err))
+	}
+	emitter.renderer = renderer
+	return emitter
 }
 
-func (s *SummaryEmitter) Emit(aggregator StateAggregator) {
-	generatedHtml := "<html>test</html>"
+func (s *Emitter) Emit(aggregator StateAggregator) {
+	generatedHtml := s.renderer.GetSummaryHtml(aggregator)
 	s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
 }

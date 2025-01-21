@@ -21,9 +21,8 @@ import (
 	"runtime"
 	"sync"
 
+	aggregator2 "github.com/snyk/snyk-ls/domain/aggregator"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/aggregator"
-
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
 	"github.com/adrg/xdg"
@@ -80,8 +79,8 @@ var notifier notification.Notifier
 var codeInstrumentor codeClientObservability.Instrumentor
 var codeErrorReporter codeClientObservability.ErrorReporter
 var scanPersister persistence.ScanSnapshotPersister
-var stateAggregator aggregator.StateAggregator
-var scanStateChangeEmitter aggregator.ScanStateChangeEmitter
+var stateAggregator aggregator2.StateAggregator
+var scanStateChangeEmitter aggregator2.ScanStateChangeEmitter
 var snykCli cli.Executor
 
 func Init() {
@@ -132,8 +131,8 @@ func initInfrastructure(c *config.Config) {
 	snykApiClient = snyk_api.NewSnykApiClient(c, authorizedClient)
 	gafConfiguration := c.Engine().GetConfiguration()
 	scanPersister = persistence.NewGitPersistenceProvider(c.Logger())
-	scanStateChangeEmitter = aggregator.NewSummaryEmitter(notifier, c)
-	stateAggregator = aggregator.NewScanStateAggregator(scanStateChangeEmitter, c)
+	scanStateChangeEmitter = aggregator2.NewSummaryEmitter(notifier, c)
+	stateAggregator = aggregator2.NewScanStateAggregator(scanStateChangeEmitter, c)
 	// we initialize the service without providers, as we want to wait for initialization to send the auth method
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	snykCli = cli.NewExecutor(c, errorReporter, notifier)
@@ -219,7 +218,7 @@ func ScanPersister() persistence.ScanSnapshotPersister {
 	return scanPersister
 }
 
-func StateAggregator() aggregator.StateAggregator {
+func StateAggregator() aggregator2.StateAggregator {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return stateAggregator

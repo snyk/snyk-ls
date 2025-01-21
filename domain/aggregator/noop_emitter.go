@@ -17,9 +17,9 @@
 package aggregator
 
 type NoopEmitter struct {
-	calls int
+	Calls int
 }
 
-func (m *NoopEmitter) Emit() {
-	m.calls++
+func (m *NoopEmitter) Emit(_ StateAggregator) {
+	m.Calls++
 }

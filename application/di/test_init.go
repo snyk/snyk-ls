@@ -20,11 +20,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/snyk/snyk-ls/domain/snyk/aggregator"
+	"github.com/golang/mock/gomock"
+
+	"github.com/snyk/snyk-ls/domain/aggregator"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
-
-	"github.com/golang/mock/gomock"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"

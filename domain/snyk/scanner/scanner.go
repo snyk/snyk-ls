@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/snyk/snyk-ls/domain/aggregator"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/aggregator"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/vcs"
 

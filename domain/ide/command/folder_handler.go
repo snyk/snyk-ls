@@ -22,7 +22,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/snyk/snyk-ls/domain/snyk/aggregator"
+	"github.com/snyk/snyk-ls/domain/aggregator"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 

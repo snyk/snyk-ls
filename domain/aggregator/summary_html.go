@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package summary
+package aggregator
 
 import (
 	"bytes"
@@ -22,7 +22,6 @@ import (
 	"html/template"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/product"
 )
 
 //go:embed template/details.html
@@ -37,7 +36,7 @@ type HtmlRenderer struct {
 }
 
 func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
-	globalTemplate, err := template.New(string(product.ProductCode)).Parse(summaryHtmlTemplate)
+	globalTemplate, err := template.New("summary").Parse(summaryHtmlTemplate)
 	if err != nil {
 		c.Logger().Error().Msgf("Failed to parse details template: %s", err)
 		return nil, err
@@ -49,7 +48,7 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 	}, nil
 }
 
-func (renderer *HtmlRenderer) GetSummaryHtml() string {
+func (renderer *HtmlRenderer) GetSummaryHtml(stateAggregator StateAggregator) string {
 	data := map[string]interface{}{
 		"Styles":            template.CSS(panelStylesTemplate),
 		"IssuesFound":       22,

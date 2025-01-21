@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package summary
+package aggregator
 
 import (
 	"testing"
@@ -30,7 +30,7 @@ func Test_Summary_Html_getSummaryDetailsHtml(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	summaryPanel := htmlRenderer.GetSummaryHtml()
+	summaryPanel := htmlRenderer.GetSummaryHtml(nil)
 
 	// assert injectable style
 	assert.Contains(t, summaryPanel, "${ideStyle}")
@@ -47,7 +47,7 @@ func Test_Summary_Html_getSummaryDetailsHtml_hasCSS(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	summaryPanel := htmlRenderer.GetSummaryHtml()
+	summaryPanel := htmlRenderer.GetSummaryHtml(nil)
 	// assert css section
 	assert.Contains(t, summaryPanel, ":root { font-size:10px; }")
 }

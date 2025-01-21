@@ -62,7 +62,7 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	agg.SetScanState(folderPath, product.ProductOpenSource, false, newState)
 
 	// Emitter should have been called once
-	assert.Equal(t, 1, emitter.calls)
+	assert.Equal(t, 1, emitter.Calls)
 
 	assert.False(t, agg.AreAllScansNotStarted(false))
 	assert.True(t, agg.HasAnyScanInProgress(false))
@@ -89,7 +89,7 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	}
 	agg.SetScanState(folderPath, product.ProductOpenSource, false, doneState)
 
-	assert.Equal(t, 1, emitter.calls)
+	assert.Equal(t, 1, emitter.Calls)
 
 	assert.False(t, agg.HaveAllScansSucceeded(false))
 	assert.False(t, agg.HasAnyScanError(false))
@@ -116,7 +116,7 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	}
 	agg.SetScanState(folderPath, product.ProductCode, false, errState)
 
-	assert.Equal(t, 1, emitter.calls, "Emit called again")
+	assert.Equal(t, 1, emitter.Calls, "Emit called again")
 
 	assert.True(t, agg.HasAnyScanError(false), "At least one working scan is in ERROR")
 	assert.False(t, agg.HaveAllScansSucceeded(false))
@@ -150,7 +150,7 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	agg.SetScanState(folderPath, product.ProductInfrastructureAsCode, false, doneState)
 
 	// Emitter called 3 times total
-	assert.Equal(t, 6, emitter.calls)
+	assert.Equal(t, 6, emitter.Calls)
 
 	assert.True(t, agg.HaveAllScansSucceeded(true))
 	assert.True(t, agg.HaveAllScansSucceeded(false))
@@ -178,7 +178,7 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 		Err:    nil,
 	}
 	agg.SetScanState("/non/existing/folder", product.ProductOpenSource, true, doneState)
-	assert.Equal(t, 0, emitter.calls)
+	assert.Equal(t, 0, emitter.Calls)
 
 	assert.True(t, agg.AreAllScansNotStarted(true))
 	assert.True(t, agg.AreAllScansNotStarted(false))
