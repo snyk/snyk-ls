@@ -132,7 +132,7 @@ func initInfrastructure(c *config.Config) {
 	gafConfiguration := c.Engine().GetConfiguration()
 	scanPersister = persistence.NewGitPersistenceProvider(c.Logger())
 	scanStateChangeEmitter = aggregator2.NewSummaryEmitter(notifier, c)
-	stateAggregator = aggregator2.NewScanStateAggregator(scanStateChangeEmitter, c)
+	stateAggregator = aggregator2.NewScanStateAggregator(c, scanStateChangeEmitter)
 	// we initialize the service without providers, as we want to wait for initialization to send the auth method
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	snykCli = cli.NewExecutor(c, errorReporter, notifier)

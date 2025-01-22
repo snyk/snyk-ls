@@ -27,7 +27,7 @@ func TestScanStateAggregator_Init(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, c)
+	agg := NewScanStateAggregator(c, emitter)
 
 	// 3) Validate initial states
 	assert.True(t, agg.AllScansStarted(true))
@@ -53,7 +53,7 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, c)
+	agg := NewScanStateAggregator(c, emitter)
 
 	newState := ScanState{
 		Status: InProgress,
@@ -81,7 +81,7 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, c)
+	agg := NewScanStateAggregator(c, emitter)
 
 	doneState := ScanState{
 		Status: Success,
@@ -108,7 +108,7 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, c)
+	agg := NewScanStateAggregator(c, emitter)
 
 	errState := ScanState{
 		Status: Error,
@@ -135,7 +135,7 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, c)
+	agg := NewScanStateAggregator(c, emitter)
 
 	doneState := ScanState{
 		Status: Success,
@@ -171,7 +171,7 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	c.SetTrustedFolders([]string{folderPath})
 	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
 
-	agg := NewScanStateAggregator(emitter, c)
+	agg := NewScanStateAggregator(c, emitter)
 
 	doneState := ScanState{
 		Status: Success,

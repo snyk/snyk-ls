@@ -47,7 +47,7 @@ type Workspace struct {
 	notifier            noti.Notifier
 	c                   *config.Config
 	scanPersister       persistence.ScanSnapshotPersister
-	statePersister      aggregator.StateAggregator
+	stateAggregator     aggregator.StateAggregator
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
@@ -85,15 +85,15 @@ func New(
 	statePersister aggregator.StateAggregator,
 ) *Workspace {
 	return &Workspace{
-		folders:        make(map[string]types.Folder),
-		instrumentor:   instrumentor,
-		scanner:        scanner,
-		hoverService:   hoverService,
-		scanNotifier:   scanNotifier,
-		notifier:       notifier,
-		c:              c,
-		scanPersister:  scanPersister,
-		statePersister: statePersister,
+		folders:         make(map[string]types.Folder),
+		instrumentor:    instrumentor,
+		scanner:         scanner,
+		hoverService:    hoverService,
+		scanNotifier:    scanNotifier,
+		notifier:        notifier,
+		c:               c,
+		scanPersister:   scanPersister,
+		stateAggregator: statePersister,
 	}
 }
 
@@ -196,7 +196,7 @@ func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFolder
 	}
 	var changedWorkspaceFolders []types.Folder
 	for _, folder := range params.Event.Added {
-		f := NewFolder(w.c, uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.statePersister)
+		f := NewFolder(w.c, uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.stateAggregator)
 		w.AddFolder(f)
 		changedWorkspaceFolders = append(changedWorkspaceFolders, f)
 	}

@@ -481,7 +481,6 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 		// Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
 		err = fmt.Errorf("couldn't determine the difference between current and base branch for %s scan. %w", p.ToProductNamesString(), err)
 	}
-	f.Issues()
 	// Trigger publishDiagnostics for all issues in Cache.
 	// Filtered issues will be sent with an empty slice if no issues exist.
 	filteredIssues := f.filterDiagnostics(productIssuesByFile[p])
@@ -691,7 +690,7 @@ func (f *Folder) IsTrusted() bool {
 	if !f.c.IsTrustedFolderFeatureEnabled() {
 		return true
 	}
-	for _, path := range config.CurrentConfig().TrustedFolders() {
+	for _, path := range f.c.TrustedFolders() {
 		if uri.FolderContains(path, f.path) {
 			return true
 		}
