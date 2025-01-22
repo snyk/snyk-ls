@@ -25,6 +25,10 @@ var _ Aggregator = (*NoopStateAggregator)(nil)
 type NoopStateAggregator struct {
 }
 
+func (n NoopStateAggregator) StateSnapshot() StateSnapshot {
+	return StateSnapshot{}
+}
+
 func (n NoopStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
 	return nil
 }
@@ -48,22 +52,22 @@ func (n NoopStateAggregator) SetScanDone(_ string, _ product.Product, _ bool, _ 
 func (n NoopStateAggregator) SetScanInProgress(_ string, _ product.Product, _ bool) {
 }
 
-func (n NoopStateAggregator) AllScansStarted(_ bool) bool {
+func (n NoopStateAggregator) allScansStarted(_ bool) bool {
 	return false
 }
 
-func (n NoopStateAggregator) AnyScanInProgress(_ bool) bool {
+func (n NoopStateAggregator) anyScanInProgress(_ bool) bool {
 	return false
 }
 
-func (n NoopStateAggregator) AnyScanSucceeded(_ bool) bool {
+func (n NoopStateAggregator) anyScanSucceeded(_ bool) bool {
 	return false
 }
 
-func (n NoopStateAggregator) AllScansSucceeded(_ bool) bool {
+func (n NoopStateAggregator) allScansSucceeded(_ bool) bool {
 	return false
 }
 
-func (n NoopStateAggregator) AnyScanError(_ bool) bool {
+func (n NoopStateAggregator) anyScanError(_ bool) bool {
 	return false
 }

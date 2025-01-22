@@ -20,6 +20,6 @@ type NoopEmitter struct {
 	Calls int
 }
 
-func (m *NoopEmitter) Emit(_ Aggregator) {
+func (m *NoopEmitter) Emit(_ StateSnapshot) {
 	m.Calls++
 }

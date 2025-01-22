@@ -30,7 +30,7 @@ import (
 var summaryHtmlTemplate string
 
 //go:embed template/styles.css
-var panelStylesTemplate string
+var summaryStylesTemplate string
 
 type HtmlRenderer struct {
 	c              *config.Config
@@ -38,9 +38,10 @@ type HtmlRenderer struct {
 }
 
 func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
+	logger := c.Logger().With().Str("method", "NewHtmlRenderer").Logger()
 	globalTemplate, err := template.New("summary").Parse(summaryHtmlTemplate)
 	if err != nil {
-		c.Logger().Error().Msgf("Failed to parse details template: %s", err)
+		logger.Error().Msgf("Failed to parse details template: %s", err)
 		return nil, err
 	}
 
@@ -50,26 +51,27 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 	}, nil
 }
 
-func (renderer *HtmlRenderer) GetSummaryHtml(stateAggregator Aggregator) string {
+func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
+	logger := renderer.c.Logger().With().Str("method", "GetSummaryHtml").Logger()
 	issueCount := renderer.getIssuesFromFolders()
 	data := map[string]interface{}{
-		"Styles":                            template.CSS(panelStylesTemplate),
+		"Styles":                            template.CSS(summaryStylesTemplate),
 		"IssuesFound":                       issueCount,
 		"FixableIssueCount":                 7,
-		"AllScansStartedReference":          stateAggregator.AllScansStarted(true),
-		"AllScansStartedWorkingDirectory":   stateAggregator.AllScansStarted(false),
-		"AnyScanInProgressReference":        stateAggregator.AnyScanInProgress(true),
-		"AnyScanInProgressWorkingDirectory": stateAggregator.AnyScanInProgress(false),
-		"AnyScanSucceededReference":         stateAggregator.AnyScanSucceeded(true),
-		"AnyScanSucceededWorkingDirectory":  stateAggregator.AnyScanSucceeded(false),
-		"AllScansSucceededReference":        stateAggregator.AllScansSucceeded(true),
-		"AllScansSucceededWorkingDirectory": stateAggregator.AllScansSucceeded(false),
-		"AnyScanErrorReference":             stateAggregator.AnyScanError(true),
-		"AnyScanErrorWorkingDirectory":      stateAggregator.AnyScanError(false),
+		"AllScansStartedReference":          state.AllScansStartedReference,
+		"AllScansStartedWorkingDirectory":   state.AllScansStartedWorkingDirectory,
+		"AnyScanInProgressReference":        state.AnyScanInProgressReference,
+		"AnyScanInProgressWorkingDirectory": state.AnyScanInProgressWorkingDirectory,
+		"AnyScanSucceededReference":         state.AnyScanSucceededReference,
+		"AnyScanSucceededWorkingDirectory":  state.AnyScanSucceededWorkingDirectory,
+		"AllScansSucceededReference":        state.AllScansSucceededReference,
+		"AllScansSucceededWorkingDirectory": state.AllScansSucceededWorkingDirectory,
+		"AnyScanErrorReference":             state.AnyScanErrorReference,
+		"AnyScanErrorWorkingDirectory":      state.AnyScanErrorWorkingDirectory,
 	}
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
-		renderer.c.Logger().Error().Msgf("Failed to execute main summary template: %v", err)
+		logger.Error().Msgf("Failed to execute main summary template: %v", err)
 		return ""
 	}
 

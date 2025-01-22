@@ -24,10 +24,11 @@ type Aggregator interface {
 	SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState ScanState)
 	SetScanDone(folderPath string, p product.Product, isReferenceScan bool, scanErr error)
 	SetScanInProgress(folderPath string, p product.Product, isReferenceScan bool)
-	AllScansStarted(isReference bool) bool
-	AnyScanInProgress(isReference bool) bool
-	AnyScanSucceeded(isReference bool) bool
-	AllScansSucceeded(isReference bool) bool
-	AnyScanError(isReference bool) bool
+	allScansStarted(isReference bool) bool
+	anyScanInProgress(isReference bool) bool
+	anyScanSucceeded(isReference bool) bool
+	allScansSucceeded(isReference bool) bool
+	anyScanError(isReference bool) bool
 	SummaryEmitter() ScanStateChangeEmitter
+	StateSnapshot() StateSnapshot
 }

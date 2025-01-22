@@ -278,11 +278,11 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				span := sc.instrumentor.NewTransaction(context.WithValue(ctx, s.Product(), s), string(s.Product()), method)
 				defer sc.instrumentor.Finish(span)
 				logger.Info().Msgf("Scanning %s with %T: STARTED", path, s)
-				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
 				sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), false)
 
 				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
+				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
 				foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, path, folderPath)
 				sc.instrumentor.Finish(scanSpan)
 				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, scanError)

@@ -58,6 +58,6 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error)
 	}
 	f.Clear()
 	f.ScanFolder(ctx)
-	HandleUntrustedFolders(ctx, cmd.srv)
+	HandleUntrustedFolders(cmd.c, ctx, cmd.srv)
 	return nil, nil
 }

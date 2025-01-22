@@ -42,8 +42,8 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.
 	loc, jsonRPCRecorder := setupServer(t, c)
 	sc := &scanner.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
-	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
-	command.HandleUntrustedFolders(context.Background(), loc.Server)
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.StateAggregator()))
+	command.HandleUntrustedFolders(c, context.Background(), loc.Server)
 
 	assert.True(t, checkTrustMessageRequest(jsonRPCRecorder, c))
 	assert.Equal(t, sc.Calls(), 0)
@@ -55,10 +55,10 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 	w := c.Workspace()
 	sc := &scanner.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
-	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.StateAggregator()))
 	w.StartRequestTrustCommunication()
 
-	command.HandleUntrustedFolders(context.Background(), loc.Server)
+	command.HandleUntrustedFolders(c, context.Background(), loc.Server)
 
 	assert.Len(t, jsonRPCRecorder.FindCallbacksByMethod("window/showMessageRequest"), 0)
 	assert.Equal(t, sc.Calls(), 0)
@@ -76,9 +76,9 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 	w := c.Workspace()
 	sc := &scanner.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
-	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.StateAggregator()))
 
-	command.HandleUntrustedFolders(context.Background(), loc.Server)
+	command.HandleUntrustedFolders(c, context.Background(), loc.Server)
 
 	assert.Eventually(t, func() bool {
 		addTrustedSent := len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.addTrustedFolders")) == 1
@@ -96,10 +96,10 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 	registerNotifier(c, loc.Server)
 	w := c.Workspace()
 	sc := &scanner.TestScanner{}
-	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister()))
+	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.StateAggregator()))
 	c.SetTrustedFolderFeatureEnabled(true)
 
-	command.HandleUntrustedFolders(context.Background(), loc.Server)
+	command.HandleUntrustedFolders(c, context.Background(), loc.Server)
 
 	assert.Equal(t, sc.Calls(), 0)
 }

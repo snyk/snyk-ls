@@ -55,6 +55,38 @@ type ScanStateAggregator struct {
 	c                          *config.Config
 }
 
+type StateSnapshot struct {
+	AllScansStartedReference          bool
+	AllScansStartedWorkingDirectory   bool
+	AnyScanInProgressReference        bool
+	AnyScanInProgressWorkingDirectory bool
+	AnyScanSucceededReference         bool
+	AnyScanSucceededWorkingDirectory  bool
+	AllScansSucceededReference        bool
+	AllScansSucceededWorkingDirectory bool
+	AnyScanErrorReference             bool
+	AnyScanErrorWorkingDirectory      bool
+}
+
+func (agg *ScanStateAggregator) StateSnapshot() StateSnapshot {
+	agg.mu.RLock()
+	defer agg.mu.RUnlock()
+
+	ss := StateSnapshot{
+		AllScansStartedReference:          agg.allScansStarted(true),
+		AllScansStartedWorkingDirectory:   agg.allScansStarted(false),
+		AnyScanInProgressReference:        agg.anyScanInProgress(true),
+		AnyScanInProgressWorkingDirectory: agg.anyScanInProgress(false),
+		AnyScanSucceededReference:         agg.anyScanSucceeded(true),
+		AnyScanSucceededWorkingDirectory:  agg.anyScanSucceeded(false),
+		AllScansSucceededReference:        agg.allScansSucceeded(true),
+		AllScansSucceededWorkingDirectory: agg.allScansSucceeded(false),
+		AnyScanErrorReference:             agg.anyScanError(true),
+		AnyScanErrorWorkingDirectory:      agg.anyScanError(false),
+	}
+	return ss
+}
+
 func (agg *ScanStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
 	return agg.scanStateChangeEmitter
 }
@@ -71,13 +103,13 @@ func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter) Aggre
 
 func (agg *ScanStateAggregator) Init(folders []string) {
 	agg.mu.Lock()
+	agg.mu.Unlock()
 
 	for _, f := range folders {
 		agg.initForAllProducts(f)
 	}
-	agg.mu.Unlock()
 	// Emit after init to send first summary
-	agg.scanStateChangeEmitter.Emit(agg)
+	agg.scanStateChangeEmitter.Emit(agg.StateSnapshot())
 }
 
 func (agg *ScanStateAggregator) initForAllProducts(folderPath string) {
@@ -93,18 +125,19 @@ func (agg *ScanStateAggregator) initForAllProducts(folderPath string) {
 // AddNewFolder adds new folder to the state scanstates map with initial NOT_STARTED state
 func (agg *ScanStateAggregator) AddNewFolder(folderPath string) {
 	agg.mu.Lock()
+	defer agg.mu.Unlock()
+
 	agg.initForAllProducts(folderPath)
-	agg.mu.Unlock()
-	agg.scanStateChangeEmitter.Emit(agg)
+
+	agg.scanStateChangeEmitter.Emit(agg.StateSnapshot())
 }
 
 // SetScanState changes the Status field of the existing state (or creates it if it doesn't exist).
 func (agg *ScanStateAggregator) SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState ScanState) {
 	agg.mu.Lock()
-	agg.setScanState(folderPath, p, isReferenceScan, newState)
-	agg.mu.Unlock()
+	defer agg.mu.Unlock()
 
-	agg.scanStateChangeEmitter.Emit(agg)
+	agg.setScanState(folderPath, p, isReferenceScan, newState)
 }
 
 func (agg *ScanStateAggregator) setScanState(folderPath string, p product.Product, isReferenceScan bool, newState ScanState) {
@@ -126,10 +159,13 @@ func (agg *ScanStateAggregator) setScanState(folderPath string, p product.Produc
 
 	st.Status = newState.Status
 	st.Err = newState.Err
+
+	agg.scanStateChangeEmitter.Emit(agg.StateSnapshot())
 }
 
 func (agg *ScanStateAggregator) SetScanDone(folderPath string, p product.Product, isReferenceScan bool, scanErr error) {
 	agg.mu.Lock()
+	defer agg.mu.Unlock()
 
 	state := ScanState{}
 	if scanErr != nil {
@@ -140,27 +176,20 @@ func (agg *ScanStateAggregator) SetScanDone(folderPath string, p product.Product
 	}
 
 	agg.setScanState(folderPath, p, isReferenceScan, state)
-	agg.mu.Unlock()
-	agg.scanStateChangeEmitter.Emit(agg)
 }
 
 func (agg *ScanStateAggregator) SetScanInProgress(folderPath string, p product.Product, isReferenceScan bool) {
 	agg.mu.Lock()
+	defer agg.mu.Unlock()
 
 	state := ScanState{
 		Status: InProgress,
 	}
 
 	agg.setScanState(folderPath, p, isReferenceScan, state)
-	agg.mu.Unlock()
-
-	agg.scanStateChangeEmitter.Emit(agg)
 }
 
-func (agg *ScanStateAggregator) AllScansStarted(isReference bool) bool {
-	agg.mu.RLock()
-	defer agg.mu.RUnlock()
-
+func (agg *ScanStateAggregator) allScansStarted(isReference bool) bool {
 	var stateMap ScanStateMap
 	if isReference {
 		stateMap = agg.referenceScanStates
@@ -176,10 +205,7 @@ func (agg *ScanStateAggregator) AllScansStarted(isReference bool) bool {
 	return true
 }
 
-func (agg *ScanStateAggregator) AnyScanInProgress(isReference bool) bool {
-	agg.mu.RLock()
-	defer agg.mu.RUnlock()
-
+func (agg *ScanStateAggregator) anyScanInProgress(isReference bool) bool {
 	var stateMap ScanStateMap
 	if isReference {
 		stateMap = agg.referenceScanStates
@@ -195,10 +221,7 @@ func (agg *ScanStateAggregator) AnyScanInProgress(isReference bool) bool {
 	return false
 }
 
-func (agg *ScanStateAggregator) AnyScanSucceeded(isReference bool) bool {
-	agg.mu.RLock()
-	defer agg.mu.RUnlock()
-
+func (agg *ScanStateAggregator) anyScanSucceeded(isReference bool) bool {
 	var stateMap ScanStateMap
 	if isReference {
 		stateMap = agg.referenceScanStates
@@ -214,10 +237,7 @@ func (agg *ScanStateAggregator) AnyScanSucceeded(isReference bool) bool {
 	return false
 }
 
-func (agg *ScanStateAggregator) AllScansSucceeded(isReference bool) bool {
-	agg.mu.RLock()
-	defer agg.mu.RUnlock()
-
+func (agg *ScanStateAggregator) allScansSucceeded(isReference bool) bool {
 	var stateMap ScanStateMap
 	if isReference {
 		stateMap = agg.referenceScanStates
@@ -233,10 +253,7 @@ func (agg *ScanStateAggregator) AllScansSucceeded(isReference bool) bool {
 	return true
 }
 
-func (agg *ScanStateAggregator) AnyScanError(isReference bool) bool {
-	agg.mu.RLock()
-	defer agg.mu.RUnlock()
-
+func (agg *ScanStateAggregator) anyScanError(isReference bool) bool {
 	var stateMap ScanStateMap
 	if isReference {
 		stateMap = agg.referenceScanStates

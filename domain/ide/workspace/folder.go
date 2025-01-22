@@ -317,7 +317,7 @@ func (f *Folder) processResults(scanData snyk.ScanData, triggerSendAnalytics boo
 	}
 
 	if triggerSendAnalytics {
-		go sendAnalytics(&scanData)
+		go sendAnalytics(f.c, &scanData)
 	}
 
 	// Filter and publish cached diagnostics
@@ -378,9 +378,7 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 	}
 }
 
-func sendAnalytics(data *snyk.ScanData) {
-	c := config.CurrentConfig()
-
+func sendAnalytics(c *config.Config, data *snyk.ScanData) {
 	logger := c.Logger().With().Str("method", "folder.sendAnalytics").Logger()
 	if data.Product == "" {
 		logger.Debug().Any("data", data).Msg("Skipping analytics for empty product")
@@ -585,7 +583,7 @@ func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[
 		}
 		for _, issue := range issueSlice {
 			// Logging here will spam the logs
-			if isVisibleSeverity(issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
+			if isVisibleSeverity(f.c, issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
 				filteredIssues[path] = append(filteredIssues[path], issue)
 			}
 		}
@@ -593,31 +591,31 @@ func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[
 	return filteredIssues
 }
 
-func isVisibleSeverity(issue snyk.Issue) bool {
-	logger := config.CurrentConfig().Logger().With().Str("method", "isVisibleSeverity").Logger()
+func isVisibleSeverity(c *config.Config, issue snyk.Issue) bool {
+	logger := c.Logger().With().Str("method", "isVisibleSeverity").Logger()
 
-	filterSeverity := config.CurrentConfig().FilterSeverity()
+	filterSeverity := c.FilterSeverity()
 	logger.Debug().Interface("filterSeverity", filterSeverity).Msg("Filtering issues by severity")
 
 	switch issue.Severity {
 	case snyk.Critical:
-		return config.CurrentConfig().FilterSeverity().Critical
+		return c.FilterSeverity().Critical
 	case snyk.High:
-		return config.CurrentConfig().FilterSeverity().High
+		return c.FilterSeverity().High
 	case snyk.Medium:
-		return config.CurrentConfig().FilterSeverity().Medium
+		return c.FilterSeverity().Medium
 	case snyk.Low:
-		return config.CurrentConfig().FilterSeverity().Low
+		return c.FilterSeverity().Low
 	}
 	return false
 }
 
-func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile, filterError error) {
-	f.stateAggregator.SummaryEmitter().Emit(f.stateAggregator)
+func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile, err error) {
+	f.stateAggregator.SummaryEmitter().Emit(f.stateAggregator.StateSnapshot())
 	f.sendHovers(issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	if filterError != nil {
-		f.sendScanError(product, filterError)
+	if err != nil {
+		f.sendScanError(product, err)
 	} else {
 		f.sendSuccess(product)
 	}
