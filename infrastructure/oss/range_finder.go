@@ -73,7 +73,7 @@ func getDependencyNode(c *config.Config, path string, issue ossIssue, fileConten
 	}
 
 	// recurse until a dependency with version was found
-	if currentDep.Value == "" && currentDep.Tree != nil && currentDep.Tree.ParentTree != nil {
+	if currentDep != nil && currentDep.Value == "" && currentDep.Tree != nil && currentDep.Tree.ParentTree != nil {
 		tree := currentDep.Tree.ParentTree
 		currentDep.LinkedParentDependencyNode = getDependencyNode(c, tree.Document, issue, []byte(tree.Root.Value))
 	}
