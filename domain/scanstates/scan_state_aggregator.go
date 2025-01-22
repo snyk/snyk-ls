@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package aggregator
+package scanstates
 
 import (
 	"sync"
@@ -59,8 +59,8 @@ func (agg *ScanStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
 	return agg.scanStateChangeEmitter
 }
 
-// NewScanStateAggregator constructs a new aggregator.
-func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter) StateAggregator {
+// NewScanStateAggregator constructs a new scanstates.
+func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter) Aggregator {
 	return &ScanStateAggregator{
 		referenceScanStates:        make(ScanStateMap),
 		workingDirectoryScanStates: make(ScanStateMap),
@@ -90,7 +90,7 @@ func (agg *ScanStateAggregator) initForAllProducts(folderPath string) {
 	agg.workingDirectoryScanStates[FolderProductKey{Product: product.ProductInfrastructureAsCode, FolderPath: folderPath}] = &ScanState{Status: NotStarted}
 }
 
-// AddNewFolder adds new folder to the state aggregator map with initial NOT_STARTED state
+// AddNewFolder adds new folder to the state scanstates map with initial NOT_STARTED state
 func (agg *ScanStateAggregator) AddNewFolder(folderPath string) {
 	agg.mu.Lock()
 	agg.initForAllProducts(folderPath)
@@ -120,7 +120,7 @@ func (agg *ScanStateAggregator) setScanState(folderPath string, p product.Produc
 	}
 
 	if !exists {
-		logger.Error().Msgf("Scan State for folder path%s and product %s doesn't exist in state aggregator", folderPath, p.ToProductNamesString())
+		logger.Error().Msgf("Scan State for folder path%s and product %s doesn't exist in state scanstates", folderPath, p.ToProductNamesString())
 		return
 	}
 

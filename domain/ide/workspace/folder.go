@@ -25,7 +25,7 @@ import (
 
 	"github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/aggregator"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	delta2 "github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
@@ -75,7 +75,7 @@ type Folder struct {
 	notifier                noti.Notifier
 	c                       *config.Config
 	scanPersister           persistence.ScanSnapshotPersister
-	stateAggregator         aggregator.StateAggregator
+	stateAggregator         scanstates.Aggregator
 }
 
 func (f *Folder) Issue(key string) snyk.Issue {
@@ -243,7 +243,7 @@ func NewFolder(
 	scanNotifier scanner.ScanNotifier,
 	notifier noti.Notifier,
 	scanPersister persistence.ScanSnapshotPersister,
-	stateAggregator aggregator.StateAggregator,
+	stateAggregator scanstates.Aggregator,
 ) *Folder {
 	folder := Folder{
 		scanner:         scanner,

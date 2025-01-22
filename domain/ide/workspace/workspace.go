@@ -20,7 +20,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/snyk/snyk-ls/domain/aggregator"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -47,7 +47,7 @@ type Workspace struct {
 	notifier            noti.Notifier
 	c                   *config.Config
 	scanPersister       persistence.ScanSnapshotPersister
-	stateAggregator     aggregator.StateAggregator
+	stateAggregator     scanstates.Aggregator
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
@@ -82,7 +82,7 @@ func New(
 	scanNotifier scanner.ScanNotifier,
 	notifier noti.Notifier,
 	scanPersister persistence.ScanSnapshotPersister,
-	statePersister aggregator.StateAggregator,
+	statePersister scanstates.Aggregator,
 ) *Workspace {
 	return &Workspace{
 		folders:         make(map[string]types.Folder),

@@ -21,7 +21,7 @@ import (
 	"runtime"
 	"sync"
 
-	aggregator2 "github.com/snyk/snyk-ls/domain/aggregator"
+	aggregator2 "github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 
@@ -79,7 +79,7 @@ var notifier notification.Notifier
 var codeInstrumentor codeClientObservability.Instrumentor
 var codeErrorReporter codeClientObservability.ErrorReporter
 var scanPersister persistence.ScanSnapshotPersister
-var stateAggregator aggregator2.StateAggregator
+var stateAggregator aggregator2.Aggregator
 var scanStateChangeEmitter aggregator2.ScanStateChangeEmitter
 var snykCli cli.Executor
 
@@ -218,7 +218,7 @@ func ScanPersister() persistence.ScanSnapshotPersister {
 	return scanPersister
 }
 
-func StateAggregator() aggregator2.StateAggregator {
+func StateAggregator() aggregator2.Aggregator {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return stateAggregator

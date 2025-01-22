@@ -22,7 +22,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/snyk/snyk-ls/domain/aggregator"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 
@@ -33,14 +33,14 @@ import (
 const DoTrust = "Trust folders and continue"
 const DontTrust = "Don't trust folders"
 
-func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg aggregator.StateAggregator) {
+func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator) {
 	go sendFolderConfigsNotification(notifier)
 	initScanStateAggregator(agg)
 	initScanPersister(persister)
 	HandleUntrustedFolders(ctx, srv)
 }
 
-func initScanStateAggregator(agg aggregator.StateAggregator) {
+func initScanStateAggregator(agg scanstates.Aggregator) {
 	c := config.CurrentConfig()
 	var folderPaths []string
 	for _, f := range c.Workspace().Folders() {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package aggregator
+package scanstates
 
 import (
 	"testing"

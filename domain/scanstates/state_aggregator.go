@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package aggregator
+package scanstates
 
 import "github.com/snyk/snyk-ls/internal/product"
 
-type StateAggregator interface {
+type Aggregator interface {
 	Init(folders []string)
 	AddNewFolder(folderPath string)
 	SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState ScanState)

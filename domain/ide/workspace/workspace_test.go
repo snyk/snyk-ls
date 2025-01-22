@@ -39,11 +39,11 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil)
+	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]string{trustedDummy})
-	w.AddFolder(NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil))
-	w.AddFolder(NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil))
+	w.AddFolder(NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil, nil))
+	w.AddFolder(NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil, nil))
 
 	trusted, untrusted := w.GetFolderTrust()
 
@@ -58,11 +58,11 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil)
+	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
-	trustedFolder := NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil)
+	trustedFolder := NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil, nil)
 	w.AddFolder(trustedFolder)
-	untrustedFolder := NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil)
+	untrustedFolder := NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil, nil)
 	w.AddFolder(untrustedFolder)
 
 	w.TrustFoldersAndScan(context.Background(), []types.Folder{trustedFolder})
@@ -84,8 +84,8 @@ func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
 
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
-	w := New(c, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil)
-	toBeRemovedFolder := NewFolder(c, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, sc, nil, scanNotifier, notification.NewNotifier(), nil)
+	w := New(c, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil, nil)
+	toBeRemovedFolder := NewFolder(c, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, sc, nil, scanNotifier, notification.NewNotifier(), nil, nil)
 	w.AddFolder(toBeRemovedFolder)
 
 	c.SetTrustedFolderFeatureEnabled(true)

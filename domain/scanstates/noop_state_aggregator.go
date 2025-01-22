@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package aggregator
+package scanstates
 
 import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
-var _ StateAggregator = (*NoopStateAggregator)(nil)
+var _ Aggregator = (*NoopStateAggregator)(nil)
 
 type NoopStateAggregator struct {
 }
@@ -32,7 +32,7 @@ func (n NoopStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
 func (n NoopStateAggregator) Init(_ []string) {
 }
 
-func NewNoopStateAggregator() StateAggregator {
+func NewNoopStateAggregator() Aggregator {
 	return &NoopStateAggregator{}
 }
 

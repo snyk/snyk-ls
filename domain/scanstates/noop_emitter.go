@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package aggregator
+package scanstates
 
 type NoopEmitter struct {
 	Calls int
 }
 
-func (m *NoopEmitter) Emit(_ StateAggregator) {
+func (m *NoopEmitter) Emit(_ Aggregator) {
 	m.Calls++
 }

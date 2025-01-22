@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package aggregator
+package scanstates
 
 import (
 	"bytes"
@@ -50,7 +50,7 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 	}, nil
 }
 
-func (renderer *HtmlRenderer) GetSummaryHtml(stateAggregator StateAggregator) string {
+func (renderer *HtmlRenderer) GetSummaryHtml(stateAggregator Aggregator) string {
 	issueCount := renderer.getIssuesFromFolders()
 	data := map[string]interface{}{
 		"Styles":                            template.CSS(panelStylesTemplate),

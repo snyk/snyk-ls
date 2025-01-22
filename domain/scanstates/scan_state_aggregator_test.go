@@ -1,4 +1,4 @@
-package aggregator
+package scanstates
 
 import (
 	"errors"
@@ -22,10 +22,10 @@ func TestScanStateAggregator_Init(t *testing.T) {
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
+	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
 
@@ -48,10 +48,10 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
+	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
 
@@ -76,10 +76,10 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
+	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
 
@@ -103,10 +103,10 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
+	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
 
@@ -130,10 +130,10 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
+	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
 
@@ -166,10 +166,10 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil))
+	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
 

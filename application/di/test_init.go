@@ -22,7 +22,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 
-	"github.com/snyk/snyk-ls/domain/aggregator"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 
@@ -89,7 +89,7 @@ func TestInit(t *testing.T) {
 	learnService = learnMock
 	codeClientScanner := &code.FakeCodeScannerClient{}
 	scanPersister = persistence.NopScanPersister{}
-	stateAggregator = aggregator.NewNoopStateAggregator()
+	stateAggregator = scanstates.NewNoopStateAggregator()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)

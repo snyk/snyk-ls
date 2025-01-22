@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package aggregator
+package scanstates
 
 import (
 	"fmt"
@@ -25,7 +25,7 @@ import (
 )
 
 type ScanStateChangeEmitter interface {
-	Emit(aggregator StateAggregator)
+	Emit(aggregator Aggregator)
 }
 
 type Emitter struct {
@@ -48,7 +48,7 @@ func NewSummaryEmitter(n notification.Notifier, c *config.Config) *Emitter {
 	return emitter
 }
 
-func (s *Emitter) Emit(aggregator StateAggregator) {
+func (s *Emitter) Emit(aggregator Aggregator) {
 	generatedHtml := s.renderer.GetSummaryHtml(aggregator)
 	go s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
 }
