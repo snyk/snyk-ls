@@ -22,5 +22,5 @@ import (
 )
 
 type Provider interface {
-	GetDelta(p product.Product) (snyk.ProductIssuesByFile, error)
+	GetDelta(p product.Product) (snyk.IssuesByFile, error)
 }

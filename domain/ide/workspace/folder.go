@@ -474,14 +474,20 @@ func appendTestResults(sic snyk.SeverityIssueCounts, results []json_schemas.Test
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
-	productIssuesByFile, err := f.GetDelta(p)
-	if err != nil {
-		// Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
-		err = fmt.Errorf("couldn't determine the difference between current and base branch for %s scan. %w", p.ToProductNamesString(), err)
+	var filteringErr error
+	issueByFile := f.IssuesByProduct()[p]
+	if f.c.IsDeltaFindingsEnabled() {
+		deltaIssues, err := f.GetDelta(p)
+		issueByFile = deltaIssues
+		if err != nil {
+			// Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
+			filteringErr = fmt.Errorf("couldn't determine the difference between current and base branch for %s scan. %w", p.ToProductNamesString(), err)
+		}
 	}
+
 	// Trigger publishDiagnostics for all issues in Cache.
 	// Filtered issues will be sent with an empty slice if no issues exist.
-	filteredIssues := f.filterDiagnostics(productIssuesByFile[p])
+	filteredIssues := f.filterDiagnostics(issueByFile)
 	filteredIssuesToSend := snyk.IssuesByFile{}
 
 	for path := range f.IssuesByProduct()[p] {
@@ -491,19 +497,16 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 	for path, issues := range filteredIssues {
 		filteredIssuesToSend[path] = issues
 	}
-	f.publishDiagnostics(p, filteredIssuesToSend, err)
+	f.publishDiagnostics(p, filteredIssuesToSend, filteringErr)
 }
 
-func (f *Folder) GetDelta(p product.Product) (snyk.ProductIssuesByFile, error) {
+func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
-	productIssueByFile := f.IssuesByProduct()
-	if !f.c.IsDeltaFindingsEnabled() {
-		return productIssueByFile, nil
-	}
+	issueByFile := f.IssuesByProduct()[p]
 
-	if len(productIssueByFile[p]) == 0 {
+	if len(issueByFile) == 0 {
 		// If no issues found in current branch scan. We can't have deltas.
-		return productIssueByFile, nil
+		return issueByFile, nil
 	}
 
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
@@ -512,7 +515,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.ProductIssuesByFile, error) {
 		return nil, delta.ErrNoDeltaCalculated
 	}
 
-	currentFlatIssueList := getFlatIssueList(productIssueByFile, p)
+	currentFlatIssueList := getFlatIssueList(issueByFile)
 	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
 	for i := range baseIssueList {
 		baseFindingIdentifiable[i] = &baseIssueList[i]
@@ -527,7 +530,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.ProductIssuesByFile, error) {
 
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")
-		return productIssueByFile, delta.ErrNoDeltaCalculated
+		return issueByFile, delta.ErrNoDeltaCalculated
 	}
 
 	deltaSnykIssues := make([]snyk.Issue, len(diff))
@@ -538,13 +541,12 @@ func (f *Folder) GetDelta(p product.Product) (snyk.ProductIssuesByFile, error) {
 		}
 		deltaSnykIssues[i] = *issue
 	}
-	productIssueByFile[p] = getIssuePerFileFromFlatList(deltaSnykIssues)
+	issueByFile = getIssuePerFileFromFlatList(deltaSnykIssues)
 
-	return productIssueByFile, nil
+	return issueByFile, nil
 }
 
-func getFlatIssueList(productIssueByFile snyk.ProductIssuesByFile, p product.Product) []snyk.Issue {
-	issueByFile := productIssueByFile[p]
+func getFlatIssueList(issueByFile snyk.IssuesByFile) []snyk.Issue {
 	var currentFlatIssueList []snyk.Issue
 	for _, issueList := range issueByFile {
 		currentFlatIssueList = append(currentFlatIssueList, issueList...)

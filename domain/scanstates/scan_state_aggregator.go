@@ -66,12 +66,20 @@ type StateSnapshot struct {
 	AllScansSucceededWorkingDirectory bool
 	AnyScanErrorReference             bool
 	AnyScanErrorWorkingDirectory      bool
+	TotalScansCount                   int
+	ScansInProgressCount              int
+	ScansErrorCount                   int
+	ScansSuccessCount                 int
 }
 
 func (agg *ScanStateAggregator) StateSnapshot() StateSnapshot {
 	agg.mu.RLock()
 	defer agg.mu.RUnlock()
 
+	return agg.stateSnapshot()
+}
+
+func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
 	ss := StateSnapshot{
 		AllScansStartedReference:          agg.allScansStarted(true),
 		AllScansStartedWorkingDirectory:   agg.allScansStarted(false),
@@ -83,6 +91,10 @@ func (agg *ScanStateAggregator) StateSnapshot() StateSnapshot {
 		AllScansSucceededWorkingDirectory: agg.allScansSucceeded(false),
 		AnyScanErrorReference:             agg.anyScanError(true),
 		AnyScanErrorWorkingDirectory:      agg.anyScanError(false),
+		TotalScansCount:                   agg.totalScansCount(),
+		ScansInProgressCount:              agg.scansCountInState(InProgress),
+		ScansSuccessCount:                 agg.scansCountInState(Success),
+		ScansErrorCount:                   agg.scansCountInState(Error),
 	}
 	return ss
 }
@@ -103,16 +115,17 @@ func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter) Aggre
 
 func (agg *ScanStateAggregator) Init(folders []string) {
 	agg.mu.Lock()
-	agg.mu.Unlock()
+	defer agg.mu.Unlock()
 
 	for _, f := range folders {
 		agg.initForAllProducts(f)
 	}
 	// Emit after init to send first summary
-	agg.scanStateChangeEmitter.Emit(agg.StateSnapshot())
+	agg.scanStateChangeEmitter.Emit(agg.stateSnapshot())
 }
 
 func (agg *ScanStateAggregator) initForAllProducts(folderPath string) {
+	// TODO: Add or remove from the map if a product is on/off
 	agg.referenceScanStates[FolderProductKey{Product: product.ProductOpenSource, FolderPath: folderPath}] = &ScanState{Status: NotStarted}
 	agg.referenceScanStates[FolderProductKey{Product: product.ProductCode, FolderPath: folderPath}] = &ScanState{Status: NotStarted}
 	agg.referenceScanStates[FolderProductKey{Product: product.ProductInfrastructureAsCode, FolderPath: folderPath}] = &ScanState{Status: NotStarted}
@@ -129,7 +142,7 @@ func (agg *ScanStateAggregator) AddNewFolder(folderPath string) {
 
 	agg.initForAllProducts(folderPath)
 
-	agg.scanStateChangeEmitter.Emit(agg.StateSnapshot())
+	agg.scanStateChangeEmitter.Emit(agg.stateSnapshot())
 }
 
 // SetScanState changes the Status field of the existing state (or creates it if it doesn't exist).
@@ -160,7 +173,7 @@ func (agg *ScanStateAggregator) setScanState(folderPath string, p product.Produc
 	st.Status = newState.Status
 	st.Err = newState.Err
 
-	agg.scanStateChangeEmitter.Emit(agg.StateSnapshot())
+	agg.scanStateChangeEmitter.Emit(agg.stateSnapshot())
 }
 
 func (agg *ScanStateAggregator) SetScanDone(folderPath string, p product.Product, isReferenceScan bool, scanErr error) {
@@ -267,4 +280,26 @@ func (agg *ScanStateAggregator) anyScanError(isReference bool) bool {
 		}
 	}
 	return false
+}
+
+func (agg *ScanStateAggregator) totalScansCount() int {
+	scansCount := len(agg.referenceScanStates) + len(agg.workingDirectoryScanStates)
+	return scansCount
+}
+
+func (agg *ScanStateAggregator) scansCountInState(status ScanStatus) int {
+	count := 0
+
+	for _, st := range agg.workingDirectoryScanStates {
+		if st.Status == status {
+			count++
+		}
+	}
+	for _, st := range agg.referenceScanStates {
+		if st.Status == status {
+			count++
+		}
+	}
+
+	return count
 }

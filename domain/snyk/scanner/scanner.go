@@ -305,10 +305,16 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				processResults(data, true, true)
 				go func() {
 					defer referenceBranchScanWaitGroup.Done()
-					// TODO: implement proper context handling
-					sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
-					err := sc.scanBaseBranch(context.Background(), s, folderPath, gitCheckoutHandler)
-					sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
+					isFullScan := path == folderPath
+					if isFullScan {
+						// TODO: implement proper context handling
+						sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
+						err := sc.scanBaseBranch(context.Background(), s, folderPath, gitCheckoutHandler)
+						sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
+						if err != nil {
+							logger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
+						}
+					}
 					// TODO: is this a good idea?
 					data = snyk.ScanData{
 						Product: s.Product(),
@@ -316,9 +322,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 					}
 					processResults(data, false, false)
 					// TODO: where should we report errors ?
-					if err != nil {
-						logger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
-					}
 				}()
 
 				logger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))

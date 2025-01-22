@@ -49,6 +49,8 @@ func NewSummaryEmitter(c *config.Config, n notification.Notifier) *Emitter {
 }
 
 func (s *Emitter) Emit(state StateSnapshot) {
-	generatedHtml := s.renderer.GetSummaryHtml(state)
-	go s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
+	go func() {
+		generatedHtml := s.renderer.GetSummaryHtml(state)
+		s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
+	}()
 }

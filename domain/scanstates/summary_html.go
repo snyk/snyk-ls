@@ -21,9 +21,10 @@ import (
 	_ "embed"
 	"html/template"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
-
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/delta"
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 //go:embed template/details.html
@@ -53,11 +54,29 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 
 func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	logger := renderer.c.Logger().With().Str("method", "GetSummaryHtml").Logger()
-	issueCount := renderer.getIssuesFromFolders()
+	var allIssues []snyk.Issue
+	var deltaIssues []snyk.Issue
+	var currentIssuesFound int
+	var currentFixableIssueCount int
+	if state.AnyScanSucceededReference || state.AnyScanSucceededWorkingDirectory {
+		allIssues, deltaIssues = renderer.getIssuesFromFolders()
+		isDeltaEnabled := renderer.c.IsDeltaFindingsEnabled()
+
+		if isDeltaEnabled {
+			currentIssuesFound = len(deltaIssues)
+			currentFixableIssueCount = fixableIssueCount(deltaIssues)
+		} else {
+			currentIssuesFound = len(allIssues)
+			currentFixableIssueCount = fixableIssueCount(allIssues)
+		}
+	}
+
 	data := map[string]interface{}{
 		"Styles":                            template.CSS(summaryStylesTemplate),
-		"IssuesFound":                       issueCount,
-		"FixableIssueCount":                 7,
+		"IssuesFound":                       len(allIssues),
+		"NewIssuesFound":                    len(deltaIssues),
+		"CurrentIssuesFound":                currentIssuesFound,
+		"CurrentFixableIssueCount":          currentFixableIssueCount,
 		"AllScansStartedReference":          state.AllScansStartedReference,
 		"AllScansStartedWorkingDirectory":   state.AllScansStartedWorkingDirectory,
 		"AnyScanInProgressReference":        state.AnyScanInProgressReference,
@@ -68,6 +87,8 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 		"AllScansSucceededWorkingDirectory": state.AllScansSucceededWorkingDirectory,
 		"AnyScanErrorReference":             state.AnyScanErrorReference,
 		"AnyScanErrorWorkingDirectory":      state.AnyScanErrorWorkingDirectory,
+		"TotalScansCount":                   state.TotalScansCount,
+		"RunningScansCount":                 state.ScansSuccessCount + state.ScansErrorCount,
 	}
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
@@ -78,17 +99,56 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	return buffer.String()
 }
 
-func (renderer *HtmlRenderer) getIssuesFromFolders() int {
+func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []snyk.Issue, deltaIssues []snyk.Issue) {
+	logger := renderer.c.Logger().With().Str("method", "getIssuesFromFolders").Logger()
+
+	for _, f := range renderer.c.Workspace().Folders() {
+		if dp, ok := f.(delta.Provider); ok {
+			deltaIssues = append(deltaIssues, renderer.getDeltaIssuesForFolder(dp)...)
+		} else {
+			logger.Error().Msgf("Failed to get cast folder %s to interface delta.Provider", f.Name())
+		}
+
+		ip, ok := f.(snyk.IssueProvider)
+		if !ok {
+			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.IssueProvider", f.Name())
+			return allIssues, deltaIssues
+		}
+		for _, issues := range ip.Issues() {
+			allIssues = append(allIssues, issues...)
+		}
+	}
+
+	return allIssues, deltaIssues
+}
+
+func (renderer *HtmlRenderer) getDeltaIssuesForFolder(dp delta.Provider) []snyk.Issue {
 	var allIssues []snyk.Issue
 
-	ip, ok := renderer.c.Workspace().(snyk.IssueProvider)
-	if !ok {
-		return 0
-	}
+	allIssues = append(allIssues, getDeltaForProduct(product.ProductOpenSource, dp)...)
+	allIssues = append(allIssues, getDeltaForProduct(product.ProductCode, dp)...)
+	allIssues = append(allIssues, getDeltaForProduct(product.ProductInfrastructureAsCode, dp)...)
 
-	for _, issues := range ip.Issues() {
+	return allIssues
+}
+
+func getDeltaForProduct(p product.Product, dp delta.Provider) []snyk.Issue {
+	var allIssues []snyk.Issue
+	issuesByFile, err := dp.GetDelta(p)
+	if err != nil {
+		return allIssues
+	}
+	for _, issues := range issuesByFile {
 		allIssues = append(allIssues, issues...)
 	}
-	return len(allIssues)
+	return allIssues
+}
 
+func fixableIssueCount(issues []snyk.Issue) (fixableIssueCount int) {
+	for _, issue := range issues {
+		if issue.AdditionalData.IsFixable() {
+			fixableIssueCount++
+		}
+	}
+	return fixableIssueCount
 }
