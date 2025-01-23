@@ -97,6 +97,18 @@ func New(
 	}
 }
 
+func (w *Workspace) HandleConfigChange() {
+	for _, folder := range w.Folders() {
+		sendPublishDiagnosticsForAllProducts(folder)
+	}
+}
+
+func sendPublishDiagnosticsForAllProducts(folder types.Folder) {
+	folder.FilterAndPublishDiagnostics(product.ProductOpenSource)
+	folder.FilterAndPublishDiagnostics(product.ProductInfrastructureAsCode)
+	folder.FilterAndPublishDiagnostics(product.ProductCode)
+}
+
 func (w *Workspace) GetScanSnapshotClearerExister() types.ScanSnapshotClearerExister {
 	return w.scanPersister
 }

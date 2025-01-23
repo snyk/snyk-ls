@@ -30,9 +30,11 @@ type ScanData struct {
 	TimestampFinished time.Time
 	Path              string
 	IsDeltaScan       bool
+	SendAnalytics     bool
+	UpdateGlobalCache bool
 }
 
-type ScanResultProcessor = func(scanData ScanData, sendAnalytics bool, updateGlobalCache bool)
+type ScanResultProcessor = func(scanData ScanData)
 
 type SeverityIssueCounts map[Severity]IssueCount
 type IssueCount struct {
@@ -41,7 +43,7 @@ type IssueCount struct {
 	Ignored int
 }
 
-func NoopResultProcessor(_ ScanData, _ bool, _ bool) {}
+func NoopResultProcessor(_ ScanData) {}
 
 func (s ScanData) GetSeverityIssueCounts() SeverityIssueCounts {
 	sic := make(SeverityIssueCounts)

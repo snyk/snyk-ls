@@ -295,6 +295,8 @@ func (sc *DelegatingConcurrentScanner) Scan(
 					DurationMs:        time.Duration(scanSpan.GetDurationMs()),
 					TimestampFinished: time.Now().UTC(),
 					Path:              folderPath,
+					SendAnalytics:     true,
+					UpdateGlobalCache: true,
 				}
 				deltaScanEnabled, deltaScanner := isDeltaScanEnabled(s)
 				// in case of delta scans, we add additional fields
@@ -302,7 +304,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 					data.IsDeltaScan = deltaScanner.DeltaScanningEnabled()
 				}
 
-				processResults(data, true, true)
+				processResults(data)
 				go func() {
 					defer referenceBranchScanWaitGroup.Done()
 					isFullScan := path == folderPath
@@ -317,10 +319,12 @@ func (sc *DelegatingConcurrentScanner) Scan(
 					}
 					// TODO: is this a good idea?
 					data = snyk.ScanData{
-						Product: s.Product(),
-						Path:    gitCheckoutHandler.BaseFolderPath(),
+						Product:           s.Product(),
+						Path:              gitCheckoutHandler.BaseFolderPath(),
+						SendAnalytics:     false,
+						UpdateGlobalCache: false,
 					}
-					processResults(data, false, false)
+					processResults(data)
 					// TODO: where should we report errors ?
 				}()
 

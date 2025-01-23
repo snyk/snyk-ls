@@ -305,20 +305,16 @@ func (f *Folder) scan(ctx context.Context, path string) {
 	f.scanner.Scan(ctx, path, f.processResults, f.path)
 }
 
-func (f *Folder) processResults(scanData snyk.ScanData, triggerSendAnalytics bool, updateGlobalCache bool) {
+func (f *Folder) processResults(scanData snyk.ScanData) {
 	if scanData.Err != nil {
 		f.sendScanError(scanData.Product, scanData.Err)
 		return
 	}
 
-	if updateGlobalCache {
-		// this also updates the severity counts in scan data, therefore we pass a pointer
-		f.updateGlobalCacheAndSeverityCounts(&scanData)
-	}
+	// this also updates the severity counts in scan data, therefore we pass a pointer
+	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
-	if triggerSendAnalytics {
-		go sendAnalytics(f.c, &scanData)
-	}
+	go sendAnalytics(f.c, &scanData)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(scanData.Product)
@@ -334,6 +330,9 @@ func (f *Folder) sendScanError(product product.Product, err error) {
 }
 
 func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
+	if !scanData.UpdateGlobalCache {
+		return
+	}
 	var newCache = snyk.IssuesByFile{}
 	var dedupMap = map[string]bool{}
 	for _, issue := range scanData.Issues {
@@ -380,6 +379,9 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *snyk.ScanData) {
 
 func sendAnalytics(c *config.Config, data *snyk.ScanData) {
 	logger := c.Logger().With().Str("method", "folder.sendAnalytics").Logger()
+	if !data.SendAnalytics {
+		return
+	}
 	if data.Product == "" {
 		logger.Debug().Any("data", data).Msg("Skipping analytics for empty product")
 		return

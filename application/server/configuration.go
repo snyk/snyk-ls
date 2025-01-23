@@ -31,7 +31,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
-	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -248,7 +247,7 @@ func updateDeltaFindings(c *config.Config, settings types.Settings) {
 
 	modified := c.SetDeltaFindingsEnabled(enable)
 	if modified {
-		sendDiagnosticsForAllProducts(c)
+		sendWorkspaceConfigChanged(c)
 	}
 }
 
@@ -395,20 +394,14 @@ func updateSeverityFilter(c *config.Config, s types.SeverityFilter) {
 	modified := c.SetSeverityFilter(s)
 
 	if modified {
-		sendDiagnosticsForAllProducts(c)
+		sendWorkspaceConfigChanged(c)
 	}
 }
 
-func sendDiagnosticsForAllProducts(c *config.Config) {
+func sendWorkspaceConfigChanged(c *config.Config) {
 	ws := c.Workspace()
 	if ws == nil {
 		return
 	}
-
-	for _, folder := range ws.Folders() {
-		folder.FilterAndPublishDiagnostics(product.ProductOpenSource)
-		folder.FilterAndPublishDiagnostics(product.ProductInfrastructureAsCode)
-		folder.FilterAndPublishDiagnostics(product.ProductCode)
-		folder.FilterAndPublishDiagnostics(product.ProductContainer)
-	}
+	ws.HandleConfigChange()
 }

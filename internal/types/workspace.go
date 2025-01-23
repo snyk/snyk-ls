@@ -50,6 +50,7 @@ type Workspace interface {
 	GetFolderTrust() (trusted []Folder, untrusted []Folder)
 	ClearIssuesByType(removedType product.FilterableIssueType)
 	TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []Folder)
+	HandleConfigChange()
 }
 
 type Folder interface {
