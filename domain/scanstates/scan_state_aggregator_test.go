@@ -6,32 +6,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestScanStateAggregator_Init(t *testing.T) {
 	c := testutil.UnitTest(t)
+	const folderPath = "/path/to/folder"
 
 	emitter := &NoopEmitter{}
-	const folderPath = "/path/to/folder"
-	sc := &scanner.TestScanner{}
-	scanNotifier := scanner.NewMockScanNotifier()
-	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
+	agg.Init([]string{folderPath})
 
 	// 3) Validate initial states
-	assert.True(t, agg.allScansStarted(true))
-	assert.True(t, agg.allScansStarted(false))
+	assert.False(t, agg.allScansStarted(true))
+	assert.False(t, agg.allScansStarted(false))
 	assert.False(t, agg.anyScanInProgress(true))
 	assert.False(t, agg.anyScanInProgress(false))
 	assert.False(t, agg.allScansSucceeded(true))
@@ -45,20 +35,15 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
-	sc := &scanner.TestScanner{}
-	scanNotifier := scanner.NewMockScanNotifier()
-	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
+	agg.Init([]string{folderPath, "/path/to/folder2"})
 
 	newState := ScanState{
 		Status: InProgress,
 		Err:    nil,
 	}
+
 	agg.SetScanState(folderPath, product.ProductOpenSource, false, newState)
 
 	// Emitter should have been called once
@@ -73,15 +58,9 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
-	sc := &scanner.TestScanner{}
-	scanNotifier := scanner.NewMockScanNotifier()
-	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
+	agg.Init([]string{folderPath})
 
 	doneState := ScanState{
 		Status: Success,
@@ -100,15 +79,9 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
-	sc := &scanner.TestScanner{}
-	scanNotifier := scanner.NewMockScanNotifier()
-	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
+	agg.Init([]string{folderPath})
 
 	errState := ScanState{
 		Status: Error,
@@ -127,15 +100,9 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
-	sc := &scanner.TestScanner{}
-	scanNotifier := scanner.NewMockScanNotifier()
-	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
+	agg.Init([]string{folderPath})
 
 	doneState := ScanState{
 		Status: Success,
@@ -163,15 +130,9 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
-	sc := &scanner.TestScanner{}
-	scanNotifier := scanner.NewMockScanNotifier()
-	notifier := notification.NewNotifier()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]string{folderPath})
-	w.AddFolder(workspace.NewFolder(c, folderPath, folderPath, sc, nil, scanNotifier, notifier, nil, nil))
 
 	agg := NewScanStateAggregator(c, emitter)
+	agg.Init([]string{folderPath})
 
 	doneState := ScanState{
 		Status: Success,
