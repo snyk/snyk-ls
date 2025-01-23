@@ -403,5 +403,5 @@ func sendWorkspaceConfigChanged(c *config.Config) {
 	if ws == nil {
 		return
 	}
-	ws.HandleConfigChange()
+	go ws.HandleConfigChange()
 }

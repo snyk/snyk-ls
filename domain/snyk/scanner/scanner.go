@@ -307,9 +307,8 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				processResults(data)
 				go func() {
 					defer referenceBranchScanWaitGroup.Done()
-					isFullScan := path == folderPath
-					if isFullScan {
-						// TODO: implement proper context handling
+					isReferenceScanNeeded := path == folderPath
+					if isReferenceScanNeeded {
 						sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
 						err := sc.scanBaseBranch(context.Background(), s, folderPath, gitCheckoutHandler)
 						sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
@@ -317,7 +316,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 							logger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
 						}
 					}
-					// TODO: is this a good idea?
 					data = snyk.ScanData{
 						Product:           s.Product(),
 						Path:              gitCheckoutHandler.BaseFolderPath(),
@@ -325,7 +323,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 						UpdateGlobalCache: false,
 					}
 					processResults(data)
-					// TODO: where should we report errors ?
 				}()
 
 				logger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))

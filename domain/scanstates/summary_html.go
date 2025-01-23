@@ -58,9 +58,10 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	var deltaIssues []snyk.Issue
 	var currentIssuesFound int
 	var currentFixableIssueCount int
+	isDeltaEnabled := renderer.c.IsDeltaFindingsEnabled()
+
 	if state.AnyScanSucceededReference || state.AnyScanSucceededWorkingDirectory {
 		allIssues, deltaIssues = renderer.getIssuesFromFolders()
-		isDeltaEnabled := renderer.c.IsDeltaFindingsEnabled()
 
 		if isDeltaEnabled {
 			currentIssuesFound = len(deltaIssues)
@@ -89,6 +90,7 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 		"AnyScanErrorWorkingDirectory":      state.AnyScanErrorWorkingDirectory,
 		"TotalScansCount":                   state.TotalScansCount,
 		"RunningScansCount":                 state.ScansSuccessCount + state.ScansErrorCount,
+		"IsDeltaEnabled":                    isDeltaEnabled,
 	}
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {

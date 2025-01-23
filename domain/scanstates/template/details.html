@@ -25,11 +25,11 @@
 <body>
 <div class="snx-header">
   <div class="snx-switch-container {{if or .AnyScanInProgressReference .AnyScanInProgressWorkingDirectory}} is-loading{{end}}" id="switchContainer">
-    <input type="radio" id="totalIssues" name="issueType" value="total" class="snx-switch-input" checked>
+    <input type="radio" id="totalIssues" name="issueType" value="total" class="snx-switch-input"{{if not .IsDeltaEnabled}} checked{{end}}>
     <label for="totalIssues" class="snx-switch-label">{{.IssuesFound}} total</label>
 
     {{if .AnyScanSucceededReference}}
-    <input type="radio" id="newIssues" name="issueType" value="new" class="snx-switch-input">
+    <input type="radio" id="newIssues" name="issueType" value="new" class="snx-switch-input" {{if .IsDeltaEnabled}} checked{{end}}>
     <label for="newIssues" class="snx-switch-label">{{.NewIssuesFound}} new</label>
     {{end}}
   </div>
