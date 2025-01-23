@@ -23,7 +23,17 @@
   ${ideStyle}
 </head>
 <body>
-<div class="snx-header ">
+<div class="snx-header">
+  <div class="snx-switch-container {{if or .AnyScanInProgressReference .AnyScanInProgressWorkingDirectory}} is-loading{{end}}" id="switchContainer">
+    <input type="radio" id="totalIssues" name="issueType" value="total" class="snx-switch-input" checked>
+    <label for="totalIssues" class="snx-switch-label">{{.IssuesFound}} total</label>
+
+    {{if .AnyScanSucceededReference}}
+    <input type="radio" id="newIssues" name="issueType" value="new" class="snx-switch-input">
+    <label for="newIssues" class="snx-switch-label">{{.NewIssuesFound}} new</label>
+    {{end}}
+  </div>
+
   {{if or .AnyScanInProgressReference .AnyScanInProgressWorkingDirectory}}
   <div class="snx-content">
     <h2 class="snx-title snx-h2">Snyk is scanning for issues...</h2>
@@ -32,18 +42,15 @@
       <strong class="snx-highlight"> {{.RunningScansCount}}/{{.TotalScansCount}} </strong> base &amp; reference scans
     </p>
   </div>
-  {{end}}
-
-  {{if or .AnyScanSucceededReference .AnyScanSucceededWorkingDirectory}}
-  <div class="snx-actions">
-    <div class="snx-toggle">
-      {{.IssuesFound}} total issues
-      {{if .AnyScanSucceededReference}}
-      {{.NewIssuesFound}} new issues
-      {{end}}
-    </div>
+  {{else if and .AllScansSucceededReference .AllScansSucceededWorkingDirectory}}
+  <div class="snx-content">
+    <h2 class="snx-title snx-h2">Snyk found the following issues:</h2>
+    <p class="snx-message is-dimmed">
+      ✅ All scans are completed.
+    </p>
   </div>
   {{end}}
+
 </div>
 
 <div class="snx-summary">
