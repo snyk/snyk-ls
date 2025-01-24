@@ -186,12 +186,9 @@ func (f *Folder) ClearIssues(path string) {
 		}
 	}
 
-	// send global cache evictions
-	f.documentDiagnosticCache.Range(func(path string, _ []snyk.Issue) bool {
-		f.documentDiagnosticCache.Delete(path)
-		f.sendEmptyDiagnosticForFile(path) // this is done automatically by the scanner removal handler (we hope)
-		return true
-	})
+	f.documentDiagnosticCache.Delete(path)
+	f.sendEmptyDiagnosticForFile(path) // this is done automatically by the scanner removal handler (we hope)
+
 	// let scanner-local cache handle its own stuff
 	if cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider); isCacheProvider {
 		if f.Contains(path) {
@@ -535,7 +532,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	df := delta2.NewDeltaFinderForProduct(p)
-	diff, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
+	diff, err := df.Enrich(baseFindingIdentifiable, currentFindingIdentifiable)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")
