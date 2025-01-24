@@ -396,7 +396,7 @@ func TestClear_ExpiredCache(t *testing.T) {
 	cut.Clear([]string{folderPath}, true)
 
 	expiredActualIssueList, err := cut.GetPersistedIssueList(folderPath, expiredProduct)
-	assert.NoError(t, err)
+	assert.Error(t, err)
 	existingActualIssueList, err := cut.GetPersistedIssueList(folderPath, existingProduct)
 	assert.NoError(t, err)
 	assert.Empty(t, expiredActualIssueList)

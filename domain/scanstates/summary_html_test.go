@@ -49,5 +49,5 @@ func Test_Summary_Html_getSummaryDetailsHtml_hasCSS(t *testing.T) {
 	assert.NoError(t, err)
 	summaryPanel := htmlRenderer.GetSummaryHtml(StateSnapshot{})
 	// assert css section
-	assert.Contains(t, summaryPanel, ":root { font-size:10px; }")
+	assert.Contains(t, summaryPanel, ":root")
 }

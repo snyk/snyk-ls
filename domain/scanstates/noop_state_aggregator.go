@@ -30,7 +30,7 @@ func (n NoopStateAggregator) StateSnapshot() StateSnapshot {
 }
 
 func (n NoopStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
-	return nil
+	return &NoopEmitter{}
 }
 
 func (n NoopStateAggregator) Init(_ []string) {

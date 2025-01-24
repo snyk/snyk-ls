@@ -59,8 +59,10 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hoverRecorder, scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
 
 	data := snyk.ScanData{
-		Product: "",
-		Issues:  []snyk.Issue{},
+		Product:           "",
+		Issues:            []snyk.Issue{},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 	f.processResults(data)
 
@@ -79,6 +81,8 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 			NewMockIssue("id1", path1),
 			NewMockIssue("id2", path2),
 		},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 	f.ScanFolder(context.Background())
 	f.processResults(data)
@@ -101,6 +105,8 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 			NewMockIssue("id1", filePath),
 			NewMockIssue("id2", filePath),
 		},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 	f.processResults(data)
 
@@ -122,6 +128,8 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 			NewMockIssue("id2", path2),
 			NewMockIssue("id3", path3),
 		},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 	f.processResults(data)
 
@@ -143,6 +151,8 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 			NewMockIssue("id2", path1),
 			NewMockIssue("id3", path1),
 		},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 	f.processResults(data)
 
@@ -174,6 +184,8 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 			issue4,
 			issue5,
 		},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 	f.processResults(data)
 
@@ -201,6 +213,8 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 			NewMockIssueWithSeverity("id4", filepath.Join(f.path, path1), snyk.Low),
 			NewMockIssueWithSeverity("id5", filepath.Join(f.path, path1), snyk.Critical),
 		},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 	f.processResults(data)
 
@@ -243,6 +257,8 @@ func Test_Clear(t *testing.T) {
 			NewMockIssue("id1", path1),
 			NewMockIssue("id2", path2),
 		},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 	f.processResults(data)
 	mtx := &sync.Mutex{}
@@ -392,6 +408,8 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 			mockIacIssue,
 			mockOpenSourceIssue,
 		},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 	f.processResults(data)
 	const expectedIssuesCountAfterRemoval = 1
@@ -421,8 +439,10 @@ func Test_processResults_ShouldSendSuccess(t *testing.T) {
 	mockCodeIssue := NewMockIssue("id1", filepath.Join(f.path, path))
 
 	data := snyk.ScanData{
-		Product: product.ProductOpenSource,
-		Issues:  []snyk.Issue{mockCodeIssue},
+		Product:           product.ProductOpenSource,
+		Issues:            []snyk.Issue{mockCodeIssue},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 	// Act
 	f.processResults(data)
@@ -444,7 +464,9 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 		Issues: []snyk.Issue{
 			mockCodeIssue,
 		},
-		Err: errors.New("test error"),
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
+		Err:               errors.New("test error"),
 	} // Act
 	f.processResults(data)
 
@@ -467,8 +489,10 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	mockCodeIssue := NewMockIssue("id1", filePath)
 
 	data := snyk.ScanData{
-		Product: product.ProductOpenSource,
-		Issues:  []snyk.Issue{mockCodeIssue},
+		Product:           product.ProductOpenSource,
+		Issues:            []snyk.Issue{mockCodeIssue},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 
 	ic := analytics.NewInstrumentationCollector()
@@ -537,6 +561,8 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 			{Severity: snyk.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
 			{Severity: snyk.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
 		},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 
 	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
