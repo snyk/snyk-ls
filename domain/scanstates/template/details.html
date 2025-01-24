@@ -42,7 +42,7 @@
       <strong class="snx-highlight"> {{.RunningScansCount}}/{{.TotalScansCount}} </strong> base &amp; reference scans
     </p>
   </div>
-  {{else if and .AllScansSucceededReference .AllScansSucceededWorkingDirectory}}
+  {{else}}
   <div class="snx-content">
     <h2 class="snx-title snx-h2">Snyk found the following issues:</h2>
     <p class="snx-message is-dimmed">

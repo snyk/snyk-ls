@@ -394,6 +394,7 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s sny
 	}
 
 	if err != nil {
+		logger.Error().Err(err).Msgf("skipping base scan persistence in %s %v", folderPath, err)
 		return err
 	}
 
