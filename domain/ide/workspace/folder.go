@@ -75,7 +75,7 @@ type Folder struct {
 	notifier                noti.Notifier
 	c                       *config.Config
 	scanPersister           persistence.ScanSnapshotPersister
-	stateAggregator         scanstates.Aggregator
+	scanStateAggregator     scanstates.Aggregator
 }
 
 func (f *Folder) Issue(key string) snyk.Issue {
@@ -198,7 +198,6 @@ func (f *Folder) ClearIssues(path string) {
 			cacheProvider.ClearIssues(path)
 		}
 	}
-
 }
 
 func (f *Folder) clearScannedStatus() {
@@ -251,19 +250,19 @@ func NewFolder(
 	scanNotifier scanner.ScanNotifier,
 	notifier noti.Notifier,
 	scanPersister persistence.ScanSnapshotPersister,
-	stateAggregator scanstates.Aggregator,
+	scanStateAggregator scanstates.Aggregator,
 ) *Folder {
 	folder := Folder{
-		scanner:         scanner,
-		path:            strings.TrimSuffix(path, "/"),
-		name:            name,
-		status:          Unscanned,
-		hoverService:    hoverService,
-		scanNotifier:    scanNotifier,
-		notifier:        notifier,
-		c:               c,
-		scanPersister:   scanPersister,
-		stateAggregator: stateAggregator,
+		scanner:             scanner,
+		path:                strings.TrimSuffix(path, "/"),
+		name:                name,
+		status:              Unscanned,
+		hoverService:        hoverService,
+		scanNotifier:        scanNotifier,
+		notifier:            notifier,
+		c:                   c,
+		scanPersister:       scanPersister,
+		scanStateAggregator: scanStateAggregator,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[string, []snyk.Issue]()
 	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
@@ -623,7 +622,7 @@ func isVisibleSeverity(c *config.Config, issue snyk.Issue) bool {
 }
 
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile, err error) {
-	f.stateAggregator.SummaryEmitter().Emit(f.stateAggregator.StateSnapshot())
+	f.scanStateAggregator.SummaryEmitter().Emit(f.scanStateAggregator.StateSnapshot())
 	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
 	if err != nil {

@@ -40,9 +40,9 @@ func Test_ClearCache_DeleteAll_NoError(t *testing.T) {
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewGitPersistenceProvider(c.Logger())
-	stateAggregator := scanstates.NewNoopStateAggregator()
-	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, stateAggregator)
-	folder := workspace.NewFolder(c, "dummy", "dummy", sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, stateAggregator)
+	scanStateAggregator := scanstates.NewNoopStateAggregator()
+	w := workspace.New(c, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator)
+	folder := workspace.NewFolder(c, "dummy", "dummy", sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator)
 	w.AddFolder(folder)
 	c.SetWorkspace(w)
 
