@@ -21,7 +21,7 @@ import "github.com/snyk/snyk-ls/internal/product"
 type Aggregator interface {
 	Init(folders []string)
 	AddNewFolder(folderPath string)
-	SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState ScanState)
+	SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState scanState)
 	SetScanDone(folderPath string, p product.Product, isReferenceScan bool, scanErr error)
 	SetScanInProgress(folderPath string, p product.Product, isReferenceScan bool)
 	allScansStarted(isReference bool) bool

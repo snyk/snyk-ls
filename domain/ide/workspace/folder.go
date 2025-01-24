@@ -176,6 +176,16 @@ func (f *Folder) Clear() {
 }
 
 func (f *Folder) ClearIssues(path string) {
+	// Delete hovers
+	for p := range f.IssuesByProduct() {
+		for filePath := range f.IssuesByProduct()[p] {
+			if filePath != path {
+				continue
+			}
+			f.hoverService.DeleteHover(p, path)
+		}
+	}
+
 	// send global cache evictions
 	f.documentDiagnosticCache.Range(func(path string, _ []snyk.Issue) bool {
 		f.documentDiagnosticCache.Delete(path)
@@ -189,8 +199,6 @@ func (f *Folder) ClearIssues(path string) {
 		}
 	}
 
-	// hovers must be deleted, too
-	f.hoverService.DeleteHover(path)
 }
 
 func (f *Folder) clearScannedStatus() {
@@ -212,7 +220,7 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 			if f.Contains(filePath) {
 				f.documentDiagnosticCache.Store(filePath, newIssues)
 				f.sendDiagnosticsForFile(filePath, newIssues)
-				f.sendHoversForFile(filePath, newIssues)
+				f.sendHoversForFile(removedType.ToProduct(), filePath, newIssues)
 			} else {
 				panic("this should never happen")
 			}
@@ -614,14 +622,14 @@ func isVisibleSeverity(c *config.Config, issue snyk.Issue) bool {
 	return false
 }
 
-func (f *Folder) publishDiagnostics(product product.Product, issuesByFile snyk.IssuesByFile, err error) {
+func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile, err error) {
 	f.stateAggregator.SummaryEmitter().Emit(f.stateAggregator.StateSnapshot())
-	f.sendHovers(issuesByFile)
+	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
 	if err != nil {
-		f.sendScanError(product, err)
+		f.sendScanError(p, err)
 	} else {
-		f.sendSuccess(product)
+		f.sendSuccess(p)
 	}
 }
 
@@ -647,14 +655,18 @@ func (f *Folder) sendDiagnosticsForFile(path string, issues []snyk.Issue) {
 	})
 }
 
-func (f *Folder) sendHovers(issuesByFile snyk.IssuesByFile) {
+func (f *Folder) sendHovers(p product.Product, issuesByFile snyk.IssuesByFile) {
 	for path, issues := range issuesByFile {
-		f.sendHoversForFile(path, issues)
+		if len(issues) == 0 {
+			f.hoverService.DeleteHover(p, path)
+		} else {
+			f.sendHoversForFile(p, path, issues)
+		}
 	}
 }
 
-func (f *Folder) sendHoversForFile(path string, issues []snyk.Issue) {
-	f.hoverService.Channel() <- converter.ToHoversDocument(path, issues)
+func (f *Folder) sendHoversForFile(p product.Product, path string, issues []snyk.Issue) {
+	f.hoverService.Channel() <- converter.ToHoversDocument(p, path, issues)
 }
 
 func (f *Folder) Path() string { return f.path }

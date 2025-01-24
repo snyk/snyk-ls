@@ -386,10 +386,11 @@ func getCodeIssue(issue snyk.Issue) types.ScanIssue {
 	return scanIssue
 }
 
-func ToHoversDocument(path string, issues []snyk.Issue) hover.DocumentHovers {
+func ToHoversDocument(p product.Product, path string, issues []snyk.Issue) hover.DocumentHovers {
 	return hover.DocumentHovers{
-		Path:  path,
-		Hover: ToHovers(issues),
+		Path:    path,
+		Hover:   ToHovers(issues),
+		Product: p,
 	}
 }
 

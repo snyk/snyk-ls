@@ -23,34 +23,34 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
-// FolderProductKey identifies a unique (FolderPath, ProductName) pair.
-type FolderProductKey struct {
+// folderProductKey identifies a unique (FolderPath, ProductName) pair.
+type folderProductKey struct {
 	FolderPath string
 	Product    product.Product
 }
 
-type ScanStatus string
+type scanStatus string
 
 const (
-	NotStarted ScanStatus = "NOT_STARTED"
-	InProgress ScanStatus = "IN_PROGRESS"
-	Success    ScanStatus = "SUCCESS"
-	Error      ScanStatus = "ERROR"
+	NotStarted scanStatus = "NOT_STARTED"
+	InProgress scanStatus = "IN_PROGRESS"
+	Success    scanStatus = "SUCCESS"
+	Error      scanStatus = "ERROR"
 )
 
-// ScanState describes the state for one scan (per folder+product).
-type ScanState struct {
-	Status ScanStatus
+// scanState describes the state for one scan (per folder+product).
+type scanState struct {
+	Status scanStatus
 	Err    error
 }
 
-type ScanStateMap map[FolderProductKey]*ScanState
+type scanStateMap map[folderProductKey]*scanState
 
 // ScanStateAggregator stores and manages the scan states for working directory and reference scans.
 type ScanStateAggregator struct {
 	mu                         sync.RWMutex
-	referenceScanStates        ScanStateMap
-	workingDirectoryScanStates ScanStateMap
+	referenceScanStates        scanStateMap
+	workingDirectoryScanStates scanStateMap
 	scanStateChangeEmitter     ScanStateChangeEmitter
 	c                          *config.Config
 }
@@ -106,8 +106,8 @@ func (agg *ScanStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
 // NewScanStateAggregator constructs a new scanstates.
 func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter) Aggregator {
 	return &ScanStateAggregator{
-		referenceScanStates:        make(ScanStateMap),
-		workingDirectoryScanStates: make(ScanStateMap),
+		referenceScanStates:        make(scanStateMap),
+		workingDirectoryScanStates: make(scanStateMap),
 		scanStateChangeEmitter:     ssce,
 		c:                          c,
 	}
@@ -126,13 +126,13 @@ func (agg *ScanStateAggregator) Init(folders []string) {
 
 func (agg *ScanStateAggregator) initForAllProducts(folderPath string) {
 	// TODO: Add or remove from the map if a product is on/off
-	agg.referenceScanStates[FolderProductKey{Product: product.ProductOpenSource, FolderPath: folderPath}] = &ScanState{Status: NotStarted}
-	agg.referenceScanStates[FolderProductKey{Product: product.ProductCode, FolderPath: folderPath}] = &ScanState{Status: NotStarted}
-	agg.referenceScanStates[FolderProductKey{Product: product.ProductInfrastructureAsCode, FolderPath: folderPath}] = &ScanState{Status: NotStarted}
+	agg.referenceScanStates[folderProductKey{Product: product.ProductOpenSource, FolderPath: folderPath}] = &scanState{Status: NotStarted}
+	agg.referenceScanStates[folderProductKey{Product: product.ProductCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
+	agg.referenceScanStates[folderProductKey{Product: product.ProductInfrastructureAsCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 
-	agg.workingDirectoryScanStates[FolderProductKey{Product: product.ProductOpenSource, FolderPath: folderPath}] = &ScanState{Status: NotStarted}
-	agg.workingDirectoryScanStates[FolderProductKey{Product: product.ProductCode, FolderPath: folderPath}] = &ScanState{Status: NotStarted}
-	agg.workingDirectoryScanStates[FolderProductKey{Product: product.ProductInfrastructureAsCode, FolderPath: folderPath}] = &ScanState{Status: NotStarted}
+	agg.workingDirectoryScanStates[folderProductKey{Product: product.ProductOpenSource, FolderPath: folderPath}] = &scanState{Status: NotStarted}
+	agg.workingDirectoryScanStates[folderProductKey{Product: product.ProductCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
+	agg.workingDirectoryScanStates[folderProductKey{Product: product.ProductInfrastructureAsCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 }
 
 // AddNewFolder adds new folder to the state scanstates map with initial NOT_STARTED state
@@ -146,18 +146,18 @@ func (agg *ScanStateAggregator) AddNewFolder(folderPath string) {
 }
 
 // SetScanState changes the Status field of the existing state (or creates it if it doesn't exist).
-func (agg *ScanStateAggregator) SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState ScanState) {
+func (agg *ScanStateAggregator) SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState scanState) {
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
 
 	agg.setScanState(folderPath, p, isReferenceScan, newState)
 }
 
-func (agg *ScanStateAggregator) setScanState(folderPath string, p product.Product, isReferenceScan bool, newState ScanState) {
+func (agg *ScanStateAggregator) setScanState(folderPath string, p product.Product, isReferenceScan bool, newState scanState) {
 	logger := agg.c.Logger().With().Str("method", "SetScanState").Logger()
 
-	key := FolderProductKey{FolderPath: folderPath, Product: p}
-	var st *ScanState
+	key := folderProductKey{FolderPath: folderPath, Product: p}
+	var st *scanState
 	var exists bool
 	if isReferenceScan {
 		st, exists = agg.referenceScanStates[key]
@@ -180,7 +180,7 @@ func (agg *ScanStateAggregator) SetScanDone(folderPath string, p product.Product
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
 
-	state := ScanState{}
+	state := scanState{}
 	if scanErr != nil {
 		state.Status = Error
 		state.Err = scanErr
@@ -195,7 +195,7 @@ func (agg *ScanStateAggregator) SetScanInProgress(folderPath string, p product.P
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
 
-	state := ScanState{
+	state := scanState{
 		Status: InProgress,
 	}
 
@@ -203,31 +203,31 @@ func (agg *ScanStateAggregator) SetScanInProgress(folderPath string, p product.P
 }
 
 func (agg *ScanStateAggregator) allScansStarted(isReference bool) bool {
-	return agg.allMatch(isReference, func(st *ScanState) bool {
+	return agg.allMatch(isReference, func(st *scanState) bool {
 		return st.Status != NotStarted
 	})
 }
 
 func (agg *ScanStateAggregator) anyScanInProgress(isReference bool) bool {
-	return agg.anyMatch(isReference, func(st *ScanState) bool {
+	return agg.anyMatch(isReference, func(st *scanState) bool {
 		return st.Status == InProgress
 	})
 }
 
 func (agg *ScanStateAggregator) anyScanSucceeded(isReference bool) bool {
-	return agg.anyMatch(isReference, func(st *ScanState) bool {
+	return agg.anyMatch(isReference, func(st *scanState) bool {
 		return st.Status == Success
 	})
 }
 
 func (agg *ScanStateAggregator) allScansSucceeded(isReference bool) bool {
-	return agg.allMatch(isReference, func(st *ScanState) bool {
+	return agg.allMatch(isReference, func(st *scanState) bool {
 		return st.Status == Success && st.Err == nil
 	})
 }
 
 func (agg *ScanStateAggregator) anyScanError(isReference bool) bool {
-	return agg.anyMatch(isReference, func(st *ScanState) bool {
+	return agg.anyMatch(isReference, func(st *scanState) bool {
 		return st.Status == Error
 	})
 }
@@ -237,7 +237,7 @@ func (agg *ScanStateAggregator) totalScansCount() int {
 	return scansCount
 }
 
-func (agg *ScanStateAggregator) scansCountInState(status ScanStatus) int {
+func (agg *ScanStateAggregator) scansCountInState(status scanStatus) int {
 	count := 0
 
 	for _, st := range agg.workingDirectoryScanStates {
@@ -254,8 +254,8 @@ func (agg *ScanStateAggregator) scansCountInState(status ScanStatus) int {
 	return count
 }
 
-func (agg *ScanStateAggregator) anyMatch(isReference bool, predicate func(*ScanState) bool) bool {
-	var stateMap ScanStateMap
+func (agg *ScanStateAggregator) anyMatch(isReference bool, predicate func(*scanState) bool) bool {
+	var stateMap scanStateMap
 	if isReference {
 		stateMap = agg.referenceScanStates
 	} else {
@@ -270,8 +270,8 @@ func (agg *ScanStateAggregator) anyMatch(isReference bool, predicate func(*ScanS
 	return false
 }
 
-func (agg *ScanStateAggregator) allMatch(isReference bool, predicate func(*ScanState) bool) bool {
-	var stateMap ScanStateMap
+func (agg *ScanStateAggregator) allMatch(isReference bool, predicate func(*scanState) bool) bool {
+	var stateMap scanStateMap
 	if isReference {
 		stateMap = agg.referenceScanStates
 	} else {

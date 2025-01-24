@@ -43,7 +43,7 @@ func NewNoopStateAggregator() Aggregator {
 func (n NoopStateAggregator) AddNewFolder(_ string) {
 }
 
-func (n NoopStateAggregator) SetScanState(_ string, _ product.Product, _ bool, _ ScanState) {
+func (n NoopStateAggregator) SetScanState(_ string, _ product.Product, _ bool, _ scanState) {
 }
 
 func (n NoopStateAggregator) SetScanDone(_ string, _ product.Product, _ bool, _ error) {

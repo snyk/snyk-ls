@@ -39,7 +39,7 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	agg := NewScanStateAggregator(c, emitter)
 	agg.Init([]string{folderPath, "/path/to/folder2"})
 
-	newState := ScanState{
+	newState := scanState{
 		Status: InProgress,
 		Err:    nil,
 	}
@@ -62,7 +62,7 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	agg := NewScanStateAggregator(c, emitter)
 	agg.Init([]string{folderPath})
 
-	doneState := ScanState{
+	doneState := scanState{
 		Status: Success,
 		Err:    nil,
 	}
@@ -83,7 +83,7 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	agg := NewScanStateAggregator(c, emitter)
 	agg.Init([]string{folderPath})
 
-	errState := ScanState{
+	errState := scanState{
 		Status: Error,
 		Err:    errors.New("something went wrong"),
 	}
@@ -104,7 +104,7 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	agg := NewScanStateAggregator(c, emitter)
 	agg.Init([]string{folderPath})
 
-	doneState := ScanState{
+	doneState := scanState{
 		Status: Success,
 		Err:    nil,
 	}
@@ -134,7 +134,7 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	agg := NewScanStateAggregator(c, emitter)
 	agg.Init([]string{folderPath})
 
-	doneState := ScanState{
+	doneState := scanState{
 		Status: Success,
 		Err:    nil,
 	}

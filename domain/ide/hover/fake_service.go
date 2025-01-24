@@ -18,6 +18,7 @@ package hover
 
 import (
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 type FakeHoverService struct {
@@ -34,7 +35,7 @@ func NewFakeHoverService() *FakeHoverService {
 	}
 }
 
-func (t *FakeHoverService) DeleteHover(path string) {
+func (t *FakeHoverService) DeleteHover(_ product.Product, path string) {
 	t.DeletedHovers[path] = true
 }
 

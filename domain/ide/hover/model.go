@@ -20,6 +20,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 type Context any
@@ -32,8 +33,9 @@ type Hover[T Context] struct {
 }
 
 type DocumentHovers struct {
-	Path  string
-	Hover []Hover[Context]
+	Path    string
+	Product product.Product
+	Hover   []Hover[Context]
 }
 
 type Params struct {

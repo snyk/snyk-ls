@@ -25,11 +25,11 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func setupFakeHover() string {
-	c := config.CurrentConfig()
+func setupFakeHover(c *config.Config) (*DefaultHoverService, string) {
 	target := NewDefaultService(c).(*DefaultHoverService)
 	fakeHover := []Hover[Context]{
 		{Range: snyk.Range{
@@ -38,12 +38,16 @@ func setupFakeHover() string {
 		},
 		},
 	}
+	hvb := hoversByProduct{
+		product.ProductCode: fakeHover,
+	}
 
 	filePath := "file:///fake-file.txt"
-	target.hovers[filePath] = fakeHover
-	target.hoverIndexes[filePath+"rangepositionstuff"] = true
+	target.hoversByFilePath[filePath] = hoversByProduct{}
+	target.hoversByFilePath[filePath] = hvb
+	target.hoverIndexes[filePath+"rangepositionstuff"+product.ProductCode.ToProductCodename()] = true
 
-	return filePath
+	return target, filePath
 }
 
 func Test_registerHovers(t *testing.T) {
@@ -56,27 +60,35 @@ func Test_registerHovers(t *testing.T) {
 	// assert de-duplication
 	target.registerHovers(hover)
 
-	assert.Equal(t, len(target.hovers[path]), 1)
+	assert.Equal(t, len(target.hoversByFilePath[path]), 1)
 	assert.Equal(t, len(target.hoverIndexes), 1)
 }
 
 func Test_DeleteHover(t *testing.T) {
 	c := testutil.UnitTest(t)
-	target := NewDefaultService(c).(*DefaultHoverService)
-	documentUri := setupFakeHover()
-	target.DeleteHover(documentUri)
+	target, documentUri := setupFakeHover(c)
+	target.DeleteHover(product.ProductCode, documentUri)
 
-	assert.Equal(t, len(target.hovers[documentUri]), 0)
+	assert.Equal(t, len(target.hoversByFilePath[documentUri]), 0)
 	assert.Equal(t, len(target.hoverIndexes), 0)
+}
+
+func Test_DeleteHover_NonExistingProduct(t *testing.T) {
+	c := testutil.UnitTest(t)
+	target, documentUri := setupFakeHover(c)
+	target.DeleteHover(product.ProductOpenSource, documentUri)
+
+	// Assert no hovers were deleted
+	assert.Equal(t, 1, len(target.hoversByFilePath[documentUri]))
+	assert.Equal(t, len(target.hoverIndexes), 1)
 }
 
 func Test_ClearAllHovers(t *testing.T) {
 	c := testutil.UnitTest(t)
-	target := NewDefaultService(c).(*DefaultHoverService)
-	documentUri := setupFakeHover()
+	target, documentUri := setupFakeHover(c)
 	target.ClearAllHovers()
 
-	assert.Equal(t, len(target.hovers[documentUri]), 0)
+	assert.Equal(t, len(target.hoversByFilePath[documentUri]), 0)
 	assert.Equal(t, len(target.hoverIndexes), 0)
 }
 
@@ -154,7 +166,11 @@ func Test_GetHoverMultiline(t *testing.T) {
 	path := "path/to/package.json"
 	for _, tc := range tests {
 		target.ClearAllHovers()
-		target.hovers[path] = tc.hoverDetails
+		hvb := hoversByProduct{
+			product.ProductCode: tc.hoverDetails,
+		}
+
+		target.hoversByFilePath[path] = hvb
 
 		result := target.GetHover(path, tc.query)
 		if !reflect.DeepEqual(tc.expected, result) {
