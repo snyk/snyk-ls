@@ -82,7 +82,7 @@ func New(
 	scanNotifier scanner.ScanNotifier,
 	notifier noti.Notifier,
 	scanPersister persistence.ScanSnapshotPersister,
-	statePersister scanstates.Aggregator,
+	stateAggregator scanstates.Aggregator,
 ) *Workspace {
 	return &Workspace{
 		folders:         make(map[string]types.Folder),
@@ -93,7 +93,7 @@ func New(
 		notifier:        notifier,
 		c:               c,
 		scanPersister:   scanPersister,
-		stateAggregator: statePersister,
+		stateAggregator: stateAggregator,
 	}
 }
 

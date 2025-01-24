@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
 	"github.com/stretchr/testify/assert"
@@ -39,11 +40,13 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
+	stateAggregator := scanstates.NewNoopStateAggregator()
+
+	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, stateAggregator)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]string{trustedDummy})
-	w.AddFolder(NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil, nil))
-	w.AddFolder(NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil, nil))
+	w.AddFolder(NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil, stateAggregator))
+	w.AddFolder(NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil, stateAggregator))
 
 	trusted, untrusted := w.GetFolderTrust()
 
@@ -58,11 +61,12 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
-	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, nil)
+	stateAggregator := scanstates.NewNoopStateAggregator()
+	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, stateAggregator)
 	c.SetTrustedFolderFeatureEnabled(true)
-	trustedFolder := NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil, nil)
+	trustedFolder := NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil, stateAggregator)
 	w.AddFolder(trustedFolder)
-	untrustedFolder := NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil, nil)
+	untrustedFolder := NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil, stateAggregator)
 	w.AddFolder(untrustedFolder)
 
 	w.TrustFoldersAndScan(context.Background(), []types.Folder{trustedFolder})
@@ -81,11 +85,12 @@ func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
 	const toBeRemoved = "toBeRemoved"
 	trustedPathAfterConversions := uri.PathFromUri(uri.PathToUri(trustedDummy))
 	toBeRemovedAbsolutePathAfterConversions := uri.PathFromUri(uri.PathToUri(toBeRemoved))
+	stateAggregator := scanstates.NewNoopStateAggregator()
 
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
-	w := New(c, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil, nil)
-	toBeRemovedFolder := NewFolder(c, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, sc, nil, scanNotifier, notification.NewNotifier(), nil, nil)
+	w := New(c, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil, stateAggregator)
+	toBeRemovedFolder := NewFolder(c, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, sc, nil, scanNotifier, notification.NewNotifier(), nil, stateAggregator)
 	w.AddFolder(toBeRemovedFolder)
 
 	c.SetTrustedFolderFeatureEnabled(true)
