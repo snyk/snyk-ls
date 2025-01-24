@@ -145,9 +145,8 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (issues []snyk.Issue, err error) {
-	c := sc.c
-	logger := c.Logger().With().Str("method", "code.Scan").Logger()
-	if !c.NonEmptyToken() {
+	logger := sc.c.Logger().With().Str("method", "code.Scan").Logger()
+	if !sc.c.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
@@ -204,7 +203,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	if err != nil {
 		return nil, err
 	}
-	results = filterCodeIssues(c, results)
+	results = filterCodeIssues(sc.c, results)
 	// Populate HTML template
 	sc.enhanceIssuesDetails(results, folderPath)
 
