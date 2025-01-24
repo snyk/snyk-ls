@@ -144,3 +144,83 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	assert.False(t, agg.allScansStarted(true))
 	assert.False(t, agg.allScansStarted(false))
 }
+
+func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
+	c := testutil.UnitTest(t)
+	emitter := &NoopEmitter{}
+	agg := NewScanStateAggregator(c, emitter)
+
+	folder := "/path/folder"
+	agg.Init([]string{folder})
+
+	agg.SetScanInProgress(folder, product.ProductOpenSource, false)
+	assert.Equal(t, 2, emitter.Calls)
+
+	assert.True(t, agg.anyScanInProgress(false))
+	assert.False(t, agg.anyScanError(false))
+}
+
+func TestScanStateAggregator_SetScanDone(t *testing.T) {
+	c := testutil.UnitTest(t)
+	emitter := &NoopEmitter{}
+	agg := NewScanStateAggregator(c, emitter)
+
+	folder := "/path/folder"
+	agg.Init([]string{folder})
+
+	agg.SetScanInProgress(folder, product.ProductOpenSource, false)
+	assert.Equal(t, 2, emitter.Calls)
+
+	agg.SetScanDone(folder, product.ProductOpenSource, false, nil)
+	assert.Equal(t, 3, emitter.Calls)
+
+	assert.False(t, agg.anyScanError(false))
+	assert.True(t, agg.anyScanSucceeded(false))
+
+	testErr := errors.New("some error")
+	agg.SetScanDone(folder, product.ProductCode, false, testErr)
+	assert.Equal(t, 4, emitter.Calls)
+
+	assert.True(t, agg.anyScanError(false))
+}
+
+func TestScanStateAggregator_StateSnapshot(t *testing.T) {
+	c := testutil.UnitTest(t)
+	emitter := &NoopEmitter{}
+	agg := NewScanStateAggregator(c, emitter)
+
+	folder := "/path/folder"
+	agg.Init([]string{folder})
+
+	// Make sure everything is NOT_STARTED initially
+	snapshot := agg.StateSnapshot()
+	assert.False(t, snapshot.AllScansStartedReference)
+	assert.False(t, snapshot.AllScansStartedWorkingDirectory)
+	assert.False(t, snapshot.AnyScanInProgressReference)
+	assert.False(t, snapshot.AnyScanInProgressWorkingDirectory)
+	assert.False(t, snapshot.AnyScanSucceededReference)
+	assert.False(t, snapshot.AnyScanSucceededWorkingDirectory)
+	assert.False(t, snapshot.AllScansSucceededReference)
+	assert.False(t, snapshot.AllScansSucceededWorkingDirectory)
+	assert.False(t, snapshot.AnyScanErrorReference)
+	assert.False(t, snapshot.AnyScanErrorWorkingDirectory)
+
+	// Now set one product to InProgress on working dir
+	agg.SetScanInProgress(folder, product.ProductOpenSource, false)
+	snapshot = agg.StateSnapshot()
+	assert.True(t, snapshot.AnyScanInProgressWorkingDirectory)
+	assert.False(t, snapshot.AnyScanInProgressReference)
+
+	// Mark that same product as Success
+	agg.SetScanDone(folder, product.ProductOpenSource, false, nil)
+	snapshot = agg.StateSnapshot()
+	assert.True(t, snapshot.AnyScanSucceededWorkingDirectory)
+	assert.False(t, snapshot.AnyScanSucceededReference)
+	assert.False(t, snapshot.AnyScanErrorWorkingDirectory)
+	assert.False(t, snapshot.AllScansSucceededWorkingDirectory)
+
+	// Introduce an error for reference scans
+	agg.SetScanDone(folder, product.ProductCode, true, errors.New("error"))
+	snapshot = agg.StateSnapshot()
+	assert.True(t, snapshot.AnyScanErrorReference)
+}

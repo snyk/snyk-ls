@@ -203,83 +203,33 @@ func (agg *ScanStateAggregator) SetScanInProgress(folderPath string, p product.P
 }
 
 func (agg *ScanStateAggregator) allScansStarted(isReference bool) bool {
-	var stateMap ScanStateMap
-	if isReference {
-		stateMap = agg.referenceScanStates
-	} else {
-		stateMap = agg.workingDirectoryScanStates
-	}
-
-	for _, st := range stateMap {
-		if st.Status == NotStarted {
-			return false
-		}
-	}
-	return true
+	return agg.allMatch(isReference, func(st *ScanState) bool {
+		return st.Status != NotStarted
+	})
 }
 
 func (agg *ScanStateAggregator) anyScanInProgress(isReference bool) bool {
-	var stateMap ScanStateMap
-	if isReference {
-		stateMap = agg.referenceScanStates
-	} else {
-		stateMap = agg.workingDirectoryScanStates
-	}
-
-	for _, st := range stateMap {
-		if st.Status == InProgress {
-			return true
-		}
-	}
-	return false
+	return agg.anyMatch(isReference, func(st *ScanState) bool {
+		return st.Status == InProgress
+	})
 }
 
 func (agg *ScanStateAggregator) anyScanSucceeded(isReference bool) bool {
-	var stateMap ScanStateMap
-	if isReference {
-		stateMap = agg.referenceScanStates
-	} else {
-		stateMap = agg.workingDirectoryScanStates
-	}
-
-	for _, st := range stateMap {
-		if st.Status == Success {
-			return true
-		}
-	}
-	return false
+	return agg.anyMatch(isReference, func(st *ScanState) bool {
+		return st.Status == Success
+	})
 }
 
 func (agg *ScanStateAggregator) allScansSucceeded(isReference bool) bool {
-	var stateMap ScanStateMap
-	if isReference {
-		stateMap = agg.referenceScanStates
-	} else {
-		stateMap = agg.workingDirectoryScanStates
-	}
-
-	for _, st := range stateMap {
-		if st.Status != Success || st.Err != nil {
-			return false
-		}
-	}
-	return true
+	return agg.allMatch(isReference, func(st *ScanState) bool {
+		return st.Status == Success && st.Err == nil
+	})
 }
 
 func (agg *ScanStateAggregator) anyScanError(isReference bool) bool {
-	var stateMap ScanStateMap
-	if isReference {
-		stateMap = agg.referenceScanStates
-	} else {
-		stateMap = agg.workingDirectoryScanStates
-	}
-
-	for _, st := range stateMap {
-		if st.Status == Error {
-			return true
-		}
-	}
-	return false
+	return agg.anyMatch(isReference, func(st *ScanState) bool {
+		return st.Status == Error
+	})
 }
 
 func (agg *ScanStateAggregator) totalScansCount() int {
@@ -302,4 +252,36 @@ func (agg *ScanStateAggregator) scansCountInState(status ScanStatus) int {
 	}
 
 	return count
+}
+
+func (agg *ScanStateAggregator) anyMatch(isReference bool, predicate func(*ScanState) bool) bool {
+	var stateMap ScanStateMap
+	if isReference {
+		stateMap = agg.referenceScanStates
+	} else {
+		stateMap = agg.workingDirectoryScanStates
+	}
+
+	for _, st := range stateMap {
+		if predicate(st) {
+			return true
+		}
+	}
+	return false
+}
+
+func (agg *ScanStateAggregator) allMatch(isReference bool, predicate func(*ScanState) bool) bool {
+	var stateMap ScanStateMap
+	if isReference {
+		stateMap = agg.referenceScanStates
+	} else {
+		stateMap = agg.workingDirectoryScanStates
+	}
+
+	for _, st := range stateMap {
+		if !predicate(st) {
+			return false
+		}
+	}
+	return true
 }

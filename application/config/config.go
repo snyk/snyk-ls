@@ -1006,6 +1006,7 @@ func (c *Config) IsDeltaFindingsEnabled() bool {
 	return c.enableDeltaFindings
 }
 
+// SetDeltaFindingsEnabled sets deltaFindings config and returns true if value changed
 func (c *Config) SetDeltaFindingsEnabled(enabled bool) bool {
 	c.m.Lock()
 	defer c.m.Unlock()
