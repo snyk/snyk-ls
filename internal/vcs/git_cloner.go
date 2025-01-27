@@ -25,6 +25,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/otiai10/copy"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func Clone(logger *zerolog.Logger, srcRepoPath string, destinationPath string, targetBranchName string) (*git.Repository, error) {
@@ -130,14 +131,14 @@ func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath string, destination
 	return targetRepo
 }
 
-func LocalRepoHasChanges(logger *zerolog.Logger, repoPath string) (bool, error) {
+func LocalRepoHasChanges(conf configuration.Configuration, logger *zerolog.Logger, repoPath string) (bool, error) {
 	currentRepo, err := git.PlainOpen(repoPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open current repo " + repoPath)
 		return false, err
 	}
 
-	branchName := GetBaseBranchName(repoPath)
+	branchName := GetBaseBranchName(conf, repoPath)
 
 	currentRepoBranch, err := currentRepo.Head()
 	if err != nil {

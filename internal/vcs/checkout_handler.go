@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 type CheckoutHandler struct {
@@ -30,10 +31,13 @@ type CheckoutHandler struct {
 	repository     *git.Repository
 	cleanupFunc    func()
 	mutex          sync.Mutex
+	conf           configuration.Configuration
 }
 
-func NewCheckoutHandler() *CheckoutHandler {
-	return &CheckoutHandler{}
+func NewCheckoutHandler(conf configuration.Configuration) *CheckoutHandler {
+	return &CheckoutHandler{
+		conf: conf,
+	}
 }
 
 func (ch *CheckoutHandler) BaseFolderPath() string {
@@ -56,7 +60,7 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderPath
 		return nil
 	}
 
-	baseBranchName := GetBaseBranchName(folderPath)
+	baseBranchName := GetBaseBranchName(ch.conf, folderPath)
 
 	tmpFolderName := fmt.Sprintf("snyk_delta_%s", NormalizeBranchName(baseBranchName))
 	baseBranchFolderPath, err := os.MkdirTemp("", tmpFolderName)

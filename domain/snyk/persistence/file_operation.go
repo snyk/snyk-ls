@@ -27,8 +27,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/product"
+	gitconfig "github.com/snyk/snyk-ls/internal/storedconfig"
 )
 
 func (g *GitPersistenceProvider) persistToDisk(cacheDir string, folderHashedPath hashedFolderPath, commitHash string, p product.Product, inputToCache []snyk.Issue) error {

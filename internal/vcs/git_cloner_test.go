@@ -203,7 +203,7 @@ func TestLocalRepoHasChanges_SameBranchNames_NoModification_SkipClone(t *testing
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
 	initGitRepo(t, repoPath, false)
-	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath)
+	shouldclone, err := LocalRepoHasChanges(c.Engine().GetConfiguration(), c.Logger(), repoPath)
 
 	assert.NoError(t, err)
 	assert.False(t, shouldclone)
@@ -213,7 +213,7 @@ func TestLocalRepoHasChanges_SameBranchNames_WithModification_Clone(t *testing.T
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
 	initGitRepo(t, repoPath, true)
-	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath)
+	shouldclone, err := LocalRepoHasChanges(c.Engine().GetConfiguration(), c.Logger(), repoPath)
 
 	assert.NoError(t, err)
 	assert.True(t, shouldclone)
@@ -231,7 +231,7 @@ func TestLocalRepoHasChanges_DifferentBranchNames_Clone(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	shouldclone, err := LocalRepoHasChanges(c.Logger(), repoPath)
+	shouldclone, err := LocalRepoHasChanges(c.Engine().GetConfiguration(), c.Logger(), repoPath)
 
 	assert.True(t, shouldclone)
 	assert.NoError(t, err)

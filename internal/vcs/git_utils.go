@@ -23,8 +23,9 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
+	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
 )
 
 var (
@@ -77,8 +78,8 @@ func hasUncommitedChanges(repo *git.Repository) bool {
 	return false
 }
 
-func GetBaseBranchName(folderPath string) string {
-	folderConfig, err := gitconfig.GetOrCreateFolderConfig(folderPath)
+func GetBaseBranchName(conf configuration.Configuration, folderPath string) string {
+	folderConfig, err := storedConfig.GetOrCreateFolderConfig(conf, folderPath)
 	if err != nil {
 		return "master"
 	}

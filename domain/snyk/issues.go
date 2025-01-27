@@ -294,7 +294,7 @@ const (
 	PackageHealth Type = iota
 	CodeQualityIssue
 	CodeSecurityVulnerability
-	LicenceIssue
+	LicenseIssue
 	DependencyVulnerability
 	InfrastructureIssue
 	ContainerVulnerability
