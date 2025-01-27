@@ -42,7 +42,7 @@ func Test_GetLearnEndpoint(t *testing.T) {
 
 func getRealOSSLookupParams() *LessonLookupParams {
 	params := &LessonLookupParams{
-		CWEs:      []string{"CWE-1321"},
+		CWEs:      []string{"CWE-601"},
 		Rule:      "SNYK-JS-ASYNC-2441827",
 		Ecosystem: "npm",
 	}
