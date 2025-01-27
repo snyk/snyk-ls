@@ -207,14 +207,8 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	cliScanner.runningScans[workDir] = newScan
 	cliScanner.mutex.Unlock()
 
-	// this asks the client for the current SDK and blocks on it
-	additionalParameters := cliScanner.updateSDKs(workDir)
-
-	// if the sdk needs additional parameters, add them (Python plugin, I look at you. Yes, you)
 	args := []string{workDir}
-	if len(additionalParameters) > 0 {
-		args = append(args, additionalParameters...)
-	}
+	args = cliScanner.updateArgsWithSdkConfig(workDir, args)
 
 	cmd := commandFunc(args, map[string]bool{"": true}, workDir)
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
@@ -243,6 +237,40 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	return issues, nil
 }
 
+func (cliScanner *CLIScanner) updateArgsWithSdkConfig(workDir string, args []string) []string {
+	// this asks the client for the current SDK and blocks on it
+	additionalParameters := cliScanner.updateSDKs(workDir)
+	folderConfigArgs := cliScanner.config.FolderConfig(workDir).AdditionalParameters
+
+	if len(additionalParameters) > 0 {
+		for _, parameter := range additionalParameters {
+			// if the sdk needs additional parameters, add them (Python plugin, I look at you. Yes, you)
+			// the given parameters take precedence, meaning, a given python configuration will overrule
+			// the automatically determined config
+			isDuplicateParam := sliceContainsParam(args, parameter) || sliceContainsParam(folderConfigArgs, parameter)
+			if !isDuplicateParam {
+				args = append(args, parameter)
+			}
+		}
+	}
+	return args
+}
+
+// sliceContainsParam checks if the parameter name is equal by splitting the given
+// arguments in the args array for the '=' parameter and comparing it to the same
+// split done with parameter. Returns true, if the left-hand side of the parameter
+// is already contained in args.
+func sliceContainsParam(args []string, parameter string) bool {
+	for _, arg := range args {
+		leftOfArg := strings.Split(arg, "=")[0]
+		leftOfParameter := strings.Split(parameter, "=")[0]
+		if leftOfParameter == leftOfArg {
+			return true
+		}
+	}
+	return false
+}
+
 func (cliScanner *CLIScanner) updateSDKs(workDir string) []string {
 	logger := cliScanner.config.Logger().With().Str("method", "updateSDKs").Logger()
 	sdkChan := make(chan []types.LsSdk)
@@ -252,7 +280,7 @@ func (cliScanner *CLIScanner) updateSDKs(workDir string) []string {
 	// wait for sdk info
 	sdks := <-sdkChan
 	logger.Debug().Msg("received SDKs")
-	return sdk.UpdateEnvironmentAndReturnAdditionalParams(sdks, logger)
+	return sdk.UpdateEnvironmentAndReturnAdditionalParams(cliScanner.config, sdks)
 }
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string) []string {
