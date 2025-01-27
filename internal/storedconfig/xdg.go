@@ -34,7 +34,7 @@ const (
 )
 
 type StoredConfig struct {
-	FolderConfigs map[string]*types.FolderConfig `json:"INTERNAL_LS_FOLDER_CONFIGS"`
+	FolderConfigs map[string]*types.FolderConfig `json:"folderConfigs"`
 }
 
 func ConfigFile(ideName string) (string, error) {

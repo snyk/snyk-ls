@@ -26,19 +26,30 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storage"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.T) {
 	conf, storageFile := setupConfigurationWithStorage(t)
 	path := "/testPath"
+	dir, err := os.UserHomeDir()
+	preCommandMap := map[product.Product]types.Pair{
+		product.ProductOpenSource: {First: "preCommand.exe", Second: true},
+	}
 
+	// act
 	actual, err := GetOrCreateFolderConfig(conf, path)
-
 	require.NoError(t, err)
-	require.Equal(t, path, actual.FolderPath)
+	actual.PreScanCommandPath = preCommandMap
+	require.NoError(t, err)
+	actual.ReferenceFolderPath = dir
+	err = UpdateFolderConfig(conf, actual)
+	require.NoError(t, err)
 
-	// check config
+	// verify
+	require.Equal(t, path, actual.FolderPath)
 	scJson := conf.GetString(ConfigMainKey)
 	var sc StoredConfig
 	err = json.Unmarshal([]byte(scJson), &sc)
