@@ -35,6 +35,7 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 	conf, storageFile := setupConfigurationWithStorage(t)
 	path := "/testPath"
 	dir, err := os.UserHomeDir()
+	require.NoError(t, err)
 	preCommandMap := map[product.Product]types.Pair{
 		product.ProductOpenSource: {First: "preCommand.exe", Second: true},
 	}
