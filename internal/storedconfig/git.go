@@ -159,10 +159,10 @@ func GitFolderPath(folderPath string) (string, error) {
 
 // DeleteEmptySnykSubsection This is a migration function to be executed if empty subsections exists
 func DeleteEmptySnykSubsection(path string) error {
-	return DeleteSnykSubsection(path, `""`)
+	return DeleteGitConfigSnykSubsection(path, `""`)
 }
 
-func DeleteSnykSubsection(path string, subsection string) error {
+func DeleteGitConfigSnykSubsection(path string, subsection string) error {
 	gitFolderPath, err := GitFolderPath(path)
 	if err != nil {
 		return err

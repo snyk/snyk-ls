@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/sdk"
+	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -237,7 +238,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) updateArgsWithSdkConfig(workDir string, args []string) []string {
+func (cliScanner *CLIScanner) updateArgsWithSdkConfig(workDir string, commandLineArgs []string) []string {
 	// this asks the client for the current SDK and blocks on it
 	additionalParameters := cliScanner.updateSDKs(workDir)
 	folderConfigArgs := cliScanner.config.FolderConfig(workDir).AdditionalParameters
@@ -247,28 +248,13 @@ func (cliScanner *CLIScanner) updateArgsWithSdkConfig(workDir string, args []str
 			// if the sdk needs additional parameters, add them (Python plugin, I look at you. Yes, you)
 			// the given parameters take precedence, meaning, a given python configuration will overrule
 			// the automatically determined config
-			isDuplicateParam := sliceContainsParam(args, parameter) || sliceContainsParam(folderConfigArgs, parameter)
+			isDuplicateParam := storedConfig.SliceContainsParam(commandLineArgs, parameter) || storedConfig.SliceContainsParam(folderConfigArgs, parameter)
 			if !isDuplicateParam {
-				args = append(args, parameter)
+				commandLineArgs = append(commandLineArgs, parameter)
 			}
 		}
 	}
-	return args
-}
-
-// sliceContainsParam checks if the parameter name is equal by splitting the given
-// arguments in the args array for the '=' parameter and comparing it to the same
-// split done with parameter. Returns true, if the left-hand side of the parameter
-// is already contained in args.
-func sliceContainsParam(args []string, parameter string) bool {
-	for _, arg := range args {
-		leftOfArg := strings.Split(arg, "=")[0]
-		leftOfParameter := strings.Split(parameter, "=")[0]
-		if leftOfParameter == leftOfArg {
-			return true
-		}
-	}
-	return false
+	return commandLineArgs
 }
 
 func (cliScanner *CLIScanner) updateSDKs(workDir string) []string {

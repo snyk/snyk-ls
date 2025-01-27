@@ -17,8 +17,9 @@
 package storedconfig
 
 import (
+	"strings"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -47,7 +48,7 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path string) (*ty
 
 	// remove git config
 	// explicitly ignore any errors when removing it
-	_ = DeleteSnykSubsection(path, path)
+	_ = DeleteGitConfigSnykSubsection(path, path)
 	return folderConfig, nil
 }
 
@@ -60,7 +61,7 @@ func mergeFolderConfigs(first types.FolderConfig, second types.FolderConfig) *ty
 	// add all additional parameters that are not already in first
 	if len(second.AdditionalParameters) > 0 {
 		for _, parameter := range second.AdditionalParameters {
-			if !slices.Contains(first.AdditionalParameters, parameter) {
+			if !SliceContainsParam(first.AdditionalParameters, parameter) {
 				first.AdditionalParameters = append(first.AdditionalParameters, parameter)
 			}
 		}
@@ -75,4 +76,19 @@ func mergeFolderConfigs(first types.FolderConfig, second types.FolderConfig) *ty
 	}
 
 	return &first
+}
+
+// SliceContainsParam checks if the parameter name is equal by splitting the given
+// arguments in the args array for the '=' parameter and comparing it to the same
+// split done with parameter. Returns true, if the left-hand side of the parameter
+// is already contained in args.
+func SliceContainsParam(args []string, parameter string) bool {
+	for _, arg := range args {
+		leftOfArg := strings.Split(arg, "=")[0]
+		leftOfParameter := strings.Split(parameter, "=")[0]
+		if leftOfParameter == leftOfArg {
+			return true
+		}
+	}
+	return false
 }
