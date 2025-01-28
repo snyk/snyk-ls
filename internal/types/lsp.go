@@ -532,12 +532,12 @@ type WorkspaceFoldersChangeEvent struct {
 // IDE sends this as part of the settings/initialization
 // LS sends this via the $/snyk.folderConfig notification
 type FolderConfig struct {
-	FolderPath           string                   `json:"folderPath"`
-	BaseBranch           string                   `json:"baseBranch"`
-	LocalBranches        []string                 `json:"localBranches,omitempty"`
-	AdditionalParameters []string                 `json:"additionalParameters,omitempty"`
-	ReferenceFolderPath  string                   `json:"referenceFolderPath,omitempty"`
-	PreScanCommandPath   map[product.Product]Pair `json:"preScanCommandPath,omitempty"`
+	FolderPath           string                    `json:"folderPath"`
+	BaseBranch           string                    `json:"baseBranch"`
+	LocalBranches        []string                  `json:"localBranches,omitempty"`
+	AdditionalParameters []string                  `json:"additionalParameters,omitempty"`
+	ReferenceFolderPath  string                    `json:"referenceFolderPath,omitempty"`
+	PreScanCommandPath   map[product.Product]*Pair `json:"preScanCommandPath,omitempty"`
 }
 
 type Pair struct {
