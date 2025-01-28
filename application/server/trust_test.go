@@ -43,7 +43,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.
 	sc := &scanner.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
-	command.HandleUntrustedFolders(c, context.Background(), loc.Server)
+	command.HandleUntrustedFolders(context.Background(), c, loc.Server)
 
 	assert.True(t, checkTrustMessageRequest(jsonRPCRecorder, c))
 	assert.Equal(t, sc.Calls(), 0)
@@ -58,7 +58,7 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 	w.StartRequestTrustCommunication()
 
-	command.HandleUntrustedFolders(c, context.Background(), loc.Server)
+	command.HandleUntrustedFolders(context.Background(), c, loc.Server)
 
 	assert.Len(t, jsonRPCRecorder.FindCallbacksByMethod("window/showMessageRequest"), 0)
 	assert.Equal(t, sc.Calls(), 0)
@@ -78,7 +78,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 	c.SetTrustedFolderFeatureEnabled(true)
 	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 
-	command.HandleUntrustedFolders(c, context.Background(), loc.Server)
+	command.HandleUntrustedFolders(context.Background(), c, loc.Server)
 
 	assert.Eventually(t, func() bool {
 		addTrustedSent := len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.addTrustedFolders")) == 1
@@ -99,7 +99,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 	c.SetTrustedFolderFeatureEnabled(true)
 
-	command.HandleUntrustedFolders(c, context.Background(), loc.Server)
+	command.HandleUntrustedFolders(context.Background(), c, loc.Server)
 
 	assert.Equal(t, sc.Calls(), 0)
 }

@@ -37,7 +37,7 @@ func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, noti
 	go sendFolderConfigsNotification(c, notifier)
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	HandleUntrustedFolders(c, ctx, srv)
+	HandleUntrustedFolders(ctx, c, srv)
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
@@ -76,7 +76,7 @@ func initScanPersister(c *config.Config, persister persistence.ScanSnapshotPersi
 	}
 }
 
-func HandleUntrustedFolders(c *config.Config, ctx context.Context, srv types.Server) {
+func HandleUntrustedFolders(ctx context.Context, c *config.Config, srv types.Server) {
 	w := c.Workspace()
 	// debounce requests from overzealous clients (Eclipse, I'm looking at you)
 	if w.IsTrustRequestOngoing() {

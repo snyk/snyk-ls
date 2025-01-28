@@ -46,7 +46,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	provider.IsAuthenticated = true
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
-	stateAggregator := scanstates.NewNoopStateAggregator()
+	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	authenticationService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notifier)
 	cmd := logoutCommand{
 		command:     types.CommandData{CommandId: types.LogoutCommand},
@@ -56,7 +56,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 
 	sc := scanner.NewTestScanner()
 
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, stateAggregator)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
 	folder := workspace.NewFolder(
 		c,
 		t.TempDir(),
@@ -66,7 +66,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		scanNotifier,
 		notifier,
 		scanPersister,
-		stateAggregator,
+		scanStateAggregator,
 	)
 	c.SetWorkspace(w)
 	w.AddFolder(folder)
