@@ -295,13 +295,9 @@ func (sc *DelegatingConcurrentScanner) Scan(
 					DurationMs:        time.Duration(scanSpan.GetDurationMs()),
 					TimestampFinished: time.Now().UTC(),
 					Path:              folderPath,
+					IsDeltaScan:       sc.c.IsDeltaFindingsEnabled(),
 					SendAnalytics:     true,
 					UpdateGlobalCache: true,
-				}
-				deltaScanEnabled, deltaScanner := isDeltaScanEnabled(s)
-				// in case of delta scans, we add additional fields
-				if deltaScanEnabled {
-					data.IsDeltaScan = deltaScanner.DeltaScanningEnabled()
 				}
 
 				processResults(data)
@@ -347,13 +343,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	sc.notifier.Send(types.InlineValueRefresh{})
 	sc.notifier.Send(types.CodeLensRefresh{})
 	// TODO: handle learn actions centrally instead of in each scanner
-}
-
-func isDeltaScanEnabled(s snyk.ProductScanner) (bool, types.DeltaScanner) {
-	if deltaScanner, ok := s.(types.DeltaScanner); ok {
-		return deltaScanner.DeltaScanningEnabled(), deltaScanner
-	}
-	return false, nil
 }
 
 func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.ProductScanner, path string, folderPath string) ([]snyk.Issue, error) {

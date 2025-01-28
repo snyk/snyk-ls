@@ -45,8 +45,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var _ types.DeltaScanner = (*Scanner)(nil)
-
 type ScanStatus struct {
 	// finished channel is closed once the scan has finished
 	finished chan bool
@@ -104,10 +102,6 @@ func (sc *Scanner) AddBundleHash(key, value string) {
 		sc.bundleHashes = make(map[string]string)
 	}
 	sc.bundleHashes[key] = value
-}
-
-func (sc *Scanner) DeltaScanningEnabled() bool {
-	return sc.C.IsDeltaFindingsEnabled()
 }
 
 func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner) *Scanner {

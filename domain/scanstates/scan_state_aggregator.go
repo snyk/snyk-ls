@@ -23,6 +23,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
+var _ Aggregator = (*ScanStateAggregator)(nil)
+
 // folderProductKey identifies a unique (FolderPath, ProductName) pair.
 type folderProductKey struct {
 	FolderPath string
@@ -189,6 +191,29 @@ func (agg *ScanStateAggregator) SetScanDone(folderPath string, p product.Product
 	}
 
 	agg.setScanState(folderPath, p, isReferenceScan, state)
+}
+
+func (agg *ScanStateAggregator) GetScanErr(folderPath string, p product.Product, isReferenceScan bool) error {
+	agg.mu.RLock()
+	defer agg.mu.RUnlock()
+
+	logger := agg.c.Logger().With().Str("method", "GetScanErr").Logger()
+
+	key := folderProductKey{FolderPath: folderPath, Product: p}
+	var st *scanState
+	var exists bool
+	if isReferenceScan {
+		st, exists = agg.referenceScanStates[key]
+	} else {
+		st, exists = agg.workingDirectoryScanStates[key]
+	}
+
+	if !exists {
+		logger.Error().Msgf("Scan State for folder path%s and product %s doesn't exist in state scanstates", folderPath, p.ToProductNamesString())
+		return nil
+	}
+
+	return st.Err
 }
 
 func (agg *ScanStateAggregator) SetScanInProgress(folderPath string, p product.Product, isReferenceScan bool) {

@@ -31,4 +31,5 @@ type Aggregator interface {
 	anyScanError(isReference bool) bool
 	SummaryEmitter() ScanStateChangeEmitter
 	StateSnapshot() StateSnapshot
+	GetScanErr(folderPath string, p product.Product, isReferenceScan bool) error
 }

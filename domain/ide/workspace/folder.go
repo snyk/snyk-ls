@@ -632,7 +632,6 @@ func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesB
 	f.scanStateAggregator.SummaryEmitter().Emit(f.scanStateAggregator.StateSnapshot())
 	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-
 	deltaErr := f.hasDeltaError(p)
 	if deltaErr != nil {
 		f.sendScanError(p, deltaErr)
@@ -642,11 +641,10 @@ func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesB
 }
 
 func (f *Folder) hasDeltaError(p product.Product) error {
-	var deltaErr error
 	if f.c.IsDeltaFindingsEnabled() {
-		_, deltaErr = f.scanPersister.GetPersistedIssueList(f.path, p)
+		return f.scanStateAggregator.GetScanErr(f.path, p, true)
 	}
-	return deltaErr
+	return nil
 }
 
 func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {

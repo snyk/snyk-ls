@@ -25,6 +25,10 @@ var _ Aggregator = (*NoopStateAggregator)(nil)
 type NoopStateAggregator struct {
 }
 
+func (n NoopStateAggregator) GetScanErr(_ string, _ product.Product, _ bool) error {
+	return nil
+}
+
 func (n NoopStateAggregator) StateSnapshot() StateSnapshot {
 	return StateSnapshot{}
 }

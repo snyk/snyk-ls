@@ -161,7 +161,6 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		c.SetLogLevel(zerolog.DebugLevel.String())
 		var cloneTargetDirGoof = setupRepoAndInitialize(t, nodejsGoof, "0336589", loc, c)
 		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
