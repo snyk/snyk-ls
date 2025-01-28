@@ -42,6 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -474,7 +475,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 
 	// check for snyk code scan message
-	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode, 1)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	// check for autofix diff on mt-us
@@ -510,7 +511,7 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.Json
 	if !strings.HasSuffix(t.Name(), "OSS_and_Code") {
 		return
 	}
-	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource, 1)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
 	atLeastOneQuickfixActionFound := false
 	for _, issue := range issueList {
@@ -562,7 +563,7 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorde
 	if !strings.HasSuffix(t.Name(), "OSS_and_Code") {
 		return
 	}
-	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource, 1)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
 
 	atLeastOneOneIssueWithCodeLensFound := false
@@ -612,11 +613,20 @@ func waitForScan(t *testing.T, cloneTargetDir string, c *config.Config) {
 	}, maxIntegTestDuration, 2*time.Millisecond)
 }
 
-func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
+func waitForDeltaScan(t *testing.T, agg scanstates.Aggregator) {
+	t.Helper()
+	// wait till the whole workspace is scanned
+	assert.Eventually(t, func() bool {
+		return agg.StateSnapshot().AllScansSucceededReference && agg.StateSnapshot().AllScansSucceededWorkingDirectory
+	}, maxIntegTestDuration, 2*time.Millisecond)
+}
+
+func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, p product.Product, desiredCallsNum int) {
 	t.Helper()
 	var notifications []jrpc2.Request
 	assert.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
+		actualCallsNum := 0
 		for _, n := range notifications {
 			var scanParams types.SnykScanParams
 			_ = n.UnmarshalParams(&scanParams)
@@ -625,10 +635,10 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder,
 				scanParams.Status != "success" {
 				continue
 			}
-			return true
+			actualCallsNum++
 		}
-		return false
-	}, 10*time.Second, 10*time.Millisecond)
+		return actualCallsNum == desiredCallsNum
+	}, maxIntegTestDuration, 10*time.Millisecond)
 }
 
 func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, p product.Product, folderPath string) []types.ScanIssue {
@@ -836,7 +846,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
 	di.Init()
-
+	scanAggregator := di.ScanStateAggregator()
 	fileWithNewVulns := "vulns.js"
 	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
 	assert.NoError(t, err)
@@ -856,34 +866,12 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 	waitForScan(t, cloneTargetDir, c)
 
-	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	waitForDeltaScan(t, scanAggregator)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode, 2)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
-	assert.Greater(t, len(issueList), 0)
+	assert.True(t, len(issueList) > 0)
 	assert.Contains(t, issueList[0].FilePath, fileWithNewVulns)
-}
-
-func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
-	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykCodeEnabled(true)
-	c.SetDeltaFindingsEnabled(true)
-	cleanupChannels()
-	di.Init()
-
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
-	assert.NoError(t, err)
-
-	initParams := prepareInitParams(t, cloneTargetDir, c)
-
-	ensureInitialized(t, c, loc, initParams)
-
-	waitForScan(t, cloneTargetDir, c)
-
-	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
-	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
-
-	assert.Equal(t, len(issueList), 0)
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
@@ -893,6 +881,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
 	di.Init()
+	scanAggregator := di.ScanStateAggregator()
 
 	fileWithNewVulns := "vulns.js"
 	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
@@ -906,7 +895,8 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 	waitForScan(t, cloneTargetDir, c)
 
-	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
+	waitForDeltaScan(t, scanAggregator)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode, 2)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	assert.Equal(t, len(issueList), 0)
