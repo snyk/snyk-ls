@@ -23,12 +23,11 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/internal/storage"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.T) {
@@ -36,14 +35,9 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 	path := "/testPath"
 	dir, err := os.UserHomeDir()
 	require.NoError(t, err)
-	preCommandMap := map[product.Product]types.Pair{
-		product.ProductOpenSource: {First: "preCommand.exe", Second: true},
-	}
 
 	// act
 	actual, err := GetOrCreateFolderConfig(conf, path)
-	require.NoError(t, err)
-	actual.PreScanCommandPath = preCommandMap
 	require.NoError(t, err)
 	actual.ReferenceFolderPath = dir
 	err = UpdateFolderConfig(conf, actual)
