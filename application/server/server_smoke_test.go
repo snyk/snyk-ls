@@ -638,7 +638,7 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder,
 			actualCallsNum++
 		}
 		return actualCallsNum == desiredCallsNum
-	}, maxIntegTestDuration, 10*time.Millisecond)
+	}, 5*time.Minute, 10*time.Millisecond)
 }
 
 func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, p product.Product, folderPath string) []types.ScanIssue {
