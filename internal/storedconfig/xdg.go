@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -59,11 +60,11 @@ func GetStoredConfig(conf configuration.Configuration) *StoredConfig {
 	storedConfigJsonString := conf.GetString(ConfigMainKey)
 
 	if len(storedConfigJsonString) == 0 {
-		return resetStorage(conf)
+		return createNewStoredConfig(conf)
 	} else {
 		err := json.Unmarshal([]byte(storedConfigJsonString), &sc)
 		if err != nil {
-			sc = resetStorage(conf)
+			sc = createNewStoredConfig(conf)
 		}
 	}
 	return sc
@@ -78,7 +79,7 @@ func Save(conf configuration.Configuration, sc *StoredConfig) error {
 	return nil
 }
 
-func resetStorage(conf configuration.Configuration) *StoredConfig {
+func createNewStoredConfig(conf configuration.Configuration) *StoredConfig {
 	config := StoredConfig{FolderConfigs: map[string]*types.FolderConfig{}}
 	conf.Set(ConfigMainKey, config)
 	return &config
