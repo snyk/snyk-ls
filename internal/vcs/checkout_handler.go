@@ -19,10 +19,12 @@ package vcs
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -62,7 +64,11 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderPath
 
 	baseBranchName := GetBaseBranchName(ch.conf, folderPath)
 
-	tmpFolderName := fmt.Sprintf("snyk_delta_%s", NormalizeBranchName(baseBranchName))
+	tmpFolderName := fmt.Sprintf(
+		"%s_%s",
+		NormalizeBranchName(filepath.Base(folderPath)),
+		NormalizeBranchName(baseBranchName),
+	)
 	baseBranchFolderPath, err := os.MkdirTemp("", tmpFolderName)
 	logger.Info().Msg("Creating tmp directory for base branch")
 
