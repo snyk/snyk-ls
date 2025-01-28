@@ -532,7 +532,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	df := delta2.NewDeltaFinderForProduct(p)
-	diff, err := df.Enrich(baseFindingIdentifiable, currentFindingIdentifiable)
+	diff, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")

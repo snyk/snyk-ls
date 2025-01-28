@@ -656,7 +656,7 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 			return nil, nil
 		}
 
-		filteredIssues := fip.FilterIssues(fip.Issues(), config.CurrentConfig().DisplayableIssueTypes())
+		filteredIssues := fip.FilterIssues(fip.Issues(), c.DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
 			logger.Debug().Msg("Sending cached issues")
@@ -668,7 +668,7 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 		}
 
 		if sc, ok := di.Scanner().(scanner.PackageScanner); ok {
-			sc.ScanPackages(context.Background(), config.CurrentConfig(), filePath, "")
+			sc.ScanPackages(context.Background(), c, filePath, "")
 		}
 		return nil, nil
 	})
