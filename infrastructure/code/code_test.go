@@ -800,7 +800,7 @@ func Test_SastApiCall(t *testing.T) {
 		SnykApiClient: apiClient,
 		errorReporter: newTestCodeErrorReporter(),
 		notifier:      notification.NewNotifier(),
-		c:             c,
+		C:             c,
 	}
 
 	t.Run("should call the API to check enablement if Snyk Code is enabled", func(t *testing.T) {
