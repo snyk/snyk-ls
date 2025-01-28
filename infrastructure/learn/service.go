@@ -244,6 +244,9 @@ func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cv
 }
 
 func (s *serviceImpl) getLessonsByEcosystem(params *LessonLookupParams) (ecoLessons []Lesson) {
+	if params.Ecosystem == "npm" {
+		params.Ecosystem = "javascript"
+	}
 	ecoLessons, _ = s.lessonsByEcosystemCache.Get(ecosystemAliases[strings.ToLower(params.Ecosystem)])
 	return
 }

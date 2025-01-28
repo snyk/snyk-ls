@@ -28,8 +28,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-
-	"github.com/adrg/xdg"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
@@ -223,7 +222,7 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		c.SetClientCapabilities(params.Capabilities)
 		setClientInformation(params)
 		// update storage
-		file, err := xdg.ConfigFile("snyk/ls-config-" + c.IdeName())
+		file, err := storedconfig.ConfigFile(c.IdeName())
 		if err != nil {
 			return nil, err
 		}

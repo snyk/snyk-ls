@@ -265,7 +265,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	}
 
 	sc.scanNotifier.SendInProgress(folderPath)
-	gitCheckoutHandler := vcs.NewCheckoutHandler()
+	gitCheckoutHandler := vcs.NewCheckoutHandler(sc.c.Engine().GetConfiguration())
 
 	waitGroup := &sync.WaitGroup{}
 	referenceBranchScanWaitGroup := &sync.WaitGroup{}
@@ -368,7 +368,7 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.
 func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s snyk.ProductScanner, folderPath string, checkoutHandler *vcs.CheckoutHandler) error {
 	logger := sc.c.Logger().With().Str("method", "scanBaseBranch").Logger()
 
-	baseBranchName := vcs.GetBaseBranchName(folderPath)
+	baseBranchName := vcs.GetBaseBranchName(sc.c.Engine().GetConfiguration(), folderPath)
 	headRef, err := vcs.HeadRefHashForBranch(&logger, folderPath, baseBranchName)
 
 	if err != nil {

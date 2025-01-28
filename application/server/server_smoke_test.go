@@ -30,11 +30,13 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -44,6 +46,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -326,7 +329,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) types.Folder {
 	t.Helper()
-	var cloneTargetDirJuice, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
+	var cloneTargetDirJuice, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
 	require.NoError(t, err)
 
 	juiceLspWorkspaceFolder := types.WorkspaceFolder{Uri: uri.PathToUri(cloneTargetDirJuice), Name: "juicy-mac-juice-face"}
@@ -684,7 +687,7 @@ func isNotStandardRegion(c *config.Config) bool {
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) string {
 	t.Helper()
-	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), repo, commit, c.Logger())
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), repo, commit, c.Logger())
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -767,7 +770,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -810,7 +813,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -836,7 +839,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	di.Init()
 
 	fileWithNewVulns := "vulns.js"
-	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
 	assert.NoError(t, err)
 
 	sourceContent, err := os.ReadFile(filepath.Join(cloneTargetDir, "app.js"))
@@ -869,7 +872,7 @@ func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
 	assert.NoError(t, err)
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
@@ -893,7 +896,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	di.Init()
 
 	fileWithNewVulns := "vulns.js"
-	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
 	assert.NoError(t, err)
 
 	newFileInCurrentDir(t, cloneTargetDir, fileWithNewVulns, "// no problems")
@@ -912,10 +915,24 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {
 	t.Helper()
-	// temporary until policy engine doesn't output to stdout anymore
 	t.Setenv("SNYK_LOG_LEVEL", "info")
+	c.SetLogLevel(zerolog.LevelInfoValue)
 	c.ConfigureLogging(nil)
 	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
+
+	documentURI := initParams.WorkspaceFolders[0].Uri
+	commitHash := getCurrentCommitHash(t, uri.PathFromUri(documentURI))
+	config.Version = commitHash
+
+	if initParams.ClientInfo.Name == "" {
+		initParams.ClientInfo.Name = "snyk-ls_(" + t.Name() + ")"
+		initParams.ClientInfo.Version = commitHash
+	}
+
+	if initParams.InitializationOptions.IntegrationName == "" {
+		initParams.InitializationOptions.IntegrationName = "ls-smoke-tests(" + t.Name() + ")"
+		initParams.InitializationOptions.IntegrationVersion = commitHash
+	}
 
 	_, err := loc.Client.Call(ctx, "initialize", initParams)
 	assert.NoError(t, err)
@@ -924,6 +941,24 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 
 	_, err = loc.Client.Call(ctx, "initialized", nil)
 	assert.NoError(t, err)
+}
+
+func getCurrentCommitHash(t *testing.T, workDir string) string {
+	t.Helper()
+	r, err := git.PlainOpen(workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get HEAD reference
+	ref, err := r.Head()
+	if err != nil {
+		return ""
+	}
+
+	// Get the hash from the reference
+	hash := ref.Hash().String()
+	return hash
 }
 
 func textDocumentDidSave(t *testing.T, loc *server.Local, testPath string) sglsp.DidSaveTextDocumentParams {

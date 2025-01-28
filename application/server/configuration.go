@@ -23,6 +23,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/snyk/snyk-ls/internal/product"
+	storedconfig "github.com/snyk/snyk-ls/internal/storedconfig"
+
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 
@@ -30,7 +33,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -156,11 +158,9 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 }
 
 func updateFolderConfig(c *config.Config, settings types.Settings) {
-	gitconfig.SetBaseBranch(c.Logger(), settings.FolderConfigs)
-	for _, folderConfig := range settings.FolderConfigs {
-		if len(folderConfig.AdditionalParameters) > 0 {
-			c.SetAdditionalParameters(folderConfig.FolderPath, folderConfig.AdditionalParameters)
-		}
+	err := storedConfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), settings.FolderConfigs)
+	if err != nil {
+		c.Logger().Err(err).Msg("couldn't update folder configs")
 	}
 }
 

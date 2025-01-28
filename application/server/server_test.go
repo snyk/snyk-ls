@@ -27,6 +27,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -142,7 +143,7 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testutil.JsonRPCRecor
 			AllowPush:   true,
 			Concurrency: 0, // set concurrency to < 1 causes initialization with number of cores
 			Logger: func(text string) {
-				config.CurrentConfig().Logger().Debug().Str("method", "json-rpc").Msg(text)
+				config.CurrentConfig().Logger().Trace().Str("method", "json-rpc").Msg(text)
 			},
 			RPCLog: RPCLogger{c: config.CurrentConfig()},
 		},
@@ -1023,7 +1024,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	var cloneTargetDir, err = testutil.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")

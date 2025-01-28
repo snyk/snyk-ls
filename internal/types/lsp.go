@@ -536,6 +536,12 @@ type FolderConfig struct {
 	BaseBranch           string   `json:"baseBranch"`
 	LocalBranches        []string `json:"localBranches,omitempty"`
 	AdditionalParameters []string `json:"additionalParameters,omitempty"`
+	ReferenceFolderPath  string   `json:"referenceFolderPath,omitempty"`
+}
+
+type Pair struct {
+	First  any `json:"first"`
+	Second any `json:"second"`
 }
 
 type FolderConfigsParam struct {

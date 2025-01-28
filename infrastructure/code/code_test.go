@@ -578,7 +578,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 		learnService:  learnMock,
 		errorReporter: errorReporterMock,
 		changedPaths:  make(map[string]map[string]bool),
-		c:             c,
+		C:             c,
 	}
 
 	issues := []snyk.Issue{
@@ -648,7 +648,7 @@ func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir string) 
 
 func Test_IsEnabled(t *testing.T) {
 	c := config.CurrentConfig()
-	scanner := &Scanner{errorReporter: newTestCodeErrorReporter(), c: c}
+	scanner := &Scanner{errorReporter: newTestCodeErrorReporter(), C: c}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
 			config.CurrentConfig().SetSnykCodeEnabled(true)

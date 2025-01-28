@@ -48,9 +48,9 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
-	gitconfig "github.com/snyk/snyk-ls/internal/git_config"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
+	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -196,7 +196,6 @@ type Config struct {
 	m                                sync.RWMutex
 	clientProtocolVersion            string
 	isOpenBrowserActionEnabled       bool
-	folderAdditionalParameters       map[string][]string
 	hoverVerbosity                   int
 	offline                          bool
 	ws                               types.Workspace
@@ -239,7 +238,6 @@ func NewFromExtension(engine workflow.Engine) *Config {
 // New creates a configuration object with default values
 func newConfig(engine workflow.Engine) *Config {
 	c := &Config{}
-	c.folderAdditionalParameters = make(map[string][]string)
 	c.logger = getNewScrubbingLogger(c)
 	c.cliSettings = NewCliSettings(c)
 	c.automaticAuthentication = true
@@ -277,6 +275,7 @@ func initWorkFlowEngine(c *Config) {
 	conf := configuration.NewWithOpts(
 		configuration.WithAutomaticEnv(),
 	)
+	conf.PersistInStorage(storedConfig.ConfigMainKey)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, enableOAuth)
@@ -1061,7 +1060,10 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.storage = s
-	c.engine.GetConfiguration().SetStorage(s)
+
+	conf := c.engine.GetConfiguration()
+	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.SetStorage(s)
 }
 
 func (c *Config) IdeVersion() string {
@@ -1131,24 +1133,11 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 func (c *Config) FolderConfig(path string) *types.FolderConfig {
 	var folderConfig *types.FolderConfig
 	var err error
-	folderConfig, err = gitconfig.GetOrCreateFolderConfig(path)
+	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path)
 	if err != nil {
-		folderConfig = &types.FolderConfig{}
+		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
-	c.m.RLock()
-	addParams, ok := c.folderAdditionalParameters[path]
-	if ok {
-		folderConfig.AdditionalParameters = addParams
-	}
-	c.m.RUnlock()
 	return folderConfig
-}
-
-func (c *Config) SetAdditionalParameters(path string, parameters []string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.folderAdditionalParameters[path] = parameters
 }
 
 func (c *Config) HoverVerbosity() int {
