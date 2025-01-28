@@ -258,19 +258,21 @@ func (agg *ScanStateAggregator) anyScanError(isReference bool) bool {
 }
 
 func (agg *ScanStateAggregator) totalScansCount() int {
-	scansCount := len(agg.referenceScanStates) + len(agg.workingDirectoryScanStates)
+	scansCount := len(agg.scanStateForEnabledProducts(false)) + len(agg.scanStateForEnabledProducts(true))
 	return scansCount
 }
 
 func (agg *ScanStateAggregator) scansCountInState(status scanStatus) int {
 	count := 0
+	wdStateMap := agg.scanStateForEnabledProducts(false)
+	refStateMap := agg.scanStateForEnabledProducts(true)
 
-	for _, st := range agg.workingDirectoryScanStates {
+	for _, st := range wdStateMap {
 		if st.Status == status {
 			count++
 		}
 	}
-	for _, st := range agg.referenceScanStates {
+	for _, st := range refStateMap {
 		if st.Status == status {
 			count++
 		}
@@ -280,12 +282,7 @@ func (agg *ScanStateAggregator) scansCountInState(status scanStatus) int {
 }
 
 func (agg *ScanStateAggregator) anyMatch(isReference bool, predicate func(*scanState) bool) bool {
-	var stateMap scanStateMap
-	if isReference {
-		stateMap = agg.referenceScanStates
-	} else {
-		stateMap = agg.workingDirectoryScanStates
-	}
+	stateMap := agg.scanStateForEnabledProducts(isReference)
 
 	for _, st := range stateMap {
 		if predicate(st) {
@@ -296,12 +293,7 @@ func (agg *ScanStateAggregator) anyMatch(isReference bool, predicate func(*scanS
 }
 
 func (agg *ScanStateAggregator) allMatch(isReference bool, predicate func(*scanState) bool) bool {
-	var stateMap scanStateMap
-	if isReference {
-		stateMap = agg.referenceScanStates
-	} else {
-		stateMap = agg.workingDirectoryScanStates
-	}
+	stateMap := agg.scanStateForEnabledProducts(isReference)
 
 	for _, st := range stateMap {
 		if !predicate(st) {
@@ -309,4 +301,26 @@ func (agg *ScanStateAggregator) allMatch(isReference bool, predicate func(*scanS
 		}
 	}
 	return true
+}
+
+func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) scanStateMap {
+	var stateMap scanStateMap
+	if isReference {
+		stateMap = agg.referenceScanStates
+	} else {
+		stateMap = agg.workingDirectoryScanStates
+	}
+	scanStateMapWithEnabledProducts := make(scanStateMap)
+
+	for key, st := range stateMap {
+		for displayableIssueType, enabled := range agg.c.DisplayableIssueTypes() {
+			p := displayableIssueType.ToProduct()
+			if enabled && key.Product == p {
+				scanStateMapWithEnabledProducts[key] = st
+				break
+			}
+		}
+	}
+
+	return scanStateMapWithEnabledProducts
 }

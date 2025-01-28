@@ -12,6 +12,8 @@ import (
 
 func TestScanStateAggregator_Init(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+
 	const folderPath = "/path/to/folder"
 
 	emitter := &NoopEmitter{}
@@ -32,6 +34,7 @@ func TestScanStateAggregator_Init(t *testing.T) {
 
 func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
@@ -55,6 +58,7 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 
 func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
@@ -76,6 +80,7 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 
 func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
@@ -97,6 +102,9 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 
 func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykIacEnabled(true)
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
@@ -127,6 +135,7 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 
 func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
@@ -147,6 +156,8 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 
 func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+
 	emitter := &NoopEmitter{}
 	agg := NewScanStateAggregator(c, emitter)
 
@@ -162,6 +173,9 @@ func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
 
 func TestScanStateAggregator_SetScanDone(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+	c.SetSnykCodeEnabled(true)
+
 	emitter := &NoopEmitter{}
 	agg := NewScanStateAggregator(c, emitter)
 
@@ -186,6 +200,9 @@ func TestScanStateAggregator_SetScanDone(t *testing.T) {
 
 func TestScanStateAggregator_StateSnapshot(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+	c.SetSnykCodeEnabled(true)
+
 	emitter := &NoopEmitter{}
 	agg := NewScanStateAggregator(c, emitter)
 
@@ -223,4 +240,35 @@ func TestScanStateAggregator_StateSnapshot(t *testing.T) {
 	agg.SetScanDone(folder, product.ProductCode, true, errors.New("error"))
 	snapshot = agg.StateSnapshot()
 	assert.True(t, snapshot.AnyScanErrorReference)
+}
+
+func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykIacEnabled(false)
+
+	emitter := &NoopEmitter{}
+	const folderPath = "/path/to/folder"
+
+	agg := NewScanStateAggregator(c, emitter)
+	agg.Init([]string{folderPath})
+
+	newState := scanState{
+		Status: InProgress,
+		Err:    nil,
+	}
+
+	agg.SetScanState(folderPath, product.ProductOpenSource, false, newState)
+	agg.SetScanState(folderPath, product.ProductCode, false, newState)
+
+	agg.SetScanState(folderPath, product.ProductOpenSource, true, newState)
+	agg.SetScanState(folderPath, product.ProductCode, true, newState)
+
+	assert.Equal(t, 5, emitter.Calls)
+
+	assert.True(t, agg.allScansStarted(false))
+	assert.True(t, agg.anyScanInProgress(false))
+	snapshot := agg.StateSnapshot()
+	assert.Equal(t, snapshot.ScansInProgressCount, 4, "IaC won't be counted since it's disabled")
 }
