@@ -24,7 +24,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/delta"
-	"github.com/snyk/snyk-ls/internal/product"
 )
 
 //go:embed template/details.html
@@ -125,25 +124,7 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []snyk.Issue, de
 }
 
 func (renderer *HtmlRenderer) getDeltaIssuesForFolder(dp delta.Provider) []snyk.Issue {
-	var allIssues []snyk.Issue
-
-	allIssues = append(allIssues, getDeltaForProduct(product.ProductOpenSource, dp)...)
-	allIssues = append(allIssues, getDeltaForProduct(product.ProductCode, dp)...)
-	allIssues = append(allIssues, getDeltaForProduct(product.ProductInfrastructureAsCode, dp)...)
-
-	return allIssues
-}
-
-func getDeltaForProduct(p product.Product, dp delta.Provider) []snyk.Issue {
-	var allIssues []snyk.Issue
-	issuesByFile, err := dp.GetDelta(p)
-	if err != nil {
-		return allIssues
-	}
-	for _, issues := range issuesByFile {
-		allIssues = append(allIssues, issues...)
-	}
-	return allIssues
+	return dp.GetDeltaForAllProducts(renderer.c.DisplayableIssueTypes())
 }
 
 func fixableIssueCount(issues []snyk.Issue) (fixableIssueCount int) {

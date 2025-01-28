@@ -23,4 +23,5 @@ import (
 
 type Provider interface {
 	GetDelta(p product.Product) (snyk.IssuesByFile, error)
+	GetDeltaForAllProducts(supportedIssueTypes map[product.FilterableIssueType]bool) []snyk.Issue
 }

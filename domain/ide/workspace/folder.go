@@ -480,16 +480,7 @@ func appendTestResults(sic snyk.SeverityIssueCounts, results []json_schemas.Test
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
-	var filteringErr error
 	issueByFile := f.IssuesByProduct()[p]
-	if f.c.IsDeltaFindingsEnabled() {
-		deltaIssues, err := f.GetDelta(p)
-		issueByFile = deltaIssues
-		if err != nil {
-			// Error can only be returned from delta analysis. Other non delta scans are skipped with no errors.
-			filteringErr = fmt.Errorf("couldn't determine the difference between current and base branch for %s scan. %w", p.ToProductNamesString(), err)
-		}
-	}
 
 	// Trigger publishDiagnostics for all issues in Cache.
 	// Filtered issues will be sent with an empty slice if no issues exist.
@@ -503,7 +494,7 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 	for path, issues := range filteredIssues {
 		filteredIssuesToSend[path] = issues
 	}
-	f.publishDiagnostics(p, filteredIssuesToSend, filteringErr)
+	f.publishDiagnostics(p, filteredIssuesToSend)
 }
 
 func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
@@ -580,10 +571,29 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 	return filteredIssuesByFile
 }
 
+func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.FilterableIssueType]bool) []snyk.Issue {
+	var deltaList []snyk.Issue
+	for filterableIssueType, enabled := range supportedIssueTypes {
+		if !enabled {
+			continue
+		}
+		p := filterableIssueType.ToProduct()
+		deltaIssueByFile, err := f.GetDelta(p)
+		if err == nil {
+			deltaList = append(deltaList, getFlatIssueList(deltaIssueByFile)...)
+		}
+	}
+	return deltaList
+}
+
 func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
-
 	filteredIssues := snyk.IssuesByFile{}
+
+	if f.c.IsDeltaFindingsEnabled() {
+		issues = getIssuePerFileFromFlatList(f.GetDeltaForAllProducts(supportedIssueTypes))
+	}
+
 	for path, issueSlice := range issues {
 		if !f.Contains(path) {
 			logger.Error().Msg("issue found in cache that does not pertain to folder")
@@ -618,15 +628,25 @@ func isVisibleSeverity(c *config.Config, issue snyk.Issue) bool {
 	return false
 }
 
-func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile, err error) {
+func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {
 	f.scanStateAggregator.SummaryEmitter().Emit(f.scanStateAggregator.StateSnapshot())
 	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	if err != nil {
-		f.sendScanError(p, err)
+
+	deltaErr := f.hasDeltaError(p)
+	if deltaErr != nil {
+		f.sendScanError(p, deltaErr)
 	} else {
 		f.sendSuccess(p)
 	}
+}
+
+func (f *Folder) hasDeltaError(p product.Product) error {
+	var deltaErr error
+	if f.c.IsDeltaFindingsEnabled() {
+		_, deltaErr = f.scanPersister.GetPersistedIssueList(f.path, p)
+	}
+	return deltaErr
 }
 
 func (f *Folder) getUniqueIssueID(issue snyk.Issue) string {
