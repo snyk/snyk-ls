@@ -155,6 +155,6 @@ func (sc *Scanner) getFileFrom(filePath string, content []byte) BundleFile {
 		Hash:    util.Hash(content),
 		Content: string(content),
 	}
-	sc.c.Logger().Trace().Str("method", "getFileFrom").Str("hash", file.Hash).Str("filePath", filePath).Send()
+	sc.C.Logger().Trace().Str("method", "getFileFrom").Str("hash", file.Hash).Str("filePath", filePath).Send()
 	return file
 }

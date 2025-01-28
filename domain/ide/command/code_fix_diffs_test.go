@@ -69,6 +69,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	codeScanner := &code.Scanner{
 		BundleUploader: code.NewBundler(c, snykCodeClient, instrumentor),
 		SnykApiClient:  snykApiClient,
+		C:              c,
 	}
 	cut := codeFixDiffs{
 		notifier:    notification.NewMockNotifier(),

@@ -106,7 +106,7 @@ func (sc *Scanner) GetAutofixDiffs(
 	issue snyk.Issue,
 ) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
 	method := "GetAutofixDiffs"
-	logger := sc.c.Logger().With().Str("method", method).Logger()
+	logger := sc.C.Logger().With().Str("method", method).Logger()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, method)
 	defer sc.BundleUploader.instrumentor.Finish(span)
 

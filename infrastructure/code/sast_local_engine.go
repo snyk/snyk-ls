@@ -22,12 +22,12 @@ import (
 )
 
 func (sc *Scanner) isLocalEngineEnabled(sastResponse snyk_api.SastResponse) bool {
-	sc.c.Logger().Debug().Any("sastResponse", sastResponse).Msg("sast response")
+	sc.C.Logger().Debug().Any("sastResponse", sastResponse).Msg("sast response")
 	return sastResponse.SastEnabled && sastResponse.LocalCodeEngine.Enabled
 }
 
 func (sc *Scanner) updateCodeApiLocalEngine(sastResponse snyk_api.SastResponse) {
 	config.CurrentConfig().SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
 	api := config.CurrentConfig().SnykCodeApi()
-	sc.c.Logger().Debug().Str("snykCodeApi", api).Msg("updated Snyk Code API Local Engine")
+	sc.C.Logger().Debug().Str("snykCodeApi", api).Msg("updated Snyk Code API Local Engine")
 }
