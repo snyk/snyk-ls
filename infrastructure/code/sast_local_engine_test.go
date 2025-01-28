@@ -49,7 +49,7 @@ func TestIsLocalEngine(t *testing.T) {
 		SnykApiClient: apiClient,
 		errorReporter: newTestCodeErrorReporter(),
 		notifier:      notification.NewNotifier(),
-		c:             c,
+		C:             c,
 	}
 
 	t.Run("should return true if SAST and local engine is enabled is disabled", func(t *testing.T) {

@@ -28,7 +28,7 @@ func TestCheckoutHandler_ShouldCheckout(t *testing.T) {
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
 	_, _ = initGitRepo(t, repoPath, false)
-	ch := NewCheckoutHandler()
+	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
 
 	err := ch.CheckoutBaseBranch(c.Logger(), repoPath)
 
@@ -43,7 +43,7 @@ func TestCheckoutHandler_ShouldCheckout(t *testing.T) {
 func TestCheckoutHandler_InvalidGitRepo(t *testing.T) {
 	c := testutil.UnitTest(t)
 	repoPath := t.TempDir()
-	ch := NewCheckoutHandler()
+	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
 
 	err := ch.CheckoutBaseBranch(c.Logger(), repoPath)
 	assert.Error(t, err)
@@ -57,7 +57,7 @@ func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 	repoPath := t.TempDir()
 	_, _ = initGitRepo(t, repoPath, false)
 
-	ch := NewCheckoutHandler()
+	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
 
 	err := ch.CheckoutBaseBranch(c.Logger(), repoPath)
 	assert.NoError(t, err)

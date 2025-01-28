@@ -42,7 +42,7 @@ func Test_GetLearnEndpoint(t *testing.T) {
 
 func getRealOSSLookupParams() *LessonLookupParams {
 	params := &LessonLookupParams{
-		CWEs:      []string{"CWE-1321"},
+		CWEs:      []string{"CWE-601"},
 		Rule:      "SNYK-JS-ASYNC-2441827",
 		Ecosystem: "npm",
 	}
@@ -78,7 +78,7 @@ func Test_GetLesson(t *testing.T) {
 		testutil.SmokeTest(t, false)
 		params := getRealOSSLookupParams()
 
-		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.LicenceIssue)
+		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.LicenseIssue)
 
 		assert.NoError(t, err)
 		assert.Empty(t, lesson)

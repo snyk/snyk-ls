@@ -21,16 +21,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rs/zerolog"
 	"github.com/subosito/gotenv"
 
 	"github.com/snyk/go-application-framework/pkg/envvars"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func UpdateEnvironmentAndReturnAdditionalParams(sdks []types.LsSdk, logger zerolog.Logger) []string {
-	logger = logger.With().Str("method", "UpdateEnvironmentAndReturnAdditionalParams").Logger()
+func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.LsSdk) []string {
+	logger := c.Logger().With().Str("method", "UpdateEnvironmentAndReturnAdditionalParams").Logger()
 	var additionalParameters []string
 	for i := 0; i < len(sdks); i++ {
 		sdk := sdks[i]

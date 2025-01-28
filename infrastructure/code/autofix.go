@@ -49,7 +49,7 @@ func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string
 	method := "GetAutofixDiffs"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
-	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
+	logger := s.c.Logger().With().Str("method", method).Logger()
 	logger.Info().Msg("Started obtaining autofix diffs")
 	defer logger.Info().Msg("Finished obtaining autofix diffs")
 
@@ -64,7 +64,7 @@ func (s *SnykCodeHTTPClient) getAutofixResponse(ctx context.Context, options Aut
 	method := "getAutofixResponse"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
-	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
+	logger := s.c.Logger().With().Str("method", method).Logger()
 
 	requestId, err := performance2.GetTraceId(ctx)
 	if err != nil {
@@ -106,7 +106,7 @@ func (sc *Scanner) GetAutofixDiffs(
 	issue snyk.Issue,
 ) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
 	method := "GetAutofixDiffs"
-	logger := config.CurrentConfig().Logger().With().Str("method", method).Logger()
+	logger := sc.C.Logger().With().Str("method", method).Logger()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, method)
 	defer sc.BundleUploader.instrumentor.Finish(span)
 

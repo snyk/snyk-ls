@@ -29,6 +29,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -56,7 +57,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			dir := t.TempDir()
-			repo, err := testutil.SetupCustomTestRepo(t, dir, nodejsGoof, "", c.Logger())
+			repo, err := storedconfig.SetupCustomTestRepo(t, dir, nodejsGoof, "", c.Logger())
 			require.NoError(t, err)
 			folder := types.WorkspaceFolder{
 				Name: fmt.Sprintf("Test Repo %d", intermediateIndex),

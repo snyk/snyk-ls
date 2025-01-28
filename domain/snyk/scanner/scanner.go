@@ -262,7 +262,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	}
 
 	sc.scanNotifier.SendInProgress(folderPath)
-	gitCheckoutHandler := vcs.NewCheckoutHandler()
+	gitCheckoutHandler := vcs.NewCheckoutHandler(sc.c.Engine().GetConfiguration())
 	defer func() {
 		if gitCheckoutHandler.CleanupFunc() != nil {
 			logger.Debug().Msg("Calling cleanup func for base folder")
@@ -329,7 +329,7 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.
 	var foundIssues []snyk.Issue
 	isDeltaEnabled, _ := isDeltaScanEnabled(s)
 	if isDeltaEnabled {
-		hasChanges, gitErr := vcs.LocalRepoHasChanges(sc.c.Logger(), folderPath)
+		hasChanges, gitErr := vcs.LocalRepoHasChanges(sc.c.Engine().GetConfiguration(), sc.c.Logger(), folderPath)
 		if gitErr != nil {
 			logger.Error().Err(gitErr).Msg("couldn't check if working dir is clean")
 			return nil, gitErr
@@ -360,7 +360,7 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.
 func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s snyk.ProductScanner, folderPath string, checkoutHandler *vcs.CheckoutHandler) error {
 	logger := sc.c.Logger().With().Str("method", "scanBaseBranch").Logger()
 
-	baseBranchName := vcs.GetBaseBranchName(folderPath)
+	baseBranchName := vcs.GetBaseBranchName(sc.c.Engine().GetConfiguration(), folderPath)
 	headRef, err := vcs.HeadRefHashForBranch(&logger, folderPath, baseBranchName)
 
 	if err != nil {

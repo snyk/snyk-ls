@@ -39,7 +39,8 @@ type StorageWithCallbacks interface {
 
 type storage struct {
 	callbacks   map[string]StorageCallbackFunc
-	jsonStorage *configuration.JsonStorage
+	jsonStorage *configuration.
+			JsonStorage
 	storageFile string
 	mutex       sync.RWMutex
 }

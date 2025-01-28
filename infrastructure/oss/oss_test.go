@@ -38,8 +38,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const testDataPackageJson = "/testdata/package.json"
@@ -361,14 +361,13 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		repo, err := testutil.SetupCustomTestRepo(t, t.TempDir(), testutil.NodejsGoof, "", c.Logger())
+		repo, err := storedconfig.SetupCustomTestRepo(t, t.TempDir(), testutil.NodejsGoof, "", c.Logger())
 		require.NoError(t, err)
-		folderConfigs := []types.FolderConfig{{
-			FolderPath:           repo,
-			AdditionalParameters: []string{"--file=pom.xml"},
-		}}
 
-		c.SetAdditionalParameters(repo, folderConfigs[0].AdditionalParameters)
+		folderConfig := c.FolderConfig(repo)
+		folderConfig.AdditionalParameters = []string{"--file=pom.xml"}
+		err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig)
+		require.NoError(t, err)
 
 		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, repo)
 
