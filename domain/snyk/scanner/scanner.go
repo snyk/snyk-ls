@@ -312,6 +312,10 @@ func (sc *DelegatingConcurrentScanner) Scan(
 							logger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
 						}
 					}
+					if !sc.c.IsDeltaFindingsEnabled() {
+						logger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
+						return
+					}
 					data = snyk.ScanData{
 						Product:           s.Product(),
 						Path:              gitCheckoutHandler.BaseFolderPath(),
