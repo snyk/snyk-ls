@@ -222,8 +222,8 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
 
 		// OSS: empty, package.json goof, package.json juice = 3
-		// Code: empty, app.js = 2
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 3, c)
+		// Code: app.js = 3
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 3, 3, c)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, c)
 	})
 
