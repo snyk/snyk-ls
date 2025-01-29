@@ -182,7 +182,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 			return len(codeIssuesForFile) > 1
 		}, time.Second*5, time.Second)
 
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 2, c)
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, c)
 
 		jsonRPCRecorder.ClearNotifications()
 		jsonRPCRecorder.ClearCallbacks()
@@ -221,10 +221,9 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		codeIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(filepath.Join(cloneTargetDirGoof, "app.js"))
 		require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
 
-		// OSS: empty, package.json goof, package.json in juice(2) = 3 * 2 = 6 for delta
-		// Code: empty, app.js (goof + juice)= 2 * 2 = 4 for delta
-		// For some reason we get only 4. Probably Juice shop delta scan fails
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 4, 4, c)
+		// OSS: empty, package.json goof, package.json juice = 3
+		// Code: empty, app.js = 2
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 3, c)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, c)
 	})
 
@@ -253,7 +252,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		codeFilePath := "app.js"
 		codeIssuesForFile := folderGoofIssueProvider.IssuesForFile(filepath.Join(cloneTargetDirGoof, codeFilePath))
 		require.Greater(t, len(codeIssuesForFile), 1) // 5 is the number of issues in the app.js file as of now
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 2, c)
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, c)
 		require.Greater(t, len(folderGoofIssueProvider.Issues()), 0)
 		jsonRPCRecorder.ClearNotifications()
 		jsonRPCRecorder.ClearCallbacks()
