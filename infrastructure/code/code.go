@@ -45,8 +45,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var _ types.DeltaScanner = (*Scanner)(nil)
-
 type ScanStatus struct {
 	// finished channel is closed once the scan has finished
 	finished chan bool
@@ -106,10 +104,6 @@ func (sc *Scanner) AddBundleHash(key, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func (sc *Scanner) DeltaScanningEnabled() bool {
-	return sc.C.IsDeltaFindingsEnabled()
-}
-
 func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner) *Scanner {
 	sc := &Scanner{
 		BundleUploader: bundleUploader,
@@ -145,9 +139,8 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (issues []snyk.Issue, err error) {
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "code.Scan").Logger()
-	if !c.NonEmptyToken() {
+	logger := sc.C.Logger().With().Str("method", "code.Scan").Logger()
+	if !sc.C.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
@@ -204,7 +197,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (is
 	if err != nil {
 		return nil, err
 	}
-	results = filterCodeIssues(c, results)
+	results = filterCodeIssues(sc.C, results)
 	// Populate HTML template
 	sc.enhanceIssuesDetails(results, folderPath)
 

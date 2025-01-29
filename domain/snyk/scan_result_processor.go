@@ -30,6 +30,8 @@ type ScanData struct {
 	TimestampFinished time.Time
 	Path              string
 	IsDeltaScan       bool
+	SendAnalytics     bool
+	UpdateGlobalCache bool
 }
 
 type ScanResultProcessor = func(scanData ScanData)

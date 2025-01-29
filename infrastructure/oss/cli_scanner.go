@@ -142,10 +142,6 @@ func (cliScanner *CLIScanner) Product() product.Product {
 	return product.ProductOpenSource
 }
 
-func (cliScanner *CLIScanner) DeltaScanningEnabled() bool {
-	return cliScanner.config.IsDeltaFindingsEnabled()
-}
-
 func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue, err error) {
 	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.scan").Logger()
 	if !cliScanner.config.NonEmptyToken() {

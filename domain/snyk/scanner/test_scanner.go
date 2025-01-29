@@ -67,6 +67,8 @@ func (s *TestScanner) Scan(
 		Issues:            s.Issues,
 		DurationMs:        1234,
 		TimestampFinished: time.Now().UTC(),
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
 	}
 	processResults(data)
 	s.calls++

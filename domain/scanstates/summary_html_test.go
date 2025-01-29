@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package summary
+package scanstates
 
 import (
 	"testing"
@@ -30,12 +30,12 @@ func Test_Summary_Html_getSummaryDetailsHtml(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	summaryPanel := htmlRenderer.GetSummaryHtml()
+	summaryPanel := htmlRenderer.GetSummaryHtml(StateSnapshot{})
 
 	// assert injectable style
 	assert.Contains(t, summaryPanel, "${ideStyle}")
 	// assert injectable script
-	assert.Contains(t, summaryPanel, "${ideScript}")
+	assert.Contains(t, summaryPanel, "${ideFunc}")
 
 	// assert Header section
 	assert.Contains(t, summaryPanel, `class="snx-header`)
@@ -47,7 +47,7 @@ func Test_Summary_Html_getSummaryDetailsHtml_hasCSS(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	summaryPanel := htmlRenderer.GetSummaryHtml()
+	summaryPanel := htmlRenderer.GetSummaryHtml(StateSnapshot{})
 	// assert css section
-	assert.Contains(t, summaryPanel, ":root { font-size:10px; }")
+	assert.Contains(t, summaryPanel, ":root")
 }

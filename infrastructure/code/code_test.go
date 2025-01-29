@@ -790,6 +790,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 }
 
 func Test_SastApiCall(t *testing.T) {
+	c := testutil.UnitTest(t)
 	apiClient := &snyk_api.FakeApiClient{
 		CodeEnabled: false,
 		ApiError:    nil,
@@ -799,6 +800,7 @@ func Test_SastApiCall(t *testing.T) {
 		SnykApiClient: apiClient,
 		errorReporter: newTestCodeErrorReporter(),
 		notifier:      notification.NewNotifier(),
+		C:             c,
 	}
 
 	t.Run("should call the API to check enablement if Snyk Code is enabled", func(t *testing.T) {

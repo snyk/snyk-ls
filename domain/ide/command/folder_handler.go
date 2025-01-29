@@ -20,11 +20,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pkg/errors"
+
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	noti "github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/summary"
-
-	"github.com/pkg/errors"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -33,25 +33,22 @@ import (
 const DoTrust = "Trust folders and continue"
 const DontTrust = "Don't trust folders"
 
-func HandleFolders(ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister) {
-	go sendFolderConfigsNotification(notifier)
-	go sendInitialSummaryPanelNotification(notifier)
-	initScanPersister(persister)
-	HandleUntrustedFolders(ctx, srv)
+func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator) {
+	go sendFolderConfigsNotification(c, notifier)
+	initScanStateAggregator(c, agg)
+	initScanPersister(c, persister)
+	HandleUntrustedFolders(ctx, c, srv)
 }
-func sendInitialSummaryPanelNotification(notifier noti.Notifier) {
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "sendInitialSummaryPanelNotification").Logger()
-	renderer, err := summary.NewHtmlRenderer(c)
-	if err != nil {
-		logger.Error().Err(err).Msg("could not create html renderer")
-		return
+
+func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
+	var folderPaths []string
+	for _, f := range c.Workspace().Folders() {
+		folderPaths = append(folderPaths, f.Path())
 	}
-	scanSummaryParams := types.ScanSummary{ScanSummary: renderer.GetSummaryHtml()}
-	notifier.Send(scanSummaryParams)
+	agg.Init(folderPaths)
 }
-func sendFolderConfigsNotification(notifier noti.Notifier) {
-	c := config.CurrentConfig()
+
+func sendFolderConfigsNotification(c *config.Config, notifier noti.Notifier) {
 	ws := c.Workspace()
 	var folderConfigs []types.FolderConfig
 	for _, f := range ws.Folders() {
@@ -66,8 +63,7 @@ func sendFolderConfigsNotification(notifier noti.Notifier) {
 	notifier.Send(folderConfigsParam)
 }
 
-func initScanPersister(persister persistence.ScanSnapshotPersister) {
-	c := config.CurrentConfig()
+func initScanPersister(c *config.Config, persister persistence.ScanSnapshotPersister) {
 	logger := c.Logger().With().Str("method", "initScanPersister").Logger()
 	w := c.Workspace()
 	var folderList []string
@@ -80,8 +76,8 @@ func initScanPersister(persister persistence.ScanSnapshotPersister) {
 	}
 }
 
-func HandleUntrustedFolders(ctx context.Context, srv types.Server) {
-	w := config.CurrentConfig().Workspace()
+func HandleUntrustedFolders(ctx context.Context, c *config.Config, srv types.Server) {
+	w := c.Workspace()
 	// debounce requests from overzealous clients (Eclipse, I'm looking at you)
 	if w.IsTrustRequestOngoing() {
 		return
@@ -91,7 +87,7 @@ func HandleUntrustedFolders(ctx context.Context, srv types.Server) {
 
 	_, untrusted := w.GetFolderTrust()
 	if len(untrusted) > 0 {
-		decision, err := showTrustDialog(srv, untrusted, DoTrust, DontTrust)
+		decision, err := showTrustDialog(c, srv, untrusted, DoTrust, DontTrust)
 		if err != nil {
 			return
 		}
@@ -102,9 +98,9 @@ func HandleUntrustedFolders(ctx context.Context, srv types.Server) {
 	}
 }
 
-func showTrustDialog(srv types.Server, untrusted []types.Folder, dontTrust string, doTrust string) (types.MessageActionItem, error) {
+func showTrustDialog(c *config.Config, srv types.Server, untrusted []types.Folder, dontTrust string, doTrust string) (types.MessageActionItem, error) {
 	method := "showTrustDialog"
-	logger := config.CurrentConfig().Logger()
+	logger := c.Logger()
 	result, err := srv.Callback(context.Background(), "window/showMessageRequest", types.ShowMessageRequestParams{
 		Type:    types.Warning,
 		Message: GetTrustMessage(untrusted),

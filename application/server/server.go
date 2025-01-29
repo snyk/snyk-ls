@@ -195,7 +195,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server, c *config.Conf
 		logger.Info().Msg("RECEIVING")
 		defer logger.Info().Msg("SENDING")
 		changedFolders := c.Workspace().ChangeWorkspaceFolders(params)
-		command.HandleFolders(bgCtx, srv, di.Notifier(), di.ScanPersister())
+		command.HandleFolders(c, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 		if c.IsAutoScanEnabled() {
 			for _, f := range changedFolders {
 				go f.ScanFolder(ctx)
@@ -422,7 +422,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
 		}
-		command.HandleFolders(context.Background(), srv, di.Notifier(), di.ScanPersister())
+		command.HandleFolders(c, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 
 		// Check once for expired cache in same thread before triggering a scan.
 		// Start a periodic go routine to check for the expired cache afterwards
@@ -520,7 +520,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.HoverService(),
 				di.ScanNotifier(),
 				di.Notifier(),
-				di.ScanPersister())
+				di.ScanPersister(),
+				di.ScanStateAggregator())
 			w.AddFolder(f)
 		}
 	} else {
@@ -533,7 +534,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.HoverService(),
 				di.ScanNotifier(),
 				di.Notifier(),
-				di.ScanPersister())
+				di.ScanPersister(),
+				di.ScanStateAggregator())
 			w.AddFolder(f)
 		} else if params.RootPath != "" {
 			f := workspace.NewFolder(
@@ -544,7 +546,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.HoverService(),
 				di.ScanNotifier(),
 				di.Notifier(),
-				di.ScanPersister())
+				di.ScanPersister(),
+				di.ScanStateAggregator())
 			w.AddFolder(f)
 		}
 	}
@@ -652,7 +655,7 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 			return nil, nil
 		}
 
-		filteredIssues := fip.FilterIssues(fip.Issues(), config.CurrentConfig().DisplayableIssueTypes())
+		filteredIssues := fip.FilterIssues(fip.Issues(), c.DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
 			logger.Debug().Msg("Sending cached issues")
@@ -664,7 +667,7 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 		}
 
 		if sc, ok := di.Scanner().(scanner.PackageScanner); ok {
-			sc.ScanPackages(context.Background(), config.CurrentConfig(), filePath, "")
+			sc.ScanPackages(context.Background(), c, filePath, "")
 		}
 		return nil, nil
 	})

@@ -23,8 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/snyk/snyk-ls/internal/product"
-	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -158,7 +157,7 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 }
 
 func updateFolderConfig(c *config.Config, settings types.Settings) {
-	err := storedConfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), settings.FolderConfigs)
+	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), settings.FolderConfigs)
 	if err != nil {
 		c.Logger().Err(err).Msg("couldn't update folder configs")
 	}
@@ -245,7 +244,10 @@ func updateDeltaFindings(c *config.Config, settings types.Settings) {
 		enable = false
 	}
 
-	c.SetDeltaFindingsEnabled(enable)
+	modified := c.SetDeltaFindingsEnabled(enable)
+	if modified {
+		sendWorkspaceConfigChanged(c)
+	}
 }
 
 func updateToken(token string) {
@@ -391,16 +393,14 @@ func updateSeverityFilter(c *config.Config, s types.SeverityFilter) {
 	modified := c.SetSeverityFilter(s)
 
 	if modified {
-		ws := c.Workspace()
-		if ws == nil {
-			return
-		}
-
-		for _, folder := range ws.Folders() {
-			folder.FilterAndPublishDiagnostics(product.ProductOpenSource)
-			folder.FilterAndPublishDiagnostics(product.ProductInfrastructureAsCode)
-			folder.FilterAndPublishDiagnostics(product.ProductCode)
-			folder.FilterAndPublishDiagnostics(product.ProductContainer)
-		}
+		sendWorkspaceConfigChanged(c)
 	}
+}
+
+func sendWorkspaceConfigChanged(c *config.Config) {
+	ws := c.Workspace()
+	if ws == nil {
+		return
+	}
+	go ws.HandleConfigChange()
 }

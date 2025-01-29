@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
@@ -45,6 +46,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	provider.IsAuthenticated = true
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
+	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	authenticationService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notifier)
 	cmd := logoutCommand{
 		command:     types.CommandData{CommandId: types.LogoutCommand},
@@ -54,7 +56,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 
 	sc := scanner.NewTestScanner()
 
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
 	folder := workspace.NewFolder(
 		c,
 		t.TempDir(),
@@ -64,6 +66,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		scanNotifier,
 		notifier,
 		scanPersister,
+		scanStateAggregator,
 	)
 	c.SetWorkspace(w)
 	w.AddFolder(folder)

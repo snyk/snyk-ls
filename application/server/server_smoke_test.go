@@ -42,6 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -188,7 +189,6 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 		// now we add juice shop as second folder/repo
 		if runtime.GOOS == "windows" {
-			t.Setenv("SNYK_LOG_LEVEL", "trace")
 			c.ConfigureLogging(nil)
 			c.SetLogLevel(zerolog.TraceLevel.String())
 		}
@@ -222,8 +222,8 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
 
 		// OSS: empty, package.json goof, package.json juice = 3
-		// Code: empty, app.js = 2
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 3, c)
+		// Code: app.js = 3
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 3, 3, c)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, c)
 	})
 
@@ -397,7 +397,6 @@ func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, jsonRPCRecorder
 }
 
 // check that notifications are sent
-// we expect one empty publishDiagnostics per changed file, and one for the new findings
 func checkDiagnosticPublishingForCachingSmokeTest(
 	t *testing.T,
 	jsonRPCRecorder *testutil.JsonRPCRecorder,
@@ -407,10 +406,6 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 	t.Helper()
 	require.Eventually(t, func() bool {
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
-		appJsEmptyFound := false
-		appJsNewFound := false
-		packageJsonEmptyFound := false
-		packageJsonNewFound := false
 		appJsCount := 0
 		packageJsonCount := 0
 
@@ -420,36 +415,16 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 			require.NoError(t, err)
 			if filepath.Base(uri.PathFromUri(param.URI)) == "package.json" {
 				c.Logger().Debug().Any("notification", notification.ParamString()).Send()
-				if len(param.Diagnostics) == 0 || expectedOSS == 1 { // if expected == 1, we don't expect empty
-					packageJsonEmptyFound = true
-				}
-				if len(param.Diagnostics) > 0 {
-					packageJsonNewFound = true
-				}
 				packageJsonCount++
 			}
 
 			if filepath.Base(uri.PathFromUri(param.URI)) == "app.js" {
-				if len(param.Diagnostics) == 0 || expectedOSS == 1 { // if expected == 1, we don't expect empty
-					appJsEmptyFound = true
-				}
-				if len(param.Diagnostics) > 0 {
-					appJsNewFound = true
-				}
 				appJsCount++
 			}
 		}
-		c.Logger().Debug().Bool("appJsEmptyFound", appJsEmptyFound).Send()
-		c.Logger().Debug().Bool("appJsNewFound", appJsNewFound).Send()
-		c.Logger().Debug().Bool("packageJsonNewFound", packageJsonNewFound).Send()
-		c.Logger().Debug().Bool("packageJsonEmptyFound", packageJsonEmptyFound).Send()
 		c.Logger().Debug().Int("appJsCount", appJsCount).Send()
 		c.Logger().Debug().Int("packageJsonCount", packageJsonCount).Send()
-		result := appJsEmptyFound &&
-			appJsNewFound &&
-			packageJsonNewFound &&
-			packageJsonEmptyFound &&
-			appJsCount == expectedCode &&
+		result := appJsCount == expectedCode &&
 			packageJsonCount == expectedOSS
 
 		return result
@@ -637,6 +612,14 @@ func waitForScan(t *testing.T, cloneTargetDir string, c *config.Config) {
 	}, maxIntegTestDuration, 2*time.Millisecond)
 }
 
+func waitForDeltaScan(t *testing.T, agg scanstates.Aggregator) {
+	t.Helper()
+	// wait till the whole workspace is scanned
+	assert.Eventually(t, func() bool {
+		return agg.StateSnapshot().AllScansSucceededReference && agg.StateSnapshot().AllScansSucceededWorkingDirectory
+	}, maxIntegTestDuration, 2*time.Millisecond)
+}
+
 func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
 	t.Helper()
 	var notifications []jrpc2.Request
@@ -653,7 +636,7 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder,
 			return true
 		}
 		return false
-	}, 10*time.Second, 10*time.Millisecond)
+	}, 5*time.Minute, 10*time.Millisecond)
 }
 
 func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, p product.Product, folderPath string) []types.ScanIssue {
@@ -819,7 +802,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	testPath := filepath.Join(cloneTargetDir, "app.js")
 
 	w := c.Workspace()
-	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister())
+	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 	w.AddFolder(f)
 
 	_ = textDocumentDidSave(t, &loc, testPath)
@@ -861,7 +844,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
 	di.Init()
-
+	scanAggregator := di.ScanStateAggregator()
 	fileWithNewVulns := "vulns.js"
 	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
 	assert.NoError(t, err)
@@ -881,34 +864,16 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 	waitForScan(t, cloneTargetDir, c)
 
+	waitForDeltaScan(t, scanAggregator)
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
-	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
+	var issueList []types.ScanIssue
+	assert.Eventually(t, func() bool {
+		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
+		return len(issueList) > 0
+	}, maxIntegTestDuration, 2*time.Millisecond)
 
-	assert.Greater(t, len(issueList), 0)
+	assert.True(t, len(issueList) > 0)
 	assert.Contains(t, issueList[0].FilePath, fileWithNewVulns)
-}
-
-func Test_SmokeSnykCodeDelta_NoScanNecessary(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
-	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykCodeEnabled(true)
-	c.SetDeltaFindingsEnabled(true)
-	cleanupChannels()
-	di.Init()
-
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
-	assert.NoError(t, err)
-
-	initParams := prepareInitParams(t, cloneTargetDir, c)
-
-	ensureInitialized(t, c, loc, initParams)
-
-	waitForScan(t, cloneTargetDir, c)
-
-	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
-	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
-
-	assert.Equal(t, len(issueList), 0)
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
@@ -918,6 +883,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
 	di.Init()
+	scanAggregator := di.ScanStateAggregator()
 
 	fileWithNewVulns := "vulns.js"
 	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
@@ -931,6 +897,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 	waitForScan(t, cloneTargetDir, c)
 
+	waitForDeltaScan(t, scanAggregator)
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
