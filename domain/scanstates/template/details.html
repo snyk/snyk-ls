@@ -75,10 +75,10 @@
 <!-- Scripts -->
 <!-- Custom scripts will be replaced here-->
 <script nonce=${nonce}>
-  document.getElementById('totalIssues').addEventListener('click', () => {
+  document.getElementById('totalIssues').addEventListener('change', () => {
     toggleDelta(false);
   });
-  document.getElementById('newIssues').addEventListener('click', () => {
+  document.getElementById('newIssues').addEventListener('change', () => {
     toggleDelta(true);
   });
   function toggleDelta(isEnabled) {

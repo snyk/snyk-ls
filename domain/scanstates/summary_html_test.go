@@ -35,7 +35,7 @@ func Test_Summary_Html_getSummaryDetailsHtml(t *testing.T) {
 	// assert injectable style
 	assert.Contains(t, summaryPanel, "${ideStyle}")
 	// assert injectable script
-	assert.Contains(t, summaryPanel, "${ideScript}")
+	assert.Contains(t, summaryPanel, "${ideFunc}")
 
 	// assert Header section
 	assert.Contains(t, summaryPanel, `class="snx-header`)
