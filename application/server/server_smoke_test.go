@@ -866,7 +866,11 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 	waitForDeltaScan(t, scanAggregator)
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductCode)
-	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
+	var issueList []types.ScanIssue
+	assert.Eventually(t, func() bool {
+		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
+		return len(issueList) > 0
+	}, maxIntegTestDuration, 2*time.Millisecond)
 
 	assert.True(t, len(issueList) > 0)
 	assert.Contains(t, issueList[0].FilePath, fileWithNewVulns)
