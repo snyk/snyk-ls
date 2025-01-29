@@ -74,6 +74,16 @@
 
 <!-- Scripts -->
 <!-- Custom scripts will be replaced here-->
-${ideScript}
+<script nonce=${nonce}>
+  document.getElementById('totalIssues').addEventListener('click', () => {
+    toggleDelta(false);
+  });
+  document.getElementById('newIssues').addEventListener('click', () => {
+    toggleDelta(true);
+  });
+  function toggleDelta(isEnabled) {
+    ${ideFunc}
+  }
+</script>
 </body>
 </html>
