@@ -508,8 +508,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
 	if err != nil {
-		logger.Err(err).Msg("Error getting persisted issue list")
-		return nil, delta.ErrNoDeltaCalculated
+		return nil, err
 	}
 
 	currentFlatIssueList := getFlatIssueList(issueByFile)
@@ -527,7 +526,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")
-		return issueByFile, delta.ErrNoDeltaCalculated
+		return issueByFile, err
 	}
 
 	deltaSnykIssues := make([]snyk.Issue, len(diff))

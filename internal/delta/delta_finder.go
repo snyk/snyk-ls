@@ -20,8 +20,6 @@ import (
 	"errors"
 )
 
-var ErrNoDeltaCalculated = errors.New("could not calculate delta")
-
 type Finder struct {
 	enricher Enricher
 	matcher  Matcher
