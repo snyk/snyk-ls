@@ -278,6 +278,9 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				span := sc.instrumentor.NewTransaction(context.WithValue(ctx, s.Product(), s), string(s.Product()), method)
 				defer sc.instrumentor.Finish(span)
 				logger.Info().Msgf("Scanning %s with %T: STARTED", path, s)
+
+				go sc.triggerReferenceScan(s, referenceBranchScanWaitGroup, scanner, gitCheckoutHandler, processResults, path, folderPath)
+
 				sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), false)
 
 				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
@@ -301,29 +304,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				}
 
 				processResults(data)
-				go func() {
-					defer referenceBranchScanWaitGroup.Done()
-					isReferenceScanNeeded := path == folderPath
-					if isReferenceScanNeeded {
-						sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
-						err := sc.scanBaseBranch(context.Background(), s, folderPath, gitCheckoutHandler)
-						sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
-						if err != nil {
-							logger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
-						}
-					}
-					if !sc.c.IsDeltaFindingsEnabled() {
-						logger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
-						return
-					}
-					data = snyk.ScanData{
-						Product:           s.Product(),
-						Path:              gitCheckoutHandler.BaseFolderPath(),
-						SendAnalytics:     false,
-						UpdateGlobalCache: false,
-					}
-					processResults(data)
-				}()
 
 				logger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
@@ -347,6 +327,32 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	sc.notifier.Send(types.InlineValueRefresh{})
 	sc.notifier.Send(types.CodeLensRefresh{})
 	// TODO: handle learn actions centrally instead of in each scanner
+}
+
+func (sc *DelegatingConcurrentScanner) triggerReferenceScan(s snyk.ProductScanner, referenceBranchScanWaitGroup *sync.WaitGroup, scanner snyk.ProductScanner, gitCheckoutHandler *vcs.CheckoutHandler, processResults snyk.ScanResultProcessor, path string, folderPath string) {
+	logger := sc.c.Logger().With().Str("method", "triggerReferenceScan").Logger()
+
+	defer referenceBranchScanWaitGroup.Done()
+	isReferenceScanNeeded := path == folderPath
+	if isReferenceScanNeeded {
+		sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
+		err := sc.scanBaseBranch(context.Background(), s, folderPath, gitCheckoutHandler)
+		sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
+		if err != nil {
+			logger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
+		}
+	}
+	if !sc.c.IsDeltaFindingsEnabled() {
+		logger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
+		return
+	}
+	data := snyk.ScanData{
+		Product:           s.Product(),
+		Path:              gitCheckoutHandler.BaseFolderPath(),
+		SendAnalytics:     false,
+		UpdateGlobalCache: false,
+	}
+	processResults(data)
 }
 
 func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.ProductScanner, path string, folderPath string) ([]snyk.Issue, error) {
