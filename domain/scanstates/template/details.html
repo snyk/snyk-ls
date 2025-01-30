@@ -75,12 +75,16 @@
 <!-- Scripts -->
 <!-- Custom scripts will be replaced here-->
 <script nonce=${nonce}>
-  document.getElementById('totalIssues').addEventListener('change', () => {
-    toggleDelta(false);
-  });
-  document.getElementById('newIssues').addEventListener('change', () => {
-    toggleDelta(true);
-  });
+  if(document.getElementById('totalIssues')) {
+    document.getElementById('totalIssues').addEventListener('change', function () {
+      toggleDelta(false);
+    });
+  }
+  if(document.getElementById('newIssues')) {
+      document.getElementById('newIssues').addEventListener('change', function () {
+        toggleDelta(true);
+      });
+  }
   function toggleDelta(isEnabled) {
     ${ideFunc}
   }
