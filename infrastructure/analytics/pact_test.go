@@ -17,13 +17,15 @@ import (
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/utils"
 
+	"github.com/snyk/snyk-ls/internal/testsupport"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestAnalyticsProviderPactV2(t *testing.T) {
-	testutil.NotOnWindows(t, "we don't have a pact cli")
+	testsupport.NotOnWindows(t, "we don't have a pact cli")
 	c := testutil.UnitTest(t)
 
 	pact := &dsl.Pact{
@@ -77,7 +79,7 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 }
 
 func TestAnalyticsPluginInstalled(t *testing.T) {
-	testutil.NotOnWindows(t, "we don't have a pact cli")
+	testsupport.NotOnWindows(t, "we don't have a pact cli")
 	c := testutil.UnitTest(t)
 
 	pact := &dsl.Pact{

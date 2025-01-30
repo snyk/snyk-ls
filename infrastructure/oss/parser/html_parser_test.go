@@ -22,13 +22,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func createTestFile(t *testing.T) *os.File {
 	t.Helper()
 	dir := t.TempDir()
-	file := testutil.CreateTempFile(t, dir)
+	file := testsupport.CreateTempFile(t, dir)
 	fileContent :=
 		`<html>
 			<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>

@@ -8,6 +8,7 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -262,7 +263,7 @@ func setupIgnoreFilesTest(t *testing.T, testCase ignoreFilesTestCase) {
 
 	for ignoreFilePath, ignoreFileContent := range testCase.ignoreFiles {
 		ignoreFileAbsPath := filepath.Join(testCase.repoPath, ignoreFilePath)
-		testutil.CreateFileOrFail(t, ignoreFileAbsPath, []byte(ignoreFileContent))
+		testsupport.CreateFileOrFail(t, ignoreFileAbsPath, []byte(ignoreFileContent))
 	}
 	createFiles(t, testCase.repoPath, allFiles)
 }
@@ -274,7 +275,7 @@ func createFiles(t *testing.T, repoPath string, allFiles []string) {
 		if !filepath.IsAbs(path) {
 			absPath = filepath.Join(repoPath, path)
 		}
-		testutil.CreateFileOrFail(t, absPath, []byte("some content to avoid skipping"))
+		testsupport.CreateFileOrFail(t, absPath, []byte("some content to avoid skipping"))
 	}
 }
 
@@ -302,9 +303,9 @@ func Test_FindNonIgnoredFiles_IgnoredFolderContainsNestedNegationRules_NestedRul
 	// Arrange
 	c := testutil.UnitTest(t)
 	repoFolder := t.TempDir()
-	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, ".gitignore"), []byte(".gitignore\n/a/\n"))
-	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, "a", ".gitignore"), []byte("!b.txt"))
-	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, "a", "b.txt"), []byte("some content"))
+	testsupport.CreateFileOrFail(t, filepath.Join(repoFolder, ".gitignore"), []byte(".gitignore\n/a/\n"))
+	testsupport.CreateFileOrFail(t, filepath.Join(repoFolder, "a", ".gitignore"), []byte("!b.txt"))
+	testsupport.CreateFileOrFail(t, filepath.Join(repoFolder, "a", "b.txt"), []byte("some content"))
 	fileFilter := filefilter.NewFileFilter(repoFolder, c.Logger())
 
 	// Act

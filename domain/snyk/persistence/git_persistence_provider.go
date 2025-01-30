@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -43,10 +44,10 @@ var (
 )
 
 var (
-	ErrPathHashDoesntExist                       = errors.New("hashed folder path doesn't exist in cache")
-	ErrProductDoesntExist                        = errors.New("product doesn't exist in cache")
-	ErrCommitDoesntExist                         = errors.New("commit doesn't exist in cache")
-	_                      ScanSnapshotPersister = (*GitPersistenceProvider)(nil)
+	ErrPathHashDoesntExist                           = errors.New("hashed folder path doesn't exist in cache")
+	ErrProductCacheDoesntExist                       = errors.New("product doesn't exist in cache")
+	ErrCommitCacheDoesntExist                        = errors.New("commit doesn't exist in cache")
+	_                          ScanSnapshotPersister = (*GitPersistenceProvider)(nil)
 )
 
 type hashedFolderPath string
@@ -64,13 +65,15 @@ type GitPersistenceProvider struct {
 	logger      *zerolog.Logger
 	mutex       sync.Mutex
 	initialized bool
+	conf        configuration.Configuration
 }
 
-func NewGitPersistenceProvider(logger *zerolog.Logger) *GitPersistenceProvider {
+func NewGitPersistenceProvider(logger *zerolog.Logger, conf configuration.Configuration) *GitPersistenceProvider {
 	return &GitPersistenceProvider{
 		cache:  make(map[hashedFolderPath]productCommitHashMap),
 		logger: logger,
 		mutex:  sync.Mutex{},
+		conf:   conf,
 	}
 }
 
@@ -87,7 +90,7 @@ func (g *GitPersistenceProvider) Init(folderPaths []string) error {
 	g.cache = make(map[hashedFolderPath]productCommitHashMap)
 
 	for _, folder := range folderPaths {
-		cacheDir, err := g.ensureCacheDirExists(folder)
+		cacheDir, err := g.ensureCacheDirExists()
 
 		if err != nil {
 			g.logger.Error().Err(err).Msgf("could not determine cache dir for folder path %s", folder)
@@ -128,11 +131,9 @@ func (g *GitPersistenceProvider) Clear(folders []string, deleteOnlyExpired bool)
 	}
 	for _, folderPath := range folders {
 		g.logger.Info().Msgf("checking for expired cache for folder %s", folderPath)
-		cacheDir, err := g.snykCacheDir(folderPath)
-		if err != nil {
-			continue
-		}
-		_, err = os.Stat(cacheDir)
+		cacheDir := snykCacheDir(g.conf)
+
+		_, err := os.Stat(cacheDir)
 		if err != nil {
 			continue
 		}
@@ -163,12 +164,7 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p prod
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
-	cacheDir, err := g.snykCacheDir(folderPath)
-	if err != nil {
-		g.logger.Error().Err(err).Msgf("failed to determine cache dir in path %s", folderPath)
-		return nil, err
-	}
-
+	cacheDir := snykCacheDir(g.conf)
 	commitHash, err := g.getCommitHashForProduct(folderPath, p)
 	if err != nil {
 		return nil, err
@@ -206,12 +202,7 @@ func (g *GitPersistenceProvider) Add(folderPath, commitHash string, issueList []
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
-	cacheDir, err := g.snykCacheDir(folderPath)
-	if err != nil {
-		g.logger.Error().Err(err).Msgf("failed to determine cache dir in path %s", folderPath)
-		return err
-	}
-
+	cacheDir := snykCacheDir(g.conf)
 	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
 
 	shouldPersist := g.shouldPersistOnDisk(hash, commitHash, p)
@@ -219,7 +210,7 @@ func (g *GitPersistenceProvider) Add(folderPath, commitHash string, issueList []
 		return nil
 	}
 
-	err = g.deleteExistingCachedSnapshot(cacheDir, hash, commitHash, p)
+	err := g.deleteExistingCachedSnapshot(cacheDir, hash, commitHash, p)
 	if err != nil {
 		g.logger.Error().Err(err).Msg("failed to delete file from disk in " + folderPath)
 		return err
@@ -240,12 +231,7 @@ func (g *GitPersistenceProvider) Exists(folderPath, commitHash string, p product
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
-	cacheDir, err := g.snykCacheDir(folderPath)
-	if err != nil {
-		g.logger.Error().Err(err).Msgf("failed to determine cache dir in path %s", folderPath)
-		return false
-	}
-
+	cacheDir := snykCacheDir(g.conf)
 	existingCommitHash, err := g.getCommitHashForProduct(folderPath, p)
 
 	if err != nil || existingCommitHash != commitHash || existingCommitHash == "" {
@@ -304,18 +290,18 @@ func (g *GitPersistenceProvider) deleteFromDiskAndCache(fullPath string, hash ha
 }
 
 func (g *GitPersistenceProvider) deleteFromCache(hash hashedFolderPath, commitHash string, p product.Product) error {
-	pchm, exists := g.cache[hash]
+	productCommitHashCache, exists := g.cache[hash]
 	if !exists {
 		return ErrPathHashDoesntExist
 	}
 
-	currentCommitHash, pchExists := pchm[p]
-	if !pchExists {
-		return ErrProductDoesntExist
+	currentCommitHash, productCacheExists := productCommitHashCache[p]
+	if !productCacheExists {
+		return ErrProductCacheDoesntExist
 	}
 
 	if currentCommitHash != commitHash {
-		return ErrCommitDoesntExist
+		return ErrCommitCacheDoesntExist
 	}
 
 	delete(g.cache[hash], p)

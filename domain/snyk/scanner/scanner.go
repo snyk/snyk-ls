@@ -21,19 +21,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/internal/vcs"
-
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
 var (
@@ -265,6 +264,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	}
 
 	sc.scanNotifier.SendInProgress(folderPath)
+	folderConfig := sc.c.FolderConfig(folderPath)
 	gitCheckoutHandler := vcs.NewCheckoutHandler(sc.c.Engine().GetConfiguration())
 
 	waitGroup := &sync.WaitGroup{}
@@ -282,10 +282,19 @@ func (sc *DelegatingConcurrentScanner) Scan(
 
 				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
+				err := sc.executePreScanCommand(ctx, sc.c, s.Product(), folderConfig, folderPath, true)
+				if err != nil {
+					logger.Err(err).Str("path", folderPath).Send()
+					sc.scanNotifier.SendError(scanner.Product(), folderPath, err.Error())
+					sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, err)
+					return
+				}
+
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
 				foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, path, folderPath)
+
+				// this span allows differentiation between processing time and scan time
 				sc.instrumentor.Finish(scanSpan)
-				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, scanError)
 
 				// now process
 				data := snyk.ScanData{
@@ -301,30 +310,38 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				}
 
 				processResults(data)
+
+				// trigger base scan in background
 				go func() {
 					defer referenceBranchScanWaitGroup.Done()
-					isReferenceScanNeeded := path == folderPath
-					if isReferenceScanNeeded {
+					isSingleFileScan := path != folderPath
+
+					// only trigger a base scan if we are scanning an actual working directory. It could also be a
+					// single file scan, triggered by e.g. a file save
+					if !isSingleFileScan {
 						sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
-						err := sc.scanBaseBranch(context.Background(), s, folderPath, gitCheckoutHandler)
-						sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
+						err = sc.scanBaseBranch(context.Background(), s, folderConfig, gitCheckoutHandler)
 						if err != nil {
 							logger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
 						}
+						sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
 					}
+
 					if !sc.c.IsDeltaFindingsEnabled() {
 						logger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
 						return
 					}
+
 					data = snyk.ScanData{
 						Product:           s.Product(),
-						Path:              gitCheckoutHandler.BaseFolderPath(),
 						SendAnalytics:     false,
 						UpdateGlobalCache: false,
+						// Err:               err, TODO: should we send the error here?
 					}
 					processResults(data)
 				}()
 
+				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, scanError)
 				logger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
 		} else {
@@ -356,51 +373,4 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.
 	}
 
 	return foundIssues, nil
-}
-
-func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s snyk.ProductScanner, folderPath string, checkoutHandler *vcs.CheckoutHandler) error {
-	logger := sc.c.Logger().With().Str("method", "scanBaseBranch").Logger()
-
-	baseBranchName := vcs.GetBaseBranchName(sc.c.Engine().GetConfiguration(), folderPath)
-	headRef, err := vcs.HeadRefHashForBranch(&logger, folderPath, baseBranchName)
-
-	if err != nil {
-		logger.Error().Err(err).Msg("couldn't get head ref for base branch")
-		return err
-	}
-
-	snapshotExists := sc.scanPersister.Exists(folderPath, headRef, s.Product())
-	if snapshotExists {
-		return nil
-	}
-
-	err = checkoutHandler.CheckoutBaseBranch(&logger, folderPath)
-	if err != nil {
-		logger.Error().Err(err).Msgf("couldn't check out base branch for folderPath %s", folderPath)
-	}
-
-	var results []snyk.Issue
-	if s.Product() == product.ProductCode {
-		results, err = s.Scan(ctx, "", checkoutHandler.BaseFolderPath())
-	} else {
-		results, err = s.Scan(ctx, checkoutHandler.BaseFolderPath(), "")
-	}
-
-	if err != nil {
-		logger.Error().Err(err).Msgf("skipping base scan persistence in %s %v", folderPath, err)
-		return err
-	}
-
-	commitHash, err := vcs.HeadRefHashForRepo(checkoutHandler.Repo())
-	if err != nil {
-		logger.Error().Err(err).Msg("could not get commit hash for repo in folder " + folderPath)
-		return err
-	}
-
-	err = sc.scanPersister.Add(folderPath, commitHash, results, s.Product())
-	if err != nil {
-		logger.Error().Err(err).Msg("could not persist issue list for folder: " + folderPath)
-	}
-
-	return nil
 }

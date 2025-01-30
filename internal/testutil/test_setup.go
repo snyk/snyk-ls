@@ -18,32 +18,30 @@ package testutil
 
 import (
 	"os"
-	"runtime"
+	"path/filepath"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/progress"
-)
-
-const (
-	integTestEnvVar = "INTEG_TESTS"
-	smokeTestEnvVar = "SMOKE_TESTS"
-	NodejsGoof      = "https://github.com/snyk-labs/nodejs-goof"
+	"github.com/snyk/snyk-ls/internal/storage"
+	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 )
 
 func IntegTest(t *testing.T) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, integTestEnvVar, false)
+	return prepareTestHelper(t, testsupport.IntegTestEnvVar, false)
 }
 
 // TODO: remove useConsistentIgnores once we have fully rolled out the feature
 func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, smokeTestEnvVar, useConsistentIgnores)
+	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, useConsistentIgnores)
 }
 
 func UnitTest(t *testing.T) *config.Config {
@@ -53,6 +51,7 @@ func UnitTest(t *testing.T) *config.Config {
 	c.ConfigureLogging(nil)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	c.SetTrustedFolderFeatureEnabled(false)
+	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
 	t.Cleanup(func() {
@@ -88,22 +87,6 @@ func CLIDownloadLockFileCleanUp(t *testing.T) {
 	})
 }
 
-func NotOnWindows(t *testing.T, reason string) {
-	t.Helper()
-	if //goland:noinspection GoBoolExpressions
-	runtime.GOOS == "windows" {
-		t.Skipf("Not on windows, because %s", reason)
-	}
-}
-
-func OnlyOnWindows(t *testing.T, reason string) {
-	t.Helper()
-	if //goland:noinspection GoBoolExpressions
-	runtime.GOOS != "windows" {
-		t.Skipf("Only on windows, because %s", reason)
-	}
-}
-
 func CreateDummyProgressListener(t *testing.T) {
 	t.Helper()
 	var dummyProgressStopChannel = make(chan bool, 1)
@@ -133,15 +116,28 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 
 	c := config.New()
 	c.ConfigureLogging(nil)
-	c.SetToken(GetEnvironmentToken(useConsistentIgnores))
+	c.SetToken(testsupport.GetEnvironmentToken(useConsistentIgnores))
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
+	redirectConfigAndDataHome(t, c)
+
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
 	t.Cleanup(func() {
 		cleanupFakeCliFile(c)
 	})
 	return c
+}
+
+func redirectConfigAndDataHome(t *testing.T, c *config.Config) {
+	t.Helper()
+	conf := c.Engine().GetConfiguration()
+	conf.Set(constants.DataHome, t.TempDir())
+	storageFile := filepath.Join(t.TempDir(), "testStorage")
+	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
+	require.NoError(t, err)
+	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.SetStorage(s)
 }
 
 func OnlyEnableCode() {
@@ -152,9 +148,7 @@ func OnlyEnableCode() {
 
 func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {
 	t.Helper()
-	ctrl := gomock.NewController(t)
-	mockEngine := mocks.NewMockEngine(ctrl)
-	engineConfig := c.Engine().GetConfiguration()
+	mockEngine, engineConfig := testsupport.SetupEngineMock(t)
 	c.SetEngine(mockEngine)
 	return mockEngine, engineConfig
 }

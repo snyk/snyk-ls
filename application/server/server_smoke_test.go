@@ -38,6 +38,8 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
+	"github.com/snyk/snyk-ls/internal/testsupport"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -62,7 +64,7 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	if endpoint == "" {
 		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
-	runSmokeTest(t, c, nodejsGoof, "0336589", ossFile, codeFile, false, true, endpoint)
+	runSmokeTest(t, c, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint)
 }
 
 func Test_SmokeWorkspaceScan(t *testing.T) {
@@ -90,7 +92,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	tests := []test{
 		{
 			name:                 "OSS_and_Code",
-			repo:                 nodejsGoof,
+			repo:                 testsupport.NodejsGoof,
 			commit:               "0336589",
 			file1:                ossFile,
 			file2:                codeFile,
@@ -99,7 +101,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		},
 		{
 			name:                 "OSS_and_Code_with_V1_endpoint",
-			repo:                 nodejsGoof,
+			repo:                 testsupport.NodejsGoof,
 			commit:               "0336589",
 			file1:                ossFile,
 			file2:                codeFile,
@@ -108,7 +110,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		},
 		{
 			name:                 "OSS_and_Code_with_consistent_ignores",
-			repo:                 nodejsGoof,
+			repo:                 testsupport.NodejsGoof,
 			commit:               "0336589",
 			file1:                ossFile,
 			file2:                codeFile,
@@ -146,13 +148,63 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testutil.SmokeTest(t, false)
-			runSmokeTest(t, c, tc.repo, tc.commit, tc.file1, tc.file2, tc.useConsistentIgnores, tc.hasVulns, "")
+			runSmokeTest(t, c, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "")
 		})
 	}
 }
 
+func Test_SmokePreScanCommand(t *testing.T) {
+	t.Run("executes pre scan command if configured", func(t *testing.T) {
+		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
+		c := testutil.SmokeTest(t, false)
+		loc, jsonRpcRecorder := setupServer(t, c)
+		c.EnableSnykCodeSecurity(false)
+		c.EnableSnykCodeQuality(false)
+		c.SetSnykOssEnabled(true)
+		c.SetSnykIacEnabled(false)
+		di.Init()
+
+		repo, err := storedconfig.SetupCustomTestRepo(t, t.TempDir(), testsupport.PythonGoof, "", c.Logger())
+		require.NoError(t, err)
+		require.NotEmpty(t, repo)
+
+		initParams := prepareInitParams(t, repo, c)
+		folderConfig := types.FolderConfig{
+			FolderPath:        repo,
+			ScanCommandConfig: make(map[product.Product]types.ScanCommandConfig),
+		}
+		script := "/path/to/script"
+		folderConfig.ScanCommandConfig[product.ProductOpenSource] = types.ScanCommandConfig{
+			PreScanOnlyReferenceFolder: false,
+			PreScanCommand:             script,
+		}
+		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
+		ensureInitialized(t, c, loc, initParams)
+
+		assert.Eventuallyf(t, func() bool {
+			notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.scan")
+			if len(notifications) == 0 {
+				return false
+			}
+
+			for _, n := range notifications {
+				var scanParams types.SnykScanParams
+				_ = n.UnmarshalParams(&scanParams)
+				if scanParams.Product != product.ProductOpenSource.ToProductCodename() ||
+					scanParams.FolderPath != repo || scanParams.Status != "error" {
+					continue
+				}
+				// TODO: check right scan state and summary is sent
+				return strings.Contains(scanParams.ErrorMessage, "fork/exec")
+			}
+
+			return false
+		}, time.Minute, time.Second, "expected scan command to fail")
+		waitForDeltaScan(t, di.ScanStateAggregator())
+	})
+}
+
 func Test_SmokeIssueCaching(t *testing.T) {
-	testutil.NotOnWindows(t, "git clone fails on juiceshop ") // TODO remove & fix
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
 		c := testutil.SmokeTest(t, false)
 		loc, jsonRPCRecorder := setupServer(t, c)
@@ -162,7 +214,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		var cloneTargetDirGoof = setupRepoAndInitialize(t, nodejsGoof, "0336589", loc, c)
+		var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
 		require.Truef(t, ok, "Expected to find snyk issue provider")
@@ -225,6 +277,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		// Code: app.js = 3
 		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 3, 3, c)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, c)
+		waitForDeltaScan(t, di.ScanStateAggregator())
 	})
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
@@ -236,7 +289,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		var cloneTargetDirGoof = setupRepoAndInitialize(t, nodejsGoof, "0336589", loc, c)
+		var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
 		require.Truef(t, ok, "Expected to find snyk issue provider")
@@ -290,6 +343,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		var emptyHover hover.Result
 		require.NoError(t, response.UnmarshalResult(&emptyHover))
 		require.Empty(t, emptyHover.Contents.Value)
+		waitForDeltaScan(t, di.ScanStateAggregator())
 	})
 }
 
@@ -302,7 +356,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	c.SetSnykOssEnabled(true)
 	di.Init()
 
-	var cloneTargetDirGoof = setupRepoAndInitialize(t, nodejsGoof, "0336589", loc, c)
+	var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 	folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 
 	// wait till the whole workspace is scanned
@@ -346,7 +400,7 @@ func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Con
 
 // check that $/snyk.scan messages are sent
 // check that they only contain issues that belong to the scanned folder
-func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, folderJuice types.Folder, folderGoof types.Folder, c *config.Config) {
+func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, folderJuice types.Folder, folderGoof types.Folder, c *config.Config) {
 	t.Helper()
 
 	require.Eventually(t, func() bool {
@@ -399,7 +453,7 @@ func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, jsonRPCRecorder
 // check that notifications are sent
 func checkDiagnosticPublishingForCachingSmokeTest(
 	t *testing.T,
-	jsonRPCRecorder *testutil.JsonRPCRecorder,
+	jsonRPCRecorder *testsupport.JsonRPCRecorder,
 	expectedCode, expectedOSS int,
 	c *config.Config,
 ) {
@@ -431,7 +485,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 	}, time.Second*600, time.Second)
 }
 
-func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, file1 string, file2 string, useConsistentIgnores bool, hasVulns bool, endpoint string) {
+func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string) {
 	t.Helper()
 	if endpoint != "" && endpoint != "/v1" {
 		t.Setenv("SNYK_API", endpoint)
@@ -489,6 +543,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 		checkOnlyOneQuickFixCodeAction(t, jsonRPCRecorder, cloneTargetDir, loc)
 		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDir, loc)
 	}
+	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
 func waitForNetwork(c *config.Config) {
@@ -505,7 +560,7 @@ func newFileInCurrentDir(t *testing.T, cloneTargetDir string, fileName string, c
 	assert.NoError(t, err)
 }
 
-func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
+func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
 	t.Helper()
 	if !strings.HasSuffix(t.Name(), "OSS_and_Code") {
 		return
@@ -557,7 +612,7 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testutil.Json
 	assert.Truef(t, atLeastOneQuickfixActionFound, "expected to find at least one code action")
 }
 
-func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
+func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
 	t.Helper()
 	if !strings.HasSuffix(t.Name(), "OSS_and_Code") {
 		return
@@ -616,11 +671,11 @@ func waitForDeltaScan(t *testing.T, agg scanstates.Aggregator) {
 	t.Helper()
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
-		return agg.StateSnapshot().AllScansSucceededReference && agg.StateSnapshot().AllScansSucceededWorkingDirectory
-	}, maxIntegTestDuration, 2*time.Millisecond)
+		return agg.StateSnapshot().AllScansFinishedWorkingDirectory && agg.StateSnapshot().AllScansFinishedReference
+	}, maxIntegTestDuration, time.Second)
 }
 
-func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
+func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
 	t.Helper()
 	var notifications []jrpc2.Request
 	assert.Eventually(t, func() bool {
@@ -639,7 +694,7 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder,
 	}, 5*time.Minute, 10*time.Millisecond)
 }
 
-func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder, p product.Product, folderPath string) []types.ScanIssue {
+func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, p product.Product, folderPath string) []types.ScanIssue {
 	t.Helper()
 
 	var issueList []types.ScanIssue
@@ -777,7 +832,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), testsupport.NodejsGoof, "0336589", c.Logger())
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -808,11 +863,12 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	_ = textDocumentDidSave(t, &loc, testPath)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, 10*time.Millisecond)
+	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
 func Test_SmokeUncFilePath(t *testing.T) {
 	c := testutil.IntegTest(t)
-	testutil.OnlyOnWindows(t, "testing windows UNC file paths")
+	testsupport.OnlyOnWindows(t, "testing windows UNC file paths")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykOssEnabled(false)
@@ -820,7 +876,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), testsupport.NodejsGoof, "0336589", c.Logger())
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -835,6 +891,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	testPath := filepath.Join(uncPath, "app.js")
 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
@@ -846,7 +903,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
 	fileWithNewVulns := "vulns.js"
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), testsupport.NodejsGoof, "0336589", c.Logger())
 	assert.NoError(t, err)
 
 	sourceContent, err := os.ReadFile(filepath.Join(cloneTargetDir, "app.js"))
@@ -874,6 +931,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 	assert.True(t, len(issueList) > 0)
 	assert.Contains(t, issueList[0].FilePath, fileWithNewVulns)
+	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
@@ -902,6 +960,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	assert.Equal(t, len(issueList), 0)
+	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {

@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -40,7 +41,7 @@ var pact dsl.Pact
 var client SnykApiClient
 
 func TestSnykApiPact(t *testing.T) {
-	testutil.NotOnWindows(t, "we don't have a pact cli")
+	testsupport.NotOnWindows(t, "we don't have a pact cli")
 	c := testutil.UnitTest(t)
 
 	setupPact(c)
