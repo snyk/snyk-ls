@@ -31,7 +31,7 @@
   <!-- Custom styles will be replaced here-->
   ${ideStyle}
 </head>
-<body>
+<body class="body-padding">
 <div class="snx-header">
   <div class="snx-switch-container {{if or .AnyScanInProgressReference .AnyScanInProgressWorkingDirectory}} is-loading{{end}}" id="switchContainer">
     <input type="radio" id="totalIssues" name="issueType" value="total" class="snx-switch-input"{{if not .IsDeltaEnabled}} checked{{end}}>
@@ -75,15 +75,20 @@
 <!-- Scripts -->
 <!-- Custom scripts will be replaced here-->
 <script nonce=${nonce}>
-  document.getElementById('totalIssues').addEventListener('change', () => {
-    toggleDelta(false);
-  });
-  document.getElementById('newIssues').addEventListener('change', () => {
-    toggleDelta(true);
-  });
+  if(document.getElementById('totalIssues')) {
+    document.getElementById('totalIssues').addEventListener('change', function () {
+      toggleDelta(false);
+    });
+  }
+  if(document.getElementById('newIssues')) {
+      document.getElementById('newIssues').addEventListener('change', function () {
+        toggleDelta(true);
+      });
+  }
   function toggleDelta(isEnabled) {
     ${ideFunc}
   }
 </script>
+${ideScript}
 </body>
 </html>
