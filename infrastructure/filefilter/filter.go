@@ -184,6 +184,7 @@ func (f *FileFilter) filterFilesInFolder(globs []string,
 				<-semaphore // Release semaphore
 			}()
 			semaphore <- struct{}{} // Acquire semaphore
+
 			if !ignoreParser.MatchesPath(file) {
 				resultsLock.Lock()
 				filteredFiles = append(filteredFiles, file)
@@ -229,7 +230,7 @@ func (f *FileFilter) collectFolderFiles(folderPath string) (folderContent, error
 
 			// If it's the root folder, collect the globs
 			globs = f.collectGlobs(path)
-			f.globsPerFolder[path] = globs
+			f.addGlobsPerFolder(path, globs)
 			return nil
 		} else { // If it's a file, collect its path
 			files = append(files, path)
@@ -247,11 +248,22 @@ func (f *FileFilter) collectFolderFiles(folderPath string) (folderContent, error
 	return content, err
 }
 
+func (f *FileFilter) addGlobsPerFolder(path string, globs []string) {
+	cleanedDirPath := filepath.Clean(path)
+	f.globsPerFolder[cleanedDirPath] = globs
+}
+
+func (f *FileFilter) getGlobsPerFolder(path string) []string {
+	cleanedDirPath := filepath.Clean(path)
+	return f.globsPerFolder[cleanedDirPath]
+}
+
 func (f *FileFilter) collectGlobs(path string) []string {
 	var globs []string
 	folderPath := path
 	if path != f.repoRoot {
-		globs = append(globs, f.globsPerFolder[filepath.Dir(path)]...)
+		pathDir := filepath.Dir(path)
+		globs = append(globs, f.getGlobsPerFolder(pathDir)...)
 	} else {
 		folderPath = f.repoRoot
 		defaultGlobs := []string{"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**", "**/.DS_Store/**"}

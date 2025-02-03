@@ -18,8 +18,8 @@
 package filesystem
 
 import (
+	"bufio"
 	"os"
-	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -35,20 +35,27 @@ func (f *Filesystem) GetLineOfCode(filePath string, line int) (string, error) {
 	if line <= 0 {
 		return "", errors.Errorf("invalid line number %d", line)
 	}
-	lines, err := f.readFile(filePath)
+
+	file, err := os.Open(filePath)
 	if err != nil {
 		return "", err
 	}
-	if len(lines) >= line {
-		return lines[line-1], nil
-	}
-	return "", errors.Errorf("line number above number of lines")
-}
+	defer func() {
+		_ = file.Close()
+	}()
 
-func (f *Filesystem) readFile(filePath string) (lines []string, err error) {
-	bytes, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
+	scanner := bufio.NewScanner(file)
+	currentLine := 0
+	for scanner.Scan() {
+		currentLine++
+		if currentLine == line {
+			return scanner.Text(), nil
+		}
 	}
-	return strings.Split(string(bytes), "\n"), nil
+
+	if err = scanner.Err(); err != nil {
+		return "", err
+	}
+
+	return "", errors.Errorf("line number above number of lines")
 }

@@ -394,7 +394,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, pa
 		}
 	}
 
-	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, bundle.Files, t)
+	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, t)
 	if err != nil {
 		if ctx.Err() == nil { // Only handle errors that are not intentional cancellations
 			msg := "error uploading files..."
@@ -507,14 +507,19 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 		if !supported {
 			continue
 		}
+		fileInfo, err := os.Stat(absoluteFilePath)
+		if err != nil {
+			sc.c.Logger().Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not open file")
+			continue
+		}
+
+		if fileInfo.Size() == 0 || fileInfo.Size() > maxFileSize {
+			continue
+		}
 
 		fileContent, err := os.ReadFile(absoluteFilePath)
 		if err != nil {
 			sc.c.Logger().Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not load content of file")
-			continue
-		}
-
-		if !(len(fileContent) > 0 && len(fileContent) <= maxFileSize) {
 			continue
 		}
 
@@ -524,6 +529,7 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 		}
 		relativePath = EncodePath(relativePath)
 
+		// TODO: Check if we need to calculate hash for createBundle and if we can't calculate when triggering uploadBatch.
 		bundleFile := sc.getFileFrom(absoluteFilePath, fileContent)
 		bundleFiles[relativePath] = bundleFile
 		fileHashes[relativePath] = bundleFile.Hash

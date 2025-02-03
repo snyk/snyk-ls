@@ -18,6 +18,7 @@ package oss
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
@@ -31,14 +32,14 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueRange snyk.Range, fileContent []byte) (actions []snyk.CodeAction) {
+func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueRange snyk.Range) (actions []snyk.CodeAction) {
 	c := config.CurrentConfig()
 	if reflect.DeepEqual(issueRange, snyk.Range{}) {
 		c.Logger().Debug().Str("issue", i.Id).Msg("skipping adding code action, as issueRange is empty")
 		return actions
 	}
 
-	quickFixAction := i.AddQuickFixAction(affectedFilePath, issueRange, fileContent)
+	quickFixAction := i.AddQuickFixAction(affectedFilePath, issueRange)
 	if quickFixAction != nil {
 		actions = append(actions, *quickFixAction)
 	}
@@ -95,7 +96,7 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 	return action
 }
 
-func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Range, fileContent []byte) *snyk.CodeAction {
+func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Range) *snyk.CodeAction {
 	logger := config.CurrentConfig().Logger().With().Str("method", "oss.AddQuickFixAction").Logger()
 	if !config.CurrentConfig().IsSnykOSSQuickFixCodeActionsEnabled() {
 		return nil
@@ -108,8 +109,13 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Ra
 	upgradeMessage := "⚡️ Upgrade to " + quickfixEdit
 	autofixEditCallback := func() *snyk.WorkspaceEdit {
 		edit := &snyk.WorkspaceEdit{}
+		content, err := os.ReadFile(affectedFilePath)
+		if err != nil {
+			logger.Error().Err(err).Str("file", affectedFilePath).Msg("could not open file")
+			return edit
+		}
 		singleTextEdit := snyk.TextEdit{
-			FullText: string(fileContent),
+			FullText: string(content),
 			Range:    issueRange,
 			NewText:  quickfixEdit,
 		}

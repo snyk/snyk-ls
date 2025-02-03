@@ -40,9 +40,9 @@ var issuesSeverity = map[string]snyk.Severity{
 	"medium":   snyk.Medium,
 }
 
-func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, issueRange snyk.Range, learnService learn.Service, ep error_reporting.ErrorReporter, fileContent []byte) snyk.Issue {
+func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, issueRange snyk.Range, learnService learn.Service, ep error_reporting.ErrorReporter) snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
-	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueRange, fileContent)
+	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueRange)
 
 	var codelensCommands []types.CommandData
 	for _, codeAction := range codeActions {
@@ -95,7 +95,6 @@ func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, is
 		Range:               issueRange,
 		Severity:            issue.ToIssueSeverity(),
 		AffectedFilePath:    affectedFilePath,
-		FileContent:         fileContent,
 		Product:             product.ProductOpenSource,
 		IssueDescriptionURL: issue.CreateIssueURL(),
 		IssueType:           snyk.DependencyVulnerability,
@@ -125,7 +124,7 @@ func convertScanResultToIssues(res *scanResult, targetFilePath string, fileConte
 			continue
 		}
 		issueRange := findRange(issue, targetFilePath, fileContent)
-		snykIssue := toIssue(targetFilePath, issue, res, issueRange, ls, ep, fileContent)
+		snykIssue := toIssue(targetFilePath, issue, res, issueRange, ls, ep)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true
