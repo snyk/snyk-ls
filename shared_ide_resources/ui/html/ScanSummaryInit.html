@@ -9,7 +9,7 @@
   content="style-src 'self' 'nonce-${nonce}' 'nonce-ideNonce' https://fonts.googleapis.com;
   script-src 'nonce-${nonce}' https://fonts.googleapis.com;
   font-src 'self' https://fonts.gstatic.com;" />
-  <style>
+  <style nonce=${nonce}>
   @import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');
 
   :root {
@@ -38,6 +38,7 @@
     .snx-header { display: flex; gap:1.6rem; }
     .snx-message { display: flex; align-items: center }
   </style>
+  ${ideStyle}
 </head>
 <body>
 
