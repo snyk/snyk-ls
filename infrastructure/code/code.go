@@ -502,7 +502,7 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 		}
 		fileInfo, err := os.Stat(absoluteFilePath)
 		if err != nil {
-			sc.c.Logger().Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not open file")
+			sc.C.Logger().Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not open file")
 			continue
 		}
 
