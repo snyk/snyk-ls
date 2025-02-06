@@ -106,7 +106,7 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 		learnService: getLearnMock(t),
 	}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, nil)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
@@ -147,7 +147,7 @@ func Test_toIssue_CodeActions(t *testing.T) {
 			sampleOssIssue.PackageManager = test.packageManager
 			sampleOssIssue.UpgradePath = []any{"false", test.packageName}
 
-			issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, nil)
+			issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
 
 			assert.Equal(t, sampleOssIssue.Id, issue.ID)
 			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].Title)
@@ -173,7 +173,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	}
 	sampleOssIssue.UpgradePath = []any{"*"}
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, nil)
+	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 2, len(issue.CodeActions))

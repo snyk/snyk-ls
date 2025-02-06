@@ -41,15 +41,15 @@ func NewUploadBatch() *UploadBatch {
 
 // todo simplify the size computation
 // maybe consider an addFile / canFitFile interface with proper error handling
-func (b *UploadBatch) canFitFile(uri string, content []byte) bool {
-	docPayloadSize := b.getTotalDocPayloadSize(uri, content)
+func (b *UploadBatch) canFitFile(uri string, size int) bool {
+	docPayloadSize := b.getTotalDocPayloadSize(uri, size)
 	newSize := docPayloadSize + b.getSize()
 	b.size += docPayloadSize
 	return newSize < maxUploadBatchSize
 }
 
-func (b *UploadBatch) getTotalDocPayloadSize(documentURI string, content []byte) int {
-	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(documentURI)) + len(content)
+func (b *UploadBatch) getTotalDocPayloadSize(documentURI string, size int) int {
+	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(documentURI)) + size
 }
 
 func (b *UploadBatch) getSize() int {
@@ -68,4 +68,5 @@ func (b *UploadBatch) hasContent() bool {
 type BundleFile struct {
 	Hash    string `json:"hash"`
 	Content string `json:"content"`
+	Size    int    `json:"-"`
 }
