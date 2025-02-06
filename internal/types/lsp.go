@@ -636,6 +636,10 @@ type ScanSummary struct {
 	ScanSummary string `json:"scanSummary"`
 }
 
+type IssueDetails struct {
+	IssueDetails string `json:"IssueDetails"`
+}
+
 type ProgressToken string
 
 type ProgressParams struct {

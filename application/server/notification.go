@@ -128,6 +128,9 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		case types.ScanSummary:
 			notifier(c, srv, "$/snyk.scanSummary", params)
 			logger.Debug().Msg("sending scan summary to client")
+		case types.IssueDetails:
+			notifier(c, srv, "$/snyk.issueDetails", params)
+			logger.Debug().Msg("sending issue details to client")
 		case types.ApplyWorkspaceEditParams:
 			handleApplyWorkspaceEdit(srv, params, &logger)
 			logger.Debug().

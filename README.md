@@ -232,13 +232,22 @@ Right now the language server supports the following actions:
     },
   }
   ```
-  - Summary Panel Status Notification
+- Summary Panel Status Notification
   - method: `$/snyk.scanSummary`
   - params: `types.ScanSummary`
   - example:
   ```json5
   {
     "scanSummary": "<html><body<p> Summary </p></body></html>"
+  }
+  ```
+- Details Panel Status Notification
+  - method: `$/snyk.issueDetails`
+  - params: `types.IssueDetails`
+  - example:
+  ```json5
+  {
+  "detailsPanel": "<html><body<p> IssueDetails </p></body></html>"
   }
   ```
 
@@ -348,12 +357,13 @@ Right now the language server supports the following actions:
     ],
   }
   ```
-- `Code Fix Command` triggers an autofix and applies the changes of the first suggestion
+- `Code Fix Command` triggers an autofix and applies the changes of the chosen suggestion
   - command: `snyk.code.fix`
   - args:
     - `codeActionId` string
     - `AffectedFilePath` string
     - `range` Range
+    - `fixId`
   - returns an error if not successful
 
 - `Code Fix Diffs` allows to retrieve the diffs for autofix suggestions
