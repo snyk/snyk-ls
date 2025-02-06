@@ -19,9 +19,11 @@ package code
 import (
 	"context"
 	"math"
+	"os"
 	"path/filepath"
 
 	"github.com/puzpuzpuz/xsync"
+	"github.com/rs/zerolog"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
@@ -48,8 +50,9 @@ func NewBundler(c *config.Config, SnykCode SnykCodeClient, instrumentor codeClie
 	}
 }
 
-func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[string]BundleFile, t *progress.Tracker) (Bundle, error) {
+func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, t *progress.Tracker) (Bundle, error) {
 	method := "code.Upload"
+	logger := b.c.Logger().With().Str("method", method).Logger()
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
 
@@ -59,10 +62,10 @@ func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[st
 	for len(bundle.missingFiles) > 0 {
 		if s.Context().Err() != nil || t.IsCanceled() {
 			progress.Cancel(t.GetToken())
-			b.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+			logger.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 			return Bundle{}, ctx.Err()
 		}
-		uploadBatches := b.groupInBatches(s.Context(), bundle, files, t)
+		uploadBatches := b.groupInBatches(s.Context(), bundle, t)
 		if len(uploadBatches) == 0 {
 			return bundle, nil
 		}
@@ -71,23 +74,47 @@ func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, files map[st
 		for i, uploadBatch := range uploadBatches {
 			if s.Context().Err() != nil || t.IsCanceled() {
 				progress.Cancel(t.GetToken())
-				b.c.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
+				logger.Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
 				return Bundle{}, ctx.Err()
 			}
+
+			b.enrichBatchWithFileContent(uploadBatch, bundle.rootPath, logger)
+
 			err := bundle.Upload(s.Context(), uploadBatch)
 			if err != nil {
 				return Bundle{}, err
 			}
 			uploadedFiles += len(uploadBatch.documents)
+			// Clear out documents in uploaded batch
+			uploadBatch.documents = make(map[string]BundleFile)
 			percentage := float64(i) / float64(len(uploadBatches)) * 100
 			t.Report(int(math.RoundToEven(percentage)))
 		}
 	}
+	// bundle doesn't need file map anymore since they are already grouped and uploaded
+	bundle.Files = make(map[string]BundleFile)
 
 	return bundle, nil
 }
 
-func (b *BundleUploader) groupInBatches(ctx context.Context, bundle Bundle, files map[string]BundleFile, t *progress.Tracker) []*UploadBatch {
+func (b *BundleUploader) enrichBatchWithFileContent(uploadBatch *UploadBatch, workDir string, logger zerolog.Logger) {
+	for filePath, bundleFile := range uploadBatch.documents {
+		absPath, err := DecodePath(ToAbsolutePath(workDir, filePath))
+		if err != nil {
+			logger.Error().Err(err).Str("file", filePath).Msg("Failed to decode Path")
+			continue
+		}
+		content, err := os.ReadFile(absPath)
+		if err != nil {
+			logger.Error().Err(err).Str("file", filePath).Msg("Failed to read bundle file")
+			continue
+		}
+		bundleFile.Content = string(content)
+		uploadBatch.documents[filePath] = bundleFile
+	}
+}
+
+func (b *BundleUploader) groupInBatches(ctx context.Context, bundle Bundle, t *progress.Tracker) []*UploadBatch {
 	method := "code.groupInBatches"
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
@@ -102,20 +129,19 @@ func (b *BundleUploader) groupInBatches(ctx context.Context, bundle Bundle, file
 			batches = append(batches, uploadBatch)
 		}
 
-		file := files[filePath]
-		var fileContent = []byte(file.Content)
-		if uploadBatch.canFitFile(filePath, fileContent) {
-			b.c.Logger().Trace().Str("path", filePath).Int("size", len(fileContent)).Msgf("added to bundle #%v", len(batches))
+		file := bundle.Files[filePath]
+		if uploadBatch.canFitFile(filePath, file.Size) {
+			b.c.Logger().Trace().Str("path", filePath).Int("size", file.Size).Msgf("added to bundle #%v", len(batches))
 			uploadBatch.documents[filePath] = file
 		} else {
 			b.c.Logger().Trace().Str("path", filePath).Int("size",
-				len(fileContent)).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
+				file.Size).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
 			newUploadBatch := NewUploadBatch()
 			newUploadBatch.documents[filePath] = file
 			batches = append(batches, newUploadBatch)
 			uploadBatch = newUploadBatch
 		}
-		percentage := float64(i) / float64(len(files)) * 100
+		percentage := float64(i) / float64(len(bundle.Files)) * 100
 		t.Report(int(math.RoundToEven(percentage)))
 	}
 	return batches
@@ -152,8 +178,8 @@ func (b *BundleUploader) isSupported(ctx context.Context, file string) (bool, er
 
 func (sc *Scanner) getFileFrom(filePath string, content []byte) BundleFile {
 	file := BundleFile{
-		Hash:    util.Hash(content),
-		Content: string(content),
+		Hash: util.Hash(content),
+		Size: len(content),
 	}
 	sc.C.Logger().Trace().Str("method", "getFileFrom").Str("hash", file.Hash).Str("filePath", filePath).Send()
 	return file

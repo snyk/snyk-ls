@@ -74,7 +74,6 @@ type Issue struct {
 	LessonUrl      string `json:"url"`
 	Fingerprint    string
 	GlobalIdentity string
-	FileContent    []byte
 }
 
 var _ delta.Identifiable = (*Issue)(nil)

@@ -48,7 +48,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		bundleFileMap[documentURI] = bundleFile
 
 		testTracker := progress.NewTestTracker(make(chan types.ProgressParams, 100000), make(chan bool, 1))
-		_, err := bundleUploader.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}, logger: c.Logger()}, bundleFileMap, testTracker)
+		_, err := bundleUploader.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}, logger: c.Logger(), Files: bundleFileMap}, testTracker)
 
 		assert.Equal(t, 1, snykCodeService.TotalBundleCount)
 		assert.NoError(t, err)
@@ -77,7 +77,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		missingFiles = append(missingFiles, path)
 
 		testTracker := progress.NewTestTracker(make(chan types.ProgressParams, 100000), make(chan bool, 1))
-		_, err := bundler.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: missingFiles, logger: c.Logger()}, bundleFileMap, testTracker)
+		_, err := bundler.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: missingFiles, logger: c.Logger(), Files: bundleFileMap}, testTracker)
 
 		assert.True(t, snykCodeService.HasExtendedBundle)
 		assert.Equal(t, 2, snykCodeService.TotalBundleCount)

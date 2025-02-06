@@ -18,6 +18,7 @@ package oss
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -31,7 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueDepNode *ast.Node, fileContent []byte) (actions []snyk.CodeAction) {
+func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueDepNode *ast.Node) (actions []snyk.CodeAction) {
 	c := config.CurrentConfig()
 	if issueDepNode == nil {
 		c.Logger().Debug().Str("issue", i.Id).Msg("skipping adding code action, as issueDepNode is empty")
@@ -47,7 +48,7 @@ func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting
 			quickFixAction = i.AddQuickFixAction(fixNode.Tree.Document, getRangeFromNode(fixNode), []byte(fixNode.Tree.Root.Value), true)
 		}
 	} else {
-		quickFixAction = i.AddQuickFixAction(affectedFilePath, getRangeFromNode(issueDepNode), fileContent, false)
+		quickFixAction = i.AddQuickFixAction(affectedFilePath, getRangeFromNode(issueDepNode), nil, false)
 	}
 	if quickFixAction != nil {
 		actions = append(actions, *quickFixAction)
@@ -121,6 +122,15 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Ra
 	}
 	autofixEditCallback := func() *snyk.WorkspaceEdit {
 		edit := &snyk.WorkspaceEdit{}
+		var err error
+		if fileContent == nil {
+			fileContent, err = os.ReadFile(affectedFilePath)
+			if err != nil {
+				logger.Error().Err(err).Str("file", affectedFilePath).Msg("could not open file")
+				return edit
+			}
+		}
+
 		singleTextEdit := snyk.TextEdit{
 			FullText: string(fileContent),
 			Range:    issueRange,
