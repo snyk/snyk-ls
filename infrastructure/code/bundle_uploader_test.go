@@ -89,7 +89,7 @@ func Test_Bundler_Upload(t *testing.T) {
 func createTempFileInDir(t *testing.T, name string, size int, temporaryDir string) (string, BundleFile) {
 	t.Helper()
 	documentURI, fileContent := createFileOfSize(t, name, size, temporaryDir)
-	return documentURI, BundleFile{Hash: util.Hash(fileContent), Content: string(fileContent)}
+	return documentURI, BundleFile{Hash: util.Hash(fileContent), Content: string(fileContent), Size: size}
 }
 
 func Test_IsSupportedLanguage(t *testing.T) {
