@@ -200,7 +200,6 @@ func Test_SmokePreScanCommand(t *testing.T) {
 
 			return false
 		}, time.Minute, time.Second, "expected scan command to fail")
-		waitForDeltaScan(t, di.ScanStateAggregator())
 	})
 }
 
