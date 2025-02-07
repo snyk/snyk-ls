@@ -156,12 +156,12 @@ func (t *Tracker) CancelOrDone(onCancel func(), doneCh <-chan struct{}) {
 		select {
 		case <-t.cancelChannel:
 			t.m.Lock()
-			logger.Info().Msgf("Canceling Progress %s. Last message: %s", t.token, t.lastMessage)
+			logger.Debug().Msgf("Canceling Progress %s. Last message: %s", t.token, t.lastMessage)
 			t.m.Unlock()
 			return
 		case <-doneCh:
 			t.m.Lock()
-			logger.Info().Msgf("Received done from channel for progress %s", t.token)
+			logger.Debug().Msgf("Received done from channel for progress %s", t.token)
 			t.m.Unlock()
 			return
 		}

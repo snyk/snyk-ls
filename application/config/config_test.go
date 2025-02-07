@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
@@ -303,5 +304,51 @@ func TestSnykUiEndpoint(t *testing.T) {
 		c.UpdateApiEndpoints(apiEndpoint)
 		uiEndpoint := c.SnykUI()
 		assert.Equal(t, "https://app.fedramp.snykgov.io", uiEndpoint)
+	})
+}
+
+func TestConfig_shouldUpdateOAuth2Token(t *testing.T) {
+	// add test cases
+	c := New()
+
+	token := oauth2.Token{
+		AccessToken:  "a",
+		RefreshToken: "b",
+		Expiry:       time.Now().Add(time.Hour),
+	}
+
+	newTokenBytes, err := json.Marshal(token)
+	require.NoError(t, err)
+
+	t.Run("old token empty -> true", func(t *testing.T) {
+		assert.True(t, c.shouldUpdateOAuth2Token("", string(newTokenBytes)))
+	})
+	t.Run("new token empty -> true", func(t *testing.T) {
+		assert.True(t, c.shouldUpdateOAuth2Token(string(newTokenBytes), ""))
+	})
+	t.Run("both tokens empty -> false", func(t *testing.T) {
+		assert.True(t, c.shouldUpdateOAuth2Token("", ""))
+	})
+	t.Run("old token expires after new token -> false", func(t *testing.T) {
+		oldToken := token
+		oldToken.Expiry = token.Expiry.Add(time.Hour)
+		oldTokenBytes, err := json.Marshal(oldToken)
+		require.NoError(t, err)
+
+		assert.False(t, c.shouldUpdateOAuth2Token(string(oldTokenBytes), string(newTokenBytes)))
+	})
+	t.Run("old token expires before new token -> true", func(t *testing.T) {
+		oldToken := token
+		oldToken.Expiry = token.Expiry.Add(-time.Hour)
+		oldTokenBytes, err := json.Marshal(oldToken)
+		require.NoError(t, err)
+
+		assert.True(t, c.shouldUpdateOAuth2Token(string(oldTokenBytes), string(newTokenBytes)))
+	})
+	t.Run("old token not an oauth token, but new one is -> true", func(t *testing.T) {
+		assert.True(t, c.shouldUpdateOAuth2Token(uuid.NewString(), string(newTokenBytes)))
+	})
+	t.Run("new token not an oauth token -> false", func(t *testing.T) {
+		assert.False(t, c.shouldUpdateOAuth2Token(string(newTokenBytes), uuid.NewString()))
 	})
 }

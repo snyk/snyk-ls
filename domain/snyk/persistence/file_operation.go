@@ -24,11 +24,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/pkg/errors"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
-	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
 )
 
 func (g *GitPersistenceProvider) persistToDisk(cacheDir string, folderHashedPath hashedFolderPath, commitHash string, p product.Product, inputToCache []snyk.Issue) error {
@@ -60,15 +62,12 @@ func (g *GitPersistenceProvider) getPersistedFiles(cacheDir string) (persistedFi
 	return persistedFiles, nil
 }
 
-func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string, error) {
-	g.logger.Debug().Msg("attempting to determine .git folder path")
-	cacheDir, err := g.snykCacheDir(folderPath)
-	if err != nil {
-		return "", err
-	}
+func (g *GitPersistenceProvider) ensureCacheDirExists() (string, error) {
+	g.logger.Debug().Msg("attempting to determine cache directory")
+	cacheDir := snykCacheDir(g.conf)
 
-	if _, err = os.Stat(cacheDir); os.IsNotExist(err) {
-		err = os.Mkdir(cacheDir, 0700)
+	if _, err := os.Stat(cacheDir); os.IsNotExist(err) {
+		err = os.MkdirAll(cacheDir, 0700)
 		if err != nil {
 			return "", err
 		}
@@ -76,15 +75,17 @@ func (g *GitPersistenceProvider) ensureCacheDirExists(folderPath string) (string
 	return cacheDir, nil
 }
 
-func (g *GitPersistenceProvider) snykCacheDir(folderPath string) (string, error) {
-	gitFolder, err := storedConfig.GitFolderPath(folderPath)
-	if err != nil {
-		return "", err
+func snykCacheDir(conf configuration.Configuration) string {
+	conf.PersistInStorage(constants.DataHome)
+	dh := conf.GetString(constants.DataHome)
+	if dh == "" {
+		dh = xdg.DataHome
 	}
 
-	cacheDir := filepath.Join(gitFolder, CacheFolder)
-
-	return cacheDir, nil
+	// we want to make sure it's persisted
+	conf.Set(constants.DataHome, dh)
+	cacheDir := filepath.Join(dh, CacheFolder)
+	return cacheDir
 }
 
 func getLocalFilePath(cacheDir string, folderPathHash hashedFolderPath, commitHash string, p product.Product) string {

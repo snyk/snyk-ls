@@ -21,9 +21,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -114,8 +119,8 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 }
 
 func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
-	testutil.UnitTest(t)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
 	sc, scanNotifier := setupScanner(enabledScanner)
 	mockScanNotifier := scanNotifier.(*MockScanNotifier)
@@ -123,4 +128,32 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	sc.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
 
 	assert.NotEmpty(t, mockScanNotifier.InProgressCalls())
+}
+
+func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
+	testsupport.NotOnWindows(t, "/bin/ls does not exist on windows")
+	c := testutil.UnitTest(t)
+	c.SetSnykOssEnabled(true)
+	p := product.ProductOpenSource
+	enabledScanner := NewTestProductScanner(p, true)
+	sc, _ := setupScanner(enabledScanner)
+	delegatingScanner, ok := sc.(*DelegatingConcurrentScanner)
+	require.True(t, ok)
+	workDir := t.TempDir()
+
+	command := "/bin/sh"
+
+	// setup folder config for prescan
+	folderConfig := c.FolderConfig(workDir)
+	scanCommandConfigMap := make(map[product.Product]types.ScanCommandConfig)
+	scanCommandConfigMap[product.ProductOpenSource] = types.ScanCommandConfig{
+		PreScanCommand:             command,
+		PreScanOnlyReferenceFolder: false,
+	}
+	folderConfig.ScanCommandConfig = scanCommandConfigMap
+	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig))
+
+	// trigger execute
+	err := delegatingScanner.executePreScanCommand(context.Background(), c, p, folderConfig, workDir, false)
+	require.NoError(t, err)
 }

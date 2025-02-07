@@ -24,6 +24,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/stretchr/testify/assert"
@@ -158,7 +159,7 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	rootDir := t.TempDir()
 
 	// create trusted repo
-	repo1, err := storedconfig.SetupCustomTestRepo(t, rootDir, nodejsGoof, "0336589", c.Logger())
+	repo1, err := storedconfig.SetupCustomTestRepo(t, rootDir, testsupport.NodejsGoof, "0336589", c.Logger())
 	assert.NoError(t, err)
 
 	// create untrusted directory in same rootDir with the exact prefix
@@ -185,7 +186,7 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, c) }, time.Second*10, time.Millisecond)
 }
 
-func checkTrustMessageRequest(jsonRPCRecorder *testutil.JsonRPCRecorder, c *config.Config) bool {
+func checkTrustMessageRequest(jsonRPCRecorder *testsupport.JsonRPCRecorder, c *config.Config) bool {
 	callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/showMessageRequest")
 	if len(callbacks) == 0 {
 		return false

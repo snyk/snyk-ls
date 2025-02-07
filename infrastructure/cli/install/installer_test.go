@@ -30,6 +30,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -109,7 +110,7 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	i := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 
 	temp := t.TempDir()
-	fakeCliFile := testutil.CreateTempFile(t, temp)
+	fakeCliFile := testsupport.CreateTempFile(t, temp)
 	config.CurrentConfig().CliSettings().SetPath(fakeCliFile.Name())
 
 	checksum, err := getChecksum(fakeCliFile.Name())
@@ -161,7 +162,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	}
 	defer func() { _ = os.Remove(cliDir) }()
 
-	fakeCliFile := testutil.CreateTempFile(t, cliDir)
+	fakeCliFile := testsupport.CreateTempFile(t, cliDir)
 	_ = fakeCliFile.Close()
 	cliDiscovery := Discovery{}
 	cliFilePath := path.Join(cliDir, cliDiscovery.ExecutableName(false))
