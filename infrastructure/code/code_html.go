@@ -67,6 +67,9 @@ var detailsHtmlTemplate string
 //go:embed template/styles.css
 var panelStylesTemplate string
 
+//go:embed template/scripts.js
+var customScripts string
+
 type HtmlRenderer struct {
 	c              *config.Config
 	globalTemplate *template.Template
@@ -148,6 +151,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"FilePath":           issue.Path(),
 		"IssueId":            issue.AdditionalData.GetKey(),
 		"Styles":             template.CSS(panelStylesTemplate),
+		"Scripts":            template.JS(customScripts),
 	}
 
 	if issue.IsIgnored {

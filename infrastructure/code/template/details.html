@@ -345,7 +345,7 @@
   {{end}}
 
   <!-- Scripts -->
-  <script nonce="${nonce}">
+  <script nonce=${nonce}>
     /**
      * Represents a single line change in a commit.
      * @typedef {Object} ExampleLine
@@ -391,21 +391,7 @@
       }
     }
 
-    function toggleElement(element, toggle) {
-      if (!element) {
-        return;
-      }
 
-      if (toggle === 'show') {
-        element.className = element.className.replace(/(?:^|\s)hidden(?!\S)/g, '');
-      } else if (toggle === 'hide') {
-        if (element.className.indexOf('hidden') === -1) {
-          element.className += ' hidden';
-        }
-      } else {
-        console.error('Unexpected toggle value', toggle);
-      }
-    }
 
     function polyfillClosest() {
       if (!Element.prototype.closest) {
@@ -497,11 +483,17 @@
       if (exampleNext) {
         exampleNext.onclick = nextExample;
       }
-
       showCurrentExample();
     });
   </script>
-  ${ideScript}
+  <!-- Embedded script from LS  -->
+  <script nonce=${nonce}>
+    {{.Scripts}}
+  </script>
+  <!-- Custom IDE specific scripts  -->
+  <script nonce=${nonce}>
+    ${ideScript}
+  </script>
 </body>
 
 </html>

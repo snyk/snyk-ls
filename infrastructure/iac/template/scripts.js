@@ -23,7 +23,7 @@
   function applyIgnoreInFile() {
     console.log('Applying ignore', issue);
     if (!issue) return;
-
+    // IntelliJ callback TODO: Inject it dynamically or remove
     window.applyIgnoreInFileQuery(issue + '|@' + filePath + ' > ' + resourcePath);
     toggleElement(ignoreInFileBtn, "hide");
     console.log('Applying ignore');
