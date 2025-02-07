@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -28,13 +27,14 @@ type ignoreFilesTestCase struct {
 }
 
 func Test_FindNonIgnoredFiles(t *testing.T) {
+	c := testutil.UnitTest(t)
 	cases := testCases(t)
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			setupIgnoreFilesTest(t, testCase)
 
-			filter := filefilter.NewFileFilter(testCase.repoPath, config.CurrentConfig().Logger())
+			filter := filefilter.NewFileFilter(testCase.repoPath, c.Logger())
 			var files []string
 			for f := range filter.FindNonIgnoredFiles(getTestTracker()) {
 				files = append(files, f)
@@ -53,6 +53,7 @@ func Test_FindNonIgnoredFiles(t *testing.T) {
 }
 
 func Test_FindNonIgnoredFiles_MultipleWorkDirs(t *testing.T) {
+	c := testutil.UnitTest(t)
 	// Arrange - set 2 repos with different ignore rules. Each repo will have foo.go and bar.go files.
 	// In repo A, foo.go will be ignored, and in repo B, bar.go will be ignored.
 	tempDir := t.TempDir()
@@ -76,7 +77,7 @@ func Test_FindNonIgnoredFiles_MultipleWorkDirs(t *testing.T) {
 		nonIgnoredFiles := filefilter.FindNonIgnoredFiles(
 			getTestTracker(),
 			testCase.repoPath,
-			config.CurrentConfig().Logger(),
+			c.Logger(),
 		)
 		files := util.ChannelToSlice(nonIgnoredFiles)
 
@@ -85,12 +86,42 @@ func Test_FindNonIgnoredFiles_MultipleWorkDirs(t *testing.T) {
 	}
 }
 
+func Test_FindNonIgnoredFiles_TrailingSlashPath(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Arrange
+	// Ignore file is in root
+	// Folder Path has a trailing backslash
+	// Files are included in sub dirs
+	tempDir := t.TempDir()
+	testCase := ignoreFilesTestCase{
+		repoPath:         filepath.Join(tempDir, string(filepath.Separator)),
+		ignoreFiles:      map[string]string{".gitignore": "bar.go\n"},
+		expectedFiles:    []string{filepath.Join(tempDir, "A", "B", "foo.go")},
+		expectedExcludes: []string{filepath.Join(tempDir, "A", "B", "bar.go")},
+	}
+	setupIgnoreFilesTest(t, testCase)
+
+	// Act
+	nonIgnoredFiles := filefilter.FindNonIgnoredFiles(
+		getTestTracker(),
+		testCase.repoPath,
+		c.Logger(),
+	)
+	files := util.ChannelToSlice(nonIgnoredFiles)
+
+	// Assert
+	assertFilesFiltered(t, testCase, files)
+}
+
 func getTestTracker() *progress.Tracker {
 	return progress.NewTestTracker(make(chan types.ProgressParams, 100000), make(chan bool, 1))
 }
 
 func Test_FindNonIgnoredFile_FilesChanged_ReturnsCorrectResults(t *testing.T) {
 	// Arrange - set up repo
+	c := testutil.UnitTest(t)
+
 	repoFolder := t.TempDir()
 	type fileChangesTestCase struct {
 		ignoreFilesTestCase
@@ -108,7 +139,7 @@ func Test_FindNonIgnoredFile_FilesChanged_ReturnsCorrectResults(t *testing.T) {
 		expectedAddedExcludes: []string{"foo2.go", "bar2.go"},
 	}
 	setupIgnoreFilesTest(t, testCase.ignoreFilesTestCase)
-	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger())
+	fileFilter := filefilter.NewFileFilter(repoFolder, c.Logger())
 	originalFilteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles(getTestTracker())) // Calling it a first time
 
 	// Act - Changing folder content
@@ -238,8 +269,11 @@ func setupIgnoreFilesTest(t *testing.T, testCase ignoreFilesTestCase) {
 
 func createFiles(t *testing.T, repoPath string, allFiles []string) {
 	t.Helper()
-	for _, fileRelPath := range allFiles {
-		absPath := filepath.Join(repoPath, fileRelPath)
+	for _, path := range allFiles {
+		absPath := path
+		if !filepath.IsAbs(path) {
+			absPath = filepath.Join(repoPath, path)
+		}
 		testutil.CreateFileOrFail(t, absPath, []byte("some content to avoid skipping"))
 	}
 }
@@ -249,20 +283,29 @@ func createFiles(t *testing.T, repoPath string, allFiles []string) {
 func assertFilesFiltered(t *testing.T, testCase ignoreFilesTestCase, files []string) {
 	t.Helper()
 	for _, expectedFile := range testCase.expectedFiles {
-		assert.Contains(t, files, filepath.Join(testCase.repoPath, expectedFile))
+		expectedFileAbsPath := expectedFile
+		if !filepath.IsAbs(expectedFileAbsPath) {
+			expectedFileAbsPath = filepath.Join(testCase.repoPath, expectedFile)
+		}
+		assert.Contains(t, files, expectedFileAbsPath)
 	}
 	for _, expectedExclude := range testCase.expectedExcludes {
-		assert.NotContains(t, files, filepath.Join(testCase.repoPath, expectedExclude))
+		expectedExcludeAbsPath := expectedExclude
+		if !filepath.IsAbs(expectedExcludeAbsPath) {
+			expectedExcludeAbsPath = filepath.Join(testCase.repoPath, expectedExclude)
+		}
+		assert.NotContains(t, files, expectedExcludeAbsPath)
 	}
 }
 
 func Test_FindNonIgnoredFiles_IgnoredFolderContainsNestedNegationRules_NestedRulesIgnored(t *testing.T) {
 	// Arrange
+	c := testutil.UnitTest(t)
 	repoFolder := t.TempDir()
 	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, ".gitignore"), []byte(".gitignore\n/a/\n"))
 	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, "a", ".gitignore"), []byte("!b.txt"))
 	testutil.CreateFileOrFail(t, filepath.Join(repoFolder, "a", "b.txt"), []byte("some content"))
-	fileFilter := filefilter.NewFileFilter(repoFolder, config.CurrentConfig().Logger())
+	fileFilter := filefilter.NewFileFilter(repoFolder, c.Logger())
 
 	// Act
 	filteredFiles := util.ChannelToSlice(fileFilter.FindNonIgnoredFiles(getTestTracker()))
