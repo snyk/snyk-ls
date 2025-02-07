@@ -579,56 +579,76 @@ func (c *Config) SetSeverityFilter(severityFilter types.SeverityFilter) bool {
 	return filterModified
 }
 
-func (c *Config) SetToken(token string) {
+func (c *Config) SetToken(newTokenString string) {
 	c.m.Lock()
-	oldToken := c.token
+	defer c.m.Unlock()
 
-	// always update the token and auth method in the engine
-	c.token = token
-	c.m.Unlock()
-
-	oauthToken, err := c.TokenAsOAuthToken()
-	isOauthToken := err == nil
 	conf := c.engine.GetConfiguration()
+	oldTokenString := c.token
 
-	// propagate token to gaf
-	if !isOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != token {
-		c.Logger().Info().Msg("Setting legacy authentication in GAF")
+	newOAuthToken, err := getAsOauthToken(newTokenString, c.logger)
+	isNewOauthToken := err == nil
+
+	// propagate newTokenString to gaf
+	if !isNewOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
+		c.logger.Info().Msg("Setting legacy authentication in GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
-		conf.Set(configuration.AUTHENTICATION_TOKEN, token)
+		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString)
 	}
 
-	if isOauthToken && conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN) != token {
-		c.Logger().Info().Err(err).Msg("setting oauth2 authentication in GAF")
+	if c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
+		c.logger.Info().Err(err).Msg("setting oauth2 authentication in GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
-		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, token)
+		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
 	}
 
-	// ensure scrubbing of new token
+	// ensure scrubbing of new newTokenString
 	if w, ok := c.scrubbingWriter.(frameworkLogging.ScrubbingLogWriter); ok {
-		w.AddTerm(token, 0)
-		if isOauthToken {
-			w.AddTerm(oauthToken.AccessToken, 0)
-			w.AddTerm(oauthToken.RefreshToken, 0)
+		w.AddTerm(newTokenString, 0)
+		if newOAuthToken != nil {
+			w.AddTerm(newOAuthToken.AccessToken, 0)
+			w.AddTerm(newOAuthToken.RefreshToken, 0)
 		}
 	}
 
-	// return if the token hasn't changed
-	if oldToken == token {
-		return
+	c.token = newTokenString
+	c.notifyTokenChannelListeners(newTokenString, oldTokenString)
+}
+
+func (c *Config) notifyTokenChannelListeners(newTokenString string, oldTokenString string) {
+	if oldTokenString != newTokenString {
+		for _, channel := range c.tokenChangeChannels {
+			select {
+			case channel <- newTokenString:
+			default:
+				// Using select and a default case avoids deadlock when the channel is full
+				c.logger.Warn().Msg("Cannot send cancellation to channel - channel is full")
+			}
+		}
+		c.tokenChangeChannels = []chan string{}
+	}
+}
+
+// shouldUpdateOAuth2Token checks if a new token should cause an update in language server.
+func (c *Config) shouldUpdateOAuth2Token(oldToken string, newToken string) bool {
+	if newToken == "" {
+		return true
 	}
 
-	c.m.Lock()
-	for _, channel := range c.tokenChangeChannels {
-		select {
-		case channel <- token:
-		default:
-			// Using select and a default case avoids deadlock when the channel is full
-			c.Logger().Warn().Msg("Cannot send cancellation to channel - channel is full")
-		}
+	newOauthToken, err := getAsOauthToken(newToken, c.logger)
+	if err != nil {
+		return false
 	}
-	c.tokenChangeChannels = []chan string{}
-	c.m.Unlock()
+
+	oldOauthToken, err := getAsOauthToken(oldToken, c.logger)
+	if err != nil {
+		return true
+	}
+
+	isNewToken := oldToken != newToken
+	tokenExpiryIsNewer := oldOauthToken.Expiry.Before(newOauthToken.Expiry)
+
+	return isNewToken && tokenExpiryIsNewer
 }
 
 func (c *Config) SetFormat(format string) {
@@ -1034,18 +1054,30 @@ func (c *Config) Logger() *zerolog.Logger {
 }
 
 func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
-	var oauthToken oauth2.Token
-	if _, err := uuid.Parse(c.Token()); err == nil {
+	token := c.Token()
+
+	oauthToken, err := getAsOauthToken(token, c.logger)
+	if err != nil || oauthToken == nil {
+		return oauth2.Token{}, err
+	}
+
+	return *oauthToken, nil
+}
+
+func getAsOauthToken(token string, logger *zerolog.Logger) (*oauth2.Token, error) {
+	if _, err := uuid.Parse(token); err == nil {
 		const msg = "creds are legacy, not oauth2"
-		c.Logger().Trace().Msg(msg)
-		return oauthToken, errors.New(msg)
+		logger.Trace().Msg(msg)
+		return nil, errors.New(msg)
 	}
-	err := json.Unmarshal([]byte(c.Token()), &oauthToken)
+
+	var oauthToken oauth2.Token
+	err := json.Unmarshal([]byte(token), &oauthToken)
 	if err != nil {
-		c.Logger().Trace().Err(err).Msg("unable to unmarshal creds to oauth2 token")
-		return oauthToken, err
+		logger.Trace().Err(err).Msg("unable to unmarshal creds to oauth2 token")
+		return nil, err
 	}
-	return oauthToken, nil
+	return &oauthToken, nil
 }
 
 func (c *Config) Storage() storage.StorageWithCallbacks {
