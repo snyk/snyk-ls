@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -72,11 +73,11 @@ func newIssueEnhancer(
 }
 
 // Adds code actions and code lenses for issues found
-func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue, bundleHash string) {
+func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue) {
 	method := "addCodeActions"
 
 	autoFixEnabled := getCodeSettings().isAutofixEnabled.Get()
-	learnEnabled := config.CurrentConfig().IsSnykLearnCodeActionsEnabled()
+	learnEnabled := b.c.IsSnykLearnCodeActionsEnabled()
 	b.c.Logger().Debug().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
 	b.c.Logger().Debug().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
 
@@ -95,18 +96,18 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 		issueData.HasAIFix = autoFixEnabled && issueData.IsAutofixable
 
 		if issueData.HasAIFix && !issues[i].IsIgnored {
-			codeAction := *b.createDeferredAutofixCodeAction(ctx, issues[i], bundleHash)
+			codeAction := *b.createDeferredAutofixCodeAction(ctx, issues[i])
 			issues[i].CodeActions = append(issues[i].CodeActions, codeAction)
+			uri, err := ideSnykURI(b.rootPath, issues[i], "showInDetailPanel")
+			if err != nil {
+				b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
+				return
+			}
 
-			codeActionId := *codeAction.Uuid
 			issues[i].CodelensCommands = append(issues[i].CodelensCommands, types.CommandData{
-				Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
-				CommandId: types.CodeFixCommand,
-				Arguments: []any{
-					codeActionId,
-					issues[i].AffectedFilePath,
-					issues[i].Range,
-				},
+				Title:     "⚡ Get AI Fixes for issue: " + issueTitle(issues[i]),
+				CommandId: types.NavigateToRangeCommand,
+				Arguments: []any{uri, issues[i].Range},
 			})
 		}
 		issues[i].AdditionalData = issueData
@@ -121,17 +122,42 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 }
 
 // returns the deferred code action CodeAction which calls autofix.
-func (b *IssueEnhancer) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue,
-	bundleHash string) *snyk.CodeAction {
-	autofixEditCallback := b.autofixFunc(ctx, issue, bundleHash)
+func (b *IssueEnhancer) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
+	autofixShowDetailsCallback := b.autofixShowDetailsFunc(ctx, issue)
+	if autofixShowDetailsCallback == nil {
+		b.c.Logger().Error().Msg("Failed to create autofixShowDetailsCallback")
+		return nil
+	}
 
-	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", &autofixEditCallback, nil, "", "")
+	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", nil, &autofixShowDetailsCallback, "", "")
 	if err != nil {
-		b.c.Logger().Error().Msg("failed to create deferred autofix code action")
+		b.c.Logger().Error().Msg("Failed to create deferred autofix code action")
 		b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")
 		return nil
 	}
 	return &action
+}
+
+func (b *IssueEnhancer) autofixShowDetailsFunc(ctx context.Context, issue snyk.Issue) func() *types.CommandData {
+	f := func() *types.CommandData {
+		method := "code.autofixShowDetailsFunc"
+		s := b.instrumentor.StartSpan(ctx, method)
+		defer b.instrumentor.Finish(s)
+
+		uri, err := ideSnykURI(b.rootPath, issue, "showInDetailPanel")
+		if err != nil {
+			b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
+			return nil
+		}
+
+		commandData := &types.CommandData{
+			Title:     types.NavigateToRangeCommand,
+			CommandId: types.NavigateToRangeCommand,
+			Arguments: []any{uri, issue.Range},
+		}
+		return commandData
+	}
+	return f
 }
 
 func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
@@ -223,7 +249,11 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 
 				// send feedback asynchronously, so people can actually see the changes done by the fix
 				go func() {
-					b.SnykCode.SubmitAutofixFeedback(ctx, fix.FixId, FixAppliedUserEvent)
+					err := b.SnykCode.SubmitAutofixFeedback(ctx, fix.FixId, FixAppliedUserEvent)
+					if err != nil {
+						b.c.Logger().Error().Msg("Failed to submit autofix feedback")
+						return
+					}
 
 					actionCommandMap, err := b.autofixFeedbackActions(fix.FixId)
 					successMessage := "Congratulations! 🎉 You’ve just fixed this " + issueTitle(issue) + " issue."
@@ -320,4 +350,32 @@ func issueTitle(issue snyk.Issue) string {
 	}
 
 	return issue.ID
+}
+
+func issueId(issue snyk.Issue) string {
+	if issue.AdditionalData == nil {
+		return issue.ID
+	}
+
+	codeIssueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	if ok && codeIssueData.GetKey() != "" {
+		return codeIssueData.GetKey()
+	}
+
+	return issue.ID
+}
+
+func ideSnykURI(rootPath string, issue snyk.Issue, ideAction string) (string, error) {
+	encodedNormalizedPath, err := ToEncodedNormalizedPath(rootPath, issue.AffectedFilePath)
+	if err != nil {
+		return "", err
+	}
+
+	u := &url.URL{
+		Scheme:   "snyk",
+		Path:     encodedNormalizedPath,
+		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.Product)), url.QueryEscape(issueId(issue)), ideAction),
+	}
+
+	return u.String(), nil
 }
