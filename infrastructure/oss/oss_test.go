@@ -351,31 +351,31 @@ func sampleIssue() ossIssue {
 }
 
 func Test_prepareScanCommand(t *testing.T) {
-	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
-
 	t.Run("Expands parameters", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"--all-projects", "-d"},
 			C:                       c,
 		}
 		c.SetCliSettings(&settings)
-
-		repo, err := storedconfig.SetupCustomTestRepo(t, t.TempDir(), testutil.NodejsGoof, "", c.Logger())
+		workDir := t.TempDir()
+		folderConfig := c.FolderConfig(workDir)
+		folderConfig.AdditionalParameters = []string{"--dev"}
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig)
 		require.NoError(t, err)
 
-		folderConfig := c.FolderConfig(repo)
-		folderConfig.AdditionalParameters = []string{"--file=pom.xml"}
-		err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig)
-		require.NoError(t, err)
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, repo)
-
-		assert.Contains(t, cmd, "--file=pom.xml")
+		assert.Contains(t, cmd, "--dev")
 		assert.Contains(t, cmd, "-d")
 	})
 
 	t.Run("does not use --all-projects if --file is given", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"--file=asdf", "-d"},
 			C:                       c,
@@ -390,6 +390,9 @@ func Test_prepareScanCommand(t *testing.T) {
 	})
 
 	t.Run("Uses --all-projects by default", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"-d"},
 			C:                       c,

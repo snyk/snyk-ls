@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestCheckoutHandler_ShouldCheckout(t *testing.T) {
@@ -30,8 +31,7 @@ func TestCheckoutHandler_ShouldCheckout(t *testing.T) {
 	_, _ = initGitRepo(t, repoPath, false)
 	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
 
-	err := ch.CheckoutBaseBranch(c.Logger(), repoPath)
-
+	err := ch.CheckoutBaseBranch(c.Logger(), getFolderConfig(repoPath))
 	assert.NotNil(t, ch.CleanupFunc())
 	assert.NotNil(t, ch.Repo())
 	assert.NotEmpty(t, ch.BaseFolderPath())
@@ -45,7 +45,7 @@ func TestCheckoutHandler_InvalidGitRepo(t *testing.T) {
 	repoPath := t.TempDir()
 	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
 
-	err := ch.CheckoutBaseBranch(c.Logger(), repoPath)
+	err := ch.CheckoutBaseBranch(c.Logger(), getFolderConfig(repoPath))
 	assert.Error(t, err)
 	assert.Nil(t, ch.CleanupFunc())
 	assert.Nil(t, ch.Repo())
@@ -59,7 +59,7 @@ func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 
 	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
 
-	err := ch.CheckoutBaseBranch(c.Logger(), repoPath)
+	err := ch.CheckoutBaseBranch(c.Logger(), getFolderConfig(repoPath))
 	assert.NoError(t, err)
 	assert.NotNil(t, ch.CleanupFunc())
 	assert.NotNil(t, ch.Repo())
@@ -68,7 +68,7 @@ func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 	firstRunPath := ch.BaseFolderPath()
 	firstRunRepo := ch.Repo()
 
-	err = ch.CheckoutBaseBranch(c.Logger(), repoPath)
+	err = ch.CheckoutBaseBranch(c.Logger(), getFolderConfig(repoPath))
 	assert.NoError(t, err)
 	assert.NotNil(t, ch.CleanupFunc())
 	assert.NotEmpty(t, ch.Repo())
@@ -77,4 +77,10 @@ func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 	assert.Equal(t, firstRunRepo, ch.Repo())
 	assert.Equal(t, firstRunPath, ch.BaseFolderPath())
 	ch.CleanupFunc()()
+}
+
+func getFolderConfig(path string) *types.FolderConfig {
+	return &types.FolderConfig{
+		FolderPath: path,
+	}
 }

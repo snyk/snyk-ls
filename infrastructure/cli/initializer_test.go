@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -65,7 +66,7 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 	initializer := SetupInitializer(t)
 
 	tempDir := t.TempDir()
-	tempFile := testutil.CreateTempFile(t, tempDir)
+	tempFile := testsupport.CreateTempFile(t, tempDir)
 	c.CliSettings().SetPath(tempFile.Name())
 
 	_ = initializer.Init()
@@ -237,7 +238,7 @@ func createDummyCliBinaryWithCreatedDate(t *testing.T, c *config.Config, binaryC
 	t.Helper()
 	// prepare user directory with OS specific dummy CLI binary
 	temp := t.TempDir()
-	file := testutil.CreateTempFile(t, temp)
+	file := testsupport.CreateTempFile(t, temp)
 
 	c.CliSettings().SetPath(file.Name())
 

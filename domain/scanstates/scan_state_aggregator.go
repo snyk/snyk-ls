@@ -68,6 +68,8 @@ type StateSnapshot struct {
 	AllScansSucceededWorkingDirectory bool
 	AnyScanErrorReference             bool
 	AnyScanErrorWorkingDirectory      bool
+	AllScansFinishedWorkingDirectory  bool
+	AllScansFinishedReference         bool
 	TotalScansCount                   int
 	ScansInProgressCount              int
 	ScansErrorCount                   int
@@ -97,6 +99,8 @@ func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
 		ScansInProgressCount:              agg.scansCountInState(InProgress),
 		ScansSuccessCount:                 agg.scansCountInState(Success),
 		ScansErrorCount:                   agg.scansCountInState(Error),
+		AllScansFinishedWorkingDirectory:  agg.allScansFinished(false),
+		AllScansFinishedReference:         agg.allScansFinished(true),
 	}
 	return ss
 }
@@ -249,6 +253,10 @@ func (agg *ScanStateAggregator) allScansSucceeded(isReference bool) bool {
 	return agg.allMatch(isReference, func(st *scanState) bool {
 		return st.Status == Success && st.Err == nil
 	})
+}
+
+func (agg *ScanStateAggregator) allScansFinished(isReference bool) bool {
+	return agg.allMatch(isReference, func(st *scanState) bool { return st.Status == Success || st.Status == Error })
 }
 
 func (agg *ScanStateAggregator) anyScanError(isReference bool) bool {

@@ -204,10 +204,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	cliScanner.runningScans[workDir] = newScan
 	cliScanner.mutex.Unlock()
 
-	args := []string{workDir}
-	args = cliScanner.updateArgsWithSdkConfig(workDir, args)
-
-	cmd := commandFunc(args, map[string]bool{"": true}, workDir)
+	cmd := commandFunc([]string{workDir}, map[string]bool{"": true}, workDir)
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
@@ -234,17 +231,22 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) updateArgsWithSdkConfig(workDir string, commandLineArgs []string) []string {
+func (cliScanner *CLIScanner) updateArgs(workDir string, commandLineArgs []string) []string {
+	folderConfigArgs := cliScanner.config.FolderConfig(workDir).AdditionalParameters
+
 	// this asks the client for the current SDK and blocks on it
 	additionalParameters := cliScanner.updateSDKs(workDir)
-	folderConfigArgs := cliScanner.config.FolderConfig(workDir).AdditionalParameters
+
+	if len(folderConfigArgs) > 0 {
+		additionalParameters = append(additionalParameters, folderConfigArgs...)
+	}
 
 	if len(additionalParameters) > 0 {
 		for _, parameter := range additionalParameters {
 			// if the sdk needs additional parameters, add them (Python plugin, I look at you. Yes, you)
 			// the given parameters take precedence, meaning, a given python configuration will overrule
 			// the automatically determined config
-			isDuplicateParam := storedConfig.SliceContainsParam(commandLineArgs, parameter) || storedConfig.SliceContainsParam(folderConfigArgs, parameter)
+			isDuplicateParam := storedConfig.SliceContainsParam(commandLineArgs, parameter)
 			if !isDuplicateParam {
 				commandLineArgs = append(commandLineArgs, parameter)
 			}
@@ -266,7 +268,6 @@ func (cliScanner *CLIScanner) updateSDKs(workDir string) []string {
 }
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string) []string {
-	c := config.CurrentConfig()
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
@@ -274,18 +275,15 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		cliScanner.config.CliSettings().Path(),
 		"test",
 	})
+	args = cliScanner.updateArgs(path, args)
 	cmd = append(cmd, args...)
 	cmd = append(cmd, "--json")
 
 	additionalParams := cliScanner.config.CliSettings().AdditionalOssParameters
 
-	// append folder parameters if set
-	folderConfig := c.FolderConfig(path)
-	additionalParams = append(additionalParams, folderConfig.AdditionalParameters...)
-
 	// now add all additional parameters, skipping blacklisted ones
 	for _, parameter := range additionalParams {
-		if slices.Contains(cmd, parameter) {
+		if storedConfig.SliceContainsParam(cmd, parameter) {
 			continue
 		}
 

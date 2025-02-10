@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -138,9 +139,9 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			skipReason := "filepath is os dependent"
 			prefix := "C:"
 			if strings.HasPrefix(tc.workDir, prefix) {
-				testutil.OnlyOnWindows(t, skipReason)
+				testsupport.OnlyOnWindows(t, skipReason)
 			} else {
-				testutil.NotOnWindows(t, skipReason)
+				testsupport.NotOnWindows(t, skipReason)
 			}
 
 			base := t.TempDir()

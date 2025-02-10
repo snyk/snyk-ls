@@ -61,6 +61,14 @@ lint: $(TOOLS_BIN)/golangci-lint
 	@echo "==> Linting code with 'golangci-lint'..."
 	@$(TOOLS_BIN)/golangci-lint run ./...
 
+## lint: Lint code with golangci-lint.
+.PHONY: lint-fix
+lint-fix: $(TOOLS_BIN)/golangci-lint
+	@echo "==> Linting and fixing code with 'golangci-lint'..."
+	@$(TOOLS_BIN)/golangci-lint run --fix ./...
+
+
+
 ## test: Run all tests.
 .PHONY: test
 test:

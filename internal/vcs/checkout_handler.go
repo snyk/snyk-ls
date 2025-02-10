@@ -26,6 +26,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type CheckoutHandler struct {
@@ -54,9 +56,10 @@ func (ch *CheckoutHandler) CleanupFunc() func() {
 	return ch.cleanupFunc
 }
 
-func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderPath string) error {
+func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConfig *types.FolderConfig) error {
 	ch.mutex.Lock()
 	defer ch.mutex.Unlock()
+	folderPath := folderConfig.FolderPath
 
 	if ch.baseFolderPath != "" && ch.repository != nil && ch.cleanupFunc != nil {
 		return nil

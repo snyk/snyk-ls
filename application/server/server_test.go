@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -79,12 +80,12 @@ func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
 	return didOpenParams, dirPath
 }
 
-func setupServer(t *testing.T, c *config.Config) (server.Local, *testutil.JsonRPCRecorder) {
+func setupServer(t *testing.T, c *config.Config) (server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	return setupCustomServer(t, c, nil)
 }
 
-func setupServerWithCustomDI(t *testing.T, c *config.Config, useMocks bool) (server.Local, *testutil.JsonRPCRecorder) {
+func setupServerWithCustomDI(t *testing.T, c *config.Config, useMocks bool) (server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	s, jsonRPCRecorder := setupCustomServer(t, c, nil)
 	if !useMocks {
@@ -93,12 +94,12 @@ func setupServerWithCustomDI(t *testing.T, c *config.Config, useMocks bool) (ser
 	return s, jsonRPCRecorder
 }
 
-func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) (server.Local, *testutil.JsonRPCRecorder) {
+func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) (server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	if c == nil {
 		c = testutil.UnitTest(t)
 	}
-	jsonRPCRecorder := &testutil.JsonRPCRecorder{}
+	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
 	loc := startServer(callBackFn, jsonRPCRecorder)
 	di.TestInit(t)
 	cleanupChannels()
@@ -123,7 +124,7 @@ func cleanupChannels() {
 
 type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
 
-func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testutil.JsonRPCRecorder) server.Local {
+func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder) server.Local {
 	var srv *jrpc2.Server
 
 	opts := &server.LocalOptions{
@@ -954,7 +955,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	c := testutil.IntegTest(t)
 	loc, _ := setupServer(t, c)
 	testutil.CreateDummyProgressListener(t)
-	file := testutil.CreateTempFile(t, t.TempDir())
+	file := testsupport.CreateTempFile(t, t.TempDir())
 	w := c.Workspace()
 
 	f := types.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(file.Name())}
@@ -986,7 +987,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 
 // Check if published diagnostics for given testPath match the expectedNumber.
 // If expectedNumber == -1 assume check for expectedNumber > 0
-func checkForPublishedDiagnostics(t *testing.T, c *config.Config, testPath string, expectedNumber int, jsonRPCRecorder *testutil.JsonRPCRecorder) func() bool {
+func checkForPublishedDiagnostics(t *testing.T, c *config.Config, testPath string, expectedNumber int, jsonRPCRecorder *testsupport.JsonRPCRecorder) func() bool {
 	t.Helper()
 	return func() bool {
 		w := c.Workspace()
@@ -1009,7 +1010,7 @@ func checkForPublishedDiagnostics(t *testing.T, c *config.Config, testPath strin
 	}
 }
 
-func checkForSnykScan(t *testing.T, jsonRPCRecorder *testutil.JsonRPCRecorder) func() bool {
+func checkForSnykScan(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder) func() bool {
 	t.Helper()
 	return func() bool {
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
@@ -1024,7 +1025,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), nodejsGoof, "0336589", c.Logger())
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), testsupport.NodejsGoof, "0336589", c.Logger())
 	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -1083,7 +1084,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 //goland:noinspection ALL
 func Test_MonitorClientProcess(t *testing.T) {
 	c := testutil.IntegTest(t)
-	testutil.NotOnWindows(t, "sleep doesn't exist on windows")
+	testsupport.NotOnWindows(t, "sleep doesn't exist on windows")
 	// start process that just sleeps
 	pidChan := make(chan int)
 	go func() {
@@ -1115,7 +1116,7 @@ func Test_getDownloadURL(t *testing.T) {
 	})
 
 	t.Run("LS standalone", func(t *testing.T) {
-		testutil.NotOnWindows(t, "don't want to handle the exe extension")
+		testsupport.NotOnWindows(t, "don't want to handle the exe extension")
 		c := testutil.UnitTest(t)
 		engine := c.Engine()
 		engine.GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)

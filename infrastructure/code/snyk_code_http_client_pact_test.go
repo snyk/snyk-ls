@@ -27,6 +27,8 @@ import (
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
+	"github.com/snyk/snyk-ls/internal/testsupport"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -48,7 +50,7 @@ var client *SnykCodeHTTPClient
 
 //nolint:gocyclo // TODO: address tech debt
 func TestSnykCodeBackendServicePact(t *testing.T) {
-	testutil.NotOnWindows(t, "we don't have a pact cli")
+	testsupport.NotOnWindows(t, "we don't have a pact cli")
 	testutil.UnitTest(t)
 
 	setupPact(t)
@@ -291,7 +293,7 @@ func getSnykRequestIdMatcher() dsl.Matcher {
 }
 
 func TestSnykCodeBackendServicePact_LocalCodeEngine(t *testing.T) {
-	testutil.NotOnWindows(t, "we don't have a pact cli")
+	testsupport.NotOnWindows(t, "we don't have a pact cli")
 	testutil.UnitTest(t)
 
 	setupPact(t)

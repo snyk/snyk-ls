@@ -38,7 +38,7 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path string) (*ty
 
 	if folderConfig != nil && gitFolderConfig != nil {
 		// the previous git configuration takes precedence
-		folderConfig = mergeFolderConfigs(*gitFolderConfig, *folderConfig)
+		folderConfig = mergeFolderConfigs(gitFolderConfig, folderConfig)
 	}
 
 	err = UpdateFolderConfig(conf, folderConfig)
@@ -53,9 +53,9 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path string) (*ty
 }
 
 // mergeFolderConfigs merges two folderConfigs, with the first taking precedence over the second
-func mergeFolderConfigs(first types.FolderConfig, second types.FolderConfig) *types.FolderConfig {
+func mergeFolderConfigs(first *types.FolderConfig, second *types.FolderConfig) *types.FolderConfig {
 	if second.FolderPath != first.FolderPath {
-		return &first
+		return first
 	}
 
 	// add all additional parameters that are not already in first
@@ -75,7 +75,11 @@ func mergeFolderConfigs(first types.FolderConfig, second types.FolderConfig) *ty
 		first.BaseBranch = second.BaseBranch
 	}
 
-	return &first
+	if first.ScanCommandConfig == nil && second.ScanCommandConfig != nil {
+		first.ScanCommandConfig = second.ScanCommandConfig
+	}
+
+	return first
 }
 
 // SliceContainsParam checks if the parameter name is equal by splitting the given

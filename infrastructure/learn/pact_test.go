@@ -25,6 +25,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	errorreporting "github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -39,7 +40,7 @@ var pact dsl.Pact
 
 func setupPact(t *testing.T) {
 	t.Helper()
-	testutil.NotOnWindows(t, "we don't have a pact cli")
+	testsupport.NotOnWindows(t, "we don't have a pact cli")
 	testutil.UnitTest(t)
 
 	pact.LogLevel = "DEBUG"
