@@ -114,6 +114,11 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
 	}
+	nonce, err := html.GenerateSecurityNonce()
+	if err != nil {
+		renderer.c.Logger().Warn().Msgf("Failed to generate security nonce: %s", err)
+		return ""
+	}
 	folderPath := renderer.determineFolderPath(issue.AffectedFilePath)
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
@@ -152,6 +157,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"IssueId":            issue.AdditionalData.GetKey(),
 		"Styles":             template.CSS(panelStylesTemplate),
 		"Scripts":            template.JS(customScripts),
+		"Nonce":              nonce,
 	}
 
 	if issue.IsIgnored {
