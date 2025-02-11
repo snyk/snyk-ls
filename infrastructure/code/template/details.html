@@ -239,7 +239,7 @@
           <!-- AI Fix -->
           <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
             <!-- AI fix buttons -->
-            {{if not eq .AiFixDiffStatus "SUCCESS"}}
+            {{if ne .AiFixDiffStatus "SUCCESS"}}
             <section id="fix-wrapper" class="ai-fix delimiter-top">
               <h2 class="ai-fix-header">
                 DeepCode AI Fixes
@@ -286,7 +286,7 @@
             <!-- AI fixes -->
             {{if eq .AiFixDiffStatus "SUCCESS"}}
             <section id="fixes-section" class="sn-ai-fixes delimiter-top">
-              {{if eq (len .AiFixResult) 0}}
+              {{if eq .AiFixResult "{}"}}
               <div id="info-no-diffs" class="font-light">
                 There are no fix diffs for this issue.
               </div>
@@ -500,6 +500,9 @@
         exampleNext.onclick = nextExample;
       }
       showCurrentExample();
+      {{if eq .AiFixDiffStatus "SUCCESS"}}
+      showCurrentDiff();
+      {{end}}
     });
   </script>
   <!-- Embedded script from LS  -->

@@ -171,7 +171,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 	}
 	aiFixResult := "{}"
 	aiFixSerialized, err := json.Marshal(renderer.AiFixDiffState.Result)
-	if err == nil {
+	if err == nil && string(aiFixSerialized) != "null" {
 		aiFixResult = string(aiFixSerialized)
 	}
 	data := map[string]interface{}{
