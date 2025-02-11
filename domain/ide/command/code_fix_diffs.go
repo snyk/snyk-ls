@@ -108,5 +108,6 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, f
 		htmlRenderer.SetAiFixDiffState(code.AiError, nil, err)
 		return
 	}
+	htmlRenderer.EnrichWithExplain(c, issue, suggestions)
 	htmlRenderer.SetAiFixDiffState(code.AiSuccess, suggestions, nil)
 }

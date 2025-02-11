@@ -22,12 +22,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/internal/uri"
 
@@ -74,9 +77,9 @@ type HtmlRenderer struct {
 	c                    *config.Config
 	globalTemplate       *template.Template
 	AiFixDiffState       AiResultState
-	AiExplainState       AiResultState
 	CurrentSelectedFixId string
 	CurrentIssueId       string
+	deepCodeBinding      *llm.DeepcodeLLMBinding
 }
 type AiStatus string
 
@@ -99,6 +102,12 @@ func GetHTMLRenderer(c *config.Config) (*HtmlRenderer, error) {
 	if codeRenderer != nil {
 		return codeRenderer, nil
 	}
+	explainEndpoint, _ := url.Parse("http://localhost:10000/explain")
+	deepCodeBinding := llm.NewDeepcodeLLMBinding(
+		llm.WithEndpoint(explainEndpoint),
+		llm.WithLogger(c.Logger()),
+		llm.WithOutputFormat(llm.HTML),
+	)
 	funcMap := template.FuncMap{
 		"repoName":      getRepoName,
 		"trimCWEPrefix": html.TrimCWEPrefix,
@@ -112,22 +121,45 @@ func GetHTMLRenderer(c *config.Config) (*HtmlRenderer, error) {
 	}
 
 	codeRenderer = &HtmlRenderer{
-		c:              c,
-		globalTemplate: globalTemplate,
-		AiExplainState: AiResultState{Status: AiNotStarted},
-		AiFixDiffState: AiResultState{Status: AiNotStarted},
+		c:               c,
+		globalTemplate:  globalTemplate,
+		AiFixDiffState:  AiResultState{Status: AiNotStarted},
+		deepCodeBinding: deepCodeBinding,
 	}
 
 	return codeRenderer, nil
 }
 
-func (renderer *HtmlRenderer) SetAiFixDiffState(state AiStatus, res any, err error) {
-	renderer.AiFixDiffState = AiResultState{Status: state, Result: res, Err: err}
-	// TODO send showDocument
+func (renderer *HtmlRenderer) EnrichWithExplain(c *config.Config, issue snyk.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
+	logger := c.Logger().With().Str("method", "EnrichWithExplain").Logger()
+	if len(suggestions) == 0 {
+		return
+	}
+	var wg sync.WaitGroup
+	for i := range suggestions {
+		diff := ""
+		for k, v := range suggestions[i].UnifiedDiffsPerFile {
+			if !strings.Contains(k, issue.AffectedFilePath) {
+				break
+			}
+			diff += v
+		}
+		wg.Add(1)
+		go func() {
+			response, err := renderer.deepCodeBinding.ExplainWithOptions(llm.ExplainOptions{RuleKey: issue.ID, Diff: diff})
+			wg.Done()
+			if err != nil {
+				logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.AdditionalData.GetKey())
+				return
+			}
+			suggestions[i].Explanation = response
+		}()
+	}
+	wg.Wait()
 }
 
-func (renderer *HtmlRenderer) SetAiExplainState(state AiStatus, res any, err error) {
-	renderer.AiExplainState = AiResultState{Status: state, Result: res, Err: err}
+func (renderer *HtmlRenderer) SetAiFixDiffState(state AiStatus, res any, err error) {
+	renderer.AiFixDiffState = AiResultState{Status: state, Result: res, Err: err}
 	// TODO send showDocument
 }
 
@@ -162,13 +194,10 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
 	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
 	var aiFixErr string
-	var aiExplainErr string
 	if renderer.AiFixDiffState.Err != nil {
 		aiFixErr = renderer.AiFixDiffState.Err.Error()
 	}
-	if renderer.AiExplainState.Err != nil {
-		aiExplainErr = renderer.AiExplainState.Err.Error()
-	}
+
 	aiFixResult := "{}"
 	aiFixSerialized, err := json.Marshal(renderer.AiFixDiffState.Result)
 	if err == nil && string(aiFixSerialized) != "null" {
@@ -210,12 +239,9 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"Scripts":              template.JS(customScripts),
 		"Nonce":                nonce,
 		"AiFixResult":          aiFixResult,
-		"ExplainResult":        renderer.AiExplainState.Result,
 		"AiFixDiffStatus":      renderer.AiFixDiffState.Status,
-		"AiExplainStatus":      renderer.AiExplainState.Status,
 		"CurrentSelectedFixId": renderer.CurrentSelectedFixId,
 		"AiFixError":           aiFixErr,
-		"AiExplainError":       aiExplainErr,
 	}
 
 	if issue.IsIgnored {
@@ -240,8 +266,8 @@ func (renderer *HtmlRenderer) resetAiFixCacheIfDifferent(issue snyk.Issue) {
 	if issue.AdditionalData.GetKey() == renderer.CurrentIssueId {
 		return
 	}
+
 	renderer.AiFixDiffState = AiResultState{Status: AiNotStarted}
-	renderer.AiExplainState = AiResultState{Status: AiNotStarted}
 	renderer.CurrentIssueId = issue.AdditionalData.GetKey()
 	renderer.CurrentSelectedFixId = ""
 }
