@@ -303,11 +303,9 @@ func Test_addIssueActions(t *testing.T) {
 		assert.Len(t, fakeIssues[0].CodelensCommands, 1)
 		assert.Len(t, fakeIssues[0].CodeActions, 1)
 	})
-
 }
 
 func Test_ideSnykURI(t *testing.T) {
-
 	t.Run("generates correct URI", func(t *testing.T) {
 		rootPath := "/Users/user/workspace/blah"
 		issue := snyk.Issue{
