@@ -67,6 +67,9 @@ var detailsHtmlTemplate string
 //go:embed template/styles.css
 var panelStylesTemplate string
 
+//go:embed template/scripts.js
+var customScripts string
+
 type HtmlRenderer struct {
 	c              *config.Config
 	globalTemplate *template.Template
@@ -111,6 +114,11 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
 	}
+	nonce, err := html.GenerateSecurityNonce()
+	if err != nil {
+		renderer.c.Logger().Warn().Msgf("Failed to generate security nonce: %s", err)
+		return ""
+	}
 	folderPath := renderer.determineFolderPath(issue.AffectedFilePath)
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
@@ -148,6 +156,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"FilePath":           issue.Path(),
 		"IssueId":            issue.AdditionalData.GetKey(),
 		"Styles":             template.CSS(panelStylesTemplate),
+		"Scripts":            template.JS(customScripts),
+		"Nonce":              nonce,
 	}
 
 	if issue.IsIgnored {

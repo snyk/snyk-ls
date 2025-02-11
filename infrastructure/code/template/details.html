@@ -23,14 +23,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
-    content="style-src 'self' 'nonce-${nonce}' 'nonce-ideNonce' https://fonts.googleapis.com;
-             script-src 'nonce-${nonce}' https://fonts.googleapis.com;
+    content="style-src 'self' 'nonce-{{.Nonce}}' 'nonce-ideNonce' https://fonts.googleapis.com;
+             script-src 'nonce-{{.Nonce}}' https://fonts.googleapis.com;
              font-src 'self' https://fonts.gstatic.com;" />
 
-  <style nonce="${nonce}">
+  <style nonce="{{.Nonce}}">
     {{.Styles}}
   </style>
-  ${ideStyle}
+  <style nonce="{{.Nonce}}">
+    ${ideStyle}
+  </style>
 </head>
 
 <body>
@@ -345,7 +347,7 @@
   {{end}}
 
   <!-- Scripts -->
-  <script nonce="${nonce}">
+  <script nonce="{{.Nonce}}">
     /**
      * Represents a single line change in a commit.
      * @typedef {Object} ExampleLine
@@ -391,21 +393,7 @@
       }
     }
 
-    function toggleElement(element, toggle) {
-      if (!element) {
-        return;
-      }
 
-      if (toggle === 'show') {
-        element.className = element.className.replace(/(?:^|\s)hidden(?!\S)/g, '');
-      } else if (toggle === 'hide') {
-        if (element.className.indexOf('hidden') === -1) {
-          element.className += ' hidden';
-        }
-      } else {
-        console.error('Unexpected toggle value', toggle);
-      }
-    }
 
     function polyfillClosest() {
       if (!Element.prototype.closest) {
@@ -497,11 +485,17 @@
       if (exampleNext) {
         exampleNext.onclick = nextExample;
       }
-
       showCurrentExample();
     });
   </script>
-  ${ideScript}
+  <!-- Embedded script from LS  -->
+  <script nonce="{{.Nonce}}">
+    {{.Scripts}}
+  </script>
+  <!-- Custom IDE specific scripts  -->
+  <script nonce="{{.Nonce}}">
+    ${ideScript}
+  </script>
 </body>
 
 </html>
