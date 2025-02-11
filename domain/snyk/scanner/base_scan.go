@@ -66,9 +66,9 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s sny
 	// scan
 	var results []snyk.Issue
 	if s.Product() == product.ProductCode {
-		results, err = s.Scan(ctx, "", baseFolderPath)
+		results, err = s.Scan(ctx, "", baseFolderPath, folderConfig)
 	} else {
-		results, err = s.Scan(ctx, baseFolderPath, "")
+		results, err = s.Scan(ctx, baseFolderPath, "", folderConfig)
 	}
 	if err != nil {
 		logger.Error().Err(err).Msgf("skipping base scan persistence in %s %v", folderPath, err)

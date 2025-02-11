@@ -291,7 +291,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				}
 
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
-				foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, path, folderPath)
+				foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, path, folderPath, folderConfig)
 
 				// this span allows differentiation between processing time and scan time
 				sc.instrumentor.Finish(scanSpan)
@@ -366,8 +366,8 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	// TODO: handle learn actions centrally instead of in each scanner
 }
 
-func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.ProductScanner, path string, folderPath string) ([]snyk.Issue, error) {
-	foundIssues, err := s.Scan(ctx, path, folderPath)
+func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.ProductScanner, path string, folderPath string, folderConfig *types.FolderConfig) ([]snyk.Issue, error) {
+	foundIssues, err := s.Scan(ctx, path, folderPath, folderConfig)
 	if err != nil {
 		return nil, err
 	}

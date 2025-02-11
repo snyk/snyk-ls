@@ -98,7 +98,7 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{}
 }
 
-func (iac *Scanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue, err error) {
+func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ *types.FolderConfig) (issues []snyk.Issue, err error) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "iac.Scan").Logger()
 	if !c.NonEmptyToken() {

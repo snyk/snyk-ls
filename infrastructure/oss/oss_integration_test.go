@@ -75,7 +75,7 @@ func Test_Scan(t *testing.T) {
 	c.ConfigureLogging(nil)
 	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
 
-	issues, _ := scanner.Scan(ctx, path, workingDir)
+	issues, _ := scanner.Scan(ctx, path, workingDir, nil)
 
 	assert.NotEqual(t, 0, len(issues))
 	assert.True(t, strings.Contains(issues[0].Message, "<p>"))
