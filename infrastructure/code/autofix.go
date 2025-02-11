@@ -118,7 +118,7 @@ func (sc *Scanner) GetAutofixDiffs(
 		return unifiedDiffSuggestions, fmt.Errorf("bundle hash not found for baseDir: %s", baseDir)
 	}
 
-	encodedNormalizedPath, err := ToEncodedNormalizedPath(baseDir, filePath)
+	encodedNormalizedPath, err := toEncodedNormalizedPath(baseDir, filePath)
 	if err != nil {
 		return unifiedDiffSuggestions, err
 	}
@@ -155,4 +155,15 @@ func (sc *Scanner) GetAutofixDiffs(
 			// If err == nil and fixStatus.message != completeStatus, we will keep polling.
 		}
 	}
+}
+
+func toEncodedNormalizedPath(rootPath string, filePath string) (string, error) {
+	relativePath, err := ToRelativeUnixPath(rootPath, filePath)
+	if err != nil {
+		// couldn't make it relative, so it's already relative
+		relativePath = filePath
+	}
+
+	encodedRelativePath := EncodePath(relativePath)
+	return encodedRelativePath, nil
 }
