@@ -160,8 +160,8 @@ func (b *IssueEnhancer) autofixShowDetailsFunc(ctx context.Context, issue snyk.I
 	return f
 }
 
-func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
-	bundleHash string) func() *snyk.WorkspaceEdit {
+// TODO, remove this function when autofixFeedbackActions has been migrated to new flow.
+func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk.WorkspaceEdit {
 	editFn := func() *snyk.WorkspaceEdit {
 		c := config.CurrentConfig()
 		method := "code.enhanceWithAutofixSuggestionEdits"
@@ -192,10 +192,9 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 		}
 
 		autofixOptions := AutofixOptions{
-			bundleHash: bundleHash,
-			shardKey:   getShardKey(b.rootPath, c.Token()),
-			filePath:   encodedNormalizedPath,
-			issue:      issue,
+			shardKey: getShardKey(b.rootPath, c.Token()),
+			filePath: encodedNormalizedPath,
+			issue:    issue,
 		}
 
 		// Polling function just calls the endpoint and registers result, signaling `done` to the
@@ -275,17 +274,6 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
 	}
 
 	return editFn
-}
-
-func ToEncodedNormalizedPath(rootPath string, filePath string) (string, error) {
-	relativePath, err := ToRelativeUnixPath(rootPath, filePath)
-	if err != nil {
-		// couldn't make it relative, so it's already relative
-		relativePath = filePath
-	}
-
-	encodedRelativePath := EncodePath(relativePath)
-	return encodedRelativePath, nil
 }
 
 func (b *IssueEnhancer) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[types.MessageAction, types.CommandData], error) {
@@ -373,9 +361,20 @@ func ideSnykURI(rootPath string, issue snyk.Issue, ideAction string) (string, er
 
 	u := &url.URL{
 		Scheme:   "snyk",
-		Path:     encodedNormalizedPath,
+		Path:     ToAbsolutePath(rootPath, encodedNormalizedPath),
 		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.Product)), url.QueryEscape(issueId(issue)), ideAction),
 	}
 
 	return u.String(), nil
+}
+
+func ToEncodedNormalizedPath(rootPath string, filePath string) (string, error) {
+	relativePath, err := ToRelativeUnixPath(rootPath, filePath)
+	if err != nil {
+		// couldn't make it relative, so it's already relative
+		relativePath = filePath
+	}
+
+	encodedRelativePath := EncodePath(relativePath)
+	return encodedRelativePath, nil
 }

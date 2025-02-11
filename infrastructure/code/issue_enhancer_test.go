@@ -65,7 +65,6 @@ func Test_getShardKey(t *testing.T) {
 func Test_autofixFunc(t *testing.T) {
 	c := config.CurrentConfig()
 	fakeSnykCode := FakeSnykCodeClient{C: c}
-	bundleHash := ""
 	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
 		SnykCode:     &fakeSnykCode,
@@ -75,7 +74,7 @@ func Test_autofixFunc(t *testing.T) {
 	}
 
 	t.Run("Shows attempt message when fix requested", func(t *testing.T) {
-		fn := issueEnhancer.autofixFunc(context.Background(), FakeIssue, bundleHash)
+		fn := issueEnhancer.autofixFunc(context.Background(), FakeIssue)
 		fn()
 
 		assert.Contains(t, mockNotifier.SentMessages(), sglsp.ShowMessageParams{
@@ -85,7 +84,7 @@ func Test_autofixFunc(t *testing.T) {
 	})
 
 	t.Run("Shows success message when fix provided", func(t *testing.T) {
-		fn := issueEnhancer.autofixFunc(context.Background(), FakeIssue, bundleHash)
+		fn := issueEnhancer.autofixFunc(context.Background(), FakeIssue)
 		fn()
 		var feedbackMessageReq types.ShowMessageRequest
 		assert.Eventually(t, func() bool {
@@ -135,7 +134,7 @@ func Test_autofixFunc(t *testing.T) {
 		// NOTE(alex.gronskiy): Code can return `<lang>/<ruleID>/test` ruleID
 		fakeTestIssue := FakeIssue
 		fakeTestIssue.ID = fakeTestIssue.ID + "/test"
-		fn := issueEnhancer.autofixFunc(context.Background(), fakeTestIssue, bundleHash)
+		fn := issueEnhancer.autofixFunc(context.Background(), fakeTestIssue)
 		fn()
 
 		var feedbackMessageReq types.ShowMessageRequest
@@ -185,7 +184,7 @@ func Test_autofixFunc(t *testing.T) {
 	t.Run("Shows error message when no fix available", func(t *testing.T) {
 		fakeSnykCode.NoFixSuggestions = true
 
-		fn := issueEnhancer.autofixFunc(context.Background(), FakeIssue, bundleHash)
+		fn := issueEnhancer.autofixFunc(context.Background(), FakeIssue)
 		fn()
 
 		assert.Contains(t, mockNotifier.SentMessages(), sglsp.ShowMessageParams{
@@ -198,7 +197,6 @@ func Test_autofixFunc(t *testing.T) {
 func Test_addIssueActions(t *testing.T) {
 	c := config.CurrentConfig()
 	fakeSnykCode := FakeSnykCodeClient{C: c}
-	bundleHash := ""
 	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
 		SnykCode:     &fakeSnykCode,
@@ -239,7 +237,7 @@ func Test_addIssueActions(t *testing.T) {
 		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(false, true)
 
-		issueEnhancer.addIssueActions(context.Background(), fakeIssues, bundleHash)
+		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
 
 		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
 		require.True(t, ok)
@@ -253,7 +251,7 @@ func Test_addIssueActions(t *testing.T) {
 		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(false, false)
 
-		issueEnhancer.addIssueActions(context.Background(), fakeIssues, bundleHash)
+		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
 
 		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
 		require.True(t, ok)
@@ -267,7 +265,7 @@ func Test_addIssueActions(t *testing.T) {
 		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(true, true)
 
-		issueEnhancer.addIssueActions(context.Background(), fakeIssues, bundleHash)
+		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
 
 		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
 		require.True(t, ok)
@@ -275,4 +273,86 @@ func Test_addIssueActions(t *testing.T) {
 		assert.Len(t, fakeIssues[0].CodelensCommands, 1)
 		assert.Len(t, fakeIssues[0].CodeActions, 1)
 	})
+
+}
+
+func Test_ideSnykURI(t *testing.T) {
+
+	t.Run("generates correct URI", func(t *testing.T) {
+		rootPath := "/Users/user/workspace/blah"
+		issue := snyk.Issue{
+			AffectedFilePath: "app.js",
+			Product:          "Code",
+			AdditionalData:   snyk.CodeIssueData{Key: "123"}, // Provide additional data
+		}
+		ideAction := "showInDetailPanel"
+
+		expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Code&issueId=123&action=showInDetailPanel"
+
+		actualURI, err := ideSnykURI(rootPath, issue, ideAction)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedURI, actualURI)
+	})
+
+	t.Run("handles missing Key in additional data", func(t *testing.T) {
+		rootPath := "/Users/user/workspace/blah" // This will cause ToEncodedNormalizedPath to return an error
+		issue := snyk.Issue{
+			AffectedFilePath: "app.js",
+			Product:          product.ProductCode,
+			ID:               "SNYK-JS-FOO-456", // Default ID if no key in additional data
+		}
+		ideAction := "showInDetailPanel"
+
+		expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=SNYK-JS-FOO-456&action=showInDetailPanel"
+
+		actualURI, err := ideSnykURI(rootPath, issue, ideAction)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedURI, actualURI)
+	})
+}
+
+func TestIssueId(t *testing.T) {
+	testCases := []struct {
+		name     string
+		issue    snyk.Issue
+		expected string
+	}{
+		{
+			name: "Nil AdditionalData",
+			issue: snyk.Issue{
+				ID:             "vuln-id",
+				AdditionalData: nil,
+			},
+			expected: "vuln-id",
+		},
+		{
+			name: "CodeIssueData with empty key",
+			issue: snyk.Issue{
+				ID: "vuln-id",
+				AdditionalData: snyk.CodeIssueData{
+					Key: "",
+				},
+			},
+			expected: "vuln-id",
+		},
+		{
+			name: "CodeIssueData with key",
+			issue: snyk.Issue{
+				ID: "vuln-id",
+				AdditionalData: snyk.CodeIssueData{
+					Key: "code-issue-key",
+				},
+			},
+			expected: "code-issue-key",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := issueId(tc.issue)
+			if result != tc.expected {
+				t.Errorf("Expected %s, got %s", tc.expected, result)
+			}
+		})
+	}
 }
