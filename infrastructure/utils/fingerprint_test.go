@@ -66,7 +66,6 @@ func TestCalculateFingerprintFromAdditionalData_OssIssueData(t *testing.T) {
 	}
 	expectedHash = sha256.Sum256([]byte("pkg4|4.0.0|dep1|with|spaces|dep2|with|spaces"))
 	assert.Equal(t, fmt.Sprintf("%x", expectedHash), CalculateFingerprintFromAdditionalData(issue))
-
 }
 
 func TestCalculateFingerprintFromAdditionalData_IaCIssueData(t *testing.T) {
