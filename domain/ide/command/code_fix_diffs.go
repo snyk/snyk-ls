@@ -44,7 +44,9 @@ func (cmd *codeFixDiffs) Command() types.CommandData {
 }
 
 func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "codeFixDiffs.Execute").Logger()
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "codeFixDiffs.Execute").Logger()
+
 	args := cmd.command.Arguments
 	if len(args) < 3 {
 		return nil, errors.New("missing required arguments")
@@ -82,15 +84,29 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("failed to find issue")
 	}
 
+	htmlRenderer, err := code.GetHTMLRenderer(c)
+	if err != nil {
+		logger.Err(err).Msg("failed to get html renderer")
+		return nil, err
+	}
+	htmlRenderer.SetAiFixDiffState(code.AiInProgress, nil, nil)
+	go cmd.handleResponse(ctx, c, folderPath, relPath, issue, htmlRenderer)
+
+	return nil, err
+}
+
+func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, folderPath string, relPath string, issue snyk.Issue, htmlRenderer *code.HtmlRenderer) {
+	logger := c.Logger().With().Str("method", "codeFixDiffs.handleResponse").Logger()
 	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, folderPath, relPath, issue)
 	if err == nil && len(suggestions) == 0 {
 		logger.Info().Msg("Autofix run successfully but there were no good fixes")
-		return suggestions, nil
+		htmlRenderer.SetAiFixDiffState(code.AiSuccess, nil, nil)
+		return
 	}
 	if err != nil {
-		// as long as the backend service doesn't support good error handling, we'll just log the error
 		logger.Err(err).Msgf("received an error from API: %s", err.Error())
-		return suggestions, nil
+		htmlRenderer.SetAiFixDiffState(code.AiError, nil, err)
+		return
 	}
-	return suggestions, err
+	htmlRenderer.SetAiFixDiffState(code.AiSuccess, suggestions, nil)
 }

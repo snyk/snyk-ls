@@ -71,8 +71,26 @@ var panelStylesTemplate string
 var customScripts string
 
 type HtmlRenderer struct {
-	c              *config.Config
-	globalTemplate *template.Template
+	c                    *config.Config
+	globalTemplate       *template.Template
+	AiFixDiffState       AiResultState
+	AiExplainState       AiResultState
+	CurrentSelectedFixId string
+	CurrentIssueId       string
+}
+type AiStatus string
+
+const (
+	AiNotStarted AiStatus = "NOT_STARTED"
+	AiInProgress AiStatus = "IN_PROGRESS"
+	AiSuccess    AiStatus = "SUCCESS"
+	AiError      AiStatus = "ERROR"
+)
+
+type AiResultState struct {
+	Status AiStatus
+	Err    error
+	Result any
 }
 
 var codeRenderer *HtmlRenderer
@@ -97,7 +115,18 @@ func GetHTMLRenderer(c *config.Config) (*HtmlRenderer, error) {
 		c:              c,
 		globalTemplate: globalTemplate,
 	}
+
 	return codeRenderer, nil
+}
+
+func (renderer *HtmlRenderer) SetAiFixDiffState(state AiStatus, res any, err error) {
+	renderer.AiFixDiffState = AiResultState{Status: state, Result: res, Err: err}
+	// TODO send showDocument
+}
+
+func (renderer *HtmlRenderer) SetAiExplainState(state AiStatus, res any, err error) {
+	renderer.AiExplainState = AiResultState{Status: state, Result: res, Err: err}
+	// TODO send showDocument
 }
 
 func (renderer *HtmlRenderer) determineFolderPath(filePath string) string {
@@ -115,6 +144,7 @@ func (renderer *HtmlRenderer) determineFolderPath(filePath string) string {
 }
 
 func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
+	renderer.resetAiFixCacheIfDifferent(issue)
 	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
@@ -182,6 +212,16 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 
 func getLineToIgnoreAction(issue snyk.Issue) int {
 	return issue.Range.Start.Line + 1
+}
+
+func (renderer *HtmlRenderer) resetAiFixCacheIfDifferent(issue snyk.Issue) {
+	if issue.AdditionalData.GetKey() == renderer.CurrentIssueId {
+		return
+	}
+	renderer.AiFixDiffState = AiResultState{}
+	renderer.AiExplainState = AiResultState{}
+	renderer.CurrentIssueId = issue.AdditionalData.GetKey()
+	renderer.CurrentSelectedFixId = ""
 }
 
 func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {
