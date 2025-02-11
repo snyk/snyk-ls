@@ -190,11 +190,11 @@ func Test_ideSnykURI(t *testing.T) {
 		issue := snyk.Issue{
 			AffectedFilePath: "app.js",
 			Product:          product.ProductCode,
-			ID:               "SNYK-JS-FOO-456", // Default ID if no key in additional data
+			ID:               "uuid-123-456", // Default ID if no key in additional data
 		}
 		ideAction := "showInDetailPanel"
 
-		expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=SNYK-JS-FOO-456&action=showInDetailPanel"
+		expectedURI := "snyk://Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=uuid-123-456&action=showInDetailPanel"
 
 		actualURI, err := ideSnykURI(rootPath, issue, ideAction)
 		assert.NoError(t, err)
