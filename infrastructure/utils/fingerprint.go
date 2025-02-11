@@ -30,8 +30,8 @@ func CalculateFingerprintFromAdditionalData(issue snyk.Issue) string {
 	var dependencyChainHash string
 	switch additionalData := issue.AdditionalData.(type) {
 	case snyk.OssIssueData:
-		if additionalData.PackageManager == "pip" && len(additionalData.From) > 1 {
-			// Pip has base directory name in from data-flow at index 0, this should not be considered for the fingerprint
+		// first element is directory name. It should not be considered for the fingerprint
+		if len(additionalData.From) > 1 {
 			dependencyChainHash = normalizeArray(additionalData.From[1:])
 		} else {
 			dependencyChainHash = normalizeArray(additionalData.From)
