@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -98,7 +99,7 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 		if issueData.HasAIFix && !issues[i].IsIgnored {
 			codeAction := *b.createDeferredAutofixCodeAction(ctx, issues[i])
 			issues[i].CodeActions = append(issues[i].CodeActions, codeAction)
-			uri, err := ideSnykURI(b.rootPath, issues[i], "showInDetailPanel")
+			uri, err := ideSnykURI(b.rootPath, issues[i], "showInDetailsPanel")
 			if err != nil {
 				b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
 				return
@@ -180,9 +181,11 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue) func(
 		defer p.End()
 		b.notifier.SendShowMessage(sglsp.Info, fixMsg)
 
+		path := EncodePath(filepath.ToSlash(ToAbsolutePath(b.rootPath, issue.AffectedFilePath)))
+
 		autofixOptions := AutofixOptions{
 			shardKey: getShardKey(b.rootPath, c.Token()),
-			filePath: EncodePath(ToAbsolutePath(b.rootPath, issue.AffectedFilePath)),
+			filePath: path,
 			issue:    issue,
 		}
 
@@ -343,9 +346,11 @@ func issueId(issue snyk.Issue) string {
 }
 
 func ideSnykURI(rootPath string, issue snyk.Issue, ideAction string) (string, error) {
+	path := EncodeAbsolutePath(ToAbsolutePath(rootPath, issue.AffectedFilePath))
+
 	u := &url.URL{
 		Scheme:   "snyk",
-		Path:     EncodePath(ToAbsolutePath(rootPath, issue.AffectedFilePath)),
+		Path:     path,
 		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.Product)), url.QueryEscape(issueId(issue)), ideAction),
 	}
 

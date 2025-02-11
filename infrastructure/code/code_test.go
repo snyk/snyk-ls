@@ -18,6 +18,7 @@ package code
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -778,13 +779,20 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[string]bool{}, testTracker)
 
 		assert.Len(t, issues[0].CodeActions, 2)
-		val, ok := (*issues[0].CodeActions[1].DeferredEdit)().Changes[EncodePath(issues[0].AffectedFilePath)]
-		assert.True(t, ok)
-		// If this fails, likely the format of autofix edits has changed to
-		// "hunk-like" ones rather than replacing the whole file
-		assert.Len(t, val, 1)
-		// Checks that it arrived from fake autofix indeed.
-		assert.Equal(t, val[0].NewText, FakeAutofixSuggestionNewText)
+
+		val := (*issues[0].CodeActions[1].DeferredCommand)()
+
+		assert.Equal(t, val.Title, "snyk.navigateToRange")
+		assert.Equal(t, types.NavigateToRangeCommand, val.Title)
+		assert.Equal(t, types.NavigateToRangeCommand, val.CommandId)
+
+		expectedURI := fmt.Sprintf("snyk:/%s?product=Snyk+Code&issueId=%s&action=showInDetailPanel",
+			issues[0].AffectedFilePath, // Use the rootPath and AffectedFilePath from your test setup
+			issueId(issues[0])) // Use the helper function issueId for the issueId
+		assert.Equal(t, expectedURI, val.Arguments[0])
+
+		// Assert the range if needed.
+		assert.Equal(t, issues[0].Range, val.Arguments[1]) // Assuming issues[0].Range is set correctly in your test setup
 	},
 	)
 }

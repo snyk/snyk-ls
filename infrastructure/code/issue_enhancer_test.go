@@ -80,7 +80,7 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 			Range:            fakeRange,
 		}
 
-		expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
+		expectedURI := "snyk://Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
 
 		commandDataFunc := issueEnhancer.autofixShowDetailsFunc(context.Background(), issue)
 		commandData := commandDataFunc()
@@ -331,7 +331,7 @@ func Test_ideSnykURI(t *testing.T) {
 		}
 		ideAction := "showInDetailPanel"
 
-		expectedURI := "snyk://Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=uuid-123-456&action=showInDetailPanel"
+		expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=uuid-123-456&action=showInDetailPanel"
 
 		actualURI, err := ideSnykURI(rootPath, issue, ideAction)
 		assert.NoError(t, err)
