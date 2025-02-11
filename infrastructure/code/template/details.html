@@ -239,13 +239,12 @@
           <!-- AI Fix -->
           <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
             <!-- AI fix buttons -->
-            {{if ne .AiFixDiffStatus "SUCCESS"}}
+            {{if or (eq .AiFixDiffStatus "NOT_STARTED") (eq .AiFixDiffStatus "IN_PROGRESS")}}
             <section id="fix-wrapper" class="ai-fix delimiter-top">
               <h2 class="ai-fix-header">
                 DeepCode AI Fixes
               </h2>
-
-              <p>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
+              <p class='{{if ne .AiFixDiffStatus "NOT_STARTED"}}hidden{{end}}'>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
 
               <div class="sn-fix-wrapper">
                 {{if eq .AiFixDiffStatus "NOT_STARTED"}}
