@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -50,7 +51,7 @@ func (t *TestProductScanner) GetInlineValues(_ string, _ snyk.Range) ([]snyk.Inl
 	return []snyk.InlineValue{}, nil
 }
 
-func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string) (issues []snyk.Issue, err error) {
+func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string, _ *types.FolderConfig) (issues []snyk.Issue, err error) {
 	t.c.Logger().Debug().Msg("Test product scanner running scan")
 	defer t.c.Logger().Debug().Msg("Test product scanner scan finished")
 

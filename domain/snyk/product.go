@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // type Filepath string
@@ -31,11 +32,7 @@ import (
 
 type ProductScanner interface {
 	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
-	Scan(
-		ctx context.Context,
-		path string,
-		folderPath string,
-	) (issues []Issue, err error)
+	Scan(ctx context.Context, path string, folderPath string, folderConfig *types.FolderConfig) (issues []Issue, err error)
 
 	IsEnabled() bool
 	Product() product.Product

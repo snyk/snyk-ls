@@ -142,7 +142,7 @@ func (cliScanner *CLIScanner) Product() product.Product {
 	return product.ProductOpenSource
 }
 
-func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string) (issues []snyk.Issue, err error) {
+func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string, folderConfig *types.FolderConfig) (issues []snyk.Issue, err error) {
 	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.scan").Logger()
 	if !cliScanner.config.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
@@ -153,10 +153,10 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string) (
 		logger.Debug().Msgf("OSS Scan not supported for %s", path)
 		return issues, nil
 	}
-	return cliScanner.scanInternal(ctx, path, cliScanner.prepareScanCommand)
+	return cliScanner.scanInternal(ctx, path, cliScanner.prepareScanCommand, folderConfig)
 }
 
-func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool, path string) []string) ([]snyk.Issue, error) {
+func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool, path string, folderConfig *types.FolderConfig) []string, folderConfig *types.FolderConfig) ([]snyk.Issue, error) {
 	method := "cliScanner.Scan"
 	logger := cliScanner.config.Logger().With().Str("method", method).Logger()
 
@@ -204,7 +204,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	cliScanner.runningScans[workDir] = newScan
 	cliScanner.mutex.Unlock()
 
-	cmd := commandFunc([]string{workDir}, map[string]bool{"": true}, workDir)
+	cmd := commandFunc([]string{workDir}, map[string]bool{"": true}, workDir, folderConfig)
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
@@ -231,8 +231,11 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) updateArgs(workDir string, commandLineArgs []string) []string {
-	folderConfigArgs := cliScanner.config.FolderConfig(workDir).AdditionalParameters
+func (cliScanner *CLIScanner) updateArgs(workDir string, commandLineArgs []string, folderConfig *types.FolderConfig) []string {
+	if folderConfig == nil {
+		folderConfig = cliScanner.config.FolderConfig(workDir)
+	}
+	folderConfigArgs := folderConfig.AdditionalParameters
 
 	// this asks the client for the current SDK and blocks on it
 	additionalParameters := cliScanner.updateSDKs(workDir)
@@ -267,7 +270,7 @@ func (cliScanner *CLIScanner) updateSDKs(workDir string) []string {
 	return sdk.UpdateEnvironmentAndReturnAdditionalParams(cliScanner.config, sdks)
 }
 
-func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string) []string {
+func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string, folderConfig *types.FolderConfig) []string {
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
@@ -275,7 +278,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		cliScanner.config.CliSettings().Path(),
 		"test",
 	})
-	args = cliScanner.updateArgs(path, args)
+	args = cliScanner.updateArgs(path, args, folderConfig)
 	cmd = append(cmd, args...)
 	cmd = append(cmd, "--json")
 
@@ -539,7 +542,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path stri
 			defer cliScanner.instrumentor.Finish(span)
 
 			logger.Info().Msg("Starting scheduled scan")
-			_, _ = cliScanner.Scan(span.Context(), path, "")
+			_, _ = cliScanner.Scan(span.Context(), path, "", nil)
 		case <-ctx.Done():
 			logger.Info().Msg("Scheduled scan canceled")
 			timer.Stop()

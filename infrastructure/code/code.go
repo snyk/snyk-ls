@@ -138,7 +138,7 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string) (issues []snyk.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string, _ *types.FolderConfig) (issues []snyk.Issue, err error) {
 	logger := sc.C.Logger().With().Str("method", "code.Scan").Logger()
 	if !sc.C.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")

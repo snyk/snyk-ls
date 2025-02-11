@@ -79,6 +79,10 @@ func mergeFolderConfigs(first *types.FolderConfig, second *types.FolderConfig) *
 		first.ScanCommandConfig = second.ScanCommandConfig
 	}
 
+	if len(first.ReferenceFolderPath) == 0 && len(second.ReferenceFolderPath) > 0 {
+		first.ReferenceFolderPath = second.ReferenceFolderPath
+	}
+
 	return first
 }
 

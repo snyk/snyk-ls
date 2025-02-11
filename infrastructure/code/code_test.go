@@ -393,7 +393,7 @@ func Test_Scan(t *testing.T) {
 			wg.Add(1)
 			go func(fileName string) {
 				t.Log("Running scan for file " + fileName)
-				_, _ = scanner.Scan(context.Background(), fileName, tempDir)
+				_, _ = scanner.Scan(context.Background(), fileName, tempDir, nil)
 				t.Log("Finished scan for file " + fileName)
 				wg.Done()
 			}(fileName)
@@ -425,7 +425,7 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func(i int) {
-				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", tempDir)
+				_, _ = scanner.Scan(context.Background(), "file"+strconv.Itoa(i)+".go", tempDir, nil)
 				wg.Done()
 			}(i)
 		}
@@ -443,7 +443,7 @@ func Test_Scan(t *testing.T) {
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		// Act
-		_, _ = scanner.Scan(context.Background(), tempDir, tempDir)
+		_, _ = scanner.Scan(context.Background(), tempDir, tempDir, nil)
 
 		// Assert
 		params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
@@ -463,7 +463,7 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func() {
-				_, _ = scanner.Scan(context.Background(), "", tempDir)
+				_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
 				wg.Done()
 			}()
 		}
@@ -486,14 +486,14 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func() {
-				_, _ = scanner.Scan(context.Background(), "", tempDir)
+				_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
 				wg.Done()
 			}()
 		}
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func() {
-				_, _ = scanner.Scan(context.Background(), "", tempDir2)
+				_, _ = scanner.Scan(context.Background(), "", tempDir2, nil)
 				wg.Done()
 			}()
 		}
@@ -509,7 +509,7 @@ func Test_Scan(t *testing.T) {
 		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
-		_, _ = scanner.Scan(context.Background(), "", tempDir)
+		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
 
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 		assert.Nil(t, params)
@@ -530,7 +530,7 @@ func Test_Scan(t *testing.T) {
 		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
-		_, _ = scanner.Scan(context.Background(), "", tempDir)
+		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
 
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 		assert.NotNil(t, params)
@@ -551,7 +551,7 @@ func Test_Scan(t *testing.T) {
 		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
-		_, _ = scanner.Scan(context.Background(), "", tempDir)
+		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
 
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 		assert.Nil(t, params)
@@ -807,7 +807,7 @@ func Test_SastApiCall(t *testing.T) {
 		apiClient.ApiError = nil
 		config.CurrentConfig().SetSnykCodeEnabled(true)
 
-		_, _ = scanner.Scan(context.Background(), "fileName", "tempDir")
+		_, _ = scanner.Scan(context.Background(), "fileName", "tempDir", nil)
 
 		assert.Equal(t, 1, len(apiClient.Calls))
 	})
@@ -815,7 +815,7 @@ func Test_SastApiCall(t *testing.T) {
 	t.Run("should return an error if Snyk Code is enabled and the API returns an error", func(t *testing.T) {
 		config.CurrentConfig().SetSnykCodeEnabled(true)
 		apiClient.ApiError = &snyk_api.SnykApiError{}
-		_, err := scanner.Scan(context.Background(), "fileName", "tempDir")
+		_, err := scanner.Scan(context.Background(), "fileName", "tempDir", nil)
 
 		assert.Error(t, err)
 		assert.Equal(t, err.Error(), "couldn't get sast enablement")
@@ -825,7 +825,7 @@ func Test_SastApiCall(t *testing.T) {
 		config.CurrentConfig().SetSnykCodeEnabled(true)
 		apiClient.ApiError = nil
 		apiClient.CodeEnabled = false
-		_, err := scanner.Scan(context.Background(), "fileName", "tempDir")
+		_, err := scanner.Scan(context.Background(), "fileName", "tempDir", nil)
 
 		assert.Error(t, err)
 		assert.Equal(t, err.Error(), "SAST is not enabled")
@@ -836,7 +836,7 @@ func Test_SastApiCall(t *testing.T) {
 		apiClient.ApiError = nil
 		apiClient.CodeEnabled = false
 		apiClient.LocalCodeEngine.Enabled = true
-		_, err := scanner.Scan(context.Background(), "fileName", "tempDir")
+		_, err := scanner.Scan(context.Background(), "fileName", "tempDir", nil)
 
 		assert.Error(t, err)
 		assert.Equal(t, err.Error(), "SAST is not enabled")

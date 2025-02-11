@@ -198,7 +198,7 @@ func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, _ = scanner.Scan(ctx, "", "")
+	_, _ = scanner.Scan(ctx, "", "", nil)
 
 	assert.False(t, cliMock.WasExecuted())
 }
@@ -323,7 +323,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			_, _ = scanner.Scan(context.Background(), p, folderPath)
+			_, _ = scanner.Scan(context.Background(), p, folderPath, nil)
 			wg.Done()
 		}()
 	}
@@ -366,7 +366,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig)
 		require.NoError(t, err)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir)
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, nil)
 
 		assert.Contains(t, cmd, "--dev")
 		assert.Contains(t, cmd, "-d")
@@ -382,7 +382,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "")
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
 
 		assert.NotContains(t, cmd, "--all-projects")
 		assert.Contains(t, cmd, "-d")
@@ -399,7 +399,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "")
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
 
 		assert.Contains(t, cmd, "--all-projects")
 		assert.Len(t, cmd, 4)
@@ -421,7 +421,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	targetFile, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
-	_, _ = scanner.Scan(ctx, targetFile, "")
+	_, _ = scanner.Scan(ctx, targetFile, "", nil)
 
 	// Assert
 	assert.Eventually(t, func() bool {
@@ -512,7 +512,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	filePath, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
-	analysis, err := scanner.Scan(context.Background(), filePath, "")
+	analysis, err := scanner.Scan(context.Background(), filePath, "", nil)
 
 	// Assert
 	assert.NoError(t, err)

@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -69,7 +70,7 @@ func (cliScanner *CLIScanner) ScanPackages(
 	notCached := cliScanner.updateCachedDependencies(dependencies)
 
 	if len(notCached) > 0 {
-		commandFunc := func(_ []string, _ map[string]bool, path string) (deps []string) {
+		commandFunc := func(_ []string, _ map[string]bool, path string, _ *types.FolderConfig) (deps []string) {
 			for _, d := range notCached {
 				deps = append(deps, d.ArtifactID+"@"+d.Version)
 			}
@@ -81,9 +82,9 @@ func (cliScanner *CLIScanner) ScanPackages(
 				"--file":         true,
 			}
 
-			return cliScanner.prepareScanCommand(deps, blacklist, path)
+			return cliScanner.prepareScanCommand(deps, blacklist, path, nil)
 		}
-		_, err := cliScanner.scanInternal(ctx, path, commandFunc)
+		_, err := cliScanner.scanInternal(ctx, path, commandFunc, nil)
 		if err != nil {
 			logger.Err(err).Msg("error scanning packages")
 			return
