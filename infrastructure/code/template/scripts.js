@@ -140,11 +140,7 @@ function getFilePathFromFix(fix) {
 }
 function showCurrentDiff() {
   // Some IDEs send back the suggestion, others send the suggestion.diffs directly.
-  let showSuggestion = suggestion;
-  if(suggestion?.diffs?.length){
-    showSuggestion = suggestion.diffs
-    console.log("NO suggestion.diffs " + suggestion)
-  }
+  let showSuggestion = getSuggestion();
 
   if (!showSuggestion.length) {
     toggleElement(noDiffsElem, 'show');
