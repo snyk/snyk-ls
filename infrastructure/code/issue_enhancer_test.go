@@ -62,6 +62,36 @@ func Test_getShardKey(t *testing.T) {
 	})
 }
 
+func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
+	c := config.CurrentConfig()
+	fakeSnykCode := FakeSnykCodeClient{C: c}
+	issueEnhancer := IssueEnhancer{
+		SnykCode:     &fakeSnykCode,
+		instrumentor: NewCodeInstrumentor(),
+		rootPath:     "/Users/user/workspace/blah",
+		c:            c,
+	}
+
+	t.Run("returns CommandData with correct URI and range", func(t *testing.T) {
+		issue := snyk.Issue{
+			AffectedFilePath: "app.js",
+			Product:          product.ProductCode,
+			AdditionalData:   snyk.CodeIssueData{Key: "123"},
+			Range:            fakeRange,
+		}
+
+		expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
+
+		commandDataFunc := issueEnhancer.autofixShowDetailsFunc(context.Background(), issue)
+		commandData := commandDataFunc()
+
+		assert.Equal(t, types.NavigateToRangeCommand, commandData.Title)
+		assert.Equal(t, types.NavigateToRangeCommand, commandData.CommandId)
+		assert.Equal(t, expectedURI, commandData.Arguments[0])
+		assert.Equal(t, issue.Range, commandData.Arguments[1])
+	})
+}
+
 func Test_autofixFunc(t *testing.T) {
 	c := config.CurrentConfig()
 	fakeSnykCode := FakeSnykCodeClient{C: c}
