@@ -180,20 +180,9 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue) func(
 		defer p.End()
 		b.notifier.SendShowMessage(sglsp.Info, fixMsg)
 
-		encodedNormalizedPath, err := ToEncodedNormalizedPath(b.rootPath, issue.AffectedFilePath)
-		if err != nil {
-			logger.
-				Err(err).
-				Str("rootPath", b.rootPath).
-				Str("AffectedFilePath", issue.AffectedFilePath).
-				Msg("error converting to relative file path")
-			b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")
-			return nil
-		}
-
 		autofixOptions := AutofixOptions{
 			shardKey: getShardKey(b.rootPath, c.Token()),
-			filePath: encodedNormalizedPath,
+			filePath: EncodePath(ToAbsolutePath(b.rootPath, issue.AffectedFilePath)),
 			issue:    issue,
 		}
 
@@ -354,27 +343,11 @@ func issueId(issue snyk.Issue) string {
 }
 
 func ideSnykURI(rootPath string, issue snyk.Issue, ideAction string) (string, error) {
-	encodedNormalizedPath, err := ToEncodedNormalizedPath(rootPath, issue.AffectedFilePath)
-	if err != nil {
-		return "", err
-	}
-
 	u := &url.URL{
 		Scheme:   "snyk",
-		Path:     ToAbsolutePath(rootPath, encodedNormalizedPath),
+		Path:     EncodePath(ToAbsolutePath(rootPath, issue.AffectedFilePath)),
 		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.Product)), url.QueryEscape(issueId(issue)), ideAction),
 	}
 
 	return u.String(), nil
-}
-
-func ToEncodedNormalizedPath(rootPath string, filePath string) (string, error) {
-	relativePath, err := ToRelativeUnixPath(rootPath, filePath)
-	if err != nil {
-		// couldn't make it relative, so it's already relative
-		relativePath = filePath
-	}
-
-	encodedRelativePath := EncodePath(relativePath)
-	return encodedRelativePath, nil
 }
