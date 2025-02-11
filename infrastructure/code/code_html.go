@@ -114,6 +114,8 @@ func GetHTMLRenderer(c *config.Config) (*HtmlRenderer, error) {
 	codeRenderer = &HtmlRenderer{
 		c:              c,
 		globalTemplate: globalTemplate,
+		AiExplainState: AiResultState{Status: AiNotStarted},
+		AiFixDiffState: AiResultState{Status: AiNotStarted},
 	}
 
 	return codeRenderer, nil
@@ -159,41 +161,61 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
 	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
+	var aiFixErr string
+	var aiExplainErr string
+	if renderer.AiFixDiffState.Err != nil {
+		aiFixErr = renderer.AiFixDiffState.Err.Error()
+	}
+	if renderer.AiExplainState.Err != nil {
+		aiExplainErr = renderer.AiExplainState.Err.Error()
+	}
+	aiFixResult := "{}"
+	aiFixSerialized, err := json.Marshal(renderer.AiFixDiffState.Result)
+	if err == nil {
+		aiFixResult = string(aiFixSerialized)
+	}
 	data := map[string]interface{}{
-		"IssueTitle":         additionalData.Title,
-		"IssueMessage":       additionalData.Message,
-		"IssueType":          getIssueType(additionalData),
-		"SeverityIcon":       html.SeverityIcon(issue),
-		"CWEs":               issue.CWEs,
-		"IssueOverview":      html.MarkdownToHTML(additionalData.Text),
-		"IsIgnored":          issue.IsIgnored,
-		"DataFlow":           additionalData.DataFlow,
-		"DataFlowKeys":       dataFlowKeys,
-		"DataFlowTable":      dataFlowTable,
-		"RepoCount":          additionalData.RepoDatasetSize,
-		"ExampleCount":       len(additionalData.ExampleCommitFixes),
-		"ExampleCommitFixes": exampleCommits,
-		"CommitFixes":        commitFixes,
-		"PriorityScore":      additionalData.PriorityScore,
-		"SnykWebUrl":         renderer.c.SnykUI(),
-		"LessonUrl":          issue.LessonUrl,
-		"LessonIcon":         html.LessonIcon(),
-		"IgnoreLineAction":   getLineToIgnoreAction(issue),
-		"HasAIFix":           additionalData.HasAIFix,
-		"ExternalIcon":       html.ExternalIcon(),
-		"ScanAnimation":      html.ScanAnimation(),
-		"GitHubIcon":         html.GitHubIcon(),
-		"ArrowLeftDark":      html.ArrowLeftDark(),
-		"ArrowLeftLight":     html.ArrowLeftLight(),
-		"ArrowRightDark":     html.ArrowRightDark(),
-		"ArrowRightLight":    html.ArrowRightLight(),
-		"FileIcon":           html.FileIcon(),
-		"FolderPath":         folderPath,
-		"FilePath":           issue.Path(),
-		"IssueId":            issue.AdditionalData.GetKey(),
-		"Styles":             template.CSS(panelStylesTemplate),
-		"Scripts":            template.JS(customScripts),
-		"Nonce":              nonce,
+		"IssueTitle":           additionalData.Title,
+		"IssueMessage":         additionalData.Message,
+		"IssueType":            getIssueType(additionalData),
+		"SeverityIcon":         html.SeverityIcon(issue),
+		"CWEs":                 issue.CWEs,
+		"IssueOverview":        html.MarkdownToHTML(additionalData.Text),
+		"IsIgnored":            issue.IsIgnored,
+		"DataFlow":             additionalData.DataFlow,
+		"DataFlowKeys":         dataFlowKeys,
+		"DataFlowTable":        dataFlowTable,
+		"RepoCount":            additionalData.RepoDatasetSize,
+		"ExampleCount":         len(additionalData.ExampleCommitFixes),
+		"ExampleCommitFixes":   exampleCommits,
+		"CommitFixes":          commitFixes,
+		"PriorityScore":        additionalData.PriorityScore,
+		"SnykWebUrl":           renderer.c.SnykUI(),
+		"LessonUrl":            issue.LessonUrl,
+		"LessonIcon":           html.LessonIcon(),
+		"IgnoreLineAction":     getLineToIgnoreAction(issue),
+		"HasAIFix":             additionalData.HasAIFix,
+		"ExternalIcon":         html.ExternalIcon(),
+		"ScanAnimation":        html.ScanAnimation(),
+		"GitHubIcon":           html.GitHubIcon(),
+		"ArrowLeftDark":        html.ArrowLeftDark(),
+		"ArrowLeftLight":       html.ArrowLeftLight(),
+		"ArrowRightDark":       html.ArrowRightDark(),
+		"ArrowRightLight":      html.ArrowRightLight(),
+		"FileIcon":             html.FileIcon(),
+		"FolderPath":           folderPath,
+		"FilePath":             issue.Path(),
+		"IssueId":              issue.AdditionalData.GetKey(),
+		"Styles":               template.CSS(panelStylesTemplate),
+		"Scripts":              template.JS(customScripts),
+		"Nonce":                nonce,
+		"AiFixResult":          aiFixResult,
+		"ExplainResult":        renderer.AiExplainState.Result,
+		"AiFixDiffStatus":      renderer.AiFixDiffState.Status,
+		"AiExplainStatus":      renderer.AiExplainState.Status,
+		"CurrentSelectedFixId": renderer.CurrentSelectedFixId,
+		"AiFixError":           aiFixErr,
+		"AiExplainError":       aiExplainErr,
 	}
 
 	if issue.IsIgnored {
@@ -218,8 +240,8 @@ func (renderer *HtmlRenderer) resetAiFixCacheIfDifferent(issue snyk.Issue) {
 	if issue.AdditionalData.GetKey() == renderer.CurrentIssueId {
 		return
 	}
-	renderer.AiFixDiffState = AiResultState{}
-	renderer.AiExplainState = AiResultState{}
+	renderer.AiFixDiffState = AiResultState{Status: AiNotStarted}
+	renderer.AiExplainState = AiResultState{Status: AiNotStarted}
 	renderer.CurrentIssueId = issue.AdditionalData.GetKey()
 	renderer.CurrentSelectedFixId = ""
 }

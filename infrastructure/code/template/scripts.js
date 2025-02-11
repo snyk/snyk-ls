@@ -173,10 +173,8 @@ function showCurrentDiff() {
   diffElem.appendChild(generateDiffHtml(patch));
 }
 function getSuggestion(){
-  if(suggestion?.diffs?.length){
-    return suggestion.diffs;
-  }
-  return suggestion;
+  let suggestionElem = document.getElementById('suggestionDiv');
+  return JSON.parse(suggestionElem.innerText);
 }
 nextDiffElem.addEventListener('click', nextDiff);
 previousDiffElem.addEventListener('click', previousDiff);

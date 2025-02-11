@@ -239,6 +239,7 @@
           <!-- AI Fix -->
           <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
             <!-- AI fix buttons -->
+            {{if not eq .AiFixDiffStatus "SUCCESS"}}
             <section id="fix-wrapper" class="ai-fix delimiter-top">
               <h2 class="ai-fix-header">
                 DeepCode AI Fixes
@@ -247,10 +248,12 @@
               <p>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
 
               <div class="sn-fix-wrapper">
+                {{if eq .AiFixDiffStatus "NOT_STARTED"}}
                 <button id="generate-ai-fix" folder-path="{{.FolderPath}}" file-path="{{.FilePath}}"
                   issue-id="{{.IssueId}}" class="generate-ai-fix">✨ Generate AI fix</button>
-
-                <div id="fix-loading-indicator" class="sn-loading hidden">
+                {{end}}
+                {{if eq .AiFixDiffStatus "IN_PROGRESS"}}
+                <div id="fix-loading-indicator" class="sn-loading">
                   <div class="sn-loading-icon">
                     {{.ScanAnimation}}
                   </div>
@@ -276,14 +279,18 @@
                     </div>
                   </div>
                 </div>
+                {{end}}
               </div>
             </section>
-
+            {{end}}
             <!-- AI fixes -->
-            <section id="fixes-section" class="sn-ai-fixes delimiter-top hidden">
+            {{if eq .AiFixDiffStatus "SUCCESS"}}
+            <section id="fixes-section" class="sn-ai-fixes delimiter-top">
+              {{if eq (len .AiFixResult) 0}}
               <div id="info-no-diffs" class="font-light">
                 There are no fix diffs for this issue.
               </div>
+              {{else}}
               <div id="diff-top" class="row between">
                 <div id="info-top" class="font-light">⚡️ Here are <span id="diff-number"></span> AI-generated solutions
                 </div>
@@ -303,10 +310,13 @@
               </div>
               <div id="diff"></div>
               <button id="apply-fix" class="button sn-apply-fix">Apply fix</button>
+              {{end}}
             </section>
+            {{end}}
 
             <!-- AI fix errors -->
-            <section id="fixes-error-section" class="sn-ai-fix-error delimiter-top hidden">
+            {{if eq .AiFixDiffStatus "ERROR"}}
+            <section id="fixes-error-section" class="sn-ai-fix-error delimiter-top">
               <div id="info-no-diffs" class="font-light">
                 ⚠️ Failed to generate the fix. Please try again.
               </div>
@@ -315,6 +325,7 @@
                         issue-id="{{.IssueId}}" class="button generate-ai-fix">✨ Retry AI fix</button>
               </div>
             </section>
+            {{end}}
           </div>
         </div>
         <!-- End Fix Analysis section -->
@@ -333,6 +344,9 @@
     </article>
   </main>
 
+  <div id="suggestionDiv" class="hidden">
+    {{.AiFixResult}}
+  </div>
   <!-- Ignore In Line Actions -->
   {{if not .IsIgnored}}
   <footer class="ignore-action-container hidden">
