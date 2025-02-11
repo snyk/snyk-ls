@@ -26,10 +26,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
-type IaCIssueData struct {
-	Path []string
-}
-
 func TestCalculateFingerprintFromAdditionalData_OssIssueData(t *testing.T) {
 	// Test with multiple "from" elements
 	issue := snyk.Issue{
