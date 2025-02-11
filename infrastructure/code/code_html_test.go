@@ -52,7 +52,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -117,7 +117,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
@@ -158,7 +158,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -197,7 +197,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -239,7 +239,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -305,7 +305,7 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section

@@ -77,7 +77,7 @@ func getOssHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (stri
 }
 
 func getCodeHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (string, error) {
-	htmlRender, err := code.NewHtmlRenderer(c)
+	htmlRender, err := code.GetHTMLRenderer(c)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Code HTML render")
 		return "", err

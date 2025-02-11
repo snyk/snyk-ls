@@ -75,7 +75,12 @@ type HtmlRenderer struct {
 	globalTemplate *template.Template
 }
 
-func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
+var codeRenderer *HtmlRenderer
+
+func GetHTMLRenderer(c *config.Config) (*HtmlRenderer, error) {
+	if codeRenderer != nil {
+		return codeRenderer, nil
+	}
 	funcMap := template.FuncMap{
 		"repoName":      getRepoName,
 		"trimCWEPrefix": html.TrimCWEPrefix,
@@ -88,10 +93,11 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 		return nil, err
 	}
 
-	return &HtmlRenderer{
+	codeRenderer = &HtmlRenderer{
 		c:              c,
 		globalTemplate: globalTemplate,
-	}, nil
+	}
+	return codeRenderer, nil
 }
 
 func (renderer *HtmlRenderer) determineFolderPath(filePath string) string {
