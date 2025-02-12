@@ -79,7 +79,7 @@ func setupTestData() (issue snyk.Issue, expectedURI string, expectedTitle string
 	}
 
 	expectedURI = "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
-	expectedTitle = "⚡ Get AI Fixes for issue: Test Issue (Snyk)"
+	expectedTitle = "⚡ Fix this issue: Test Issue (Snyk)"
 
 	return
 }
