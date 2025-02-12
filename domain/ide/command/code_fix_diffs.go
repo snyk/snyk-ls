@@ -91,7 +91,6 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		logger.Err(err).Msg("failed to get html renderer")
 		return nil, err
 	}
-	htmlRenderer.SetAiFixDiffState(code.AiInProgress, nil, nil)
 	go cmd.handleResponse(ctx, c, folderPath, relPath, issue, htmlRenderer)
 
 	return nil, err
@@ -99,18 +98,21 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 
 func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, folderPath string, relPath string, issue snyk.Issue, htmlRenderer *code.HtmlRenderer) {
 	logger := c.Logger().With().Str("method", "codeFixDiffs.handleResponse").Logger()
+	aiFixHandler := htmlRenderer.AiFixHandler
+
+	aiFixHandler.SetAiFixDiffState(code.AiFixInProgress, nil, nil)
 
 	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, folderPath, relPath, issue)
 	if err == nil && len(suggestions) == 0 {
 		logger.Info().Msg("Autofix run successfully but there were no good fixes")
-		htmlRenderer.SetAiFixDiffState(code.AiSuccess, nil, nil)
+		aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, nil, nil)
 		return
 	}
 	if err != nil {
 		logger.Err(err).Msgf("received an error from API: %s", err.Error())
-		htmlRenderer.SetAiFixDiffState(code.AiError, nil, err)
+		aiFixHandler.SetAiFixDiffState(code.AiFixError, nil, err)
 		return
 	}
-	htmlRenderer.EnrichWithExplain(ctx, c, issue, suggestions)
-	htmlRenderer.SetAiFixDiffState(code.AiSuccess, suggestions, nil)
+	aiFixHandler.EnrichWithExplain(ctx, c, issue, suggestions)
+	aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, suggestions, nil)
 }

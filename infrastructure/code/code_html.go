@@ -18,7 +18,6 @@ package code
 
 import (
 	"bytes"
-	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -26,7 +25,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -74,27 +72,9 @@ var panelStylesTemplate string
 var customScripts string
 
 type HtmlRenderer struct {
-	c                    *config.Config
-	globalTemplate       *template.Template
-	AiFixDiffState       AiResultState
-	CurrentSelectedFixId string
-	CurrentIssueId       string
-	deepCodeBinding      llm.DeepCodeLLMBinding
-	explainCancelFunc    context.CancelFunc
-}
-type AiStatus string
-
-const (
-	AiNotStarted AiStatus = "NOT_STARTED"
-	AiInProgress AiStatus = "IN_PROGRESS"
-	AiSuccess    AiStatus = "SUCCESS"
-	AiError      AiStatus = "ERROR"
-)
-
-type AiResultState struct {
-	Status AiStatus
-	Err    error
-	Result any
+	c              *config.Config
+	globalTemplate *template.Template
+	AiFixHandler   *AiFixHandler
 }
 
 var codeRenderer *HtmlRenderer
@@ -103,6 +83,7 @@ func GetHTMLRenderer(c *config.Config, deepCodeLLMBinding llm.DeepCodeLLMBinding
 	if codeRenderer != nil {
 		return codeRenderer, nil
 	}
+
 	funcMap := template.FuncMap{
 		"repoName":      getRepoName,
 		"trimCWEPrefix": html.TrimCWEPrefix,
@@ -116,50 +97,14 @@ func GetHTMLRenderer(c *config.Config, deepCodeLLMBinding llm.DeepCodeLLMBinding
 	}
 
 	codeRenderer = &HtmlRenderer{
-		c:               c,
-		globalTemplate:  globalTemplate,
-		AiFixDiffState:  AiResultState{Status: AiNotStarted},
+		c:              c,
+		globalTemplate: globalTemplate,
+	}
+	codeRenderer.AiFixHandler = &AiFixHandler{
+		aiFixDiffState:  aiResultState{status: AiFixNotStarted},
 		deepCodeBinding: deepCodeLLMBinding,
 	}
-
 	return codeRenderer, nil
-}
-
-func (renderer *HtmlRenderer) EnrichWithExplain(ctx context.Context, c *config.Config, issue snyk.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
-	logger := c.Logger().With().Str("method", "EnrichWithExplain").Logger()
-	if ctx.Err() != nil {
-		logger.Debug().Msgf("EnrichWithExplain context cancelled")
-		return
-	}
-	contextWithCancel, cancelFunc := context.WithTimeout(ctx, 5*time.Minute)
-	renderer.explainCancelFunc = cancelFunc
-	defer cancelFunc()
-	if len(suggestions) == 0 {
-		return
-	}
-	var wg sync.WaitGroup
-	for i := range suggestions {
-		diff := ""
-		for _, v := range suggestions[i].UnifiedDiffsPerFile {
-			diff += v
-		}
-		wg.Add(1)
-		go func() {
-			response, err := renderer.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.ID, Diff: diff})
-			wg.Done()
-			if err != nil {
-				logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.AdditionalData.GetKey())
-				return
-			}
-			suggestions[i].Explanation = response
-		}()
-	}
-	wg.Wait()
-}
-
-func (renderer *HtmlRenderer) SetAiFixDiffState(state AiStatus, res any, err error) {
-	renderer.AiFixDiffState = AiResultState{Status: state, Result: res, Err: err}
-	// TODO send showDocument
 }
 
 func (renderer *HtmlRenderer) determineFolderPath(filePath string) string {
@@ -177,7 +122,7 @@ func (renderer *HtmlRenderer) determineFolderPath(filePath string) string {
 }
 
 func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
-	renderer.resetAiFixCacheIfDifferent(issue)
+	renderer.AiFixHandler.resetAiFixCacheIfDifferent(issue)
 	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
@@ -193,54 +138,53 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
 	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
 	var aiFixErr string
-	if renderer.AiFixDiffState.Err != nil {
-		aiFixErr = renderer.AiFixDiffState.Err.Error()
+	if renderer.AiFixHandler.aiFixDiffState.err != nil {
+		aiFixErr = renderer.AiFixHandler.aiFixDiffState.err.Error()
 	}
 
 	aiFixResult := "{}"
-	aiFixSerialized, err := json.Marshal(renderer.AiFixDiffState.Result)
+	aiFixSerialized, err := json.Marshal(renderer.AiFixHandler.aiFixDiffState.result)
 	if err == nil && string(aiFixSerialized) != "null" {
 		aiFixResult = string(aiFixSerialized)
 	}
 	data := map[string]interface{}{
-		"IssueTitle":           additionalData.Title,
-		"IssueMessage":         additionalData.Message,
-		"IssueType":            getIssueType(additionalData),
-		"SeverityIcon":         html.SeverityIcon(issue),
-		"CWEs":                 issue.CWEs,
-		"IssueOverview":        html.MarkdownToHTML(additionalData.Text),
-		"IsIgnored":            issue.IsIgnored,
-		"DataFlow":             additionalData.DataFlow,
-		"DataFlowKeys":         dataFlowKeys,
-		"DataFlowTable":        dataFlowTable,
-		"RepoCount":            additionalData.RepoDatasetSize,
-		"ExampleCount":         len(additionalData.ExampleCommitFixes),
-		"ExampleCommitFixes":   exampleCommits,
-		"CommitFixes":          commitFixes,
-		"PriorityScore":        additionalData.PriorityScore,
-		"SnykWebUrl":           renderer.c.SnykUI(),
-		"LessonUrl":            issue.LessonUrl,
-		"LessonIcon":           html.LessonIcon(),
-		"IgnoreLineAction":     getLineToIgnoreAction(issue),
-		"HasAIFix":             additionalData.HasAIFix,
-		"ExternalIcon":         html.ExternalIcon(),
-		"ScanAnimation":        html.ScanAnimation(),
-		"GitHubIcon":           html.GitHubIcon(),
-		"ArrowLeftDark":        html.ArrowLeftDark(),
-		"ArrowLeftLight":       html.ArrowLeftLight(),
-		"ArrowRightDark":       html.ArrowRightDark(),
-		"ArrowRightLight":      html.ArrowRightLight(),
-		"FileIcon":             html.FileIcon(),
-		"FolderPath":           folderPath,
-		"FilePath":             issue.Path(),
-		"IssueId":              issue.AdditionalData.GetKey(),
-		"Styles":               template.CSS(panelStylesTemplate),
-		"Scripts":              template.JS(customScripts),
-		"Nonce":                nonce,
-		"AiFixResult":          aiFixResult,
-		"AiFixDiffStatus":      renderer.AiFixDiffState.Status,
-		"CurrentSelectedFixId": renderer.CurrentSelectedFixId,
-		"AiFixError":           aiFixErr,
+		"IssueTitle":         additionalData.Title,
+		"IssueMessage":       additionalData.Message,
+		"IssueType":          getIssueType(additionalData),
+		"SeverityIcon":       html.SeverityIcon(issue),
+		"CWEs":               issue.CWEs,
+		"IssueOverview":      html.MarkdownToHTML(additionalData.Text),
+		"IsIgnored":          issue.IsIgnored,
+		"DataFlow":           additionalData.DataFlow,
+		"DataFlowKeys":       dataFlowKeys,
+		"DataFlowTable":      dataFlowTable,
+		"RepoCount":          additionalData.RepoDatasetSize,
+		"ExampleCount":       len(additionalData.ExampleCommitFixes),
+		"ExampleCommitFixes": exampleCommits,
+		"CommitFixes":        commitFixes,
+		"PriorityScore":      additionalData.PriorityScore,
+		"SnykWebUrl":         renderer.c.SnykUI(),
+		"LessonUrl":          issue.LessonUrl,
+		"LessonIcon":         html.LessonIcon(),
+		"IgnoreLineAction":   getLineToIgnoreAction(issue),
+		"HasAIFix":           additionalData.HasAIFix,
+		"ExternalIcon":       html.ExternalIcon(),
+		"ScanAnimation":      html.ScanAnimation(),
+		"GitHubIcon":         html.GitHubIcon(),
+		"ArrowLeftDark":      html.ArrowLeftDark(),
+		"ArrowLeftLight":     html.ArrowLeftLight(),
+		"ArrowRightDark":     html.ArrowRightDark(),
+		"ArrowRightLight":    html.ArrowRightLight(),
+		"FileIcon":           html.FileIcon(),
+		"FolderPath":         folderPath,
+		"FilePath":           issue.Path(),
+		"IssueId":            issue.AdditionalData.GetKey(),
+		"Styles":             template.CSS(panelStylesTemplate),
+		"Scripts":            template.JS(customScripts),
+		"Nonce":              nonce,
+		"AiFixResult":        aiFixResult,
+		"AiFixDiffStatus":    renderer.AiFixHandler.aiFixDiffState.status,
+		"AiFixError":         aiFixErr,
 	}
 
 	if issue.IsIgnored {
@@ -259,20 +203,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 
 func getLineToIgnoreAction(issue snyk.Issue) int {
 	return issue.Range.Start.Line + 1
-}
-
-func (renderer *HtmlRenderer) resetAiFixCacheIfDifferent(issue snyk.Issue) {
-	if issue.AdditionalData.GetKey() == renderer.CurrentIssueId {
-		return
-	}
-
-	renderer.AiFixDiffState = AiResultState{Status: AiNotStarted}
-	renderer.CurrentIssueId = issue.AdditionalData.GetKey()
-	renderer.CurrentSelectedFixId = ""
-	if renderer.explainCancelFunc != nil {
-		renderer.explainCancelFunc()
-	}
-	renderer.explainCancelFunc = nil
 }
 
 func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {
