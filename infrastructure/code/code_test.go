@@ -18,7 +18,6 @@ package code
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/internal/product"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,6 +25,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/snyk/snyk-ls/internal/product"
 
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
