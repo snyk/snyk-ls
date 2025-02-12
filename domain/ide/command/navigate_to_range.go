@@ -19,8 +19,9 @@ package command
 import (
 	"context"
 	"encoding/json"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"strings"
+
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"

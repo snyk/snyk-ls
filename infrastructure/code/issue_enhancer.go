@@ -19,9 +19,10 @@ package code
 import (
 	"context"
 	"fmt"
-	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"net/url"
 	"strconv"
+
+	codeClientObservability "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/internal/types"
 
