@@ -123,6 +123,8 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 }
 
 // returns the deferred code action CodeAction which calls autofix.
+//
+//lint:ignore U1000 Remove this function when autofixFeedbackActions has been migrated to new flow.
 func (b *IssueEnhancer) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
 	autofixEditCallback := b.autofixFunc(ctx, issue)
 	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", &autofixEditCallback, nil, "", "")
