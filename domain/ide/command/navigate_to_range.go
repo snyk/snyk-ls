@@ -19,6 +19,8 @@ package command
 import (
 	"context"
 	"encoding/json"
+	sglsp "github.com/sourcegraph/go-lsp"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -60,8 +62,16 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 	if !ok {
 		return nil, errors.Errorf("invalid range path: %s", args[0])
 	}
+
+	var documentUri sglsp.DocumentURI
+	if !strings.HasPrefix(path, "snyk://") {
+		documentUri = uri.PathToUri(path)
+	} else {
+		documentUri = sglsp.DocumentURI(path)
+	}
+
 	params := types.ShowDocumentParams{
-		Uri:       uri.PathToUri(path),
+		Uri:       documentUri,
 		External:  false,
 		TakeFocus: true,
 		Selection: converter.ToRange(myRange),

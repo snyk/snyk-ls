@@ -18,7 +18,7 @@ package code
 
 import (
 	"context"
-	"fmt"
+	"github.com/snyk/snyk-ls/internal/product"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -67,6 +67,20 @@ func setupDocs(t *testing.T) (string, lsp.TextDocumentItem, lsp.TextDocumentItem
 		URI: uri.PathToUri(filepath.Join(path, "test2.java")),
 	}
 	return path, firstDoc, secondDoc, content1, content2
+}
+
+func setupTestData() (issue snyk.Issue, expectedURI string, expectedTitle string) {
+	issue = snyk.Issue{
+		AffectedFilePath: "/Users/user/workspace/blah/app.js",
+		Product:          product.ProductCode,
+		AdditionalData:   snyk.CodeIssueData{Key: "123", Title: "Test Issue"},
+		Range:            fakeRange,
+	}
+
+	expectedURI = "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
+	expectedTitle = "⚡ Get AI Fixes for issue: Test Issue (Snyk)"
+
+	return
 }
 
 func TestCreateBundle(t *testing.T) {
@@ -702,6 +716,14 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
 
+	c := config.CurrentConfig()
+
+	issueEnhancer := IssueEnhancer{
+		SnykCode:     &FakeSnykCodeClient{C: c},
+		instrumentor: NewCodeInstrumentor(),
+		c:            c,
+	}
+
 	t.Run("should not add autofix after analysis when not enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		channel := make(chan types.ProgressParams, 10000)
@@ -780,21 +802,35 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 
 		assert.Len(t, issues[0].CodeActions, 2)
 
-		val := (*issues[0].CodeActions[1].DeferredCommand)()
-
-		assert.Equal(t, val.Title, "snyk.navigateToRange")
-		assert.Equal(t, types.NavigateToRangeCommand, val.Title)
-		assert.Equal(t, types.NavigateToRangeCommand, val.CommandId)
-
-		expectedURI := fmt.Sprintf("snyk:/%s?product=Snyk+Code&issueId=%s&action=showInDetailPanel",
-			issues[0].AffectedFilePath, // Use the rootPath and AffectedFilePath from your test setup
-			issueId(issues[0])) // Use the helper function issueId for the issueId
-		assert.Equal(t, expectedURI, val.Arguments[0])
-
-		// Assert the range if needed.
-		assert.Equal(t, issues[0].Range, val.Arguments[1]) // Assuming issues[0].Range is set correctly in your test setup
+		expectedCodeAction := issueEnhancer.createShowDocumentCodeAction(issues[0])
+		assert.Equal(t, issues[0].CodeActions[1].Title, expectedCodeAction.Title)
+		assert.Equal(t, issues[0].CodeActions[1].Command.Title, expectedCodeAction.Command.Title)
+		assert.Equal(t, issues[0].CodeActions[1].Command.CommandId, expectedCodeAction.Command.CommandId)
+		assert.Equal(t, issues[0].CodeActions[1].Command.Arguments, expectedCodeAction.Command.Arguments)
 	},
 	)
+}
+
+func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
+	c := config.CurrentConfig()
+	issueEnhancer := IssueEnhancer{
+		SnykCode:     &FakeSnykCodeClient{C: c},
+		instrumentor: NewCodeInstrumentor(),
+		c:            c,
+	}
+
+	t.Run("creates show document code action successfully", func(t *testing.T) {
+		issue, expectedURI, expectedTitle := setupTestData()
+		codeAction := issueEnhancer.createShowDocumentCodeAction(issue)
+
+		assert.NotNil(t, codeAction)
+		assert.Equal(t, expectedTitle, codeAction.Title)
+		assert.NotNil(t, codeAction.Command)
+		assert.Equal(t, expectedTitle, codeAction.Command.Title)
+		assert.Equal(t, types.NavigateToRangeCommand, codeAction.Command.CommandId)
+		assert.Equal(t, expectedURI, codeAction.Command.Arguments[0])
+		assert.Equal(t, issue.Range, codeAction.Command.Arguments[1])
+	})
 }
 
 func Test_SastApiCall(t *testing.T) {

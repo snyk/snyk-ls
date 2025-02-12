@@ -71,17 +71,15 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 		rootPath:     "/Users/user/workspace/blah",
 		c:            c,
 	}
+	issue := snyk.Issue{
+		AffectedFilePath: "/Users/user/workspace/blah/app.js",
+		Product:          product.ProductCode,
+		AdditionalData:   snyk.CodeIssueData{Key: "123"},
+		Range:            fakeRange,
+	}
+	expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
 
 	t.Run("returns CommandData with correct URI and range", func(t *testing.T) {
-		issue := snyk.Issue{
-			AffectedFilePath: "app.js",
-			Product:          product.ProductCode,
-			AdditionalData:   snyk.CodeIssueData{Key: "123"},
-			Range:            fakeRange,
-		}
-
-		expectedURI := "snyk://Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
-
 		commandDataFunc := issueEnhancer.autofixShowDetailsFunc(context.Background(), issue)
 		commandData := commandDataFunc()
 
@@ -307,33 +305,15 @@ func Test_addIssueActions(t *testing.T) {
 
 func Test_ideSnykURI(t *testing.T) {
 	t.Run("generates correct URI", func(t *testing.T) {
-		rootPath := "/Users/user/workspace/blah"
-		issue := snyk.Issue{
-			AffectedFilePath: "app.js",
-			Product:          "Code",
-			AdditionalData:   snyk.CodeIssueData{Key: "123"}, // Provide additional data
-		}
-		ideAction := "showInDetailPanel"
-
-		expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Code&issueId=123&action=showInDetailPanel"
-
-		actualURI, err := ideSnykURI(rootPath, issue, ideAction)
+		issue, ideAction, expectedURI := setupAiFixTestData()
+		actualURI, err := ideSnykURI(issue, ideAction)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedURI, actualURI)
 	})
 
 	t.Run("handles missing Key in additional data", func(t *testing.T) {
-		rootPath := "/Users/user/workspace/blah" // This will cause ToEncodedNormalizedPath to return an error
-		issue := snyk.Issue{
-			AffectedFilePath: "app.js",
-			Product:          product.ProductCode,
-			ID:               "uuid-123-456", // Default ID if no key in additional data
-		}
-		ideAction := "showInDetailPanel"
-
-		expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=uuid-123-456&action=showInDetailPanel"
-
-		actualURI, err := ideSnykURI(rootPath, issue, ideAction)
+		issue, ideAction, expectedURI := setupAiFixTestData()
+		actualURI, err := ideSnykURI(issue, ideAction)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedURI, actualURI)
 	})
@@ -383,4 +363,16 @@ func TestIssueId(t *testing.T) {
 			}
 		})
 	}
+}
+
+func setupAiFixTestData() (issue snyk.Issue, ideAction string, expectedURI string) {
+	issue = snyk.Issue{
+		AffectedFilePath: "/Users/user/workspace/blah/app.js",
+		Product:          "Code",
+		AdditionalData:   snyk.CodeIssueData{Key: "123"}, // Provide additional data
+	}
+	ideAction = "showInDetailPanel"
+	expectedURI = "snyk:///Users/user/workspace/blah/app.js?product=Code&issueId=123&action=showInDetailPanel"
+
+	return
 }

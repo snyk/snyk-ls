@@ -97,14 +97,14 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 		issueData.HasAIFix = autoFixEnabled && issueData.IsAutofixable
 
 		if issueData.HasAIFix && !issues[i].IsIgnored {
-			codeAction := *b.createDeferredAutofixCodeAction(ctx, issues[i])
-			issues[i].CodeActions = append(issues[i].CodeActions, codeAction)
-			uri, err := ideSnykURI(b.rootPath, issues[i], "showInDetailsPanel")
+			codeActionShowDocument := *b.createShowDocumentCodeAction(issues[i])
+			issues[i].CodeActions = append(issues[i].CodeActions, codeActionShowDocument)
+
+			uri, err := ideSnykURI(issues[i], "showInDetailsPanel")
 			if err != nil {
 				b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
 				return
 			}
-
 			issues[i].CodelensCommands = append(issues[i].CodelensCommands, types.CommandData{
 				Title:     "⚡ Get AI Fixes for issue: " + issueTitle(issues[i]),
 				CommandId: types.NavigateToRangeCommand,
@@ -124,13 +124,9 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 
 // returns the deferred code action CodeAction which calls autofix.
 func (b *IssueEnhancer) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
-	autofixShowDetailsCallback := b.autofixShowDetailsFunc(ctx, issue)
-	if autofixShowDetailsCallback == nil {
-		b.c.Logger().Error().Msg("Failed to create autofixShowDetailsCallback")
-		return nil
-	}
+	autofixEditCallback := b.autofixFunc(ctx, issue)
+	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", &autofixEditCallback, nil, "", "")
 
-	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", nil, &autofixShowDetailsCallback, "", "")
 	if err != nil {
 		b.c.Logger().Error().Msg("Failed to create deferred autofix code action")
 		b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")
@@ -139,13 +135,35 @@ func (b *IssueEnhancer) createDeferredAutofixCodeAction(ctx context.Context, iss
 	return &action
 }
 
+// returns the deferred code action CodeAction which calls autofix.
+func (b *IssueEnhancer) createShowDocumentCodeAction(issue snyk.Issue) (codeAction *snyk.CodeAction) {
+	method := "code.createShowDocumentCodeAction"
+	uri, err := ideSnykURI(issue, "showInDetailPanel")
+	if err != nil {
+		b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
+		return nil
+	}
+
+	title := fmt.Sprintf("⚡ Get AI Fixes for issue: %s (Snyk)", issueTitle(issue))
+
+	codeAction = &snyk.CodeAction{
+		Title: title,
+		Command: &types.CommandData{
+			Title:     title,
+			CommandId: types.NavigateToRangeCommand,
+			Arguments: []any{uri, issue.Range},
+		},
+	}
+	return codeAction
+}
+
 func (b *IssueEnhancer) autofixShowDetailsFunc(ctx context.Context, issue snyk.Issue) func() *types.CommandData {
 	f := func() *types.CommandData {
 		method := "code.autofixShowDetailsFunc"
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
 
-		uri, err := ideSnykURI(b.rootPath, issue, "showInDetailPanel")
+		uri, err := ideSnykURI(issue, "showInDetailPanel")
 		if err != nil {
 			b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
 			return nil
@@ -345,12 +363,10 @@ func issueId(issue snyk.Issue) string {
 	return issue.ID
 }
 
-func ideSnykURI(rootPath string, issue snyk.Issue, ideAction string) (string, error) {
-	path := EncodeAbsolutePath(ToAbsolutePath(rootPath, issue.AffectedFilePath))
-
+func ideSnykURI(issue snyk.Issue, ideAction string) (string, error) {
 	u := &url.URL{
 		Scheme:   "snyk",
-		Path:     path,
+		Path:     issue.AffectedFilePath,
 		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.Product)), url.QueryEscape(issueId(issue)), ideAction),
 	}
 
