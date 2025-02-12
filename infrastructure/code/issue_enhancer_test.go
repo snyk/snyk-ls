@@ -19,16 +19,13 @@ package code
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -62,143 +59,37 @@ func Test_getShardKey(t *testing.T) {
 	})
 }
 
-func Test_autofixFunc(t *testing.T) {
+func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 	c := config.CurrentConfig()
 	fakeSnykCode := FakeSnykCodeClient{C: c}
-	bundleHash := ""
-	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
 		SnykCode:     &fakeSnykCode,
-		notifier:     mockNotifier,
 		instrumentor: NewCodeInstrumentor(),
+		rootPath:     "/Users/user/workspace/blah",
 		c:            c,
 	}
+	issue := snyk.Issue{
+		AffectedFilePath: "/Users/user/workspace/blah/app.js",
+		Product:          product.ProductCode,
+		AdditionalData:   snyk.CodeIssueData{Key: "123"},
+		Range:            fakeRange,
+	}
+	expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
 
-	t.Run("Shows attempt message when fix requested", func(t *testing.T) {
-		fn := issueEnhancer.autofixFunc(context.Background(), FakeIssue, bundleHash)
-		fn()
+	t.Run("returns CommandData with correct URI and range", func(t *testing.T) {
+		commandDataFunc := issueEnhancer.autofixShowDetailsFunc(context.Background(), issue)
+		commandData := commandDataFunc()
 
-		assert.Contains(t, mockNotifier.SentMessages(), sglsp.ShowMessageParams{
-			Type:    sglsp.Info,
-			Message: "Attempting to fix SNYK-123 (Snyk)",
-		})
-	})
-
-	t.Run("Shows success message when fix provided", func(t *testing.T) {
-		fn := issueEnhancer.autofixFunc(context.Background(), FakeIssue, bundleHash)
-		fn()
-		var feedbackMessageReq types.ShowMessageRequest
-		assert.Eventually(t, func() bool {
-			messages := mockNotifier.SentMessages()
-			if messages == nil || len(messages) < 2 {
-				return false
-			}
-			for _, message := range messages {
-				if _, ok := message.(types.ShowMessageRequest); ok {
-					feedbackMessageReq = message.(types.ShowMessageRequest)
-					break
-				}
-			}
-			FakeSnykCodeApiServiceMutex.Lock()
-			eventSent := fakeSnykCode.FeedbackSent == FixAppliedUserEvent
-			FakeSnykCodeApiServiceMutex.Unlock()
-			return eventSent && types.Info == feedbackMessageReq.Type &&
-				"Congratulations! 🎉 You’ve just fixed this SNYK-123 issue. Was this fix helpful?" == feedbackMessageReq.Message
-		}, 10*time.Second, 1*time.Second)
-
-		// Compare button action commands
-		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
-		commandData1 := types.CommandData{
-			Title:     types.CodeSubmitFixFeedback,
-			CommandId: types.CodeSubmitFixFeedback,
-			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", FixPositiveFeedback},
-		}
-		commandData2 := types.CommandData{
-			Title:     types.CodeSubmitFixFeedback,
-			CommandId: types.CodeSubmitFixFeedback,
-			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", FixNegativeFeedback},
-		}
-		positiveFeedback := types.MessageAction("👍")
-		negativeFeedback := types.MessageAction("👎")
-		actionCommandMap.Add(positiveFeedback, commandData1)
-		actionCommandMap.Add(negativeFeedback, commandData2)
-
-		assert.Equal(t, actionCommandMap.Keys(), feedbackMessageReq.Actions.Keys())
-
-		buttonAction1, _ := feedbackMessageReq.Actions.Get(positiveFeedback)
-		buttonAction2, _ := feedbackMessageReq.Actions.Get(negativeFeedback)
-		assert.Equal(t, commandData1, buttonAction1)
-		assert.Equal(t, commandData2, buttonAction2)
-	})
-
-	t.Run("Shows success message when fix for test-issue provided", func(t *testing.T) {
-		// NOTE(alex.gronskiy): Code can return `<lang>/<ruleID>/test` ruleID
-		fakeTestIssue := FakeIssue
-		fakeTestIssue.ID = fakeTestIssue.ID + "/test"
-		fn := issueEnhancer.autofixFunc(context.Background(), fakeTestIssue, bundleHash)
-		fn()
-
-		var feedbackMessageReq types.ShowMessageRequest
-		assert.Eventually(t, func() bool {
-			messages := mockNotifier.SentMessages()
-			if messages == nil || len(messages) < 2 {
-				return false
-			}
-			for _, message := range messages {
-				if _, ok := message.(types.ShowMessageRequest); ok {
-					feedbackMessageReq = message.(types.ShowMessageRequest)
-					break
-				}
-			}
-			FakeSnykCodeApiServiceMutex.Lock()
-			eventSent := fakeSnykCode.FeedbackSent == FixAppliedUserEvent
-			FakeSnykCodeApiServiceMutex.Unlock()
-			return eventSent && types.Info == feedbackMessageReq.Type &&
-				"Congratulations! 🎉 You’ve just fixed this SNYK-123 issue. Was this fix helpful?" == feedbackMessageReq.Message
-		}, 10*time.Second, 1*time.Second)
-
-		// Compare button action commands
-		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
-		commandData1 := types.CommandData{
-			Title:     types.CodeSubmitFixFeedback,
-			CommandId: types.CodeSubmitFixFeedback,
-			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", FixPositiveFeedback},
-		}
-		commandData2 := types.CommandData{
-			Title:     types.CodeSubmitFixFeedback,
-			CommandId: types.CodeSubmitFixFeedback,
-			Arguments: []any{"123e4567-e89b-12d3-a456-426614174000/1", FixNegativeFeedback},
-		}
-		positiveFeedback := types.MessageAction("👍")
-		negativeFeedback := types.MessageAction("👎")
-		actionCommandMap.Add(positiveFeedback, commandData1)
-		actionCommandMap.Add(negativeFeedback, commandData2)
-
-		assert.Equal(t, actionCommandMap.Keys(), feedbackMessageReq.Actions.Keys())
-
-		buttonAction1, _ := feedbackMessageReq.Actions.Get(positiveFeedback)
-		buttonAction2, _ := feedbackMessageReq.Actions.Get(negativeFeedback)
-		assert.Equal(t, commandData1, buttonAction1)
-		assert.Equal(t, commandData2, buttonAction2)
-	})
-
-	t.Run("Shows error message when no fix available", func(t *testing.T) {
-		fakeSnykCode.NoFixSuggestions = true
-
-		fn := issueEnhancer.autofixFunc(context.Background(), FakeIssue, bundleHash)
-		fn()
-
-		assert.Contains(t, mockNotifier.SentMessages(), sglsp.ShowMessageParams{
-			Type:    sglsp.MTError,
-			Message: "Oh snap! 😔 The fix did not remediate the issue and was not applied.",
-		})
+		assert.Equal(t, types.NavigateToRangeCommand, commandData.Title)
+		assert.Equal(t, types.NavigateToRangeCommand, commandData.CommandId)
+		assert.Equal(t, expectedURI, commandData.Arguments[0])
+		assert.Equal(t, issue.Range, commandData.Arguments[1])
 	})
 }
 
 func Test_addIssueActions(t *testing.T) {
 	c := config.CurrentConfig()
 	fakeSnykCode := FakeSnykCodeClient{C: c}
-	bundleHash := ""
 	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
 		SnykCode:     &fakeSnykCode,
@@ -239,7 +130,7 @@ func Test_addIssueActions(t *testing.T) {
 		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(false, true)
 
-		issueEnhancer.addIssueActions(context.Background(), fakeIssues, bundleHash)
+		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
 
 		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
 		require.True(t, ok)
@@ -253,7 +144,7 @@ func Test_addIssueActions(t *testing.T) {
 		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(false, false)
 
-		issueEnhancer.addIssueActions(context.Background(), fakeIssues, bundleHash)
+		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
 
 		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
 		require.True(t, ok)
@@ -267,7 +158,7 @@ func Test_addIssueActions(t *testing.T) {
 		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(true, true)
 
-		issueEnhancer.addIssueActions(context.Background(), fakeIssues, bundleHash)
+		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
 
 		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
 		require.True(t, ok)
@@ -275,4 +166,78 @@ func Test_addIssueActions(t *testing.T) {
 		assert.Len(t, fakeIssues[0].CodelensCommands, 1)
 		assert.Len(t, fakeIssues[0].CodeActions, 1)
 	})
+}
+
+func Test_ideSnykURI(t *testing.T) {
+	t.Run("generates correct URI", func(t *testing.T) {
+		issue, ideAction, expectedURI := setupAiFixTestData()
+		actualURI, err := ideSnykURI(issue, ideAction)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedURI, actualURI)
+	})
+
+	t.Run("handles missing Key in additional data", func(t *testing.T) {
+		issue, ideAction, expectedURI := setupAiFixTestData()
+		actualURI, err := ideSnykURI(issue, ideAction)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedURI, actualURI)
+	})
+}
+
+func TestIssueId(t *testing.T) {
+	testCases := []struct {
+		name     string
+		issue    snyk.Issue
+		expected string
+	}{
+		{
+			name: "Nil AdditionalData",
+			issue: snyk.Issue{
+				ID:             "vuln-id",
+				AdditionalData: nil,
+			},
+			expected: "vuln-id",
+		},
+		{
+			name: "CodeIssueData with empty key",
+			issue: snyk.Issue{
+				ID: "vuln-id",
+				AdditionalData: snyk.CodeIssueData{
+					Key: "",
+				},
+			},
+			expected: "vuln-id",
+		},
+		{
+			name: "CodeIssueData with key",
+			issue: snyk.Issue{
+				ID: "vuln-id",
+				AdditionalData: snyk.CodeIssueData{
+					Key: "code-issue-key",
+				},
+			},
+			expected: "code-issue-key",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := issueId(tc.issue)
+			if result != tc.expected {
+				t.Errorf("Expected %s, got %s", tc.expected, result)
+			}
+		})
+	}
+}
+
+func setupAiFixTestData() (issue snyk.Issue, ideAction string, expectedURI string) {
+	issue = snyk.Issue{
+		AffectedFilePath: "/Users/user/workspace/blah/app.js",
+		Product:          "Code",
+		AdditionalData:   snyk.CodeIssueData{Key: "123"}, // Provide additional data
+	}
+	ideAction = "showInDetailPanel"
+	expectedURI = "snyk:///Users/user/workspace/blah/app.js?product=Code&issueId=123&action=showInDetailPanel"
+
+	return
 }

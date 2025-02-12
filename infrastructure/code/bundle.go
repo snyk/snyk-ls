@@ -140,7 +140,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]s
 			logger.Trace().Msg("sending diagnostics...")
 			t.ReportWithMessage(90, "Analysis complete.")
 
-			b.issueEnhancer.addIssueActions(ctx, issues, b.BundleHash)
+			b.issueEnhancer.addIssueActions(ctx, issues)
 
 			return issues, nil
 		} else if status.message == "ANALYZING" {

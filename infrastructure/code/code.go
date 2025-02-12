@@ -461,7 +461,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path string,
 		path,
 		sc.C,
 	)
-	issueEnhancer.addIssueActions(ctx, issues, bundleHash)
+	issueEnhancer.addIssueActions(ctx, issues)
 
 	return issues, nil
 }

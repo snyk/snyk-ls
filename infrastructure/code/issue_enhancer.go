@@ -19,22 +19,17 @@ package code
 import (
 	"context"
 	"fmt"
-	"math"
+	"net/url"
 	"strconv"
-	"time"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/internal/types"
 
-	sglsp "github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -72,11 +67,11 @@ func newIssueEnhancer(
 }
 
 // Adds code actions and code lenses for issues found
-func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue, bundleHash string) {
+func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue) {
 	method := "addCodeActions"
 
 	autoFixEnabled := getCodeSettings().isAutofixEnabled.Get()
-	learnEnabled := config.CurrentConfig().IsSnykLearnCodeActionsEnabled()
+	learnEnabled := b.c.IsSnykLearnCodeActionsEnabled()
 	b.c.Logger().Debug().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
 	b.c.Logger().Debug().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
 
@@ -95,18 +90,18 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 		issueData.HasAIFix = autoFixEnabled && issueData.IsAutofixable
 
 		if issueData.HasAIFix && !issues[i].IsIgnored {
-			codeAction := *b.createDeferredAutofixCodeAction(ctx, issues[i], bundleHash)
-			issues[i].CodeActions = append(issues[i].CodeActions, codeAction)
+			codeActionShowDocument := *b.createShowDocumentCodeAction(issues[i])
+			issues[i].CodeActions = append(issues[i].CodeActions, codeActionShowDocument)
 
-			codeActionId := *codeAction.Uuid
+			uri, err := ideSnykURI(issues[i], "showInDetailsPanel")
+			if err != nil {
+				b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
+				return
+			}
 			issues[i].CodelensCommands = append(issues[i].CodelensCommands, types.CommandData{
 				Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
-				CommandId: types.CodeFixCommand,
-				Arguments: []any{
-					codeActionId,
-					issues[i].AffectedFilePath,
-					issues[i].Range,
-				},
+				CommandId: types.NavigateToRangeCommand,
+				Arguments: []any{uri, issues[i].Range},
 			})
 		}
 		issues[i].AdditionalData = issueData
@@ -121,159 +116,47 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 }
 
 // returns the deferred code action CodeAction which calls autofix.
-func (b *IssueEnhancer) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue,
-	bundleHash string) *snyk.CodeAction {
-	autofixEditCallback := b.autofixFunc(ctx, issue, bundleHash)
-
-	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", &autofixEditCallback, nil, "", "")
+func (b *IssueEnhancer) createShowDocumentCodeAction(issue snyk.Issue) (codeAction *snyk.CodeAction) {
+	method := "code.createShowDocumentCodeAction"
+	uri, err := ideSnykURI(issue, "showInDetailPanel")
 	if err != nil {
-		b.c.Logger().Error().Msg("failed to create deferred autofix code action")
-		b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")
+		b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
 		return nil
 	}
-	return &action
+
+	title := fmt.Sprintf("⚡ Fix this issue: %s (Snyk)", issueTitle(issue))
+
+	codeAction = &snyk.CodeAction{
+		Title: title,
+		Command: &types.CommandData{
+			Title:     title,
+			CommandId: types.NavigateToRangeCommand,
+			Arguments: []any{uri, issue.Range},
+		},
+	}
+	return codeAction
 }
 
-func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue,
-	bundleHash string) func() *snyk.WorkspaceEdit {
-	editFn := func() *snyk.WorkspaceEdit {
-		c := config.CurrentConfig()
-		method := "code.enhanceWithAutofixSuggestionEdits"
-		logger := c.Logger().With().Str("method", method).Logger()
+func (b *IssueEnhancer) autofixShowDetailsFunc(ctx context.Context, issue snyk.Issue) func() *types.CommandData {
+	f := func() *types.CommandData {
+		method := "code.autofixShowDetailsFunc"
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
 
-		ctx, cancel := context.WithCancel(s.Context())
-		defer cancel()
-
-		p := progress.NewTracker(true)
-		go func() { p.CancelOrDone(cancel, ctx.Done()) }() // make uploads in batches until no missing files reported anymore
-
-		fixMsg := "Attempting to fix " + issueTitle(issue) + " (Snyk)"
-		p.BeginWithMessage(fixMsg, "")
-		defer p.End()
-		b.notifier.SendShowMessage(sglsp.Info, fixMsg)
-
-		encodedNormalizedPath, err := ToEncodedNormalizedPath(b.rootPath, issue.AffectedFilePath)
+		uri, err := ideSnykURI(issue, "showInDetailPanel")
 		if err != nil {
-			logger.
-				Err(err).
-				Str("rootPath", b.rootPath).
-				Str("AffectedFilePath", issue.AffectedFilePath).
-				Msg("error converting to relative file path")
-			b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")
+			b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
 			return nil
 		}
 
-		autofixOptions := AutofixOptions{
-			bundleHash: bundleHash,
-			shardKey:   getShardKey(b.rootPath, c.Token()),
-			filePath:   encodedNormalizedPath,
-			issue:      issue,
+		commandData := &types.CommandData{
+			Title:     types.NavigateToRangeCommand,
+			CommandId: types.NavigateToRangeCommand,
+			Arguments: []any{uri, issue.Range},
 		}
-
-		// Polling function just calls the endpoint and registers result, signaling `done` to the
-		// channel.
-		pollFunc := func() (fix *AutofixSuggestion, complete bool) {
-			logger.Debug().Str("requestId", b.requestId).Msg("polling")
-			fixSuggestions, fixStatus, err := b.SnykCode.GetAutofixSuggestions(s.Context(), autofixOptions, b.rootPath)
-			fix = nil
-			complete = false
-			if err != nil {
-				logger.Error().
-					Err(err).Str("requestId", b.requestId).
-					Str("stage", "requesting autofix").Msg("error requesting autofix")
-				complete = true
-			} else if fixStatus.message == completeStatus {
-				if len(fixSuggestions) > 0 {
-					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggestion goes into the fix
-					fix = &fixSuggestions[0]
-				} else {
-					logger.Debug().Str("requestId", b.requestId).Msg("No good fix could be computed.")
-				}
-				complete = true
-			}
-			return fix, complete
-		}
-
-		// Actual polling loop.
-		pollingTicker := time.NewTicker(1 * time.Second)
-		defer pollingTicker.Stop()
-		timeoutTimer := time.NewTimer(2 * time.Minute)
-		defer timeoutTimer.Stop()
-		tries := 1.0
-		for {
-			select {
-			case <-timeoutTimer.C:
-				logger.Error().Str("requestId", b.requestId).Msg("timeout requesting autofix")
-				b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please try again. Request ID: "+b.requestId)
-				return nil
-			case <-pollingTicker.C:
-				p.ReportWithMessage(int(math.Min(tries, 99)), "Polling for fix...")
-				fix, complete := pollFunc()
-				if !complete {
-					tries++
-					continue
-				}
-
-				if fix == nil {
-					b.notifier.SendShowMessage(sglsp.MTError, "Oh snap! 😔 The fix did not remediate the issue and was not applied.")
-					return nil
-				}
-
-				// send feedback asynchronously, so people can actually see the changes done by the fix
-				go func() {
-					b.SnykCode.SubmitAutofixFeedback(ctx, fix.FixId, FixAppliedUserEvent)
-
-					actionCommandMap, err := b.autofixFeedbackActions(fix.FixId)
-					successMessage := "Congratulations! 🎉 You’ve just fixed this " + issueTitle(issue) + " issue."
-					if err != nil {
-						b.notifier.SendShowMessage(sglsp.Info, successMessage)
-					} else {
-						// sleep to give client side to actually apply & review the fix
-						time.Sleep(2 * time.Second)
-						b.notifier.Send(types.ShowMessageRequest{
-							Message: successMessage + " Was this fix helpful?",
-							Type:    types.Info,
-							Actions: actionCommandMap,
-						})
-					}
-				}()
-				return &fix.AutofixEdit
-			}
-		}
+		return commandData
 	}
-
-	return editFn
-}
-
-func ToEncodedNormalizedPath(rootPath string, filePath string) (string, error) {
-	relativePath, err := ToRelativeUnixPath(rootPath, filePath)
-	if err != nil {
-		// couldn't make it relative, so it's already relative
-		relativePath = filePath
-	}
-
-	encodedRelativePath := EncodePath(relativePath)
-	return encodedRelativePath, nil
-}
-
-func (b *IssueEnhancer) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[types.MessageAction, types.CommandData], error) {
-	createCommandData := func(feedback string) types.CommandData {
-		return types.CommandData{
-			Title:     types.CodeSubmitFixFeedback,
-			CommandId: types.CodeSubmitFixFeedback,
-			Arguments: []any{fixId, feedback},
-		}
-	}
-	actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
-	positiveFeedbackCmd := createCommandData(FixPositiveFeedback)
-	negativeFeedbackCmd := createCommandData(FixNegativeFeedback)
-
-	actionCommandMap.Add("👍", positiveFeedbackCmd)
-	actionCommandMap.Add("👎", negativeFeedbackCmd)
-
-	return actionCommandMap, nil
+	return f
 }
 
 func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *snyk.CodeAction) {
@@ -320,4 +203,27 @@ func issueTitle(issue snyk.Issue) string {
 	}
 
 	return issue.ID
+}
+
+func issueId(issue snyk.Issue) string {
+	if issue.AdditionalData == nil {
+		return issue.ID
+	}
+
+	codeIssueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	if ok && codeIssueData.GetKey() != "" {
+		return codeIssueData.GetKey()
+	}
+
+	return issue.ID
+}
+
+func ideSnykURI(issue snyk.Issue, ideAction string) (string, error) {
+	u := &url.URL{
+		Scheme:   "snyk",
+		Path:     issue.AffectedFilePath,
+		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.Product)), url.QueryEscape(issueId(issue)), ideAction),
+	}
+
+	return u.String(), nil
 }

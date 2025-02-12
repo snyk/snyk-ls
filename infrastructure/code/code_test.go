@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/internal/product"
+
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
@@ -66,6 +68,20 @@ func setupDocs(t *testing.T) (string, lsp.TextDocumentItem, lsp.TextDocumentItem
 		URI: uri.PathToUri(filepath.Join(path, "test2.java")),
 	}
 	return path, firstDoc, secondDoc, content1, content2
+}
+
+func setupTestData() (issue snyk.Issue, expectedURI string, expectedTitle string) {
+	issue = snyk.Issue{
+		AffectedFilePath: "/Users/user/workspace/blah/app.js",
+		Product:          product.ProductCode,
+		AdditionalData:   snyk.CodeIssueData{Key: "123", Title: "Test Issue"},
+		Range:            fakeRange,
+	}
+
+	expectedURI = "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
+	expectedTitle = "⚡ Fix this issue: Test Issue (Snyk)"
+
+	return
 }
 
 func TestCreateBundle(t *testing.T) {
@@ -250,7 +266,7 @@ func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient,
 
 func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 	t.Helper()
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
 	snykCodeMock := &FakeSnykCodeClient{C: c}
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.
@@ -647,7 +663,7 @@ func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir string) 
 }
 
 func Test_IsEnabled(t *testing.T) {
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
 	scanner := &Scanner{errorReporter: newTestCodeErrorReporter(), C: c}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
@@ -700,6 +716,14 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
+
+	c := testutil.UnitTest(t)
+
+	issueEnhancer := IssueEnhancer{
+		SnykCode:     &FakeSnykCodeClient{C: c},
+		instrumentor: NewCodeInstrumentor(),
+		c:            c,
+	}
 
 	t.Run("should not add autofix after analysis when not enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
@@ -778,15 +802,36 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[string]bool{}, testTracker)
 
 		assert.Len(t, issues[0].CodeActions, 2)
-		val, ok := (*issues[0].CodeActions[1].DeferredEdit)().Changes[EncodePath(issues[0].AffectedFilePath)]
-		assert.True(t, ok)
-		// If this fails, likely the format of autofix edits has changed to
-		// "hunk-like" ones rather than replacing the whole file
-		assert.Len(t, val, 1)
-		// Checks that it arrived from fake autofix indeed.
-		assert.Equal(t, val[0].NewText, FakeAutofixSuggestionNewText)
+
+		expectedCodeAction := issueEnhancer.createShowDocumentCodeAction(issues[0])
+		assert.Equal(t, issues[0].CodeActions[1].Title, expectedCodeAction.Title)
+		assert.Equal(t, issues[0].CodeActions[1].Command.Title, expectedCodeAction.Command.Title)
+		assert.Equal(t, issues[0].CodeActions[1].Command.CommandId, expectedCodeAction.Command.CommandId)
+		assert.Equal(t, issues[0].CodeActions[1].Command.Arguments, expectedCodeAction.Command.Arguments)
 	},
 	)
+}
+
+func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
+	c := testutil.UnitTest(t)
+	issueEnhancer := IssueEnhancer{
+		SnykCode:     &FakeSnykCodeClient{C: c},
+		instrumentor: NewCodeInstrumentor(),
+		c:            c,
+	}
+
+	t.Run("creates show document code action successfully", func(t *testing.T) {
+		issue, expectedURI, expectedTitle := setupTestData()
+		codeAction := issueEnhancer.createShowDocumentCodeAction(issue)
+
+		assert.NotNil(t, codeAction)
+		assert.Equal(t, expectedTitle, codeAction.Title)
+		assert.NotNil(t, codeAction.Command)
+		assert.Equal(t, expectedTitle, codeAction.Command.Title)
+		assert.Equal(t, types.NavigateToRangeCommand, codeAction.Command.CommandId)
+		assert.Equal(t, expectedURI, codeAction.Command.Arguments[0])
+		assert.Equal(t, issue.Range, codeAction.Command.Arguments[1])
+	})
 }
 
 func Test_SastApiCall(t *testing.T) {
