@@ -19,24 +19,16 @@ package code
 import (
 	"context"
 	"fmt"
-	"math"
-	"net/url"
-	"path/filepath"
-	"strconv"
-	"time"
-
 	codeClientObservability "github.com/snyk/code-client-go/observability"
+	"net/url"
+	"strconv"
 
 	"github.com/snyk/snyk-ls/internal/types"
-
-	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -164,132 +156,6 @@ func (b *IssueEnhancer) autofixShowDetailsFunc(ctx context.Context, issue snyk.I
 		return commandData
 	}
 	return f
-}
-
-// TODO, remove this function when autofixFeedbackActions has been migrated to new flow.
-func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue) func() *snyk.WorkspaceEdit {
-	editFn := func() *snyk.WorkspaceEdit {
-		c := config.CurrentConfig()
-		method := "code.enhanceWithAutofixSuggestionEdits"
-		logger := c.Logger().With().Str("method", method).Logger()
-		s := b.instrumentor.StartSpan(ctx, method)
-		defer b.instrumentor.Finish(s)
-
-		ctx, cancel := context.WithCancel(s.Context())
-		defer cancel()
-
-		p := progress.NewTracker(true)
-		go func() { p.CancelOrDone(cancel, ctx.Done()) }() // make uploads in batches until no missing files reported anymore
-
-		fixMsg := "Attempting to fix " + issueTitle(issue) + " (Snyk)"
-		p.BeginWithMessage(fixMsg, "")
-		defer p.End()
-		b.notifier.SendShowMessage(sglsp.Info, fixMsg)
-
-		path := EncodePath(filepath.ToSlash(ToAbsolutePath(b.rootPath, issue.AffectedFilePath)))
-
-		autofixOptions := AutofixOptions{
-			bundleHash: "",
-			shardKey:   getShardKey(b.rootPath, c.Token()),
-			filePath:   path,
-			issue:      issue,
-		}
-
-		// Polling function just calls the endpoint and registers result, signaling `done` to the
-		// channel.
-		pollFunc := func() (fix *AutofixSuggestion, complete bool) {
-			logger.Debug().Str("requestId", b.requestId).Msg("polling")
-			fixSuggestions, fixStatus, err := b.SnykCode.GetAutofixSuggestions(s.Context(), autofixOptions, b.rootPath)
-			fix = nil
-			complete = false
-			if err != nil {
-				logger.Error().
-					Err(err).Str("requestId", b.requestId).
-					Str("stage", "requesting autofix").Msg("error requesting autofix")
-				complete = true
-			} else if fixStatus.message == completeStatus {
-				if len(fixSuggestions) > 0 {
-					// TODO(alex.gronskiy): currently, only the first ([0]) fix suggestion goes into the fix
-					fix = &fixSuggestions[0]
-				} else {
-					logger.Debug().Str("requestId", b.requestId).Msg("No good fix could be computed.")
-				}
-				complete = true
-			}
-			return fix, complete
-		}
-
-		// Actual polling loop.
-		pollingTicker := time.NewTicker(1 * time.Second)
-		defer pollingTicker.Stop()
-		timeoutTimer := time.NewTimer(2 * time.Minute)
-		defer timeoutTimer.Stop()
-		tries := 1.0
-		for {
-			select {
-			case <-timeoutTimer.C:
-				logger.Error().Str("requestId", b.requestId).Msg("timeout requesting autofix")
-				b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please try again. Request ID: "+b.requestId)
-				return nil
-			case <-pollingTicker.C:
-				p.ReportWithMessage(int(math.Min(tries, 99)), "Polling for fix...")
-				fix, complete := pollFunc()
-				if !complete {
-					tries++
-					continue
-				}
-
-				if fix == nil {
-					b.notifier.SendShowMessage(sglsp.MTError, "Oh snap! 😔 The fix did not remediate the issue and was not applied.")
-					return nil
-				}
-
-				// send feedback asynchronously, so people can actually see the changes done by the fix
-				go func() {
-					err := b.SnykCode.SubmitAutofixFeedback(ctx, fix.FixId, FixAppliedUserEvent)
-					if err != nil {
-						b.c.Logger().Error().Msg("Failed to submit autofix feedback")
-						return
-					}
-
-					actionCommandMap, err := b.autofixFeedbackActions(fix.FixId)
-					successMessage := "Congratulations! 🎉 You’ve just fixed this " + issueTitle(issue) + " issue."
-					if err != nil {
-						b.notifier.SendShowMessage(sglsp.Info, successMessage)
-					} else {
-						// sleep to give client side to actually apply & review the fix
-						time.Sleep(2 * time.Second)
-						b.notifier.Send(types.ShowMessageRequest{
-							Message: successMessage + " Was this fix helpful?",
-							Type:    types.Info,
-							Actions: actionCommandMap,
-						})
-					}
-				}()
-				return &fix.AutofixEdit
-			}
-		}
-	}
-
-	return editFn
-}
-
-func (b *IssueEnhancer) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[types.MessageAction, types.CommandData], error) {
-	createCommandData := func(feedback string) types.CommandData {
-		return types.CommandData{
-			Title:     types.CodeSubmitFixFeedback,
-			CommandId: types.CodeSubmitFixFeedback,
-			Arguments: []any{fixId, feedback},
-		}
-	}
-	actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
-	positiveFeedbackCmd := createCommandData(FixPositiveFeedback)
-	negativeFeedbackCmd := createCommandData(FixNegativeFeedback)
-
-	actionCommandMap.Add("👍", positiveFeedbackCmd)
-	actionCommandMap.Add("👎", negativeFeedbackCmd)
-
-	return actionCommandMap, nil
 }
 
 func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *snyk.CodeAction) {
