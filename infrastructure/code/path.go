@@ -39,17 +39,6 @@ func EncodePath(relativePath string) string {
 	return encodedPath
 }
 
-func EncodeAbsolutePath(absolutePathPath string) string {
-	segments := strings.Split(filepath.ToSlash(absolutePathPath), "/")
-	encodedPath := "/"
-	for _, segment := range segments {
-		encodedSegment := url.PathEscape(segment)
-		encodedPath = path.Join(encodedPath, encodedSegment)
-	}
-
-	return encodedPath
-}
-
 func DecodePath(encodedRelativePath string) (string, error) {
 	return url.PathUnescape(encodedRelativePath)
 }

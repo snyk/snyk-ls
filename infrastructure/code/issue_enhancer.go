@@ -106,7 +106,7 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 				return
 			}
 			issues[i].CodelensCommands = append(issues[i].CodelensCommands, types.CommandData{
-				Title:     "⚡ Get AI Fixes for issue: " + issueTitle(issues[i]),
+				Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
 				CommandId: types.NavigateToRangeCommand,
 				Arguments: []any{uri, issues[i].Range},
 			})
@@ -123,21 +123,6 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 }
 
 // returns the deferred code action CodeAction which calls autofix.
-//
-//lint:ignore U1000 Remove this function when autofixFeedbackActions has been migrated to new flow.
-func (b *IssueEnhancer) createDeferredAutofixCodeAction(ctx context.Context, issue snyk.Issue) *snyk.CodeAction {
-	autofixEditCallback := b.autofixFunc(ctx, issue)
-	action, err := snyk.NewDeferredCodeAction("⚡ Fix this issue: "+issueTitle(issue)+" (Snyk)", &autofixEditCallback, nil, "", "")
-
-	if err != nil {
-		b.c.Logger().Error().Msg("Failed to create deferred autofix code action")
-		b.notifier.SendShowMessage(sglsp.MTError, "Something went wrong. Please contact Snyk support.")
-		return nil
-	}
-	return &action
-}
-
-// returns the deferred code action CodeAction which calls autofix.
 func (b *IssueEnhancer) createShowDocumentCodeAction(issue snyk.Issue) (codeAction *snyk.CodeAction) {
 	method := "code.createShowDocumentCodeAction"
 	uri, err := ideSnykURI(issue, "showInDetailPanel")
@@ -146,7 +131,7 @@ func (b *IssueEnhancer) createShowDocumentCodeAction(issue snyk.Issue) (codeActi
 		return nil
 	}
 
-	title := fmt.Sprintf("⚡ Get AI Fixes for issue: %s (Snyk)", issueTitle(issue))
+	title := fmt.Sprintf("⚡ Fix this issue: %s (Snyk)", issueTitle(issue))
 
 	codeAction = &snyk.CodeAction{
 		Title: title,
@@ -204,9 +189,10 @@ func (b *IssueEnhancer) autofixFunc(ctx context.Context, issue snyk.Issue) func(
 		path := EncodePath(filepath.ToSlash(ToAbsolutePath(b.rootPath, issue.AffectedFilePath)))
 
 		autofixOptions := AutofixOptions{
-			shardKey: getShardKey(b.rootPath, c.Token()),
-			filePath: path,
-			issue:    issue,
+			bundleHash: "",
+			shardKey:   getShardKey(b.rootPath, c.Token()),
+			filePath:   path,
+			issue:      issue,
 		}
 
 		// Polling function just calls the endpoint and registers result, signaling `done` to the

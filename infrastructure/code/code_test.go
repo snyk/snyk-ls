@@ -266,7 +266,7 @@ func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient,
 
 func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 	t.Helper()
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
 	snykCodeMock := &FakeSnykCodeClient{C: c}
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.
@@ -663,7 +663,7 @@ func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir string) 
 }
 
 func Test_IsEnabled(t *testing.T) {
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
 	scanner := &Scanner{errorReporter: newTestCodeErrorReporter(), C: c}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
@@ -717,7 +717,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
 
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
 
 	issueEnhancer := IssueEnhancer{
 		SnykCode:     &FakeSnykCodeClient{C: c},
@@ -813,7 +813,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 }
 
 func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
 	issueEnhancer := IssueEnhancer{
 		SnykCode:     &FakeSnykCodeClient{C: c},
 		instrumentor: NewCodeInstrumentor(),
