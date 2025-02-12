@@ -21,6 +21,7 @@ import (
 	"errors"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -32,8 +33,9 @@ import (
 )
 
 type generateIssueDescription struct {
-	command       types.CommandData
-	issueProvider snyk.IssueProvider
+	command            types.CommandData
+	issueProvider      snyk.IssueProvider
+	deepCodeLLMBinding llm.DeepCodeLLMBinding
 }
 
 func (cmd *generateIssueDescription) Command() types.CommandData {
@@ -58,7 +60,7 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 	if issue.Product == product.ProductInfrastructureAsCode {
 		return getIacHtml(c, logger, issue)
 	} else if issue.Product == product.ProductCode {
-		return getCodeHtml(c, logger, issue)
+		return getCodeHtml(c, logger, issue, cmd.deepCodeLLMBinding)
 	} else if issue.Product == product.ProductOpenSource {
 		return getOssHtml(c, logger, issue)
 	}
@@ -76,8 +78,8 @@ func getOssHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (stri
 	return html, nil
 }
 
-func getCodeHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (string, error) {
-	htmlRender, err := code.GetHTMLRenderer(c)
+func getCodeHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue, deepCodeLLMBinding llm.DeepCodeLLMBinding) (string, error) {
+	htmlRender, err := code.GetHTMLRenderer(c, deepCodeLLMBinding)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Code HTML render")
 		return "", err

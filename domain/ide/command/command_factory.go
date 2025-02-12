@@ -19,6 +19,8 @@ package command
 import (
 	"fmt"
 
+	"github.com/snyk/code-client-go/llm"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -32,18 +34,7 @@ import (
 
 // CreateFromCommandData gets a command based on the given parameters that can be passed to the CommandService
 // nolint: gocyclo, nolintlint // this is a factory, it's ok to have high cyclomatic complexity here
-func CreateFromCommandData(
-	c *config.Config,
-	commandData types.CommandData,
-	srv types.Server,
-	authService authentication.AuthenticationService,
-	learnService learn.Service,
-	notifier noti.Notifier,
-	issueProvider snyk.IssueProvider,
-	codeApiClient SnykCodeHttpClient,
-	codeScanner *code.Scanner,
-	cli cli.Executor,
-) (types.Command, error) {
+func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv types.Server, authService authentication.AuthenticationService, learnService learn.Service, notifier noti.Notifier, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner, cli cli.Executor, deepCodeLLMBinding llm.DeepCodeLLMBinding) (types.Command, error) {
 	httpClient := c.Engine().GetNetworkAccess().GetHttpClient
 
 	switch commandData.CommandId {
@@ -83,17 +74,18 @@ func CreateFromCommandData(
 		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil
 	case types.CodeFixDiffsCommand:
 		return &codeFixDiffs{
-			command:       commandData,
-			codeScanner:   codeScanner,
-			issueProvider: issueProvider,
-			notifier:      notifier,
+			command:            commandData,
+			codeScanner:        codeScanner,
+			issueProvider:      issueProvider,
+			notifier:           notifier,
+			deepCodeLLMBinding: deepCodeLLMBinding,
 		}, nil
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
 	case types.ClearCacheCommand:
 		return &clearCache{command: commandData, c: c}, nil
 	case types.GenerateIssueDescriptionCommand:
-		return &generateIssueDescription{command: commandData, issueProvider: issueProvider}, nil
+		return &generateIssueDescription{command: commandData, issueProvider: issueProvider, deepCodeLLMBinding: deepCodeLLMBinding}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

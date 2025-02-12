@@ -18,11 +18,11 @@ package code
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"net/url"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -79,7 +79,8 @@ type HtmlRenderer struct {
 	AiFixDiffState       AiResultState
 	CurrentSelectedFixId string
 	CurrentIssueId       string
-	deepCodeBinding      *llm.DeepcodeLLMBinding
+	deepCodeBinding      llm.DeepCodeLLMBinding
+	explainCancelFunc    context.CancelFunc
 }
 type AiStatus string
 
@@ -98,16 +99,10 @@ type AiResultState struct {
 
 var codeRenderer *HtmlRenderer
 
-func GetHTMLRenderer(c *config.Config) (*HtmlRenderer, error) {
+func GetHTMLRenderer(c *config.Config, deepCodeLLMBinding llm.DeepCodeLLMBinding) (*HtmlRenderer, error) {
 	if codeRenderer != nil {
 		return codeRenderer, nil
 	}
-	explainEndpoint, _ := url.Parse("http://localhost:10000/explain")
-	deepCodeBinding := llm.NewDeepcodeLLMBinding(
-		llm.WithEndpoint(explainEndpoint),
-		llm.WithLogger(c.Logger()),
-		llm.WithOutputFormat(llm.HTML),
-	)
 	funcMap := template.FuncMap{
 		"repoName":      getRepoName,
 		"trimCWEPrefix": html.TrimCWEPrefix,
@@ -124,29 +119,33 @@ func GetHTMLRenderer(c *config.Config) (*HtmlRenderer, error) {
 		c:               c,
 		globalTemplate:  globalTemplate,
 		AiFixDiffState:  AiResultState{Status: AiNotStarted},
-		deepCodeBinding: deepCodeBinding,
+		deepCodeBinding: deepCodeLLMBinding,
 	}
 
 	return codeRenderer, nil
 }
 
-func (renderer *HtmlRenderer) EnrichWithExplain(c *config.Config, issue snyk.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
+func (renderer *HtmlRenderer) EnrichWithExplain(ctx context.Context, c *config.Config, issue snyk.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
 	logger := c.Logger().With().Str("method", "EnrichWithExplain").Logger()
+	if ctx.Err() != nil {
+		logger.Debug().Msgf("EnrichWithExplain context cancelled")
+		return
+	}
+	contextWithCancel, cancelFunc := context.WithTimeout(ctx, 5*time.Minute)
+	renderer.explainCancelFunc = cancelFunc
+	defer cancelFunc()
 	if len(suggestions) == 0 {
 		return
 	}
 	var wg sync.WaitGroup
 	for i := range suggestions {
 		diff := ""
-		for k, v := range suggestions[i].UnifiedDiffsPerFile {
-			if !strings.Contains(k, issue.AffectedFilePath) {
-				break
-			}
+		for _, v := range suggestions[i].UnifiedDiffsPerFile {
 			diff += v
 		}
 		wg.Add(1)
 		go func() {
-			response, err := renderer.deepCodeBinding.ExplainWithOptions(llm.ExplainOptions{RuleKey: issue.ID, Diff: diff})
+			response, err := renderer.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.ID, Diff: diff})
 			wg.Done()
 			if err != nil {
 				logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.AdditionalData.GetKey())
@@ -270,6 +269,10 @@ func (renderer *HtmlRenderer) resetAiFixCacheIfDifferent(issue snyk.Issue) {
 	renderer.AiFixDiffState = AiResultState{Status: AiNotStarted}
 	renderer.CurrentIssueId = issue.AdditionalData.GetKey()
 	renderer.CurrentSelectedFixId = ""
+	if renderer.explainCancelFunc != nil {
+		renderer.explainCancelFunc()
+	}
+	renderer.explainCancelFunc = nil
 }
 
 func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {

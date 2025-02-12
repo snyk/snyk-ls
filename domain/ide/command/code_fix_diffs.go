@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/snyk/code-client-go/llm"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -33,10 +34,11 @@ import (
 )
 
 type codeFixDiffs struct {
-	command       types.CommandData
-	notifier      notification.Notifier
-	issueProvider snyk.IssueProvider
-	codeScanner   *code.Scanner
+	command            types.CommandData
+	notifier           notification.Notifier
+	issueProvider      snyk.IssueProvider
+	codeScanner        *code.Scanner
+	deepCodeLLMBinding llm.DeepCodeLLMBinding
 }
 
 func (cmd *codeFixDiffs) Command() types.CommandData {
@@ -84,7 +86,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("failed to find issue")
 	}
 
-	htmlRenderer, err := code.GetHTMLRenderer(c)
+	htmlRenderer, err := code.GetHTMLRenderer(c, cmd.deepCodeLLMBinding)
 	if err != nil {
 		logger.Err(err).Msg("failed to get html renderer")
 		return nil, err
@@ -97,6 +99,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 
 func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, folderPath string, relPath string, issue snyk.Issue, htmlRenderer *code.HtmlRenderer) {
 	logger := c.Logger().With().Str("method", "codeFixDiffs.handleResponse").Logger()
+
 	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, folderPath, relPath, issue)
 	if err == nil && len(suggestions) == 0 {
 		logger.Info().Msg("Autofix run successfully but there were no good fixes")
@@ -108,6 +111,6 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, f
 		htmlRenderer.SetAiFixDiffState(code.AiError, nil, err)
 		return
 	}
-	htmlRenderer.EnrichWithExplain(c, issue, suggestions)
+	htmlRenderer.EnrichWithExplain(ctx, c, issue, suggestions)
 	htmlRenderer.SetAiFixDiffState(code.AiSuccess, suggestions, nil)
 }
