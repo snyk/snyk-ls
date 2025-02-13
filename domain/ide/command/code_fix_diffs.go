@@ -22,10 +22,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/llm"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -35,6 +37,7 @@ import (
 
 type codeFixDiffs struct {
 	command            types.CommandData
+	srv                types.Server
 	notifier           notification.Notifier
 	issueProvider      snyk.IssueProvider
 	codeScanner        *code.Scanner
@@ -100,19 +103,37 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, f
 	logger := c.Logger().With().Str("method", "codeFixDiffs.handleResponse").Logger()
 	aiFixHandler := htmlRenderer.AiFixHandler
 
-	aiFixHandler.SetAiFixDiffState(code.AiFixInProgress, nil, nil)
+	setStateCallback := func() { cmd.sendShowDocumentRequest(logger, issue, cmd.srv) }
+
+	aiFixHandler.SetAiFixDiffState(code.AiFixInProgress, nil, nil, setStateCallback)
 
 	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, folderPath, relPath, issue)
 	if err == nil && len(suggestions) == 0 {
 		logger.Info().Msg("Autofix run successfully but there were no good fixes")
-		aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, nil, nil)
+		aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, nil, nil, setStateCallback)
 		return
 	}
 	if err != nil {
 		logger.Err(err).Msgf("received an error from API: %s", err.Error())
-		aiFixHandler.SetAiFixDiffState(code.AiFixError, nil, err)
+		aiFixHandler.SetAiFixDiffState(code.AiFixError, nil, err, setStateCallback)
 		return
 	}
 	aiFixHandler.EnrichWithExplain(ctx, c, issue, suggestions)
-	aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, suggestions, nil)
+	aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, suggestions, nil, setStateCallback)
+}
+
+func (cmd *codeFixDiffs) sendShowDocumentRequest(logger zerolog.Logger, issue snyk.Issue, srv types.Server) {
+	snykUri := code.SnykMagnetUri(issue, code.ShowInDetailPanelIdeCommand)
+	logger.Debug().
+		Str("method", "code.sendShowDocumentRequest").
+		Msg("showing Document")
+
+	params := types.ShowDocumentParams{
+		Uri:       lsp.DocumentURI(snykUri),
+		Selection: converter.ToRange(issue.Range),
+	}
+	_, err := srv.Callback(context.Background(), "window/showDocument", params)
+	if err != nil {
+		logger.Err(err).Msgf("failed to send snyk window/showDocument callback for file %s", issue.AffectedFilePath)
+	}
 }

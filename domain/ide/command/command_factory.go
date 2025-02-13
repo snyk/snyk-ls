@@ -76,6 +76,7 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 		return &codeFixDiffs{
 			command:            commandData,
 			codeScanner:        codeScanner,
+			srv:                srv,
 			issueProvider:      issueProvider,
 			notifier:           notifier,
 			deepCodeLLMBinding: deepCodeLLMBinding,

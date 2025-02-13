@@ -33,6 +33,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
+const ShowInDetailPanelIdeCommand = "showInDetailPanel"
+
 type IssueEnhancer struct {
 	SnykCode      SnykCodeClient
 	instrumentor  codeClientObservability.Instrumentor
@@ -93,11 +95,8 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 			codeActionShowDocument := *b.createShowDocumentCodeAction(issues[i])
 			issues[i].CodeActions = append(issues[i].CodeActions, codeActionShowDocument)
 
-			uri, err := ideSnykURI(issues[i], "showInDetailsPanel")
-			if err != nil {
-				b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
-				return
-			}
+			uri := SnykMagnetUri(issues[i], ShowInDetailPanelIdeCommand)
+
 			issues[i].CodelensCommands = append(issues[i].CodelensCommands, types.CommandData{
 				Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
 				CommandId: types.NavigateToRangeCommand,
@@ -117,13 +116,7 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 
 // returns the deferred code action CodeAction which calls autofix.
 func (b *IssueEnhancer) createShowDocumentCodeAction(issue snyk.Issue) (codeAction *snyk.CodeAction) {
-	method := "code.createShowDocumentCodeAction"
-	uri, err := ideSnykURI(issue, "showInDetailPanel")
-	if err != nil {
-		b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
-		return nil
-	}
-
+	uri := SnykMagnetUri(issue, ShowInDetailPanelIdeCommand)
 	title := fmt.Sprintf("⚡ Fix this issue: %s (Snyk)", issueTitle(issue))
 
 	codeAction = &snyk.CodeAction{
@@ -143,20 +136,20 @@ func (b *IssueEnhancer) autofixShowDetailsFunc(ctx context.Context, issue snyk.I
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
 
-		uri, err := ideSnykURI(issue, "showInDetailPanel")
-		if err != nil {
-			b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
-			return nil
-		}
-
-		commandData := &types.CommandData{
-			Title:     types.NavigateToRangeCommand,
-			CommandId: types.NavigateToRangeCommand,
-			Arguments: []any{uri, issue.Range},
-		}
-		return commandData
+		return getSnykShowDocumentCommand(issue, ShowInDetailPanelIdeCommand)
 	}
 	return f
+}
+
+func getSnykShowDocumentCommand(issue snyk.Issue, action string) *types.CommandData {
+	uri := SnykMagnetUri(issue, action)
+
+	commandData := &types.CommandData{
+		Title:     types.NavigateToRangeCommand,
+		CommandId: types.NavigateToRangeCommand,
+		Arguments: []any{uri, issue.Range},
+	}
+	return commandData
 }
 
 func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *snyk.CodeAction) {
@@ -218,12 +211,12 @@ func issueId(issue snyk.Issue) string {
 	return issue.ID
 }
 
-func ideSnykURI(issue snyk.Issue, ideAction string) (string, error) {
+func SnykMagnetUri(issue snyk.Issue, ideAction string) string {
 	u := &url.URL{
 		Scheme:   "snyk",
 		Path:     issue.AffectedFilePath,
 		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.Product)), url.QueryEscape(issueId(issue)), ideAction),
 	}
 
-	return u.String(), nil
+	return u.String()
 }

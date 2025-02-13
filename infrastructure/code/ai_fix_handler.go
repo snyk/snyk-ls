@@ -83,9 +83,11 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	wg.Wait()
 }
 
-func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, res any, err error) {
+func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, res any, err error, callback func()) {
 	fixHandler.aiFixDiffState = aiResultState{status: state, result: res, err: err}
-	// TODO send showDocument
+	if callback != nil {
+		callback()
+	}
 }
 
 func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue snyk.Issue) {
