@@ -17,10 +17,12 @@
 package code
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rs/zerolog"
 
@@ -33,6 +35,7 @@ import (
 	"github.com/snyk/code-client-go/scan"
 
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -476,6 +479,7 @@ func isNoFilesError(err error) bool {
 	return ok
 }
 
+//nolint:gocyclo // we will address cyclomatic complexity, but that's gonna be done when we move this to code-client-go
 func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath string, filePaths <-chan string, changedFiles map[string]bool, t *progress.Tracker) (Bundle, error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
@@ -516,6 +520,11 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 			continue
 		}
 
+		utf8FileContent, err := util.ConvertToUTF8(bytes.NewReader(fileContent))
+		if err != nil || !utf8.Valid(utf8FileContent) {
+			continue
+		}
+
 		relativePath, err := ToRelativeUnixPath(rootPath, absoluteFilePath)
 		if err != nil {
 			sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: rootPath})
@@ -523,7 +532,7 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 		relativePath = EncodePath(relativePath)
 
 		// TODO: Check if we need to calculate hash for createBundle and if we can't calculate when triggering uploadBatch.
-		bundleFile := sc.getFileFrom(absoluteFilePath, fileContent)
+		bundleFile := sc.getFileFrom(absoluteFilePath, utf8FileContent)
 		bundleFiles[relativePath] = bundleFile
 		fileHashes[relativePath] = bundleFile.Hash
 

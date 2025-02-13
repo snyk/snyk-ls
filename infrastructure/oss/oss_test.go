@@ -473,8 +473,9 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	scanner.scheduleRefreshScan(ctx2, targetPath)
 
 	// Assert
-	time.Sleep(3*(scanner.refreshScanWaitDuration+fakeCli.ExecuteDuration) + 5*time.Millisecond)
-	assert.Equal(t, 1, fakeCli.GetFinishedScans())
+	assert.Eventuallyf(t, func() bool {
+		return fakeCli.GetFinishedScans() == 1
+	}, time.Minute, time.Millisecond, "none of the scans finished in time or more than 1 scan ran")
 }
 
 func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testing.T) {

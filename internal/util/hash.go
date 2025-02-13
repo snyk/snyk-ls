@@ -26,15 +26,27 @@ import (
 )
 
 func Hash(content []byte) string {
-	byteReader := bytes.NewReader(content)
-	reader, _ := charset.NewReaderLabel("UTF-8", byteReader)
-	utf8content, err := io.ReadAll(reader)
+	reader := bytes.NewReader(content)
+	utf8content, err := ConvertToUTF8(reader)
 	if err != nil {
 		utf8content = content
 	}
-	b := sha256.Sum256(utf8content)
+	return HashWithoutConversion(utf8content)
+}
+
+func HashWithoutConversion(content []byte) string {
+	b := sha256.Sum256(content)
 	sum256 := hex.EncodeToString(b[:])
 	return sum256
+}
+
+func ConvertToUTF8(reader io.Reader) ([]byte, error) {
+	utf8Reader, err := charset.NewReaderLabel("UTF-8", reader)
+	if err != nil {
+		return nil, err
+	}
+	utf8content, err := io.ReadAll(utf8Reader)
+	return utf8content, err
 }
 
 func Sha256First16Hash(input string) string {
