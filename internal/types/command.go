@@ -44,8 +44,9 @@ const (
 	GenerateIssueDescriptionCommand = "snyk.generateIssueDescription"
 	// Snyk Code specific commands
 	CodeFixCommand        = "snyk.code.fix"
-	CodeSubmitFixFeedback = "snyk.code.submitFixFeedback"
 	CodeFixDiffsCommand   = "snyk.code.fixDiffs"
+	CodeSubmitFixFeedback = "snyk.code.submitFixFeedback"
+	ApplyEditCommand      = "snyk.applyEdit"
 )
 
 var (
