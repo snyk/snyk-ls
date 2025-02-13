@@ -32,6 +32,7 @@ type AiFixHandler struct {
 	currentIssueId    string
 	deepCodeBinding   llm.DeepCodeLLMBinding
 	explainCancelFunc context.CancelFunc
+	autoTriggerAiFix  bool
 }
 
 type AiStatus string
@@ -90,6 +91,10 @@ func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, res any, err e
 	}
 }
 
+func (fixHandler *AiFixHandler) SetAutoTriggerAiFix(isEnabled bool) {
+	fixHandler.autoTriggerAiFix = isEnabled
+}
+
 func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue snyk.Issue) {
 	if issue.AdditionalData.GetKey() == fixHandler.currentIssueId {
 		return
@@ -101,4 +106,5 @@ func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue snyk.Issue) {
 		fixHandler.explainCancelFunc()
 	}
 	fixHandler.explainCancelFunc = nil
+	fixHandler.autoTriggerAiFix = false
 }

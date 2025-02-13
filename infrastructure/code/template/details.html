@@ -510,6 +510,10 @@
       {{if eq .AiFixDiffStatus "SUCCESS"}}
       showCurrentDiff();
       {{end}}
+
+      {{if .AutoTriggerAiFix }}
+      generateAIFix();
+      {{end}}
     });
   </script>
   <!-- Embedded script from LS  -->

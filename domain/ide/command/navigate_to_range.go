@@ -21,21 +21,25 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/snyk/code-client-go/llm"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 type navigateToRangeCommand struct {
-	command types.CommandData
-	srv     types.Server
-	logger  *zerolog.Logger
+	command            types.CommandData
+	srv                types.Server
+	logger             *zerolog.Logger
+	deepCodeLLMBinding llm.DeepCodeLLMBinding
 }
 
 func (cmd *navigateToRangeCommand) Command() types.CommandData {
@@ -69,6 +73,8 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		documentUri = uri.PathToUri(path)
 	} else {
 		documentUri = sglsp.DocumentURI(path)
+		renderer, _ := code.GetHTMLRenderer(config.CurrentConfig(), cmd.deepCodeLLMBinding)
+		renderer.AiFixHandler.SetAutoTriggerAiFix(true)
 	}
 
 	params := types.ShowDocumentParams{

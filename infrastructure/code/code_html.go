@@ -185,6 +185,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"AiFixResult":        aiFixResult,
 		"AiFixDiffStatus":    renderer.AiFixHandler.aiFixDiffState.status,
 		"AiFixError":         aiFixErr,
+		"AutoTriggerAiFix":   renderer.AiFixHandler.autoTriggerAiFix,
 	}
 
 	if issue.IsIgnored {
@@ -198,7 +199,9 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		return ""
 	}
 
-	return buffer.String()
+	var result = buffer.String()
+	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
+	return result
 }
 
 func getLineToIgnoreAction(issue snyk.Issue) int {
