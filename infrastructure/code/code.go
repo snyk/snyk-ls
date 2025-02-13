@@ -479,6 +479,7 @@ func isNoFilesError(err error) bool {
 	return ok
 }
 
+//nolint:gocyclo // we will address cyclomatic complexity, but that's gonna be done when we move this to code-client-go
 func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath string, filePaths <-chan string, changedFiles map[string]bool, t *progress.Tracker) (Bundle, error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
