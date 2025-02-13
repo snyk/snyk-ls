@@ -511,15 +511,19 @@
       showCurrentDiff();
       {{end}}
 
-      {{if .AutoTriggerAiFix }}
-      generateAIFix();
-      {{end}}
     });
   </script>
   <!-- Embedded script from LS  -->
   <script nonce="{{.Nonce}}">
     {{.Scripts}}
-  </script>
+    // some IDEs take longer to inject their handler functions
+    // TODO: Should we add an event listener when the IDE functions are loaded?
+    {{if .AutoTriggerAiFix }}
+    setTimeout(() => {
+      generateAIFix();
+    }, 500)
+    {{end}}
+</script>
   <!-- Custom IDE specific scripts  -->
   <script nonce="{{.Nonce}}">
     ${ideScript}

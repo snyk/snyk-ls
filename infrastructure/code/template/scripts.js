@@ -181,5 +181,5 @@ function getSuggestion(){
   let suggestionElem = document.getElementById('suggestionDiv');
   return JSON.parse(suggestionElem.innerText);
 }
-nextDiffElem.addEventListener('click', nextDiff);
-previousDiffElem.addEventListener('click', previousDiff);
+nextDiffElem?.addEventListener('click', nextDiff);
+previousDiffElem?.addEventListener('click', previousDiff);
