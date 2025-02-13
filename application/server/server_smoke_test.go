@@ -100,6 +100,15 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
+			name:                 "OSS_and_Code (PHP Goof)",
+			repo:                 "https://github.com/snyk-labs/php-goof.git",
+			commit:               "",
+			file1:                "composer.json",
+			file2:                "index.php",
+			useConsistentIgnores: false,
+			hasVulns:             true,
+		},
+		{
 			name:                 "OSS_and_Code_with_V1_endpoint",
 			repo:                 testsupport.NodejsGoof,
 			commit:               "0336589",

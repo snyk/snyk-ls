@@ -17,6 +17,7 @@
 package code
 
 import (
+	"bytes"
 	"context"
 	"math"
 	"os"
@@ -109,7 +110,12 @@ func (b *BundleUploader) enrichBatchWithFileContent(uploadBatch *UploadBatch, wo
 			logger.Error().Err(err).Str("file", filePath).Msg("Failed to read bundle file")
 			continue
 		}
-		bundleFile.Content = string(content)
+		utf8Content, err := util.ConvertToUTF8(bytes.NewReader(content))
+		if err != nil {
+			logger.Error().Err(err).Str("file", filePath).Msg("Failed to convert bundle file to UTF-8")
+			continue
+		}
+		bundleFile.Content = string(utf8Content)
 		uploadBatch.documents[filePath] = bundleFile
 	}
 }
@@ -176,10 +182,10 @@ func (b *BundleUploader) isSupported(ctx context.Context, file string) (bool, er
 	return isSupportedExtension || isSupportedConfigFile, nil
 }
 
-func (sc *Scanner) getFileFrom(filePath string, content []byte) BundleFile {
+func (sc *Scanner) getFileFrom(filePath string, utf8FileContent []byte) BundleFile {
 	file := BundleFile{
-		Hash: util.Hash(content),
-		Size: len(content),
+		Hash: util.HashWithoutConversion(utf8FileContent),
+		Size: len(utf8FileContent),
 	}
 	sc.C.Logger().Trace().Str("method", "getFileFrom").Str("hash", file.Hash).Str("filePath", filePath).Send()
 	return file
