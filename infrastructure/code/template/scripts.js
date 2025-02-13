@@ -57,6 +57,10 @@ const nextDiffElem = document.getElementById('next-diff');
 const previousDiffElem = document.getElementById('previous-diff');
 const diffSelectedIndexElem = document.getElementById('diff-counter');
 
+
+//explain AI fix elements
+const fixExplainText = document.getElementById('fix-explain-text')
+
 const diffTopElem = document.getElementById('diff-top');
 const diffElem = document.getElementById('diff');
 const noDiffsElem = document.getElementById('info-no-diffs');
@@ -165,6 +169,7 @@ function showCurrentDiff() {
   // IntelliJ way of getting file ? TODO: Investigate
   const filePath = showSuggestion.filePath ? showSuggestion.filePath : getFilePathFromFix(diffSuggestion);
   const patch = diffSuggestion.unifiedDiffsPerFile[filePath];
+  fixExplainText.innerText = diffSuggestion.explanation;
   console.log()
   // clear all elements
   while (diffElem.firstChild) {
@@ -173,10 +178,8 @@ function showCurrentDiff() {
   diffElem.appendChild(generateDiffHtml(patch));
 }
 function getSuggestion(){
-  if(suggestion?.diffs?.length){
-    return suggestion.diffs;
-  }
-  return suggestion;
+  let suggestionElem = document.getElementById('suggestionDiv');
+  return JSON.parse(suggestionElem.innerText);
 }
-nextDiffElem.addEventListener('click', nextDiff);
-previousDiffElem.addEventListener('click', previousDiff);
+nextDiffElem?.addEventListener('click', nextDiff);
+previousDiffElem?.addEventListener('click', previousDiff);

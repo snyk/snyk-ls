@@ -31,6 +31,7 @@ import (
 type AutofixUnifiedDiffSuggestion struct {
 	FixId               string            `json:"fixId"`
 	UnifiedDiffsPerFile map[string]string `json:"unifiedDiffsPerFile"`
+	Explanation         string            `json:"explanation"`
 }
 
 func (a AutofixUnifiedDiffSuggestion) String() string {
