@@ -40,6 +40,7 @@ type navigateToRangeCommand struct {
 	srv                types.Server
 	logger             *zerolog.Logger
 	deepCodeLLMBinding llm.DeepCodeLLMBinding
+	c                  *config.Config
 }
 
 func (cmd *navigateToRangeCommand) Command() types.CommandData {
@@ -73,8 +74,11 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		documentUri = uri.PathToUri(path)
 	} else {
 		documentUri = sglsp.DocumentURI(path)
-		renderer, _ := code.GetHTMLRenderer(config.CurrentConfig(), cmd.deepCodeLLMBinding)
-		renderer.AiFixHandler.SetAutoTriggerAiFix(true)
+		// TODO: move this to a new command to process snyk magnet link
+		renderer, rendererErr := code.GetHTMLRenderer(cmd.c, cmd.deepCodeLLMBinding)
+		if rendererErr == nil {
+			renderer.AiFixHandler.SetAutoTriggerAiFix(true)
+		}
 	}
 
 	params := types.ShowDocumentParams{

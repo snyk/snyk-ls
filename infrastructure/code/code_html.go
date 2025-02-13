@@ -122,6 +122,7 @@ func (renderer *HtmlRenderer) determineFolderPath(filePath string) string {
 }
 
 func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
+	autoTriggerAiFix := renderer.AiFixHandler.autoTriggerAiFix
 	renderer.AiFixHandler.resetAiFixCacheIfDifferent(issue)
 	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
 	if !ok {
@@ -185,7 +186,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"AiFixResult":        aiFixResult,
 		"AiFixDiffStatus":    renderer.AiFixHandler.aiFixDiffState.status,
 		"AiFixError":         aiFixErr,
-		"AutoTriggerAiFix":   renderer.AiFixHandler.autoTriggerAiFix,
+		"AutoTriggerAiFix":   autoTriggerAiFix,
 	}
 
 	if issue.IsIgnored {

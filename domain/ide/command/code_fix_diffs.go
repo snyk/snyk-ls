@@ -42,6 +42,7 @@ type codeFixDiffs struct {
 	issueProvider      snyk.IssueProvider
 	codeScanner        *code.Scanner
 	deepCodeLLMBinding llm.DeepCodeLLMBinding
+	c                  *config.Config
 }
 
 func (cmd *codeFixDiffs) Command() types.CommandData {
@@ -49,8 +50,7 @@ func (cmd *codeFixDiffs) Command() types.CommandData {
 }
 
 func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "codeFixDiffs.Execute").Logger()
+	logger := cmd.c.Logger().With().Str("method", "codeFixDiffs.Execute").Logger()
 
 	args := cmd.command.Arguments
 	if len(args) < 3 {
@@ -89,12 +89,12 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("failed to find issue")
 	}
 
-	htmlRenderer, err := code.GetHTMLRenderer(c, cmd.deepCodeLLMBinding)
+	htmlRenderer, err := code.GetHTMLRenderer(cmd.c, cmd.deepCodeLLMBinding)
 	if err != nil {
 		logger.Err(err).Msg("failed to get html renderer")
 		return nil, err
 	}
-	go cmd.handleResponse(ctx, c, folderPath, relPath, issue, htmlRenderer)
+	go cmd.handleResponse(ctx, cmd.c, folderPath, relPath, issue, htmlRenderer)
 
 	return nil, err
 }
