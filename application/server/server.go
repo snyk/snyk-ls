@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/snyk/snyk-ls/application/server/mcp"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -59,6 +60,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
+var mcpServer *mcp.McpServer
+
 func Start(c *config.Config) {
 	var srv *jrpc2.Server
 
@@ -89,6 +92,7 @@ func Start(c *config.Config) {
 }
 
 const textDocumentDidOpenOperation = "textDocument/didOpen"
+
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
@@ -442,6 +446,15 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		}
 
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
+
+		go func() {
+			mcpServer = mcp.NewMcpServer(c, mcp.WithScanner(di.Scanner()), mcp.WithLogger(c.Logger()))
+			err := mcpServer.Start()
+			if err != nil {
+				c.Logger().Err(err).Msg("failed to start mcp server")
+			}
+		}()
+
 		return nil, nil
 	})
 }
@@ -613,6 +626,9 @@ func shutdown() jrpc2.Handler {
 
 		disposeProgressListener()
 		di.Notifier().DisposeListener()
+		if mcpServer != nil {
+			mcpServer.Shutdown(context.Background())
+		}
 		return nil, nil
 	})
 }

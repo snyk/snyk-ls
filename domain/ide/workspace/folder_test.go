@@ -65,7 +65,7 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.processResults(data)
+	f.ProcessResults(data)
 
 	assert.Equal(t, 0, hoverRecorder.Calls())
 }
@@ -86,7 +86,7 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 		SendAnalytics:     true,
 	}
 	f.ScanFolder(context.Background())
-	f.processResults(data)
+	f.ProcessResults(data)
 
 	assert.Equal(t, 2, f.documentDiagnosticCache.Size())
 	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, path1))
@@ -109,7 +109,7 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.processResults(data)
+	f.ProcessResults(data)
 
 	assert.Equal(t, 1, len(f.Issues()))
 	assert.Len(t, f.IssuesForFile(filePath), 2)
@@ -132,7 +132,7 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.processResults(data)
+	f.ProcessResults(data)
 
 	assert.Len(t, f.Issues(), 3)
 	assert.Len(t, f.IssuesForFile(path1), 1)
@@ -155,7 +155,7 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.processResults(data)
+	f.ProcessResults(data)
 
 	assert.Len(t, f.Issues(), 1)
 	issuesForFile := f.IssuesForFile(path1)
@@ -188,7 +188,7 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.processResults(data)
+	f.ProcessResults(data)
 
 	assert.Len(t, f.Issues(), 2)
 	issuesForFile := f.IssuesForFile(path1)
@@ -217,7 +217,7 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.processResults(data)
+	f.ProcessResults(data)
 
 	mtx := &sync.Mutex{}
 	var diagnostics []types.Diagnostic
@@ -261,7 +261,7 @@ func Test_Clear(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.processResults(data)
+	f.ProcessResults(data)
 	mtx := &sync.Mutex{}
 	clearDiagnosticNotifications := 0
 
@@ -412,7 +412,7 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.processResults(data)
+	f.ProcessResults(data)
 	const expectedIssuesCountAfterRemoval = 1
 
 	// Act
@@ -446,7 +446,7 @@ func Test_processResults_ShouldSendSuccess(t *testing.T) {
 		SendAnalytics:     true,
 	}
 	// Act
-	f.processResults(data)
+	f.ProcessResults(data)
 
 	// Assert
 	assert.Len(t, scanNotifier.SuccessCalls(), 1)
@@ -469,7 +469,7 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 		SendAnalytics:     true,
 		Err:               errors.New("test error"),
 	} // Act
-	f.processResults(data)
+	f.ProcessResults(data)
 
 	// Assert
 	assert.Empty(t, scanNotifier.SuccessCalls())
@@ -535,7 +535,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Act
-	f.processResults(data)
+	f.ProcessResults(data)
 	maxWaitTime := 10 * time.Second
 
 	select {
@@ -572,7 +572,7 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 		gomock.Any()).Times(1)
 
 	// Act
-	f.processResults(scanData)
+	f.ProcessResults(scanData)
 
 	// Assert
 	require.NotEmpty(t, scanData.GetSeverityIssueCounts())

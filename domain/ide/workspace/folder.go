@@ -306,10 +306,10 @@ func (f *Folder) scan(ctx context.Context, path string) {
 		f.c.Logger().Warn().Str("path", path).Str("method", method).Msg("skipping scan of untrusted path")
 		return
 	}
-	f.scanner.Scan(ctx, path, f.processResults, f.path)
+	f.scanner.Scan(ctx, path, f.ProcessResults, f.path)
 }
 
-func (f *Folder) processResults(scanData snyk.ScanData) {
+func (f *Folder) ProcessResults(scanData snyk.ScanData) {
 	if scanData.Err != nil {
 		f.sendScanError(scanData.Product, scanData.Err)
 		return
@@ -327,7 +327,7 @@ func (f *Folder) processResults(scanData snyk.ScanData) {
 func (f *Folder) sendScanError(product product.Product, err error) {
 	f.scanNotifier.SendError(product, f.path, err.Error())
 	f.c.Logger().Err(err).
-		Str("method", "processResults").
+		Str("method", "ProcessResults").
 		Str("product", string(product)).
 		Msg("Product returned an error")
 	f.notifier.SendErrorDiagnostic(f.path, err)

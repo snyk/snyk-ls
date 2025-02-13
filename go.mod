@@ -1,6 +1,8 @@
 module github.com/snyk/snyk-ls
 
-go 1.22.0
+go 1.23
+
+toolchain go1.23.4
 
 require (
 	github.com/adrg/strutil v0.3.1
@@ -26,7 +28,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/code-client-go v1.12.0
+	github.com/snyk/code-client-go v1.14.1
 	github.com/snyk/go-application-framework v0.0.0-20241218075424-470703ebd741
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.5
@@ -89,6 +91,7 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mark3labs/mcp-go v0.8.3 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
