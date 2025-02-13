@@ -503,6 +503,10 @@
         exampleNext.onclick = nextExample;
       }
       showCurrentExample();
+      {{if ne .AiFixDiffStatus "NOT_STARTED"}}
+      window.scrollTo(0, document.body.scrollHeight);
+      {{end}}
+
       {{if eq .AiFixDiffStatus "SUCCESS"}}
       showCurrentDiff();
       {{end}}
