@@ -101,8 +101,8 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	wg.Wait()
 }
 
-func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, res any, err error, callback func()) {
-	fixHandler.aiFixDiffState = aiResultState{status: state, result: []AutofixUnifiedDiffSuggestion{}, err: err}
+func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, suggestions []AutofixUnifiedDiffSuggestion, err error, callback func()) {
+	fixHandler.aiFixDiffState = aiResultState{status: state, result: suggestions, err: err}
 	if callback != nil {
 		callback()
 	}
