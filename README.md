@@ -232,7 +232,7 @@ Right now the language server supports the following actions:
     },
   }
   ```
-  - Summary Panel Status Notification
+- Summary Panel Status Notification
   - method: `$/snyk.scanSummary`
   - params: `types.ScanSummary`
   - example:
@@ -389,6 +389,14 @@ Right now the language server supports the following actions:
          // WHEN
          comp.changePassword();
   ```
+- `Code Fix Apply Edit Command` triggers an autofix and applies the changes of the first suggestion
+  - command: `snyk.code.fixApplyEdit`
+  - args:
+    - `fixId` string
+  - returns an WorkspaceEdit:
+<https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspaceEdit>
+  
+  
 - `Feature Flag Status Command` triggers the api call to check if a feature flag is enabled
   - command: `snyk.getFeatureFlagStatus`
   - args:

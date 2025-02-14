@@ -45,7 +45,7 @@ const (
 	// Snyk Code specific commands
 	CodeFixCommand          = "snyk.code.fix"
 	CodeFixDiffsCommand     = "snyk.code.fixDiffs"
-	CodeFixApplyEditCommand = "snyk.code.applyEdit"
+	CodeFixApplyEditCommand = "snyk.code.fixApplyEdit"
 	CodeSubmitFixFeedback   = "snyk.code.submitFixFeedback"
 )
 
