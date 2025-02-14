@@ -19,8 +19,12 @@ package command
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/llm"
+	sglsp "github.com/sourcegraph/go-lsp"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -28,8 +32,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
-	sglsp "github.com/sourcegraph/go-lsp"
-	"time"
 )
 
 type applyEditCommand struct {
@@ -58,7 +60,7 @@ func (cmd *applyEditCommand) Execute(ctx context.Context) (any, error) {
 		return nil, err
 	}
 
-	workspaceEdit, err := cmd.getWorkspaceEdit(err, htmlRenderer, fixId)
+	workspaceEdit, err := cmd.getWorkspaceEdit(htmlRenderer, fixId)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +100,7 @@ func (cmd *applyEditCommand) Execute(ctx context.Context) (any, error) {
 	return nil, nil
 }
 
-func (cmd *applyEditCommand) getWorkspaceEdit(err error, htmlRenderer *code.HtmlRenderer, fixId string) (snyk.WorkspaceEdit, error) {
+func (cmd *applyEditCommand) getWorkspaceEdit(htmlRenderer *code.HtmlRenderer, fixId string) (snyk.WorkspaceEdit, error) {
 	path, diff, err := htmlRenderer.AiFixHandler.GetResults(fixId)
 	if err != nil {
 		cmd.logger.Debug().Str("method", "applyEditCommand.Execute").Msgf("Unable to get the fix fix for %s", fixId)
