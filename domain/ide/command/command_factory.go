@@ -70,6 +70,9 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 		return &reportAnalyticsCommand{command: commandData, authenticationService: authService}, nil
 	case types.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
+	case types.CodeFixApplyEditCommand:
+		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier,
+			deepCodeLLMBinding: deepCodeLLMBinding, apiClient: codeApiClient, c: c, logger: c.Logger()}, nil
 	case types.CodeSubmitFixFeedback:
 		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil
 	case types.CodeFixDiffsCommand:

@@ -18,6 +18,7 @@ package code
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -47,10 +48,26 @@ const (
 type aiResultState struct {
 	status AiStatus
 	err    error
-	result any
+	result []AutofixUnifiedDiffSuggestion
 }
 
 const explainTimeout = 5 * time.Minute
+
+func (fixHandler *AiFixHandler) GetCurrentIssueId() string {
+	return fixHandler.currentIssueId
+}
+func (fixHandler *AiFixHandler) GetResults(fixId string) (filePath string, diff string, err error) {
+	for _, suggestion := range fixHandler.aiFixDiffState.result {
+		if suggestion.FixId == fixId {
+			for k, v := range suggestion.UnifiedDiffsPerFile {
+				filePath = k
+				diff += v
+			}
+			return filePath, diff, nil
+		}
+	}
+	return "", "", fmt.Errorf("no suggestion found for fixId: %s", fixId)
+}
 
 func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config.Config, issue snyk.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
 	logger := c.Logger().With().Str("method", "EnrichWithExplain").Logger()
@@ -84,8 +101,8 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	wg.Wait()
 }
 
-func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, res any, err error, callback func()) {
-	fixHandler.aiFixDiffState = aiResultState{status: state, result: res, err: err}
+func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, suggestions []AutofixUnifiedDiffSuggestion, err error, callback func()) {
+	fixHandler.aiFixDiffState = aiResultState{status: state, result: suggestions, err: err}
 	if callback != nil {
 		callback()
 	}

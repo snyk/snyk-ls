@@ -558,8 +558,8 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([
 	return markers, nil
 }
 
-// createAutofixWorkspaceEdit turns the returned fix into an edit.
-func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
+// CreateAutofixWorkspaceEdit turns the returned fix into an edit.
+func CreateAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
 	fileContent, err := os.ReadFile(absoluteFilePath)
 	if err != nil {
 		return edit
@@ -594,7 +594,7 @@ func (s *AutofixResponse) toAutofixSuggestions(baseDir string, filePath string) 
 		}
 		d := AutofixSuggestion{
 			FixId:       suggestion.Id,
-			AutofixEdit: createAutofixWorkspaceEdit(decodedPath, suggestion.Value),
+			AutofixEdit: CreateAutofixWorkspaceEdit(decodedPath, suggestion.Value),
 		}
 		fixSuggestions = append(fixSuggestions, d)
 	}
