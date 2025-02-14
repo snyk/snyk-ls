@@ -71,7 +71,7 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 	case types.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
 	case types.CodeFixApplyEditCommand:
-		return &applyEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier,
+		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier,
 			deepCodeLLMBinding: deepCodeLLMBinding, apiClient: codeApiClient, c: c, logger: c.Logger()}, nil
 	case types.CodeSubmitFixFeedback:
 		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil

@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type applyEditCommand struct {
+type applyAiFixEditCommand struct {
 	command            types.CommandData
 	issueProvider      snyk.IssueProvider
 	notifier           notification.Notifier
@@ -44,11 +44,11 @@ type applyEditCommand struct {
 	logger             *zerolog.Logger
 }
 
-func (cmd *applyEditCommand) Command() types.CommandData {
+func (cmd *applyAiFixEditCommand) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *applyEditCommand) Execute(ctx context.Context) (any, error) {
+func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 	fixId, ok := cmd.command.Arguments[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("invalid edit")
@@ -56,7 +56,7 @@ func (cmd *applyEditCommand) Execute(ctx context.Context) (any, error) {
 
 	htmlRenderer, err := code.GetHTMLRenderer(cmd.c, cmd.deepCodeLLMBinding)
 	if err != nil {
-		cmd.logger.Debug().Str("method", "applyEditCommand.Execute").Msgf("Unable to get the htmlRenderer")
+		cmd.logger.Debug().Str("method", "applyAiFixEditCommand.Execute").Msgf("Unable to get the htmlRenderer")
 		return nil, err
 	}
 
@@ -100,10 +100,10 @@ func (cmd *applyEditCommand) Execute(ctx context.Context) (any, error) {
 	return nil, nil
 }
 
-func (cmd *applyEditCommand) getWorkspaceEdit(htmlRenderer *code.HtmlRenderer, fixId string) (snyk.WorkspaceEdit, error) {
+func (cmd *applyAiFixEditCommand) getWorkspaceEdit(htmlRenderer *code.HtmlRenderer, fixId string) (snyk.WorkspaceEdit, error) {
 	path, diff, err := htmlRenderer.AiFixHandler.GetResults(fixId)
 	if err != nil {
-		cmd.logger.Debug().Str("method", "applyEditCommand.Execute").Msgf("Unable to get the fix fix for %s", fixId)
+		cmd.logger.Debug().Str("method", "applyAiFixEditCommand.Execute").Msgf("Unable to get the fix fix for %s", fixId)
 		return snyk.WorkspaceEdit{}, err
 	}
 
@@ -111,7 +111,7 @@ func (cmd *applyEditCommand) getWorkspaceEdit(htmlRenderer *code.HtmlRenderer, f
 	return workspaceEdit, nil
 }
 
-func (cmd *applyEditCommand) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[types.MessageAction, types.CommandData], error) {
+func (cmd *applyAiFixEditCommand) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[types.MessageAction, types.CommandData], error) {
 	createCommandData := func(feedback string) types.CommandData {
 		return types.CommandData{
 			Title:     types.CodeSubmitFixFeedback,
