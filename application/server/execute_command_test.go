@@ -79,7 +79,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	folder := workspace.NewFolder(c, "dummy", "dummy", scannerForFolder, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 	dontClear := workspace.NewFolder(c, "dontclear", "dontclear", scannerForDontClear, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 
-	dontClearIssuePath := "dontclear/file.txt"
+	dontClearIssuePath := types.FilePath("dontclear/file.txt")
 	scannerForDontClear.AddTestIssue(snyk.Issue{AffectedFilePath: dontClearIssuePath})
 	scannerForFolder.AddTestIssue(snyk.Issue{AffectedFilePath: "dummy/file.txt"})
 
@@ -196,7 +196,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 		c.SetTrustedFolderFeatureEnabled(true)
-		c.SetTrustedFolders([]string{"/path/to/folder2"})
+		c.SetTrustedFolders([]types.FilePath{"/path/to/folder2"})
 
 		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)

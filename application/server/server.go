@@ -26,9 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/snyk/snyk-ls/application/server/mcp"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	mcp2 "github.com/snyk/snyk-ls/internal/mcp"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -60,7 +60,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-var mcpServer *mcp.McpServer
+var mcpServer *mcp2.McpLLMBinding
 
 func Start(c *config.Config) {
 	var srv *jrpc2.Server
@@ -119,7 +119,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 }
 
 func textDocumentDidChangeHandler() jrpc2.Handler {
-	debouncerMap := make(map[string]*debounce.Debouncer)
+	debouncerMap := make(map[types.FilePath]*debounce.Debouncer)
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
 		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "TextDocumentDidChangeHandler").Logger()
@@ -448,7 +448,7 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
 
 		go func() {
-			mcpServer = mcp.NewMcpServer(c, mcp.WithScanner(di.Scanner()), mcp.WithLogger(c.Logger()))
+			mcpServer = mcp2.NewMcpServer(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()))
 			err := mcpServer.Start()
 			if err != nil {
 				c.Logger().Err(err).Msg("failed to start mcp server")
@@ -505,7 +505,7 @@ func startOfflineDetection(c *config.Config) { //nolint:unused // this is gonna 
 
 func deleteExpiredCache(c *config.Config) {
 	w := c.Workspace()
-	var folderList []string
+	var folderList []types.FilePath
 	for _, f := range w.Folders() {
 		folderList = append(folderList, f.Path())
 	}
@@ -553,7 +553,7 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 		} else if params.RootPath != "" {
 			f := workspace.NewFolder(
 				c,
-				params.RootPath,
+				types.FilePath(params.RootPath),
 				params.ClientInfo.Name,
 				di.Scanner(),
 				di.HoverService(),
@@ -656,12 +656,13 @@ func logError(logger *zerolog.Logger, err error, method string) {
 func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidOpenTextDocumentParams) (any, error) {
 		filePath := uri.PathFromUri(params.TextDocument.URI)
-		logger := c.Logger().With().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", filePath).Logger()
+		filePathString := string(filePath)
+		logger := c.Logger().With().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", filePathString).Logger()
 
 		logger.Info().Msg("Receiving")
 		folder := c.Workspace().GetFolderContaining(filePath)
 		if folder == nil {
-			logger.Warn().Msg("No folder found for file " + filePath)
+			logger.Warn().Msg("No folder found for file " + filePathString)
 			return nil, nil
 		}
 
@@ -717,7 +718,7 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 				logger.Warn().Msg("Not scanning, auto-scan is disabled")
 			}
 		} else if autoScanEnabled {
-			logger.Warn().Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
+			logger.Warn().Str("documentURI", string(filePath)).Msg("Not scanning, file not part of workspace")
 		}
 		return nil, nil
 	})

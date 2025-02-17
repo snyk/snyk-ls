@@ -27,6 +27,7 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
@@ -160,7 +161,7 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			actual := getAbsTargetFilePath(c, scanResult{
 				DisplayTargetFile: tc.displayTargetFile,
 				Path:              filepath.Join(base, adjustedPath),
-			}, filepath.Join(base, adjustedWorkDir), filepath.Join(base, adjustedPath))
+			}, types.FilePath(filepath.Join(base, adjustedWorkDir)), types.FilePath(filepath.Join(base, adjustedPath)))
 			assert.Equal(t, expected, actual)
 		})
 	}

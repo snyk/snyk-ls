@@ -177,7 +177,7 @@ type Config struct {
 	automaticAuthentication          bool
 	tokenChangeChannels              []chan string
 	filterSeverity                   types.SeverityFilter
-	trustedFolders                   []string
+	trustedFolders                   []types.FilePath
 	trustedFoldersFeatureEnabled     bool
 	activateSnykCodeSecurity         bool
 	activateSnykCodeQuality          bool
@@ -893,13 +893,13 @@ func (c *Config) SetIdeVersion(ideVersion string) {
 	c.engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, ideVersion)
 }
 
-func (c *Config) TrustedFolders() []string {
+func (c *Config) TrustedFolders() []types.FilePath {
 	c.m.RLock()
 	defer c.m.RUnlock()
 	return c.trustedFolders
 }
 
-func (c *Config) SetTrustedFolders(folderPaths []string) {
+func (c *Config) SetTrustedFolders(folderPaths []types.FilePath) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.trustedFolders = folderPaths
@@ -1162,7 +1162,7 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 	c.isOpenBrowserActionEnabled = enable
 }
 
-func (c *Config) FolderConfig(path string) *types.FolderConfig {
+func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	var folderConfig *types.FolderConfig
 	var err error
 	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path)

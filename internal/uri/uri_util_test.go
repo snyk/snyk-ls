@@ -26,12 +26,14 @@ import (
 	"github.com/sourcegraph/go-lsp"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var dir, _ = os.Getwd()
 
 func TestPathFromUri(t *testing.T) {
-	u := PathToUri(dir + "/asdf")
+	u := PathToUri(types.FilePath(dir + "/asdf"))
 	u = lsp.DocumentURI(strings.Replace(string(u), "file://", "file:", 1))
 	assert.Equal(t, filepath.Clean(dir+"/asdf"), PathFromUri(u)) // Eclipse case
 }

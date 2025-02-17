@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -67,7 +68,7 @@ func clientFunc() *http.Client {
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
-	files := map[string]string{}
+	files := map[types.FilePath]string{}
 	randomAddition := fmt.Sprintf("\n public void random() { System.out.println(\"%d\") }", time.Now().UnixMicro())
 	files[path1] = util.Hash([]byte(content + randomAddition))
 	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
@@ -79,8 +80,8 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
-	var removedFiles []string
-	files := map[string]string{}
+	var removedFiles []types.FilePath
+	files := map[types.FilePath]string{}
 	files[path1] = util.Hash([]byte(content))
 	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := createTestExtendMap()
@@ -91,8 +92,8 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	assert.NotEmpty(t, bundleHash)
 }
 
-func createTestExtendMap() map[string]BundleFile {
-	filesExtend := map[string]BundleFile{}
+func createTestExtendMap() map[types.FilePath]BundleFile {
+	filesExtend := map[types.FilePath]BundleFile{}
 
 	filesExtend[path1] = BundleFile{
 		Hash:    util.Hash([]byte(content)),
@@ -151,14 +152,14 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 
 	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
 	shardKey := util.Hash([]byte("/"))
-	var removedFiles []string
-	files := map[string]string{}
+	var removedFiles []types.FilePath
+	files := map[types.FilePath]string{}
 	bytes := []byte(content)
 	files[path1] = util.Hash(bytes)
-	workDir := t.TempDir()
-	err := os.WriteFile(filepath.Join(workDir, path1), bytes, 0660)
+	workDir := types.FilePath(t.TempDir())
+	err := os.WriteFile(filepath.Join(string(workDir), path1), bytes, 0660)
 	require.NoError(t, err)
-	err = os.WriteFile(filepath.Join(workDir, path2), bytes, 0660)
+	err = os.WriteFile(filepath.Join(string(workDir), path2), bytes, 0660)
 	require.NoError(t, err)
 	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
 	filesExtend := createTestExtendMap()
@@ -166,7 +167,7 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	assert.Len(t, missingFiles, 0, "all files should be uploaded now")
 
 	assert.Eventually(t, func() bool {
-		limitToFiles := []string{path1, path2}
+		limitToFiles := []types.FilePath{path1, path2}
 
 		analysisOptions := AnalysisOptions{
 			bundleHash:   bundleHash,
@@ -284,13 +285,13 @@ func TestAutofixRequestBody(t *testing.T) {
 	options := AutofixOptions{
 		bundleHash: testBundleHash,
 		filePath:   testFilePath,
-		issue: snyk.Issue{
-			Range: snyk.Range{
-				Start: snyk.Position{
+		issue: &snyk.Issue{
+			Range: types.Range{
+				Start: types.Position{
 					Line:      testLineNumber0Based,
 					Character: 0,
 				},
-				End: snyk.Position{
+				End: types.Position{
 					Line:      testLineNumber0Based + 5,
 					Character: 0,
 				},

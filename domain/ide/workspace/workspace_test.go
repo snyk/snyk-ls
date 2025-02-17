@@ -44,7 +44,7 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 
 	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, scanStateAggregator)
 	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]string{trustedDummy})
+	c.SetTrustedFolders([]types.FilePath{trustedDummy})
 	w.AddFolder(NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator))
 	w.AddFolder(NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator))
 
@@ -94,7 +94,7 @@ func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
 	w.AddFolder(toBeRemovedFolder)
 
 	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]string{trustedPathAfterConversions})
+	c.SetTrustedFolders([]types.FilePath{trustedPathAfterConversions})
 	c.SetAutomaticScanning(true)
 
 	params := types.DidChangeWorkspaceFoldersParams{Event: types.WorkspaceFoldersChangeEvent{

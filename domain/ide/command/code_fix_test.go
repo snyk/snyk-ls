@@ -46,6 +46,7 @@ var sampleRangeArg = map[string]interface{}{
 }
 var codeActionId = uuid.New()
 var sampleArgs = []any{codeActionId.String(), "test/path.js", sampleRangeArg}
+var _ snyk.IssueProvider = (*issueProviderMock)(nil)
 
 type issueProviderMock struct {
 	mock.Mock
@@ -56,16 +57,16 @@ func (m *issueProviderMock) Issues() snyk.IssuesByFile {
 	return args.Get(0).(snyk.IssuesByFile)
 }
 
-func (m *issueProviderMock) Issue(_ string) snyk.Issue {
+func (m *issueProviderMock) Issue(_ string) types.Issue {
 	panic("this should not be called")
 }
 
-func (m *issueProviderMock) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
+func (m *issueProviderMock) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
 	args := m.Called(path, r)
-	return args.Get(0).([]snyk.Issue)
+	return args.Get(0).([]types.Issue)
 }
 
-func (m *issueProviderMock) IssuesForFile(_ string) []snyk.Issue {
+func (m *issueProviderMock) IssuesForFile(_ types.FilePath) []types.Issue {
 	panic("this should not be called")
 }
 
@@ -88,33 +89,33 @@ func setupCommand(mockNotifier *notification.MockNotifier) *fixCodeIssue {
 	return cmd
 }
 
-func setupMockEdit() (edit *snyk.WorkspaceEdit, deferredEdit func() *snyk.WorkspaceEdit) {
-	var mockTextEdit = snyk.TextEdit{
-		Range: snyk.Range{
-			Start: snyk.Position{Line: 1, Character: 2},
-			End:   snyk.Position{Line: 3, Character: 4}},
+func setupMockEdit() (edit *types.WorkspaceEdit, deferredEdit func() *types.WorkspaceEdit) {
+	var mockTextEdit = types.TextEdit{
+		Range: types.Range{
+			Start: types.Position{Line: 1, Character: 2},
+			End:   types.Position{Line: 3, Character: 4}},
 		NewText: "someText",
 	}
-	var mockEdit = &snyk.WorkspaceEdit{
-		Changes: map[string][]snyk.TextEdit{
+	var mockEdit = &types.WorkspaceEdit{
+		Changes: map[string][]types.TextEdit{
 			"someUri": {mockTextEdit},
 		},
 	}
-	var deferredMockEdit = func() *snyk.WorkspaceEdit {
+	var deferredMockEdit = func() *types.WorkspaceEdit {
 		return mockEdit
 	}
 	return mockEdit, deferredMockEdit
 }
 
-func setupSampleIssues(issueRange snyk.Range, codeAction snyk.CodeAction, cmdData types.CommandData) []snyk.Issue {
-	return []snyk.Issue{{
+func setupSampleIssues(issueRange types.Range, codeAction snyk.CodeAction, cmdData types.CommandData) []types.Issue {
+	return []types.Issue{&snyk.Issue{
 		ID:          "SNYK-123",
 		Range:       issueRange,
-		Severity:    snyk.High,
+		Severity:    types.High,
 		Product:     product.ProductCode,
-		IssueType:   snyk.CodeSecurityVulnerability,
+		IssueType:   types.CodeSecurityVulnerability,
 		Message:     "This is a dummy error (severity error)",
-		CodeActions: []snyk.CodeAction{codeAction},
+		CodeActions: []types.CodeAction{&codeAction},
 		CodelensCommands: []types.CommandData{
 			cmdData,
 		},
@@ -155,7 +156,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 	}
 	issues := setupSampleIssues(issueRange, codeAction, cmd.command)
 	issueMap := snyk.IssuesByFile{
-		filePath.(string): issues,
+		filePath.(types.FilePath): issues,
 	}
 
 	issueProviderMock := new(issueProviderMock)
@@ -168,7 +169,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 	// assert
 	assert.NoError(t, err)
 	assert.Nil(t, res)
-	assert.Nil(t, issues[0].CodelensCommands) // verify commands are reset
+	assert.Nil(t, issues[0].GetCodelensCommands()) // verify commands are reset
 
 	// Verify workspace edit is sent to the client
 	workspaceEdit := converter.ToWorkspaceEdit(mockEdit)
@@ -188,7 +189,7 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	require.True(t, ok)
 	issueRange, err := cmd.toRange(rangeDto)
 	require.NoError(t, err)
-	deferredMockEdit := func() *snyk.WorkspaceEdit {
+	deferredMockEdit := func() *types.WorkspaceEdit {
 		return nil
 	}
 	codeAction := snyk.CodeAction{
@@ -197,7 +198,7 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	}
 	issues := setupSampleIssues(issueRange, codeAction, cmd.command)
 	issueMap := snyk.IssuesByFile{
-		filePath.(string): issues,
+		filePath.(types.FilePath): issues,
 	}
 
 	issueProviderMock := new(issueProviderMock)
@@ -210,7 +211,7 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	// assert
 	assert.NoError(t, err)
 	assert.Nil(t, res)
-	assert.NotNil(t, issues[0].CodelensCommands) // verify commands isn't reset
+	assert.NotNil(t, issues[0].GetCodelensCommands()) // verify commands isn't reset
 
 	var sentMessages []any
 	// Verify no workspace edit is sent to the client

@@ -50,12 +50,12 @@ import (
 )
 
 var scanCount = 1
-var _ snyk.ProductScanner = (*Scanner)(nil)
+var _ types.ProductScanner = (*Scanner)(nil)
 
 var (
-	issueSeverities = map[string]snyk.Severity{
-		"high": snyk.High,
-		"low":  snyk.Low,
+	issueSeverities = map[string]types.Severity{
+		"high": types.High,
+		"low":  types.Low,
 	}
 )
 
@@ -98,7 +98,7 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{}
 }
 
-func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ *types.FolderConfig) (issues []snyk.Issue, err error) {
+func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "iac.Scan").Logger()
 	if !c.NonEmptyToken() {
@@ -120,14 +120,14 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ *types.Fo
 	}
 	p := progress.NewTracker(true) // todo - get progress trackers via DI
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
-	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", path)
+	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(path))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")
 
-	var workspacePath string
+	var workspacePath types.FilePath
 	if uri.IsUriDirectory(documentURI) {
 		workspacePath = uri.PathFromUri(documentURI)
 	} else {
-		workspacePath = filepath.Dir(uri.PathFromUri(documentURI))
+		workspacePath = types.FilePath(filepath.Dir(string(uri.PathFromUri(documentURI))))
 	}
 	iac.mutex.Lock()
 	i := scanCount
@@ -170,10 +170,7 @@ func (iac *Scanner) Scan(ctx context.Context, path string, _ string, _ *types.Fo
 	return issues, nil
 }
 
-func (iac *Scanner) retrieveIssues(scanResults []iacScanResult,
-	issues []snyk.Issue,
-	workspacePath string,
-) ([]snyk.Issue, error) {
+func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []types.Issue, workspacePath types.FilePath) ([]types.Issue, error) {
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
 			isIgnored := ignorableIacErrorCodes[s.ErrorCode]
@@ -191,14 +188,11 @@ func (iac *Scanner) retrieveIssues(scanResults []iacScanResult,
 }
 
 func (iac *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
-	ext := filepath.Ext(uri.PathFromUri(documentURI))
+	ext := filepath.Ext(string(uri.PathFromUri(documentURI)))
 	return uri.IsUriDirectory(documentURI) || extensions[ext]
 }
 
-func (iac *Scanner) doScan(ctx context.Context,
-	documentURI sglsp.DocumentURI,
-	workspacePath string,
-) (scanResults []iacScanResult, err error) {
+func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, workspacePath types.FilePath) (scanResults []iacScanResult, err error) {
 	method := "iac.doScan"
 	s := iac.instrumentor.StartSpan(ctx, method)
 	defer iac.instrumentor.Finish(s)
@@ -273,7 +267,7 @@ func (iac *Scanner) unmarshal(res []byte) (scanResults []iacScanResult, err erro
 }
 
 func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
-	path, err := filepath.Abs(uri.PathFromUri(u))
+	path, err := filepath.Abs(string(uri.PathFromUri(u)))
 	if err != nil {
 		iac.c.Logger().Err(err).Str("method", "iac.Scan").
 			Msg("Error while extracting file absolutePath")
@@ -286,8 +280,8 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
 	return cmd
 }
 
-func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath string) ([]snyk.Issue, error) {
-	targetFile := filepath.Join(workspacePath, scanResult.TargetFile)
+func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath types.FilePath) ([]types.Issue, error) {
+	targetFile := filepath.Join(string(workspacePath), scanResult.TargetFile)
 	rawFileContent, err := os.ReadFile(targetFile)
 	fileContentString := ""
 	if err != nil {
@@ -299,7 +293,7 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath str
 	}
 
 	iac.c.Logger().Debug().Msgf("found %v IAC issues for file %s", len(scanResult.IacIssues), targetFile)
-	var issues []snyk.Issue
+	var issues []types.Issue
 
 	for _, issue := range scanResult.IacIssues {
 		if issue.LineNumber > 0 {
@@ -308,12 +302,12 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath str
 			issue.LineNumber = 0
 		}
 
-		iacIssue, err := iac.toIssue(targetFile, issue, fileContentString)
+		iacIssue, err := iac.toIssue(types.FilePath(targetFile), issue, fileContentString)
 		if err != nil {
 			return nil, pkgerrors.Wrap(err, "unable to convert IaC issue to Snyk issue")
 		}
 
-		issues = append(issues, iacIssue)
+		issues = append(issues, &iacIssue)
 	}
 	return issues, nil
 }
@@ -338,7 +332,7 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 	)
 }
 
-func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent string) (snyk.Issue, error) {
+func (iac *Scanner) toIssue(affectedFilePath types.FilePath, issue iacIssue, fileContent string) (snyk.Issue, error) {
 	const defaultRangeStart = 0
 	const defaultRangeEnd = 80
 	title := issue.IacDescription.Issue
@@ -376,9 +370,9 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 
 	result := snyk.Issue{
 		ID: issue.PublicID,
-		Range: snyk.Range{
-			Start: snyk.Position{Line: issue.LineNumber, Character: rangeStart},
-			End:   snyk.Position{Line: issue.LineNumber, Character: rangeEnd},
+		Range: types.Range{
+			Start: types.Position{Line: issue.LineNumber, Character: rangeStart},
+			End:   types.Position{Line: issue.LineNumber, Character: rangeEnd},
 		},
 		Message:             title,
 		FormattedMessage:    iac.getExtendedMessage(issue),
@@ -386,8 +380,8 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 		AffectedFilePath:    affectedFilePath,
 		Product:             product.ProductInfrastructureAsCode,
 		IssueDescriptionURL: issueURL,
-		IssueType:           snyk.InfrastructureIssue,
-		CodeActions:         []snyk.CodeAction{action},
+		IssueType:           types.InfrastructureIssue,
+		CodeActions:         []types.CodeAction{action},
 		AdditionalData:      additionalData,
 	}
 
@@ -398,7 +392,7 @@ func (iac *Scanner) toIssue(affectedFilePath string, issue iacIssue, fileContent
 	return result, nil
 }
 
-func (iac *Scanner) toAdditionalData(affectedFilePath string, issue iacIssue) (snyk.IaCIssueData, error) {
+func (iac *Scanner) toAdditionalData(affectedFilePath types.FilePath, issue iacIssue) (snyk.IaCIssueData, error) {
 	key := getIssueKey(affectedFilePath, issue)
 
 	iacIssuePath, err := parseIacIssuePath(issue.Path)
@@ -456,15 +450,15 @@ func (iac *Scanner) createIssueURL(id string) *url.URL {
 	return parse
 }
 
-func (iac *Scanner) toIssueSeverity(snykSeverity string) snyk.Severity {
+func (iac *Scanner) toIssueSeverity(snykSeverity string) types.Severity {
 	severity, ok := issueSeverities[snykSeverity]
 	if !ok {
-		return snyk.Medium
+		return types.Medium
 	}
 	return severity
 }
 
-func getIssueKey(affectedFilePath string, issue iacIssue) string {
-	id := sha256.Sum256([]byte(affectedFilePath + strconv.Itoa(issue.LineNumber) + issue.PublicID))
+func getIssueKey(affectedFilePath types.FilePath, issue iacIssue) string {
+	id := sha256.Sum256([]byte(string(affectedFilePath) + strconv.Itoa(issue.LineNumber) + issue.PublicID))
 	return hex.EncodeToString(id[:16])
 }

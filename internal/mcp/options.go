@@ -20,34 +20,27 @@ import (
 	"net/url"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/code-client-go/llm"
 
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type McpOption func(server *McpServer)
+type McpOption func(server *McpLLMBinding)
 
-func WithScanner(scanner scanner.Scanner) McpOption {
-	return func(server *McpServer) {
+func WithScanner(scanner types.Scanner) McpOption {
+	return func(server *McpLLMBinding) {
 		server.scanner = scanner
 	}
 }
 
 func WithLogger(logger *zerolog.Logger) McpOption {
-	return func(server *McpServer) {
+	return func(server *McpLLMBinding) {
 		l := logger.With().Str("component", "mcp").Logger()
 		server.logger = &l
 	}
 }
 
-func WithBinding(binding llm.SnykLLMBindings) McpOption {
-	return func(server *McpServer) {
-		server.binding = binding
-	}
-}
-
-func WithBaseURL(baseURL *url.URL) func(server *McpServer) {
-	return func(server *McpServer) {
+func WithBaseURL(baseURL *url.URL) func(server *McpLLMBinding) {
+	return func(server *McpLLMBinding) {
 		server.baseURL = baseURL
 	}
 }

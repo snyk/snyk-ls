@@ -39,7 +39,7 @@ func Test_getShardKey(t *testing.T) {
 		sampleRootPath := "C:\\GIT\\root"
 		// deepcode ignore HardcodedPassword/test: false positive
 		token := testToken
-		assert.Equal(t, util.Hash([]byte(sampleRootPath)), getShardKey(sampleRootPath, token))
+		assert.Equal(t, util.Hash([]byte(sampleRootPath)), getShardKey(types.FilePath(sampleRootPath), token))
 	})
 
 	t.Run("should return token hash", func(t *testing.T) {
@@ -47,7 +47,7 @@ func Test_getShardKey(t *testing.T) {
 		sampleRootPath := ""
 		// deepcode ignore HardcodedPassword/test: false positive
 		token := testToken
-		assert.Equal(t, util.Hash([]byte(token)), getShardKey(sampleRootPath, token))
+		assert.Equal(t, util.Hash([]byte(token)), getShardKey(types.FilePath(sampleRootPath), token))
 	})
 
 	t.Run("should return empty shard key", func(t *testing.T) {
@@ -55,7 +55,7 @@ func Test_getShardKey(t *testing.T) {
 		sampleRootPath := ""
 		// deepcode ignore HardcodedPassword/test: false positive
 		token := ""
-		assert.Equal(t, "", getShardKey(sampleRootPath, token))
+		assert.Equal(t, "", getShardKey(types.FilePath(sampleRootPath), token))
 	})
 }
 
@@ -68,7 +68,7 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 		rootPath:     "/Users/user/workspace/blah",
 		c:            c,
 	}
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		AffectedFilePath: "/Users/user/workspace/blah/app.js",
 		Product:          product.ProductCode,
 		AdditionalData:   snyk.CodeIssueData{Key: "123"},
@@ -105,17 +105,17 @@ func Test_addIssueActions(t *testing.T) {
 		getCodeSettings().SetAutofixEnabled(true)
 	}
 
-	var setupFakeIssues = func(isIgnored bool, isAutofixable bool) []snyk.Issue {
-		return []snyk.Issue{
-			{
+	var setupFakeIssues = func(isIgnored bool, isAutofixable bool) []types.Issue {
+		return []types.Issue{
+			&snyk.Issue{
 				ID:               "SNYK-123",
 				Range:            fakeRange,
-				Severity:         snyk.High,
+				Severity:         types.High,
 				Product:          product.ProductCode,
-				IssueType:        snyk.CodeQualityIssue,
+				IssueType:        types.CodeQualityIssue,
 				Message:          "This is a dummy error (severity error)",
 				CodelensCommands: []types.CommandData{FakeCommand},
-				CodeActions:      []snyk.CodeAction{FakeCodeAction},
+				CodeActions:      []types.CodeAction{&FakeCodeAction},
 				IsIgnored:        isIgnored,
 				AdditionalData: snyk.CodeIssueData{
 					Key:           uuid.New().String(),
@@ -132,11 +132,11 @@ func Test_addIssueActions(t *testing.T) {
 
 		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
 
-		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
+		issueData, ok := fakeIssues[0].GetAdditionalData().(snyk.CodeIssueData)
 		require.True(t, ok)
 		assert.True(t, issueData.HasAIFix)
-		assert.Len(t, fakeIssues[0].CodelensCommands, 2)
-		assert.Len(t, fakeIssues[0].CodeActions, 2)
+		assert.Len(t, fakeIssues[0].GetCodelensCommands(), 2)
+		assert.Len(t, fakeIssues[0].GetCodeActions(), 2)
 	})
 
 	t.Run("Does not include AI fixes if issue is not autofixable", func(t *testing.T) {
@@ -146,11 +146,11 @@ func Test_addIssueActions(t *testing.T) {
 
 		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
 
-		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
+		issueData, ok := fakeIssues[0].GetAdditionalData().(snyk.CodeIssueData)
 		require.True(t, ok)
 		assert.False(t, issueData.HasAIFix)
-		assert.Len(t, fakeIssues[0].CodelensCommands, 1)
-		assert.Len(t, fakeIssues[0].CodeActions, 1)
+		assert.Len(t, fakeIssues[0].GetCodelensCommands(), 1)
+		assert.Len(t, fakeIssues[0].GetCodeActions(), 1)
 	})
 
 	t.Run("Does not include AI fixes even if it is autofixable if issue is ignored", func(t *testing.T) {
@@ -160,11 +160,11 @@ func Test_addIssueActions(t *testing.T) {
 
 		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
 
-		issueData, ok := fakeIssues[0].AdditionalData.(snyk.CodeIssueData)
+		issueData, ok := fakeIssues[0].GetAdditionalData().(snyk.CodeIssueData)
 		require.True(t, ok)
 		assert.True(t, issueData.HasAIFix)
-		assert.Len(t, fakeIssues[0].CodelensCommands, 1)
-		assert.Len(t, fakeIssues[0].CodeActions, 1)
+		assert.Len(t, fakeIssues[0].GetCodelensCommands(), 1)
+		assert.Len(t, fakeIssues[0].GetCodeActions(), 1)
 	})
 }
 
@@ -222,7 +222,7 @@ func TestIssueId(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := issueId(tc.issue)
+			result := issueId(&tc.issue)
 			if result != tc.expected {
 				t.Errorf("Expected %s, got %s", tc.expected, result)
 			}
@@ -230,8 +230,8 @@ func TestIssueId(t *testing.T) {
 	}
 }
 
-func setupAiFixTestData() (issue snyk.Issue, ideAction string, expectedURI string) {
-	issue = snyk.Issue{
+func setupAiFixTestData() (issue *snyk.Issue, ideAction string, expectedURI string) {
+	issue = &snyk.Issue{
 		AffectedFilePath: "/Users/user/workspace/blah/app.js",
 		Product:          "Code",
 		AdditionalData:   snyk.CodeIssueData{Key: "123"}, // Provide additional data

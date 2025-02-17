@@ -25,21 +25,14 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func (sc *DelegatingConcurrentScanner) executePreScanCommand(
-	ctx context.Context,
-	c *config.Config,
-	p product.Product,
-	folderConfig *types.FolderConfig,
-	scanDir string,
-	isNotReferenceScan bool,
-) error {
+func (sc *DelegatingConcurrentScanner) executePreScanCommand(ctx context.Context, c *config.Config, p product.Product, folderConfig *types.FolderConfig, scanDir types.FilePath, isNotReferenceScan bool) error {
 	commandConfig := folderConfig.ScanCommandConfig
 
 	if shouldNotScan(commandConfig, p, isNotReferenceScan) {
 		return nil
 	}
 
-	preScanCommand := scans.NewPreScanCommand(c.Engine().GetConfiguration(), scanDir, commandConfig[p].PreScanCommand, c.Logger())
+	preScanCommand := scans.NewPreScanCommand(c.Engine().GetConfiguration(), scanDir, types.FilePath(commandConfig[p].PreScanCommand), c.Logger())
 	return preScanCommand.ExecutePreScanCommand(ctx)
 }
 

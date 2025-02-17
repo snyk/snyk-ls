@@ -201,12 +201,12 @@ func Test_UpdateSettings(t *testing.T) {
 			OutputFormat:                 &outputFormat,   // default is markdown
 			FolderConfigs: []types.FolderConfig{
 				{
-					FolderPath:           tempDir1,
+					FolderPath:           types.FilePath(tempDir1),
 					BaseBranch:           "testBaseBranch1",
 					AdditionalParameters: []string{"--file=asdf"},
 				},
 				{
-					FolderPath: tempDir2,
+					FolderPath: types.FilePath(tempDir2),
 					BaseBranch: "testBaseBranch2",
 				},
 			},
@@ -245,12 +245,12 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, *settings.HoverVerbosity, c.HoverVerbosity())
 		assert.Equal(t, *settings.OutputFormat, c.Format())
 
-		folderConfig1 := c.FolderConfig(tempDir1)
+		folderConfig1 := c.FolderConfig(types.FilePath(tempDir1))
 		assert.NotEmpty(t, folderConfig1.BaseBranch)
 		assert.Equal(t, settings.FolderConfigs[0].AdditionalParameters[0],
 			folderConfig1.AdditionalParameters[0])
 
-		folderConfig2 := c.FolderConfig(tempDir2)
+		folderConfig2 := c.FolderConfig(types.FilePath(tempDir2))
 		assert.NotEmpty(t, folderConfig2.BaseBranch)
 		assert.Empty(t, folderConfig2.AdditionalParameters)
 

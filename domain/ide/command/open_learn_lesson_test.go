@@ -24,7 +24,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -48,14 +47,14 @@ func Test_openLearnLesson_Execute(t *testing.T) {
 	data := types.CommandData{
 		Title:     types.OpenLearnLesson,
 		CommandId: types.OpenLearnLesson,
-		Arguments: []any{rule, eco, cwes, cves, float64(snyk.DependencyVulnerability)},
+		Arguments: []any{rule, eco, cwes, cves, float64(types.DependencyVulnerability)},
 	}
 	mockService := mock_learn.NewMockService(ctrl)
 	cut := openLearnLesson{learnService: mockService, command: data, openBrowserHandleFunc: openBrowserHandlerFunc}
 	expectedLessonURL := "https://lessonURL"
 	expectedLesson := &learn.Lesson{Url: expectedLessonURL}
 	mockService.EXPECT().
-		GetLesson(eco, rule, []string{"CWE-89", "CWE-ZZ"}, []string{"CVE-2020-1234"}, snyk.DependencyVulnerability).
+		GetLesson(eco, rule, []string{"CWE-89", "CWE-ZZ"}, []string{"CVE-2020-1234"}, types.DependencyVulnerability).
 		Return(expectedLesson, nil)
 
 	_, err := cut.Execute(context.Background())

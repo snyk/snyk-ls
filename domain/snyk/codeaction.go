@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var _ types.Groupable = (*CodeAction)(nil)
+var (
+	_ types.CodeAction = (*CodeAction)(nil)
+	_ types.Groupable  = (*CodeAction)(nil)
+)
 
 // CodeAction represents a code action that can be executed by the client using an in-document menu.
 // This type should be created by the NewCodeAction or NewDeferredCodeAction functions.
@@ -40,12 +43,12 @@ type CodeAction struct {
 	IsPreferred *bool
 
 	// Edit is an optional WorkspaceEdit literal that can be executed by the client.
-	Edit *WorkspaceEdit
+	Edit *types.WorkspaceEdit
 
 	// DeferredEdit is a function that returns a WorkspaceEdit.
 	// Used for heavy calculations that shouldn't be done ahead of time.
 	// A CodeAction cannot have both Edit and DeferredEdit.
-	DeferredEdit *func() *WorkspaceEdit `json:"-"`
+	DeferredEdit *func() *types.WorkspaceEdit `json:"-"`
 
 	// Command that will be executed after the Edit (if present).
 	Command *types.CommandData
@@ -68,21 +71,57 @@ type CodeAction struct {
 	GroupingType types.GroupingType
 }
 
-func (c CodeAction) GetGroupingKey() types.Key {
+func (c *CodeAction) SetEdit(edit *types.WorkspaceEdit) {
+	c.Edit = edit
+}
+
+func (c *CodeAction) SetTitle(title string) {
+	c.Title = title
+}
+
+func (c *CodeAction) GetTitle() string {
+	return c.Title
+}
+
+func (c *CodeAction) GetIsPreferred() *bool {
+	return c.IsPreferred
+}
+
+func (c *CodeAction) GetEdit() *types.WorkspaceEdit {
+	return c.Edit
+}
+
+func (c *CodeAction) GetDeferredEdit() *func() *types.WorkspaceEdit {
+	return c.DeferredEdit
+}
+
+func (c *CodeAction) GetCommand() *types.CommandData {
+	return c.Command
+}
+
+func (c *CodeAction) GetDeferredCommand() *func() *types.CommandData {
+	return c.DeferredCommand
+}
+
+func (c *CodeAction) GetUuid() *uuid.UUID {
+	return c.Uuid
+}
+
+func (c *CodeAction) GetGroupingKey() types.Key {
 	return c.GroupingKey
 }
 
-func (c CodeAction) GetGroupingValue() any {
+func (c *CodeAction) GetGroupingValue() any {
 	return c.GroupingValue
 }
 
-func (c CodeAction) GetGroupingType() types.GroupingType {
+func (c *CodeAction) GetGroupingType() types.GroupingType {
 	return c.GroupingType
 }
 
-func NewCodeAction(title string, edit *WorkspaceEdit, command *types.CommandData) (CodeAction, error) {
+func NewCodeAction(title string, edit *types.WorkspaceEdit, command *types.CommandData) (*CodeAction, error) {
 	if edit == nil && command == nil {
-		return CodeAction{}, errors.New("a non-deferred action must have either an edit or a command")
+		return nil, errors.New("a non-deferred action must have either an edit or a command")
 	}
 
 	action := CodeAction{
@@ -90,12 +129,12 @@ func NewCodeAction(title string, edit *WorkspaceEdit, command *types.CommandData
 		Edit:    edit,
 		Command: command,
 	}
-	return action, nil
+	return &action, nil
 }
 
 func NewDeferredCodeAction(
 	title string,
-	deferredEdit *func() *WorkspaceEdit,
+	deferredEdit *func() *types.WorkspaceEdit,
 	deferredCommand *func() *types.CommandData,
 	groupingKey types.Key,
 	groupingValue any,

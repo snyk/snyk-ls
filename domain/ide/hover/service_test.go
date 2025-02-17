@@ -24,17 +24,17 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func setupFakeHover(c *config.Config) (*DefaultHoverService, string) {
+func setupFakeHover(c *config.Config) (*DefaultHoverService, types.FilePath) {
 	target := NewDefaultService(c).(*DefaultHoverService)
 	fakeHover := []Hover[Context]{
-		{Range: snyk.Range{
-			Start: snyk.Position{Line: 3, Character: 56},
-			End:   snyk.Position{Line: 5, Character: 80},
+		{Range: types.Range{
+			Start: types.Position{Line: 3, Character: 56},
+			End:   types.Position{Line: 5, Character: 80},
 		},
 		},
 	}
@@ -42,10 +42,11 @@ func setupFakeHover(c *config.Config) (*DefaultHoverService, string) {
 		product.ProductCode: fakeHover,
 	}
 
-	filePath := "file:///fake-file.txt"
+	filePath := types.FilePath("file:///fake-file.txt")
 	target.hoversByFilePath[filePath] = hoversByProduct{}
 	target.hoversByFilePath[filePath] = hvb
-	target.hoverIndexes[filePath+"rangepositionstuff"+product.ProductCode.ToProductCodename()] = true
+	path := string(filePath) + "rangepositionstuff" + product.ProductCode.ToProductCodename()
+	target.hoverIndexes[path] = true
 
 	return target, filePath
 }
@@ -98,72 +99,72 @@ func Test_GetHoverMultiline(t *testing.T) {
 
 	tests := []struct {
 		hoverDetails []Hover[Context]
-		query        snyk.Position
+		query        types.Position
 		expected     Result
 	}{
 		// multiline range
 		{
-			hoverDetails: []Hover[Context]{{Range: snyk.Range{
-				Start: snyk.Position{Line: 3, Character: 56},
-				End:   snyk.Position{Line: 5, Character: 80},
+			hoverDetails: []Hover[Context]{{Range: types.Range{
+				Start: types.Position{Line: 3, Character: 56},
+				End:   types.Position{Line: 5, Character: 80},
 			},
 				Message: "## Issues found"}},
-			query: snyk.Position{Line: 4, Character: 66},
+			query: types.Position{Line: 4, Character: 66},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: "## Issues found"},
 			},
 		},
 		// exact line but within character range
 		{
-			hoverDetails: []Hover[Context]{{Range: snyk.Range{
-				Start: snyk.Position{Line: 4, Character: 56},
-				End:   snyk.Position{Line: 4, Character: 80},
+			hoverDetails: []Hover[Context]{{Range: types.Range{
+				Start: types.Position{Line: 4, Character: 56},
+				End:   types.Position{Line: 4, Character: 80},
 			},
 				Message: "## Issues found"}},
-			query: snyk.Position{Line: 4, Character: 66},
+			query: types.Position{Line: 4, Character: 66},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: "## Issues found"},
 			},
 		},
 		// exact line and exact character
 		{
-			hoverDetails: []Hover[Context]{{Range: snyk.Range{
-				Start: snyk.Position{Line: 4, Character: 56},
-				End:   snyk.Position{Line: 4, Character: 56},
+			hoverDetails: []Hover[Context]{{Range: types.Range{
+				Start: types.Position{Line: 4, Character: 56},
+				End:   types.Position{Line: 4, Character: 56},
 			},
 				Message: "## Issues found"}},
-			query: snyk.Position{Line: 4, Character: 56},
+			query: types.Position{Line: 4, Character: 56},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: "## Issues found"},
 			},
 		},
 		// hover left of the character position on exact line
 		{
-			hoverDetails: []Hover[Context]{{Range: snyk.Range{
-				Start: snyk.Position{Line: 4, Character: 56},
-				End:   snyk.Position{Line: 4, Character: 86},
+			hoverDetails: []Hover[Context]{{Range: types.Range{
+				Start: types.Position{Line: 4, Character: 56},
+				End:   types.Position{Line: 4, Character: 86},
 			},
 				Message: "## Issues found"}},
-			query: snyk.Position{Line: 4, Character: 45},
+			query: types.Position{Line: 4, Character: 45},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: ""},
 			},
 		},
 		// hover right of the character position on exact line
 		{
-			hoverDetails: []Hover[Context]{{Range: snyk.Range{
-				Start: snyk.Position{Line: 4, Character: 56},
-				End:   snyk.Position{Line: 4, Character: 86},
+			hoverDetails: []Hover[Context]{{Range: types.Range{
+				Start: types.Position{Line: 4, Character: 56},
+				End:   types.Position{Line: 4, Character: 86},
 			},
 				Message: "## Issues found"}},
-			query: snyk.Position{Line: 4, Character: 105},
+			query: types.Position{Line: 4, Character: 105},
 			expected: Result{Contents: MarkupContent{
 				Kind: "markdown", Value: ""},
 			},
 		},
 	}
 
-	path := "path/to/package.json"
+	path := types.FilePath("path/to/package.json")
 	for _, tc := range tests {
 		target.ClearAllHovers()
 		hvb := hoversByProduct{
@@ -187,26 +188,26 @@ func Test_SendingHovers_AfterClearAll_DoesNotBlock(t *testing.T) {
 
 	service.Channel() <- hover
 	assert.Eventually(t, func() bool {
-		return service.GetHover(hover.Path, snyk.Position{
+		return service.GetHover(hover.Path, types.Position{
 			Line:      10,
 			Character: 14,
 		}).Contents.Value != ""
 	}, 1*time.Second, 10*time.Millisecond)
 }
 
-func fakeDocumentHover() (DocumentHovers, string) {
-	documentUri := "fake-file.json"
+func fakeDocumentHover() (DocumentHovers, types.FilePath) {
+	documentUri := types.FilePath("fake-file.json")
 	hover := DocumentHovers{
 		Path: documentUri,
 		Hover: []Hover[Context]{
 			{
 				Id: "test-id",
-				Range: snyk.Range{
-					Start: snyk.Position{
+				Range: types.Range{
+					Start: types.Position{
 						Line:      10,
 						Character: 14,
 					},
-					End: snyk.Position{
+					End: types.Position{
 						Line:      56,
 						Character: 87,
 					},

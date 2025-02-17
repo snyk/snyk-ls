@@ -28,18 +28,19 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/storage"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.T) {
 	conf, storageFile := setupConfigurationWithStorage(t)
-	path := "/testPath"
+	path := types.FilePath("/testPath")
 	dir, err := os.UserHomeDir()
 	require.NoError(t, err)
 
 	// act
 	actual, err := GetOrCreateFolderConfig(conf, path)
 	require.NoError(t, err)
-	actual.ReferenceFolderPath = dir
+	actual.ReferenceFolderPath = types.FilePath(dir)
 	err = UpdateFolderConfig(conf, actual)
 	require.NoError(t, err)
 
@@ -57,7 +58,7 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 }
 
 func Test_GetOrCreateFolderConfig_shouldIntegrateGitBranchInformation(t *testing.T) {
-	dir := t.TempDir()
+	dir := types.FilePath(t.TempDir())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 	repo, err := SetupCustomTestRepo(t, dir, "https://github.com/snyk-labs/nodejs-goof", "", &logger)
 	require.NoError(t, err)

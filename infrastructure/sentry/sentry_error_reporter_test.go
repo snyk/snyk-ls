@@ -60,7 +60,7 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 
 func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	c := testutil.UnitTest(t)
-	path := "testPath"
+	path := types.FilePath("testPath")
 	text := "test error"
 	channel := make(chan types.PublishDiagnosticsParams)
 	notifier := notification.NewNotifier()

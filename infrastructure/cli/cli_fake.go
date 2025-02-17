@@ -25,6 +25,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type TestExecutor struct {
@@ -70,7 +71,7 @@ func (t *TestExecutor) GetCommand() []string {
 	return t.cmd
 }
 
-func (t *TestExecutor) Execute(ctx context.Context, cmd []string, _ string) (resp []byte, err error) {
+func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error) {
 	err = ctx.Err()
 	if err != nil { // Checking for ctx cancellation before faking CLI execution
 		return resp, err

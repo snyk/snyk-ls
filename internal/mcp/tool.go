@@ -21,13 +21,12 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const SnykScanWorkspaceScan = types.WorkspaceScanCommand
 
-func (m *McpServer) addSnykScanTool() error {
+func (m *McpLLMBinding) addSnykScanTool() error {
 	tool := mcp.NewTool(SnykScanWorkspaceScan,
 		mcp.WithDescription("Perform Snyk scans on current workspace"),
 	)
@@ -37,7 +36,7 @@ func (m *McpServer) addSnykScanTool() error {
 	return nil
 }
 
-func (m *McpServer) snykWorkSpaceScanHandler() func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykWorkSpaceScanHandler() func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		w := m.c.Workspace()
 		trusted, _ := w.GetFolderTrust()
@@ -46,7 +45,7 @@ func (m *McpServer) snykWorkSpaceScanHandler() func(ctx context.Context, request
 			Content: make([]interface{}, 0),
 		}
 
-		resultProcessor := func(data snyk.ScanData) {
+		resultProcessor := func(data types.ScanData) {
 			// add the scan results to the call tool response
 			// in the future, this could be a rendered markdown/html template
 			callToolResult.Content = append(callToolResult.Content, data)

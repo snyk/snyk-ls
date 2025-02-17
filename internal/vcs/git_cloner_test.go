@@ -28,14 +28,15 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestClone_ShouldClone(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
 	initGitRepo(t, repoPath, false)
 
-	tmpFolderPath := t.TempDir()
+	tmpFolderPath := types.FilePath(t.TempDir())
 	cloneTargetBranchName := "master"
 	repo, err := Clone(c.Logger(), repoPath, tmpFolderPath, cloneTargetBranchName)
 
@@ -45,10 +46,10 @@ func TestClone_ShouldClone(t *testing.T) {
 
 func TestClone_ShouldClone_SameOriginRemoteUrl(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
 	srcRepo, _ := initGitRepo(t, repoPath, false)
 
-	tmpFolderPath := t.TempDir()
+	tmpFolderPath := types.FilePath(t.TempDir())
 	cloneTargetBranchName := "master"
 	clonedRepo, err := Clone(c.Logger(), repoPath, tmpFolderPath, cloneTargetBranchName)
 
@@ -70,10 +71,10 @@ func TestClone_ShouldClone_SameOriginRemoteUrl(t *testing.T) {
 
 func TestClone_InvalidBranchName(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
 	initGitRepo(t, repoPath, false)
 
-	tmpFolderPath := t.TempDir()
+	tmpFolderPath := types.FilePath(t.TempDir())
 	cloneTargetBranchName := "foobar"
 	repo, err := Clone(c.Logger(), repoPath, tmpFolderPath, cloneTargetBranchName)
 
@@ -83,8 +84,8 @@ func TestClone_InvalidBranchName(t *testing.T) {
 
 func TestClone_DetachedHead_TargetBranchExists(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
-	destinationPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
+	destinationPath := types.FilePath(t.TempDir())
 	repo, currentHead := initGitRepo(t, repoPath, true)
 	worktree, err := repo.Worktree()
 	assert.NoError(t, err)
@@ -105,8 +106,8 @@ func TestClone_DetachedHead_TargetBranchExists(t *testing.T) {
 
 func TestClone_DetachedHead_TargetBranchExists_SameOriginRemoteUrl(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
-	destinationPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
+	destinationPath := types.FilePath(t.TempDir())
 	srcRepo, currentHead := initGitRepo(t, repoPath, true)
 	worktree, err := srcRepo.Worktree()
 	assert.NoError(t, err)
@@ -139,8 +140,8 @@ func TestClone_DetachedHead_TargetBranchExists_SameOriginRemoteUrl(t *testing.T)
 
 func TestClone_DetachedHead_TargetBranchDoesNotExists(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
-	destinationPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
+	destinationPath := types.FilePath(t.TempDir())
 	repo, currentHead := initGitRepo(t, repoPath, true)
 	worktree, err := repo.Worktree()
 	assert.NoError(t, err)
@@ -161,8 +162,8 @@ func TestClone_DetachedHead_TargetBranchDoesNotExists(t *testing.T) {
 
 func TestClone_DetachedHead_TargetBranchExists_OpenChanges(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
-	destinationPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
+	destinationPath := types.FilePath(t.TempDir())
 	repo, currentHead := initGitRepo(t, repoPath, true)
 	worktree, err := repo.Worktree()
 	assert.NoError(t, err)
@@ -175,7 +176,7 @@ func TestClone_DetachedHead_TargetBranchExists_OpenChanges(t *testing.T) {
 	err = worktree.Checkout(&git.CheckoutOptions{Hash: currentHead.Hash()})
 	assert.NoError(t, err)
 
-	testfile := filepath.Join(repoPath, "testFile3.txt")
+	testfile := filepath.Join(string(repoPath), "testFile3.txt")
 	err = os.WriteFile(testfile, []byte("testData"), 0600)
 	assert.NoError(t, err)
 
@@ -184,13 +185,13 @@ func TestClone_DetachedHead_TargetBranchExists_OpenChanges(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, cloneRepo)
-	assert.NoFileExists(t, filepath.Join(destinationPath, testfile))
+	assert.NoFileExists(t, filepath.Join(string(destinationPath), testfile))
 }
 
 func TestClone_InvalidGitRepo(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
-	tmpFolderPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
+	tmpFolderPath := types.FilePath(t.TempDir())
 	branchName := "feat/foobar"
 
 	repo, err := Clone(c.Logger(), repoPath, tmpFolderPath, branchName)
@@ -201,7 +202,7 @@ func TestClone_InvalidGitRepo(t *testing.T) {
 
 func TestLocalRepoHasChanges_SameBranchNames_NoModification_SkipClone(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
 	initGitRepo(t, repoPath, false)
 	shouldclone, err := LocalRepoHasChanges(c.Engine().GetConfiguration(), c.Logger(), repoPath)
 
@@ -211,7 +212,7 @@ func TestLocalRepoHasChanges_SameBranchNames_NoModification_SkipClone(t *testing
 
 func TestLocalRepoHasChanges_SameBranchNames_WithModification_Clone(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
 	initGitRepo(t, repoPath, true)
 	shouldclone, err := LocalRepoHasChanges(c.Engine().GetConfiguration(), c.Logger(), repoPath)
 
@@ -221,7 +222,7 @@ func TestLocalRepoHasChanges_SameBranchNames_WithModification_Clone(t *testing.T
 
 func TestLocalRepoHasChanges_DifferentBranchNames_Clone(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
 	repo, _ := initGitRepo(t, repoPath, true)
 	wt, err := repo.Worktree()
 	assert.NoError(t, err)
@@ -238,7 +239,7 @@ func TestLocalRepoHasChanges_DifferentBranchNames_Clone(t *testing.T) {
 }
 
 func TestLocalRepoHasChanges_HasUncommittedChanges(t *testing.T) {
-	repo, _ := initGitRepo(t, t.TempDir(), true)
+	repo, _ := initGitRepo(t, types.FilePath(t.TempDir()), true)
 
 	hasChanges := hasUncommitedChanges(repo)
 
@@ -246,19 +247,20 @@ func TestLocalRepoHasChanges_HasUncommittedChanges(t *testing.T) {
 }
 
 func TestLocalRepoHasChanges_HasCommittedChanges(t *testing.T) {
-	repo, _ := initGitRepo(t, t.TempDir(), false)
+	repo, _ := initGitRepo(t, types.FilePath(t.TempDir()), false)
 
 	hasChanges := hasUncommitedChanges(repo)
 
 	assert.False(t, hasChanges)
 }
 
-func initGitRepo(t *testing.T, repoPath string, isModified bool) (*git.Repository, *plumbing.Reference) {
+func initGitRepo(t *testing.T, repoPath types.FilePath, isModified bool) (*git.Repository, *plumbing.Reference) {
 	t.Helper()
-	repo, err := git.PlainInit(repoPath, false)
+	repoPathAsString := string(repoPath)
+	repo, err := git.PlainInit(repoPathAsString, false)
 	assert.NoError(t, err)
 
-	absoluteFileName := filepath.Join(repoPath, "testFile.txt")
+	absoluteFileName := filepath.Join(repoPathAsString, "testFile.txt")
 	err = os.WriteFile(absoluteFileName, []byte("testData"), 0600)
 	assert.NoError(t, err)
 	worktree, err := repo.Worktree()
@@ -270,7 +272,7 @@ func initGitRepo(t *testing.T, repoPath string, isModified bool) (*git.Repositor
 		Author: &object.Signature{Name: t.Name()},
 	})
 	assert.NoError(t, err)
-	testfile2 := filepath.Join(repoPath, "testFile2.txt")
+	testfile2 := filepath.Join(repoPathAsString, "testFile2.txt")
 	err = os.WriteFile(testfile2, []byte("testData"), 0600)
 	assert.NoError(t, err)
 

@@ -53,7 +53,7 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 
 	discovery := install.Discovery{}
 	clientParams := types.InitializeParams{
-		RootURI: uri.PathToUri(dir),
+		RootURI: uri.PathToUri(types.FilePath(dir)),
 		InitializationOptions: types.Settings{
 			ActivateSnykCode:            "false",
 			ActivateSnykOpenSource:      "true",
@@ -72,7 +72,7 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 	// wait for scan
 	assert.Eventually(t, func() bool {
 		rsp, err := loc.Client.Call(ctx, "textDocument/inlineValue", types.InlineValueParams{
-			TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filepath.Join(dir, "package.json"))},
+			TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(types.FilePath(filepath.Join(dir, "package.json")))},
 			Range:        sglsp.Range{Start: sglsp.Position{Line: 17}, End: sglsp.Position{Line: 17}},
 		})
 		assert.NoError(t, err)

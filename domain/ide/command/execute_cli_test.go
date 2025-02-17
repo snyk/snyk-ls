@@ -31,7 +31,7 @@ import (
 func Test_executeCLI_callsCli(t *testing.T) {
 	c := testutil.UnitTest(t)
 	expected := `{ "outputKey": "outputValue" }`
-	dir := t.TempDir()
+	dir := types.FilePath(t.TempDir())
 
 	cli := cli2.NewTestExecutorWithResponse(expected)
 

@@ -22,35 +22,36 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var _ snyk.CacheProvider = (*Scanner)(nil)
 
-func (sc *Scanner) addToCache(results []snyk.Issue) {
+func (sc *Scanner) addToCache(results []types.Issue) {
 	sc.issueCache.RemoveExpired()
 	for _, issue := range results {
-		cachedIssues, present := sc.issueCache.Get(issue.AffectedFilePath)
+		cachedIssues, present := sc.issueCache.Get(issue.GetAffectedFilePath())
 		if present {
 			cachedIssues = append(cachedIssues, issue)
 			cachedIssues = sc.deduplicate(cachedIssues)
-			sc.issueCache.Set(issue.AffectedFilePath, cachedIssues, imcache.WithDefaultExpiration())
+			sc.issueCache.Set(issue.GetAffectedFilePath(), cachedIssues, imcache.WithDefaultExpiration())
 		} else {
-			sc.issueCache.Set(issue.AffectedFilePath, []snyk.Issue{issue}, imcache.WithDefaultExpiration())
+			sc.issueCache.Set(issue.GetAffectedFilePath(), []types.Issue{issue}, imcache.WithDefaultExpiration())
 		}
 	}
 }
 
-func (sc *Scanner) removeFromCache(scanned map[string]bool) {
+func (sc *Scanner) removeFromCache(scanned map[types.FilePath]bool) {
 	for path := range scanned {
 		sc.ClearIssues(path)
 	}
 }
 
-func (sc *Scanner) deduplicate(issues []snyk.Issue) []snyk.Issue {
-	var deduplicatedSlice []snyk.Issue
+func (sc *Scanner) deduplicate(issues []types.Issue) []types.Issue {
+	var deduplicatedSlice []types.Issue
 	seen := map[string]bool{}
 	for _, issue := range issues {
-		uniqueID := issue.AdditionalData.GetKey()
+		uniqueID := issue.GetAdditionalData().GetKey()
 		if !seen[uniqueID] {
 			seen[uniqueID] = true
 			deduplicatedSlice = append(deduplicatedSlice, issue)
@@ -59,37 +60,37 @@ func (sc *Scanner) deduplicate(issues []snyk.Issue) []snyk.Issue {
 	return deduplicatedSlice
 }
 
-func (sc *Scanner) Issue(key string) snyk.Issue {
+func (sc *Scanner) Issue(key string) types.Issue {
 	for _, issues := range sc.issueCache.GetAll() {
 		for _, issue := range issues {
-			if issue.AdditionalData.GetKey() == key {
+			if issue.GetAdditionalData().GetKey() == key {
 				return issue
 			}
 		}
 	}
-	return snyk.Issue{}
+	return nil
 }
 
 func (sc *Scanner) Issues() snyk.IssuesByFile {
 	return sc.issueCache.GetAll()
 }
 
-func (sc *Scanner) IssuesForFile(path string) []snyk.Issue {
+func (sc *Scanner) IssuesForFile(path types.FilePath) []types.Issue {
 	issues, found := sc.issueCache.Get(path)
 	if !found {
-		return []snyk.Issue{}
+		return []types.Issue{}
 	}
 	return issues
 }
 
-func (sc *Scanner) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
+func (sc *Scanner) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
 	issues, found := sc.issueCache.Get(path)
 	if !found {
-		return []snyk.Issue{}
+		return []types.Issue{}
 	}
-	var filteredIssues []snyk.Issue
+	var filteredIssues []types.Issue
 	for _, issue := range issues {
-		if issue.Range.Overlaps(r) {
+		if issue.GetRange().Overlaps(r) {
 			filteredIssues = append(filteredIssues, issue)
 		}
 	}
@@ -106,13 +107,13 @@ func (sc *Scanner) Clear() {
 	}
 }
 
-func (sc *Scanner) ClearIssues(path string) {
+func (sc *Scanner) ClearIssues(path types.FilePath) {
 	if sc.cacheRemovalHandler != nil {
 		sc.cacheRemovalHandler(path)
 	}
 	sc.issueCache.Remove(path)
 }
 
-func (sc *Scanner) RegisterCacheRemovalHandler(handler func(path string)) {
+func (sc *Scanner) RegisterCacheRemovalHandler(handler func(path types.FilePath)) {
 	sc.cacheRemovalHandler = handler
 }

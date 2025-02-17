@@ -36,7 +36,7 @@ func New(errorReporter error_reporting.ErrorReporter) *EmojiScanner {
 	}
 }
 
-func (sc *EmojiScanner) Scan(ctx context.Context, path string, folderPath string) []snyk.Issue {
+func (sc *EmojiScanner) Scan(ctx context.Context, path string, folderPath string) []types.Issue {
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		// error handling
@@ -46,7 +46,7 @@ func (sc *EmojiScanner) Scan(ctx context.Context, path string, folderPath string
 
 	if fileInfo.IsDir() {
 		// our scanner don't need to scan folders, instead we operate on a file basis.
-		return []snyk.Issue{}
+		return []types.Issue{}
 	}
 
 	bytes, err := os.ReadFile(path)
@@ -57,7 +57,7 @@ func (sc *EmojiScanner) Scan(ctx context.Context, path string, folderPath string
 
 	emojiRegexp := regexp.MustCompile(`\x{1F408}`) // 🐈 cat emoji regexp
 
-	issues := make([]snyk.Issue, 0)
+	issues := make([]types.Issue, 0)
 
 	lines := strings.Split(strings.ReplaceAll(string(bytes), "\r", ""), "\n") // split lines
 	for i, line := range lines {
@@ -95,14 +95,14 @@ func (sc *EmojiScanner) Scan(ctx context.Context, path string, folderPath string
 
 			issue := snyk.NewIssue(
 				"So now you know",
-				snyk.Low,
+				types.Low,
 				snyk.EmojiIssue,
 				r,
 				"Cats are not allowed in this project",
 				sc.GetFormattedMessage(),
 				path,
 				sc.Product(),
-				[]snyk.Reference{},
+				[]types.Reference{},
 				sc.catsEvilProofUrl,
 				[]snyk.CodeAction{replaceCodeAction, learnCodeAction},
 				[]snyk.Command{},

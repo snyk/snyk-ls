@@ -58,13 +58,13 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 	issueMap := cmd.issueProvider.Issues()
 	for _, issues := range issueMap {
 		for i := range issues {
-			for _, action := range issues[i].CodeActions {
-				if action.Uuid == nil || *action.Uuid != codeActionId {
+			for _, action := range issues[i].GetCodeActions() {
+				if action.GetUuid() == nil || *action.GetUuid() != codeActionId {
 					continue
 				}
 
 				// execute autofix codeaction
-				edit := (*action.DeferredEdit)()
+				edit := (*action.GetDeferredEdit())()
 				if edit == nil {
 					cmd.logger.Debug().Msg("No fix could be computed.")
 					return nil, nil
@@ -76,7 +76,7 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 				})
 
 				// reset codelenses
-				issues[i].CodelensCommands = nil
+				issues[i].SetCodelensCommands(nil)
 
 				// Give client some time to apply edit, then refresh code lenses to hide stale codelens for the fixed issue
 				time.Sleep(1 * time.Second)
@@ -92,46 +92,46 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 type RangeDto = map[string]interface{}
 type RangePositionDto = map[string]interface{}
 
-func (cmd *fixCodeIssue) toRange(rangeArg any) (snyk.Range, error) {
+func (cmd *fixCodeIssue) toRange(rangeArg any) (types.Range, error) {
 	dto, ok := rangeArg.(RangeDto)
 	if !ok {
-		return snyk.Range{}, fmt.Errorf("invalid range parameter")
+		return types.Range{}, fmt.Errorf("invalid range parameter")
 	}
 	startPos := dto["Start"]
 	endPos := dto["End"]
 	startPosDto, ok := startPos.(RangePositionDto)
 	if !ok {
-		return snyk.Range{}, fmt.Errorf("invalid start position parameter")
+		return types.Range{}, fmt.Errorf("invalid start position parameter")
 	}
 	startPosLine, ok := startPosDto["Line"].(float64)
 	if !ok {
-		return snyk.Range{}, fmt.Errorf("invalid start position line")
+		return types.Range{}, fmt.Errorf("invalid start position line")
 	}
 	startLine := startPosLine
 	startChar, ok := startPosDto["Character"].(float64)
 	if !ok {
-		return snyk.Range{}, fmt.Errorf("invalid start position character")
+		return types.Range{}, fmt.Errorf("invalid start position character")
 	}
 	endPosDto, ok := endPos.(RangePositionDto)
 	if !ok {
-		return snyk.Range{}, fmt.Errorf("invalid end position parameter")
+		return types.Range{}, fmt.Errorf("invalid end position parameter")
 	}
 
 	endLine, ok := endPosDto["Line"].(float64)
 	if !ok {
-		return snyk.Range{}, fmt.Errorf("invalid end position line")
+		return types.Range{}, fmt.Errorf("invalid end position line")
 	}
 	endChar, ok := endPosDto["Character"].(float64)
 	if !ok {
-		return snyk.Range{}, fmt.Errorf("invalid end position character")
+		return types.Range{}, fmt.Errorf("invalid end position character")
 	}
 
-	snykRange := snyk.Range{
-		Start: snyk.Position{
+	snykRange := types.Range{
+		Start: types.Position{
 			Line:      int(startLine),
 			Character: int(startChar),
 		},
-		End: snyk.Position{
+		End: types.Position{
 			Line:      int(endLine),
 			Character: int(endChar),
 		},

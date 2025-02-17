@@ -21,13 +21,13 @@ import (
 	"strings"
 
 	"github.com/snyk/snyk-ls/ast"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type NpmRangeFinder struct {
-	uri         string
+	uri         types.FilePath
 	fileContent []byte
-	myRange     snyk.Range
+	myRange     types.Range
 }
 
 func (n *NpmRangeFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {

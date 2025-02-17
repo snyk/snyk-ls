@@ -19,7 +19,6 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/snyk/code-client-go/llm"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -37,11 +36,9 @@ func TestNewMcpServerWithOptions(t *testing.T) {
 	c := testutil.UnitTest(t)
 	baseURL, _ := url.Parse("http://test:8080")
 
-	binding := llm.NewDeepcodeLLMBinding()
 	s := scanner.NewTestScanner()
-	mcpServer := NewMcpServer(c, WithScanner(s), WithBaseURL(baseURL), WithBinding(binding))
+	mcpServer := NewMcpServer(c, WithScanner(s), WithBaseURL(baseURL))
 
-	assert.Equal(t, binding, mcpServer.binding)
 	assert.Equal(t, s, mcpServer.scanner)
 	assert.Equal(t, baseURL, mcpServer.baseURL)
 }

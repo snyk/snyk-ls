@@ -250,7 +250,7 @@ func containsMatchingMessage(t *testing.T,
 	msg any,
 	testCase sendMessageTestCase,
 	expectedProduct string,
-	folderPath string,
+	folderPath types.FilePath,
 ) bool {
 	t.Helper()
 	scanMessage, ok := msg.(types.SnykScanParams)

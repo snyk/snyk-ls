@@ -24,18 +24,16 @@ import (
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
-	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// McpServer is an implementation of a mcp server that allows interaction between
+// McpLLMBinding is an implementation of a mcp server that allows interaction between
 // a given SnykLLMBinding and a CommandService.
-type McpServer struct {
+type McpLLMBinding struct {
 	c         *config.Config
-	binding   llm.SnykLLMBindings
-	scanner   scanner.Scanner
+	scanner   types.Scanner
 	logger    *zerolog.Logger
 	mcpServer *server.MCPServer
 	sseServer *server.SSEServer
@@ -43,9 +41,9 @@ type McpServer struct {
 	mutex     sync.Mutex
 }
 
-func NewMcpServer(c *config.Config, opts ...McpOption) *McpServer {
+func NewMcpServer(c *config.Config, opts ...McpOption) *McpLLMBinding {
 	logger := zerolog.Nop()
-	mcpServerImpl := &McpServer{
+	mcpServerImpl := &McpLLMBinding{
 		c:      c,
 		logger: &logger,
 	}
@@ -67,7 +65,7 @@ func defaultURL() *url.URL {
 }
 
 // Start starts the MCP server. It blocks until the server is stopped via Shutdown.
-func (m *McpServer) Start() error {
+func (m *McpLLMBinding) Start() error {
 	// protect critical assignments with mutex
 	m.mutex.Lock()
 	m.mcpServer = server.NewMCPServer(
@@ -100,7 +98,7 @@ func (m *McpServer) Start() error {
 	return nil
 }
 
-func (m *McpServer) Shutdown(ctx context.Context) {
+func (m *McpLLMBinding) Shutdown(ctx context.Context) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 

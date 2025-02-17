@@ -31,19 +31,19 @@ type Clearer interface {
 }
 
 type ScanSnapshotClearerExister interface {
-	Init(folderPath []string) error
-	Clear(folderPath []string, deleteOnlyExpired bool)
-	Exists(folderPath, commitHash string, p product.Product) bool
+	Init(folderPath []FilePath) error
+	Clear(folderPath []FilePath, deleteOnlyExpired bool)
+	Exists(folderPath FilePath, commitHash string, p product.Product) bool
 }
 
 type Workspace interface {
 	Clearer
 	TrustRequester
 	GetScanSnapshotClearerExister() ScanSnapshotClearerExister
-	RemoveFolder(folderPath string)
-	DeleteFile(filePath string)
+	RemoveFolder(folderPath FilePath)
+	DeleteFile(filePath FilePath)
 	AddFolder(f Folder)
-	GetFolderContaining(path string) Folder
+	GetFolderContaining(path FilePath) Folder
 	Folders() (folder []Folder)
 	ScanWorkspace(ctx context.Context)
 	ChangeWorkspaceFolders(params DidChangeWorkspaceFoldersParams) []Folder
@@ -59,10 +59,10 @@ type Folder interface {
 	IsScanned() bool
 	SetStatus(status FolderStatus)
 	ScanFolder(ctx context.Context)
-	ScanFile(ctx context.Context, path string)
-	Contains(path string) bool
+	ScanFile(ctx context.Context, path FilePath)
+	Contains(path FilePath) bool
 	FilterAndPublishDiagnostics(p product.Product)
-	Path() string
+	Path() FilePath
 	Uri() lsp.DocumentURI
 	Name() string
 	Status() FolderStatus

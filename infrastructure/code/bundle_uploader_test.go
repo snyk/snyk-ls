@@ -43,12 +43,12 @@ func Test_Bundler_Upload(t *testing.T) {
 	t.Run("adds files to bundle", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{C: c}
 		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: NewCodeInstrumentor(), c: c}
-		documentURI, bundleFile := createTempFileInDir(t, "bundleDoc.java", 10, temporaryDir)
-		bundleFileMap := map[string]BundleFile{}
-		bundleFileMap[documentURI] = bundleFile
+		filePath, bundleFile := createTempFileInDir(t, "bundleDoc.java", 10, temporaryDir)
+		bundleFileMap := map[types.FilePath]BundleFile{}
+		bundleFileMap[filePath] = bundleFile
 
 		testTracker := progress.NewTestTracker(make(chan types.ProgressParams, 100000), make(chan bool, 1))
-		_, err := bundleUploader.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []string{documentURI}, logger: c.Logger(), Files: bundleFileMap}, testTracker)
+		_, err := bundleUploader.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []types.FilePath{filePath}, logger: c.Logger(), Files: bundleFileMap}, testTracker)
 
 		assert.Equal(t, 1, snykCodeService.TotalBundleCount)
 		assert.NoError(t, err)
@@ -58,8 +58,8 @@ func Test_Bundler_Upload(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{C: c}
 		var bundler = BundleUploader{SnykCode: snykCodeService, instrumentor: NewCodeInstrumentor(), c: c}
 
-		bundleFileMap := map[string]BundleFile{}
-		var missingFiles []string
+		bundleFileMap := map[types.FilePath]BundleFile{}
+		var missingFiles []types.FilePath
 		path, bundleFile := createTempFileInDir(t, "bundleDoc1.java", (1024*1024)-1, temporaryDir)
 		bundleFileMap[path] = bundleFile
 		missingFiles = append(missingFiles, path)
@@ -86,10 +86,10 @@ func Test_Bundler_Upload(t *testing.T) {
 	})
 }
 
-func createTempFileInDir(t *testing.T, name string, size int, temporaryDir string) (string, BundleFile) {
+func createTempFileInDir(t *testing.T, name string, size int, temporaryDir string) (types.FilePath, BundleFile) {
 	t.Helper()
-	documentURI, fileContent := createFileOfSize(t, name, size, temporaryDir)
-	return documentURI, BundleFile{Hash: util.Hash(fileContent), Content: string(fileContent), Size: size}
+	filePath, fileContent := createFileOfSize(t, name, size, temporaryDir)
+	return types.FilePath(filePath), BundleFile{Hash: util.Hash(fileContent), Content: string(fileContent), Size: size}
 }
 
 func Test_IsSupportedLanguage(t *testing.T) {

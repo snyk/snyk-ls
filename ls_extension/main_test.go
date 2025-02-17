@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/stretchr/testify/assert"
 
@@ -13,7 +14,7 @@ import (
 
 func Test_ExtensionEntryPoint(t *testing.T) {
 	expectedLoglevel := "trace"
-	expectedLogPath := t.TempDir()
+	expectedLogPath := types.FilePath(t.TempDir())
 
 	engine := app.CreateAppEngineWithOptions()
 

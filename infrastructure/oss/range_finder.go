@@ -22,7 +22,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type RangeFinder interface {
@@ -30,29 +30,30 @@ type RangeFinder interface {
 }
 
 type DefaultFinder struct {
-	path        string
+	path        types.FilePath
 	fileContent []byte
 	c           *config.Config
 }
 
 // getDependencyNode will return the dependency node with range information
 // in case of maven, the node will also contain tree links information for the whole dep tree
-func getDependencyNode(c *config.Config, path string, issue ossIssue, fileContent []byte) *ast.Node {
+func getDependencyNode(c *config.Config, path types.FilePath, issue ossIssue, fileContent []byte) *ast.Node {
 	var finder RangeFinder
 
 	if len(fileContent) == 0 {
 		return nil
 	}
 
+	pathAsString := string(path)
 	switch issue.PackageManager {
 	case "npm":
-		if packageScanSupportedExtensions[filepath.Ext(path)] {
+		if packageScanSupportedExtensions[filepath.Ext(pathAsString)] {
 			finder = &htmlRangeFinder{path: path, fileContent: fileContent, config: c}
 		} else {
 			finder = &NpmRangeFinder{uri: path, fileContent: fileContent}
 		}
 	case "maven":
-		if strings.HasSuffix(path, "pom.xml") {
+		if strings.HasSuffix(pathAsString, "pom.xml") {
 			finder = &mavenRangeFinder{path: path, fileContent: fileContent, c: c}
 		} else {
 			finder = &DefaultFinder{path: path, fileContent: fileContent, c: c}
@@ -69,13 +70,13 @@ func getDependencyNode(c *config.Config, path string, issue ossIssue, fileConten
 	// we go recurse to the parent of it
 	if currentDep == nil && parsedTree != nil && parsedTree.ParentTree != nil {
 		tree := parsedTree.ParentTree
-		currentDep = getDependencyNode(c, tree.Document, issue, []byte(tree.Root.Value))
+		currentDep = getDependencyNode(c, types.FilePath(tree.Document), issue, []byte(tree.Root.Value))
 	}
 
 	// recurse until a dependency with version was found
 	if currentDep != nil && currentDep.Value == "" && currentDep.Tree != nil && currentDep.Tree.ParentTree != nil {
 		tree := currentDep.Tree.ParentTree
-		currentDep.LinkedParentDependencyNode = getDependencyNode(c, tree.Document, issue, []byte(tree.Root.Value))
+		currentDep.LinkedParentDependencyNode = getDependencyNode(c, types.FilePath(tree.Document), issue, []byte(tree.Root.Value))
 	}
 
 	return currentDep
@@ -91,13 +92,13 @@ func (f *DefaultFinder) find(introducingPackageName string, introducingVersion s
 		if strings.Contains(line, introducingPackageName) {
 			// length of line is ignoring some trailing characters
 			endChar := len(strings.TrimRight(line, " \"',)"))
-			r := snyk.Range{
-				Start: snyk.Position{Line: i, Character: strings.Index(line, introducingPackageName)},
-				End:   snyk.Position{Line: i, Character: endChar},
+			r := types.Range{
+				Start: types.Position{Line: i, Character: strings.Index(line, introducingPackageName)},
+				End:   types.Position{Line: i, Character: endChar},
 			}
 			f.c.Logger().Debug().Str("package", introducingPackageName).
 				Str("version", introducingVersion).
-				Str("path", f.path).
+				Str("path", string(f.path)).
 				Interface("range", r).Msg("found range")
 			return &ast.Node{Line: r.Start.Line, StartChar: r.Start.Character, EndChar: r.End.Character}, nil
 		}

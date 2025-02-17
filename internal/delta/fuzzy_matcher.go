@@ -24,6 +24,8 @@ import (
 
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var _ Matcher = (*FuzzyMatcher)(nil)
@@ -115,7 +117,7 @@ func findMatches(currentIssue Identifiable, index int, baseIssues []Identifiable
 	similarIssues := make(IssueConfidenceList, 0)
 
 	for _, baseIssue := range baseIssues {
-		if baseIssue.RuleId() != currentIssue.RuleId() {
+		if baseIssue.GetRuleID() != currentIssue.GetRuleID() {
 			continue
 		}
 
@@ -205,10 +207,10 @@ func filePositionDistance(baseIssue, currentIssue Identifiable) float64 {
 		return 0
 	}
 
-	ds := checkDirs(basePathable.Path(), currentPathable.Path())
-	fns := fileNameSimilarity(basePathable.Path(), currentPathable.Path())
-	fes := fileExtSimilarity(filepath.Ext(basePathable.Path()),
-		filepath.Ext(currentPathable.Path()))
+	ds := checkDirs(basePathable.GetPath(), currentPathable.GetPath())
+	fns := fileNameSimilarity(basePathable.GetPath(), currentPathable.GetPath())
+	fes := fileExtSimilarity(filepath.Ext(string(basePathable.GetPath())),
+		filepath.Ext(string(currentPathable.GetPath())))
 
 	pathSimilarity :=
 		ds*weights.DirSimilarity +
@@ -246,7 +248,7 @@ func matchDistance(baseIssue Identifiable, currentIssue Identifiable) (float64, 
 	return startLineSimilarity, startColumnSimilarity, endColumnSimilarity, endLineSimilarity
 }
 
-func checkDirs(path1, path2 string) float64 {
+func checkDirs(path1, path2 types.FilePath) float64 {
 	if path1 == path2 {
 		return 1
 	}
@@ -254,13 +256,13 @@ func checkDirs(path1, path2 string) float64 {
 	relativePath := relative(path1, path2)
 	relativePathDistance := float64(len(strings.Split(relativePath, "/")))
 
-	longestPossiblePath := math.Max(float64(len(strings.Split(path1, "/"))), float64(len(strings.Split(path2, "/"))))
+	longestPossiblePath := math.Max(float64(len(strings.Split(string(path1), "/"))), float64(len(strings.Split(string(path2), "/"))))
 
 	return 1 - relativePathDistance/longestPossiblePath
 }
 
-func fileNameSimilarity(file1, file2 string) float64 {
-	return strutil.Similarity(file1, file2, metrics.NewLevenshtein())
+func fileNameSimilarity(file1, file2 types.FilePath) float64 {
+	return strutil.Similarity(string(file1), string(file2), metrics.NewLevenshtein())
 }
 
 func similarityToDistance(value1, value2 int) float64 {
@@ -278,8 +280,8 @@ func historicDistance() float64 {
 	return 1
 }
 
-func relative(path1, path2 string) string {
-	res, err := filepath.Rel(path1, path2)
+func relative(path1, path2 types.FilePath) string {
+	res, err := filepath.Rel(string(path1), string(path2))
 	if err != nil {
 		return ""
 	}
