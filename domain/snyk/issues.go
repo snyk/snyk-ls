@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/delta"
@@ -75,153 +76,232 @@ type Issue struct {
 	LessonUrl      string `json:"url"`
 	Fingerprint    string
 	GlobalIdentity string
+	m              sync.RWMutex
 }
 
 func (i *Issue) SetRange(r types.Range) {
+	i.m.Lock()
+	defer i.m.Unlock()
 	i.Range = r
 }
 
 func (i *Issue) GetReferences() []types.Reference {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.References
 }
 
 func (i *Issue) SetCodeActions(actions []types.CodeAction) {
+	i.m.Lock()
+	defer i.m.Unlock()
+
 	i.CodeActions = actions
 }
 
 func (i *Issue) SetCodelensCommands(lenses []types.CommandData) {
+	i.m.Lock()
+	defer i.m.Unlock()
+
 	i.CodelensCommands = lenses
 }
 
 func (i *Issue) GetCodelensCommands() []types.CommandData {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.CodelensCommands
 }
 
 func (i *Issue) GetCodeActions() []types.CodeAction {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.CodeActions
 }
 
 func (i *Issue) GetIssueDescriptionURL() *url.URL {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.IssueDescriptionURL
 }
 
 func (i *Issue) GetEcosystem() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Ecosystem
 }
 
 func (i *Issue) GetCWEs() []string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.CWEs
 }
 
 func (i *Issue) GetCVEs() []string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.CVEs
 }
 
 func (i *Issue) GetIssueType() types.IssueType {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.IssueType
 }
 
 func (i *Issue) GetLessonUrl() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.LessonUrl
 }
 
-func (i *Issue) SetLessonUrl(url string) {
-	i.LessonUrl = url
-}
-
-func (i *Issue) SetAdditionalData(data types.IssueAdditionalData) {
-	i.AdditionalData = data
-}
-
 func (i *Issue) GetID() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.ID
 }
 
 func (i *Issue) GetDescription() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Message
 }
 
 func (i *Issue) GetRange() types.Range {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Range
 }
 
 func (i *Issue) GetMessage() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Message
 }
 
 func (i *Issue) GetFormattedMessage() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.FormattedMessage
 }
 
 func (i *Issue) GetAffectedFilePath() types.FilePath {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.AffectedFilePath
 }
 
 func (i *Issue) GetIsIgnored() bool {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.IsIgnored
 }
 
 func (i *Issue) GetSeverity() types.Severity {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Severity
 }
 
 func (i *Issue) GetIgnoreDetails() *types.IgnoreDetails {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.IgnoreDetails
 }
 
 func (i *Issue) GetProduct() product.Product {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Product
 }
 
 func (i *Issue) GetAdditionalData() types.IssueAdditionalData {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.AdditionalData
 }
 
+func (i *Issue) SetLessonUrl(url string) {
+	i.m.Lock()
+	defer i.m.Unlock()
+	i.LessonUrl = url
+}
+
+func (i *Issue) SetAdditionalData(data types.IssueAdditionalData) {
+	i.m.Lock()
+	defer i.m.Unlock()
+	i.AdditionalData = data
+}
+
 func (i *Issue) StartLine() int {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Range.Start.Line
 }
 
 func (i *Issue) EndLine() int {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Range.End.Line
 }
 
 func (i *Issue) StartColumn() int {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Range.Start.Character
 }
 
 func (i *Issue) EndColumn() int {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Range.End.Character
 }
 
 func (i *Issue) GetIsNew() bool {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.IsNew
 }
 
 func (i *Issue) SetIsNew(isNew bool) {
+	i.m.Lock()
+	defer i.m.Unlock()
 	i.IsNew = isNew
 }
 
 func (i *Issue) GetGlobalIdentity() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.GlobalIdentity
 }
 
 func (i *Issue) SetGlobalIdentity(globalIdentity string) {
+	i.m.Lock()
+	defer i.m.Unlock()
+
 	i.GlobalIdentity = globalIdentity
 }
 
 func (i *Issue) GetPath() types.FilePath {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.AffectedFilePath
 }
 
 func (i *Issue) GetFingerprint() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Fingerprint
 }
 
 func (i *Issue) SetFingerPrint(fingerprint string) {
+	i.m.Lock()
+	defer i.m.Unlock()
+
 	i.Fingerprint = fingerprint
 }
 
 func (i *Issue) GetRuleID() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.ID
 }
 
@@ -293,7 +373,7 @@ func (i *Issue) GetFilterableIssueType() product.FilterableIssueType {
 }
 
 func (i *Issue) String() string {
-	return fmt.Sprintf("%s, ID: %s, Range: %s", i.AffectedFilePath, i.ID, i.Range)
+	return fmt.Sprintf("%s, ID: %s, Range: %s", i.GetAffectedFilePath(), i.GetID(), i.GetRange())
 }
 
 type Severity int8
@@ -342,4 +422,11 @@ func (i *Issue) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("unknown additional data type: %s", additionalType.Type)
 	}
 	return nil
+}
+
+func (i *Issue) SetID(id string) {
+	i.m.Lock()
+	defer i.m.Unlock()
+
+	i.ID = id
 }

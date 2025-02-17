@@ -1,3 +1,6 @@
+//go:build !race
+// +build !race
+
 /*
  * © 2025 Snyk Limited
  *
@@ -30,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
+// Test_WorkspaceScan does not run in race mode, due to races in the underlying framework
 func Test_WorkspaceScan(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 	w := workspace.New(c, nil, nil, nil, nil, nil, nil, nil)

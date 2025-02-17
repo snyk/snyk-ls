@@ -199,6 +199,7 @@ type Config struct {
 	hoverVerbosity                   int
 	offline                          bool
 	ws                               types.Workspace
+	mcpServerEnabled                 bool
 }
 
 func CurrentConfig() *Config {
@@ -1212,4 +1213,11 @@ func (c *Config) SetWorkspace(workspace types.Workspace) {
 	defer c.m.Unlock()
 
 	c.ws = workspace
+}
+
+func (c *Config) McpServerEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.mcpServerEnabled
 }

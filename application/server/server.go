@@ -60,8 +60,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-var mcpServer *mcp2.McpLLMBinding
-
 func Start(c *config.Config) {
 	var srv *jrpc2.Server
 
@@ -80,9 +78,27 @@ func Start(c *config.Config) {
 	di.Init()
 	initHandlers(srv, handlers, c)
 
-	logger.Info().Msg("Starting up...")
-	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
+	// start mcp server
+	logger.Info().Msg("Starting up MCP Server...")
+	var mcpServer *mcp2.McpLLMBinding
+	go func() {
+		mcpServer = mcp2.NewMcpServer(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()))
+		err := mcpServer.Start()
+		if err != nil {
+			c.Logger().Err(err).Msg("failed to start mcp server")
+		}
+	}()
 
+	// shutdown mcp server once the lsp returns from wait status
+	defer func() {
+		if mcpServer != nil {
+			logger.Info().Msg("Shutting down MCP Server...")
+			mcpServer.Shutdown(context.Background())
+		}
+	}()
+
+	logger.Info().Msg("Starting up Language Server...")
+	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
 	status := srv.WaitStatus()
 	if status.Err != nil {
 		logger.Err(status.Err).Msg("server stopped because of error")
@@ -384,6 +400,8 @@ func getDownloadURL(c *config.Config) (u string) {
 	}
 }
 
+var mcpHttpServer *mcp2.McpLLMBinding
+
 func initializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		// Logging these messages only after the client has been initialized.
@@ -446,15 +464,6 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		}
 
 		logger.Debug().Msg("trying to get trusted status for untrusted folders")
-
-		go func() {
-			mcpServer = mcp2.NewMcpServer(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()))
-			err := mcpServer.Start()
-			if err != nil {
-				c.Logger().Err(err).Msg("failed to start mcp server")
-			}
-		}()
-
 		return nil, nil
 	})
 }
@@ -626,8 +635,8 @@ func shutdown() jrpc2.Handler {
 
 		disposeProgressListener()
 		di.Notifier().DisposeListener()
-		if mcpServer != nil {
-			mcpServer.Shutdown(context.Background())
+		if mcpHttpServer != nil {
+			mcpHttpServer.Shutdown(context.Background())
 		}
 		return nil, nil
 	})

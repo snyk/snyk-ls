@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/exp/maps"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/oss/parser"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -134,10 +134,18 @@ func TestCLIScanner_updateCachedDependencies_updates_range_of_issues_in_cache(t 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, updatedDependencies)
 
-	// we need to copy the cache to a different map because updateCachedDependencies will
-	// change the range of the issues in the map, which is a pointer
+	// we need to create new instances to be able to compare
 	oldPackageCache := make(map[string][]types.Issue)
-	maps.Copy(oldPackageCache, cliScanner.packageIssueCache)
+	for path, issues := range cliScanner.packageIssueCache {
+		newIssues := make([]types.Issue, len(issues))
+		for i, issue := range issues {
+			myBackupIssue := snyk.Issue{}
+			myBackupIssue.SetRange(issue.GetRange())
+			myBackupIssue.SetID(issue.GetID())
+			newIssues[i] = &myBackupIssue
+		}
+		oldPackageCache[path] = newIssues
+	}
 
 	assert.Len(t, cliScanner.updateCachedDependencies(updatedDependencies), 1)
 
