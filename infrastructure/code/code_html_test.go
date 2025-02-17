@@ -134,7 +134,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:        "java/DontUsePrintStackTrace",
 		Severity:  2,
 		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
@@ -161,7 +161,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(&issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 0")
@@ -181,7 +181,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:        "scala/DontUsePrintStackTrace",
 		Severity:  2,
 		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
@@ -200,7 +200,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(&issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// assert Ignore Details section
 	// Asserting an expired date to prevent the test from breaking in the future as the current date changes
@@ -216,7 +216,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:        "java/DontUsePrintStackTrace",
 		Severity:  2,
 		CWEs:      []string{"CWE-123", "CWE-456"},
@@ -242,7 +242,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(&issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// assert Ignore Details section - Ignore link must be the custom endpoint
 	assert.Contains(t, codePanelHtml, customEndpoint)
@@ -287,7 +287,7 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		Range:     getIssueRange(),
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		ID:        "go/NoHardcodedCredentials/test",
@@ -308,7 +308,7 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(&issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, "--default-font: \"SF Pro Text\", \"Segoe UI\", \"Ubuntu\", Geneva, Verdana, Tahoma, sans-serif;\n")
 }
@@ -405,7 +405,7 @@ func Test_Prepare_DataFlowTable(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",
 			DataFlow:           dataFlow,

@@ -112,7 +112,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]t
 
 	t.ReportWithMessage(40, string("Snyk Code analysis for "+b.rootPath+", Retrieving results..."))
 
-	c := config.CurrentConfig()
+	c := b.issueEnhancer.c
 	analysisOptions := AnalysisOptions{
 		bundleHash:   b.BundleHash,
 		shardKey:     getShardKey(b.rootPath, c.Token()),

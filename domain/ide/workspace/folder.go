@@ -90,7 +90,7 @@ func (f *Folder) Issue(key string) types.Issue {
 		return true
 	})
 
-	if foundIssue.GetID() == "" {
+	if foundIssue == nil || foundIssue.GetID() == "" {
 		if issueProvider, ok := f.scanner.(snyk.IssueProvider); ok {
 			foundIssue = issueProvider.Issue(key)
 		}

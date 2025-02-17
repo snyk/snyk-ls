@@ -48,8 +48,7 @@ func NewExtensionExecutor(c *config.Config) Executor {
 
 func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error) {
 	method := "ExtensionExecutor.Execute"
-	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd[1:]).Str("workingDir",
-		string(workingDir)).Msg("calling legacycli extension")
+	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd[1:]).Str("workingDir", string(workingDir)).Msg("calling legacycli extension")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(c.cliTimeout))
@@ -74,7 +73,7 @@ func (c ExtensionExecutor) doExecute(_ context.Context, cmd []string, workingDir
 
 	legacyCLI := workflow.NewWorkflowIdentifier("legacycli")
 	legacyCLIConfig := config.CurrentConfig().Engine().GetConfiguration().Clone()
-	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
+	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, string(workingDir))
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
 	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))

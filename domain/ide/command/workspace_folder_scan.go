@@ -45,11 +45,12 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error)
 		cmd.c.Logger().Warn().Str("method", method).Err(err).Send()
 		return nil, err
 	}
-	path, ok := args[0].(types.FilePath)
+	path, ok := args[0].(string)
+	filePath := types.FilePath(path)
 	if !ok {
 		return nil, fmt.Errorf("received WorkspaceFolderScanCommand with invalid path")
 	}
-	f := w.GetFolderContaining(path)
+	f := w.GetFolderContaining(filePath)
 	if f == nil {
 		err := errors.New("received WorkspaceFolderScanCommand with path not in workspace")
 		cmd.c.Logger().Warn().Str("method", method).Err(err).Send()

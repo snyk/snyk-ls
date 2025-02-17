@@ -70,7 +70,7 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	// Compare
 	assert.Equal(t, expectedPayload, actualData)
 	assert.Equal(t, expectedSnykCommand, actualSnykCommand)
-	assert.Equal(t, expectedWorkingDir, actualWorkingDir)
+	assert.Equal(t, string(expectedWorkingDir), actualWorkingDir)
 }
 
 func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {

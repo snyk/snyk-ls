@@ -378,7 +378,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	// execute scan cli command
 	response, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   types.ExecuteCLICommand,
-		Arguments: []any{folderGoof.Path(), "test", "--json"},
+		Arguments: []any{string(folderGoof.Path()), "test", "--json"},
 	})
 	require.NoError(t, err)
 
@@ -588,13 +588,13 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 		}
 		response, err := loc.Client.Call(context.Background(), "textDocument/codeAction", params)
 		assert.NoError(t, err)
-		var actions []types.CodeAction
+		var actions []types.LSPCodeAction
 		err = response.UnmarshalResult(&actions)
 		assert.NoError(t, err)
 
 		quickFixCount := 0
 		for _, action := range actions {
-			isQuickfixAction := strings.Contains(action.GetTitle(), "Upgrade to")
+			isQuickfixAction := strings.Contains(action.Title, "Upgrade to")
 			if isQuickfixAction {
 				quickFixCount++
 				atLeastOneQuickfixActionFound = true
@@ -602,14 +602,14 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 
 			// "cfenv": "^1.0.4", 1 fixable issue
 			if issue.Range.Start.Line == 19 && isQuickfixAction {
-				assert.Contains(t, action.GetTitle(), "and fix 1 issue")
-				assert.NotContains(t, action.GetTitle(), "and fix 1 issues")
+				assert.Contains(t, action.Title, "and fix 1 issue")
+				assert.NotContains(t, action.Title, "and fix 1 issues")
 			}
 
 			// "tap": "^11.1.3", 12 fixable, 11 unfixable
 			if issue.Range.Start.Line == 46 && isQuickfixAction {
-				assert.Contains(t, action.GetTitle(), "and fix ")
-				assert.Contains(t, action.GetTitle(), " issues")
+				assert.Contains(t, action.Title, "and fix ")
+				assert.Contains(t, action.Title, " issues")
 			}
 		}
 		// no issues should have more than one quickfix

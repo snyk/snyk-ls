@@ -188,11 +188,11 @@ func TestCreateBundle(t *testing.T) {
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
 
 		// Arrange
-		filesRelPaths := []string{
+		filesRelPaths := []types.FilePath{
 			"path/to/file1.java",
 			"path/with spaces/file2.java",
 		}
-		expectedPaths := []string{
+		expectedPaths := []types.FilePath{
 			"path/to/file1.java",
 			"path/with%20spaces/file2.java",
 		}
@@ -201,7 +201,7 @@ func TestCreateBundle(t *testing.T) {
 		tempDir := types.FilePath(t.TempDir())
 		var filesFullPaths []string
 		for _, fileRelPath := range filesRelPaths {
-			file := filepath.Join(string(tempDir), fileRelPath)
+			file := filepath.Join(string(tempDir), string(fileRelPath))
 			filesFullPaths = append(filesFullPaths, file)
 			_ = os.MkdirAll(filepath.Dir(file), 0700)
 			err := os.WriteFile(file, []byte("some content so the file won't be skipped"), 0600)
@@ -257,6 +257,7 @@ func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient,
 func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 	t.Helper()
 	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
 	snykCodeMock := &FakeSnykCodeClient{C: c}
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.
@@ -376,7 +377,7 @@ func Test_Scan(t *testing.T) {
 		// Arrange
 		snykCodeMock, scanner := setupTestScanner(t)
 		wg := sync.WaitGroup{}
-		changedFilesRelPaths := []string{ // File paths relative to the repo base
+		changedFilesRelPaths := []types.FilePath{ // File paths relative to the repo base
 			"file0.go",
 			"file1.go",
 			"file2.go",
@@ -386,7 +387,7 @@ func Test_Scan(t *testing.T) {
 		tempDir := t.TempDir()
 		var changedFilesAbsPaths []types.FilePath
 		for _, file := range changedFilesRelPaths {
-			fullPath := filepath.Join(tempDir, file)
+			fullPath := filepath.Join(tempDir, string(file))
 			err := os.MkdirAll(filepath.Dir(fullPath), 0755)
 			assert.Nil(t, err)
 			err = os.WriteFile(fullPath, []byte("func main() {}"), 0644)
@@ -408,9 +409,9 @@ func Test_Scan(t *testing.T) {
 
 		// Assert
 		allCalls := snykCodeMock.GetAllCalls(RunAnalysisOperation)
-		communicatedChangedFiles := make([]string, 0)
+		communicatedChangedFiles := make([]types.FilePath, 0)
 		for _, call := range allCalls {
-			params := call[1].([]string)
+			params := call[1].([]types.FilePath)
 			communicatedChangedFiles = append(communicatedChangedFiles, params...)
 		}
 
@@ -454,7 +455,7 @@ func Test_Scan(t *testing.T) {
 		// Assert
 		params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
 		assert.NotNil(t, params)
-		assert.Equal(t, 0, len(params[1].([]string)))
+		assert.Equal(t, 0, len(params[1].([]types.FilePath)))
 	})
 
 	t.Run("Scans run sequentially for the same folder", func(t *testing.T) {
@@ -692,11 +693,11 @@ func Test_IsEnabled(t *testing.T) {
 	)
 }
 
-func autofixSetupAndCleanup(t *testing.T) {
+func autofixSetupAndCleanup(t *testing.T, c *config.Config) {
 	t.Helper()
 	resetCodeSettings()
 	t.Cleanup(resetCodeSettings)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c.SetSnykCodeEnabled(true)
 	getCodeSettings().isAutofixEnabled.Set(false)
 }
 
@@ -707,21 +708,13 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
 
-	c := testutil.UnitTest(t)
-
-	issueEnhancer := IssueEnhancer{
-		SnykCode:     &FakeSnykCodeClient{C: c},
-		instrumentor: NewCodeInstrumentor(),
-		c:            c,
-	}
-
 	t.Run("should not add autofix after analysis when not enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		channel := make(chan types.ProgressParams, 10000)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
 
-		autofixSetupAndCleanup(t)
+		autofixSetupAndCleanup(t, c)
 
 		snykCodeMock := &FakeSnykCodeClient{C: c}
 		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
@@ -747,7 +740,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
 
-		autofixSetupAndCleanup(t)
+		autofixSetupAndCleanup(t, c)
 		getCodeSettings().isAutofixEnabled.Set(true)
 
 		snykCodeMock := &FakeSnykCodeClient{C: c}
@@ -772,10 +765,15 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 
 	t.Run("should run autofix after analysis when is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		issueEnhancer := IssueEnhancer{
+			SnykCode:     &FakeSnykCodeClient{C: c},
+			instrumentor: NewCodeInstrumentor(),
+			c:            c,
+		}
 		channel := make(chan types.ProgressParams, 10000)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
-		autofixSetupAndCleanup(t)
+		autofixSetupAndCleanup(t, c)
 		getCodeSettings().isAutofixEnabled.Set(true)
 
 		snykCodeMock := &FakeSnykCodeClient{C: c}
@@ -789,7 +787,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		files := []string{string(filePath)}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[types.FilePath]bool{}, testTracker)
+		issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), path, map[types.FilePath]bool{}, testTracker)
 
 		assert.Len(t, issues[0].GetCodeActions(), 2)
 

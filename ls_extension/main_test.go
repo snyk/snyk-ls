@@ -3,10 +3,9 @@ package ls_extension
 import (
 	"testing"
 
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/types"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/application/config"
 
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -14,7 +13,7 @@ import (
 
 func Test_ExtensionEntryPoint(t *testing.T) {
 	expectedLoglevel := "trace"
-	expectedLogPath := types.FilePath(t.TempDir())
+	expectedLogPath := t.TempDir()
 
 	engine := app.CreateAppEngineWithOptions()
 

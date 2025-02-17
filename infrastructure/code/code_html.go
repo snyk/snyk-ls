@@ -45,7 +45,7 @@ type IgnoreDetail struct {
 
 type DataFlowItem struct {
 	Number         int
-	FilePath       types.FilePath
+	FilePath       string
 	StartLine      int
 	EndLine        int
 	StartCharacter int
@@ -124,14 +124,14 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
 	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
-	data := map[string]interface{}{
+	data := map[string]any{
 		"IssueTitle":         additionalData.Title,
 		"IssueMessage":       additionalData.Message,
 		"IssueType":          getIssueType(additionalData),
 		"SeverityIcon":       html.SeverityIcon(issue),
 		"CWEs":               issue.GetCWEs(),
 		"IssueOverview":      html.MarkdownToHTML(additionalData.Text),
-		"GetIsIgnored":       issue.GetIsIgnored(),
+		"IsIgnored":          issue.GetIsIgnored(),
 		"DataFlow":           additionalData.DataFlow,
 		"DataFlowKeys":       dataFlowKeys,
 		"DataFlowTable":      dataFlowTable,
@@ -153,8 +153,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"ArrowRightDark":     html.ArrowRightDark(),
 		"ArrowRightLight":    html.ArrowRightLight(),
 		"FileIcon":           html.FileIcon(),
-		"FolderPath":         folderPath,
-		"FilePath":           issue.GetAffectedFilePath(),
+		"FolderPath":         string(folderPath),
+		"FilePath":           string(issue.GetAffectedFilePath()),
 		"IssueId":            issue.GetAdditionalData().GetKey(),
 		"Styles":             template.CSS(panelStylesTemplate),
 		"Scripts":            template.JS(customScripts),
@@ -202,18 +202,18 @@ func parseCategory(category string) string {
 	return category
 }
 
-func prepareDataFlowTable(issue snyk.CodeIssueData) ([]string, map[types.FilePath][]DataFlowItem) {
-	items := make(map[types.FilePath][]DataFlowItem)
+func prepareDataFlowTable(issue snyk.CodeIssueData) ([]string, map[string][]DataFlowItem) {
+	items := make(map[string][]DataFlowItem)
 	var dataFlowKeys []string
 	for i, flow := range issue.DataFlow {
 		fileName := filepath.Base(string(flow.FilePath))
-		if items[types.FilePath(fileName)] == nil {
+		if items[fileName] == nil {
 			dataFlowKeys = append(dataFlowKeys, fileName)
-			items[types.FilePath(fileName)] = []DataFlowItem{}
+			items[fileName] = []DataFlowItem{}
 		}
-		items[types.FilePath(fileName)] = append(items[types.FilePath(fileName)], DataFlowItem{
+		items[fileName] = append(items[fileName], DataFlowItem{
 			Number:         i + 1,
-			FilePath:       flow.FilePath,
+			FilePath:       string(flow.FilePath),
 			StartLine:      flow.FlowRange.Start.Line,
 			EndLine:        flow.FlowRange.End.Line,
 			StartCharacter: flow.FlowRange.Start.Character,

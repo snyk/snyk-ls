@@ -234,7 +234,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, settings.CliPath, c.CliSettings().Path())
 		assert.Equal(t, types.DefaultSeverityFilter(), c.FilterSeverity())
-		assert.Subset(t, []string{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
+		assert.Subset(t, []types.FilePath{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
 		assert.Equal(t, settings.OsPlatform, c.OsPlatform())
 		assert.Equal(t, settings.OsArch, c.OsArch())
 		assert.Equal(t, settings.RuntimeName, c.RuntimeName())
@@ -313,8 +313,8 @@ func Test_UpdateSettings(t *testing.T) {
 
 		UpdateSettings(c, types.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
 
-		assert.Contains(t, c.TrustedFolders(), "/a/b")
-		assert.Contains(t, c.TrustedFolders(), "/b/c")
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/a/b"))
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/b/c"))
 	})
 
 	t.Run("manage binaries automatically", func(t *testing.T) {

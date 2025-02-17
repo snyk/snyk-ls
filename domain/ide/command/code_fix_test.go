@@ -146,7 +146,8 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
 
-	filePath := sampleArgs[1]
+	filePath := sampleArgs[1].(string)
+	path := types.FilePath(filePath)
 	issueRange, err := cmd.toRange(sampleArgs[2])
 	require.NoError(t, err)
 	mockEdit, deferredMockEdit := setupMockEdit()
@@ -156,7 +157,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 	}
 	issues := setupSampleIssues(issueRange, codeAction, cmd.command)
 	issueMap := snyk.IssuesByFile{
-		filePath.(types.FilePath): issues,
+		path: issues,
 	}
 
 	issueProviderMock := new(issueProviderMock)
@@ -184,7 +185,8 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
 
-	filePath := sampleArgs[1]
+	filePath := sampleArgs[1].(string)
+	path := types.FilePath(filePath)
 	rangeDto, ok := sampleArgs[2].(RangeDto)
 	require.True(t, ok)
 	issueRange, err := cmd.toRange(rangeDto)
@@ -198,7 +200,7 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	}
 	issues := setupSampleIssues(issueRange, codeAction, cmd.command)
 	issueMap := snyk.IssuesByFile{
-		filePath.(types.FilePath): issues,
+		path: issues,
 	}
 
 	issueProviderMock := new(issueProviderMock)

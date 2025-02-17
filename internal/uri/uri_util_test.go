@@ -33,9 +33,10 @@ import (
 var dir, _ = os.Getwd()
 
 func TestPathFromUri(t *testing.T) {
-	u := PathToUri(types.FilePath(dir + "/asdf"))
+	testPath := filepath.Join(dir, "asdf")
+	u := PathToUri(types.FilePath(testPath))
 	u = lsp.DocumentURI(strings.Replace(string(u), "file://", "file:", 1))
-	assert.Equal(t, filepath.Clean(dir+"/asdf"), PathFromUri(u)) // Eclipse case
+	assert.Equal(t, filepath.Clean(testPath), string(PathFromUri(u))) // Eclipse case
 }
 
 func TestPathFromUri_UNC(t *testing.T) {

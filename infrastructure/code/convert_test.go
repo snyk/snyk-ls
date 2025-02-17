@@ -638,7 +638,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 		issue.GetMessage())
 	assert.Equal(t, types.CodeQualityIssue, issue.GetIssueType())
 	assert.Equal(t, types.Low, issue.GetSeverity())
-	assert.Equal(t, path, issue.GetAffectedFilePath())
+	assert.Equal(t, types.FilePath(path), issue.GetAffectedFilePath())
 	assert.Equal(t, types.Range{Start: types.Position{Line: 5, Character: 6}, End: types.Position{Line: 5, Character: 6}}, issue.GetRange())
 	assert.Equal(t, product.ProductCode, issue.GetProduct())
 	assert.Equal(t, issueDescriptionURL, issue.GetIssueDescriptionURL())

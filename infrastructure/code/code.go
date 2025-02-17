@@ -323,7 +323,7 @@ func getReferencedFiles(issues []types.Issue) []types.FilePath {
 			continue
 		}
 		for _, dataFlow := range codeIssueData.DataFlow {
-			referencedFiles = append(referencedFiles, dataFlow.FilePath)
+			referencedFiles = append(referencedFiles, types.FilePath(dataFlow.FilePath))
 		}
 	}
 	return referencedFiles

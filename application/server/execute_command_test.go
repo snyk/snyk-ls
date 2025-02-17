@@ -187,7 +187,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		}
 
 		assert.Len(t, c.TrustedFolders(), 2)
-		assert.Contains(t, c.TrustedFolders(), "/path/to/folder1", "/path/to/folder2")
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder1"))
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder2"))
 	})
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
@@ -204,7 +205,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Len(t, config.CurrentConfig().TrustedFolders(), 2)
-		assert.Contains(t, config.CurrentConfig().TrustedFolders(), "/path/to/folder1", "/path/to/folder2")
+		assert.Len(t, c.TrustedFolders(), 2)
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder1"))
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder2"))
 	})
 }

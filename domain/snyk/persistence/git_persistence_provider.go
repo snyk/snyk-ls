@@ -28,6 +28,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -187,13 +188,16 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 		return nil, err
 	}
 
-	var results []types.Issue
-	err = json.Unmarshal(content, &results)
-
+	var snykIssues []snyk.Issue
+	err = json.Unmarshal(content, &snykIssues)
 	if err != nil {
 		return nil, err
 	}
 
+	var results []types.Issue
+	for _, issue := range snykIssues {
+		results = append(results, &issue)
+	}
 	return results, nil
 }
 

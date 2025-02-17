@@ -35,8 +35,8 @@ import (
 
 func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
-	const trustedDummy = "trustedDummy"
-	const untrustedDummy = "untrustedDummy"
+	const trustedDummy = types.FilePath("trustedDummy")
+	const untrustedDummy = types.FilePath("untrustedDummy")
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
@@ -45,8 +45,8 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, scanStateAggregator)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]types.FilePath{trustedDummy})
-	w.AddFolder(NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator))
-	w.AddFolder(NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator))
+	w.AddFolder(NewFolder(c, trustedDummy, string(trustedDummy), sc, nil, scanNotifier, notifier, nil, scanStateAggregator))
+	w.AddFolder(NewFolder(c, untrustedDummy, string(untrustedDummy), sc, nil, scanNotifier, notifier, nil, scanStateAggregator))
 
 	trusted, untrusted := w.GetFolderTrust()
 

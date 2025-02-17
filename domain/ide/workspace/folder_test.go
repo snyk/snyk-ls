@@ -348,22 +348,26 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 	// arrange
 	filePath, folderPath := types.FilePath("test/path"), types.FilePath("test")
 
-	criticalIssue := snyk.Issue{AffectedFilePath: filePath, Severity: types.Critical,
-		Product: product.ProductOpenSource, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}}
+	criticalIssue := &snyk.Issue{
+		AffectedFilePath: filePath,
+		Severity:         types.Critical,
+		Product:          product.ProductOpenSource,
+		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
+	}
 
-	highIssue := snyk.Issue{
+	highIssue := &snyk.Issue{
 		AffectedFilePath: filePath,
 		Severity:         types.High,
 		Product:          product.ProductOpenSource,
 		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
 	}
-	mediumIssue := snyk.Issue{
+	mediumIssue := &snyk.Issue{
 		AffectedFilePath: filePath,
 		Severity:         types.Medium,
 		Product:          product.ProductOpenSource,
 		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
 	}
-	lowIssue := snyk.Issue{
+	lowIssue := &snyk.Issue{
 		AffectedFilePath: filePath,
 		Severity:         types.Low,
 		Product:          product.ProductOpenSource,
@@ -372,16 +376,16 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 
 	scannerRecorder := scanner.NewTestScanner()
 	scannerRecorder.Issues = []types.Issue{
-		&criticalIssue,
-		&highIssue,
-		&mediumIssue,
-		&lowIssue,
+		criticalIssue,
+		highIssue,
+		mediumIssue,
+		lowIssue,
 	}
 
 	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
 	ctx := context.Background()
 
-	config.CurrentConfig().SetSeverityFilter(types.NewSeverityFilter(true, true, false, false))
+	c.SetSeverityFilter(types.NewSeverityFilter(true, true, false, false))
 
 	// act
 	f.ScanFile(ctx, filePath)
