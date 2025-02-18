@@ -239,7 +239,17 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 	}
 }
 
-func NewFolder(c *config.Config, path types.FilePath, name string, scanner scanner.Scanner, hoverService hover.Service, scanNotifier scanner.ScanNotifier, notifier noti.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator) *Folder {
+func NewFolder(
+	c *config.Config,
+	path types.FilePath,
+	name string,
+	scanner scanner.Scanner,
+	hoverService hover.Service,
+	scanNotifier scanner.ScanNotifier,
+	notifier noti.Notifier,
+	scanPersister persistence.ScanSnapshotPersister,
+	scanStateAggregator scanstates.Aggregator,
+) *Folder {
 	folder := Folder{
 		scanner:             scanner,
 		path:                types.FilePath(strings.TrimSuffix(string(path), "/")),
@@ -577,7 +587,10 @@ func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.Filterab
 	return deltaList
 }
 
-func (f *Folder) FilterIssues(issues snyk.IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.IssuesByFile {
+func (f *Folder) FilterIssues(
+	issues snyk.IssuesByFile,
+	supportedIssueTypes map[product.FilterableIssueType]bool,
+) snyk.IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 	filteredIssues := snyk.IssuesByFile{}
 
