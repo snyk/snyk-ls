@@ -969,7 +969,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
-	assert.Equal(t, len(issueList), 0)
+	assert.Len(t, issueList, 0, "no issues expected, as delta and no new change")
 	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
