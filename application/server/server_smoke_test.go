@@ -932,7 +932,13 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	}, maxIntegTestDuration, 5*time.Second)
 
 	assert.True(t, len(issueList) > 0)
-	assert.Contains(t, issueList[0].FilePath, fileWithNewVulns)
+	for _, issue := range issueList {
+		issuePath := filepath.Clean(string(issue.FilePath))
+		newVulnFilePath := filepath.Clean(filepath.Join(cloneTargetDirString, fileWithNewVulns))
+		if issue.IsNew {
+			assert.Equal(t, newVulnFilePath, issuePath, "should not be in delta list: %s", string(issue.FilePath))
+		}
+	}
 	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
