@@ -19,7 +19,6 @@ package code
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net/url"
 	"os"
 	"regexp"
@@ -559,27 +558,76 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([
 }
 
 // CreateAutofixWorkspaceEdit turns the returned fix into an edit.
-func CreateAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
-	fileContent, err := os.ReadFile(absoluteFilePath)
-	if err != nil {
-		return edit
+func CreateAutofixWorkspaceEdit(absoluteFilePath string, fixDiff string) (edit snyk.WorkspaceEdit) {
+	// TODO - could we parse this out of the diff instead?
+	//fileContent, err := os.ReadFile(absoluteFilePath)
+	//if err != nil {
+	//	return edit
+	//}
+
+	// TODO sanitise diff? Can we make assumptions on the line format?
+	var hunkLine = 0
+	var textEdits []snyk.TextEdit
+
+	//Loop over the diff
+	for _, line := range strings.Split(fixDiff, "\n") {
+		if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") {
+			// TODO - Could sanity check that A and B are the same file, and/or parse out the filename here
+			continue // We ignore header lines
+		} else if strings.HasPrefix(line, "@@") {
+			r := regexp.MustCompile(`@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@`)
+			matches := r.FindStringSubmatch(line)
+			if matches == nil {
+				return edit
+			}
+
+			hunkLine, _ = strconv.Atoi(matches[1])
+			hunkLine -= 1 // TextEdit range is 0-indexed, whereas LSP diff is 1-indexed.
+
+		} else if strings.HasPrefix(line, "-") {
+			currentTextEdit := snyk.TextEdit{
+				Range: snyk.Range{
+					Start: snyk.Position{
+						Line:      hunkLine,
+						Character: 0,
+					},
+					End: snyk.Position{
+						// TODO - will this fail if there is no newline at the end of the file? Should we calculate line length instead?
+						Line:      hunkLine + 1,
+						Character: 0,
+					},
+				},
+				NewText: "", // Initialise to a blank string to allow for deletions. Any additions will be populated below.
+				//FullText: string(fileContent),
+			}
+
+			textEdits = append(textEdits, currentTextEdit)
+			hunkLine += 1
+		} else if strings.HasPrefix(line, "+") {
+			textEdit := snyk.TextEdit{
+				Range: snyk.Range{
+					Start: snyk.Position{
+						Line:      hunkLine,
+						Character: 0,
+					},
+					End: snyk.Position{
+						Line:      hunkLine,
+						Character: 0,
+					},
+				},
+				NewText: strings.TrimPrefix(line, "+") + "\n",
+				//FullText: string(fileContent),
+			}
+
+			textEdits = append(textEdits, textEdit)
+		} else if strings.HasPrefix(line, " ") {
+			hunkLine += 1
+		}
 	}
-	singleTextEdit := snyk.TextEdit{
-		Range: snyk.Range{
-			// TODO(alex.gronskiy): should be changed to an actual hunk-like edit instead of
-			// this "replace-the-whole-file" strategy
-			Start: snyk.Position{
-				Line:      0,
-				Character: 0},
-			End: snyk.Position{
-				Line:      math.MaxInt32,
-				Character: 0},
-		},
-		NewText:  fixedSourceCode,
-		FullText: string(fileContent),
-	}
+
 	edit.Changes = make(map[string][]snyk.TextEdit)
-	edit.Changes[absoluteFilePath] = []snyk.TextEdit{singleTextEdit}
+	edit.Changes[absoluteFilePath] = textEdits
+
 	return edit
 }
 

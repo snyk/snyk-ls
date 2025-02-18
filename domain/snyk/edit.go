@@ -35,7 +35,7 @@ type TextEdit struct {
 	 */
 	NewText string
 
-	FullText string
+	//FullText string
 }
 
 func (e *TextEdit) SanitizeRange() {
@@ -48,7 +48,7 @@ func (e *TextEdit) SanitizeRange() {
 
 	posixLineSeparator := "\n"
 	windowsLineSeparator := "\r\n"
-	normalizedText := strings.Replace(e.FullText, windowsLineSeparator, posixLineSeparator, -1)
+	normalizedText := strings.Replace(e.NewText, windowsLineSeparator, posixLineSeparator, -1)
 	lines := strings.Split(normalizedText, posixLineSeparator)
 
 	maxLineIndex := e.ensureGreaterThanZero(len(lines) - 1)

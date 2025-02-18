@@ -315,7 +315,7 @@ func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 			AutofixEdit: snyk.WorkspaceEdit{
 				Changes: map[string][]snyk.TextEdit{
 					options.filePath: {snyk.TextEdit{
-						FullText: FakeAutofixSuggestionNewText,
+						//FullText: FakeAutofixSuggestionNewText,
 						Range: snyk.Range{
 							Start: snyk.Position{Line: 0, Character: 0},
 							End:   snyk.Position{Line: 10000, Character: 0},
@@ -331,7 +331,7 @@ func (f *FakeSnykCodeClient) GetAutofixSuggestions(
 			AutofixEdit: snyk.WorkspaceEdit{
 				Changes: map[string][]snyk.TextEdit{
 					options.filePath: {snyk.TextEdit{
-						FullText: "FAKE_AUTOFIX_UNUSED",
+						//FullText: "FAKE_AUTOFIX_UNUSED",
 						Range: snyk.Range{
 							Start: snyk.Position{Line: 0, Character: 0},
 							End:   snyk.Position{Line: 10000, Character: 0},

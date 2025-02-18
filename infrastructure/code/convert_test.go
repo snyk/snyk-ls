@@ -1127,3 +1127,52 @@ func Test_ParseDateFromString(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateAutofixWorkspaceEdit(t *testing.T) {
+	type args struct {
+		absoluteFilePath string
+		fixDiff          string
+	}
+	fixDiff := `
+--- /Users/andrewrobinsonhodges/Developer/snyk/juice-shop
++++ /Users/andrewrobinsonhodges/Developer/snyk/juice-shop-fixed
+@@ -3,7 +3,8 @@
+  * SPDX-License-Identifier: MIT
+  */
+
+-import fs = require('fs')
++import fs from 'fs'
++import path from 'path'
+ import { type Request, type Response, type NextFunction } from 'express'
+ import { UserModel } from '../models/user'
+ import logger from '../lib/logger'
+@@ -25,7 +26,7 @@
+       if (uploadedFileType !== null && utils.startsWith(uploadedFileType.mime, 'image')) {
+         const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
+         if (loggedInUser) {
+-          fs.open(` + "`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${uploadedFileType.ext}`" + `, 'w', function (err, fd) {
++          fs.open(path.basename(uploadedFile.path), 'w', function (err, fd) {
+             if (err != null) logger.warn('Error opening file: ' + err.message)
+             // @ts-expect-error FIXME buffer has unexpected type
+             fs.write(fd, buffer, 0, buffer.length, null, function (err) {
+
+`
+	tests := []struct {
+		name     string
+		args     args
+		wantEdit snyk.WorkspaceEdit
+	}{
+
+		{"Multi line diff test",
+			args{"test.txt", fixDiff},
+			snyk.WorkspaceEdit{Changes: map[string][]snyk.TextEdit{
+				"test.txt": []snyk.TextEdit{},
+			}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.wantEdit, CreateAutofixWorkspaceEdit(tt.args.absoluteFilePath, tt.args.fixDiff), "CreateAutofixWorkspaceEdit(%v, %v)", tt.args.absoluteFilePath, tt.args.fixDiff)
+		})
+	}
+}

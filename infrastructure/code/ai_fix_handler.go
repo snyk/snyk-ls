@@ -56,6 +56,7 @@ const explainTimeout = 5 * time.Minute
 func (fixHandler *AiFixHandler) GetCurrentIssueId() string {
 	return fixHandler.currentIssueId
 }
+
 func (fixHandler *AiFixHandler) GetResults(fixId string) (filePath string, diff string, err error) {
 	for _, suggestion := range fixHandler.aiFixDiffState.result {
 		if suggestion.FixId == fixId {
