@@ -25,11 +25,13 @@ import (
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type FakeCodeScannerClient struct {
 	UploadAndAnalyzeWasCalled bool
-	rootPath                  string
+	rootPath                  types.FilePath
 }
 
 func getSarifResponseJson2(filePath string) string {

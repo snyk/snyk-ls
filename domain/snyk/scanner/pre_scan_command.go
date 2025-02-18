@@ -30,7 +30,7 @@ func (sc *DelegatingConcurrentScanner) executePreScanCommand(
 	c *config.Config,
 	p product.Product,
 	folderConfig *types.FolderConfig,
-	scanDir string,
+	scanDir types.FilePath,
 	isNotReferenceScan bool,
 ) error {
 	commandConfig := folderConfig.ScanCommandConfig
@@ -39,7 +39,7 @@ func (sc *DelegatingConcurrentScanner) executePreScanCommand(
 		return nil
 	}
 
-	preScanCommand := scans.NewPreScanCommand(c.Engine().GetConfiguration(), scanDir, commandConfig[p].PreScanCommand, c.Logger())
+	preScanCommand := scans.NewPreScanCommand(c.Engine().GetConfiguration(), scanDir, types.FilePath(commandConfig[p].PreScanCommand), c.Logger())
 	return preScanCommand.ExecutePreScanCommand(ctx)
 }
 

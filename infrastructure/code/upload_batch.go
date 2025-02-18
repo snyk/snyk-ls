@@ -16,6 +16,8 @@
 
 package code
 
+import "github.com/snyk/snyk-ls/internal/types"
+
 const (
 	maxFileSize               = 1024 * 1024
 	maxUploadBatchSize        = 1024*1024*4 - 1024 // subtract 1k for potential headers
@@ -29,27 +31,27 @@ const (
 
 type UploadBatch struct {
 	hash      string
-	documents map[string]BundleFile
+	documents map[types.FilePath]BundleFile
 	size      int
 }
 
 func NewUploadBatch() *UploadBatch {
 	return &UploadBatch{
-		documents: map[string]BundleFile{},
+		documents: map[types.FilePath]BundleFile{},
 	}
 }
 
 // todo simplify the size computation
 // maybe consider an addFile / canFitFile interface with proper error handling
-func (b *UploadBatch) canFitFile(uri string, size int) bool {
+func (b *UploadBatch) canFitFile(uri types.FilePath, size int) bool {
 	docPayloadSize := b.getTotalDocPayloadSize(uri, size)
 	newSize := docPayloadSize + b.getSize()
 	b.size += docPayloadSize
 	return newSize < maxUploadBatchSize
 }
 
-func (b *UploadBatch) getTotalDocPayloadSize(documentURI string, size int) int {
-	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(documentURI)) + size
+func (b *UploadBatch) getTotalDocPayloadSize(filePath types.FilePath, size int) int {
+	return len(jsonHashSizePerFile) + len(jsonOverheadPerFile) + len([]byte(filePath)) + size
 }
 
 func (b *UploadBatch) getSize() int {

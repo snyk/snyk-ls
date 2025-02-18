@@ -53,7 +53,7 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 
 	discovery := install.Discovery{}
 	clientParams := types.InitializeParams{
-		RootURI: uri.PathToUri(dir),
+		RootURI: uri.PathToUri(types.FilePath(dir)),
 		InitializationOptions: types.Settings{
 			ActivateSnykCode:            "false",
 			ActivateSnykOpenSource:      "true",
@@ -69,10 +69,13 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 	_, err = loc.Client.Call(ctx, "initialized", nil)
 	assert.NoError(t, err)
 
-	// wait for scan
+	testFilePath := filepath.Join(dir, "package.json")
+	documentURI := uri.PathToUri(types.FilePath(testFilePath))
+
 	assert.Eventually(t, func() bool {
+		// wait for scan
 		rsp, err := loc.Client.Call(ctx, "textDocument/inlineValue", types.InlineValueParams{
-			TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filepath.Join(dir, "package.json"))},
+			TextDocument: sglsp.TextDocumentIdentifier{URI: documentURI},
 			Range:        sglsp.Range{Start: sglsp.Position{Line: 17}, End: sglsp.Position{Line: 17}},
 		})
 		assert.NoError(t, err)
@@ -82,5 +85,5 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 		assert.NoError(t, err)
 
 		return len(inlineValues) == 1 && inlineValues[0].Range.Start.Line == 17 && inlineValues[0].Range.End.Line == 17
-	}, 60*time.Second, 1*time.Second, "expected inline values to be served, but they were not")
+	}, time.Minute, 1*time.Second, "expected inline values to be served, but they were not")
 }

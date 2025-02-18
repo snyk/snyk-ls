@@ -79,9 +79,9 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	folder := workspace.NewFolder(c, "dummy", "dummy", scannerForFolder, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 	dontClear := workspace.NewFolder(c, "dontclear", "dontclear", scannerForDontClear, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 
-	dontClearIssuePath := "dontclear/file.txt"
-	scannerForDontClear.AddTestIssue(snyk.Issue{AffectedFilePath: dontClearIssuePath})
-	scannerForFolder.AddTestIssue(snyk.Issue{AffectedFilePath: "dummy/file.txt"})
+	dontClearIssuePath := types.FilePath("dontclear/file.txt")
+	scannerForDontClear.AddTestIssue(&snyk.Issue{AffectedFilePath: dontClearIssuePath})
+	scannerForFolder.AddTestIssue(&snyk.Issue{AffectedFilePath: "dummy/file.txt"})
 
 	c.Workspace().AddFolder(folder)
 	c.Workspace().AddFolder(dontClear)
@@ -187,7 +187,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		}
 
 		assert.Len(t, c.TrustedFolders(), 2)
-		assert.Contains(t, c.TrustedFolders(), "/path/to/folder1", "/path/to/folder2")
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder1"))
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder2"))
 	})
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
@@ -196,7 +197,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 		c.SetTrustedFolderFeatureEnabled(true)
-		c.SetTrustedFolders([]string{"/path/to/folder2"})
+		c.SetTrustedFolders([]types.FilePath{"/path/to/folder2"})
 
 		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -204,7 +205,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Len(t, config.CurrentConfig().TrustedFolders(), 2)
-		assert.Contains(t, config.CurrentConfig().TrustedFolders(), "/path/to/folder1", "/path/to/folder2")
+		assert.Len(t, c.TrustedFolders(), 2)
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder1"))
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder2"))
 	})
 }

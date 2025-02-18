@@ -20,10 +20,11 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/ast/maven"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type mavenRangeFinder struct {
-	path        string
+	path        types.FilePath
 	fileContent []byte
 	c           *config.Config
 }

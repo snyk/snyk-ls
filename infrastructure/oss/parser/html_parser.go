@@ -8,7 +8,7 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var (
@@ -43,10 +43,10 @@ func (h htmlParser) ParseContent(content string) (dependencies []Dependency, err
 	return dependencies, nil
 }
 
-func (h htmlParser) Parse(filePath string) (dependencies []Dependency, err error) {
-	logger := h.config.Logger().With().Str("method", "htmlParser.Parse").Str("file", filePath).Logger()
+func (h htmlParser) Parse(filePath types.FilePath) (dependencies []Dependency, err error) {
+	logger := h.config.Logger().With().Str("method", "htmlParser.Parse").Str("file", string(filePath)).Logger()
 
-	bytes, err := os.ReadFile(filePath)
+	bytes, err := os.ReadFile(string(filePath))
 	if err != nil {
 		logger.Err(err).Msg("couldn't read file")
 		return nil, err
@@ -72,12 +72,12 @@ func (h htmlParser) parseDependencies(deps []string, fileContent string) (depend
 		line := strings.Count(before, "\n")
 		absPosDep := strings.Index(fileContent, dep)
 		linePos := absPosDep - strings.LastIndex(before, "\n")
-		dependency.Range = snyk.Range{
-			Start: snyk.Position{
+		dependency.Range = types.Range{
+			Start: types.Position{
 				Line:      line,
 				Character: linePos,
 			},
-			End: snyk.Position{
+			End: types.Position{
 				Line:      line,
 				Character: len(dep) + linePos,
 			},

@@ -54,8 +54,8 @@ type hashedFolderPath string
 
 type ScanSnapshotPersister interface {
 	types.ScanSnapshotClearerExister
-	Add(folderPath, commitHash string, issueList []snyk.Issue, p product.Product) error
-	GetPersistedIssueList(folderPath string, p product.Product) ([]snyk.Issue, error)
+	Add(folderPath types.FilePath, commitHash string, issueList []types.Issue, p product.Product) error
+	GetPersistedIssueList(folderPath types.FilePath, p product.Product) ([]types.Issue, error)
 }
 
 type productCommitHashMap map[product.Product]string
@@ -78,7 +78,7 @@ func NewGitPersistenceProvider(logger *zerolog.Logger, conf configuration.Config
 }
 
 // Init Loads persisted files into cache and determines the cache location
-func (g *GitPersistenceProvider) Init(folderPaths []string) error {
+func (g *GitPersistenceProvider) Init(folderPaths []types.FilePath) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
@@ -122,7 +122,7 @@ func (g *GitPersistenceProvider) Init(folderPaths []string) error {
 	return nil
 }
 
-func (g *GitPersistenceProvider) Clear(folders []string, deleteOnlyExpired bool) {
+func (g *GitPersistenceProvider) Clear(folders []types.FilePath, deleteOnlyExpired bool) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
@@ -160,7 +160,7 @@ func (g *GitPersistenceProvider) Clear(folders []string, deleteOnlyExpired bool)
 	}
 }
 
-func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p product.Product) ([]snyk.Issue, error) {
+func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath, p product.Product) ([]types.Issue, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
@@ -174,7 +174,7 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p prod
 		return nil, errors.New("no commit hash found in cache")
 	}
 
-	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
 
 	filePath := getLocalFilePath(cacheDir, hash, commitHash, p)
 	content, err := os.ReadFile(filePath)
@@ -188,22 +188,25 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath string, p prod
 		return nil, err
 	}
 
-	var results []snyk.Issue
-	err = json.Unmarshal(content, &results)
-
+	var snykIssues []snyk.Issue
+	err = json.Unmarshal(content, &snykIssues)
 	if err != nil {
 		return nil, err
 	}
 
+	var results []types.Issue
+	for i := range snykIssues {
+		results = append(results, &snykIssues[i])
+	}
 	return results, nil
 }
 
-func (g *GitPersistenceProvider) Add(folderPath, commitHash string, issueList []snyk.Issue, p product.Product) error {
+func (g *GitPersistenceProvider) Add(folderPath types.FilePath, commitHash string, issueList []types.Issue, p product.Product) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
 	cacheDir := snykCacheDir(g.conf)
-	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
 
 	shouldPersist := g.shouldPersistOnDisk(hash, commitHash, p)
 	if !shouldPersist {
@@ -212,7 +215,7 @@ func (g *GitPersistenceProvider) Add(folderPath, commitHash string, issueList []
 
 	err := g.deleteExistingCachedSnapshot(cacheDir, hash, commitHash, p)
 	if err != nil {
-		g.logger.Error().Err(err).Msg("failed to delete file from disk in " + folderPath)
+		g.logger.Error().Err(err).Msg(string("failed to delete file from disk in " + folderPath))
 		return err
 	}
 
@@ -227,7 +230,7 @@ func (g *GitPersistenceProvider) Add(folderPath, commitHash string, issueList []
 	return nil
 }
 
-func (g *GitPersistenceProvider) Exists(folderPath, commitHash string, p product.Product) bool {
+func (g *GitPersistenceProvider) Exists(folderPath types.FilePath, commitHash string, p product.Product) bool {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
@@ -238,17 +241,17 @@ func (g *GitPersistenceProvider) Exists(folderPath, commitHash string, p product
 		return false
 	}
 
-	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
+	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
 	exists := g.snapshotExistsOnDisk(cacheDir, hash, commitHash, p)
 	if exists {
 		return true
 	}
 
-	g.logger.Debug().Msg("entry exists in cache but not on disk. Maybe file was deleted? " + folderPath)
+	g.logger.Debug().Msg(string("entry exists in cache but not on disk. Maybe file was deleted? " + folderPath))
 
 	err = g.deleteFromCache(hash, commitHash, p)
 	if err != nil {
-		g.logger.Error().Err(err).Msg("failed to remove file from cache: " + folderPath)
+		g.logger.Error().Err(err).Msg(string("failed to remove file from cache: " + folderPath))
 	}
 	return false
 }
@@ -309,8 +312,8 @@ func (g *GitPersistenceProvider) deleteFromCache(hash hashedFolderPath, commitHa
 	return nil
 }
 
-func (g *GitPersistenceProvider) getCommitHashForProduct(folderPath string, p product.Product) (commitHash string, err error) {
-	hash := hashedFolderPath(util.Sha256First16Hash(folderPath))
+func (g *GitPersistenceProvider) getCommitHashForProduct(folderPath types.FilePath, p product.Product) (commitHash string, err error) {
+	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
 
 	pchMap, ok := g.cache[hash]
 	if !ok {

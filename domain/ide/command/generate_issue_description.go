@@ -51,22 +51,22 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 	}
 
 	issue := cmd.issueProvider.Issue(issueId)
-	if issue.ID == "" {
+	if issue.GetID() == "" {
 		return nil, errors.New("failed to find issue")
 	}
 
-	if issue.Product == product.ProductInfrastructureAsCode {
+	if issue.GetProduct() == product.ProductInfrastructureAsCode {
 		return getIacHtml(c, logger, issue)
-	} else if issue.Product == product.ProductCode {
+	} else if issue.GetProduct() == product.ProductCode {
 		return getCodeHtml(c, logger, issue)
-	} else if issue.Product == product.ProductOpenSource {
+	} else if issue.GetProduct() == product.ProductOpenSource {
 		return getOssHtml(c, logger, issue)
 	}
 
 	return nil, nil
 }
 
-func getOssHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (string, error) {
+func getOssHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (string, error) {
 	htmlRender, err := oss.NewHtmlRenderer(c)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Oss HTML render")
@@ -76,7 +76,7 @@ func getOssHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (stri
 	return html, nil
 }
 
-func getCodeHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (string, error) {
+func getCodeHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (string, error) {
 	htmlRender, err := code.NewHtmlRenderer(c)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Code HTML render")
@@ -86,7 +86,7 @@ func getCodeHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (str
 	return html, nil
 }
 
-func getIacHtml(c *config.Config, logger zerolog.Logger, issue snyk.Issue) (string, error) {
+func getIacHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (string, error) {
 	htmlRender, err := iac.NewHtmlRenderer(c)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create IaC HTML render")

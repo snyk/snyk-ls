@@ -77,7 +77,7 @@ func (m *MockNotifier) SendError(err error) {
 	)
 }
 
-func (m *MockNotifier) SendErrorDiagnostic(path string, err error) {
+func (m *MockNotifier) SendErrorDiagnostic(path types.FilePath, err error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.sendErrorDiagnosticCounter++

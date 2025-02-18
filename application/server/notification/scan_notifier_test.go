@@ -91,7 +91,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	mockNotifier := notification.NewMockNotifier()
 	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
-	const folderPath = "/test/iac/folderPath"
+	const folderPath = types.FilePath("/test/iac/folderPath")
 
 	// Act - run the test
 	scanNotifier.SendSuccessForAllProducts(folderPath)
@@ -110,7 +110,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 	mockNotifier := notification.NewMockNotifier()
 	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
-	const folderPath = "/test/oss/folderPath"
+	const folderPath = types.FilePath("/test/oss/folderPath")
 
 	// Act - run the test
 	scanNotifier.SendSuccess(product.ProductOpenSource, folderPath)
@@ -173,7 +173,7 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 	mockNotifier := notification.NewMockNotifier()
 	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
-	const folderPath = "/test/iac/folderPath"
+	const folderPath = types.FilePath("/test/iac/folderPath")
 
 	// Act - run the test
 	scanNotifier.SendSuccess(product.ProductInfrastructureAsCode, folderPath)
@@ -250,7 +250,7 @@ func containsMatchingMessage(t *testing.T,
 	msg any,
 	testCase sendMessageTestCase,
 	expectedProduct string,
-	folderPath string,
+	folderPath types.FilePath,
 ) bool {
 	t.Helper()
 	scanMessage, ok := msg.(types.SnykScanParams)

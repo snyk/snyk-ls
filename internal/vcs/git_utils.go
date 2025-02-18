@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var (
@@ -42,8 +43,8 @@ func HeadRefHashForRepo(repo *git.Repository) (string, error) {
 	return commitHash, nil
 }
 
-func HeadRefHashForBranch(logger *zerolog.Logger, repoPath, branchName string) (string, error) {
-	repo, err := git.PlainOpen(repoPath)
+func HeadRefHashForBranch(logger *zerolog.Logger, repoPath types.FilePath, branchName string) (string, error) {
+	repo, err := git.PlainOpen(string(repoPath))
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open repository")
 		return "", err
@@ -79,7 +80,7 @@ func hasUncommitedChanges(repo *git.Repository) bool {
 	return false
 }
 
-func GetBaseBranchName(conf configuration.Configuration, folderPath string) string {
+func GetBaseBranchName(conf configuration.Configuration, folderPath types.FilePath) string {
 	folderConfig, err := storedConfig.GetOrCreateFolderConfig(conf, folderPath)
 	if err != nil {
 		return "master"

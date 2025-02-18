@@ -8,6 +8,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_IaC_Html_getIacHtml(t *testing.T) {
@@ -15,7 +16,8 @@ func Test_IaC_Html_getIacHtml(t *testing.T) {
 
 	// Initialize the IaC service
 	service, _ := NewHtmlRenderer(cfg)
-	iacPanelHtml := service.GetDetailsHtml(createIacIssueSample())
+	sample := createIacIssueSample()
+	iacPanelHtml := service.GetDetailsHtml(&sample)
 
 	// assert
 	assert.Contains(t, iacPanelHtml, "<!DOCTYPE html>", "HTML should contain the doctype declaration")
@@ -27,8 +29,8 @@ func Test_IaC_Html_getIacHtml(t *testing.T) {
 	assert.Contains(t, iacPanelHtml, "Role or ClusterRole with too wide permissions", "HTML should contain the issue title")
 	assert.Contains(t, iacPanelHtml, "The role uses wildcards, which grant the role permissions to the whole cluster", "HTML should contain the issue description")
 	assert.Contains(t, iacPanelHtml, "Set only the necessary permissions required", "HTML should contain the remediation instructions")
-	// If Issue.IsIgnored = true, these will not be present
-	if !createIacIssueSample().IsIgnored {
+	// If Issue.GetIsIgnored = true, these will not be present
+	if !sample.IsIgnored {
 		assert.Contains(t, iacPanelHtml, `<footer id="ignore-container" class="ignore-action-container hidden">`, "If Issue is not ignored, hidden footer with ignore options should be present.")
 		assert.Contains(t, iacPanelHtml, `/Users/cata/git/playground/dex/examples/k8s/dex.yaml`, "HTML should contain file path for the ignore functionality")
 	}
@@ -59,9 +61,9 @@ func createIacIssueSample() snyk.Issue {
 		IssueType:     5,
 		IsIgnored:     false,
 		IgnoreDetails: nil, // No ignore details provided
-		Range: snyk.Range{
-			Start: snyk.Position{Line: 141, Character: 2},
-			End:   snyk.Position{Line: 141, Character: 14},
+		Range: types.Range{
+			Start: types.Position{Line: 141, Character: 2},
+			End:   types.Position{Line: 141, Character: 14},
 		},
 		Message:             "The role uses wildcards, which grant the role permissions to the whole cluster (Snyk)",
 		FormattedMessage:    "\n### SNYK-CC-K8S-44: Role or ClusterRole with too wide permissions\n\n**Issue:** The role uses wildcards, which grant the role permissions to the whole cluster\n\n**Impact:** The use of wildcard rights grants is likely to provide excessive rights to the Kubernetes API. For a ClusterRole this would be considered high severity.\n\n**Resolve:** Set only the necessary permissions required\n",

@@ -16,8 +16,10 @@
 
 package error_reporting
 
+import "github.com/snyk/snyk-ls/internal/types"
+
 type ErrorReporter interface {
 	FlushErrorReporting()
 	CaptureError(err error) bool
-	CaptureErrorAndReportAsIssue(path string, err error) bool
+	CaptureErrorAndReportAsIssue(path types.FilePath, err error) bool
 }

@@ -37,7 +37,7 @@ import (
 // Workspace represents the highest entity in an IDE that contains code. A workspace may contain multiple folders
 type Workspace struct {
 	mutex               sync.Mutex
-	folders             map[string]types.Folder
+	folders             map[types.FilePath]types.Folder
 	instrumentor        performance.Instrumentor
 	scanner             scanner.Scanner
 	hoverService        hover.Service
@@ -51,7 +51,7 @@ type Workspace struct {
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
-	issues := make(map[string][]snyk.Issue)
+	issues := make(map[types.FilePath][]types.Issue)
 	for _, folder := range w.folders {
 		if issueProvider, ok := folder.(snyk.IssueProvider); ok {
 			for filePath, issueSlice := range issueProvider.Issues() {
@@ -62,16 +62,16 @@ func (w *Workspace) Issues() snyk.IssuesByFile {
 	return issues
 }
 
-func (w *Workspace) Issue(key string) snyk.Issue {
+func (w *Workspace) Issue(key string) types.Issue {
 	for _, folder := range w.folders {
 		if issueProvider, ok := folder.(snyk.IssueProvider); ok {
 			issue := issueProvider.Issue(key)
-			if issue.ID != "" {
+			if issue.GetID() != "" {
 				return issue
 			}
 		}
 	}
-	return snyk.Issue{}
+	return nil
 }
 
 func New(
@@ -85,7 +85,7 @@ func New(
 	scanStateAggregator scanstates.Aggregator,
 ) *Workspace {
 	return &Workspace{
-		folders:             make(map[string]types.Folder),
+		folders:             make(map[types.FilePath]types.Folder),
 		instrumentor:        instrumentor,
 		scanner:             scanner,
 		hoverService:        hoverService,
@@ -113,7 +113,7 @@ func (w *Workspace) GetScanSnapshotClearerExister() types.ScanSnapshotClearerExi
 	return w.scanPersister
 }
 
-func (w *Workspace) RemoveFolder(folderPath string) {
+func (w *Workspace) RemoveFolder(folderPath types.FilePath) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	folder := w.GetFolderContaining(folderPath)
@@ -126,7 +126,7 @@ func (w *Workspace) RemoveFolder(folderPath string) {
 	delete(w.folders, folderPath)
 }
 
-func (w *Workspace) DeleteFile(filePath string) {
+func (w *Workspace) DeleteFile(filePath types.FilePath) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	folder := w.GetFolderContaining(filePath)
@@ -141,14 +141,14 @@ func (w *Workspace) AddFolder(f types.Folder) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	if w.folders == nil {
-		w.folders = map[string]types.Folder{}
+		w.folders = map[types.FilePath]types.Folder{}
 	}
 	if w.folders[f.Path()] == nil {
 		w.folders[f.Path()] = f
 	}
 }
 
-func (w *Workspace) IssuesForFile(path string) []snyk.Issue {
+func (w *Workspace) IssuesForFile(path types.FilePath) []types.Issue {
 	folder := w.GetFolderContaining(path)
 	if folder == nil {
 		return nil
@@ -161,7 +161,7 @@ func (w *Workspace) IssuesForFile(path string) []snyk.Issue {
 	return nil
 }
 
-func (w *Workspace) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
+func (w *Workspace) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
 	folder := w.GetFolderContaining(path)
 	if folder == nil {
 		return nil
@@ -174,7 +174,7 @@ func (w *Workspace) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
 	return nil
 }
 
-func (w *Workspace) GetFolderContaining(path string) types.Folder {
+func (w *Workspace) GetFolderContaining(path types.FilePath) types.Folder {
 	for _, folder := range w.folders {
 		if folder.Contains(path) {
 			return folder
@@ -242,10 +242,10 @@ func (w *Workspace) GetFolderTrust() (trusted []types.Folder, untrusted []types.
 	for _, folder := range w.folders {
 		if folder.IsTrusted() {
 			trusted = append(trusted, folder)
-			w.c.Logger().Info().Str("folder", folder.Path()).Msg("Trusted folder")
+			w.c.Logger().Info().Str("folder", string(folder.Path())).Msg("Trusted folder")
 		} else {
 			untrusted = append(untrusted, folder)
-			w.c.Logger().Info().Str("folder", folder.Path()).Msg("Untrusted folder")
+			w.c.Logger().Info().Str("folder", string(folder.Path())).Msg("Untrusted folder")
 		}
 	}
 	return trusted, untrusted

@@ -25,7 +25,7 @@ import (
 )
 
 // GetOrCreateFolderConfig queries git for the folder config of the given path
-func GetOrCreateFolderConfig(conf configuration.Configuration, path string) (*types.FolderConfig, error) {
+func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePath) (*types.FolderConfig, error) {
 	folderConfig, err := folderConfigFromStorage(conf, path)
 	if err != nil {
 		return nil, err

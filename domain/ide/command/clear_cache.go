@@ -92,7 +92,7 @@ func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, folderUri *lsp
 }
 
 func (cmd *clearCache) purgePersistedCache(logger *zerolog.Logger, folderUri *lsp.DocumentURI) {
-	var folderList []string
+	var folderList []types.FilePath
 	ws := cmd.c.Workspace()
 	clearerExister := ws.GetScanSnapshotClearerExister()
 	if clearerExister == nil {

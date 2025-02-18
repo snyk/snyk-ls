@@ -27,13 +27,13 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type TextDocumentCodeActionHandler func(context.Context, types.CodeActionParams) ([]types.CodeAction, error)
-type ResolveHandler func(context.Context, types.CodeAction) (*types.CodeAction, error)
+type TextDocumentCodeActionHandler func(context.Context, types.CodeActionParams) ([]types.LSPCodeAction, error)
+type ResolveHandler func(context.Context, types.LSPCodeAction) (*types.LSPCodeAction, error)
 
 // ResolveCodeActionHandler returns a jrpc2.Handler that can be used to handle the "codeAction/resolve" LSP method
-func ResolveCodeActionHandler(c *config.Config, service *codeaction.CodeActionsService, server types.Server) ResolveHandler {
+func ResolveCodeActionHandler(c *config.Config, service *codeaction.CodeActionsService, _ types.Server) ResolveHandler {
 	logger := c.Logger().With().Str("method", "ResolveCodeActionHandler").Logger()
-	return func(ctx context.Context, params types.CodeAction) (*types.CodeAction, error) {
+	return func(ctx context.Context, params types.LSPCodeAction) (*types.LSPCodeAction, error) {
 		logger = logger.With().Interface("request", params).Logger()
 		logger.Debug().Msg("RECEIVING")
 
@@ -61,7 +61,7 @@ func GetCodeActionHandler(c *config.Config) TextDocumentCodeActionHandler {
 	_, cancel := context.WithCancel(context.Background())
 	logger := c.Logger().With().Str("method", "CodeActionHandler").Logger()
 
-	return func(paramCtx context.Context, params types.CodeActionParams) ([]types.CodeAction, error) {
+	return func(paramCtx context.Context, params types.CodeActionParams) ([]types.LSPCodeAction, error) {
 		// We want to avoid concurrent runs of this handler to prevent race condition.
 		var ctx context.Context
 		mu.Lock()

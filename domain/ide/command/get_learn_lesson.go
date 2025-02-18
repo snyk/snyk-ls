@@ -22,7 +22,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -71,7 +70,7 @@ func learnLesson(args []any, learnService learn.Service) (*learn.Lesson, error) 
 	if !ok {
 		return nil, errors.New("learn lesson issueType is not a number")
 	}
-	issueType := snyk.Type(issueTypeArg)
+	issueType := types.IssueType(issueTypeArg)
 
 	lesson, err := learnService.GetLesson(ecosystem, rule, cwes, cves, issueType)
 	if err != nil {

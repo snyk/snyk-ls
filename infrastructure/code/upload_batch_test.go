@@ -20,12 +20,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_getSize(t *testing.T) {
 	t.Run("returns overhead", func(t *testing.T) {
 		bundle := NewUploadBatch()
-		bundle.documents = map[string]BundleFile{
+		bundle.documents = map[types.FilePath]BundleFile{
 			"uri": {},
 		}
 

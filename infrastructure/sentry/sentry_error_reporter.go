@@ -24,6 +24,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // A Sentry implementation of our error reporter that respects user preferences regarding tracking
@@ -32,7 +33,7 @@ type GDPRAwareSentryErrorReporter struct {
 	c        *config.Config
 }
 
-func (s *GDPRAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path string, err error) bool {
+func (s *GDPRAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path types.FilePath, err error) bool {
 	if s.notifier != nil {
 		s.notifier.SendErrorDiagnostic(path, err)
 	}

@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_DefaultFinder_FindRange(t *testing.T) {
@@ -58,13 +58,13 @@ func TestDefaultFinder_Find(t *testing.T) {
 	assert.Equal(t, expectedRange, getRangeFromNode(actualRange))
 }
 
-func getExpectedRangeForDefaultFinderTests() snyk.Range {
-	expectedRange := snyk.Range{
-		Start: snyk.Position{
+func getExpectedRangeForDefaultFinderTests() types.Range {
+	expectedRange := types.Range{
+		Start: types.Position{
 			Line:      9,
 			Character: 1,
 		},
-		End: snyk.Position{
+		End: types.Position{
 			Line:      9,
 			Character: 32,
 		},
@@ -72,7 +72,7 @@ func getExpectedRangeForDefaultFinderTests() snyk.Range {
 	return expectedRange
 }
 
-func setupDefaultFinderEnvForTesting() (ossIssue, string, []byte) {
+func setupDefaultFinderEnvForTesting() (ossIssue, types.FilePath, []byte) {
 	var issue = ossIssue{
 		Id:             "testIssue",
 		Name:           "SNYK-TEST-ISSUE-1",
@@ -87,5 +87,5 @@ func setupDefaultFinderEnvForTesting() (ossIssue, string, []byte) {
 	}
 	var testPath, _ = filepath.Abs("testdata/go.mod")
 	var testContent, _ = os.ReadFile(testPath)
-	return issue, testPath, testContent
+	return issue, types.FilePath(testPath), testContent
 }

@@ -23,9 +23,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	errorreporting "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_GetLearnEndpoint(t *testing.T) {
@@ -67,7 +67,7 @@ func Test_GetLesson(t *testing.T) {
 	t.Run("OSS issue - lesson returned", func(t *testing.T) {
 		params := getRealOSSLookupParams()
 
-		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.DependencyVulnerability)
+		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, types.DependencyVulnerability)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, lesson)
@@ -78,7 +78,7 @@ func Test_GetLesson(t *testing.T) {
 		testutil.SmokeTest(t, false)
 		params := getRealOSSLookupParams()
 
-		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.LicenseIssue)
+		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, types.LicenseIssue)
 
 		assert.NoError(t, err)
 		assert.Empty(t, lesson)
@@ -99,7 +99,7 @@ func Test_GetLesson(t *testing.T) {
 	t.Run("Code quality - no lessons returned", func(t *testing.T) {
 		params := getRealCodeLookupParams()
 
-		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.CodeQualityIssue)
+		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, types.CodeQualityIssue)
 
 		assert.NoError(t, err)
 		assert.Empty(t, lesson)
@@ -108,7 +108,7 @@ func Test_GetLesson(t *testing.T) {
 
 func checkLesson(t *testing.T, cut Service, params LessonLookupParams) {
 	t.Helper()
-	lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, snyk.CodeSecurityVulnerability)
+	lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, types.CodeSecurityVulnerability)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, lesson)

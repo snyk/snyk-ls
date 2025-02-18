@@ -79,12 +79,12 @@ func getAdditionalParams(folderSection *config.Subsection) string {
 	return ""
 }
 
-func getConfigSection(path string) (*git.Repository, *config2.Config, *config.Config, *config.Subsection, error) {
+func getConfigSection(path types.FilePath) (*git.Repository, *config2.Config, *config.Config, *config.Subsection, error) {
 	mutex.Lock()
 	// if DeleteEmptySnykSubsection fails, ignore error and attempt to reload config again
 	_ = DeleteEmptySnykSubsection(path)
 	mutex.Unlock()
-	repository, err := git.PlainOpen(path)
+	repository, err := git.PlainOpen(string(path))
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -97,7 +97,7 @@ func getConfigSection(path string) (*git.Repository, *config2.Config, *config.Co
 
 	raw := repoConfig.Raw
 	section := raw.Section(mainSection)
-	folderSection := section.Subsection(path)
+	folderSection := section.Subsection(string(path))
 	return repository, repoConfig, raw, folderSection, nil
 }
 
@@ -117,7 +117,7 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 	return localBranches, nil
 }
 
-func SetOption(logger *zerolog.Logger, folderPath, key string, value string) {
+func SetOption(logger *zerolog.Logger, folderPath types.FilePath, key string, value string) {
 	// Don't set the config option if folder path or value is empty.
 	// Setting empty options causes go-git to fail fetching config sections.
 	if len(folderPath) == 0 || len(value) == 0 {
@@ -125,7 +125,7 @@ func SetOption(logger *zerolog.Logger, folderPath, key string, value string) {
 	}
 	repo, repoConfig, _, subsection, err := getConfigSection(folderPath)
 	if err != nil {
-		logger.Error().Err(err).Msg("could not get git config for folder " + folderPath)
+		logger.Error().Err(err).Msg("could not get git config for folder " + string(folderPath))
 		return
 	}
 	subsection.SetOption(key, value)
@@ -135,8 +135,8 @@ func SetOption(logger *zerolog.Logger, folderPath, key string, value string) {
 	}
 }
 
-func GitFolderPath(folderPath string) (string, error) {
-	repo, err := git.PlainOpen(folderPath)
+func GitFolderPath(folderPath types.FilePath) (string, error) {
+	repo, err := git.PlainOpen(string(folderPath))
 	if err != nil {
 		return "", fmt.Errorf("failed to open repository: %s %w", folderPath, err)
 	}
@@ -158,11 +158,11 @@ func GitFolderPath(folderPath string) (string, error) {
 }
 
 // DeleteEmptySnykSubsection This is a migration function to be executed if empty subsections exists
-func DeleteEmptySnykSubsection(path string) error {
+func DeleteEmptySnykSubsection(path types.FilePath) error {
 	return DeleteGitConfigSnykSubsection(path, `""`)
 }
 
-func DeleteGitConfigSnykSubsection(path string, subsection string) error {
+func DeleteGitConfigSnykSubsection(path types.FilePath, subsection types.FilePath) error {
 	gitFolderPath, err := GitFolderPath(path)
 	if err != nil {
 		return err
@@ -197,7 +197,7 @@ func DeleteGitConfigSnykSubsection(path string, subsection string) error {
 	return nil
 }
 
-func getFromGit(path string) (*types.FolderConfig, error) {
+func getFromGit(path types.FilePath) (*types.FolderConfig, error) {
 	repository, repoConfig, _, folderSection, err := getConfigSection(path)
 	if err != nil {
 		return nil, nil
@@ -232,9 +232,9 @@ func getFromGit(path string) (*types.FolderConfig, error) {
 	return &folderConfig, nil
 }
 
-func SetupCustomTestRepo(t *testing.T, rootDir string, url string, targetCommit string, logger *zerolog.Logger) (string, error) {
+func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targetCommit string, logger *zerolog.Logger) (types.FilePath, error) {
 	t.Helper()
-	tempDir := filepath.Join(rootDir, util.Sha256First16Hash(t.Name()))
+	tempDir := filepath.Join(string(rootDir), util.Sha256First16Hash(t.Name()))
 	assert.NoError(t, os.MkdirAll(tempDir, 0755))
 	repoDir := "1"
 	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
@@ -260,5 +260,5 @@ func SetupCustomTestRepo(t *testing.T, rootDir string, url string, targetCommit 
 	output, err = clean.CombinedOutput()
 
 	logger.Debug().Msg(string(output))
-	return absoluteCloneRepoDir, err
+	return types.FilePath(absoluteCloneRepoDir), err
 }

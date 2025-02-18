@@ -43,7 +43,7 @@ func NewScanNotifier(c *config.Config, notifier notification.Notifier) (scanner.
 	}, nil
 }
 
-func (n *scanNotifier) SendError(product product.Product, folderPath string, errorMessage string) {
+func (n *scanNotifier) SendError(product product.Product, folderPath types.FilePath, errorMessage string) {
 	cliError := &types.CliError{}
 	err := json.Unmarshal([]byte(errorMessage), cliError)
 	if err != nil {
@@ -63,7 +63,7 @@ func (n *scanNotifier) SendError(product product.Product, folderPath string, err
 }
 
 // SendSuccessForAllProducts reports success for all enabled products
-func (n *scanNotifier) SendSuccessForAllProducts(folderPath string) {
+func (n *scanNotifier) SendSuccessForAllProducts(folderPath types.FilePath) {
 	for _, p := range n.supportedProducts() {
 		if n.c.IsProductEnabled(p) {
 			n.sendSuccess(p, folderPath)
@@ -72,12 +72,12 @@ func (n *scanNotifier) SendSuccessForAllProducts(folderPath string) {
 }
 
 // SendSuccess sends scan success message for a single enabled product
-func (n *scanNotifier) SendSuccess(product product.Product, folderPath string) {
+func (n *scanNotifier) SendSuccess(product product.Product, folderPath types.FilePath) {
 	// If no issues found, we still should send success message the reported product
 	n.sendSuccess(product, folderPath)
 }
 
-func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string) {
+func (n *scanNotifier) sendSuccess(pr product.Product, folderPath types.FilePath) {
 	if !n.c.IsProductEnabled(pr) {
 		return
 	}
@@ -92,7 +92,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath string) {
 }
 
 // SendInProgress Notifies all snyk/scan enabled product messages
-func (n *scanNotifier) SendInProgress(folderPath string) {
+func (n *scanNotifier) SendInProgress(folderPath types.FilePath) {
 	products := n.supportedProducts()
 	for _, pr := range products {
 		if !n.c.IsProductEnabled(pr) {

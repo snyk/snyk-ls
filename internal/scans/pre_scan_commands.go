@@ -25,17 +25,19 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type PreScanCommand struct {
 	conf               configuration.Configuration
-	preScanCommandPath string
+	preScanCommandPath types.FilePath
 	semaphore          *semaphore.Weighted
 	logger             *zerolog.Logger
-	workDir            string
+	workDir            types.FilePath
 }
 
-func NewPreScanCommand(conf configuration.Configuration, workDir string, preScanCommandPath string, logger *zerolog.Logger) *PreScanCommand {
+func NewPreScanCommand(conf configuration.Configuration, workDir types.FilePath, preScanCommandPath types.FilePath, logger *zerolog.Logger) *PreScanCommand {
 	return &PreScanCommand{
 		conf:               conf,
 		workDir:            workDir,
@@ -61,7 +63,7 @@ func (p *PreScanCommand) ExecutePreScanCommand(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Minute)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, p.preScanCommandPath)
+	cmd := exec.CommandContext(ctx, string(p.preScanCommandPath))
 	cmd.Stderr = logger
 	cmd.Stdout = logger
 	err = cmd.Run()

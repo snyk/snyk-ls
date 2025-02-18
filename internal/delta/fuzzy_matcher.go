@@ -24,14 +24,16 @@ import (
 
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var _ Matcher = (*FuzzyMatcher)(nil)
 
 type IssueConfidence struct {
-	BaseUUID           string
-	IssueIDResultIndex int
-	Confidence         float64
+	BaseUUID           string  // global identity
+	IssueIDResultIndex int     // index in current issue list
+	Confidence         float64 // confidence that it's the same issue
 }
 
 type DeduplicatedIssuesToIDs map[int]Identity
@@ -86,24 +88,31 @@ func (_ FuzzyMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]I
 			existingAssignedIds[issue.GetGlobalIdentity()] = true
 			continue
 		}
+
+		// match issues to global identities and save it into strongMatchingIssues
 		findMatch(issue, index, baseIssueList, strongMatchingIssues)
 	}
 
+	// deduplicate using the highest confidence (only put highest confidence entries in strongMatchingIssues into finalResult)
 	finalResult := deduplicateIssues(strongMatchingIssues)
 
 	// Assign identities found to results
-	for i, identity := range finalResult {
+	// Identity: GlobalIdentity + Confidence
+	for index, identity := range finalResult {
 		if !existingAssignedIds[identity.IdentityID] {
-			currentIssueList[i].SetGlobalIdentity(identity.IdentityID)
+			currentIssueList[index].SetGlobalIdentity(identity.IdentityID)
 		}
 	}
 
 	return currentIssueList, nil
 }
 
+// findMatch manipulates the strongMatchingIssues parameter to contain an association Global Identity -> Issue
+// index: position (index) in current, not base issue list
 func findMatch(issue Identifiable, index int, baseIssueList []Identifiable, strongMatchingIssues map[string]IssueConfidence) {
 	matches := findMatches(issue, index, baseIssueList)
 
+	// iterate over matches and find the strongest match -> if existing issue has lower confidence, we take the next
 	for _, match := range matches {
 		if existingIssue, ok := strongMatchingIssues[match.BaseUUID]; !ok || existingIssue.Confidence < match.Confidence {
 			strongMatchingIssues[match.BaseUUID] = match
@@ -115,7 +124,7 @@ func findMatches(currentIssue Identifiable, index int, baseIssues []Identifiable
 	similarIssues := make(IssueConfidenceList, 0)
 
 	for _, baseIssue := range baseIssues {
-		if baseIssue.RuleId() != currentIssue.RuleId() {
+		if baseIssue.GetRuleID() != currentIssue.GetRuleID() {
 			continue
 		}
 
@@ -205,10 +214,9 @@ func filePositionDistance(baseIssue, currentIssue Identifiable) float64 {
 		return 0
 	}
 
-	ds := checkDirs(basePathable.Path(), currentPathable.Path())
-	fns := fileNameSimilarity(basePathable.Path(), currentPathable.Path())
-	fes := fileExtSimilarity(filepath.Ext(basePathable.Path()),
-		filepath.Ext(currentPathable.Path()))
+	ds := checkDirs(basePathable.GetPath(), currentPathable.GetPath())
+	fns := fileNameSimilarity(basePathable.GetPath(), currentPathable.GetPath())
+	fes := fileExtSimilarity(filepath.Ext(string(basePathable.GetPath())), filepath.Ext(string(currentPathable.GetPath())))
 
 	pathSimilarity :=
 		ds*weights.DirSimilarity +
@@ -239,14 +247,13 @@ func matchDistance(baseIssue Identifiable, currentIssue Identifiable) (float64, 
 		return 0, 0, 0, 0
 	}
 	startLineSimilarity := similarityToDistance(baseRangeable.StartLine(), currentRangeable.StartLine())
-	startColumnSimilarity := similarityToDistance(baseRangeable.StartColumn(),
-		currentRangeable.StartColumn())
+	startColumnSimilarity := similarityToDistance(baseRangeable.StartColumn(), currentRangeable.StartColumn())
 	endColumnSimilarity := similarityToDistance(baseRangeable.EndColumn(), currentRangeable.EndColumn())
 	endLineSimilarity := similarityToDistance(baseRangeable.EndLine(), currentRangeable.EndLine())
 	return startLineSimilarity, startColumnSimilarity, endColumnSimilarity, endLineSimilarity
 }
 
-func checkDirs(path1, path2 string) float64 {
+func checkDirs(path1, path2 types.FilePath) float64 {
 	if path1 == path2 {
 		return 1
 	}
@@ -254,13 +261,15 @@ func checkDirs(path1, path2 string) float64 {
 	relativePath := relative(path1, path2)
 	relativePathDistance := float64(len(strings.Split(relativePath, "/")))
 
-	longestPossiblePath := math.Max(float64(len(strings.Split(path1, "/"))), float64(len(strings.Split(path2, "/"))))
+	longestPossiblePath := math.Max(float64(len(strings.Split(string(path1), "/"))), float64(len(strings.Split(string(path2), "/"))))
 
 	return 1 - relativePathDistance/longestPossiblePath
 }
 
-func fileNameSimilarity(file1, file2 string) float64 {
-	return strutil.Similarity(file1, file2, metrics.NewLevenshtein())
+func fileNameSimilarity(file1, file2 types.FilePath) float64 {
+	basePathFile1 := filepath.Base(string(file1))
+	basePathFile2 := filepath.Base(string(file2))
+	return strutil.Similarity(basePathFile1, basePathFile2, metrics.NewLevenshtein())
 }
 
 func similarityToDistance(value1, value2 int) float64 {
@@ -278,8 +287,8 @@ func historicDistance() float64 {
 	return 1
 }
 
-func relative(path1, path2 string) string {
-	res, err := filepath.Rel(path1, path2)
+func relative(path1, path2 types.FilePath) string {
+	res, err := filepath.Rel(string(path1), string(path2))
 	if err != nil {
 		return ""
 	}

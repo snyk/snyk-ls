@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // todo iac is undertested, at a very least we should make sure the CLI gets the right commands in
@@ -115,7 +116,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 			},
 		},
 	}
-	issues, err := scanner.retrieveIssues(results, []snyk.Issue{}, "")
+	issues, err := scanner.retrieveIssues(results, []types.Issue{}, "")
 
 	assert.NoError(t, err)
 	assert.Len(t, issues, 1)
@@ -183,7 +184,7 @@ func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
 }
 
 func Test_getIssueId(t *testing.T) {
-	affectedFilePath := "path/to/file/test.yml"
+	affectedFilePath := types.FilePath("path/to/file/test.yml")
 	id := getIssueKey(affectedFilePath, sampleIssue())
 
 	assert.Equal(t, "4bd522a2fc6ce20c3258f9c194e0fca0", id)
@@ -231,7 +232,7 @@ func Test_parseIacResult(t *testing.T) {
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)
 
-	retrieveIssues, err := scanner.retrieveIssues(issues, []snyk.Issue{}, ".")
+	retrieveIssues, err := scanner.retrieveIssues(issues, []types.Issue{}, ".")
 	assert.NoError(t, err)
 
 	assert.Len(t, retrieveIssues, 2)
@@ -247,7 +248,7 @@ func Test_parseIacResult_failOnInvalidPath(t *testing.T) {
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)
 
-	retrieveIssues, err := scanner.retrieveIssues(issues, []snyk.Issue{}, ".")
+	retrieveIssues, err := scanner.retrieveIssues(issues, []types.Issue{}, ".")
 	assert.Error(t, err)
 
 	assert.Len(t, retrieveIssues, 0)

@@ -23,15 +23,16 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var bundleWithFiles = &UploadBatch{
 	hash:      "bundleWithFilesHash",
-	documents: map[string]BundleFile{"file": {}},
+	documents: map[types.FilePath]BundleFile{"file": {}},
 }
 var bundleWithMultipleFiles = &UploadBatch{
 	hash: "bundleWithMultipleFilesHash",
-	documents: map[string]BundleFile{
+	documents: map[types.FilePath]BundleFile{
 		"file":    {},
 		"another": {},
 	},

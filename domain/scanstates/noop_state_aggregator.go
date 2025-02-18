@@ -18,6 +18,7 @@ package scanstates
 
 import (
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var _ Aggregator = (*NoopStateAggregator)(nil)
@@ -25,7 +26,7 @@ var _ Aggregator = (*NoopStateAggregator)(nil)
 type NoopStateAggregator struct {
 }
 
-func (n NoopStateAggregator) GetScanErr(_ string, _ product.Product, _ bool) error {
+func (n NoopStateAggregator) GetScanErr(folderPath types.FilePath, p product.Product, isReferenceScan bool) error {
 	return nil
 }
 
@@ -37,23 +38,23 @@ func (n NoopStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
 	return &NoopEmitter{}
 }
 
-func (n NoopStateAggregator) Init(_ []string) {
+func (n NoopStateAggregator) Init(folders []types.FilePath) {
 }
 
 func NewNoopStateAggregator() Aggregator {
 	return &NoopStateAggregator{}
 }
 
-func (n NoopStateAggregator) AddNewFolder(_ string) {
+func (n NoopStateAggregator) AddNewFolder(_ types.FilePath) {
 }
 
-func (n NoopStateAggregator) SetScanState(_ string, _ product.Product, _ bool, _ scanState) {
+func (n NoopStateAggregator) SetScanState(_ types.FilePath, _ product.Product, _ bool, _ scanState) {
 }
 
-func (n NoopStateAggregator) SetScanDone(_ string, _ product.Product, _ bool, _ error) {
+func (n NoopStateAggregator) SetScanDone(folderPath types.FilePath, p product.Product, isReferenceScan bool, scanErr error) {
 }
 
-func (n NoopStateAggregator) SetScanInProgress(_ string, _ product.Product, _ bool) {
+func (n NoopStateAggregator) SetScanInProgress(folderPath types.FilePath, p product.Product, isReferenceScan bool) {
 }
 
 func (n NoopStateAggregator) allScansStarted(_ bool) bool {

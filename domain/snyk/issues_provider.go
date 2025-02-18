@@ -20,9 +20,10 @@ import (
 	"fmt"
 
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type IssuesByFile map[string][]Issue
+type IssuesByFile types.IssuesByFile
 
 func (f IssuesByFile) SeverityCountsAsString(critical, high, medium, low int) string {
 	var severityCounts string
@@ -58,14 +59,14 @@ func (f IssuesByFile) SeverityCounts() (total, critical, high, medium, low int) 
 	for _, issues := range f {
 		for _, issue := range issues {
 			total++
-			switch issue.Severity {
-			case Critical:
+			switch issue.GetSeverity() {
+			case types.Critical:
 				critical++
-			case High:
+			case types.High:
 				high++
-			case Medium:
+			case types.Medium:
 				medium++
-			case Low:
+			case types.Low:
 				low++
 			}
 		}
@@ -77,7 +78,7 @@ func (f IssuesByFile) FixableCount() int {
 	var fixableCount int
 	for _, issues := range f {
 		for _, issue := range issues {
-			if issue.AdditionalData.IsFixable() {
+			if issue.GetAdditionalData().IsFixable() {
 				fixableCount++
 			}
 		}
@@ -94,9 +95,9 @@ type ProductIssuesByFile map[product.Product]IssuesByFile
 // IssueProvider is an interface that allows to retrieve issues for a given path and range.
 // This is used instead of any concrete dependency to allow for easier testing and more flexibility in implementation.
 type IssueProvider interface {
-	IssuesForFile(path string) []Issue
-	IssuesForRange(path string, r Range) []Issue
-	Issue(key string) Issue
+	IssuesForFile(path types.FilePath) []types.Issue
+	IssuesForRange(path types.FilePath, r types.Range) []types.Issue
+	Issue(key string) types.Issue
 	Issues() IssuesByFile
 }
 
@@ -104,8 +105,8 @@ type CacheProvider interface {
 	IssueProvider
 	IsProviderFor(issueType product.FilterableIssueType) bool
 	Clear()
-	ClearIssues(path string)
-	RegisterCacheRemovalHandler(handler func(path string))
+	ClearIssues(path types.FilePath)
+	RegisterCacheRemovalHandler(handler func(path types.FilePath))
 }
 
 type FilteringIssueProvider interface {

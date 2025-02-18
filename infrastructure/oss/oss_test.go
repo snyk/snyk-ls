@@ -40,6 +40,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const testDataPackageJson = "/testdata/package.json"
@@ -49,15 +50,15 @@ const testDataPackageJson = "/testdata/package.json"
 func Test_toIssueSeverity(t *testing.T) {
 	testutil.UnitTest(t)
 	issue := ossIssue{Severity: "critical"}
-	assert.Equal(t, snyk.Critical, issue.ToIssueSeverity())
+	assert.Equal(t, types.Critical, issue.ToIssueSeverity())
 	issue = ossIssue{Severity: "high"}
-	assert.Equal(t, snyk.High, issue.ToIssueSeverity())
+	assert.Equal(t, types.High, issue.ToIssueSeverity())
 	issue = ossIssue{Severity: "medium"}
-	assert.Equal(t, snyk.Medium, issue.ToIssueSeverity())
+	assert.Equal(t, types.Medium, issue.ToIssueSeverity())
 	issue = ossIssue{Severity: "info"}
-	assert.Equal(t, snyk.Low, issue.ToIssueSeverity())
+	assert.Equal(t, types.Low, issue.ToIssueSeverity())
 	issue = ossIssue{Severity: "asdf"}
-	assert.Equal(t, snyk.Low, issue.ToIssueSeverity())
+	assert.Equal(t, types.Low, issue.ToIssueSeverity())
 }
 
 func Test_determineTargetFile(t *testing.T) {
@@ -73,7 +74,7 @@ func Test_FindRange(t *testing.T) {
 	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
 	var p = "build.gradle"
-	node := getDependencyNode(c, p, issue, []byte(content))
+	node := getDependencyNode(c, types.FilePath(p), issue, []byte(content))
 	foundRange := getRangeFromNode(node)
 
 	assert.Equal(t, 3, foundRange.Start.Line)
@@ -150,17 +151,17 @@ func Test_toIssue_CodeActions(t *testing.T) {
 			issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
 
 			assert.Equal(t, sampleOssIssue.Id, issue.ID)
-			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].Title)
+			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].GetTitle())
 			assert.Equal(t, 1, len(issue.CodelensCommands))
 			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodelensCommands[0].Title)
 
 			if test.openBrowserEnabled {
 				assert.Equal(t, 3, len(issue.CodeActions))
-				assert.Equal(t, "Open description of 'THOU SHALL NOT PASS affecting package pkg' in browser (Snyk)", issue.CodeActions[1].Title)
-				assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[2].Title)
+				assert.Equal(t, "Open description of 'THOU SHALL NOT PASS affecting package pkg' in browser (Snyk)", issue.CodeActions[1].GetTitle())
+				assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[2].GetTitle())
 			} else {
 				assert.Equal(t, 2, len(issue.CodeActions))
-				assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[1].Title)
+				assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[1].GetTitle())
 			}
 		})
 	}
@@ -178,8 +179,8 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 2, len(issue.CodeActions))
 	assert.Equal(t, "Open description of 'THOU SHALL NOT PASS affecting package pkg' in browser (Snyk)",
-		issue.CodeActions[0].Title)
-	assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[1].Title)
+		issue.CodeActions[0].GetTitle())
+	assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[1].GetTitle())
 	assert.Equal(t, 0, len(issue.CodelensCommands))
 }
 
@@ -323,7 +324,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			_, _ = scanner.Scan(context.Background(), p, folderPath, nil)
+			_, _ = scanner.Scan(context.Background(), types.FilePath(p), types.FilePath(folderPath), nil)
 			wg.Done()
 		}()
 	}
@@ -360,7 +361,7 @@ func Test_prepareScanCommand(t *testing.T) {
 			C:                       c,
 		}
 		c.SetCliSettings(&settings)
-		workDir := t.TempDir()
+		workDir := types.FilePath(t.TempDir())
 		folderConfig := c.FolderConfig(workDir)
 		folderConfig.AdditionalParameters = []string{"--dev"}
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig)
@@ -421,7 +422,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	targetFile, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
-	_, _ = scanner.Scan(ctx, targetFile, "", nil)
+	_, _ = scanner.Scan(ctx, types.FilePath(targetFile), "", nil)
 
 	// Assert
 	assert.Eventually(t, func() bool {
@@ -445,7 +446,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	t.Cleanup(cancel)
 
 	// Act
-	scanner.scheduleRefreshScan(ctx, p)
+	scanner.scheduleRefreshScan(ctx, types.FilePath(p))
 
 	// Assert
 	time.Sleep(scanner.refreshScanWaitDuration + fakeCli.ExecuteDuration + 10*time.Millisecond)
@@ -469,8 +470,8 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	t.Cleanup(cancel2)
 
 	// Act
-	scanner.scheduleRefreshScan(ctx1, targetPath)
-	scanner.scheduleRefreshScan(ctx2, targetPath)
+	scanner.scheduleRefreshScan(ctx1, types.FilePath(targetPath))
+	scanner.scheduleRefreshScan(ctx2, types.FilePath(targetPath))
 
 	// Assert
 	assert.Eventuallyf(t, func() bool {
@@ -492,7 +493,7 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Act
-	scanner.scheduleRefreshScan(ctx, targetPath)
+	scanner.scheduleRefreshScan(ctx, types.FilePath(targetPath))
 	cancel()
 
 	// Assert
@@ -513,7 +514,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	filePath, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
-	analysis, err := scanner.Scan(context.Background(), filePath, "", nil)
+	analysis, err := scanner.Scan(context.Background(), types.FilePath(filePath), "", nil)
 
 	// Assert
 	assert.NoError(t, err)

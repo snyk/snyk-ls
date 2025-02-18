@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type HtmlRenderer struct {
@@ -36,7 +37,7 @@ type HtmlRenderer struct {
 type TemplateData struct {
 	Styles       template.CSS
 	Scripts      template.JS
-	Issue        snyk.Issue
+	Issue        types.Issue
 	SeverityIcon template.HTML
 	Description  template.HTML
 	Remediation  template.HTML
@@ -76,7 +77,7 @@ func getScripts() template.JS {
 }
 
 // Function to get the rendered HTML with issue details and CSS
-func (service *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
+func (service *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	var htmlTemplate bytes.Buffer
 
 	nonce, err := html.GenerateSecurityNonce()
@@ -85,7 +86,7 @@ func (service *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		return ""
 	}
 
-	issueData, ok := issue.AdditionalData.(snyk.IaCIssueData)
+	issueData, ok := issue.GetAdditionalData().(snyk.IaCIssueData)
 	if !ok {
 		service.c.Logger().Error().Msgf("Failed to parse IaC issue")
 		return htmlTemplate.String()
@@ -96,10 +97,10 @@ func (service *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		Scripts:      getScripts(),
 		Issue:        issue,
 		SeverityIcon: html.SeverityIcon(issue),
-		Description:  html.MarkdownToHTML(issue.Message),
+		Description:  html.MarkdownToHTML(issue.GetMessage()),
 		Remediation:  html.MarkdownToHTML(issueData.Resolve),
 		ResourcePath: formatPath(issueData.Path),
-		FilePath:     template.HTML(issue.Path()),
+		FilePath:     template.HTML(issue.GetAffectedFilePath()),
 		Nonce:        template.HTML(nonce),
 	}
 

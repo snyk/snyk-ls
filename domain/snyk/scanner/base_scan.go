@@ -22,13 +22,12 @@ import (
 
 	"github.com/gosimple/hashdir"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
-func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s snyk.ProductScanner, folderConfig *types.FolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
+func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s types.ProductScanner, folderConfig *types.FolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
 	logger := sc.c.Logger().With().Str("method", "scanBaseBranch").Logger()
 	if folderConfig == nil {
 		return errors.New("folder config is required")
@@ -59,12 +58,12 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s sny
 	// prepare the scan directory with the pre-scan command
 	err = sc.executePreScanCommand(ctx, sc.c, s.Product(), folderConfig, baseFolderPath, false)
 	if err != nil {
-		logger.Err(err).Str("folderPath", folderPath).Str("baseFolderPath", baseFolderPath).Send()
+		logger.Err(err).Str("folderPath", string(folderPath)).Str("baseFolderPath", string(baseFolderPath)).Send()
 		return err
 	}
 
 	// scan
-	var results []snyk.Issue
+	var results []types.Issue
 	if s.Product() == product.ProductCode {
 		results, err = s.Scan(ctx, "", baseFolderPath, folderConfig)
 	} else {
@@ -82,8 +81,8 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s sny
 
 func (sc *DelegatingConcurrentScanner) persistScanResults(
 	folderConfig *types.FolderConfig,
-	results []snyk.Issue,
-	s snyk.ProductScanner,
+	results []types.Issue,
+	s types.ProductScanner,
 ) {
 	logger := sc.c.Logger().With().Str("method", "persistScanResults").Logger()
 	folderPath := folderConfig.FolderPath
@@ -97,7 +96,7 @@ func (sc *DelegatingConcurrentScanner) persistScanResults(
 
 	err = sc.scanPersister.Add(folderPath, persistHash, results, s.Product())
 	if err != nil {
-		logger.Error().Err(err).Msg("could not persist issue list for folder: " + folderPath)
+		logger.Error().Err(err).Msg(string("could not persist issue list for folder: " + folderPath))
 	}
 }
 
@@ -108,7 +107,7 @@ func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.Folder
 	if folderConfig.ReferenceFolderPath != "" {
 		// this is not a performance problem
 		// jdk repository hashing (2.1 GB with lots of files) takes 5.9s on a Mac M3 Pro
-		persistHash, err = hashdir.Make(folderConfig.ReferenceFolderPath, "sha256")
+		persistHash, err = hashdir.Make(string(folderConfig.ReferenceFolderPath), "sha256")
 	} else {
 		persistHash, err = vcs.HeadRefHashForBranch(&logger, folderConfig.FolderPath, folderConfig.BaseBranch)
 	}

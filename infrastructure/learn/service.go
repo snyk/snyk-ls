@@ -30,14 +30,14 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type Service interface {
 	LearnEndpoint(conf *config.Config) (learnEndpoint string, err error)
-	GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType snyk.Type) (lesson *Lesson, err error)
+	GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType types.IssueType) (lesson *Lesson, err error)
 	GetAllLessons() (lessons []Lesson, err error)
 	MaintainCache() func()
 }
@@ -208,7 +208,7 @@ func (s *serviceImpl) updateCaches(lessons []Lesson) {
 	}
 }
 
-func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType snyk.Type) (lesson *Lesson, err error) {
+func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType types.IssueType) (lesson *Lesson, err error) {
 	logger := s.logger.With().Str("method", "GetLesson").Logger()
 
 	params := s.lessonsLookupParams(ecosystem, rule, cwes, cves, issueType)
@@ -297,7 +297,7 @@ func (s *serviceImpl) lessonsLookupParams(
 	rule string,
 	cwes []string,
 	cves []string,
-	issueType snyk.Type,
+	issueType types.IssueType,
 ) (params *LessonLookupParams) {
 	// the vscode service only takes the first CWE/CVE
 	if len(cwes) > 0 && len(cwes[0]) > 0 {
@@ -311,14 +311,14 @@ func (s *serviceImpl) lessonsLookupParams(
 		cves = []string{}
 	}
 	switch issueType {
-	case snyk.DependencyVulnerability:
+	case types.DependencyVulnerability:
 		params = &LessonLookupParams{
 			rule,
 			ecosystem,
 			cwes,
 			cves,
 		}
-	case snyk.CodeSecurityVulnerability:
+	case types.CodeSecurityVulnerability:
 		idParts := strings.Split(rule, "/")
 		params = &LessonLookupParams{
 			idParts[len(idParts)-1],

@@ -188,7 +188,11 @@ func updateTrustedFolders(c *config.Config, settings types.Settings) {
 	}
 
 	if settings.TrustedFolders != nil {
-		c.SetTrustedFolders(settings.TrustedFolders)
+		var trustedFolders []types.FilePath
+		for _, folder := range settings.TrustedFolders {
+			trustedFolders = append(trustedFolders, types.FilePath(folder))
+		}
+		c.SetTrustedFolders(trustedFolders)
 	}
 }
 

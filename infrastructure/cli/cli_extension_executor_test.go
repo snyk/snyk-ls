@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -40,7 +41,7 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	expectedSnykCommand := cmd[1:]
 	actualSnykCommand := []string{}
 
-	expectedWorkingDir := "my work dir"
+	expectedWorkingDir := types.FilePath("my work dir")
 	actualWorkingDir := ""
 
 	expectedPayload := []byte("hello")
@@ -69,7 +70,7 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	// Compare
 	assert.Equal(t, expectedPayload, actualData)
 	assert.Equal(t, expectedSnykCommand, actualSnykCommand)
-	assert.Equal(t, expectedWorkingDir, actualWorkingDir)
+	assert.Equal(t, string(expectedWorkingDir), actualWorkingDir)
 }
 
 func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {

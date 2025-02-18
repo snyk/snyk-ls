@@ -34,9 +34,9 @@ type lensesWithIssueCount struct {
 	totalIssues  int
 }
 
-func GetFor(filePath string) (lenses []sglsp.CodeLens) {
+func GetFor(filePath types.FilePath) (lenses []sglsp.CodeLens) {
 	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "codelens.GetFor").Str("filePath", filePath).Logger()
+	logger := c.Logger().With().Str("method", "codelens.GetFor").Str("filePath", string(filePath)).Logger()
 	f := c.Workspace().GetFolderContaining(filePath)
 	if f == nil {
 		return lenses
@@ -50,23 +50,23 @@ func GetFor(filePath string) (lenses []sglsp.CodeLens) {
 	issues := ip.IssuesForFile(filePath)
 
 	// group by range first
-	lensesByRange := make(map[snyk.Range]*lensesWithIssueCount)
+	lensesByRange := make(map[types.Range]*lensesWithIssueCount)
 	for _, issue := range issues {
-		if c.IsDeltaFindingsEnabled() && !issue.IsNew {
+		if c.IsDeltaFindingsEnabled() && !issue.GetIsNew() {
 			continue
 		}
-		for _, lens := range issue.CodelensCommands {
-			lensesWithIssueCountsForRange := lensesByRange[issue.Range]
+		for _, lens := range issue.GetCodelensCommands() {
+			lensesWithIssueCountsForRange := lensesByRange[issue.GetRange()]
 			if lensesWithIssueCountsForRange == nil {
 				lensesWithIssueCountsForRange = &lensesWithIssueCount{
 					lensCommands: []types.CommandData{},
 					issueCount:   0,
-					totalIssues:  len(ip.IssuesForRange(filePath, issue.Range)),
+					totalIssues:  len(ip.IssuesForRange(filePath, issue.GetRange())),
 				}
 			}
 			lensesWithIssueCountsForRange.lensCommands = append(lensesWithIssueCountsForRange.lensCommands, lens)
 			lensesWithIssueCountsForRange.issueCount++
-			lensesByRange[issue.Range] = lensesWithIssueCountsForRange
+			lensesByRange[issue.GetRange()] = lensesWithIssueCountsForRange
 		}
 	}
 
@@ -126,7 +126,7 @@ func getLensCommands(lensesWithIssueCount *lensesWithIssueCount, logger zerolog.
 	return lenses
 }
 
-func getCodeLensFromCommand(r snyk.Range, command types.CommandData) sglsp.CodeLens {
+func getCodeLensFromCommand(r types.Range, command types.CommandData) sglsp.CodeLens {
 	return sglsp.CodeLens{
 		Range: converter.ToRange(r),
 		Command: sglsp.Command{

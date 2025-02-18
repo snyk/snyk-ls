@@ -25,7 +25,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestNpmRangeFinder_Find(t *testing.T) {
@@ -47,9 +47,9 @@ func TestNpmRangeFinder_Find(t *testing.T) {
 	var testPath, _ = filepath.Abs("testdata/package.json")
 	var testContent, _ = os.ReadFile(testPath)
 	npmRangeFinder := NpmRangeFinder{
-		uri:         testPath,
+		uri:         types.FilePath(testPath),
 		fileContent: testContent,
-		myRange:     snyk.Range{},
+		myRange:     types.Range{},
 	}
 
 	expected := ast.Node{
@@ -90,9 +90,9 @@ func TestNpmRangeFinder_Find_Scoped_Packages(t *testing.T) {
 	var testPath, _ = filepath.Abs("testdata/package.json")
 	var testContent, _ = os.ReadFile(testPath)
 	npmRangeFinder := NpmRangeFinder{
-		uri:         testPath,
+		uri:         types.FilePath(testPath),
 		fileContent: testContent,
-		myRange:     snyk.Range{},
+		myRange:     types.Range{},
 	}
 
 	expected := ast.Node{

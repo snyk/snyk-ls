@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type OssIssueData struct {
@@ -29,7 +30,7 @@ type OssIssueData struct {
 	LineNumber         int                `json:"lineNumber"`
 	Identifiers        Identifiers        `jsom:"identifiers"`
 	Description        string             `json:"description"`
-	References         []Reference        `json:"references,omitempty"`
+	References         []types.Reference  `json:"references,omitempty"`
 	Version            string             `json:"version"`
 	License            string             `json:"license,omitempty"`
 	PackageManager     string             `json:"packageManager"`
@@ -43,7 +44,7 @@ type OssIssueData struct {
 	Exploit            string             `json:"exploit,omitempty"`
 	IsPatchable        bool               `json:"isPatchable"`
 	ProjectName        string             `json:"projectName"`
-	DisplayTargetFile  string             `json:"displayTargetFile"`
+	DisplayTargetFile  types.FilePath     `json:"displayTargetFile"`
 	Language           string             `json:"language"`
 	Details            string             `json:"details"`
 	MatchingIssues     []OssIssueData     `json:"matchingIssues"`

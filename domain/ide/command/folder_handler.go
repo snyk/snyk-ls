@@ -41,7 +41,7 @@ func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, noti
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
-	var folderPaths []string
+	var folderPaths []types.FilePath
 	for _, f := range c.Workspace().Folders() {
 		folderPaths = append(folderPaths, f.Path())
 	}
@@ -66,7 +66,7 @@ func sendFolderConfigsNotification(c *config.Config, notifier noti.Notifier) {
 func initScanPersister(c *config.Config, persister persistence.ScanSnapshotPersister) {
 	logger := c.Logger().With().Str("method", "initScanPersister").Logger()
 	w := c.Workspace()
-	var folderList []string
+	var folderList []types.FilePath
 	for _, f := range w.Folders() {
 		folderList = append(folderList, f.Path())
 	}
@@ -123,7 +123,7 @@ func showTrustDialog(c *config.Config, srv types.Server, untrusted []types.Folde
 }
 
 func GetTrustMessage(untrusted []types.Folder) string {
-	var untrustedFolderString string
+	var untrustedFolderString types.FilePath
 	for _, folder := range untrusted {
 		untrustedFolderString += folder.Path() + "\n"
 	}

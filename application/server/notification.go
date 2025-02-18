@@ -151,7 +151,7 @@ func registerNotifier(c *config.Config, srv types.Server) {
 }
 
 func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server) {
-	folder := types.WorkspaceFolder{Uri: uri.PathToUri(params.FolderPath)}
+	folder := types.WorkspaceFolder{Uri: uri.PathToUri(types.FilePath(params.FolderPath))}
 	logger.Debug().Str("folderPath", params.FolderPath).Msg("retrieving sdk")
 
 	sdks := []types.LsSdk{}

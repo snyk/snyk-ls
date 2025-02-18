@@ -34,31 +34,31 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var issuesSeverity = map[string]snyk.Severity{
-	"critical": snyk.Critical,
-	"high":     snyk.High,
-	"low":      snyk.Low,
-	"medium":   snyk.Medium,
+var issuesSeverity = map[string]types.Severity{
+	"critical": types.Critical,
+	"high":     types.High,
+	"low":      types.Low,
+	"medium":   types.Medium,
 }
 
-func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter) snyk.Issue {
+func toIssue(affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter) *snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
 	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueDepNode)
 
 	var codelensCommands []types.CommandData
 	for _, codeAction := range codeActions {
-		if strings.Contains(codeAction.Title, "Upgrade to") {
+		if strings.Contains(codeAction.GetTitle(), "Upgrade to") {
 			codelensCommands = append(codelensCommands, types.CommandData{
-				Title:     codeAction.Title,
+				Title:     codeAction.GetTitle(),
 				CommandId: types.CodeFixCommand,
 				Arguments: []any{
-					codeAction.Uuid,
+					codeAction.GetUuid(),
 					affectedFilePath,
 					getRangeFromNode(issueDepNode),
 				},
-				GroupingKey:   codeAction.GroupingKey,
-				GroupingType:  codeAction.GroupingType,
-				GroupingValue: codeAction.GroupingValue,
+				GroupingKey:   codeAction.GetGroupingKey(),
+				GroupingType:  codeAction.GetGroupingType(),
+				GroupingValue: codeAction.GetGroupingValue(),
 			})
 		}
 	}
@@ -90,7 +90,7 @@ func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, is
 		message = message[:maxLength] + "... (Snyk)"
 	}
 
-	d := snyk.Issue{
+	d := &snyk.Issue{
 		ID:                  issue.Id,
 		Message:             message,
 		FormattedMessage:    issue.GetExtendedMessage(issue),
@@ -99,7 +99,7 @@ func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, is
 		AffectedFilePath:    affectedFilePath,
 		Product:             product.ProductOpenSource,
 		IssueDescriptionURL: issue.CreateIssueURL(),
-		IssueType:           snyk.DependencyVulnerability,
+		IssueType:           types.DependencyVulnerability,
 		CodeActions:         codeActions,
 		CodelensCommands:    codelensCommands,
 		Ecosystem:           issue.PackageManager,
@@ -114,25 +114,25 @@ func toIssue(affectedFilePath string, issue ossIssue, scanResult *scanResult, is
 	return d
 }
 
-func getRangeFromNode(issueDepNode *ast.Node) snyk.Range {
+func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 	if issueDepNode == nil {
-		return snyk.Range{}
+		return types.Range{}
 	}
-	r := snyk.Range{
-		Start: snyk.Position{Line: issueDepNode.Line, Character: issueDepNode.StartChar},
-		End:   snyk.Position{Line: issueDepNode.Line, Character: issueDepNode.EndChar},
+	r := types.Range{
+		Start: types.Position{Line: issueDepNode.Line, Character: issueDepNode.StartChar},
+		End:   types.Position{Line: issueDepNode.Line, Character: issueDepNode.EndChar},
 	}
 	return r
 }
 
-func convertScanResultToIssues(c *config.Config, res *scanResult, targetFilePath string, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]snyk.Issue) []snyk.Issue {
-	var issues []snyk.Issue
+func convertScanResultToIssues(c *config.Config, res *scanResult, targetFilePath types.FilePath, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue) []types.Issue {
+	var issues []types.Issue
 
 	duplicateCheckMap := map[string]bool{}
 
 	for _, issue := range res.Vulnerabilities {
 		packageKey := issue.PackageName + "@" + issue.Version
-		duplicateKey := targetFilePath + "|" + issue.Id + "|" + issue.PackageName
+		duplicateKey := string(targetFilePath) + "|" + issue.Id + "|" + issue.PackageName
 		if duplicateCheckMap[duplicateKey] {
 			continue
 		}

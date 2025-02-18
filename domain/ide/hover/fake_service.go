@@ -17,25 +17,25 @@
 package hover
 
 import (
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type FakeHoverService struct {
 	hovers        chan DocumentHovers
 	calls         int
-	DeletedHovers map[string]bool
+	DeletedHovers map[types.FilePath]bool
 }
 
 func NewFakeHoverService() *FakeHoverService {
 	return &FakeHoverService{
 		calls:         0,
 		hovers:        make(chan DocumentHovers, 10000),
-		DeletedHovers: make(map[string]bool),
+		DeletedHovers: make(map[types.FilePath]bool),
 	}
 }
 
-func (t *FakeHoverService) DeleteHover(_ product.Product, path string) {
+func (t *FakeHoverService) DeleteHover(p product.Product, path types.FilePath) {
 	t.DeletedHovers[path] = true
 }
 
@@ -50,7 +50,7 @@ func (t *FakeHoverService) ClearAllHovers() {
 	}
 }
 
-func (t *FakeHoverService) GetHover(_ string, _ snyk.Position) Result {
+func (t *FakeHoverService) GetHover(_ types.FilePath, _ types.Position) Result {
 	//TODO implement me
 	panic("implement me")
 }

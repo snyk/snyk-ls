@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/exp/maps"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -34,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestCLIScanner_ScanPackages_WithoutContent(t *testing.T) {
@@ -53,7 +53,7 @@ func TestCLIScanner_ScanPackages_WithContent(t *testing.T) {
 
 	testFilePath, scanner, _ := setupCLIScannerAsPackageScanner(t, c)
 
-	bytes, err := os.ReadFile(testFilePath)
+	bytes, err := os.ReadFile(string(testFilePath))
 	fileContent := string(bytes)
 	assert.NoError(t, err)
 
@@ -68,7 +68,7 @@ func TestCLIScanner_ScanPackages_WithContentAndNotSupportedFileExtension(t *test
 
 	testFilePath, scanner, _ := setupCLIScannerAsPackageScanner(t, c)
 
-	bytes, err := os.ReadFile(testFilePath)
+	bytes, err := os.ReadFile(string(testFilePath))
 	fileContent := string(bytes)
 	assert.NoError(t, err)
 
@@ -124,7 +124,7 @@ func TestCLIScanner_updateCachedDependencies_updates_range_of_issues_in_cache(t 
 
 	assert.Len(t, cliScanner.updateCachedDependencies(dependencies), 1)
 
-	bytes, err := os.ReadFile(testFilePath)
+	bytes, err := os.ReadFile(string(testFilePath))
 	assert.NoError(t, err)
 
 	// this should move the range of the issue in the cache down
@@ -134,10 +134,18 @@ func TestCLIScanner_updateCachedDependencies_updates_range_of_issues_in_cache(t 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, updatedDependencies)
 
-	// we need to copy the cache to a different map because updateCachedDependencies will
-	// change the range of the issues in the map, which is a pointer
-	oldPackageCache := make(map[string][]snyk.Issue)
-	maps.Copy(oldPackageCache, cliScanner.packageIssueCache)
+	// we need to create new instances to be able to compare
+	oldPackageCache := make(map[string][]types.Issue)
+	for path, issues := range cliScanner.packageIssueCache {
+		newIssues := make([]types.Issue, len(issues))
+		for i, issue := range issues {
+			myBackupIssue := &snyk.Issue{}
+			myBackupIssue.SetRange(issue.GetRange())
+			myBackupIssue.SetID(issue.GetID())
+			newIssues[i] = myBackupIssue
+		}
+		oldPackageCache[path] = newIssues
+	}
 
 	assert.Len(t, cliScanner.updateCachedDependencies(updatedDependencies), 1)
 
@@ -145,14 +153,14 @@ func TestCLIScanner_updateCachedDependencies_updates_range_of_issues_in_cache(t 
 		newIssues := cliScanner.packageIssueCache[key]
 		for i, issue := range issues {
 			assert.NotEqual(t, issue, newIssues[i])
-			assert.Equal(t, issue.ID, newIssues[i].ID)
-			assert.Equal(t, issue.Range.Start.Line, newIssues[i].Range.Start.Line-4)
-			assert.Equal(t, issue.Range.End.Line, newIssues[i].Range.End.Line-4)
+			assert.Equal(t, issue.GetID(), newIssues[i].GetID())
+			assert.Equal(t, issue.GetRange().Start.Line, newIssues[i].GetRange().Start.Line-4)
+			assert.Equal(t, issue.GetRange().End.Line, newIssues[i].GetRange().End.Line-4)
 		}
 	}
 }
 
-func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (string, *CLIScanner, *cli.TestExecutor) {
+func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (types.FilePath, *CLIScanner, *cli.TestExecutor) {
 	t.Helper()
 	c.SetCliSettings(&config.CliSettings{
 		AdditionalOssParameters: []string{"--all-projects"},
@@ -168,5 +176,5 @@ func setupCLIScannerAsPackageScanner(t *testing.T, c *config.Config) (string, *C
 	assert.NoError(t, err)
 	cliExecutor := cli.NewTestExecutorWithResponseFromFile(testResult, c.Logger())
 	scanner := NewCLIScanner(c, instrumentor, errorReporter, cliExecutor, getLearnMock(t), notifier).(*CLIScanner)
-	return testFilePath, scanner, cliExecutor
+	return types.FilePath(testFilePath), scanner, cliExecutor
 }

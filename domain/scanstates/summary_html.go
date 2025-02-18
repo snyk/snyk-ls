@@ -24,6 +24,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/delta"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 //go:embed template/details.html
@@ -53,8 +54,8 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 
 func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	logger := renderer.c.Logger().With().Str("method", "GetSummaryHtml").Logger()
-	var allIssues []snyk.Issue
-	var deltaIssues []snyk.Issue
+	var allIssues []types.Issue
+	var deltaIssues []types.Issue
 	var currentIssuesFound int
 	var currentFixableIssueCount int
 	isDeltaEnabled := renderer.c.IsDeltaFindingsEnabled()
@@ -100,7 +101,7 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	return buffer.String()
 }
 
-func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []snyk.Issue, deltaIssues []snyk.Issue) {
+func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, deltaIssues []types.Issue) {
 	logger := renderer.c.Logger().With().Str("method", "getIssuesFromFolders").Logger()
 
 	for _, f := range renderer.c.Workspace().Folders() {
@@ -123,13 +124,13 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []snyk.Issue, de
 	return allIssues, deltaIssues
 }
 
-func (renderer *HtmlRenderer) getDeltaIssuesForFolder(dp delta.Provider) []snyk.Issue {
+func (renderer *HtmlRenderer) getDeltaIssuesForFolder(dp delta.Provider) []types.Issue {
 	return dp.GetDeltaForAllProducts(renderer.c.DisplayableIssueTypes())
 }
 
-func fixableIssueCount(issues []snyk.Issue) (fixableIssueCount int) {
+func fixableIssueCount(issues []types.Issue) (fixableIssueCount int) {
 	for _, issue := range issues {
-		if issue.AdditionalData.IsFixable() {
+		if issue.GetAdditionalData().IsFixable() {
 			fixableIssueCount++
 		}
 	}

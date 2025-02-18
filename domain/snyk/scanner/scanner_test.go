@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -50,7 +49,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
 	scanner, _ := setupScanner(enabledScanner, disabledScanner)
 
-	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", types.NoopResultProcessor, "")
 
 	assert.Eventually(
 		t,
@@ -62,7 +61,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	)
 }
 
-func setupScanner(testProductScanners ...snyk.ProductScanner) (
+func setupScanner(testProductScanners ...types.ProductScanner) (
 	sc Scanner,
 	scanNotifier ScanNotifier,
 ) {
@@ -88,7 +87,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	emptyToken := !config.CurrentConfig().NonEmptyToken()
 
 	// Act
-	scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
+	scanner.Scan(context.Background(), "", types.NoopResultProcessor, "")
 
 	// Assert
 	assert.True(t, emptyToken)
@@ -105,7 +104,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 
 	// Act
 	go func() {
-		scanner.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
+		scanner.Scan(context.Background(), "", types.NoopResultProcessor, "")
 		done <- true
 	}()
 	time.Sleep(500 * time.Millisecond) // Wait for the product scanner to start running
@@ -125,7 +124,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	sc, scanNotifier := setupScanner(enabledScanner)
 	mockScanNotifier := scanNotifier.(*MockScanNotifier)
 
-	sc.Scan(context.Background(), "", snyk.NoopResultProcessor, "")
+	sc.Scan(context.Background(), "", types.NoopResultProcessor, "")
 
 	assert.NotEmpty(t, mockScanNotifier.InProgressCalls())
 }
@@ -139,7 +138,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	sc, _ := setupScanner(enabledScanner)
 	delegatingScanner, ok := sc.(*DelegatingConcurrentScanner)
 	require.True(t, ok)
-	workDir := t.TempDir()
+	workDir := types.FilePath(t.TempDir())
 
 	command := "/bin/sh"
 

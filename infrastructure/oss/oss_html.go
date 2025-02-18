@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 //go:embed template/details.html
@@ -64,8 +65,8 @@ func join(sep string, s []string) string {
 	return strings.Join(s, sep)
 }
 
-func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
-	additionalData, ok := issue.AdditionalData.(snyk.OssIssueData)
+func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
+	additionalData, ok := issue.GetAdditionalData().(snyk.OssIssueData)
 	if !ok {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to OssIssueData")
 		return ""
@@ -76,11 +77,11 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 	detailedPaths := getDetailedPaths(additionalData)
 
 	data := map[string]interface{}{
-		"IssueId":            issue.ID,
+		"IssueId":            issue.GetID(),
 		"IssueName":          additionalData.Name,
 		"IssueTitle":         additionalData.Title,
 		"IssueType":          getIssueType(additionalData),
-		"SeverityText":       issue.Severity.String(),
+		"SeverityText":       issue.GetSeverity().String(),
 		"SeverityIcon":       html.SeverityIcon(issue),
 		"VulnerableModule":   additionalData.Name,
 		"IssueOverview":      html.MarkdownToHTML(string(overview)),

@@ -47,11 +47,11 @@ type TestProductScanner struct {
 	c            *config.Config
 }
 
-func (t *TestProductScanner) GetInlineValues(_ string, _ snyk.Range) ([]snyk.InlineValue, error) {
+func (t *TestProductScanner) GetInlineValues(_ types.FilePath, _ types.Range) ([]snyk.InlineValue, error) {
 	return []snyk.InlineValue{}, nil
 }
 
-func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string, _ *types.FolderConfig) (issues []snyk.Issue, err error) {
+func (t *TestProductScanner) Scan(ctx context.Context, _ types.FilePath, _ types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
 	t.c.Logger().Debug().Msg("Test product scanner running scan")
 	defer t.c.Logger().Debug().Msg("Test product scanner scan finished")
 
@@ -74,7 +74,7 @@ func (t *TestProductScanner) Scan(ctx context.Context, _ string, _ string, _ *ty
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.scans++
-	return []snyk.Issue{}, nil
+	return []types.Issue{}, nil
 }
 
 func (t *TestProductScanner) Scans() int {

@@ -19,54 +19,56 @@ package snyk
 import (
 	"reflect"
 	"testing"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestUpdateSeverityCount(t *testing.T) {
 	tests := []struct {
 		name     string
-		initial  SeverityIssueCounts
-		issue    Issue
-		expected SeverityIssueCounts
+		initial  types.SeverityIssueCounts
+		issue    types.Issue
+		expected types.SeverityIssueCounts
 	}{{
 		name:    "Add new Critical issue",
-		initial: make(SeverityIssueCounts),
-		issue: Issue{
-			Severity: Critical,
+		initial: make(types.SeverityIssueCounts),
+		issue: &Issue{
+			Severity: types.Critical,
 		},
-		expected: SeverityIssueCounts{
-			Critical: {Total: 1, Ignored: 0, Open: 1},
+		expected: types.SeverityIssueCounts{
+			types.Critical: {Total: 1, Ignored: 0, Open: 1},
 		},
 	}, {
 		name: "Add ignored High issue",
-		initial: SeverityIssueCounts{
-			High: {Total: 1, Ignored: 1, Open: 0},
+		initial: types.SeverityIssueCounts{
+			types.High: {Total: 1, Ignored: 1, Open: 0},
 		},
-		issue: Issue{
-			Severity:  High,
+		issue: &Issue{
+			Severity:  types.High,
 			IsIgnored: true,
 		},
-		expected: SeverityIssueCounts{
-			High: {Total: 2, Ignored: 2, Open: 0},
+		expected: types.SeverityIssueCounts{
+			types.High: {Total: 2, Ignored: 2, Open: 0},
 		},
 	}, {
 		name: "Add new Medium issue",
-		initial: SeverityIssueCounts{
-			Medium: {Total: 2, Ignored: 1, Open: 1},
+		initial: types.SeverityIssueCounts{
+			types.Medium: {Total: 2, Ignored: 1, Open: 1},
 		},
-		issue: Issue{
-			Severity: Medium,
+		issue: &Issue{
+			Severity: types.Medium,
 		},
-		expected: SeverityIssueCounts{
-			Medium: {Total: 3, Ignored: 1, Open: 2},
+		expected: types.SeverityIssueCounts{
+			types.Medium: {Total: 3, Ignored: 1, Open: 2},
 		},
 	}, {
 		name:    "Add new Low issue",
-		initial: make(SeverityIssueCounts),
-		issue: Issue{
-			Severity: Low,
+		initial: make(types.SeverityIssueCounts),
+		issue: &Issue{
+			Severity: types.Low,
 		},
-		expected: SeverityIssueCounts{
-			Low: {Total: 1, Ignored: 0, Open: 1},
+		expected: types.SeverityIssueCounts{
+			types.Low: {Total: 1, Ignored: 0, Open: 1},
 		}}}
 
 	for _, testStruct := range tests {
@@ -76,7 +78,7 @@ func TestUpdateSeverityCount(t *testing.T) {
 			issue := testStruct.issue
 
 			// Act
-			updateSeverityCount(initial, issue)
+			types.UpdateSeverityCount(initial, issue)
 
 			// Assert
 			if !reflect.DeepEqual(initial, testStruct.expected) {
@@ -89,25 +91,25 @@ func TestUpdateSeverityCount(t *testing.T) {
 func TestGetSeverityIssueCounts(t *testing.T) {
 	tests := []struct {
 		name     string
-		scanData ScanData
-		expected SeverityIssueCounts
+		scanData types.ScanData
+		expected types.SeverityIssueCounts
 	}{{
 		name: "Mixed issues",
-		scanData: ScanData{
-			Issues: []Issue{
-				{Severity: Critical, IsIgnored: false},
-				{Severity: Critical, IsIgnored: true},
-				{Severity: High, IsIgnored: false},
-				{Severity: Medium, IsIgnored: true},
-				{Severity: Medium, IsIgnored: false},
-				{Severity: Low, IsIgnored: false},
+		scanData: types.ScanData{
+			Issues: []types.Issue{
+				&Issue{Severity: types.Critical, IsIgnored: false},
+				&Issue{Severity: types.Critical, IsIgnored: true},
+				&Issue{Severity: types.High, IsIgnored: false},
+				&Issue{Severity: types.Medium, IsIgnored: true},
+				&Issue{Severity: types.Medium, IsIgnored: false},
+				&Issue{Severity: types.Low, IsIgnored: false},
 			},
 		},
-		expected: SeverityIssueCounts{
-			Critical: {Total: 2, Ignored: 1, Open: 1},
-			High:     {Total: 1, Ignored: 0, Open: 1},
-			Medium:   {Total: 2, Ignored: 1, Open: 1},
-			Low:      {Total: 1, Ignored: 0, Open: 1},
+		expected: types.SeverityIssueCounts{
+			types.Critical: {Total: 2, Ignored: 1, Open: 1},
+			types.High:     {Total: 1, Ignored: 0, Open: 1},
+			types.Medium:   {Total: 2, Ignored: 1, Open: 1},
+			types.Low:      {Total: 1, Ignored: 0, Open: 1},
 		},
 	}}
 

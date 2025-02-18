@@ -35,7 +35,7 @@ const (
 )
 
 type StoredConfig struct {
-	FolderConfigs map[string]*types.FolderConfig `json:"folderConfigs"`
+	FolderConfigs map[types.FilePath]*types.FolderConfig `json:"folderConfigs"`
 }
 
 func ConfigFile(ideName string) (string, error) {
@@ -44,7 +44,7 @@ func ConfigFile(ideName string) (string, error) {
 	return xdg.ConfigFile(path)
 }
 
-func folderConfigFromStorage(conf configuration.Configuration, path string) (*types.FolderConfig, error) {
+func folderConfigFromStorage(conf configuration.Configuration, path types.FilePath) (*types.FolderConfig, error) {
 	sc := GetStoredConfig(conf)
 
 	if sc.FolderConfigs[path] == nil {
@@ -80,7 +80,7 @@ func Save(conf configuration.Configuration, sc *StoredConfig) error {
 }
 
 func createNewStoredConfig(conf configuration.Configuration) *StoredConfig {
-	config := StoredConfig{FolderConfigs: map[string]*types.FolderConfig{}}
+	config := StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}
 	conf.Set(ConfigMainKey, config)
 	return &config
 }

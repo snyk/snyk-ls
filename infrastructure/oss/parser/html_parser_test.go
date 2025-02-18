@@ -24,12 +24,13 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func createTestFile(t *testing.T) *os.File {
 	t.Helper()
-	dir := t.TempDir()
-	file := testsupport.CreateTempFile(t, dir)
+	dir := types.FilePath(t.TempDir())
+	file := testsupport.CreateTempFile(t, string(dir))
 	fileContent :=
 		`<html>
 			<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
@@ -52,7 +53,7 @@ func TestHtmlParser_Parse_FindsDependencies(t *testing.T) {
 	p := NewHTMLParser(c)
 	file := createTestFile(t)
 
-	dependencies, err := p.Parse(file.Name())
+	dependencies, err := p.Parse(types.FilePath(file.Name()))
 
 	assert.NoError(t, err)
 	assert.Len(t, dependencies, 7)
@@ -63,7 +64,7 @@ func TestHtmlParser_parses_maxcdn(t *testing.T) {
 	h := NewHTMLParser(c).(*htmlParser)
 	file := createTestFile(t)
 
-	dependencies, err := h.Parse(file.Name())
+	dependencies, err := h.Parse(types.FilePath(file.Name()))
 	assert.NoError(t, err)
 
 	assert.Equal(t, "bootstrap", dependencies[0].ArtifactID)
@@ -74,7 +75,7 @@ func TestHtmlParser_parses_stackpath(t *testing.T) {
 	h := NewHTMLParser(c).(*htmlParser)
 	file := createTestFile(t)
 
-	dependencies, err := h.Parse(file.Name())
+	dependencies, err := h.Parse(types.FilePath(file.Name()))
 	assert.NoError(t, err)
 
 	assert.Equal(t, "bootstrap", dependencies[1].ArtifactID)
@@ -85,7 +86,7 @@ func TestHtmlParser_parses_yastatic(t *testing.T) {
 	h := NewHTMLParser(c).(*htmlParser)
 	file := createTestFile(t)
 
-	dependencies, err := h.Parse(file.Name())
+	dependencies, err := h.Parse(types.FilePath(file.Name()))
 	assert.NoError(t, err)
 
 	assert.Equal(t, "lodash", dependencies[2].ArtifactID)
@@ -96,7 +97,7 @@ func TestHtmlParser_parses_jsdelivrnet(t *testing.T) {
 	h := NewHTMLParser(c).(*htmlParser)
 	file := createTestFile(t)
 
-	dependencies, err := h.Parse(file.Name())
+	dependencies, err := h.Parse(types.FilePath(file.Name()))
 	assert.NoError(t, err)
 
 	assert.Equal(t, "bootstrap", dependencies[3].ArtifactID)
@@ -107,7 +108,7 @@ func TestHtmlParser_parses_unpkg(t *testing.T) {
 	h := NewHTMLParser(c).(*htmlParser)
 	file := createTestFile(t)
 
-	dependencies, err := h.Parse(file.Name())
+	dependencies, err := h.Parse(types.FilePath(file.Name()))
 	assert.NoError(t, err)
 
 	assert.Equal(t, "react", dependencies[4].ArtifactID)
@@ -118,7 +119,7 @@ func TestHtmlParser_parses_jquery(t *testing.T) {
 	h := NewHTMLParser(c).(*htmlParser)
 	file := createTestFile(t)
 
-	dependencies, err := h.Parse(file.Name())
+	dependencies, err := h.Parse(types.FilePath(file.Name()))
 	assert.NoError(t, err)
 
 	assert.Equal(t, "jquery", dependencies[5].ArtifactID)
@@ -129,7 +130,7 @@ func TestHtmlParser_parses_aspnetcdn(t *testing.T) {
 	h := NewHTMLParser(c).(*htmlParser)
 	file := createTestFile(t)
 
-	dependencies, err := h.Parse(file.Name())
+	dependencies, err := h.Parse(types.FilePath(file.Name()))
 	assert.NoError(t, err)
 
 	assert.Equal(t, "jquery", dependencies[6].ArtifactID)

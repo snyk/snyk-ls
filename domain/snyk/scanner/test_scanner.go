@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/google/uuid"
 
@@ -32,13 +33,13 @@ import (
 type TestScanner struct {
 	mutex  sync.Mutex
 	calls  int
-	Issues []snyk.Issue
+	Issues []types.Issue
 }
 
 func NewTestScanner() *TestScanner {
 	return &TestScanner{
 		calls:  0,
-		Issues: []snyk.Issue{},
+		Issues: []types.Issue{},
 	}
 }
 
@@ -54,15 +55,10 @@ func (s *TestScanner) Product() product.Product {
 	return TestProduct
 }
 
-func (s *TestScanner) Scan(
-	_ context.Context,
-	_ string,
-	processResults snyk.ScanResultProcessor,
-	_ string,
-) {
+func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, folderPath types.FilePath) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	data := snyk.ScanData{
+	data := types.ScanData{
 		Product:           product.ProductOpenSource,
 		Issues:            s.Issues,
 		DurationMs:        1234,
@@ -80,7 +76,7 @@ func (s *TestScanner) Calls() int {
 	return s.calls
 }
 
-func (s *TestScanner) AddTestIssue(issue snyk.Issue) {
+func (s *TestScanner) AddTestIssue(issue *snyk.Issue) {
 	if issue.AdditionalData == nil {
 		issue.AdditionalData = snyk.CodeIssueData{
 			Key: util.Result(uuid.NewUUID()).String(),

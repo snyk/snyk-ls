@@ -59,7 +59,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
 	folder := workspace.NewFolder(
 		c,
-		t.TempDir(),
+		types.FilePath(t.TempDir()),
 		t.Name(),
 		sc,
 		hoverService,
@@ -72,8 +72,8 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	w.AddFolder(folder)
 
 	ctx := context.Background()
-	path := filepath.Join(folder.Path(), "path1")
-	sc.AddTestIssue(snyk.Issue{ID: "issue-1", AffectedFilePath: path})
+	path := types.FilePath(filepath.Join(string(folder.Path()), "path1"))
+	sc.AddTestIssue(&snyk.Issue{ID: "issue-1", AffectedFilePath: path})
 
 	folder.ScanFolder(ctx)
 
@@ -83,6 +83,6 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	authenticated := authenticationService.IsAuthenticated()
 	assert.NoError(t, err)
 	assert.False(t, authenticated)
-	assert.Empty(t, folder.IssuesForFile(t.TempDir()))
+	assert.Empty(t, folder.IssuesForFile(types.FilePath(t.TempDir())))
 	assert.Empty(t, len(hoverService.Channel()))
 }
