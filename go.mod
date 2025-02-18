@@ -2,7 +2,7 @@ module github.com/snyk/snyk-ls
 
 go 1.23.0
 
-toolchain go1.23.4
+toolchain go1.24.0
 
 require (
 	github.com/adrg/strutil v0.3.1
