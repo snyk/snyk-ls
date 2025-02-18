@@ -50,7 +50,11 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 	}
 
 	args := cmd.command.Arguments
-	codeActionId, err := uuid.Parse(args[0].(string))
+	uuidArg, ok := args[0].(string)
+	if !ok {
+		return nil, errors.New("code action id (first parameter) is not a string.")
+	}
+	codeActionId, err := uuid.Parse(uuidArg)
 	if err != nil {
 		return nil, errors.Join(err, fmt.Errorf("Failed to parse code action id."))
 	}

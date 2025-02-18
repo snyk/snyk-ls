@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -34,10 +33,7 @@ import (
 )
 
 func Test_Bundler_Upload(t *testing.T) {
-	temporaryDir := setup(t)
-	t.Cleanup(func() {
-		_ = os.RemoveAll(temporaryDir)
-	})
+	temporaryDir := t.TempDir()
 
 	c := config.CurrentConfig()
 	t.Run("adds files to bundle", func(t *testing.T) {
@@ -162,15 +158,6 @@ func Test_IsSupported_ConfigFile(t *testing.T) {
 		_, _ = bundler.isSupported(context.Background(), path)
 		assert.Len(t, snykCodeMock.Calls, 1)
 	})
-}
-
-func setup(t *testing.T) string {
-	t.Helper()
-	dir, err := os.MkdirTemp(xdg.DataHome, "createFileOfSize")
-	if err != nil {
-		t.Fatal(err, "Couldn't create test directory")
-	}
-	return dir
 }
 
 func createFileOfSize(t *testing.T, filename string, contentSize int, dir string) (string, []byte) {
