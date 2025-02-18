@@ -779,11 +779,6 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		snykCodeMock := &FakeSnykCodeClient{C: c}
 		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 		filePath, path := TempWorkdirWithIssues(t)
-		t.Cleanup(
-			func() {
-				_ = os.RemoveAll(string(path))
-			},
-		)
 		files := []string{string(filePath)}
 
 		// execute

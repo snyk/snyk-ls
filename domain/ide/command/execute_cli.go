@@ -52,7 +52,7 @@ func (cmd *executeCLICommand) Execute(ctx context.Context) (any, error) {
 	if len(cmd.command.Arguments) < 2 {
 		return nil, fmt.Errorf("invalid usage of executeCLICommand. First arg needs to be the workDir, then CLI arguments without binary path")
 	}
-	workDir, ok := cmd.command.Arguments[0].(types.FilePath)
+	workDir, ok := cmd.command.Arguments[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("workDir needs to be a string")
 	}
@@ -68,7 +68,7 @@ func (cmd *executeCLICommand) Execute(ctx context.Context) (any, error) {
 
 	args = cmd.cli.ExpandParametersFromConfig(args)
 	var exitCode int
-	resp, err := cmd.cli.Execute(ctx, args, workDir)
+	resp, err := cmd.cli.Execute(ctx, args, types.FilePath(workDir))
 	if err != nil {
 		var exitError *exec.ExitError
 		if errors.As(err, &exitError) {

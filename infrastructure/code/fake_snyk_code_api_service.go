@@ -269,7 +269,8 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	FakeSnykCodeApiServiceMutex.Unlock()
 
 	FakeSnykCodeApiServiceMutex.Lock()
-	issueClone := FakeIssue
+	issueClone := FakeIssue.Clone()
+
 	issues := []types.Issue{issueClone}
 	if f.NoFixSuggestions {
 		if issueData, ok := issues[0].GetAdditionalData().(snyk.CodeIssueData); ok {

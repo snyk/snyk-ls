@@ -79,6 +79,36 @@ type Issue struct {
 	m              sync.RWMutex
 }
 
+func (i *Issue) Clone() *Issue {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return &Issue{
+		ID:                  i.ID,
+		Severity:            i.Severity,
+		IssueType:           i.IssueType,
+		IsIgnored:           i.IsIgnored,
+		IsNew:               i.IsNew,
+		IgnoreDetails:       i.IgnoreDetails,
+		Range:               i.Range,
+		Message:             i.Message,
+		FormattedMessage:    i.FormattedMessage,
+		AffectedFilePath:    i.AffectedFilePath,
+		Product:             i.Product,
+		References:          i.References,
+		IssueDescriptionURL: i.IssueDescriptionURL,
+		CodeActions:         i.CodeActions,
+		CodelensCommands:    i.CodelensCommands,
+		Ecosystem:           i.Ecosystem,
+		CWEs:                i.CWEs,
+		CVEs:                i.CVEs,
+		AdditionalData:      i.AdditionalData,
+		LessonUrl:           i.LessonUrl,
+		Fingerprint:         i.Fingerprint,
+		GlobalIdentity:      i.GlobalIdentity,
+		m:                   sync.RWMutex{},
+	}
+}
+
 func (i *Issue) SetRange(r types.Range) {
 	i.m.Lock()
 	defer i.m.Unlock()

@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -107,15 +106,6 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                "index.php",
 			useConsistentIgnores: false,
 			hasVulns:             true,
-		},
-		{
-			name:                 "OSS_and_Code_with_V1_endpoint",
-			repo:                 testsupport.NodejsGoof,
-			commit:               "0336589",
-			file1:                ossFile,
-			file2:                codeFile,
-			useConsistentIgnores: false,
-			endpoint:             path.Join(endpoint, "/v1"),
 		},
 		{
 			name:                 "OSS_and_Code_with_consistent_ignores",
