@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	codeclient "github.com/snyk/code-client-go"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
 
@@ -388,7 +389,8 @@ func getSarifResponseJson2(filePath string) string {
 
 func (f *FakeCodeScannerClient) UploadAndAnalyze(_ context.Context, _ string, _ scan.Target,
 	files <-chan string,
-	_ map[string]bool) (*codeClientSarif.SarifResponse, string, error) {
+	_ map[string]bool,
+	_ ...codeclient.ReportingOption) (*codeClientSarif.SarifResponse, string, error) {
 	var analysisResponse codeClientSarif.SarifResponse
 	responseJson := getSarifResponseJson2(filepath.Base(<-files))
 	err := json.Unmarshal([]byte(responseJson), &analysisResponse)
