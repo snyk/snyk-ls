@@ -122,7 +122,7 @@ func ToWorkspaceEdit(edit *snyk.WorkspaceEdit) *sglsp.WorkspaceEdit {
 func ToTextEdits(edits []snyk.TextEdit) (lspEdits []sglsp.TextEdit) {
 	for _, edit := range edits {
 		unsanitized := edit
-		edit.SanitizeRange()
+		//edit.SanitizeRange()
 		if edit.NewText == "" && isEmpty(edit.Range) {
 			config.CurrentConfig().Logger().Warn().Msg("skipping unsanitized edit in range: " + unsanitized.Range.String())
 			continue

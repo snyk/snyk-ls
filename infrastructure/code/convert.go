@@ -559,20 +559,21 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([
 
 // CreateAutofixWorkspaceEdit turns the returned fix into an edit.
 func CreateAutofixWorkspaceEdit(absoluteFilePath string, fixDiff string) (edit snyk.WorkspaceEdit) {
-	// TODO - could we parse this out of the diff instead?
+
+	// TODO sanitise diff?
 	//fileContent, err := os.ReadFile(absoluteFilePath)
 	//if err != nil {
 	//	return edit
 	//}
 
-	// TODO sanitise diff? Can we make assumptions on the line format?
-	var hunkLine = 0
 	var textEdits []snyk.TextEdit
+
+	var hunkLine = 0   // Location in the current hunk
+	var hunkOffset = 0 // Whether we need to offset the current hunk based on previous edits.
 
 	//Loop over the diff
 	for _, line := range strings.Split(fixDiff, "\n") {
 		if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") {
-			// TODO - Could sanity check that A and B are the same file, and/or parse out the filename here
 			continue // We ignore header lines
 		} else if strings.HasPrefix(line, "@@") {
 			r := regexp.MustCompile(`@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@`)
@@ -581,8 +582,9 @@ func CreateAutofixWorkspaceEdit(absoluteFilePath string, fixDiff string) (edit s
 				return edit
 			}
 
-			hunkLine, _ = strconv.Atoi(matches[1])
-			hunkLine -= 1 // TextEdit range is 0-indexed, whereas LSP diff is 1-indexed.
+			hunkLine, _ = strconv.Atoi(matches[1]) // Apply the edit from the first line of the original file in the diff
+			hunkLine -= 1                          // TextEdit range is 0-indexed, whereas LSP diff is 1-indexed
+			hunkLine += hunkOffset                 // Account for any previous additions or deletions.
 
 		} else if strings.HasPrefix(line, "-") {
 			currentTextEdit := snyk.TextEdit{
@@ -592,17 +594,14 @@ func CreateAutofixWorkspaceEdit(absoluteFilePath string, fixDiff string) (edit s
 						Character: 0,
 					},
 					End: snyk.Position{
-						// TODO - will this fail if there is no newline at the end of the file? Should we calculate line length instead?
 						Line:      hunkLine + 1,
 						Character: 0,
 					},
 				},
-				NewText: "", // Initialise to a blank string to allow for deletions. Any additions will be populated below.
-				//FullText: string(fileContent),
+				NewText: "",
 			}
-
 			textEdits = append(textEdits, currentTextEdit)
-			hunkLine += 1
+			hunkOffset -= 1 // We've removed a line, so future hunks will be offset.
 		} else if strings.HasPrefix(line, "+") {
 			textEdit := snyk.TextEdit{
 				Range: snyk.Range{
@@ -616,12 +615,12 @@ func CreateAutofixWorkspaceEdit(absoluteFilePath string, fixDiff string) (edit s
 					},
 				},
 				NewText: strings.TrimPrefix(line, "+") + "\n",
-				//FullText: string(fileContent),
 			}
-
 			textEdits = append(textEdits, textEdit)
+			hunkOffset += 1 // We've added a line, so future hunks will be offset.
+			hunkLine += 1   // We've added a line, so increment the pointer in our current hunk.
 		} else if strings.HasPrefix(line, " ") {
-			hunkLine += 1
+			hunkLine += 1 // We skip over unchanged lines, so increment the pointer in our current hunk.
 		}
 	}
 
