@@ -159,7 +159,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	html := htmlRenderer.GetDetailsHtml(&issue)
+	html := htmlRenderer.GetDetailsHtml(issue)
 
 	assert.NotEmpty(t, html, "Details field should not be empty")
 	assert.Contains(t, html, "<!DOCTYPE html>", "Details should contain HTML doctype declaration")
@@ -177,7 +177,7 @@ func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
 	// Assert the Details field contains the HTML template and expected content
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	html := htmlRenderer.GetDetailsHtml(&issue)
+	html := htmlRenderer.GetDetailsHtml(issue)
 
 	assert.NotEmpty(t, html, "HTML Details should not be empty")
 	assert.Contains(t, html, "PublicID", "HTML should contain the PublicID")

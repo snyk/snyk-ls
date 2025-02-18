@@ -70,8 +70,8 @@ func setupDocs(t *testing.T) (types.FilePath, lsp.TextDocumentItem, lsp.TextDocu
 	return types.FilePath(path), firstDoc, secondDoc, content1, content2
 }
 
-func setupTestData() (issue snyk.Issue, expectedURI string, expectedTitle string) {
-	issue = snyk.Issue{
+func setupTestData() (issue *snyk.Issue, expectedURI string, expectedTitle string) {
+	issue = &snyk.Issue{
 		AffectedFilePath: "/Users/user/workspace/blah/app.js",
 		Product:          product.ProductCode,
 		AdditionalData:   snyk.CodeIssueData{Key: "123", Title: "Test Issue"},
@@ -811,7 +811,7 @@ func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
 
 	t.Run("creates show document code action successfully", func(t *testing.T) {
 		issue, expectedURI, expectedTitle := setupTestData()
-		codeAction := issueEnhancer.createShowDocumentCodeAction(&issue)
+		codeAction := issueEnhancer.createShowDocumentCodeAction(issue)
 
 		assert.NotNil(t, codeAction)
 		assert.Equal(t, expectedTitle, codeAction.GetTitle())
@@ -905,8 +905,8 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 		scanner.changedPaths[tempDir][changedFile] = true
 
 		// add the issue. The issue references `changedFile` in the dataflow
-		issue := snyk.Issue{AdditionalData: getInterfileTestCodeIssueData()}
-		scanner.issueCache.Set(fromChangeAffectedFile, []types.Issue{&issue}, imcache.WithDefaultExpiration())
+		issue := &snyk.Issue{AdditionalData: getInterfileTestCodeIssueData()}
+		scanner.issueCache.Set(fromChangeAffectedFile, []types.Issue{issue}, imcache.WithDefaultExpiration())
 		defer scanner.issueCache.RemoveAll()
 
 		files := scanner.getFilesToBeScanned(tempDir)

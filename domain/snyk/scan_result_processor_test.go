@@ -27,12 +27,12 @@ func TestUpdateSeverityCount(t *testing.T) {
 	tests := []struct {
 		name     string
 		initial  types.SeverityIssueCounts
-		issue    Issue
+		issue    types.Issue
 		expected types.SeverityIssueCounts
 	}{{
 		name:    "Add new Critical issue",
 		initial: make(types.SeverityIssueCounts),
-		issue: Issue{
+		issue: &Issue{
 			Severity: types.Critical,
 		},
 		expected: types.SeverityIssueCounts{
@@ -43,7 +43,7 @@ func TestUpdateSeverityCount(t *testing.T) {
 		initial: types.SeverityIssueCounts{
 			types.High: {Total: 1, Ignored: 1, Open: 0},
 		},
-		issue: Issue{
+		issue: &Issue{
 			Severity:  types.High,
 			IsIgnored: true,
 		},
@@ -55,7 +55,7 @@ func TestUpdateSeverityCount(t *testing.T) {
 		initial: types.SeverityIssueCounts{
 			types.Medium: {Total: 2, Ignored: 1, Open: 1},
 		},
-		issue: Issue{
+		issue: &Issue{
 			Severity: types.Medium,
 		},
 		expected: types.SeverityIssueCounts{
@@ -64,7 +64,7 @@ func TestUpdateSeverityCount(t *testing.T) {
 	}, {
 		name:    "Add new Low issue",
 		initial: make(types.SeverityIssueCounts),
-		issue: Issue{
+		issue: &Issue{
 			Severity: types.Low,
 		},
 		expected: types.SeverityIssueCounts{
@@ -78,7 +78,7 @@ func TestUpdateSeverityCount(t *testing.T) {
 			issue := testStruct.issue
 
 			// Act
-			types.UpdateSeverityCount(initial, &issue)
+			types.UpdateSeverityCount(initial, issue)
 
 			// Assert
 			if !reflect.DeepEqual(initial, testStruct.expected) {

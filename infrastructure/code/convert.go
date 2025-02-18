@@ -403,7 +403,7 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 				DataFlow:           s.getCodeFlow(result, baseDir),
 			}
 
-			d := snyk.Issue{
+			d := &snyk.Issue{
 				ID:                  result.RuleID,
 				Range:               myRange,
 				Severity:            issueSeverity(result.Level),
@@ -422,7 +422,7 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 			d.IsIgnored, d.IgnoreDetails = s.getIgnoreDetails(result)
 			d.AdditionalData = additionalData
 
-			issues = append(issues, &d)
+			issues = append(issues, d)
 		}
 	}
 	return issues, errs

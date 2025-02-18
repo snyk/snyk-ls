@@ -73,7 +73,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 
 	ctx := context.Background()
 	path := types.FilePath(filepath.Join(string(folder.Path()), "path1"))
-	sc.AddTestIssue(snyk.Issue{ID: "issue-1", AffectedFilePath: path})
+	sc.AddTestIssue(&snyk.Issue{ID: "issue-1", AffectedFilePath: path})
 
 	folder.ScanFolder(ctx)
 

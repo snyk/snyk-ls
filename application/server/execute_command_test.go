@@ -80,8 +80,8 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	dontClear := workspace.NewFolder(c, "dontclear", "dontclear", scannerForDontClear, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 
 	dontClearIssuePath := types.FilePath("dontclear/file.txt")
-	scannerForDontClear.AddTestIssue(snyk.Issue{AffectedFilePath: dontClearIssuePath})
-	scannerForFolder.AddTestIssue(snyk.Issue{AffectedFilePath: "dummy/file.txt"})
+	scannerForDontClear.AddTestIssue(&snyk.Issue{AffectedFilePath: dontClearIssuePath})
+	scannerForFolder.AddTestIssue(&snyk.Issue{AffectedFilePath: "dummy/file.txt"})
 
 	c.Workspace().AddFolder(folder)
 	c.Workspace().AddFolder(dontClear)

@@ -195,8 +195,8 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 	}
 
 	var results []types.Issue
-	for _, issue := range snykIssues {
-		results = append(results, &issue)
+	for i := range snykIssues {
+		results = append(results, &snykIssues[i])
 	}
 	return results, nil
 }

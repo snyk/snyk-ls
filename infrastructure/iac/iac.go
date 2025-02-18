@@ -302,12 +302,12 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath typ
 			issue.LineNumber = 0
 		}
 
-		iacIssue, err := iac.toIssue(types.FilePath(targetFile), issue, fileContentString)
+		i, err := iac.toIssue(types.FilePath(targetFile), issue, fileContentString)
 		if err != nil {
 			return nil, pkgerrors.Wrap(err, "unable to convert IaC issue to Snyk issue")
 		}
 
-		issues = append(issues, &iacIssue)
+		issues = append(issues, i)
 	}
 	return issues, nil
 }
@@ -332,7 +332,7 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 	)
 }
 
-func (iac *Scanner) toIssue(affectedFilePath types.FilePath, issue iacIssue, fileContent string) (snyk.Issue, error) {
+func (iac *Scanner) toIssue(affectedFilePath types.FilePath, issue iacIssue, fileContent string) (*snyk.Issue, error) {
 	const defaultRangeStart = 0
 	const defaultRangeEnd = 80
 	title := issue.IacDescription.Issue
@@ -365,10 +365,10 @@ func (iac *Scanner) toIssue(affectedFilePath types.FilePath, issue iacIssue, fil
 
 	additionalData, err := iac.toAdditionalData(affectedFilePath, issue)
 	if err != nil {
-		return snyk.Issue{}, pkgerrors.Wrap(err, "unable to create IaC issue additional data")
+		return nil, pkgerrors.Wrap(err, "unable to create IaC issue additional data")
 	}
 
-	result := snyk.Issue{
+	result := &snyk.Issue{
 		ID: issue.PublicID,
 		Range: types.Range{
 			Start: types.Position{Line: issue.LineNumber, Character: rangeStart},

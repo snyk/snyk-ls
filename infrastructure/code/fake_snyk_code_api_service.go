@@ -73,7 +73,7 @@ var (
 		Arguments: []any{"id", "path", fakeRange},
 	}
 
-	FakeIssue = snyk.Issue{
+	FakeIssue = &snyk.Issue{
 		ID:               "SNYK-123",
 		Range:            fakeRange,
 		Severity:         types.High,
@@ -270,7 +270,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 
 	FakeSnykCodeApiServiceMutex.Lock()
 	issueClone := FakeIssue
-	issues := []types.Issue{&issueClone}
+	issues := []types.Issue{issueClone}
 	if f.NoFixSuggestions {
 		if issueData, ok := issues[0].GetAdditionalData().(snyk.CodeIssueData); ok {
 			issueData.IsAutofixable = false

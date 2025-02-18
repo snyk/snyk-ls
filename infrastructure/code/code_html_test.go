@@ -35,7 +35,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		Range:     getIssueRange(),
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		ID:        "go/NoHardcodedCredentials/test",
@@ -55,7 +55,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(&issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// assert injectable style
 	assert.Contains(t, codePanelHtml, "${ideStyle}")
@@ -99,7 +99,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		Range:     getIssueRange(),
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		ID:        "go/NoHardcodedCredentials/test",
@@ -120,7 +120,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(&issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="">`)
 	assert.Contains(t, codePanelHtml, `✨ Generate AI fix`)

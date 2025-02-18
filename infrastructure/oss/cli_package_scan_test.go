@@ -139,10 +139,10 @@ func TestCLIScanner_updateCachedDependencies_updates_range_of_issues_in_cache(t 
 	for path, issues := range cliScanner.packageIssueCache {
 		newIssues := make([]types.Issue, len(issues))
 		for i, issue := range issues {
-			myBackupIssue := snyk.Issue{}
+			myBackupIssue := &snyk.Issue{}
 			myBackupIssue.SetRange(issue.GetRange())
 			myBackupIssue.SetID(issue.GetID())
-			newIssues[i] = &myBackupIssue
+			newIssues[i] = myBackupIssue
 		}
 		oldPackageCache[path] = newIssues
 	}

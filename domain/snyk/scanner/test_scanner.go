@@ -76,12 +76,12 @@ func (s *TestScanner) Calls() int {
 	return s.calls
 }
 
-func (s *TestScanner) AddTestIssue(issue snyk.Issue) {
+func (s *TestScanner) AddTestIssue(issue *snyk.Issue) {
 	if issue.AdditionalData == nil {
 		issue.AdditionalData = snyk.CodeIssueData{
 			Key: util.Result(uuid.NewUUID()).String(),
 		}
 		issue.Product = product.ProductCode
 	}
-	s.Issues = append(s.Issues, &issue)
+	s.Issues = append(s.Issues, issue)
 }

@@ -187,12 +187,12 @@ func Test_ideSnykURI(t *testing.T) {
 func TestIssueId(t *testing.T) {
 	testCases := []struct {
 		name     string
-		issue    snyk.Issue
+		issue    *snyk.Issue
 		expected string
 	}{
 		{
 			name: "Nil AdditionalData",
-			issue: snyk.Issue{
+			issue: &snyk.Issue{
 				ID:             "vuln-id",
 				AdditionalData: nil,
 			},
@@ -200,7 +200,7 @@ func TestIssueId(t *testing.T) {
 		},
 		{
 			name: "CodeIssueData with empty key",
-			issue: snyk.Issue{
+			issue: &snyk.Issue{
 				ID: "vuln-id",
 				AdditionalData: snyk.CodeIssueData{
 					Key: "",
@@ -210,7 +210,7 @@ func TestIssueId(t *testing.T) {
 		},
 		{
 			name: "CodeIssueData with key",
-			issue: snyk.Issue{
+			issue: &snyk.Issue{
 				ID: "vuln-id",
 				AdditionalData: snyk.CodeIssueData{
 					Key: "code-issue-key",
@@ -222,7 +222,7 @@ func TestIssueId(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := issueId(&tc.issue)
+			result := issueId(tc.issue)
 			if result != tc.expected {
 				t.Errorf("Expected %s, got %s", tc.expected, result)
 			}

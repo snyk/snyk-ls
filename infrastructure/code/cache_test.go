@@ -103,7 +103,7 @@ func TestScanner_Cache(t *testing.T) {
 		// BL should work like this
 		// cache is initialized with an eviction handler
 		// eviction handler should call a function that iterates over additional handlers
-		_, scanner := setupTestScanner(t) //nolint:govet // we want a new scanner here
+		_, scanner := setupTestScanner(t)
 		evictionChan := make(chan types.FilePath)
 		testEvictionHandler := func(path types.FilePath) {
 			go func() { evictionChan <- path }()
@@ -130,7 +130,7 @@ func TestScanner_Cache(t *testing.T) {
 		}
 	})
 	t.Run("clear issues should evict all issues", func(t *testing.T) {
-		_, scanner := setupTestScanner(t) //nolint:govet // we want a new scanner here
+		_, scanner := setupTestScanner(t)
 		evictionChan := make(chan types.FilePath)
 		testEvictionHandler := func(path types.FilePath) {
 			go func() { evictionChan <- path }()

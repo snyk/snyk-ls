@@ -75,7 +75,7 @@ const documentUriExample = sglsp.DocumentURI("file:///path/to/file")
 
 func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 	testutil.UnitTest(t)
-	expectedIssue := snyk.Issue{
+	expectedIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
 				Title:   "Fix this",
@@ -95,7 +95,7 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 
 func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 	testutil.UnitTest(t)
-	fakeIssue := snyk.Issue{
+	fakeIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
 				Title:   "Fix this",
@@ -159,7 +159,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 		return mockEdit
 	}
 	id := uuid.New()
-	expectedIssue := snyk.Issue{
+	expectedIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
 				Title:        "Fix this",
@@ -245,13 +245,13 @@ func setupService(t *testing.T) *codeaction.CodeActionsService {
 	return service
 }
 
-func setupWithSingleIssue(t *testing.T, issue snyk.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
+func setupWithSingleIssue(t *testing.T, issue *snyk.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
 	t.Helper()
 	r := exampleRange
 	uriPath := documentUriExample
 	path := uri.PathFromUri(uriPath)
 	providerMock := new(mockIssuesProvider)
-	issues := []types.Issue{&issue}
+	issues := []types.Issue{issue}
 	providerMock.On("IssuesForRange", path, converter.FromRange(r)).Return(issues)
 	fileWatcher := watcher.NewFileWatcher()
 	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
