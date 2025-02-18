@@ -28,6 +28,7 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 TOOLS_BIN := $(shell pwd)/.bin
 
 OVERRIDE_GOCI_LINT_V := v1.64.5
+GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
 NOCACHE := "-count=1"
@@ -41,7 +42,7 @@ tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin
 
 $(TOOLS_BIN)/go-licenses:
 	@echo "==> Installing go-licenses"
-	@GOBIN=$(TOOLS_BIN) go install github.com/google/go-licenses@v1.0.0
+	@GOBIN=$(TOOLS_BIN) go install github.com/google/go-licenses@$(GOLICENSES_V)
 
 $(TOOLS_BIN)/golangci-lint:
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(OVERRIDE_GOCI_LINT_V)/install.sh | sh -s -- -b $(TOOLS_BIN)/ $(OVERRIDE_GOCI_LINT_V)
