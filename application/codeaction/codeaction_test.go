@@ -245,7 +245,7 @@ func setupService(t *testing.T) *codeaction.CodeActionsService {
 	return service
 }
 
-func setupWithSingleIssue(t *testing.T, issue *snyk.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
+func setupWithSingleIssue(t *testing.T, issue types.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
 	t.Helper()
 	r := exampleRange
 	uriPath := documentUriExample
