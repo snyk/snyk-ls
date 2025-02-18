@@ -61,7 +61,7 @@ type Issue struct {
 	// IssueDescriptionURL contains a Uri to display more information
 	IssueDescriptionURL *url.URL
 	// CodeActions can contain workspace edits or commands to be executed
-	CodeActions []types.CodeAction
+	CodeActions []types.CodeAction `json:"-"` // don't marshall/unmarshall as this is an interface and we don't need it
 	// CodelensCommands that can be executed via a codelens
 	CodelensCommands []types.CommandData
 	// The Ecosystem of the issue, e.g. npm, maven, nuget, etc.

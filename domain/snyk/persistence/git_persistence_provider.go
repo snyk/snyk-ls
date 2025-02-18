@@ -50,7 +50,7 @@ var (
 	_                          ScanSnapshotPersister = (*GitPersistenceProvider)(nil)
 )
 
-type hashedFolderPath types.FilePath
+type hashedFolderPath string
 
 type ScanSnapshotPersister interface {
 	types.ScanSnapshotClearerExister
