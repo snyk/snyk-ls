@@ -78,6 +78,7 @@ func (m *McpLLMBinding) Start() error {
 
 	err := m.addSnykScanTool()
 	if err != nil {
+		m.mutex.Unlock()
 		return err
 	}
 

@@ -41,9 +41,13 @@ func isPortInUse(u *url.URL) bool {
 
 func determineFreePort() int {
 	port := DefaultPort
-	for i := range 10 {
-		port = port + i
-		u, _ := url.Parse(fmt.Sprintf("http://%s:%d", DefaultHost, port))
+	for range 1000 {
+		port++
+		u, err := url.Parse(fmt.Sprintf("http://%s:%d", DefaultHost, port))
+		if err != nil {
+			// this should not ever happen. so if it does, we panic
+			panic(err)
+		}
 		inUse := isPortInUse(u)
 		if !inUse {
 			break
