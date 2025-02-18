@@ -85,5 +85,4 @@ func Test_determineFreePort(t *testing.T) {
 	if port > DefaultPort && port < DefaultPort+1000 {
 		t.Errorf("Expected to fail to find a free port. Port %d found instead ", port)
 	}
-
 }
