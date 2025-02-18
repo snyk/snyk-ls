@@ -400,8 +400,6 @@ func getDownloadURL(c *config.Config) (u string) {
 	}
 }
 
-var mcpHttpServer *mcp2.McpLLMBinding
-
 func initializedHandler(srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		// Logging these messages only after the client has been initialized.
@@ -635,9 +633,6 @@ func shutdown() jrpc2.Handler {
 
 		disposeProgressListener()
 		di.Notifier().DisposeListener()
-		if mcpHttpServer != nil {
-			mcpHttpServer.Shutdown(context.Background())
-		}
 		return nil, nil
 	})
 }
