@@ -45,7 +45,7 @@ func TestPathFromUri_UNC(t *testing.T) {
 	}
 	uri := lsp.DocumentURI("file://host/folder/subfolder/subsubfolder")
 	res := PathFromUri(uri)
-	assert.Equal(t, "\\\\host\\folder\\subfolder\\subsubfolder", res)
+	assert.Equal(t, "\\\\host\\folder\\subfolder\\subsubfolder", string(res))
 }
 
 func TestPathToUri_UNC(t *testing.T) {
