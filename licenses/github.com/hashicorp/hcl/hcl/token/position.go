@@ -4,7 +4,7 @@ import "fmt"
 
 // Pos describes an arbitrary source position
 // including the file, line, and column location.
-// A CodeFlowPositionInFile is valid if the line number is > 0.
+// A Position is valid if the line number is > 0.
 type Pos struct {
 	Filename string // filename, if any
 	Offset   int    // offset, starting at 0

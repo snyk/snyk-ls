@@ -18,7 +18,7 @@ type Scanner struct {
 	buf *bytes.Buffer // Source buffer for advancing and scanning
 	src []byte        // Source buffer for immutable access
 
-	// Source CodeFlowPositionInFile
+	// Source Position
 	srcPos  token.Pos // current position
 	prevPos token.Pos // previous position, used for peek() method
 
@@ -37,7 +37,7 @@ type Scanner struct {
 
 	// tokPos is the start position of most recently scanned token; set by
 	// Scan. The Filename field is always left untouched by the Scanner.  If
-	// an error is reported (via Error) and CodeFlowPositionInFile is invalid, the scanner is
+	// an error is reported (via Error) and Position is invalid, the scanner is
 	// not inside a token.
 	tokPos token.Pos
 }
