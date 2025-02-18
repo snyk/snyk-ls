@@ -80,7 +80,6 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		file2                string
 		useConsistentIgnores bool
 		hasVulns             bool
-		endpoint             string
 	}
 
 	endpoint := os.Getenv("SNYK_API")
