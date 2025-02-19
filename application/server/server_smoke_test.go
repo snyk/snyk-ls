@@ -946,6 +946,8 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
+	c.SetSnykOssEnabled(false)
+	c.SetSnykIacEnabled(false)
 	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
 	di.Init()
@@ -969,13 +971,12 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
-	assert.Len(t, issueList, 0, "no issues expected, as delta and no new change")
-	waitForDeltaScan(t, di.ScanStateAggregator())
+	assert.Equal(t, 0, len(issueList), "no issues expected, as delta and no new change")
 }
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {
 	t.Helper()
-	t.Setenv("SNYK_LOG_LEVEL", "info")
+	t.Setenv("SNYK_LOG_LEVEL", "debug")
 	c.SetLogLevel(zerolog.LevelInfoValue)
 	c.ConfigureLogging(nil)
 	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)

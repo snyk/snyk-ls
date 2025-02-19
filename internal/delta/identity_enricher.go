@@ -24,7 +24,7 @@ var _ Enricher = (*FindingsEnricher)(nil)
 
 type Enricher interface {
 	EnrichWithId(issueList []Identifiable) []Identifiable
-	EnrichWithIsNew(issueList, deltaList []Identifiable) []Identifiable
+	EnrichWithIsNew(issueList, newIssueList []Identifiable) []Identifiable
 }
 
 type FindingsEnricher struct {
@@ -44,14 +44,17 @@ func (_ FindingsEnricher) EnrichWithId(issueList []Identifiable) []Identifiable 
 	return issueList
 }
 
-func (_ FindingsEnricher) EnrichWithIsNew(issueList, deltaList []Identifiable) []Identifiable {
-	for i := range issueList {
-		for j := range deltaList {
-			if issueList[i].GetGlobalIdentity() == deltaList[j].GetGlobalIdentity() {
-				issueList[i].SetIsNew(true)
+func (_ FindingsEnricher) EnrichWithIsNew(allCurrentIssues, newIssues []Identifiable) []Identifiable {
+	for i := range allCurrentIssues {
+		for j := range newIssues {
+			// everything in delta list is new
+			newIssues[j].SetIsNew(true)
+			if allCurrentIssues[i].GetGlobalIdentity() == newIssues[j].GetGlobalIdentity() {
+				// issues that have the same id as a new issue are also new
+				allCurrentIssues[i].SetIsNew(true)
 			}
 		}
 	}
 
-	return issueList
+	return allCurrentIssues
 }

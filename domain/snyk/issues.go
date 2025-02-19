@@ -307,7 +307,11 @@ func (i *Issue) SetGlobalIdentity(globalIdentity string) {
 	i.m.Lock()
 	defer i.m.Unlock()
 
-	i.GlobalIdentity = globalIdentity
+	if i.GlobalIdentity == "" {
+		i.GlobalIdentity = globalIdentity
+	} else {
+		panic("GlobalIdentity already set")
+	}
 }
 
 func (i *Issue) GetPath() types.FilePath {

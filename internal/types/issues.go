@@ -157,4 +157,5 @@ func UpdateSeverityCount(sic SeverityIssueCounts, issue Issue) {
 }
 
 type FilePath string
+
 type IssuesByFile map[FilePath][]Issue

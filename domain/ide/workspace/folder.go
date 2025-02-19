@@ -513,31 +513,35 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 		return nil, err
 	}
 
-	currentFlatIssueList := getFlatIssueList(issueByFile)
 	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
 	for i := range baseIssueList {
 		baseFindingIdentifiable[i] = baseIssueList[i]
 	}
+
+	currentFlatIssueList := getFlatIssueList(issueByFile)
 	currentFindingIdentifiable := make([]delta.Identifiable, len(currentFlatIssueList))
 	for i := range currentFlatIssueList {
 		currentFindingIdentifiable[i] = currentFlatIssueList[i]
 	}
-
 	df := delta2.NewDeltaFinderForProduct(p)
-	diff, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
+	enrichedIssues, err := df.DiffAndEnrich(baseFindingIdentifiable, currentFindingIdentifiable)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")
 		return issueByFile, err
 	}
 
-	deltaSnykIssues := make([]types.Issue, len(diff))
-	for i := range diff {
-		issue, ok := diff[i].(types.Issue)
-		if !ok {
+	deltaSnykIssues := []types.Issue{}
+	for i := range enrichedIssues {
+		identifiable := enrichedIssues[i]
+		if identifiable == nil || !identifiable.GetIsNew() {
 			continue
 		}
-		deltaSnykIssues[i] = issue
+
+		issue, ok := identifiable.(types.Issue)
+		if ok && issue != nil {
+			deltaSnykIssues = append(deltaSnykIssues, issue)
+		}
 	}
 	issueByFile = getIssuePerFileFromFlatList(deltaSnykIssues)
 
@@ -555,6 +559,9 @@ func getFlatIssueList(issueByFile snyk.IssuesByFile) []types.Issue {
 func getIssuePerFileFromFlatList(issueList []types.Issue) snyk.IssuesByFile {
 	issueByFile := make(snyk.IssuesByFile)
 	for _, issue := range issueList {
+		if issue == nil {
+			continue
+		}
 		list, exists := issueByFile[issue.GetAffectedFilePath()]
 		if !exists {
 			list = []types.Issue{issue}
@@ -595,7 +602,8 @@ func (f *Folder) FilterIssues(
 	filteredIssues := snyk.IssuesByFile{}
 
 	if f.c.IsDeltaFindingsEnabled() {
-		issues = getIssuePerFileFromFlatList(f.GetDeltaForAllProducts(supportedIssueTypes))
+		deltaForAllProducts := f.GetDeltaForAllProducts(supportedIssueTypes)
+		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
 
 	for path, issueSlice := range issues {
