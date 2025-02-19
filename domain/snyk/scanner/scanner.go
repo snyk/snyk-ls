@@ -298,7 +298,6 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 					SendAnalytics:     true,
 					UpdateGlobalCache: true,
 				}
-
 				processResults(data)
 
 				// trigger base scan in background

@@ -61,7 +61,14 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	isDeltaEnabled := renderer.c.IsDeltaFindingsEnabled()
 
 	if state.AnyScanSucceededReference || state.AnyScanSucceededWorkingDirectory {
-		allIssues, deltaIssues = renderer.getIssuesFromFolders()
+		allIssues = renderer.getIssuesFromFolders()
+		deltaIssues = []types.Issue{}
+
+		for _, issue := range allIssues {
+			if issue.GetIsNew() {
+				deltaIssues = append(deltaIssues, issue)
+			}
+		}
 
 		if isDeltaEnabled {
 			currentIssuesFound = len(deltaIssues)
@@ -101,27 +108,27 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	return buffer.String()
 }
 
-func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, deltaIssues []types.Issue) {
+func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue) {
 	logger := renderer.c.Logger().With().Str("method", "getIssuesFromFolders").Logger()
 
 	for _, f := range renderer.c.Workspace().Folders() {
-		if dp, ok := f.(delta.Provider); ok {
-			deltaIssues = append(deltaIssues, renderer.getDeltaIssuesForFolder(dp)...)
-		} else {
-			logger.Error().Msgf("Failed to get cast folder %s to interface delta.Provider", f.Name())
-		}
+		//if dp, ok := f.(delta.Provider); ok {
+		//	deltaIssues = append(deltaIssues, renderer.getDeltaIssuesForFolder(dp)...)
+		//} else {
+		//	logger.Error().Msgf("Failed to get cast folder %s to interface delta.Provider", f.Name())
+		//}
 
 		ip, ok := f.(snyk.IssueProvider)
 		if !ok {
 			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.IssueProvider", f.Name())
-			return allIssues, deltaIssues
+			return allIssues
 		}
 		for _, issues := range ip.Issues() {
 			allIssues = append(allIssues, issues...)
 		}
 	}
 
-	return allIssues, deltaIssues
+	return allIssues
 }
 
 func (renderer *HtmlRenderer) getDeltaIssuesForFolder(dp delta.Provider) []types.Issue {

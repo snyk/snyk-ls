@@ -2,7 +2,7 @@ module github.com/snyk/snyk-ls
 
 go 1.23.0
 
-toolchain go1.24.0
+toolchain go1.23.5
 
 require (
 	github.com/adrg/strutil v0.3.1
@@ -79,7 +79,6 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/invopop/yaml v0.3.1 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
