@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -689,7 +689,7 @@ func getPathAndUnifiedDiff(baseDir string, filePath string, newText string) (dec
 	// Workaround: AI Suggestion API only returns \n new lines. It doesn't consider carriage returns.
 	contentBefore := strings.Replace(string(fileContent), "\r\n", "\n", -1)
 	edits := myers.ComputeEdits(span.URIFromPath(decodedPath), contentBefore, newText)
-	unifiedDiff = fmt.Sprint(gotextdiff.ToUnified(decodedPath, decodedPath, contentBefore, edits))
+	unifiedDiff = fmt.Sprint(gotextdiff.ToUnified(decodedPath, decodedPath+"fixed", contentBefore, edits))
 
 	return decodedPath, unifiedDiff
 }
