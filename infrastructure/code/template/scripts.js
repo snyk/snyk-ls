@@ -64,9 +64,6 @@ const fixExplainText = document.getElementById('fix-explain-text')
 const diffTopElem = document.getElementById('diff-top');
 const diffElem = document.getElementById('diff');
 const noDiffsElem = document.getElementById('info-no-diffs');
-if (noDiffsElem) {
-  noDiffsElem.innerText = "We couldn't determine any fixes for this issue.";
-}
 const diffNumElem = document.getElementById('diff-number');
 const diffNum2Elem = document.getElementById('diff-number2');
 

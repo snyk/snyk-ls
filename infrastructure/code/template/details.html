@@ -291,7 +291,17 @@
             <section id="fixes-section" class="sn-ai-fixes delimiter-top">
               {{if eq .AiFixResult "{}"}}
               <div id="info-no-diffs" class="font-light">
-                There are no fix diffs for this issue.
+                <h3 class="ai-fix-header">No AI Fix Available:</h3>
+                We couldn’t generate fixes that meet our high-quality standards.
+                <br>
+                To ensure your code remains secure and error-free, no automatic fix suggestion will be recommended for this issue.
+                <br>
+                You can review suggested areas to improve or retry once updates have been made.
+                <br>
+                Read more in our
+                <a class="styled-link" href="https://docs.snyk.io/scan-with-snyk/snyk-code/manage-code-vulnerabilities/fix-code-vulnerabilities-automatically#limitations">
+                [documentation]
+                </a>
               </div>
               {{else}}
               <div id="diff-top" class="row between">
@@ -413,9 +423,6 @@
         }
       }
     }
-
-
-
     function polyfillClosest() {
       if (!Element.prototype.closest) {
         Element.prototype.closest = function (s) {
