@@ -301,34 +301,34 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 				processResults(data)
 
 				// trigger base scan in background
-				go func() {
-					defer referenceBranchScanWaitGroup.Done()
-					isSingleFileScan := path != folderPath
+				//go func() {
+				defer referenceBranchScanWaitGroup.Done()
+				isSingleFileScan := path != folderPath
 
-					// only trigger a base scan if we are scanning an actual working directory. It could also be a
-					// single file scan, triggered by e.g. a file save
-					if !isSingleFileScan {
-						sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
-						err = sc.scanBaseBranch(context.Background(), s, folderConfig, gitCheckoutHandler)
-						if err != nil {
-							logger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
-						}
-						sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
+				// only trigger a base scan if we are scanning an actual working directory. It could also be a
+				// single file scan, triggered by e.g. a file save
+				if !isSingleFileScan {
+					sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
+					err = sc.scanBaseBranch(context.Background(), s, folderConfig, gitCheckoutHandler)
+					if err != nil {
+						logger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
 					}
+					sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
+				}
 
-					if !sc.c.IsDeltaFindingsEnabled() {
-						logger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
-						return
-					}
+				if !sc.c.IsDeltaFindingsEnabled() {
+					logger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
+					return
+				}
 
-					data = types.ScanData{
-						Product:           s.Product(),
-						SendAnalytics:     false,
-						UpdateGlobalCache: false,
-						// Err:               err, TODO: should we send the error here?
-					}
-					processResults(data)
-				}()
+				data = types.ScanData{
+					Product:           s.Product(),
+					SendAnalytics:     false,
+					UpdateGlobalCache: false,
+					// Err:               err, TODO: should we send the error here?
+				}
+				processResults(data)
+				//}()
 
 				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, scanError)
 				logger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))

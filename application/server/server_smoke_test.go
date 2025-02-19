@@ -946,8 +946,6 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
-	c.SetSnykOssEnabled(false)
-	c.SetSnykIacEnabled(false)
 	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
 	di.Init()

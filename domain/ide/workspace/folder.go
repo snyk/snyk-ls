@@ -582,7 +582,8 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.FilterableIssueType]bool) []types.Issue {
 	var deltaList []types.Issue
 	for filterableIssueType, enabled := range supportedIssueTypes {
-		if !enabled {
+		// analyse deltas for code only for code security
+		if !enabled || filterableIssueType == product.FilterableIssueTypeCodeQuality {
 			continue
 		}
 		p := filterableIssueType.ToProduct()
