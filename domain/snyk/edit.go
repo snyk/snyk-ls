@@ -18,7 +18,6 @@ package snyk
 
 import (
 	"math"
-	"strings"
 )
 
 type TextEdit struct {
@@ -34,57 +33,6 @@ type TextEdit struct {
 	 * empty string.
 	 */
 	NewText string
-
-	//FullText string
-}
-
-func (e *TextEdit) SanitizeRange() {
-	// check text length and number of lines and adjust range in text edit
-	// to not go out of bounds
-	if e.NewText == "" {
-		e.Range = Range{}
-		return
-	}
-
-	posixLineSeparator := "\n"
-	windowsLineSeparator := "\r\n"
-	normalizedText := strings.Replace(e.NewText, windowsLineSeparator, posixLineSeparator, -1)
-	lines := strings.Split(normalizedText, posixLineSeparator)
-
-	maxLineIndex := e.ensureGreaterThanZero(len(lines) - 1)
-
-	if e.Range.Start.Line > maxLineIndex {
-		// we can't recover here, reset the edit
-		e.NewText = ""
-		e.Range = Range{}
-		return
-	}
-
-	startLine := e.Range.Start.Line
-
-	if e.Range.Start.Character > len(lines[startLine]) {
-		e.NewText = ""
-		e.Range = Range{}
-		return
-	}
-
-	if e.Range.End.Line > maxLineIndex {
-		e.Range.End.Line = maxLineIndex
-		e.Range.End.Character = len(lines[maxLineIndex])
-		return
-	}
-
-	if e.Range.End.Character > len(lines[e.Range.End.Line]) {
-		e.Range.End.Character = len(lines[e.Range.End.Line])
-		return
-	}
-
-	if e.Range.Start.Line > e.Range.End.Line ||
-		e.Range.Start.Line == e.Range.End.Line && e.Range.Start.Character > e.Range.End.Character {
-		e.NewText = ""
-		e.Range = Range{}
-		return
-	}
 }
 
 func (e *TextEdit) ensureGreaterThanZero(i int) int {
@@ -93,7 +41,7 @@ func (e *TextEdit) ensureGreaterThanZero(i int) int {
 
 type WorkspaceEdit struct {
 	/**
-	 * Holds changes to existing resources.
+	 * Holds changes to existing resources, keyed on the affected file path.
 	 */
 	Changes map[string][]TextEdit
 }

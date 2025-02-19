@@ -107,7 +107,7 @@ func (cmd *applyAiFixEditCommand) getWorkspaceEdit(htmlRenderer *code.HtmlRender
 		return snyk.WorkspaceEdit{}, err
 	}
 
-	workspaceEdit := code.CreateAutofixWorkspaceEdit(path, diff)
+	workspaceEdit := code.CreateWorkspaceEditFromDiff(path, diff)
 	return workspaceEdit, nil
 }
 

@@ -891,16 +891,25 @@ func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
 	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
 	filePath := "file.js"
 	baseDir := t.TempDir()
-	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("test test test"), 0666)
+	absoluteFilePath := filepath.Join(baseDir, filePath)
+	err := os.WriteFile(absoluteFilePath, []byte("test test test"), 0666)
 	require.NoError(t, err)
 	edits := response.toAutofixSuggestions(baseDir, filePath)
-	editValues := make([]string, 0)
-	for _, edit := range edits {
-		change := edit.AutofixEdit.Changes[ToAbsolutePath(baseDir, filePath)][0]
-		editValues = append(editValues, change.NewText)
-	}
 
-	assert.Contains(t, editValues, "test1", "test2")
+	for i, edit := range edits {
+		assert.Equal(t, fixes[i].Id, edit.FixId)
+		changes := edit.AutofixEdit.Changes[absoluteFilePath]
+
+		// We expect a deletion and an insertion, for two changes total.
+		assert.Equal(t, 2, len(changes))
+
+		// First change should be a deletion.
+		assert.Equal(t, "", changes[0].NewText)
+
+		// Second change should insert the new text and a newline.
+		assert.Equal(t, fixes[i].Value+"\n", changes[1].NewText)
+
+	}
 }
 
 func Test_AutofixResponse_toAutofixSuggestion_HtmlEncodedFilePath(t *testing.T) {
@@ -917,24 +926,24 @@ func Test_AutofixResponse_toAutofixSuggestion_HtmlEncodedFilePath(t *testing.T) 
 	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
 	filePath := "file_with space.js"
 	baseDir := t.TempDir()
-	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("test test test"), 0666)
+	absoluteFilePath := filepath.Join(baseDir, filePath)
+	err := os.WriteFile(absoluteFilePath, []byte("test test test"), 0666)
 	require.NoError(t, err)
 	// Here, we provide the HTML encoded path and expect toAutofixSuggestions to decode it.
 	edits := response.toAutofixSuggestions(baseDir, "file_with%20space.js")
-	editValues := make([]string, 0)
-	editFilePaths := make([]string, 0)
-	for _, edit := range edits {
-		change := edit.AutofixEdit.Changes[ToAbsolutePath(baseDir, filePath)][0]
-		editValues = append(editValues, change.NewText)
 
-		for key := range edit.AutofixEdit.Changes {
-			editFilePaths = append(editFilePaths, key)
-		}
-	}
+	for i, edit := range edits {
+		assert.Equal(t, fixes[i].Id, edit.FixId)
+		changes := edit.AutofixEdit.Changes[absoluteFilePath]
 
-	assert.Contains(t, editValues, "test1", "test2")
-	for _, filePath := range editFilePaths {
-		assert.Contains(t, filePath, "file_with space.js")
+		// We expect a deletion and an insertion, for two changes total.
+		assert.Equal(t, 2, len(changes))
+
+		// First change should be a deletion.
+		assert.Equal(t, "", changes[0].NewText)
+
+		// Second change should insert the new text and a newline.
+		assert.Equal(t, fixes[i].Value+"\n", changes[1].NewText)
 	}
 }
 
@@ -1129,50 +1138,119 @@ func Test_ParseDateFromString(t *testing.T) {
 }
 
 func TestCreateAutofixWorkspaceEdit(t *testing.T) {
-	type args struct {
-		absoluteFilePath string
-		fixDiff          string
-	}
-	fixDiff := `
---- /Users/andrewrobinsonhodges/Developer/snyk/juice-shop
-+++ /Users/andrewrobinsonhodges/Developer/snyk/juice-shop-fixed
-@@ -3,7 +3,8 @@
-  * SPDX-License-Identifier: MIT
-  */
+	tempFilePath := filepath.Join(os.TempDir(), "test.txt")
 
--import fs = require('fs')
-+import fs from 'fs'
-+import path from 'path'
- import { type Request, type Response, type NextFunction } from 'express'
- import { UserModel } from '../models/user'
- import logger from '../lib/logger'
-@@ -25,7 +26,7 @@
-       if (uploadedFileType !== null && utils.startsWith(uploadedFileType.mime, 'image')) {
-         const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
-         if (loggedInUser) {
--          fs.open(` + "`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${uploadedFileType.ext}`" + `, 'w', function (err, fd) {
-+          fs.open(path.basename(uploadedFile.path), 'w', function (err, fd) {
-             if (err != null) logger.warn('Error opening file: ' + err.message)
-             // @ts-expect-error FIXME buffer has unexpected type
-             fs.write(fd, buffer, 0, buffer.length, null, function (err) {
-
+	originalFileContent := `
+ one
+ two
+ three_but_with_a_bug
+ three_but_with_a_bug
+ four
+ five
+ eight
+ nine
+ ten
+`
+	goodDiff := `
+--- ` + tempFilePath + `
++++ ` + tempFilePath + `
+@@ -2,4 +2,3 @@
+ two
+-three_but_with_a_bug
+-three_but_with_a_bug
++three
+ four
+@@ -4,4 +4,6 @@
+ four
+ five
++six
++seven
+ eight
+ nine
+`
+	malformedDiff := `
+--- ` + tempFilePath + `
++++ ` + tempFilePath + `
+@ -2,400000000 +2,3 @
+ two
+-three_but_with_a_bug
+-three_but_with_a_bug
++three
+ four
+@@ -400,4 +400,6 @@
+ four
 `
 	tests := []struct {
-		name     string
-		args     args
-		wantEdit snyk.WorkspaceEdit
+		name         string
+		diff         string
+		filePath     string
+		fileContents string
+		expectedEdit snyk.WorkspaceEdit
 	}{
-
-		{"Multi line diff test",
-			args{"test.txt", fixDiff},
+		{"Multi line diff results in multiple TextEdits",
+			goodDiff,
+			tempFilePath,
+			originalFileContent,
 			snyk.WorkspaceEdit{Changes: map[string][]snyk.TextEdit{
-				"test.txt": []snyk.TextEdit{},
+				tempFilePath: []snyk.TextEdit{
+					// WorkspaceEdit for the correctly formatted diff will contain 5 TextEdits: 2 deletions and 3 insertions.
+					snyk.TextEdit{
+						Range:   snyk.Range{Start: snyk.Position{Line: 2, Character: 0}, End: snyk.Position{Line: 3, Character: 0}},
+						NewText: "",
+					},
+					snyk.TextEdit{
+						Range:   snyk.Range{Start: snyk.Position{Line: 2, Character: 0}, End: snyk.Position{Line: 3, Character: 0}},
+						NewText: "",
+					},
+					snyk.TextEdit{
+						Range:   snyk.Range{Start: snyk.Position{Line: 2, Character: 0}, End: snyk.Position{Line: 2, Character: 0}},
+						NewText: "three\n",
+					},
+					snyk.TextEdit{
+						Range:   snyk.Range{Start: snyk.Position{Line: 4, Character: 0}, End: snyk.Position{Line: 4, Character: 0}},
+						NewText: "six\n",
+					},
+					snyk.TextEdit{
+						Range:   snyk.Range{Start: snyk.Position{Line: 5, Character: 0}, End: snyk.Position{Line: 5, Character: 0}},
+						NewText: "seven\n",
+					},
+				},
 			}},
+		},
+		{"Malformed diff produces empty WorkspaceEdit",
+			malformedDiff,
+			tempFilePath,
+			originalFileContent,
+			snyk.WorkspaceEdit{Changes: map[string][]snyk.TextEdit(nil)},
+		},
+		{"Short file produces empty WorkspaceEdit",
+			goodDiff,
+			tempFilePath,
+			"one",
+			snyk.WorkspaceEdit{Changes: map[string][]snyk.TextEdit(nil)},
+		},
+		{"Missing file produces empty WorkspaceEdit",
+			goodDiff,
+			"/this/file/does/not/exist",
+			"one",
+			snyk.WorkspaceEdit{Changes: map[string][]snyk.TextEdit(nil)},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.wantEdit, CreateAutofixWorkspaceEdit(tt.args.absoluteFilePath, tt.args.fixDiff), "CreateAutofixWorkspaceEdit(%v, %v)", tt.args.absoluteFilePath, tt.args.fixDiff)
+			// If we're testing with a valid file path, create it for the test to use.
+			if tt.filePath == tempFilePath {
+				err := os.WriteFile(tempFilePath, []byte(originalFileContent), 0666)
+				assert.NoError(t, err)
+
+				testContents, err := os.ReadFile(tt.filePath)
+				assert.NoError(t, err)
+				assert.Equalf(t, originalFileContent, string(testContents), "File contents: %v", string(testContents))
+			}
+
+			// Create a WorkSpaceEdit for the file, and check against the reference.
+			assert.Equalf(t, tt.expectedEdit, CreateWorkspaceEditFromDiff(tt.filePath, tt.diff),
+				"CreateWorkspaceEditFromDiff(%v, %v)", tt.filePath, tt.diff)
 		})
 	}
 }
