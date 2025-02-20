@@ -23,7 +23,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -129,10 +128,6 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue) {
 	}
 
 	return allIssues
-}
-
-func (renderer *HtmlRenderer) getDeltaIssuesForFolder(dp delta.Provider) []types.Issue {
-	return dp.GetDeltaForAllProducts(renderer.c.DisplayableIssueTypes())
 }
 
 func fixableIssueCount(issues []types.Issue) (fixableIssueCount int) {
