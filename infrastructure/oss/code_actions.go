@@ -132,7 +132,6 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Ra
 		}
 
 		singleTextEdit := snyk.TextEdit{
-			//FullText: string(fileContent),
 			Range:   issueRange,
 			NewText: quickfixEdit,
 		}
