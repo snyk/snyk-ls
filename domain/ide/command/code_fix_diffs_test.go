@@ -18,6 +18,8 @@ package command
 
 import (
 	"context"
+	"github.com/creachadair/jrpc2"
+	"github.com/snyk/code-client-go/llm"
 	"runtime"
 	"testing"
 
@@ -37,6 +39,14 @@ func Test_codeFixDiffs_Command(t *testing.T) {
 }
 
 type mockIssueProvider struct {
+}
+type ServerImplMock struct{}
+
+func (b *ServerImplMock) Callback(_ context.Context, _ string, _ any) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
+	return nil, nil
+}
+func (b *ServerImplMock) Notify(_ context.Context, _ string, _ any) error {
+	return nil
 }
 
 func (m mockIssueProvider) Issues() snyk.IssuesByFile {
@@ -72,8 +82,11 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		C:              c,
 	}
 	cut := codeFixDiffs{
-		notifier:    notification.NewMockNotifier(),
-		codeScanner: codeScanner,
+		notifier:           notification.NewMockNotifier(),
+		codeScanner:        codeScanner,
+		c:                  c,
+		srv:                &ServerImplMock{},
+		deepCodeLLMBinding: llm.NewDeepcodeLLMBinding(),
 	}
 	if runtime.GOOS == "windows" {
 		codeScanner.AddBundleHash("\\folderPath", "bundleHash")
@@ -89,7 +102,9 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 		suggestions, err := cut.Execute(context.Background())
 
-		require.NotEmptyf(t, suggestions, "suggestions should not be empty")
+		// Code fix diffs command doesn't return suggestions anymore
+		// TODO: handle getting the suggestions
+		require.Emptyf(t, suggestions, "suggestions should not be empty")
 		require.NoError(t, err)
 	})
 

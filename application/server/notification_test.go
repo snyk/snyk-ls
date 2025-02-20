@@ -28,25 +28,11 @@ import (
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
-	"github.com/snyk/snyk-ls/internal/concurrency"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
-
-type ServerImplMock struct{}
-
-var notified = concurrency.AtomicBool{}
-
-func (b *ServerImplMock) Callback(_ context.Context, _ string, _ any) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
-	notified.Set(true)
-	return nil, nil
-}
-func (b *ServerImplMock) Notify(_ context.Context, _ string, _ any) error {
-	notified.Set(true)
-	return nil
-}
 
 func TestCreateProgressListener(t *testing.T) {
 	c := testutil.UnitTest(t)
