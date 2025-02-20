@@ -80,7 +80,7 @@ type HtmlRenderer struct {
 var codeRenderer *HtmlRenderer
 
 func GetHTMLRenderer(c *config.Config, deepCodeLLMBinding llm.DeepCodeLLMBinding) (*HtmlRenderer, error) {
-	if codeRenderer != nil {
+	if codeRenderer != nil && codeRenderer.c == c {
 		return codeRenderer, nil
 	}
 
