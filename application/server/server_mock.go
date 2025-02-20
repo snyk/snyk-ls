@@ -18,7 +18,9 @@ package server
 
 import (
 	"context"
+
 	"github.com/creachadair/jrpc2"
+
 	"github.com/snyk/snyk-ls/internal/concurrency"
 )
 

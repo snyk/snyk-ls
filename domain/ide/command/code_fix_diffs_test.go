@@ -18,13 +18,14 @@ package command
 
 import (
 	"context"
-	"github.com/creachadair/jrpc2"
-	"github.com/snyk/code-client-go/llm"
 	"runtime"
 	"testing"
 
+	"github.com/creachadair/jrpc2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
