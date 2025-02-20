@@ -127,7 +127,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t, c)
 
 	// reset to use real service
-	command.SetService(command.NewService(di.AuthenticationService(), nil, nil, nil, nil, nil, nil))
+	command.SetService(command.NewService(di.AuthenticationService(), nil, nil, nil, nil, nil, nil, nil))
 
 	config.CurrentConfig().SetAutomaticAuthentication(false)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
