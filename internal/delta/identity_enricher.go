@@ -41,7 +41,7 @@ func NewFindingsEnricher() *FindingsEnricher {
 func (_ FindingsEnricher) EnrichWithId(issueList []Identifiable) []Identifiable {
 	for i := range issueList {
 		if issueList[i].GetGlobalIdentity() == "" {
-			id := ""
+			var id string
 			if issue, ok := issueList[i].(IdentifiableFingerprintablePathable); ok {
 				id = generateGlobalID(issue)
 			} else {
