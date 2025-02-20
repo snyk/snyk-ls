@@ -210,10 +210,11 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	customEndpoint := "https://app.dev.snyk.io"
-	didUpdate := c.UpdateApiEndpoints(customEndpoint + "/api")
+	customApiEndpoint := customEndpoint + "/api"
+	didUpdate := c.UpdateApiEndpoints(customApiEndpoint)
 	assert.True(t, didUpdate)
-	newEndpoint := c.SnykCodeApi()
-	assert.Equalf(t, customEndpoint, newEndpoint, "Failed to update endpoint, currently %v", newEndpoint)
+	newEndpoint := c.SnykApi()
+	assert.Equalf(t, customApiEndpoint, newEndpoint, "Failed to update endpoint, currently %v", newEndpoint)
 
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
