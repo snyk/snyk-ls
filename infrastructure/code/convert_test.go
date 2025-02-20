@@ -1232,7 +1232,7 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 		{"Missing file produces empty WorkspaceEdit",
 			goodDiff,
 			"/this/file/does/not/exist",
-			"one",
+			originalFileContent,
 			snyk.WorkspaceEdit{Changes: map[string][]snyk.TextEdit(nil)},
 		},
 	}
