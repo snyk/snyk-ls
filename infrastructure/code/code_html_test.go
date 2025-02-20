@@ -210,7 +210,10 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	customEndpoint := "https://app.dev.snyk.io"
-	c.UpdateApiEndpoints(customEndpoint + "/api")
+	didUpdate := c.UpdateApiEndpoints(customEndpoint + "/api")
+	assert.True(t, didUpdate)
+	newEndpoint := c.SnykCodeApi()
+	assert.Equalf(t, customEndpoint, newEndpoint, "Failed to update endpoint, currently %v", newEndpoint)
 
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
@@ -244,7 +247,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// assert Ignore Details section - Ignore link must be the custom endpoint
-	assert.Contains(t, codePanelHtml, customEndpoint)
+	assert.Containsf(t, codePanelHtml, customEndpoint, "HTML does not contain link to custom endpoint %s", codePanelHtml)
 }
 
 func getFixes() []snyk.ExampleCommitFix {
