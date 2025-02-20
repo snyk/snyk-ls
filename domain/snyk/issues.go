@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/delta"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var (
@@ -300,18 +301,14 @@ func (i *Issue) SetIsNew(isNew bool) {
 func (i *Issue) GetGlobalIdentity() string {
 	i.m.RLock()
 	defer i.m.RUnlock()
+	if i.GlobalIdentity == "" {
+		i.GlobalIdentity = util.HashWithoutConversion([]byte(i.Fingerprint))
+	}
 	return i.GlobalIdentity
 }
 
-func (i *Issue) SetGlobalIdentity(globalIdentity string) {
-	i.m.Lock()
-	defer i.m.Unlock()
-
-	if i.GlobalIdentity == "" {
-		i.GlobalIdentity = globalIdentity
-	} else {
-		panic("GlobalIdentity already set")
-	}
+func (i *Issue) SetGlobalIdentity(_ string) {
+	// empty operation, this is automatically calculated from fingerprint
 }
 
 func (i *Issue) GetPath() types.FilePath {
@@ -331,6 +328,7 @@ func (i *Issue) SetFingerPrint(fingerprint string) {
 	defer i.m.Unlock()
 
 	i.Fingerprint = fingerprint
+	i.GlobalIdentity = util.HashWithoutConversion([]byte(fingerprint))
 }
 
 func (i *Issue) GetRuleID() string {

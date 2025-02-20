@@ -523,6 +523,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	for i := range currentFlatIssueList {
 		currentFindingIdentifiable[i] = currentFlatIssueList[i]
 	}
+
 	df := delta2.NewDeltaFinderForProduct(p)
 	enrichedIssues, err := df.DiffAndEnrich(baseFindingIdentifiable, currentFindingIdentifiable)
 
@@ -582,7 +583,7 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.FilterableIssueType]bool) []types.Issue {
 	var deltaList []types.Issue
 	for filterableIssueType, enabled := range supportedIssueTypes {
-		// analyse deltas for code only for code security
+		// analyze deltas for code only for code security
 		if !enabled || filterableIssueType == product.FilterableIssueTypeCodeQuality {
 			continue
 		}

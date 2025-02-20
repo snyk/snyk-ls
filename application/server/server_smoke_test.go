@@ -939,7 +939,6 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 			assert.Equal(t, newVulnFilePath, issuePath, "should not be in delta list: %s", string(issue.FilePath))
 		}
 	}
-	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
