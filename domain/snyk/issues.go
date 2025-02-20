@@ -301,14 +301,11 @@ func (i *Issue) SetIsNew(isNew bool) {
 func (i *Issue) GetGlobalIdentity() string {
 	i.m.RLock()
 	defer i.m.RUnlock()
-	if i.GlobalIdentity == "" {
-		i.GlobalIdentity = util.HashWithoutConversion([]byte(i.Fingerprint))
-	}
 	return i.GlobalIdentity
 }
 
-func (i *Issue) SetGlobalIdentity(_ string) {
-	// empty operation, this is automatically calculated from fingerprint
+func (i *Issue) SetGlobalIdentity(id string) {
+	i.GlobalIdentity = id
 }
 
 func (i *Issue) GetPath() types.FilePath {

@@ -899,6 +899,8 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
+	c.SetSnykOssEnabled(false)
+	c.SetSnykIacEnabled(false)
 	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
 	di.Init()

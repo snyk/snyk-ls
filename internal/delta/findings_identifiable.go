@@ -43,3 +43,9 @@ type Identifiable interface {
 	SetIsNew(isNew bool)
 	GetIsNew() bool
 }
+
+type IdentifiableFingerprintablePathable interface {
+	Identifiable
+	Fingerprintable
+	Pathable
+}

@@ -17,7 +17,11 @@
 package delta
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
+
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var _ Enricher = (*FindingsEnricher)(nil)
@@ -37,11 +41,22 @@ func NewFindingsEnricher() *FindingsEnricher {
 func (_ FindingsEnricher) EnrichWithId(issueList []Identifiable) []Identifiable {
 	for i := range issueList {
 		if issueList[i].GetGlobalIdentity() == "" {
-			issueList[i].SetGlobalIdentity(uuid.New().String())
+			id := ""
+			if issue, ok := issueList[i].(IdentifiableFingerprintablePathable); ok {
+				id = generateGlobalID(issue)
+			} else {
+				id = uuid.New().String()
+			}
+			issueList[i].SetGlobalIdentity(id)
 		}
 	}
 
 	return issueList
+}
+
+func generateGlobalID(i IdentifiableFingerprintablePathable) string {
+	globalIdentity := fmt.Sprintf("%s@@@%s", i.GetFingerprint(), i.GetPath())
+	return util.HashWithoutConversion([]byte(globalIdentity))
 }
 
 func (_ FindingsEnricher) EnrichWithIsNew(allCurrentIssues, newIssues []Identifiable) []Identifiable {
