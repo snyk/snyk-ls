@@ -16,10 +16,6 @@
 
 package snyk
 
-import (
-	"math"
-)
-
 type TextEdit struct {
 
 	/**
@@ -33,10 +29,6 @@ type TextEdit struct {
 	 * empty string.
 	 */
 	NewText string
-}
-
-func (e *TextEdit) ensureGreaterThanZero(i int) int {
-	return int(math.Max(0, float64(i)))
 }
 
 type WorkspaceEdit struct {

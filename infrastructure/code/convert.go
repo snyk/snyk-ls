@@ -571,7 +571,7 @@ func CreateWorkspaceEditFromDiff(absoluteFilePath string, diff string) (edit sny
 	var hunkLine = 0   // Location in the current hunk
 	var hunkOffset = 0 // Whether we need to offset the current hunk based on previous edits.
 
-	// Loop over the diff. Diffs will always use \n instead of \r\n, so no need to sanitise (see getUnifiedDiff).
+	// Loop over the diff. Diffs will always use \n instead of \r\n, so no need to sanitize (see getUnifiedDiff).
 	for _, line := range strings.Split(diff, "\n") {
 
 		// If we are being asked to make changes outside the original file, abort and return an empty edit.
