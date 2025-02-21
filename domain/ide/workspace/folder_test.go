@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	context2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 
 	"github.com/golang/mock/gomock"
@@ -572,11 +573,20 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(),
-		gomock.Any()).Times(1)
+	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
+		Times(1).
+		Do(func(id workflow.Identifier, data []workflow.Data, config configuration.Configuration) {
+			require.Len(t, data, 1)
+			payload := string(data[0].GetPayload().([]byte))
+			require.NotEmpty(t, payload)
+			require.Contains(t, payload, "scan_source")
+			require.Contains(t, payload, "delta_scan_type")
+		})
+
+	ctx := context2.NewContextWithScanSource(context2.NewContextWithDeltaScanType(context.Background(), context2.WorkingDirectory), context2.LLM)
 
 	// Act
-	f.ProcessResults(context.Background(), scanData)
+	f.ProcessResults(ctx, scanData)
 
 	// Assert
 	require.NotEmpty(t, scanData.GetSeverityIssueCounts())
