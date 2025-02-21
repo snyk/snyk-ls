@@ -67,24 +67,3 @@ func DeltaScanTypeFromContext(ctx context.Context) (DeltaScanType, bool) {
 	d, ok := ctx.Value(deltaScanTypeKey).(DeltaScanType)
 	return d, ok
 }
-
-type TraceID string
-
-func (t TraceID) String() string {
-	return string(t)
-}
-
-type traceIDKeyType int
-
-var traceIDKey traceIDKeyType
-
-// NewContext returns a new Context that carries value u.
-func NewContextWithTraceID(ctx context.Context, traceID TraceID) context.Context {
-	return context.WithValue(ctx, traceIDKey, traceID)
-}
-
-// FromContext returns the User value stored in ctx, if any.
-func TraceIDFromContext(ctx context.Context) (TraceID, bool) {
-	t, ok := ctx.Value(traceIDKey).(TraceID)
-	return t, ok
-}

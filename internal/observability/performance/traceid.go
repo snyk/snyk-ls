@@ -19,20 +19,20 @@ package performance
 import (
 	"context"
 	"errors"
-
-	context2 "github.com/snyk/snyk-ls/internal/context"
 )
+
+type TraceIdContextKey string
 
 // GetContextWithTraceId Returns a child context with "trace_id" set to the given traceId
 func GetContextWithTraceId(ctx context.Context, traceId string) context.Context {
-	return context2.NewContextWithTraceID(ctx, context2.TraceID(traceId))
+	return context.WithValue(ctx, TraceIdContextKey("trace_id"), traceId)
 }
 
 func GetTraceId(ctx context.Context) (string, error) {
-	v, ok := context2.TraceIDFromContext(ctx)
+	v, ok := ctx.Value(TraceIdContextKey("trace_id")).(string)
 	if !ok {
 		return "", errors.New("\"trace_id\" context key not found")
 	}
 
-	return v.String(), nil
+	return v, nil
 }
