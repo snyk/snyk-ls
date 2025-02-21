@@ -550,7 +550,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	}
 }
 
-func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
+func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	engineMock, gafConfig := setUpEngineMock(t, c)
@@ -587,6 +587,37 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	// Act
 	f.ProcessResults(ctx, scanData)
+	time.Sleep(time.Second)
+}
+
+func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	engineMock, gafConfig := setUpEngineMock(t, c)
+
+	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
+
+	filePath := types.FilePath(filepath.Join(string(f.Path()), "dummy.java"))
+	scanData := types.ScanData{
+		Product: product.ProductOpenSource,
+		Issues: []types.Issue{
+			&snyk.Issue{Severity: types.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			&snyk.Issue{Severity: types.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			&snyk.Issue{Severity: types.Critical, IsIgnored: true, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			&snyk.Issue{Severity: types.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+			&snyk.Issue{Severity: types.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
+		},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
+	}
+
+	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
+	engineMock.EXPECT().GetWorkflows().AnyTimes()
+	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
+		Times(1)
+
+	// Act
+	f.ProcessResults(context.Background(), scanData)
 
 	// Assert
 	require.NotEmpty(t, scanData.GetSeverityIssueCounts())
