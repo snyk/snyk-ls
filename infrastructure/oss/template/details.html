@@ -61,7 +61,7 @@
         {{end}}
         {{end}}
 
-      {{if gt (len .CvssScore) 0}}
+      {{if ne .CvssScore "0.0" }}
       <span class="delimiter"> </span>
       <a class="cvssscore styled-link"  rel="noopener noreferrer" href="https://www.first.org/cvss/calculator/3.1#{{.CVSSv3}}">CVSS {{.CvssScore}}</a>
       {{end}}

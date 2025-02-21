@@ -1,0 +1,28 @@
+{
+  "id": "snyk:lic:npm:jschardet:LGPL-2.1",
+  "type": "license",
+  "title": "LGPL-2.1 license",
+  "semver": {
+    "vulnerable": [
+      ">=0"
+    ]
+  },
+  "license": "LGPL-2.1",
+  "language": "js",
+  "description": "LGPL-2.1 license",
+  "packageName": "jschardet",
+  "creationTime": "2025-01-12T12:02:43.648Z",
+  "packageManager": "npm",
+  "publicationTime": "2025-01-12T12:02:43.648Z",
+  "severity": "medium",
+  "severityWithCritical": "medium",
+  "from": [
+    "sca-license-test@1.0.0",
+    "jschardet@2.3.0"
+  ],
+  "upgradePath": [],
+  "isUpgradable": false,
+  "isPatchable": false,
+  "name": "jschardet",
+  "version": "2.3.0"
+}

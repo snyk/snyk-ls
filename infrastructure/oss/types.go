@@ -101,6 +101,10 @@ func (r AppliedPolicyRules) toAppliedPolicyRules() snyk.AppliedPolicyRules {
 	}
 }
 
+var (
+	LearnLicenseUrl = "https://learn.snyk.io/lesson/license-policy-management/?loc=ide"
+)
+
 type Annotation struct {
 	Value  string `json:"value,omitempty"`
 	Reason string `json:"reason,omitempty"`
@@ -140,12 +144,23 @@ func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []sny
 	additionalData.DisplayTargetFile = types.FilePath(targetFilePath)
 	additionalData.Language = i.Language
 	additionalData.MatchingIssues = matchingIssues
-	if i.lesson != nil {
-		additionalData.Lesson = i.lesson.Url
+	if i.lesson != nil || i.isLicenseIssue() {
+		additionalData.Lesson = i.getLessonURL()
 	}
 	additionalData.Remediation = i.GetRemediation()
 	additionalData.AppliedPolicyRules = i.AppliedPolicyRules.toAppliedPolicyRules()
 	return additionalData
+}
+
+func (i *ossIssue) isLicenseIssue() bool {
+	return i.License != ""
+}
+
+func (i *ossIssue) getLessonURL() string {
+	if i.isLicenseIssue() {
+		return LearnLicenseUrl
+	}
+	return i.lesson.Url
 }
 
 func (i *ossIssue) toReferences() []types.Reference {
