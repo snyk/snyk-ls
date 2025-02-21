@@ -22,10 +22,11 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/infrastructure/oss/parser"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type htmlRangeFinder struct {
-	path        string
+	path        types.FilePath
 	fileContent []byte
 	config      *config.Config
 }

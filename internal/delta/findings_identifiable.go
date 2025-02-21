@@ -16,6 +16,8 @@
 
 package delta
 
+import "github.com/snyk/snyk-ls/internal/types"
+
 type Fingerprintable interface {
 	Identifiable
 	GetFingerprint() string
@@ -31,13 +33,19 @@ type Locatable interface {
 
 type Pathable interface {
 	Identifiable
-	Path() string
+	GetPath() types.FilePath
 }
 
 type Identifiable interface {
-	RuleId() string
+	GetRuleID() string
 	GetGlobalIdentity() string
 	SetGlobalIdentity(globalIdentity string)
 	SetIsNew(isNew bool)
 	GetIsNew() bool
+}
+
+type IdentifiableFingerprintablePathable interface {
+	Identifiable
+	Fingerprintable
+	Pathable
 }

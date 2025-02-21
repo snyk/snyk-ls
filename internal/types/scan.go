@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited All rights reserved.
+ * © 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,18 @@
  * limitations under the License.
  */
 
-package snyk
+package types
 
 import (
+	"context"
 	"time"
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
+
+type ScanResultProcessor = func(scanData ScanData)
+
+func NoopResultProcessor(_ ScanData) {}
 
 type ScanData struct {
 	Product           product.Product
@@ -28,44 +33,21 @@ type ScanData struct {
 	Err               error
 	DurationMs        time.Duration
 	TimestampFinished time.Time
-	Path              string
+	Path              FilePath
 	IsDeltaScan       bool
 	SendAnalytics     bool
 	UpdateGlobalCache bool
 }
 
-type ScanResultProcessor = func(scanData ScanData)
-
-type SeverityIssueCounts map[Severity]IssueCount
-type IssueCount struct {
-	Total   int
-	Open    int
-	Ignored int
+type Scanner interface {
+	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
+	Scan(ctx context.Context, path FilePath, processResults ScanResultProcessor, folderPath FilePath)
 }
 
-func NoopResultProcessor(_ ScanData) {}
+type ProductScanner interface {
+	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
+	Scan(ctx context.Context, path FilePath, folderPath FilePath, folderConfig *FolderConfig) (issues []Issue, err error)
 
-func (s ScanData) GetSeverityIssueCounts() SeverityIssueCounts {
-	sic := make(SeverityIssueCounts)
-
-	for _, issue := range s.Issues {
-		updateSeverityCount(sic, issue)
-	}
-
-	return sic
-}
-
-func updateSeverityCount(sic SeverityIssueCounts, issue Issue) {
-	ic, exists := sic[issue.Severity]
-	if !exists {
-		ic = IssueCount{}
-	}
-	if issue.IsIgnored {
-		ic.Ignored++
-	} else {
-		ic.Open++
-	}
-	ic.Total++
-
-	sic[issue.Severity] = ic
+	IsEnabled() bool
+	Product() product.Product
 }

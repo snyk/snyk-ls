@@ -21,13 +21,14 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var _ Aggregator = (*ScanStateAggregator)(nil)
 
 // folderProductKey identifies a unique (FolderPath, ProductName) pair.
 type folderProductKey struct {
-	FolderPath string
+	FolderPath types.FilePath
 	Product    product.Product
 }
 
@@ -119,7 +120,7 @@ func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter) Aggre
 	}
 }
 
-func (agg *ScanStateAggregator) Init(folders []string) {
+func (agg *ScanStateAggregator) Init(folders []types.FilePath) {
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
 
@@ -130,7 +131,7 @@ func (agg *ScanStateAggregator) Init(folders []string) {
 	agg.scanStateChangeEmitter.Emit(agg.stateSnapshot())
 }
 
-func (agg *ScanStateAggregator) initForAllProducts(folderPath string) {
+func (agg *ScanStateAggregator) initForAllProducts(folderPath types.FilePath) {
 	// TODO: Add or remove from the map if a product is on/off
 	agg.referenceScanStates[folderProductKey{Product: product.ProductOpenSource, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 	agg.referenceScanStates[folderProductKey{Product: product.ProductCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
@@ -142,7 +143,7 @@ func (agg *ScanStateAggregator) initForAllProducts(folderPath string) {
 }
 
 // AddNewFolder adds new folder to the state scanstates map with initial NOT_STARTED state
-func (agg *ScanStateAggregator) AddNewFolder(folderPath string) {
+func (agg *ScanStateAggregator) AddNewFolder(folderPath types.FilePath) {
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
 
@@ -152,14 +153,14 @@ func (agg *ScanStateAggregator) AddNewFolder(folderPath string) {
 }
 
 // SetScanState changes the Status field of the existing state (or creates it if it doesn't exist).
-func (agg *ScanStateAggregator) SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState scanState) {
+func (agg *ScanStateAggregator) SetScanState(folderPath types.FilePath, p product.Product, isReferenceScan bool, newState scanState) {
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
 
 	agg.setScanState(folderPath, p, isReferenceScan, newState)
 }
 
-func (agg *ScanStateAggregator) setScanState(folderPath string, p product.Product, isReferenceScan bool, newState scanState) {
+func (agg *ScanStateAggregator) setScanState(folderPath types.FilePath, p product.Product, isReferenceScan bool, newState scanState) {
 	logger := agg.c.Logger().With().Str("method", "SetScanState").Logger()
 
 	key := folderProductKey{FolderPath: folderPath, Product: p}
@@ -182,7 +183,7 @@ func (agg *ScanStateAggregator) setScanState(folderPath string, p product.Produc
 	agg.scanStateChangeEmitter.Emit(agg.stateSnapshot())
 }
 
-func (agg *ScanStateAggregator) SetScanDone(folderPath string, p product.Product, isReferenceScan bool, scanErr error) {
+func (agg *ScanStateAggregator) SetScanDone(folderPath types.FilePath, p product.Product, isReferenceScan bool, scanErr error) {
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
 
@@ -197,7 +198,7 @@ func (agg *ScanStateAggregator) SetScanDone(folderPath string, p product.Product
 	agg.setScanState(folderPath, p, isReferenceScan, state)
 }
 
-func (agg *ScanStateAggregator) GetScanErr(folderPath string, p product.Product, isReferenceScan bool) error {
+func (agg *ScanStateAggregator) GetScanErr(folderPath types.FilePath, p product.Product, isReferenceScan bool) error {
 	agg.mu.RLock()
 	defer agg.mu.RUnlock()
 
@@ -220,7 +221,7 @@ func (agg *ScanStateAggregator) GetScanErr(folderPath string, p product.Product,
 	return st.Err
 }
 
-func (agg *ScanStateAggregator) SetScanInProgress(folderPath string, p product.Product, isReferenceScan bool) {
+func (agg *ScanStateAggregator) SetScanInProgress(folderPath types.FilePath, p product.Product, isReferenceScan bool) {
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
 

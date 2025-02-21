@@ -36,47 +36,47 @@ import (
 
 var htmlEndingRegExp = regexp.MustCompile(`<br\s?/?>`)
 
-func FromRange(lspRange sglsp.Range) snyk.Range {
-	return snyk.Range{
+func FromRange(lspRange sglsp.Range) types.Range {
+	return types.Range{
 		Start: FromPosition(lspRange.Start),
 		End:   FromPosition(lspRange.End),
 	}
 }
 
-func FromPosition(pos sglsp.Position) snyk.Position {
-	return snyk.Position{
+func FromPosition(pos sglsp.Position) types.Position {
+	return types.Position{
 		Line:      pos.Line,
 		Character: pos.Character,
 	}
 }
 
-func ToCodeActions(issues []snyk.Issue) (actions []types.CodeAction) {
+func ToCodeActions(issues []types.Issue) (actions []types.LSPCodeAction) {
 	dedupMap := map[string]bool{}
 	for _, issue := range issues {
-		for _, action := range issue.CodeActions {
-			if !dedupMap[action.Title] {
+		for _, action := range issue.GetCodeActions() {
+			if !dedupMap[action.GetTitle()] {
 				codeAction := ToCodeAction(issue, action)
 				actions = append(actions, codeAction)
-				dedupMap[action.Title] = true
+				dedupMap[action.GetTitle()] = true
 			}
 		}
 	}
 	return actions
 }
 
-func ToCodeAction(issue snyk.Issue, action snyk.CodeAction) types.CodeAction {
+func ToCodeAction(issue types.Issue, action types.CodeAction) types.LSPCodeAction {
 	var id *types.CodeActionData = nil
-	if action.Uuid != nil {
-		i := types.CodeActionData(*action.Uuid)
+	if action.GetUuid() != nil {
+		i := types.CodeActionData(*action.GetUuid())
 		id = &i
 	}
-	return types.CodeAction{
-		Title:       action.Title,
+	return types.LSPCodeAction{
+		Title:       action.GetTitle(),
 		Kind:        types.QuickFix,
-		Diagnostics: ToDiagnostics([]snyk.Issue{issue}),
-		IsPreferred: action.IsPreferred,
-		Edit:        ToWorkspaceEdit(action.Edit),
-		Command:     ToCommand(action.Command),
+		Diagnostics: ToDiagnostics([]types.Issue{issue}),
+		IsPreferred: action.GetIsPreferred(),
+		Edit:        ToWorkspaceEdit(action.GetEdit()),
+		Command:     ToCommand(action.GetCommand()),
 		Data:        id,
 	}
 }
@@ -107,19 +107,19 @@ func ToCommand(command *types.CommandData) *sglsp.Command {
 	}
 }
 
-func ToWorkspaceEdit(edit *snyk.WorkspaceEdit) *sglsp.WorkspaceEdit {
+func ToWorkspaceEdit(edit *types.WorkspaceEdit) *sglsp.WorkspaceEdit {
 	if edit == nil {
 		return nil
 	}
 	lspMap := map[string][]sglsp.TextEdit{}
 	for k, v := range edit.Changes {
-		lspMap[string(uri.PathToUri(k))] = ToTextEdits(v)
+		lspMap[string(uri.PathToUri(types.FilePath(k)))] = ToTextEdits(v)
 	}
 
 	return &sglsp.WorkspaceEdit{Changes: lspMap}
 }
 
-func ToTextEdits(edits []snyk.TextEdit) (lspEdits []sglsp.TextEdit) {
+func ToTextEdits(edits []types.TextEdit) (lspEdits []sglsp.TextEdit) {
 	for _, edit := range edits {
 		unsanitized := edit
 		edit.SanitizeRange()
@@ -133,47 +133,47 @@ func ToTextEdits(edits []snyk.TextEdit) (lspEdits []sglsp.TextEdit) {
 	return lspEdits
 }
 
-func isEmpty(r snyk.Range) bool {
-	return r.Start == snyk.Position{} && r.End == snyk.Position{}
+func isEmpty(r types.Range) bool {
+	return r.Start == types.Position{} && r.End == types.Position{}
 }
 
-func ToTextEdit(edit snyk.TextEdit) sglsp.TextEdit {
+func ToTextEdit(edit types.TextEdit) sglsp.TextEdit {
 	return sglsp.TextEdit{
 		Range:   ToRange(edit.Range),
 		NewText: edit.NewText,
 	}
 }
 
-func ToSeverity(severity snyk.Severity) types.DiagnosticSeverity {
+func ToSeverity(severity types.Severity) types.DiagnosticSeverity {
 	switch severity {
-	case snyk.Critical:
+	case types.Critical:
 		return types.DiagnosticsSeverityError
-	case snyk.High:
+	case types.High:
 		return types.DiagnosticsSeverityError
-	case snyk.Medium:
+	case types.Medium:
 		return types.DiagnosticsSeverityWarning
-	case snyk.Low:
+	case types.Low:
 		return types.DiagnosticsSeverityInformation
 	default:
 		return types.DiagnosticsSeverityHint
 	}
 }
 
-func ToRange(r snyk.Range) sglsp.Range {
+func ToRange(r types.Range) sglsp.Range {
 	return sglsp.Range{
 		Start: ToPosition(r.Start),
 		End:   ToPosition(r.End),
 	}
 }
 
-func ToPosition(p snyk.Position) sglsp.Position {
+func ToPosition(p types.Position) sglsp.Position {
 	return sglsp.Position{
 		Line:      p.Line,
 		Character: p.Character,
 	}
 }
 
-func ToDiagnostics(issues []snyk.Issue) []types.Diagnostic {
+func ToDiagnostics(issues []types.Issue) []types.Diagnostic {
 	// In JSON, `nil` serializes to `null`, while an empty slice serializes to `[]`.
 	// Sending null instead of an empty array leads to stored diagnostics not being cleared.
 	// Do not prefer nil over an empty slice in this case. The next line ensures that even if issues is empty,
@@ -182,22 +182,22 @@ func ToDiagnostics(issues []snyk.Issue) []types.Diagnostic {
 
 	for _, issue := range issues {
 		s := ""
-		if issue.IssueDescriptionURL != nil {
-			s = issue.IssueDescriptionURL.String()
+		if issue.GetIssueDescriptionURL() != nil {
+			s = issue.GetIssueDescriptionURL().String()
 		}
 		diagnostic := types.Diagnostic{
-			Range:           ToRange(issue.Range),
-			Severity:        ToSeverity(issue.Severity),
-			Code:            issue.ID,
-			Source:          string(issue.Product),
-			Message:         issue.Message,
+			Range:           ToRange(issue.GetRange()),
+			Severity:        ToSeverity(issue.GetSeverity()),
+			Code:            issue.GetID(),
+			Source:          string(issue.GetProduct()),
+			Message:         issue.GetMessage(),
 			CodeDescription: types.CodeDescription{Href: types.Uri(s)},
 		}
-		if issue.Product == product.ProductInfrastructureAsCode {
+		if issue.GetProduct() == product.ProductInfrastructureAsCode {
 			diagnostic.Data = getIacIssue(issue)
-		} else if issue.Product == product.ProductCode {
+		} else if issue.GetProduct() == product.ProductCode {
 			diagnostic.Data = getCodeIssue(issue)
-		} else if issue.Product == product.ProductOpenSource {
+		} else if issue.GetProduct() == product.ProductOpenSource {
 			diagnostic.Data = getOssIssue(issue)
 		}
 		diagnostics = append(diagnostics, diagnostic)
@@ -205,8 +205,8 @@ func ToDiagnostics(issues []snyk.Issue) []types.Diagnostic {
 	return diagnostics
 }
 
-func getOssIssue(issue snyk.Issue) types.ScanIssue {
-	additionalData, ok := issue.AdditionalData.(snyk.OssIssueData)
+func getOssIssue(issue types.Issue) types.ScanIssue {
+	additionalData, ok := issue.GetAdditionalData().(snyk.OssIssueData)
 	if !ok {
 		return types.ScanIssue{}
 	}
@@ -216,8 +216,8 @@ func getOssIssue(issue snyk.Issue) types.ScanIssue {
 		matchingIssues[i] = types.OssIssueData{
 			License: matchingIssue.License,
 			Identifiers: types.OssIdentifiers{
-				CWE: issue.CWEs,
-				CVE: issue.CVEs,
+				CWE: issue.GetCWEs(),
+				CVE: issue.GetCVEs(),
 			},
 			Description:       matchingIssue.Description,
 			Language:          matchingIssue.Language,
@@ -241,19 +241,19 @@ func getOssIssue(issue snyk.Issue) types.ScanIssue {
 	scanIssue := types.ScanIssue{
 		Id:                  additionalData.Key,
 		Title:               additionalData.Title,
-		Severity:            issue.Severity.String(),
-		FilePath:            issue.AffectedFilePath,
-		Range:               ToRange(issue.Range),
-		IsIgnored:           issue.IsIgnored,
-		IsNew:               issue.IsNew,
+		Severity:            issue.GetSeverity().String(),
+		FilePath:            issue.GetAffectedFilePath(),
+		Range:               ToRange(issue.GetRange()),
+		IsIgnored:           issue.GetIsIgnored(),
+		IsNew:               issue.GetIsNew(),
 		FilterableIssueType: additionalData.GetFilterableIssueType(),
 		AdditionalData: types.OssIssueData{
 			Key:     additionalData.Key,
-			RuleId:  issue.ID,
+			RuleId:  issue.GetID(),
 			License: additionalData.License,
 			Identifiers: types.OssIdentifiers{
-				CWE: issue.CWEs,
-				CVE: issue.CVEs,
+				CWE: issue.GetCWEs(),
+				CVE: issue.GetCVEs(),
 			},
 			Description:       additionalData.Description,
 			Language:          additionalData.Language,
@@ -279,8 +279,8 @@ func getOssIssue(issue snyk.Issue) types.ScanIssue {
 	return scanIssue
 }
 
-func getIacIssue(issue snyk.Issue) types.ScanIssue {
-	additionalData, ok := issue.AdditionalData.(snyk.IaCIssueData)
+func getIacIssue(issue types.Issue) types.ScanIssue {
+	additionalData, ok := issue.GetAdditionalData().(snyk.IaCIssueData)
 	if !ok {
 		return types.ScanIssue{}
 	}
@@ -288,11 +288,11 @@ func getIacIssue(issue snyk.Issue) types.ScanIssue {
 	scanIssue := types.ScanIssue{
 		Id:                  additionalData.Key,
 		Title:               additionalData.Title,
-		Severity:            issue.Severity.String(),
-		FilePath:            issue.AffectedFilePath,
-		Range:               ToRange(issue.Range),
-		IsIgnored:           issue.IsIgnored,
-		IsNew:               issue.IsNew,
+		Severity:            issue.GetSeverity().String(),
+		FilePath:            issue.GetAffectedFilePath(),
+		Range:               ToRange(issue.GetRange()),
+		IsIgnored:           issue.GetIsIgnored(),
+		IsNew:               issue.GetIsNew(),
 		FilterableIssueType: additionalData.GetFilterableIssueType(),
 		AdditionalData: types.IacIssueData{
 			Key:           additionalData.Key,
@@ -310,8 +310,8 @@ func getIacIssue(issue snyk.Issue) types.ScanIssue {
 	return scanIssue
 }
 
-func getCodeIssue(issue snyk.Issue) types.ScanIssue {
-	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+func getCodeIssue(issue types.Issue) types.ScanIssue {
+	additionalData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 	if !ok {
 		return types.ScanIssue{}
 	}
@@ -321,7 +321,7 @@ func getCodeIssue(issue snyk.Issue) types.ScanIssue {
 		positions := make([]types.MarkerPosition, 0)
 		for _, pos := range marker.Pos {
 			positions = append(positions, types.MarkerPosition{
-				Position: types.Position{
+				CodeFlowPositionInFile: types.CodeFlowPositionInFile{
 					Rows: pos.Rows,
 					Cols: pos.Cols,
 				},
@@ -347,12 +347,12 @@ func getCodeIssue(issue snyk.Issue) types.ScanIssue {
 
 	scanIssue := types.ScanIssue{
 		Id:                  additionalData.Key,
-		Title:               issue.Message,
-		Severity:            issue.Severity.String(),
-		FilePath:            issue.AffectedFilePath,
-		Range:               ToRange(issue.Range),
-		IsIgnored:           issue.IsIgnored,
-		IsNew:               issue.IsNew,
+		Title:               issue.GetMessage(),
+		Severity:            issue.GetSeverity().String(),
+		FilePath:            issue.GetAffectedFilePath(),
+		Range:               ToRange(issue.GetRange()),
+		IsIgnored:           issue.GetIsIgnored(),
+		IsNew:               issue.GetIsNew(),
 		FilterableIssueType: additionalData.GetFilterableIssueType(),
 		AdditionalData: types.CodeIssueData{
 			Key:             additionalData.Key,
@@ -375,18 +375,18 @@ func getCodeIssue(issue snyk.Issue) types.ScanIssue {
 	if scanIssue.IsIgnored {
 		scanIssue.IgnoreDetails =
 			types.IgnoreDetails{
-				Category:   issue.IgnoreDetails.Category,
-				Reason:     issue.IgnoreDetails.Reason,
-				Expiration: issue.IgnoreDetails.Expiration,
-				IgnoredOn:  issue.IgnoreDetails.IgnoredOn,
-				IgnoredBy:  issue.IgnoreDetails.IgnoredBy,
+				Category:   issue.GetIgnoreDetails().Category,
+				Reason:     issue.GetIgnoreDetails().Reason,
+				Expiration: issue.GetIgnoreDetails().Expiration,
+				IgnoredOn:  issue.GetIgnoreDetails().IgnoredOn,
+				IgnoredBy:  issue.GetIgnoreDetails().IgnoredBy,
 			}
 	}
 
 	return scanIssue
 }
 
-func ToHoversDocument(p product.Product, path string, issues []snyk.Issue) hover.DocumentHovers {
+func ToHoversDocument(p product.Product, path types.FilePath, issues []types.Issue) hover.DocumentHovers {
 	return hover.DocumentHovers{
 		Path:    path,
 		Hover:   ToHovers(issues),
@@ -394,7 +394,7 @@ func ToHoversDocument(p product.Product, path string, issues []snyk.Issue) hover
 	}
 }
 
-func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
+func ToHovers(issues []types.Issue) (hovers []hover.Hover[hover.Context]) {
 	c := config.CurrentConfig()
 	if c.HoverVerbosity() == 0 {
 		return hovers
@@ -402,10 +402,10 @@ func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 
 	for _, i := range issues {
 		var message string
-		if len(i.FormattedMessage) > 0 {
-			message = i.FormattedMessage
+		if len(i.GetFormattedMessage()) > 0 {
+			message = i.GetFormattedMessage()
 		} else {
-			message = i.Message
+			message = i.GetMessage()
 		}
 
 		hoverOutputFormat := c.Format()
@@ -420,8 +420,8 @@ func ToHovers(issues []snyk.Issue) (hovers []hover.Hover[hover.Context]) {
 		}
 
 		hovers = append(hovers, hover.Hover[hover.Context]{
-			Id:      i.ID,
-			Range:   i.Range,
+			Id:      i.GetID(),
+			Range:   i.GetRange(),
 			Message: message,
 			Context: i,
 		})

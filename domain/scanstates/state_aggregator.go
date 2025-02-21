@@ -16,14 +16,17 @@
 
 package scanstates
 
-import "github.com/snyk/snyk-ls/internal/product"
+import (
+	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
+)
 
 type Aggregator interface {
-	Init(folders []string)
-	AddNewFolder(folderPath string)
-	SetScanState(folderPath string, p product.Product, isReferenceScan bool, newState scanState)
-	SetScanDone(folderPath string, p product.Product, isReferenceScan bool, scanErr error)
-	SetScanInProgress(folderPath string, p product.Product, isReferenceScan bool)
+	Init(folders []types.FilePath)
+	AddNewFolder(folderPath types.FilePath)
+	SetScanState(folderPath types.FilePath, p product.Product, isReferenceScan bool, newState scanState)
+	SetScanDone(folderPath types.FilePath, p product.Product, isReferenceScan bool, scanErr error)
+	SetScanInProgress(folderPath types.FilePath, p product.Product, isReferenceScan bool)
 	allScansStarted(isReference bool) bool
 	anyScanInProgress(isReference bool) bool
 	anyScanSucceeded(isReference bool) bool
@@ -31,5 +34,5 @@ type Aggregator interface {
 	anyScanError(isReference bool) bool
 	SummaryEmitter() ScanStateChangeEmitter
 	StateSnapshot() StateSnapshot
-	GetScanErr(folderPath string, p product.Product, isReferenceScan bool) error
+	GetScanErr(folderPath types.FilePath, p product.Product, isReferenceScan bool) error
 }

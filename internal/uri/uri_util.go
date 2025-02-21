@@ -28,6 +28,8 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"go.lsp.dev/uri"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const fileScheme = "file://"
@@ -36,10 +38,10 @@ const eclipseWorkspaceFolderScheme = "file:"
 
 var rangeFragmentRegexp = regexp.MustCompile(`^(.+)://((.*)@)?(.+?)(:(\d*))?/?((.*)\?)?((.*)#)L?(\d+)(?:,(\d+))?(-L?(\d+)(?:,(\d+))?)?`)
 
-func FolderContains(folderPath string, path string) bool {
+func FolderContains(folderPath types.FilePath, path types.FilePath) bool {
 	filePathSeparator := string(filepath.Separator)
-	cleanPath := filepath.Clean(path)
-	cleanFolderPath := filepath.Clean(folderPath)
+	cleanPath := filepath.Clean(string(path))
+	cleanFolderPath := filepath.Clean(string(folderPath))
 	if !strings.HasSuffix(cleanFolderPath, filePathSeparator) {
 		cleanFolderPath += filePathSeparator
 	}
@@ -49,7 +51,7 @@ func FolderContains(folderPath string, path string) bool {
 
 // todo can we create a path domain type?
 // PathFromUri converts the given uri to a file path
-func PathFromUri(documentURI sglsp.DocumentURI) string {
+func PathFromUri(documentURI sglsp.DocumentURI) types.FilePath {
 	u := string(documentURI)
 
 	// Check if path is UNC file path. In this case return it.
@@ -62,11 +64,11 @@ func PathFromUri(documentURI sglsp.DocumentURI) string {
 		u = strings.Replace(u, eclipseWorkspaceFolderScheme, fileScheme, 1)
 	}
 
-	return uri.New(u).Filename()
+	return types.FilePath(uri.New(u).Filename())
 }
 
 // pathFromUNCUri checks if the provided file URI represents a UNC path.
-func pathFromUNCUri(uri string) string {
+func pathFromUNCUri(uri string) types.FilePath {
 	if runtime.GOOS != "windows" || !strings.HasPrefix(uri, fileScheme) {
 		return ""
 	}
@@ -87,17 +89,17 @@ func pathFromUNCUri(uri string) string {
 	if len(parsedURI.Host) > 0 {
 		uncPath := fmt.Sprintf(`\\%s%s`, parsedURI.Host, parsedURI.Path)
 		// Convert slashes to backslashes
-		return filepath.Clean(uncPath)
+		return types.FilePath(filepath.Clean(uncPath))
 	}
 
 	return ""
 }
 
 // PathToUri converts a path to a DocumentURI
-func PathToUri(path string) sglsp.DocumentURI {
+func PathToUri(path types.FilePath) sglsp.DocumentURI {
 	// in case of UNC file path. uri.File returns file://// which IDEs can't interpret correctly
 	// file://// is still a valid UNC, but we have to replace with file:// for the IDEs to interpret it correctly
-	parsedUri := uri.File(path)
+	parsedUri := uri.File(string(path))
 	uriAsString := string(parsedUri)
 	if strings.HasPrefix(uriAsString, uncFileScheme) {
 		uriAsString = strings.Replace(uriAsString, uncFileScheme, fileScheme, 1)
@@ -110,8 +112,8 @@ func IsUriDirectory(documentURI sglsp.DocumentURI) bool {
 	return IsDirectory(workspaceUri)
 }
 
-func IsDirectory(path string) bool {
-	stat, err := os.Stat(path)
+func IsDirectory(path types.FilePath) bool {
+	stat, err := os.Stat(string(path))
 	if err != nil {
 		return false
 	}

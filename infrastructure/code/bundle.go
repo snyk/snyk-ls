@@ -30,19 +30,20 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Bundle struct {
 	SnykCode      SnykCodeClient
 	BundleHash    string
 	UploadBatches []*UploadBatch
-	Files         map[string]BundleFile
+	Files         map[types.FilePath]BundleFile
 	instrumentor  codeClientObservability.Instrumentor
 	errorReporter codeClientObservability.ErrorReporter
 	requestId     string
-	missingFiles  []string
-	limitToFiles  []string
-	rootPath      string
+	missingFiles  []types.FilePath
+	limitToFiles  []types.FilePath
+	rootPath      types.FilePath
 	issueEnhancer IssueEnhancer
 	logger        *zerolog.Logger
 }
@@ -57,7 +58,7 @@ func (b *Bundle) Upload(ctx context.Context, uploadBatch *UploadBatch) error {
 }
 
 func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) error {
-	var removeFiles []string
+	var removeFiles []types.FilePath
 	var err error
 	if uploadBatch.hasContent() {
 		b.BundleHash, b.missingFiles, err = b.SnykCode.ExtendBundle(ctx, b.BundleHash, uploadBatch.documents,
@@ -71,17 +72,17 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	return err
 }
 
-func (b *Bundle) FetchDiagnosticsData(ctx context.Context, t *progress.Tracker) ([]snyk.Issue, error) {
+func (b *Bundle) FetchDiagnosticsData(ctx context.Context, t *progress.Tracker) ([]types.Issue, error) {
 	defer b.logger.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
 	b.logger.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
 	return b.retrieveAnalysis(ctx, t)
 }
 
-func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
+func getIssueLangAndRuleId(issue types.Issue) (string, string, bool) {
 	logger := config.CurrentConfig().Logger().With().Str("method", "getIssueLangAndRuleId").Logger()
-	issueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	issueData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 	if !ok {
-		logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Can't access issue data")
+		logger.Trace().Str("file", string(issue.GetAffectedFilePath())).Int("line", issue.GetRange().Start.Line).Msg("Can't access issue data")
 		return "", "", false
 	}
 	// NOTE(alex.gronskiy): we tend to receive either `<lang>/<ruleID>` or `<lang>/<ruleID>/test` (the
@@ -93,25 +94,25 @@ func getIssueLangAndRuleId(issue snyk.Issue) (string, string, bool) {
 		return ruleIdSplit[0], ruleIdSplit[1], true
 	}
 
-	logger.Trace().Str("file", issue.AffectedFilePath).Int("line", issue.Range.Start.Line).Msg("Issue data does not contain RuleID")
+	logger.Trace().Str("file", string(issue.GetAffectedFilePath())).Int("line", issue.GetRange().Start.Line).Msg("Issue data does not contain RuleID")
 	return "", "", false
 }
 
-func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]snyk.Issue, error) {
+func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]types.Issue, error) {
 	logger := b.logger.With().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).Logger()
 
 	if b.BundleHash == "" {
-		logger.Warn().Str("rootPath", b.rootPath).Msg("bundle hash is empty")
-		return []snyk.Issue{}, nil
+		logger.Warn().Str("rootPath", string(b.rootPath)).Msg("bundle hash is empty")
+		return []types.Issue{}, nil
 	}
 
 	method := "code.retrieveAnalysis"
 	s := b.instrumentor.StartSpan(ctx, method)
 	defer b.instrumentor.Finish(s)
 
-	t.ReportWithMessage(40, "Snyk Code analysis for "+b.rootPath+", Retrieving results...")
+	t.ReportWithMessage(40, string("Snyk Code analysis for "+b.rootPath+", Retrieving results..."))
 
-	c := config.CurrentConfig()
+	c := b.issueEnhancer.c
 	analysisOptions := AnalysisOptions{
 		bundleHash:   b.BundleHash,
 		shardKey:     getShardKey(b.rootPath, c.Token()),
@@ -123,7 +124,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]s
 	for {
 		if ctx.Err() != nil || t.IsCanceled() { // Cancellation requested
 			progress.Cancel(t.GetToken())
-			return []snyk.Issue{}, nil
+			return []types.Issue{}, nil
 		}
 		issues, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions, b.rootPath)
 
@@ -131,9 +132,9 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]s
 			logger.Error().Err(err).
 				Int("fileCount", len(b.UploadBatches)).
 				Msg("error retrieving diagnostics...")
-			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: b.rootPath})
+			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: string(b.rootPath)})
 			t.ReportWithMessage(90, fmt.Sprintf("Analysis failed: %v", err))
-			return []snyk.Issue{}, err
+			return []types.Issue{}, err
 		}
 
 		if status.message == completeStatus {
@@ -150,9 +151,9 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]s
 		if time.Since(start) > c.SnykCodeAnalysisTimeout() {
 			err := errors.New("analysis call timed out")
 			b.logger.Error().Err(err).Msg("timeout...")
-			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: b.rootPath})
+			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: string(b.rootPath)})
 			t.ReportWithMessage(90, "Snyk Code Analysis timed out")
-			return []snyk.Issue{}, err
+			return []types.Issue{}, err
 		}
 		time.Sleep(1 * time.Second)
 		t.Report(status.percentage)

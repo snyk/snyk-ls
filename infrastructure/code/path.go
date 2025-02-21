@@ -8,12 +8,14 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func ToRelativeUnixPath(baseDir string, absoluteFilePath string) (string, error) {
-	relativePath, err := filepath.Rel(baseDir, absoluteFilePath)
+func ToRelativeUnixPath(baseDir types.FilePath, absoluteFilePath types.FilePath) (types.FilePath, error) {
+	relativePath, err := filepath.Rel(string(baseDir), string(absoluteFilePath))
 	if err != nil {
-		relativePath = absoluteFilePath
+		relativePath = string(absoluteFilePath)
 		if baseDir != "" {
 			errMsg := fmt.Sprint("could not get relative path for file: ", absoluteFilePath, " and root path: ", baseDir)
 			return "", errors.Wrap(err, errMsg)
@@ -21,22 +23,22 @@ func ToRelativeUnixPath(baseDir string, absoluteFilePath string) (string, error)
 	}
 
 	relativePath = filepath.ToSlash(relativePath) // treat all paths as unix paths
-	return relativePath, nil
+	return types.FilePath(relativePath), nil
 }
 
-func ToAbsolutePath(baseDir string, relativePath string) string {
-	return filepath.Join(baseDir, relativePath)
+func ToAbsolutePath(baseDir types.FilePath, relativePath types.FilePath) string {
+	return filepath.Join(string(baseDir), string(relativePath))
 }
 
-func EncodePath(relativePath string) string {
-	segments := strings.Split(filepath.ToSlash(relativePath), "/")
+func EncodePath(relativePath types.FilePath) types.FilePath {
+	segments := strings.Split(filepath.ToSlash(string(relativePath)), "/")
 	encodedPath := ""
 	for _, segment := range segments {
 		encodedSegment := url.PathEscape(segment)
 		encodedPath = path.Join(encodedPath, encodedSegment)
 	}
 
-	return encodedPath
+	return types.FilePath(encodedPath)
 }
 
 func DecodePath(encodedRelativePath string) (string, error) {

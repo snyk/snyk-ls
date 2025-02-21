@@ -43,15 +43,15 @@ func (m mockIssueProvider) Issues() snyk.IssuesByFile {
 	panic("this should not be called")
 }
 
-func (m mockIssueProvider) IssuesForFile(_ string) []snyk.Issue {
+func (m mockIssueProvider) IssuesForFile(path types.FilePath) []types.Issue {
 	panic("this should not be called")
 }
 
-func (m mockIssueProvider) IssuesForRange(_ string, _ snyk.Range) []snyk.Issue {
+func (m mockIssueProvider) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
 	panic("this should not be called")
 }
-func (m mockIssueProvider) Issue(key string) snyk.Issue {
-	return snyk.Issue{ID: key}
+func (m mockIssueProvider) Issue(key string) types.Issue {
+	return &snyk.Issue{ID: key}
 }
 
 func Test_codeFixDiffs_Execute(t *testing.T) {

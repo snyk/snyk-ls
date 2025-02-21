@@ -44,22 +44,17 @@ var (
 
 type Scanner interface {
 	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
-	Scan(
-		ctx context.Context,
-		path string,
-		processResults snyk.ScanResultProcessor,
-		folderPath string,
-	)
+	Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, folderPath types.FilePath)
 	Init() error
 }
 
 type PackageScanner interface {
-	ScanPackages(ctx context.Context, config *config.Config, path string, content string)
+	ScanPackages(ctx context.Context, config *config.Config, path types.FilePath, content string)
 }
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
-	scanners            []snyk.ProductScanner
+	scanners            []types.ProductScanner
 	initializer         initialize.Initializer
 	instrumentor        performance.Instrumentor
 	scanNotifier        ScanNotifier
@@ -71,20 +66,20 @@ type DelegatingConcurrentScanner struct {
 	scanStateAggregator scanstates.Aggregator
 }
 
-func (sc *DelegatingConcurrentScanner) Issue(key string) snyk.Issue {
+func (sc *DelegatingConcurrentScanner) Issue(key string) types.Issue {
 	for _, scanner := range sc.scanners {
 		if s, ok := scanner.(snyk.IssueProvider); ok {
 			issue := s.Issue(key)
-			if issue.ID != "" {
+			if issue.GetID() != "" {
 				return issue
 			}
 		}
 	}
-	return snyk.Issue{}
+	return nil
 }
 
 func (sc *DelegatingConcurrentScanner) Issues() snyk.IssuesByFile {
-	issues := make(map[string][]snyk.Issue)
+	issues := make(map[types.FilePath][]types.Issue)
 	for _, scanner := range sc.scanners {
 		if issueProvider, ok := scanner.(snyk.IssueProvider); ok {
 			for filePath, issueSlice := range issueProvider.Issues() {
@@ -95,8 +90,8 @@ func (sc *DelegatingConcurrentScanner) Issues() snyk.IssuesByFile {
 	return issues
 }
 
-func (sc *DelegatingConcurrentScanner) IssuesForFile(path string) []snyk.Issue {
-	var issues []snyk.Issue
+func (sc *DelegatingConcurrentScanner) IssuesForFile(path types.FilePath) []types.Issue {
+	var issues []types.Issue
 	for _, scanner := range sc.scanners {
 		if s, ok := scanner.(snyk.IssueProvider); ok {
 			issues = append(issues, s.IssuesForFile(path)...)
@@ -105,8 +100,8 @@ func (sc *DelegatingConcurrentScanner) IssuesForFile(path string) []snyk.Issue {
 	return issues
 }
 
-func (sc *DelegatingConcurrentScanner) IssuesForRange(path string, r snyk.Range) []snyk.Issue {
-	var issues []snyk.Issue
+func (sc *DelegatingConcurrentScanner) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
+	var issues []types.Issue
 	for _, scanner := range sc.scanners {
 		if s, ok := scanner.(snyk.IssueProvider); ok {
 			issues = append(issues, s.IssuesForRange(path, r)...)
@@ -134,7 +129,7 @@ func (sc *DelegatingConcurrentScanner) Clear() {
 	}
 }
 
-func (sc *DelegatingConcurrentScanner) ClearIssues(path string) {
+func (sc *DelegatingConcurrentScanner) ClearIssues(path types.FilePath) {
 	for _, productScanner := range sc.scanners {
 		if cacheProvider, isCacheProvider := productScanner.(snyk.CacheProvider); isCacheProvider {
 			cacheProvider.ClearIssues(path)
@@ -151,7 +146,7 @@ func (sc *DelegatingConcurrentScanner) ClearIssues(path string) {
 	}
 }
 
-func (sc *DelegatingConcurrentScanner) ClearInlineValues(path string) {
+func (sc *DelegatingConcurrentScanner) ClearInlineValues(path types.FilePath) {
 	for _, scanner := range sc.scanners {
 		if s, ok := scanner.(snyk.InlineValueProvider); ok {
 			s.ClearInlineValues(path)
@@ -159,7 +154,7 @@ func (sc *DelegatingConcurrentScanner) ClearInlineValues(path string) {
 	}
 }
 
-func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(path string)) {
+func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(path types.FilePath)) {
 	for _, productScanner := range sc.scanners {
 		if cacheProvider, isCacheProvider := productScanner.(snyk.CacheProvider); isCacheProvider {
 			cacheProvider.RegisterCacheRemovalHandler(handler)
@@ -167,7 +162,7 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 	}
 }
 
-func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config *config.Config, path string, content string) {
+func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config *config.Config, path types.FilePath, content string) {
 	if config.Offline() {
 		config.Logger().Warn().Str("method", "ScanPackages").Msgf("we are offline, not scanning %s, %s", path, content)
 		return
@@ -180,7 +175,7 @@ func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config 
 	}
 }
 
-func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, scanners ...snyk.ProductScanner) Scanner {
+func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, scanners ...types.ProductScanner) Scanner {
 	return &DelegatingConcurrentScanner{
 		instrumentor:        instrumentor,
 		initializer:         initializer,
@@ -195,7 +190,7 @@ func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, 
 	}
 }
 
-func (sc *DelegatingConcurrentScanner) GetInlineValues(path string, myRange snyk.Range) ([]snyk.InlineValue, error) {
+func (sc *DelegatingConcurrentScanner) GetInlineValues(path types.FilePath, myRange types.Range) ([]snyk.InlineValue, error) {
 	var values []snyk.InlineValue
 	for _, scanner := range sc.scanners {
 		if s, ok := scanner.(snyk.InlineValueProvider); ok {
@@ -220,12 +215,7 @@ func (sc *DelegatingConcurrentScanner) Init() error {
 	return nil
 }
 
-func (sc *DelegatingConcurrentScanner) Scan(
-	ctx context.Context,
-	path string,
-	processResults snyk.ScanResultProcessor,
-	folderPath string,
-) {
+func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, folderPath types.FilePath) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	logger := sc.c.Logger().With().Str("method", method).Logger()
 
@@ -273,7 +263,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 		if scanner.IsEnabled() {
 			waitGroup.Add(1)
 			referenceBranchScanWaitGroup.Add(1)
-			go func(s snyk.ProductScanner) {
+			go func(s types.ProductScanner) {
 				defer waitGroup.Done()
 				span := sc.instrumentor.NewTransaction(context.WithValue(ctx, s.Product(), s), string(s.Product()), method)
 				defer sc.instrumentor.Finish(span)
@@ -284,7 +274,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 
 				err := sc.executePreScanCommand(ctx, sc.c, s.Product(), folderConfig, folderPath, true)
 				if err != nil {
-					logger.Err(err).Str("path", folderPath).Send()
+					logger.Err(err).Str("path", string(folderPath)).Send()
 					sc.scanNotifier.SendError(scanner.Product(), folderPath, err.Error())
 					sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, err)
 					return
@@ -297,7 +287,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 				sc.instrumentor.Finish(scanSpan)
 
 				// now process
-				data := snyk.ScanData{
+				data := types.ScanData{
 					Product:           s.Product(),
 					Issues:            foundIssues,
 					Err:               scanError,
@@ -308,7 +298,6 @@ func (sc *DelegatingConcurrentScanner) Scan(
 					SendAnalytics:     true,
 					UpdateGlobalCache: true,
 				}
-
 				processResults(data)
 
 				// trigger base scan in background
@@ -332,7 +321,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 						return
 					}
 
-					data = snyk.ScanData{
+					data = types.ScanData{
 						Product:           s.Product(),
 						SendAnalytics:     false,
 						UpdateGlobalCache: false,
@@ -366,7 +355,7 @@ func (sc *DelegatingConcurrentScanner) Scan(
 	// TODO: handle learn actions centrally instead of in each scanner
 }
 
-func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s snyk.ProductScanner, path string, folderPath string, folderConfig *types.FolderConfig) ([]snyk.Issue, error) {
+func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types.ProductScanner, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) ([]types.Issue, error) {
 	foundIssues, err := s.Scan(ctx, path, folderPath, folderConfig)
 	if err != nil {
 		return nil, err
