@@ -140,6 +140,8 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			handleInlineValueRefresh(srv, &logger)
 			logger.Debug().
 				Msg("sending inline value refresh request to client")
+		case types.McpServerURLParams:
+			notifier(c, srv, "$/snyk.mcpServerURL", params)
 		default:
 			logger.Warn().
 				Interface("params", params).

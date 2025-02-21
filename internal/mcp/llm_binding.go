@@ -58,15 +58,15 @@ func NewMcpLLMBinding(c *config.Config, opts ...McpOption) *McpLLMBinding {
 
 func defaultURL() *url.URL {
 	rawURL := fmt.Sprintf("http://%s:%d", DefaultHost, determineFreePort())
-	parse, err := url.Parse(rawURL)
+	u, err := url.Parse(rawURL)
 	if err != nil {
 		panic(err)
 	}
-	return parse
+	return u
 }
 
 // Start starts the MCP server. It blocks until the server is stopped via Shutdown.
-func (m *McpLLMBinding) Start() error {
+func (m *McpLLMBinding) Start() (*url.URL, error) {
 	// protect critical assignments with mutex
 	m.mutex.Lock()
 	m.mcpServer = server.NewMCPServer(
@@ -80,7 +80,7 @@ func (m *McpLLMBinding) Start() error {
 	err := m.addSnykScanTool()
 	if err != nil {
 		m.mutex.Unlock()
-		return err
+		return nil, err
 	}
 
 	// listen on default url/port if none was configured
@@ -95,9 +95,9 @@ func (m *McpLLMBinding) Start() error {
 	err = m.sseServer.Start(m.baseURL.Host)
 	if err != nil {
 		m.logger.Error().Err(err).Msg("Error starting MCP SSE server")
-		return err
+		return nil, err
 	}
-	return nil
+	return m.baseURL, nil
 }
 
 func (m *McpLLMBinding) Shutdown(ctx context.Context) {
