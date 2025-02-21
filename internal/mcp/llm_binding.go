@@ -32,16 +32,17 @@ import (
 // McpLLMBinding is an implementation of a mcp server that allows interaction between
 // a given SnykLLMBinding and a CommandService.
 type McpLLMBinding struct {
-	c         *config.Config
-	scanner   types.Scanner
-	logger    *zerolog.Logger
-	mcpServer *server.MCPServer
-	sseServer *server.SSEServer
-	baseURL   *url.URL
-	mutex     sync.Mutex
+	c                         *config.Config
+	scanner                   types.Scanner
+	logger                    *zerolog.Logger
+	mcpServer                 *server.MCPServer
+	sseServer                 *server.SSEServer
+	baseURL                   *url.URL
+	forwardingResultProcessor types.ScanResultProcessor
+	mutex                     sync.Mutex
 }
 
-func NewMcpServer(c *config.Config, opts ...McpOption) *McpLLMBinding {
+func NewMcpLLMBinding(c *config.Config, opts ...McpOption) *McpLLMBinding {
 	logger := zerolog.Nop()
 	mcpServerImpl := &McpLLMBinding{
 		c:      c,

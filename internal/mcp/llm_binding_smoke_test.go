@@ -42,7 +42,7 @@ func Test_WorkspaceScan(t *testing.T) {
 
 	c.SetWorkspace(w)
 	sc := scanner.NewTestScanner()
-	server := NewMcpServer(c, WithScanner(sc), WithLogger(c.Logger()))
+	server := NewMcpLLMBinding(c, WithScanner(sc), WithLogger(c.Logger()))
 
 	go func() {
 		_ = server.Start()

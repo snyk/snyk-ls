@@ -82,7 +82,7 @@ func Start(c *config.Config) {
 	logger.Info().Msg("Starting up MCP Server...")
 	var mcpServer *mcp2.McpLLMBinding
 	go func() {
-		mcpServer = mcp2.NewMcpServer(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()))
+		mcpServer = mcp2.NewMcpLLMBinding(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()))
 		err := mcpServer.Start()
 		if err != nil {
 			c.Logger().Err(err).Msg("failed to start mcp server")

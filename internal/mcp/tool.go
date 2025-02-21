@@ -52,6 +52,19 @@ func (m *McpLLMBinding) snykWorkSpaceScanHandler() func(ctx context.Context, req
 			if data.Err != nil {
 				callToolResult.IsError = true
 			}
+
+			go func() {
+				// standard processing for the folder
+				scanResultProcessor := folderScanResultProcessor(w, data.Path)
+				if scanResultProcessor != nil {
+					scanResultProcessor(data)
+				}
+
+				// forward to forwarding processor
+				if m.forwardingResultProcessor != nil {
+					m.forwardingResultProcessor(data)
+				}
+			}()
 		}
 
 		for _, folder := range trusted {
@@ -60,4 +73,10 @@ func (m *McpLLMBinding) snykWorkSpaceScanHandler() func(ctx context.Context, req
 
 		return callToolResult, nil
 	}
+}
+
+func folderScanResultProcessor(w types.Workspace, path types.FilePath) types.ScanResultProcessor {
+	folder := w.GetFolderContaining(path)
+	scanResultProcessor := folder.ScanResultProcessor()
+	return scanResultProcessor
 }

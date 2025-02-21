@@ -78,6 +78,10 @@ type Folder struct {
 	scanStateAggregator     scanstates.Aggregator
 }
 
+func (f *Folder) ScanResultProcessor() types.ScanResultProcessor {
+	return f.ProcessResults
+}
+
 func (f *Folder) Issue(key string) types.Issue {
 	var foundIssue types.Issue
 	f.documentDiagnosticCache.Range(func(filePath types.FilePath, issues []types.Issue) bool {
