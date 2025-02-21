@@ -65,6 +65,7 @@ func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResu
 		TimestampFinished: time.Now().UTC(),
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
+		Path:              folderPath,
 	}
 	processResults(data)
 	s.calls++
