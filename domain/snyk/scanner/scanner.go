@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -28,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -224,6 +227,8 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 		return
 	}
 
+	ctx, logger = sc.enrichContextAndLogger(ctx, logger)
+
 	authenticated := sc.authService.IsAuthenticated()
 
 	if !authenticated {
@@ -265,14 +270,15 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 			referenceBranchScanWaitGroup.Add(1)
 			go func(s types.ProductScanner) {
 				defer waitGroup.Done()
-				span := sc.instrumentor.NewTransaction(context.WithValue(ctx, s.Product(), s), string(s.Product()), method)
+				enrichedContext := ctx2.NewContextWithDeltaScanType(ctx, ctx2.WorkingDirectory)
+				span := sc.instrumentor.NewTransaction(context.WithValue(enrichedContext, s.Product(), s), string(s.Product()), method)
 				defer sc.instrumentor.Finish(span)
 				logger.Info().Msgf("Scanning %s with %T: STARTED", path, s)
 				sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), false)
 
 				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
-				err := sc.executePreScanCommand(ctx, sc.c, s.Product(), folderConfig, folderPath, true)
+				err := sc.executePreScanCommand(span.Context(), sc.c, s.Product(), folderConfig, folderPath, true)
 				if err != nil {
 					logger.Err(err).Str("path", string(folderPath)).Send()
 					sc.scanNotifier.SendError(scanner.Product(), folderPath, err.Error())
@@ -298,18 +304,19 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 					SendAnalytics:     true,
 					UpdateGlobalCache: true,
 				}
-				processResults(ctx, data)
+				processResults(span.Context(), data)
 
 				// trigger base scan in background
 				go func() {
 					defer referenceBranchScanWaitGroup.Done()
 					isSingleFileScan := path != folderPath
+					refScanCtx := ctx2.NewContextWithDeltaScanType(span.Context(), ctx2.Reference)
 
 					// only trigger a base scan if we are scanning an actual working directory. It could also be a
 					// single file scan, triggered by e.g. a file save
 					if !isSingleFileScan {
 						sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
-						err = sc.scanBaseBranch(context.Background(), s, folderConfig, gitCheckoutHandler)
+						err = sc.scanBaseBranch(refScanCtx, s, folderConfig, gitCheckoutHandler)
 						if err != nil {
 							logger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
 						}
@@ -327,7 +334,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 						UpdateGlobalCache: false,
 						// Err:               err, TODO: should we send the error here?
 					}
-					processResults(ctx, data)
+					processResults(refScanCtx, data)
 				}()
 
 				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, scanError)
@@ -353,6 +360,18 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 	sc.notifier.Send(types.InlineValueRefresh{})
 	sc.notifier.Send(types.CodeLensRefresh{})
 	// TODO: handle learn actions centrally instead of in each scanner
+}
+
+func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(ctx context.Context, logger zerolog.Logger) (context.Context, zerolog.Logger) {
+	// by default, scan source is IDE
+	scanSource, ok := ctx2.ScanSourceFromContext(ctx)
+	if !ok {
+		scanSource = ctx2.IDE
+		ctx = ctx2.NewContextWithScanSource(ctx, scanSource)
+	}
+
+	logger = logger.With().Any("scanSource", scanSource).Logger()
+	return ctx, logger
 }
 
 func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types.ProductScanner, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) ([]types.Issue, error) {

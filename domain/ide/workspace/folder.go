@@ -30,6 +30,7 @@ import (
 	delta2 "github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	context2 "github.com/snyk/snyk-ls/internal/context"
 
 	"github.com/snyk/snyk-ls/internal/delta"
 
@@ -323,7 +324,7 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
-	go sendAnalytics(f.c, &scanData)
+	go sendAnalytics(ctx, f.c, &scanData)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(scanData.Product)
@@ -387,7 +388,7 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 	}
 }
 
-func sendAnalytics(c *config.Config, data *types.ScanData) {
+func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) {
 	logger := c.Logger().With().Str("method", "folder.sendAnalytics").Logger()
 	if !data.SendAnalytics {
 		return
@@ -410,6 +411,13 @@ func sendAnalytics(c *config.Config, data *types.ScanData) {
 	}
 	summary := createTestSummary(data, c)
 
+	extension := map[string]any{"is_delta_scan": data.IsDeltaScan}
+
+	scanSource, ok := context2.ScanSourceFromContext(ctx)
+	if ok {
+		extension["scan_source"] = scanSource.String()
+	}
+
 	param := types.AnalyticsEventParam{
 		InteractionType: "Scan done",
 		Category:        categories,
@@ -417,7 +425,7 @@ func sendAnalytics(c *config.Config, data *types.ScanData) {
 		TargetId:        targetId,
 		TimestampMs:     data.TimestampFinished.UnixMilli(),
 		DurationMs:      int64(data.DurationMs),
-		Extension:       map[string]any{"is_delta_scan": data.IsDeltaScan},
+		Extension:       extension,
 	}
 
 	ic := analytics.PayloadForAnalyticsEventParam(c, param)

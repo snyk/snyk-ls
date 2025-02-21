@@ -25,14 +25,14 @@ import (
 
 // GetContextWithTraceId Returns a child context with "trace_id" set to the given traceId
 func GetContextWithTraceId(ctx context.Context, traceId string) context.Context {
-	return context.WithValue(ctx, context2.TraceID("trace_id"), traceId)
+	return context2.NewContextWithTraceID(ctx, context2.TraceID(traceId))
 }
 
 func GetTraceId(ctx context.Context) (string, error) {
-	v, ok := ctx.Value(context2.TraceID("trace_id")).(string)
+	v, ok := context2.TraceIDFromContext(ctx)
 	if !ok {
 		return "", errors.New("\"trace_id\" context key not found")
 	}
 
-	return v, nil
+	return v.String(), nil
 }

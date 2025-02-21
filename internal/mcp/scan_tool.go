@@ -21,6 +21,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -65,8 +66,9 @@ func (m *McpLLMBinding) snykWorkSpaceScanHandler() func(ctx context.Context, req
 			}
 		}
 
+		enrichedContext := ctx2.NewContextWithScanSource(ctx, ctx2.LLM)
 		for _, folder := range trusted {
-			m.scanner.Scan(ctx, folder.Path(), resultProcessor, folder.Path())
+			m.scanner.Scan(enrichedContext, folder.Path(), resultProcessor, folder.Path())
 		}
 
 		return callToolResult, nil
