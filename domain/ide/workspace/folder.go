@@ -314,7 +314,7 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 	f.scanner.Scan(ctx, path, f.ProcessResults, f.path)
 }
 
-func (f *Folder) ProcessResults(scanData types.ScanData) {
+func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	if scanData.Err != nil {
 		f.sendScanError(scanData.Product, scanData.Err)
 		return

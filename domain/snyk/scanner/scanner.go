@@ -298,7 +298,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 					SendAnalytics:     true,
 					UpdateGlobalCache: true,
 				}
-				processResults(data)
+				processResults(ctx, data)
 
 				// trigger base scan in background
 				go func() {
@@ -327,7 +327,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 						UpdateGlobalCache: false,
 						// Err:               err, TODO: should we send the error here?
 					}
-					processResults(data)
+					processResults(ctx, data)
 				}()
 
 				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, scanError)

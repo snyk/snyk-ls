@@ -45,7 +45,7 @@ func (m *McpLLMBinding) snykWorkSpaceScanHandler() func(ctx context.Context, req
 			Content: make([]interface{}, 0),
 		}
 
-		resultProcessor := func(data types.ScanData) {
+		resultProcessor := func(ctx context.Context, data types.ScanData) {
 			// add the scan results to the call tool response
 			// in the future, this could be a rendered markdown/html template
 			callToolResult.Content = append(callToolResult.Content, data)
@@ -56,12 +56,12 @@ func (m *McpLLMBinding) snykWorkSpaceScanHandler() func(ctx context.Context, req
 			// standard processing for the folder
 			scanResultProcessor := folderScanResultProcessor(w, data.Path)
 			if scanResultProcessor != nil {
-				scanResultProcessor(data)
+				scanResultProcessor(ctx, data)
 			}
 
 			// forward to forwarding processor
 			if m.forwardingResultProcessor != nil {
-				m.forwardingResultProcessor(data)
+				m.forwardingResultProcessor(ctx, data)
 			}
 		}
 

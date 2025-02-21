@@ -67,7 +67,7 @@ func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResu
 		SendAnalytics:     true,
 		Path:              folderPath,
 	}
-	processResults(data)
+	processResults(ctx, data)
 	s.calls++
 }
 
