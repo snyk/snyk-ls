@@ -418,6 +418,11 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 		extension["scan_source"] = scanSource.String()
 	}
 
+	deltaScanType, ok := context2.DeltaScanTypeFromContext(ctx)
+	if ok {
+		extension["delta_scan_type"] = deltaScanType.String()
+	}
+
 	param := types.AnalyticsEventParam{
 		InteractionType: "Scan done",
 		Category:        categories,
