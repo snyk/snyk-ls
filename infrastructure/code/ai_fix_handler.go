@@ -18,7 +18,6 @@ package code
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/snyk/code-client-go/llm"
@@ -64,24 +63,29 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	if len(suggestions) == 0 {
 		return
 	}
-	var wg sync.WaitGroup
+	var diffs []string
+	diffs = getDiffListFromSuggestions(suggestions, diffs)
+
+	explanations, err := fixHandler.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.ID, Diff: diffs})
+	if err != nil {
+		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.AdditionalData.GetKey())
+		return
+	}
+	for j := range explanations {
+		suggestions[j].Explanation = explanations[j]
+	}
+}
+
+func getDiffListFromSuggestions(suggestions []AutofixUnifiedDiffSuggestion, diffs []string) []string {
+	// Suggestion diffs may be coming from different files
 	for i := range suggestions {
 		diff := ""
 		for _, v := range suggestions[i].UnifiedDiffsPerFile {
 			diff += v
 		}
-		wg.Add(1)
-		go func() {
-			response, err := fixHandler.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.ID, Diff: diff})
-			wg.Done()
-			if err != nil {
-				logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.AdditionalData.GetKey())
-				return
-			}
-			suggestions[i].Explanation = response
-		}()
+		diffs = append(diffs, diff)
 	}
-	wg.Wait()
+	return diffs
 }
 
 func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, res any, err error, callback func()) {
