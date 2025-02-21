@@ -975,7 +975,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {
 	t.Helper()
-	t.Setenv("SNYK_LOG_LEVEL", "debug")
+	t.Setenv("SNYK_LOG_LEVEL", "info")
 	c.SetLogLevel(zerolog.LevelInfoValue)
 	c.ConfigureLogging(nil)
 	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
