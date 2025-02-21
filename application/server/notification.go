@@ -140,6 +140,8 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			handleInlineValueRefresh(srv, &logger)
 			logger.Debug().
 				Msg("sending inline value refresh request to client")
+		case types.McpServerURLParams:
+			notifier(c, srv, "$/snyk.mcpServerURL", params)
 		default:
 			logger.Warn().
 				Interface("params", params).
@@ -165,14 +167,14 @@ func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server)
 
 	callback, err := srv.Callback(ctx, "workspace/snyk.sdks", folder)
 	if err != nil {
-		logger.Warn().Err(err).Str("folderPath", params.FolderPath).Msg("could not retrieve sdk")
+		logger.Debug().Str("folderPath", params.FolderPath).Msg("could not retrieve sdk, , most likely not yet supported by IDE, continuing...")
 		return
 	}
 
 	// unmarshall into array that is transferred back via the channel on exit
 	err = callback.UnmarshalResult(&sdks)
 	if err != nil {
-		logger.Warn().Err(err).Str("resultString", callback.ResultString()).Msg("could not unmarshal sdk response")
+		logger.Debug().Str("resultString", callback.ResultString()).Msg("could not get sdk response, most likely not yet supported by IDE, continuing...")
 		return
 	}
 }

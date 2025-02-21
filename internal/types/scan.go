@@ -23,9 +23,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
-type ScanResultProcessor = func(scanData ScanData)
+type ScanResultProcessor = func(ctx context.Context, scanData ScanData)
 
-func NoopResultProcessor(_ ScanData) {}
+func NoopResultProcessor(_ context.Context, _ ScanData) {}
 
 type ScanData struct {
 	Product           product.Product

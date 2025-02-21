@@ -21,6 +21,7 @@ package mcp
 
 import (
 	"context"
+	"net/url"
 	"testing"
 	"time"
 
@@ -28,8 +29,12 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -37,27 +42,46 @@ import (
 func Test_WorkspaceScan(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 	w := workspace.New(c, nil, nil, nil, nil, nil, nil, nil)
-	f := workspace.NewFolder(c, "testPath", "test", nil, nil, nil, nil, nil, nil)
+	sc := scanner.NewTestScanner()
+	scanNotifier := scanner.NewMockScanNotifier()
+	hoverService := hover.NewFakeHoverService()
+	notifier := noti.NewMockNotifier()
+	emitter := scanstates.NewSummaryEmitter(c, notifier)
+	scanStateAggregator := scanstates.NewScanStateAggregator(c, emitter)
+	scanPersister := persistence.NewNopScanPersister()
+
+	f := workspace.NewFolder(
+		c,
+		"testPath",
+		"test",
+		sc,
+		hoverService,
+		scanNotifier,
+		notifier,
+		scanPersister,
+		scanStateAggregator,
+	)
+
 	w.AddFolder(f)
 
 	c.SetWorkspace(w)
-	sc := scanner.NewTestScanner()
-	server := NewMcpServer(c, WithScanner(sc), WithLogger(c.Logger()))
+	server := NewMcpLLMBinding(c, WithScanner(sc), WithLogger(c.Logger()))
 
+	var baseURL *url.URL
 	go func() {
-		_ = server.Start()
+		baseURL, _ = server.Start()
 	}()
 
-	baseURL := ""
 	assert.Eventually(t, func() bool {
 		server.mutex.Lock()
 		defer server.mutex.Unlock()
 		portInUse := isPortInUse(server.baseURL)
-		baseURL = server.baseURL.String() + "/sse"
-		return portInUse
+		return portInUse && server.baseURL == baseURL
 	}, time.Minute, time.Second)
 
-	mcpClient, err := client.NewSSEMCPClient(baseURL)
+	clientEndpoint := server.baseURL.String() + "/sse"
+
+	mcpClient, err := client.NewSSEMCPClient(clientEndpoint)
 	assert.NoError(t, err)
 	defer mcpClient.Close()
 

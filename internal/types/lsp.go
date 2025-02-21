@@ -31,6 +31,10 @@ const (
 	FocusOut   TextDocumentSaveReason = 2
 )
 
+type McpServerURLParams struct {
+	URL string `json:"url"`
+}
+
 type TextDocumentSaveReason int
 
 type DiagnosticResult struct {

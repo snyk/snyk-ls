@@ -200,6 +200,7 @@ type Config struct {
 	offline                          bool
 	ws                               types.Workspace
 	mcpServerEnabled                 bool
+	mcpBaseURL                       *url.URL
 }
 
 func CurrentConfig() *Config {
@@ -1220,4 +1221,17 @@ func (c *Config) McpServerEnabled() bool {
 	defer c.m.RUnlock()
 
 	return c.mcpServerEnabled
+}
+
+func (c *Config) SetMCPServerURL(baseURL *url.URL) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.mcpBaseURL = baseURL
+}
+
+func (c *Config) GetMCPServerURL() *url.URL {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.mcpBaseURL
 }

@@ -82,11 +82,12 @@ func Start(c *config.Config) {
 	logger.Info().Msg("Starting up MCP Server...")
 	var mcpServer *mcp2.McpLLMBinding
 	go func() {
-		mcpServer = mcp2.NewMcpServer(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()))
-		err := mcpServer.Start()
+		mcpServer = mcp2.NewMcpLLMBinding(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()))
+		baseURL, err := mcpServer.Start()
 		if err != nil {
 			c.Logger().Err(err).Msg("failed to start mcp server")
 		}
+		c.SetMCPServerURL(baseURL)
 	}()
 
 	// shutdown mcp server once the lsp returns from wait status
@@ -460,8 +461,10 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 			)
 			logger.Info().Msg(msg)
 		}
-
-		logger.Debug().Msg("trying to get trusted status for untrusted folders")
+		mcpServerURL := c.GetMCPServerURL()
+		if mcpServerURL != nil {
+			di.Notifier().Send(types.McpServerURLParams{URL: mcpServerURL.String()})
+		}
 		return nil, nil
 	})
 }

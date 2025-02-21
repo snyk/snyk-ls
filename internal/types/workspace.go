@@ -67,4 +67,5 @@ type Folder interface {
 	Name() string
 	Status() FolderStatus
 	IsTrusted() bool
+	ScanResultProcessor() ScanResultProcessor
 }

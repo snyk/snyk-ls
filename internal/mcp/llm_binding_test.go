@@ -27,7 +27,7 @@ import (
 
 func TestNewMcpServer(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mcpServer := NewMcpServer(c)
+	mcpServer := NewMcpLLMBinding(c)
 	assert.NotNil(t, mcpServer)
 	assert.NotNil(t, mcpServer.logger)
 }
@@ -37,7 +37,7 @@ func TestNewMcpServerWithOptions(t *testing.T) {
 	baseURL, _ := url.Parse("http://test:8080")
 
 	s := scanner.NewTestScanner()
-	mcpServer := NewMcpServer(c, WithScanner(s), WithBaseURL(baseURL))
+	mcpServer := NewMcpLLMBinding(c, WithScanner(s), WithBaseURL(baseURL))
 
 	assert.Equal(t, s, mcpServer.scanner)
 	assert.Equal(t, baseURL, mcpServer.baseURL)
