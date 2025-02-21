@@ -447,7 +447,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path types.F
 		stringChangedFiles[string(k)] = v
 	}
 
-	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, stringChangedFiles)
+	sarif, bundleHash, _, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, stringChangedFiles)
 	if err != nil || ctx.Err() != nil {
 		return []types.Issue{}, err
 	}

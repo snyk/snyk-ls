@@ -390,10 +390,10 @@ func getSarifResponseJson2(filePath string) string {
 func (f *FakeCodeScannerClient) UploadAndAnalyze(_ context.Context, _ string, _ scan.Target,
 	files <-chan string,
 	_ map[string]bool,
-	_ ...codeclient.ReportingOption) (*codeClientSarif.SarifResponse, string, error) {
+	_ ...codeclient.AnalysisOption) (*codeClientSarif.SarifResponse, string, *scan.ResultMetaData, error) {
 	var analysisResponse codeClientSarif.SarifResponse
 	responseJson := getSarifResponseJson2(filepath.Base(<-files))
 	err := json.Unmarshal([]byte(responseJson), &analysisResponse)
 	f.UploadAndAnalyzeWasCalled = true
-	return &analysisResponse, "", err
+	return &analysisResponse, "", &scan.ResultMetaData{}, err
 }
