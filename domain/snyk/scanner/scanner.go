@@ -270,17 +270,17 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 			referenceBranchScanWaitGroup.Add(1)
 			go func(s types.ProductScanner) {
 				defer waitGroup.Done()
-				enrichedContext, logger := sc.enrichContextAndLogger(ctx, logger)
+				enrichedContext, productWDScanLogger := sc.enrichContextAndLogger(ctx, logger)
 				span := sc.instrumentor.NewTransaction(context.WithValue(enrichedContext, s.Product(), s), string(s.Product()), method)
 				defer sc.instrumentor.Finish(span)
-				logger.Info().Msgf("Scanning %s with %T: STARTED", path, s)
+				productWDScanLogger.Info().Msgf("Scanning %s with %T: STARTED", path, s)
 				sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), false)
 
 				scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
 				err := sc.executePreScanCommand(span.Context(), sc.c, s.Product(), folderConfig, folderPath, true)
 				if err != nil {
-					logger.Err(err).Str("path", string(folderPath)).Send()
+					productWDScanLogger.Err(err).Str("path", string(folderPath)).Send()
 					sc.scanNotifier.SendError(scanner.Product(), folderPath, err.Error())
 					sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, err)
 					return
@@ -311,7 +311,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 					defer referenceBranchScanWaitGroup.Done()
 					isSingleFileScan := path != folderPath
 					scanTypeCtx := ctx2.NewContextWithDeltaScanType(context.Background(), ctx2.Reference)
-					refScanCtx, logger := sc.enrichContextAndLogger(scanTypeCtx, logger)
+					refScanCtx, productRefScanLogger := sc.enrichContextAndLogger(scanTypeCtx, logger)
 
 					// only trigger a base scan if we are scanning an actual working directory. It could also be a
 					// single file scan, triggered by e.g. a file save
@@ -319,13 +319,13 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 						sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
 						err = sc.scanBaseBranch(refScanCtx, s, folderConfig, gitCheckoutHandler)
 						if err != nil {
-							logger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
+							productRefScanLogger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
 						}
 						sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
 					}
 
 					if !sc.c.IsDeltaFindingsEnabled() {
-						logger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
+						productRefScanLogger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
 						return
 					}
 
@@ -339,7 +339,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 				}()
 
 				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, scanError)
-				logger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
+				productWDScanLogger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", path, s, len(foundIssues))
 			}(scanner)
 		} else {
 			logger.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
