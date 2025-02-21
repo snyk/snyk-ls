@@ -270,7 +270,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 			referenceBranchScanWaitGroup.Add(1)
 			go func(s types.ProductScanner) {
 				defer waitGroup.Done()
-				enrichedContext := ctx2.NewContextWithDeltaScanType(ctx, ctx2.WorkingDirectory)
+				enrichedContext, logger := sc.enrichContextAndLogger(ctx, logger)
 				span := sc.instrumentor.NewTransaction(context.WithValue(enrichedContext, s.Product(), s), string(s.Product()), method)
 				defer sc.instrumentor.Finish(span)
 				logger.Info().Msgf("Scanning %s with %T: STARTED", path, s)
@@ -310,7 +310,8 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 				go func() {
 					defer referenceBranchScanWaitGroup.Done()
 					isSingleFileScan := path != folderPath
-					refScanCtx := ctx2.NewContextWithDeltaScanType(span.Context(), ctx2.Reference)
+					scanTypeCtx := ctx2.NewContextWithDeltaScanType(context.Background(), ctx2.Reference)
+					refScanCtx, logger := sc.enrichContextAndLogger(scanTypeCtx, logger)
 
 					// only trigger a base scan if we are scanning an actual working directory. It could also be a
 					// single file scan, triggered by e.g. a file save
@@ -346,20 +347,19 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 	}
 	logger.Debug().Msgf("All product scanners started for %s", path)
 	waitGroup.Wait()
+	referenceBranchScanWaitGroup.Wait()
 
-	go func() {
+	defer func() {
 		if gitCheckoutHandler.CleanupFunc() != nil {
 			// Force defer cleanup func to wait until all reference scans are done
-			referenceBranchScanWaitGroup.Wait()
 			logger.Debug().Msg("Calling cleanup func for base folder")
-			gitCheckoutHandler.CleanupFunc()()
+			go gitCheckoutHandler.CleanupFunc()()
+			logger.Debug().Msgf("All product scanners finished for %s", path)
+			sc.notifier.Send(types.InlineValueRefresh{})
+			sc.notifier.Send(types.CodeLensRefresh{})
+			// TODO: handle learn actions centrally instead of in each scanner
 		}
 	}()
-
-	logger.Debug().Msgf("All product scanners finished for %s", path)
-	sc.notifier.Send(types.InlineValueRefresh{})
-	sc.notifier.Send(types.CodeLensRefresh{})
-	// TODO: handle learn actions centrally instead of in each scanner
 }
 
 func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(ctx context.Context, logger zerolog.Logger) (context.Context, zerolog.Logger) {
@@ -371,6 +371,15 @@ func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(ctx context.Contex
 	}
 
 	logger = logger.With().Any("scanSource", scanSource).Logger()
+
+	scanType, ok := ctx2.DeltaScanTypeFromContext(ctx)
+	if !ok {
+		scanType = ctx2.WorkingDirectory
+		ctx = ctx2.NewContextWithDeltaScanType(ctx, scanType)
+	}
+
+	logger = logger.With().Any("deltaScanType", scanType).Logger()
+
 	return ctx, logger
 }
 
