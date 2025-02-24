@@ -173,7 +173,7 @@ func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server)
 
 	callback, err := srv.Callback(ctx, "workspace/snyk.sdks", folder)
 	if err != nil {
-		logger.Debug().Str("folderPath", params.FolderPath).Msg("could not retrieve sdk, , most likely not yet supported by IDE, continuing...")
+		logger.Debug().Str("folderPath", params.FolderPath).Msg("could not retrieve sdk, most likely not yet supported by IDE, continuing...")
 		return
 	}
 
