@@ -21,7 +21,6 @@ package mcp
 
 import (
 	"context"
-	"net/url"
 	"testing"
 	"time"
 
@@ -67,16 +66,16 @@ func Test_WorkspaceScan(t *testing.T) {
 	c.SetWorkspace(w)
 	server := NewMcpLLMBinding(c, WithScanner(sc), WithLogger(c.Logger()))
 
-	var baseURL *url.URL
 	go func() {
-		_ = server.Start()
+		err := server.Start()
+		assert.NoError(t, err)
 	}()
 
 	assert.Eventually(t, func() bool {
 		server.mutex.Lock()
 		defer server.mutex.Unlock()
 		portInUse := isPortInUse(server.baseURL)
-		return portInUse && server.baseURL == baseURL
+		return portInUse && server.baseURL == c.GetMCPServerURL()
 	}, time.Minute, time.Second)
 
 	clientEndpoint := server.baseURL.String() + "/sse"
