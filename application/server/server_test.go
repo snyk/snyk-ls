@@ -244,7 +244,7 @@ func Test_initialized_shouldSendMcpServerAddress(t *testing.T) {
 	loc, jsonRpcRecorder := setupServer(t, c)
 
 	params := types.InitializeParams{
-		InitializationOptions: types.Settings{RequiredProtocolVersion: "22"},
+		InitializationOptions: types.Settings{RequiredProtocolVersion: config.LsProtocolVersion},
 	}
 
 	rsp, err := loc.Client.Call(ctx, "initialize", params)
