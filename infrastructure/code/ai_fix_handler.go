@@ -66,13 +66,15 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	var diffs []string
 	diffs = getDiffListFromSuggestions(suggestions, diffs)
 
-	explanations, err := fixHandler.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.ID, Diff: diffs})
+	explanations, err := fixHandler.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.ID, Diffs: diffs})
 	if err != nil {
 		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.AdditionalData.GetKey())
 		return
 	}
-	for j := range explanations {
-		suggestions[j].Explanation = explanations[j]
+	for j := range len(explanations) {
+		if j < len(diffs) {
+			suggestions[j].Explanation = explanations[diffs[j]]
+		}
 	}
 }
 

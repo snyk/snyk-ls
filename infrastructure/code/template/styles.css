@@ -882,3 +882,7 @@ button.sn-apply-fix:hover {
 .hidden {
   display: none;
 }
+
+.explain-wrapper{
+  margin-top: 1rem;
+}
