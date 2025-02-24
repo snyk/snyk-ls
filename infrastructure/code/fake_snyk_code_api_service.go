@@ -291,61 +291,6 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	return issues, successfulResult, nil
 }
 
-func (f *FakeSnykCodeClient) GetAutofixSuggestions(
-	_ context.Context,
-	options AutofixOptions,
-	_ string,
-) ([]AutofixSuggestion, AutofixStatus, error) {
-	<-time.After(f.AnalysisDuration)
-	FakeSnykCodeApiServiceMutex.Lock()
-	params := []any{options.bundleHash, options.filePath, options.issue.ID, options.issue.Range.Start.Line}
-	f.addCall(params, RunAutofixOperation)
-	FakeSnykCodeApiServiceMutex.Unlock()
-
-	if f.NoFixSuggestions {
-		f.C.Logger().Trace().Str("method", "GetAutofixSuggestions").Interface("fakeAutofix",
-			"someAutofixSuggestion").Msg("fake backend call received & answered with no suggestions")
-		return nil, AutofixStatus{message: "COMPLETE"}, nil
-	}
-
-	suggestions := []AutofixSuggestion{
-		// First suggestion
-		{
-			FixId: "123e4567-e89b-12d3-a456-426614174000/1",
-			AutofixEdit: snyk.WorkspaceEdit{
-				Changes: map[string][]snyk.TextEdit{
-					options.filePath: {snyk.TextEdit{
-						Range: snyk.Range{
-							Start: snyk.Position{Line: 0, Character: 0},
-							End:   snyk.Position{Line: 10000, Character: 0},
-						},
-						NewText: FakeAutofixSuggestionNewText,
-					}},
-				},
-			},
-		},
-		// Second suggestion -- currently dropped
-		{
-			FixId: "123e4567-e89b-12d3-a456-426614174000/2",
-			AutofixEdit: snyk.WorkspaceEdit{
-				Changes: map[string][]snyk.TextEdit{
-					options.filePath: {snyk.TextEdit{
-						Range: snyk.Range{
-							Start: snyk.Position{Line: 0, Character: 0},
-							End:   snyk.Position{Line: 10000, Character: 0},
-						},
-						NewText: "FAKE_AUTOFIX_UNUSED",
-					}},
-				},
-			},
-		},
-	}
-
-	f.C.Logger().Trace().Str("method", "GetAutofixSuggestions").Interface("fakeAutofix",
-		"someAutofixSuggestion").Msg("fake backend call received & answered")
-	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
-}
-
 func (f *FakeSnykCodeClient) SubmitAutofixFeedback(_ context.Context, _ string, feedback string) error {
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.FeedbackSent = feedback
