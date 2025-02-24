@@ -843,6 +843,8 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 		t.Fatalf("initialization failed: %v", err)
 	}
 
+	c.SetLSPInitialized(true)
+
 	snykFilePath, folderPath := createTemporaryDirectoryWithSnykFile(t)
 
 	sendFileSavedMessage(t, snykFilePath, folderPath, loc)
@@ -894,6 +896,8 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	c.SetLSPInitialized(true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
