@@ -149,6 +149,8 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	}
 	var expected = types.AuthenticationParams{Token: "test token", ApiUrl: "https://api.snyk.io"}
 
+	c.SetLSPInitialized(true)
+
 	di.Notifier().Send(expected)
 	assert.Eventually(
 		t,
@@ -180,7 +182,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 		t.Fatal(err)
 	}
 	var expected = types.SnykIsAvailableCli{CliPath: filepath.Join(t.TempDir(), "cli")}
-
+	c.SetLSPInitialized(true)
 	di.Notifier().Send(expected)
 	assert.Eventually(
 		t,
@@ -212,7 +214,7 @@ func TestShowMessageRequest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
+		c.SetLSPInitialized(true)
 		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 		expectedTitle := "test title"
 		// data, err := command.CreateFromCommandData(snyk.CommandData{
@@ -270,7 +272,7 @@ func TestShowMessageRequest(t *testing.T) {
 		actionCommandMap.Add(types.MessageAction(selectedAction), types.CommandData{CommandId: types.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}})
 
 		request := types.ShowMessageRequest{Message: "message", Type: types.Info, Actions: actionCommandMap}
-
+		c.SetLSPInitialized(true)
 		di.Notifier().Send(request)
 
 		assert.Eventually(

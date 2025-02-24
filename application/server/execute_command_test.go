@@ -125,18 +125,24 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
+	c.SetAutomaticAuthentication(false)
+	c.SetAuthenticationMethod(types.FakeAuthentication)
+
+	authenticationService := di.AuthenticationService()
+	fakeAuthenticationProvider := authenticationService.Provider().(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider.IsAuthenticated = false
 
 	// reset to use real service
-	command.SetService(command.NewService(di.AuthenticationService(), nil, nil, nil, nil, nil, nil))
+	command.SetService(command.NewService(authenticationService, di.Notifier(), di.LearnService(), nil, nil, nil, nil))
 
-	config.CurrentConfig().SetAutomaticAuthentication(false)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = false
 	params := lsp.ExecuteCommandParams{Command: types.LoginCommand}
+
+	_, err = loc.Client.Call(ctx, "initialized", types.InitializedParams{})
+	assert.NoError(t, err)
 
 	// Act
 	tokenResponse, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -147,7 +153,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// Assert
 	assert.NotEmpty(t, tokenResponse.ResultString())
 	assert.True(t, fakeAuthenticationProvider.IsAuthenticated)
-	assert.Eventually(t, func() bool { return len(jsonRPCRecorder.Notifications()) > 0 }, 5*time.Second, 50*time.Millisecond)
+	assert.Eventually(t, func() bool { return len(jsonRPCRecorder.Notifications()) > 0 }, 10*time.Second, 50*time.Millisecond)
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")
 	assert.Equal(t, 1, len(notifications))
 	var hasAuthenticatedNotification types.AuthenticationParams

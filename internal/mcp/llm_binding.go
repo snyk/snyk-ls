@@ -32,16 +32,17 @@ import (
 // McpLLMBinding is an implementation of a mcp server that allows interaction between
 // a given SnykLLMBinding and a CommandService.
 type McpLLMBinding struct {
-	c         *config.Config
-	scanner   types.Scanner
-	logger    *zerolog.Logger
-	mcpServer *server.MCPServer
-	sseServer *server.SSEServer
-	baseURL   *url.URL
-	mutex     sync.Mutex
+	c                         *config.Config
+	scanner                   types.Scanner
+	logger                    *zerolog.Logger
+	mcpServer                 *server.MCPServer
+	sseServer                 *server.SSEServer
+	baseURL                   *url.URL
+	forwardingResultProcessor types.ScanResultProcessor
+	mutex                     sync.Mutex
 }
 
-func NewMcpServer(c *config.Config, opts ...McpOption) *McpLLMBinding {
+func NewMcpLLMBinding(c *config.Config, opts ...McpOption) *McpLLMBinding {
 	logger := zerolog.Nop()
 	mcpServerImpl := &McpLLMBinding{
 		c:      c,
@@ -57,11 +58,11 @@ func NewMcpServer(c *config.Config, opts ...McpOption) *McpLLMBinding {
 
 func defaultURL() *url.URL {
 	rawURL := fmt.Sprintf("http://%s:%d", DefaultHost, determineFreePort())
-	parse, err := url.Parse(rawURL)
+	u, err := url.Parse(rawURL)
 	if err != nil {
 		panic(err)
 	}
-	return parse
+	return u
 }
 
 // Start starts the MCP server. It blocks until the server is stopped via Shutdown.
@@ -91,6 +92,7 @@ func (m *McpLLMBinding) Start() error {
 	m.mutex.Unlock()
 
 	m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("starting")
+	m.c.SetMCPServerURL(m.baseURL)
 	err = m.sseServer.Start(m.baseURL.Host)
 	if err != nil {
 		m.logger.Error().Err(err).Msg("Error starting MCP SSE server")

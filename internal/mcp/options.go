@@ -44,3 +44,9 @@ func WithBaseURL(baseURL *url.URL) func(server *McpLLMBinding) {
 		server.baseURL = baseURL
 	}
 }
+
+func WithScanResultProcessor(proc types.ScanResultProcessor) func(server *McpLLMBinding) {
+	return func(server *McpLLMBinding) {
+		server.forwardingResultProcessor = proc
+	}
+}
