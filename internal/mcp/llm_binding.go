@@ -66,7 +66,7 @@ func defaultURL() *url.URL {
 }
 
 // Start starts the MCP server. It blocks until the server is stopped via Shutdown.
-func (m *McpLLMBinding) Start() (*url.URL, error) {
+func (m *McpLLMBinding) Start() error {
 	// protect critical assignments with mutex
 	m.mutex.Lock()
 	m.mcpServer = server.NewMCPServer(
@@ -80,7 +80,7 @@ func (m *McpLLMBinding) Start() (*url.URL, error) {
 	err := m.addSnykScanTool()
 	if err != nil {
 		m.mutex.Unlock()
-		return nil, err
+		return err
 	}
 
 	// listen on default url/port if none was configured
@@ -92,12 +92,13 @@ func (m *McpLLMBinding) Start() (*url.URL, error) {
 	m.mutex.Unlock()
 
 	m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("starting")
+	m.c.SetMCPServerURL(m.baseURL)
 	err = m.sseServer.Start(m.baseURL.Host)
 	if err != nil {
 		m.logger.Error().Err(err).Msg("Error starting MCP SSE server")
-		return nil, err
+		return err
 	}
-	return m.baseURL, nil
+	return nil
 }
 
 func (m *McpLLMBinding) Shutdown(ctx context.Context) {

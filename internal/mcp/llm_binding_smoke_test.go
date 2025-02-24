@@ -69,7 +69,7 @@ func Test_WorkspaceScan(t *testing.T) {
 
 	var baseURL *url.URL
 	go func() {
-		baseURL, _ = server.Start()
+		_ = server.Start()
 	}()
 
 	assert.Eventually(t, func() bool {
