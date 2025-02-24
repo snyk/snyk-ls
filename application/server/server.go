@@ -465,6 +465,10 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		if mcpServerURL != nil {
 			di.Notifier().Send(types.McpServerURLParams{URL: mcpServerURL.String()})
 		}
+		// only set our config to initialized after leaving the func
+		defer func() {
+			c.SetLSPInitialized(true)
+		}()
 		return nil, nil
 	})
 }

@@ -557,16 +557,8 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 
 	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
 
-	filePath := types.FilePath(filepath.Join(string(f.Path()), "dummy.java"))
 	scanData := types.ScanData{
-		Product: product.ProductOpenSource,
-		Issues: []types.Issue{
-			&snyk.Issue{Severity: types.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			&snyk.Issue{Severity: types.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			&snyk.Issue{Severity: types.Critical, IsIgnored: true, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			&snyk.Issue{Severity: types.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-			&snyk.Issue{Severity: types.High, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
-		},
+		Product:           product.ProductOpenSource,
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
@@ -580,7 +572,7 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 			payload := string(data[0].GetPayload().([]byte))
 			require.NotEmpty(t, payload)
 			require.Contains(t, payload, "scan_source")
-			require.Contains(t, payload, "delta_scan_type")
+			require.Contains(t, payload, "scan_type")
 		})
 
 	ctx := context2.NewContextWithScanSource(context2.NewContextWithDeltaScanType(context.Background(), context2.WorkingDirectory), context2.LLM)

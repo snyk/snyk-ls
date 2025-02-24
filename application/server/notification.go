@@ -80,9 +80,14 @@ func disposeProgressListener() {
 	progressStopChan <- true
 }
 
+//nolint:gocyclo // this is ok, as it's so high because of forwarding the calls
 func registerNotifier(c *config.Config, srv types.Server) {
 	logger := c.Logger().With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
+		for !c.IsLSPInitialized() {
+			time.Sleep(100 * time.Millisecond)
+			logger.Debug().Msg("waiting for lsp initialization to be finished...")
+		}
 		switch params := params.(type) {
 		case types.GetSdk:
 			handleGetSdks(params, logger, srv)
@@ -141,6 +146,7 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			logger.Debug().
 				Msg("sending inline value refresh request to client")
 		case types.McpServerURLParams:
+			logger.Debug().Msgf("sending mcp url %s", params.URL)
 			notifier(c, srv, "$/snyk.mcpServerURL", params)
 		default:
 			logger.Warn().
