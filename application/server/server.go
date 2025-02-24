@@ -408,6 +408,10 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		// looks weird when including the method name.
 		c := config.CurrentConfig()
 		initialLogger := c.Logger()
+		// only set our config to initialized after leaving the func
+		defer func() {
+			c.SetLSPInitialized(true)
+		}()
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
 		initialLogger.Info().Msgf("CLI Path: %s", c.CliSettings().Path())
 		initialLogger.Info().Msgf("CLI Installed? %t", c.CliSettings().Installed())
@@ -464,10 +468,6 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 		if mcpServerURL != nil {
 			di.Notifier().Send(types.McpServerURLParams{URL: mcpServerURL.String()})
 		}
-		// only set our config to initialized after leaving the func
-		defer func() {
-			c.SetLSPInitialized(true)
-		}()
 		return nil, nil
 	})
 }
