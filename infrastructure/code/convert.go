@@ -559,7 +559,6 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([
 
 // CreateWorkspaceEditFromDiff turns the returned fix (in diff format) into a series of TextEdits in a WorkspaceEdit.
 func CreateWorkspaceEditFromDiff(absoluteFilePath string, diff string) (edit snyk.WorkspaceEdit) {
-
 	fileContentBytes, err := os.ReadFile(absoluteFilePath)
 	if err != nil || len(fileContentBytes) == 0 {
 		return edit
@@ -573,7 +572,6 @@ func CreateWorkspaceEditFromDiff(absoluteFilePath string, diff string) (edit sny
 
 	// Loop over the diff. Diffs will always use \n instead of \r\n, so no need to sanitize (see getUnifiedDiff).
 	for _, line := range strings.Split(diff, "\n") {
-
 		// If we are being asked to make changes outside the original file, abort and return an empty edit.
 		if hunkLine-hunkOffset > len(fileContentLineStrings) {
 			return edit
@@ -612,7 +610,6 @@ func CreateWorkspaceEditFromDiff(absoluteFilePath string, diff string) (edit sny
 }
 
 func buildOneLineTextEdit(startLine int, endLine int, text string) snyk.TextEdit {
-
 	if startLine > endLine {
 		return snyk.TextEdit{} // We should never reach this. Return an empty edit if the input it invalid.
 	}
