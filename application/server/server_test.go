@@ -789,6 +789,8 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		t.Fatal(err)
 	}
 
+	c.SetLSPInitialized(true)
+
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
 
