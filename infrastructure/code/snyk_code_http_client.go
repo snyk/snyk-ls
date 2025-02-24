@@ -463,32 +463,6 @@ type AutofixStatus struct {
 
 var failed = AutofixStatus{message: "FAILED"}
 
-func (s *SnykCodeHTTPClient) GetAutofixSuggestions(
-	ctx context.Context,
-	options AutofixOptions,
-	baseDir string,
-) (autofixSuggestions []AutofixSuggestion,
-	status AutofixStatus,
-	err error,
-) {
-	method := "code.GetAutofixSuggestions"
-	span := s.instrumentor.StartSpan(ctx, method)
-	defer s.instrumentor.Finish(span)
-	logger := s.c.Logger().With().
-		Str("method", method).
-		Str("requestId", span.GetTraceId()).Logger()
-
-	logger.Info().Msg("Started obtaining autofix suggestions")
-	defer logger.Info().Msg("Finished obtaining autofix suggestions")
-
-	autofixResponse, status, err := s.getAutofixResponse(ctx, options)
-	if err != nil {
-		return nil, status, err
-	}
-	suggestions := autofixResponse.toAutofixSuggestions(baseDir, options.filePath)
-	return suggestions, status, nil
-}
-
 func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOptions) (AutofixResponse, error) {
 	requestId, err := performance2.GetTraceId(ctx)
 	span := s.instrumentor.StartSpan(ctx, "code.RunAutofix")

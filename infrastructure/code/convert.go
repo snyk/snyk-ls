@@ -632,25 +632,6 @@ func buildOneLineTextEdit(startLine int, endLine int, text string) snyk.TextEdit
 	}
 }
 
-// toAutofixSuggestionsIssues converts the HTTP json-first payload to the domain type
-func (s *AutofixResponse) toAutofixSuggestions(baseDir string, filePath string) (fixSuggestions []AutofixSuggestion) {
-	for _, suggestion := range s.AutofixSuggestions {
-
-		decodedPath, unifiedDiff := getPathAndUnifiedDiff(baseDir, filePath, suggestion.Value)
-		if decodedPath == "" || unifiedDiff == "" {
-			continue
-		}
-
-		d := AutofixSuggestion{
-			FixId:       suggestion.Id,
-			AutofixEdit: CreateWorkspaceEditFromDiff(decodedPath, unifiedDiff),
-		}
-		fixSuggestions = append(fixSuggestions, d)
-	}
-
-	return fixSuggestions
-}
-
 func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir string, filePath string) []AutofixUnifiedDiffSuggestion {
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
 	for _, suggestion := range s.AutofixSuggestions {
