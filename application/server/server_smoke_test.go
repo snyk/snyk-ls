@@ -861,6 +861,8 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 	w.AddFolder(f)
 
+	c.SetLSPInitialized(true)
+
 	_ = textDocumentDidSave(t, &loc, testPath)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, 10*time.Millisecond)
