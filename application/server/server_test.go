@@ -377,6 +377,7 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 	settings := types.Settings{Token: toBeRedacted}
 
 	os.Stderr, _ = file, err
+	time.Sleep(500 * time.Millisecond)
 
 	_, err = loc.Client.Call(ctx, "initialize", types.InitializeParams{InitializationOptions: settings})
 	if err != nil {
