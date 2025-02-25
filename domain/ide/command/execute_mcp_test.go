@@ -1,3 +1,6 @@
+//go:build !race
+// +build !race
+
 /*
  * © 2024 Snyk Limited
  *

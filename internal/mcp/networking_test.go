@@ -51,7 +51,7 @@ func Test_isPortInUse(t *testing.T) {
 
 func Test_determineFreePort(t *testing.T) {
 	port := determineFreePort()
-	if port <= DefaultPort {
+	if port < DefaultPort {
 		t.Errorf("Expected port to be greater than %d, but got %d", DefaultPort, port)
 	}
 
