@@ -78,6 +78,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 	w := c.Workspace()
 	sc := &scanner.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
+	c.SetLSPInitialized(true)
 	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 
 	command.HandleUntrustedFolders(context.Background(), c, loc.Server)

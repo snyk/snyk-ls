@@ -30,6 +30,7 @@ import (
 	delta2 "github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	context2 "github.com/snyk/snyk-ls/internal/context"
 
 	"github.com/snyk/snyk-ls/internal/delta"
 
@@ -76,6 +77,10 @@ type Folder struct {
 	c                       *config.Config
 	scanPersister           persistence.ScanSnapshotPersister
 	scanStateAggregator     scanstates.Aggregator
+}
+
+func (f *Folder) ScanResultProcessor() types.ScanResultProcessor {
+	return f.ProcessResults
 }
 
 func (f *Folder) Issue(key string) types.Issue {
@@ -310,7 +315,7 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 	f.scanner.Scan(ctx, path, f.ProcessResults, f.path)
 }
 
-func (f *Folder) ProcessResults(scanData types.ScanData) {
+func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	if scanData.Err != nil {
 		f.sendScanError(scanData.Product, scanData.Err)
 		return
@@ -319,7 +324,7 @@ func (f *Folder) ProcessResults(scanData types.ScanData) {
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
-	go sendAnalytics(f.c, &scanData)
+	go sendAnalytics(ctx, f.c, &scanData)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(scanData.Product)
@@ -383,7 +388,7 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 	}
 }
 
-func sendAnalytics(c *config.Config, data *types.ScanData) {
+func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) {
 	logger := c.Logger().With().Str("method", "folder.sendAnalytics").Logger()
 	if !data.SendAnalytics {
 		return
@@ -406,6 +411,18 @@ func sendAnalytics(c *config.Config, data *types.ScanData) {
 	}
 	summary := createTestSummary(data, c)
 
+	extension := map[string]any{"is_delta_scan": data.IsDeltaScan}
+
+	scanSource, ok := context2.ScanSourceFromContext(ctx)
+	if ok {
+		extension["scan_source"] = scanSource.String()
+	}
+
+	deltaScanType, ok := context2.DeltaScanTypeFromContext(ctx)
+	if ok {
+		extension["scan_type"] = deltaScanType.String()
+	}
+
 	param := types.AnalyticsEventParam{
 		InteractionType: "Scan done",
 		Category:        categories,
@@ -413,7 +430,7 @@ func sendAnalytics(c *config.Config, data *types.ScanData) {
 		TargetId:        targetId,
 		TimestampMs:     data.TimestampFinished.UnixMilli(),
 		DurationMs:      int64(data.DurationMs),
-		Extension:       map[string]any{"is_delta_scan": data.IsDeltaScan},
+		Extension:       extension,
 	}
 
 	ic := analytics.PayloadForAnalyticsEventParam(c, param)

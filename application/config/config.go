@@ -33,10 +33,8 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/denisbrodbeck/machineid"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/xtgo/uuid"
-	"golang.org/x/oauth2"
-
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -45,6 +43,8 @@ import (
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
@@ -200,6 +200,8 @@ type Config struct {
 	offline                          bool
 	ws                               types.Workspace
 	mcpServerEnabled                 bool
+	mcpBaseURL                       *url.URL
+	isLSPInitialized                 bool
 }
 
 func CurrentConfig() *Config {
@@ -329,7 +331,7 @@ func (c *Config) determineDeviceId() string {
 		if c.token != "" {
 			return util.Hash([]byte(c.token))
 		} else {
-			return uuid.NewTime().String()
+			return uuid.NewString()
 		}
 	} else {
 		return id
@@ -1220,4 +1222,29 @@ func (c *Config) McpServerEnabled() bool {
 	defer c.m.RUnlock()
 
 	return c.mcpServerEnabled
+}
+
+func (c *Config) SetMCPServerURL(baseURL *url.URL) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.mcpBaseURL = baseURL
+}
+
+func (c *Config) GetMCPServerURL() *url.URL {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.mcpBaseURL
+}
+
+func (c *Config) IsLSPInitialized() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.isLSPInitialized
+}
+
+func (c *Config) SetLSPInitialized(initialized bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.isLSPInitialized = initialized
 }

@@ -21,6 +21,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -45,19 +46,40 @@ func (m *McpLLMBinding) snykWorkSpaceScanHandler() func(ctx context.Context, req
 			Content: make([]interface{}, 0),
 		}
 
-		resultProcessor := func(data types.ScanData) {
+		resultProcessor := func(ctx context.Context, data types.ScanData) {
 			// add the scan results to the call tool response
 			// in the future, this could be a rendered markdown/html template
 			callToolResult.Content = append(callToolResult.Content, data)
 			if data.Err != nil {
 				callToolResult.IsError = true
 			}
+
+			// standard processing for the folder
+			scanResultProcessor := folderScanResultProcessor(w, data.Path)
+			if scanResultProcessor != nil {
+				scanResultProcessor(ctx, data)
+			}
+
+			// forward to forwarding processor
+			if m.forwardingResultProcessor != nil {
+				m.forwardingResultProcessor(ctx, data)
+			}
 		}
 
+		enrichedContext := ctx2.NewContextWithScanSource(ctx, ctx2.LLM)
 		for _, folder := range trusted {
-			m.scanner.Scan(ctx, folder.Path(), resultProcessor, folder.Path())
+			m.scanner.Scan(enrichedContext, folder.Path(), resultProcessor, folder.Path())
 		}
 
 		return callToolResult, nil
 	}
+}
+
+func folderScanResultProcessor(w types.Workspace, path types.FilePath) types.ScanResultProcessor {
+	folder := w.GetFolderContaining(path)
+	if folder == nil {
+		return nil
+	}
+	scanResultProcessor := folder.ScanResultProcessor()
+	return scanResultProcessor
 }

@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -236,6 +237,44 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 		return len(callbacks) > 0
 	}, time.Second*10, time.Millisecond,
 		"did not receive callback because of wrong protocol version")
+}
+
+func Test_initialized_shouldSendMcpServerAddress(t *testing.T) {
+	c := testutil.UnitTest(t)
+	loc, jsonRpcRecorder := setupServer(t, c)
+
+	params := types.InitializeParams{
+		InitializationOptions: types.Settings{RequiredProtocolVersion: config.LsProtocolVersion},
+	}
+
+	rsp, err := loc.Client.Call(ctx, "initialize", params)
+	require.NoError(t, err)
+	var result types.InitializeResult
+	err = rsp.UnmarshalResult(&result)
+	require.NoError(t, err)
+
+	testURL, err := url.Parse("http://localhost:1234")
+	require.NoError(t, err)
+
+	c.SetMCPServerURL(testURL)
+
+	_, err = loc.Client.Call(ctx, "initialized", params)
+	require.NoError(t, err)
+	require.Eventuallyf(t, func() bool {
+		n := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.mcpServerURL")
+		if n == nil {
+			return false
+		}
+		if len(n) > 1 {
+			t.Fatal("can't succeed anymore, too many notifications ", n)
+		}
+
+		var param types.McpServerURLParams
+		err = n[0].UnmarshalParams(&param)
+		require.NoError(t, err)
+		return param.URL == testURL.String()
+	}, time.Minute, time.Millisecond,
+		"did not receive mcp server url")
 }
 
 func Test_initialize_shouldSupportAllCommands(t *testing.T) {
@@ -750,6 +789,8 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		t.Fatal(err)
 	}
 
+	c.SetLSPInitialized(true)
+
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
 
@@ -802,6 +843,8 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 		t.Fatalf("initialization failed: %v", err)
 	}
 
+	c.SetLSPInitialized(true)
+
 	snykFilePath, folderPath := createTemporaryDirectoryWithSnykFile(t)
 
 	sendFileSavedMessage(t, snykFilePath, folderPath, loc)
@@ -853,6 +896,8 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	c.SetLSPInitialized(true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
