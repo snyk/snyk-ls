@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/testsupport"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestPreScanCommand_ExecutePreScanCommand(t *testing.T) {
@@ -35,7 +36,7 @@ func TestPreScanCommand_ExecutePreScanCommand(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	dir, err := os.Getwd()
 	require.NoError(t, err)
-	cut := NewPreScanCommand(conf, dir, "/bin/ls", &logger)
+	cut := NewPreScanCommand(conf, types.FilePath(dir), "/bin/ls", &logger)
 
 	err = cut.ExecutePreScanCommand(context.Background())
 

@@ -16,11 +16,15 @@
 
 package snyk
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/snyk/snyk-ls/internal/types"
+)
 
 type InlineValue interface {
-	Path() string
-	Range() Range
+	Path() types.FilePath
+	Range() types.Range
 	Text() string
 	fmt.Stringer
 }
@@ -29,8 +33,8 @@ type InlineValue interface {
 type InlineValueProvider interface {
 	// GetInlineValues returns inline values for a given path and range.
 	// This should be a very fast operation.
-	GetInlineValues(path string, myRange Range) ([]InlineValue, error)
+	GetInlineValues(path types.FilePath, myRange types.Range) ([]InlineValue, error)
 
 	// ClearInlineValues clears inline values for a given path.
-	ClearInlineValues(path string)
+	ClearInlineValues(path types.FilePath)
 }

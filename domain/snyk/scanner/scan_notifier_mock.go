@@ -18,42 +18,43 @@ package scanner
 
 import (
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var _ ScanNotifier = &MockScanNotifier{}
 
 type MockScanNotifier struct {
-	inProgressCalls []string
-	successCalls    []string
-	errorCalls      []string
+	inProgressCalls []types.FilePath
+	successCalls    []types.FilePath
+	errorCalls      []types.FilePath
 }
 
 func NewMockScanNotifier() *MockScanNotifier { return &MockScanNotifier{} }
 
-func (m *MockScanNotifier) SendInProgress(folderPath string) {
+func (m *MockScanNotifier) SendInProgress(folderPath types.FilePath) {
 	m.inProgressCalls = append(m.inProgressCalls, folderPath)
 }
 
-func (m *MockScanNotifier) SendSuccessForAllProducts(folderPath string) {
+func (m *MockScanNotifier) SendSuccessForAllProducts(folderPath types.FilePath) {
 	m.successCalls = append(m.successCalls, folderPath)
 }
 
-func (m *MockScanNotifier) SendSuccess(_ product.Product, folderPath string) {
+func (m *MockScanNotifier) SendSuccess(_ product.Product, folderPath types.FilePath) {
 	m.successCalls = append(m.successCalls, folderPath)
 }
 
-func (m *MockScanNotifier) SendError(_ product.Product, folderPath string, _ string) {
+func (m *MockScanNotifier) SendError(product product.Product, folderPath types.FilePath, errorMessage string) {
 	m.errorCalls = append(m.errorCalls, folderPath)
 }
 
-func (m *MockScanNotifier) InProgressCalls() []string {
+func (m *MockScanNotifier) InProgressCalls() []types.FilePath {
 	return m.inProgressCalls
 }
 
-func (m *MockScanNotifier) SuccessCalls() []string {
+func (m *MockScanNotifier) SuccessCalls() []types.FilePath {
 	return m.successCalls
 }
 
-func (m *MockScanNotifier) ErrorCalls() []string {
+func (m *MockScanNotifier) ErrorCalls() []types.FilePath {
 	return m.errorCalls
 }

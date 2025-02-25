@@ -17,7 +17,7 @@
 package code
 
 import (
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type SnykAnalysisFailedError struct {
@@ -27,10 +27,10 @@ type SnykAnalysisFailedError struct {
 func (e SnykAnalysisFailedError) Error() string { return e.Msg }
 
 type AnalysisRequestKey struct {
-	Type         string   `json:"type"`
-	Hash         string   `json:"hash"`
-	LimitToFiles []string `json:"limitToFiles,omitempty"`
-	Shard        string   `json:"shard"`
+	Type         string           `json:"type"`
+	Hash         string           `json:"hash"`
+	LimitToFiles []types.FilePath `json:"limitToFiles,omitempty"`
+	Shard        string           `json:"shard"`
 }
 
 type codeRequestContextOrg struct {
@@ -67,11 +67,11 @@ type autofixResponseSingleFix struct {
 }
 
 type AutofixRequestKey struct {
-	Type     string `json:"type"`
-	Hash     string `json:"hash"`
-	Shard    string `json:"shard"`
-	FilePath string `json:"filePath"`
-	RuleId   string `json:"ruleId"`
+	Type     string         `json:"type"`
+	Hash     string         `json:"hash"`
+	Shard    string         `json:"shard"`
+	FilePath types.FilePath `json:"filePath"`
+	RuleId   string         `json:"ruleId"`
 	// 1-based to comply with Sarif and Code API, see
 	// https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Ref493492556
 	LineNum int `json:"lineNum"`
@@ -100,7 +100,7 @@ func (e SnykAutofixFailedError) Error() string { return e.Msg }
 // AutofixSuggestion models a fix returned by autofix service
 type AutofixSuggestion struct {
 	FixId       string
-	AutofixEdit snyk.WorkspaceEdit
+	AutofixEdit types.WorkspaceEdit
 }
 
 type AutofixEventDetails struct {

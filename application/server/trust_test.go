@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 
@@ -33,7 +34,6 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -78,6 +78,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 	w := c.Workspace()
 	sc := &scanner.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
+	c.SetLSPInitialized(true)
 	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 
 	command.HandleUntrustedFolders(context.Background(), c, loc.Server)
@@ -156,7 +157,7 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	rootDir := t.TempDir()
+	rootDir := types.FilePath(t.TempDir())
 
 	// create trusted repo
 	repo1, err := storedconfig.SetupCustomTestRepo(t, rootDir, testsupport.NodejsGoof, "0336589", c.Logger())
@@ -164,11 +165,11 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 
 	// create untrusted directory in same rootDir with the exact prefix
 	exploitDir := repo1 + "-exploit"
-	err = os.MkdirAll(exploitDir, 0755)
+	err = os.MkdirAll(string(exploitDir), 0755)
 	assert.NoError(t, err)
 
 	// only trust first dir
-	c.SetTrustedFolders([]string{repo1})
+	c.SetTrustedFolders([]types.FilePath{repo1})
 
 	_, err = loc.Client.Call(context.Background(), "initialize", types.InitializeParams{
 		RootURI: uri.PathToUri(exploitDir),

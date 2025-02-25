@@ -27,14 +27,14 @@ import (
 
 func TestFind_EmptyLists(t *testing.T) {
 	f := NewFinder()
-	_, err := f.Enrich([]Identifiable{}, []Identifiable{})
+	_, err := f.DiffAndEnrich([]Identifiable{}, []Identifiable{})
 
 	assert.EqualError(t, err, "currentlist is empty")
 }
 
 func TestFind_MissingDiffer(t *testing.T) {
 	f := NewFinder(WithEnricher(FindingsEnricher{}))
-	_, err := f.Enrich(
+	_, err := f.DiffAndEnrich(
 		[]Identifiable{&mockIdentifiable{globalIdentity: "1"}},
 		[]Identifiable{&mockIdentifiable{globalIdentity: "2"}})
 
@@ -60,7 +60,7 @@ func TestFind_DifferWithEnricher(t *testing.T) {
 		WithDiffer(FindingsDiffer{}),
 	)
 
-	enrichedList, err := f.Enrich(
+	enrichedList, err := f.DiffAndEnrich(
 		[]Identifiable{&mockIdentifiable{globalIdentity: "1"}},
 		[]Identifiable{
 			&mockIdentifiable{globalIdentity: "1"},
@@ -115,7 +115,7 @@ func TestFind_DifferWithEnricherWithMatcher(t *testing.T) {
 	currentIssueList = append(currentIssueList, newIssue)
 	baseFindingIdentifiable := convertToFindingsIdentifiable(baseIssueList)
 	currentFindingIdentifiable := convertToFindingsIdentifiable(currentIssueList)
-	enrichedList, err := f.Enrich(baseFindingIdentifiable, currentFindingIdentifiable)
+	enrichedList, err := f.DiffAndEnrich(baseFindingIdentifiable, currentFindingIdentifiable)
 
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 3)
@@ -153,7 +153,7 @@ func TestFind_DifferWithEnricherWithMatcher_NoNewIssues(t *testing.T) {
 	}
 
 	baseFindingIdentifiable := convertToFindingsIdentifiable(baseIssueList)
-	enrichedList, err := f.Enrich(baseFindingIdentifiable, baseFindingIdentifiable)
+	enrichedList, err := f.DiffAndEnrich(baseFindingIdentifiable, baseFindingIdentifiable)
 
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 2)
@@ -206,7 +206,7 @@ func TestFind_DifferWithEnricherWithMatcher_NewIssue_ExistingId(t *testing.T) {
 	currentIssueList = append(currentIssueList, newIssue)
 	baseFindingIdentifiable := convertToFindingsIdentifiable(baseIssueList)
 	currentFindingIdentifiable := convertToFindingsIdentifiable(currentIssueList)
-	enrichedList, err := f.Enrich(baseFindingIdentifiable, currentFindingIdentifiable)
+	enrichedList, err := f.DiffAndEnrich(baseFindingIdentifiable, currentFindingIdentifiable)
 
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 3)

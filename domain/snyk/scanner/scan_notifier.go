@@ -16,11 +16,14 @@
 
 package scanner
 
-import "github.com/snyk/snyk-ls/internal/product"
+import (
+	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
+)
 
 type ScanNotifier interface {
-	SendInProgress(folderPath string)
-	SendSuccess(product product.Product, folderPath string)
-	SendSuccessForAllProducts(folderPath string)
-	SendError(product product.Product, folderPath string, errorMessage string)
+	SendInProgress(folderPath types.FilePath)
+	SendSuccess(product product.Product, folderPath types.FilePath)
+	SendSuccessForAllProducts(folderPath types.FilePath)
+	SendError(product product.Product, folderPath types.FilePath, errorMessage string)
 }

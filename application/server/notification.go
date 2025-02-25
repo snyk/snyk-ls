@@ -80,9 +80,14 @@ func disposeProgressListener() {
 	progressStopChan <- true
 }
 
+//nolint:gocyclo // this is ok, as it's so high because of forwarding the calls
 func registerNotifier(c *config.Config, srv types.Server) {
 	logger := c.Logger().With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
+		for !c.IsLSPInitialized() {
+			logger.Debug().Msg("waiting for lsp initialization to be finished...")
+			time.Sleep(300 * time.Millisecond)
+		}
 		switch params := params.(type) {
 		case types.GetSdk:
 			handleGetSdks(params, logger, srv)
@@ -140,6 +145,9 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			handleInlineValueRefresh(srv, &logger)
 			logger.Debug().
 				Msg("sending inline value refresh request to client")
+		case types.McpServerURLParams:
+			logger.Debug().Msgf("sending mcp url %s", params.URL)
+			notifier(c, srv, "$/snyk.mcpServerURL", params)
 		default:
 			logger.Warn().
 				Interface("params", params).
@@ -151,7 +159,7 @@ func registerNotifier(c *config.Config, srv types.Server) {
 }
 
 func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server) {
-	folder := types.WorkspaceFolder{Uri: uri.PathToUri(params.FolderPath)}
+	folder := types.WorkspaceFolder{Uri: uri.PathToUri(types.FilePath(params.FolderPath))}
 	logger.Debug().Str("folderPath", params.FolderPath).Msg("retrieving sdk")
 
 	sdks := []types.LsSdk{}
@@ -165,14 +173,14 @@ func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server)
 
 	callback, err := srv.Callback(ctx, "workspace/snyk.sdks", folder)
 	if err != nil {
-		logger.Warn().Err(err).Str("folderPath", params.FolderPath).Msg("could not retrieve sdk")
+		logger.Debug().Str("folderPath", params.FolderPath).Msg("could not retrieve sdk, most likely not yet supported by IDE, continuing...")
 		return
 	}
 
 	// unmarshall into array that is transferred back via the channel on exit
 	err = callback.UnmarshalResult(&sdks)
 	if err != nil {
-		logger.Warn().Err(err).Str("resultString", callback.ResultString()).Msg("could not unmarshal sdk response")
+		logger.Debug().Str("resultString", callback.ResultString()).Msg("could not get sdk response, most likely not yet supported by IDE, continuing...")
 		return
 	}
 }

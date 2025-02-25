@@ -16,7 +16,7 @@ type Notifier interface {
 	SendShowMessage(messageType sglsp.MessageType, message string)
 	Send(msg any)
 	SendError(err error)
-	SendErrorDiagnostic(path string, err error)
+	SendErrorDiagnostic(path types.FilePath, err error)
 	Receive() (payload any, stop bool)
 	CreateListener(callback func(params any))
 	DisposeListener()
@@ -49,7 +49,7 @@ func (n *notifierImpl) SendError(err error) {
 	})
 }
 
-func (n *notifierImpl) SendErrorDiagnostic(path string, err error) {
+func (n *notifierImpl) SendErrorDiagnostic(path types.FilePath, err error) {
 	n.Send(types.PublishDiagnosticsParams{
 		URI: uri.PathToUri(path),
 		Diagnostics: []types.Diagnostic{{

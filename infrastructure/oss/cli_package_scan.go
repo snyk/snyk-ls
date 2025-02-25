@@ -25,7 +25,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/oss/parser"
 )
 
@@ -40,7 +39,7 @@ var (
 func (cliScanner *CLIScanner) ScanPackages(
 	ctx context.Context,
 	config *config.Config,
-	path string,
+	path types.FilePath,
 	content string,
 ) {
 	cliScanner.packageScanMutex.Lock()
@@ -70,7 +69,7 @@ func (cliScanner *CLIScanner) ScanPackages(
 	notCached := cliScanner.updateCachedDependencies(dependencies)
 
 	if len(notCached) > 0 {
-		commandFunc := func(_ []string, _ map[string]bool, path string, _ *types.FolderConfig) (deps []string) {
+		commandFunc := func(_ []string, _ map[string]bool, path types.FilePath, _ *types.FolderConfig) (deps []string) {
 			for _, d := range notCached {
 				deps = append(deps, d.ArtifactID+"@"+d.Version)
 			}
@@ -92,8 +91,7 @@ func (cliScanner *CLIScanner) ScanPackages(
 	}
 }
 
-func (cliScanner *CLIScanner) getDependencies(config *config.Config, path string,
-	content string) (dependencies []parser.Dependency, err error) {
+func (cliScanner *CLIScanner) getDependencies(config *config.Config, path types.FilePath, content string) (dependencies []parser.Dependency, err error) {
 	logger := config.Logger().With().Str("method", "CLIScanner.getDependencies").Logger()
 	p := parser.NewParser(config, path)
 	if content == "" {
@@ -127,13 +125,13 @@ func (cliScanner *CLIScanner) updateCachedDependencies(dependencies []parser.Dep
 			logger.Trace().Str("dependency", dependency.String()).Msg("cached")
 			cliScanner.removeVulnerabilityCountsFromCache(cached)
 			// update ranges of issues in inlinevalue cache
-			newCached := []snyk.Issue{}
+			newCached := []types.Issue{}
 			for _, issue := range cached {
-				logger.Trace().Str("issue", issue.ID).
-					Str("old range", issue.Range.String()).
+				logger.Trace().Str("issue", issue.GetID()).
+					Str("old range", issue.GetRange().String()).
 					Str("new range", dependency.Range.String()).
 					Msg("updating range")
-				issue.Range = dependency.Range
+				issue.SetRange(dependency.Range)
 				newCached = append(newCached, issue)
 			}
 			cliScanner.packageIssueCache[key] = newCached
@@ -143,6 +141,6 @@ func (cliScanner *CLIScanner) updateCachedDependencies(dependencies []parser.Dep
 	return notCached
 }
 
-func (cliScanner *CLIScanner) isPackageScanSupported(path string) bool {
-	return packageScanSupportedExtensions[strings.ToLower(filepath.Ext(path))]
+func (cliScanner *CLIScanner) isPackageScanSupported(path types.FilePath) bool {
+	return packageScanSupportedExtensions[strings.ToLower(filepath.Ext(string(path)))]
 }

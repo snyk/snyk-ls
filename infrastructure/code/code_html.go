@@ -30,6 +30,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/llm"
 
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -107,7 +108,7 @@ func GetHTMLRenderer(c *config.Config, deepCodeLLMBinding llm.DeepCodeLLMBinding
 	return codeRenderer, nil
 }
 
-func (renderer *HtmlRenderer) determineFolderPath(filePath string) string {
+func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types.FilePath {
 	ws := renderer.c.Workspace()
 	if ws == nil {
 		return ""
@@ -121,10 +122,10 @@ func (renderer *HtmlRenderer) determineFolderPath(filePath string) string {
 	return ""
 }
 
-func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
+func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	autoTriggerAiFix := renderer.AiFixHandler.autoTriggerAiFix
 	renderer.AiFixHandler.resetAiFixCacheIfDifferent(issue)
-	additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	additionalData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 	if !ok {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
@@ -134,7 +135,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		renderer.c.Logger().Warn().Msgf("Failed to generate security nonce: %s", err)
 		return ""
 	}
-	folderPath := renderer.determineFolderPath(issue.AffectedFilePath)
+	folderPath := renderer.determineFolderPath(issue.GetAffectedFilePath())
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
 	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
@@ -148,14 +149,14 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 	if err == nil && string(aiFixSerialized) != "null" {
 		aiFixResult = string(aiFixSerialized)
 	}
-	data := map[string]interface{}{
+	data := map[string]any{
 		"IssueTitle":         additionalData.Title,
 		"IssueMessage":       additionalData.Message,
 		"IssueType":          getIssueType(additionalData),
 		"SeverityIcon":       html.SeverityIcon(issue),
-		"CWEs":               issue.CWEs,
+		"CWEs":               issue.GetCWEs(),
 		"IssueOverview":      html.MarkdownToHTML(additionalData.Text),
-		"IsIgnored":          issue.IsIgnored,
+		"IsIgnored":          issue.GetIsIgnored(),
 		"DataFlow":           additionalData.DataFlow,
 		"DataFlowKeys":       dataFlowKeys,
 		"DataFlowTable":      dataFlowTable,
@@ -165,7 +166,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"CommitFixes":        commitFixes,
 		"PriorityScore":      additionalData.PriorityScore,
 		"SnykWebUrl":         renderer.c.SnykUI(),
-		"LessonUrl":          issue.LessonUrl,
+		"LessonUrl":          issue.GetLessonUrl(),
 		"LessonIcon":         html.LessonIcon(),
 		"IgnoreLineAction":   getLineToIgnoreAction(issue),
 		"HasAIFix":           additionalData.HasAIFix,
@@ -177,9 +178,9 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"ArrowRightDark":     html.ArrowRightDark(),
 		"ArrowRightLight":    html.ArrowRightLight(),
 		"FileIcon":           html.FileIcon(),
-		"FolderPath":         folderPath,
-		"FilePath":           issue.Path(),
-		"IssueId":            issue.AdditionalData.GetKey(),
+		"FolderPath":         string(folderPath),
+		"FilePath":           string(issue.GetAffectedFilePath()),
+		"IssueId":            issue.GetAdditionalData().GetKey(),
 		"Styles":             template.CSS(panelStylesTemplate),
 		"Scripts":            template.JS(customScripts),
 		"Nonce":              nonce,
@@ -189,9 +190,9 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"AutoTriggerAiFix":   autoTriggerAiFix,
 	}
 
-	if issue.IsIgnored {
-		data["IgnoreDetails"] = prepareIgnoreDetailsRow(issue.IgnoreDetails)
-		data["IgnoreReason"] = issue.IgnoreDetails.Reason
+	if issue.GetIsIgnored() {
+		data["IgnoreDetails"] = prepareIgnoreDetailsRow(issue.GetIgnoreDetails())
+		data["IgnoreReason"] = issue.GetIgnoreDetails().Reason
 	}
 
 	var buffer bytes.Buffer
@@ -205,11 +206,11 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 	return result
 }
 
-func getLineToIgnoreAction(issue snyk.Issue) int {
-	return issue.Range.Start.Line + 1
+func getLineToIgnoreAction(issue types.Issue) int {
+	return issue.GetRange().Start.Line + 1
 }
 
-func prepareIgnoreDetailsRow(ignoreDetails *snyk.IgnoreDetails) []IgnoreDetail {
+func prepareIgnoreDetailsRow(ignoreDetails *types.IgnoreDetails) []IgnoreDetail {
 	return []IgnoreDetail{
 		{"Category", parseCategory(ignoreDetails.Category)},
 		{"Expiration", formatExpirationDate(ignoreDetails.Expiration)},
@@ -233,17 +234,17 @@ func parseCategory(category string) string {
 }
 
 func prepareDataFlowTable(issue snyk.CodeIssueData) ([]string, map[string][]DataFlowItem) {
-	items := make(map[string][]DataFlowItem, 0)
+	items := make(map[string][]DataFlowItem)
 	var dataFlowKeys []string
 	for i, flow := range issue.DataFlow {
-		fileName := filepath.Base(flow.FilePath)
+		fileName := filepath.Base(string(flow.FilePath))
 		if items[fileName] == nil {
 			dataFlowKeys = append(dataFlowKeys, fileName)
 			items[fileName] = []DataFlowItem{}
 		}
 		items[fileName] = append(items[fileName], DataFlowItem{
 			Number:         i + 1,
-			FilePath:       flow.FilePath,
+			FilePath:       string(flow.FilePath),
 			StartLine:      flow.FlowRange.Start.Line,
 			EndLine:        flow.FlowRange.End.Line,
 			StartCharacter: flow.FlowRange.Start.Character,

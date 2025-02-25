@@ -23,12 +23,13 @@ import (
 	"strings"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func CalculateFingerprintFromAdditionalData(issue snyk.Issue) string {
+func CalculateFingerprintFromAdditionalData(issue types.Issue) string {
 	var preHash string
 	var dependencyChainHash string
-	switch additionalData := issue.AdditionalData.(type) {
+	switch additionalData := issue.GetAdditionalData().(type) {
 	case snyk.OssIssueData:
 		// first element is directory name. It should not be considered for the fingerprint
 		if len(additionalData.From) > 1 {

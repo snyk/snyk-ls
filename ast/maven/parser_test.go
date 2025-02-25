@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestCreateDependencyTree(t *testing.T) {
@@ -31,7 +32,7 @@ func TestCreateDependencyTree(t *testing.T) {
 	var testPath, _ = filepath.Abs("testdata/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
 	parser := Parser{config: c}
-	tree := parser.Parse(string(testContent), testPath)
+	tree := parser.Parse(string(testContent), types.FilePath(testPath))
 	children := tree.Root.Children
 	assert.Len(t, children, 2, "Should have extracted 2 deps from pom.xml")
 
@@ -49,7 +50,7 @@ func TestCreateHierarchicalDependencyTree(t *testing.T) {
 	var testPath, _ = filepath.Abs("testdata/maven-goof/sub/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
 	parser := Parser{config: c}
-	tree := parser.Parse(string(testContent), testPath)
+	tree := parser.Parse(string(testContent), types.FilePath(testPath))
 
 	assert.NotNilf(t, tree.ParentTree, "Should have returned a Parent tree")
 

@@ -33,10 +33,8 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/denisbrodbeck/machineid"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/xtgo/uuid"
-	"golang.org/x/oauth2"
-
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -45,6 +43,8 @@ import (
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
@@ -177,7 +177,7 @@ type Config struct {
 	automaticAuthentication          bool
 	tokenChangeChannels              []chan string
 	filterSeverity                   types.SeverityFilter
-	trustedFolders                   []string
+	trustedFolders                   []types.FilePath
 	trustedFoldersFeatureEnabled     bool
 	activateSnykCodeSecurity         bool
 	activateSnykCodeQuality          bool
@@ -199,6 +199,9 @@ type Config struct {
 	hoverVerbosity                   int
 	offline                          bool
 	ws                               types.Workspace
+	mcpServerEnabled                 bool
+	mcpBaseURL                       *url.URL
+	isLSPInitialized                 bool
 }
 
 func CurrentConfig() *Config {
@@ -328,7 +331,7 @@ func (c *Config) determineDeviceId() string {
 		if c.token != "" {
 			return util.Hash([]byte(c.token))
 		} else {
-			return uuid.NewTime().String()
+			return uuid.NewString()
 		}
 	} else {
 		return id
@@ -893,13 +896,13 @@ func (c *Config) SetIdeVersion(ideVersion string) {
 	c.engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, ideVersion)
 }
 
-func (c *Config) TrustedFolders() []string {
+func (c *Config) TrustedFolders() []types.FilePath {
 	c.m.RLock()
 	defer c.m.RUnlock()
 	return c.trustedFolders
 }
 
-func (c *Config) SetTrustedFolders(folderPaths []string) {
+func (c *Config) SetTrustedFolders(folderPaths []types.FilePath) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.trustedFolders = folderPaths
@@ -1162,7 +1165,7 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 	c.isOpenBrowserActionEnabled = enable
 }
 
-func (c *Config) FolderConfig(path string) *types.FolderConfig {
+func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	var folderConfig *types.FolderConfig
 	var err error
 	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path)
@@ -1212,4 +1215,36 @@ func (c *Config) SetWorkspace(workspace types.Workspace) {
 	defer c.m.Unlock()
 
 	c.ws = workspace
+}
+
+func (c *Config) McpServerEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.mcpServerEnabled
+}
+
+func (c *Config) SetMCPServerURL(baseURL *url.URL) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.mcpBaseURL = baseURL
+}
+
+func (c *Config) GetMCPServerURL() *url.URL {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.mcpBaseURL
+}
+
+func (c *Config) IsLSPInitialized() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.isLSPInitialized
+}
+
+func (c *Config) SetLSPInitialized(initialized bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.isLSPInitialized = initialized
 }

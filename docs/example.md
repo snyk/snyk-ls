@@ -22,8 +22,8 @@ const (
 type EmojiScanner struct {
 }
 
-func (sc *EmojiScanner) Scan(ctx context.Context, filePath string, folderPath string) []snyk.Issue {
-  return []snyk.Issue{} // return no issues for now
+func (sc *EmojiScanner) Scan(ctx context.Context, filePath string, folderPath string) []types.Issue {
+  return []types.Issue{} // return no issues for now
 }
 
 func (sc *EmojiScanner) IsEnabled() bool {
@@ -43,7 +43,7 @@ func (sc *EmojiScanner) Product() snyk.Product {
 
 ```go
 // code from `infrastructure/snyk/scanner/emoji.go`
-func (sc *EmojiScanner) Scan(ctx context.Context, path string, folderPath string) []snyk.Issue {
+func (sc *EmojiScanner) Scan(ctx context.Context, path string, folderPath string) []types.Issue {
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		// error handling
@@ -53,7 +53,7 @@ func (sc *EmojiScanner) Scan(ctx context.Context, path string, folderPath string
 
 	if fileInfo.IsDir() {
 		// our scanner don't need to scan folders, instead we operate on a file basis.
-		return []snyk.Issue{}
+		return []types.Issue{}
 	}
 
 	bytes, err := os.ReadFile(path)
@@ -64,7 +64,7 @@ func (sc *EmojiScanner) Scan(ctx context.Context, path string, folderPath string
 
 	emojiRegexp := regexp.MustCompile(`\x{1F408}`) // 🐈 cat emoji regexp
 
-	issues := make([]snyk.Issue, 0)
+	issues := make([]types.Issue, 0)
 
 	lines := strings.Split(strings.ReplaceAll(string(bytes), "\r", ""), "\n") // split lines
 	for i, line := range lines {
@@ -81,14 +81,14 @@ func (sc *EmojiScanner) Scan(ctx context.Context, path string, folderPath string
 
 			issue := snyk.NewIssue(
 				"So now you know",
-				snyk.Low,
+				types.Low,
 				snyk.EmojiIssue,
 				r,
 				"Cats are not allowed in this project",
 				"",
 				path,
 				sc.Product(),
-				[]snyk.Reference{},
+				[]types.Reference{},
 				sc.catsEvilProofUrl,
 				[]snyk.CodeAction{},
 				[]snyk.Command{},
@@ -176,14 +176,14 @@ codeAction := snyk.CodeAction{
 
 issue := snyk.NewIssue(
   "So now you know",
-  snyk.Low,
+  types.Low,
   snyk.EmojiIssue,
   r,
   "Cats are not allowed in this project",
   "",
   path,
   sc.Product(),
-  []snyk.Reference{},
+  []types.Reference{},
   sc.catsEvilProofUrl,
   []snyk.CodeAction{codeAction}, // updated
   []snyk.Command{},
@@ -221,14 +221,14 @@ You have seen a message "Cats are not allowed in this project" when hovering ove
 // code from `infrastructure/snyk/scanner/emoji.go`
 issue := snyk.NewIssue(
   "So now you know",
-  snyk.Low,
+  types.Low,
   snyk.EmojiIssue,
   r,
   "Cats are not allowed in this project",
   sc.GetFormattedMessage(), // new function
   path,
   sc.Product(),
-  []snyk.Reference{},
+  []types.Reference{},
   sc.catsEvilProofUrl,
   []snyk.CodeAction{codeAction},
   []snyk.Command{},

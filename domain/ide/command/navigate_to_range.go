@@ -29,8 +29,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -53,7 +51,7 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		cmd.logger.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
 	}
 	// convert to correct type
-	var myRange snyk.Range
+	var myRange types.Range
 	args := cmd.command.Arguments
 	marshal, err := json.Marshal(args[1])
 	if err != nil {
@@ -64,13 +62,13 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		return nil, errors.Wrap(err, "couldn't unmarshal range from json")
 	}
 
-	path, ok := args[0].(string)
+	path, ok := args[0].(types.FilePath)
 	if !ok {
 		return nil, errors.Errorf("invalid range path: %s", args[0])
 	}
 
 	var documentUri sglsp.DocumentURI
-	if !strings.HasPrefix(path, "snyk://") {
+	if !strings.HasPrefix(string(path), "snyk://") {
 		documentUri = uri.PathToUri(path)
 	} else {
 		documentUri = sglsp.DocumentURI(path)

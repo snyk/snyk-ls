@@ -47,7 +47,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 
 	// create clones and make them workspace folders
 	type scanParamsTuple map[product.Product]bool
-	successfulScans := map[string]scanParamsTuple{}
+	successfulScans := map[types.FilePath]scanParamsTuple{}
 
 	var workspaceFolders []types.WorkspaceFolder
 	wg := sync.WaitGroup{}
@@ -57,7 +57,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			dir := t.TempDir()
+			dir := types.FilePath(t.TempDir())
 			repo, err := storedconfig.SetupCustomTestRepo(t, dir, testsupport.NodejsGoof, "", c.Logger())
 			require.NoError(t, err)
 			folder := types.WorkspaceFolder{

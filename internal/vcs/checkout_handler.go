@@ -31,7 +31,7 @@ import (
 )
 
 type CheckoutHandler struct {
-	baseFolderPath string
+	baseFolderPath types.FilePath
 	repository     *git.Repository
 	cleanupFunc    func()
 	mutex          sync.Mutex
@@ -44,7 +44,7 @@ func NewCheckoutHandler(conf configuration.Configuration) *CheckoutHandler {
 	}
 }
 
-func (ch *CheckoutHandler) BaseFolderPath() string {
+func (ch *CheckoutHandler) BaseFolderPath() types.FilePath {
 	return ch.baseFolderPath
 }
 
@@ -69,7 +69,7 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConf
 
 	tmpFolderName := fmt.Sprintf(
 		"%s_%s",
-		NormalizeBranchName(filepath.Base(folderPath)),
+		NormalizeBranchName(filepath.Base(string(folderPath))),
 		NormalizeBranchName(baseBranchName),
 	)
 	baseBranchFolderPath, err := os.MkdirTemp("", tmpFolderName)
@@ -80,7 +80,7 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConf
 		return err
 	}
 
-	repo, err := Clone(logger, folderPath, baseBranchFolderPath, baseBranchName)
+	repo, err := Clone(logger, folderPath, types.FilePath(baseBranchFolderPath), baseBranchName)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone base branch")
@@ -99,7 +99,7 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConf
 		}
 	}
 
-	ch.baseFolderPath = baseBranchFolderPath
+	ch.baseFolderPath = types.FilePath(baseBranchFolderPath)
 	ch.repository = repo
 	ch.cleanupFunc = cleanupFunc
 	return nil

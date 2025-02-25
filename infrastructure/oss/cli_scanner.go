@@ -63,7 +63,7 @@ var (
 	}
 
 	// Make sure CLIScanner implements the desired interfaces
-	_ snyk.ProductScanner      = (*CLIScanner)(nil)
+	_ types.ProductScanner     = (*CLIScanner)(nil)
 	_ snyk.InlineValueProvider = (*CLIScanner)(nil)
 )
 
@@ -74,7 +74,7 @@ type CLIScanner struct {
 	mutex                   *sync.RWMutex
 	inlineValueMutex        *sync.RWMutex
 	packageScanMutex        *sync.Mutex
-	runningScans            map[string]*scans.ScanProgress
+	runningScans            map[types.FilePath]*scans.ScanProgress
 	refreshScanWaitDuration time.Duration
 	scheduledScan           *time.Timer
 	scheduledScanMtx        *sync.Mutex
@@ -83,11 +83,11 @@ type CLIScanner struct {
 	notifier                noti.Notifier
 	inlineValues            inlineValueMap
 	supportedFiles          map[string]bool
-	packageIssueCache       map[string][]snyk.Issue
+	packageIssueCache       map[string][]types.Issue
 	config                  *config.Config
 }
 
-func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier) snyk.ProductScanner {
+func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier) types.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -96,13 +96,13 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 		inlineValueMutex:        &sync.RWMutex{},
 		packageScanMutex:        &sync.Mutex{},
 		scheduledScanMtx:        &sync.Mutex{},
-		runningScans:            map[string]*scans.ScanProgress{},
+		runningScans:            map[types.FilePath]*scans.ScanProgress{},
 		refreshScanWaitDuration: 24 * time.Hour,
 		scanCount:               1,
 		learnService:            learnService,
 		notifier:                notifier,
 		inlineValues:            make(inlineValueMap),
-		packageIssueCache:       make(map[string][]snyk.Issue),
+		packageIssueCache:       make(map[string][]types.Issue),
 		config:                  c,
 		supportedFiles: map[string]bool{
 			"yarn.lock":               true,
@@ -142,7 +142,7 @@ func (cliScanner *CLIScanner) Product() product.Product {
 	return product.ProductOpenSource
 }
 
-func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string, folderConfig *types.FolderConfig) (issues []snyk.Issue, err error) {
+func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.scan").Logger()
 	if !cliScanner.config.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
@@ -156,7 +156,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path string, _ string, f
 	return cliScanner.scanInternal(ctx, path, cliScanner.prepareScanCommand, folderConfig)
 }
 
-func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, commandFunc func(args []string, parameterBlacklist map[string]bool, path string, folderConfig *types.FolderConfig) []string, folderConfig *types.FolderConfig) ([]snyk.Issue, error) {
+func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path types.FilePath, commandFunc func(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) []string, folderConfig *types.FolderConfig) ([]types.Issue, error) {
 	method := "cliScanner.Scan"
 	logger := cliScanner.config.Logger().With().Str("method", method).Logger()
 
@@ -167,7 +167,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 
 	if ctx.Err() != nil {
 		logger.Debug().Msg("Canceling OSS scan - OSS scanner received cancellation signal")
-		return []snyk.Issue{}, nil
+		return []types.Issue{}, nil
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -175,21 +175,21 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 
 	p := progress.NewTracker(true)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
-	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", path)
+	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
 
-	path, err := filepath.Abs(path)
+	filePath, err := filepath.Abs(string(path))
 	if err != nil {
 		logger.Err(err).Str("method", method).
 			Msg("Error while extracting file absolutePath")
 	}
 
-	var workDir string
+	var workDir types.FilePath
 
 	if uri.IsDirectory(path) {
 		workDir = path
 	} else {
-		workDir = filepath.Dir(path)
+		workDir = types.FilePath(filepath.Dir(filePath))
 	}
 
 	cliScanner.mutex.Lock()
@@ -204,7 +204,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	cliScanner.runningScans[workDir] = newScan
 	cliScanner.mutex.Unlock()
 
-	cmd := commandFunc([]string{workDir}, map[string]bool{"": true}, workDir, folderConfig)
+	cmd := commandFunc([]string{string(workDir)}, map[string]bool{"": true}, workDir, folderConfig)
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
@@ -214,7 +214,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 				return nil, handledErr
 			}
 		} else { // If scan was canceled, return empty results
-			return []snyk.Issue{}, nil
+			return []types.Issue{}, nil
 		}
 	}
 
@@ -231,7 +231,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path string, com
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) updateArgs(workDir string, commandLineArgs []string, folderConfig *types.FolderConfig) []string {
+func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs []string, folderConfig *types.FolderConfig) []string {
 	if folderConfig == nil {
 		folderConfig = cliScanner.config.FolderConfig(workDir)
 	}
@@ -258,10 +258,10 @@ func (cliScanner *CLIScanner) updateArgs(workDir string, commandLineArgs []strin
 	return commandLineArgs
 }
 
-func (cliScanner *CLIScanner) updateSDKs(workDir string) []string {
+func (cliScanner *CLIScanner) updateSDKs(workDir types.FilePath) []string {
 	logger := cliScanner.config.Logger().With().Str("method", "updateSDKs").Logger()
 	sdkChan := make(chan []types.LsSdk)
-	getSdk := types.GetSdk{FolderPath: workDir, Result: sdkChan}
+	getSdk := types.GetSdk{FolderPath: string(workDir), Result: sdkChan}
 	logger.Debug().Msg("asking IDE for SDKS")
 	cliScanner.notifier.Send(getSdk)
 	// wait for sdk info
@@ -270,7 +270,7 @@ func (cliScanner *CLIScanner) updateSDKs(workDir string) []string {
 	return sdk.UpdateEnvironmentAndReturnAdditionalParams(cliScanner.config, sdks)
 }
 
-func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path string, folderConfig *types.FolderConfig) []string {
+func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) []string {
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
@@ -315,15 +315,15 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	return cmd
 }
 
-func (cliScanner *CLIScanner) isSupported(path string) bool {
-	return uri.IsDirectory(path) || cliScanner.supportedFiles[filepath.Base(path)]
+func (cliScanner *CLIScanner) isSupported(path types.FilePath) bool {
+	return uri.IsDirectory(path) || cliScanner.supportedFiles[filepath.Base(string(path))]
 }
 
 func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	res []byte,
-	workDir string,
-	path string,
-) (issues []snyk.Issue) {
+	workDir types.FilePath,
+	path types.FilePath,
+) (issues []types.Issue) {
 	logger := cliScanner.config.Logger().With().Str("method", "getAbsTargetFilePath").Logger()
 	if ctx.Err() != nil {
 		return nil
@@ -337,7 +337,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 
 	for _, scanResult := range scanResults {
 		targetFilePath := getAbsTargetFilePath(cliScanner.config, scanResult, workDir, path)
-		fileContent, err := os.ReadFile(targetFilePath)
+		fileContent, err := os.ReadFile(string(targetFilePath))
 		if err != nil {
 			reportedErr := fmt.Errorf("skipping scanResult for path: %s displayTargetFile: %s in workDir: %s as we can't determine the absolute filesystem path. %w", scanResult.Path, scanResult.DisplayTargetFile, workDir, err)
 			cliScanner.errorReporter.CaptureErrorAndReportAsIssue(targetFilePath, reportedErr)
@@ -350,7 +350,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	return issues
 }
 
-func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir string, path string) string {
+func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir types.FilePath, path types.FilePath) types.FilePath {
 	logger := c.Logger().With().Str("method", "getAbsTargetFilePath").Logger()
 	if scanResult.DisplayTargetFile == "" && path != "" {
 		return path
@@ -360,10 +360,10 @@ func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir strin
 	// if displayTargetFile is an absolute path, no need to do anything more
 	isAbs := filepath.IsAbs(displayTargetFile)
 	if isAbs {
-		return displayTargetFile
+		return types.FilePath(displayTargetFile)
 	}
 
-	relative, err := filepath.Rel(workDir, displayTargetFile)
+	relative, err := filepath.Rel(string(workDir), displayTargetFile)
 	if err != nil || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		logger.Trace().Err(err).Msgf("path is not relative to %s", workDir)
 		// now we try out stuff
@@ -379,11 +379,11 @@ func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir strin
 			if tryOutErr != nil {
 				logger.Trace().Err(err).Msgf("joining basePath: %s to path: %s failed", basePath, scanResultPath)
 				// if that doesn't work, let's try full path and full display target file
-				tryOutPath = filepath.Join(workDir, displayTargetFile)
+				tryOutPath = filepath.Join(string(workDir), displayTargetFile)
 				_, tryOutErr = os.Stat(tryOutPath)
 				if tryOutErr != nil {
 					logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed.", displayTargetFile, workDir)
-					tryOutPath = filepath.Join(workDir, basePath)
+					tryOutPath = filepath.Join(string(workDir), basePath)
 					_, tryOutErr = os.Stat(tryOutPath)
 					if tryOutErr != nil {
 						logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed. Falling back to returning: %s", displayTargetFile, workDir, displayTargetFile)
@@ -397,11 +397,11 @@ func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir strin
 			logger.Error().Msgf("couldn't determine absolute file path for: %s", scanResult.DisplayTargetFile)
 			return ""
 		}
-		return tryOutPath
+		return types.FilePath(tryOutPath)
 	}
 
 	// it's relative, we can now just return it!
-	joinedRelative := filepath.Join(workDir, relative)
+	joinedRelative := filepath.Join(string(workDir), relative)
 	_, statErr := os.Stat(joinedRelative)
 	if statErr != nil {
 		abs, err := filepath.Abs(joinedRelative)
@@ -414,7 +414,7 @@ func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir strin
 			return ""
 		}
 
-		return abs
+		return types.FilePath(abs)
 	}
 	// we really can't figure it out, we return empty
 	return ""
@@ -441,7 +441,7 @@ func (cliScanner *CLIScanner) unmarshallOssJson(res []byte) (scanResults []scanR
 }
 
 // Returns true if CLI run failed, false otherwise
-func (cliScanner *CLIScanner) handleError(path string, err error, res []byte, cmd []string) (bool, error) {
+func (cliScanner *CLIScanner) handleError(path types.FilePath, err error, res []byte, cmd []string) (bool, error) {
 	cliError := &types.CliError{}
 	unmarshalErr := json.Unmarshal(res, cliError)
 	if unmarshalErr != nil {
@@ -495,9 +495,9 @@ func determineTargetFile(displayTargetFile string) string {
 
 func (cliScanner *CLIScanner) retrieveIssues(
 	res *scanResult,
-	targetFilePath string,
+	targetFilePath types.FilePath,
 	fileContent []byte,
-) []snyk.Issue {
+) []types.Issue {
 	// we are updating the cli scanner maps/attributes in parallel, so we need to lock
 	cliScanner.mutex.Lock()
 	defer cliScanner.mutex.Unlock()
@@ -512,7 +512,7 @@ func (cliScanner *CLIScanner) retrieveIssues(
 // scheduleRefreshScan Schedules new scan after refreshScanWaitDuration once existing OSS results might be stale.
 // The timer is reset if a new scan is scheduled before the previous one is executed.
 // Canceling the context will stop the timer and abort the scheduled scan.
-func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path string) {
+func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path types.FilePath) {
 	logger := cliScanner.config.Logger().With().Str("method", "cliScanner.scheduleRefreshScan").Logger()
 	cliScanner.scheduledScanMtx.Lock()
 	if cliScanner.scheduledScan != nil {

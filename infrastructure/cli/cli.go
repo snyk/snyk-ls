@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type SnykCli struct {
@@ -60,13 +61,13 @@ func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, 
 }
 
 type Executor interface {
-	Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error)
+	Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error)
 	ExpandParametersFromConfig(base []string) []string
 }
 
-func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
+func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error) {
 	method := "SnykCli.Execute"
-	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", workingDir).Msg("calling Snyk CLI")
+	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", string(workingDir)).Msg("calling Snyk CLI")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
 	ctx, cancel := context.WithTimeout(ctx, c.cliTimeout)
@@ -77,7 +78,7 @@ func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir string) 
 	return output, err
 }
 
-func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string) ([]byte, error) {
+func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.FilePath) ([]byte, error) {
 	// handle concurrency limit and cancellations
 	err := c.semaphore.Acquire(ctx, 1)
 	if err != nil {
@@ -91,18 +92,18 @@ func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir string
 	return output, err
 }
 
-func (c *SnykCli) getCommand(cmd []string, workingDir string, ctx context.Context) *exec.Cmd {
+func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx context.Context) *exec.Cmd {
 	if c.c.Logger().GetLevel() < zerolog.InfoLevel {
 		cmd = append(cmd, "-d")
 	}
 
 	cloneConfig := c.c.Engine().GetConfiguration().Clone()
 	cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
-	envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), workingDir)
+	envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
 	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
 
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
-	command.Dir = workingDir
+	command.Dir = string(workingDir)
 	command.Env = cliEnv
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Args", command.Args).Send()
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()
