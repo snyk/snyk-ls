@@ -155,25 +155,27 @@
               </h2>
               <div class="data-flow-body">
                 {{range $fileName := .DataFlowKeys}}
+                {{ $stepCount := len (index $.DataFlowTable $fileName) }}
                 <div class="data-flow-file">
-                  {{$.FileIcon}}
-                  <span class="data-flow-file-name">{{$fileName}}</span>
+                  <span class="data-flow-file-name">{{$.FileIcon}} {{$fileName}}</span>
+                  <span class="data-flow-file-steps">{{$stepCount}} {{if eq $stepCount 1}}step{{else}}steps{{end}}</span>
                 </div>
                 <table class="data-flow-table">
                   <tbody>
                   {{range index $.DataFlowTable $fileName}}
                   <tr class="data-flow-row">
-                    <td class="data-flow-number">
-                      <div class="data-flow-circle">{{.Number}}</div>
-                      <div class="data-flow-line"></div>
-                    </td>
+                    
                     <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
                         end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
                       {{.StartLineValue}}
                     </td>
-                    <td class="delimiter data-flow-delimiter">|</td>
+                    <!-- <td class="delimiter data-flow-delimiter">|</td> -->
                     <td class="data-flow-text">
                       <code>{{.Content}}</code>
+                    </td>
+                    <td class="data-flow-number">
+                      <div class="data-flow-circle">{{.Number}}</div>
+                      <div class="data-flow-line"></div>
                     </td>
                   </tr>
                   {{end}}

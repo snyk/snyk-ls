@@ -16,6 +16,7 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');
 :root {
+  font-size: 10px;
   --container-paddding: 20px;
   --input-padding-vertical: 6px;
   --input-padding-horizontal: 4px;
@@ -70,7 +71,7 @@ body {
   padding: 0;
   background-color: var(--background-color);
   font-family:  var(--default-font);
-  font-size: 0.8rem;
+  font-size: 1.3rem;
   font-weight: 400;
   color: var(--text-color);
   overflow-y: auto;
@@ -83,10 +84,28 @@ h2 {
 
 h2, h3 {
   text-transform: uppercase;
-  font-size: 1rem;
+  font-size: 2rem;
   margin-block-start: 0;
   margin-block-end: 0.4rem;
   font-weight: 500;
+}
+
+pre {
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow:auto;
+  background-color: var(--code-background-color);
+}
+
+pre code {
+  background-color: transparent;
+}
+
+code {
+  padding: 2px 4px;
+  font-family: monospace;
+  color: var(--vscode-editorCodeLens-foreground);
 }
 
 section {
@@ -114,7 +133,6 @@ main {
 
 .ignore-warning-wrapper,
 header,
-article,
 footer {
   padding: 0px 20px 5px 20px;
 }
@@ -135,22 +153,31 @@ footer {
 .ignore-details-header,
 .data-flow-header,
 .ai-fix-header,
-.overview-text>h2 {
+.overview-text>h2, .overview-text>h3 {
   line-height: 1.25rem;
-  font-size: 1rem;
+  font-size: 1.2rem;
+  font-weight: 600;
   margin-bottom: 10px;
+}
+
+.severity-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
 }
 
 .severity-title {
   padding-left: 8px;
-  font-size: 1.4rem;
+  font-size: 2rem;
+  font-weight: 500;
+  margin-bottom: 0;
 }
 
 .severity-container {
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding-bottom: 20px;
+  padding-bottom: 10px;
   padding-top: 20px;
 }
 
@@ -160,12 +187,7 @@ footer {
   align-items: center;
   margin-bottom: 1rem;
   line-height: 1rem;
-  font-size: 1rem;
-}
-
-.severity .icon {
-  width: 32px;
-  height: 32px;
+  font-size: 1.3rem;
 }
 
 .lesson-container {
@@ -194,6 +216,7 @@ footer {
 }
 
 .delimiter {
+  opacity: .5;
   margin: 0 8px;
 }
 .severity-title {
@@ -240,10 +263,11 @@ footer {
 }
 
 .data-flow-file {
-  font-weight: bold;
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  margin-top: 5px;
+  margin-top: 10px;
+  color: var(--vscode-editorCodeLens-foreground);
 }
 
 .data-flow-file-icon {
@@ -251,11 +275,10 @@ footer {
   margin-right: 4px;
 }
 
-.data-flow-body {
-  margin-top: 5px;
-  margin-bottom: 10px;
+.data-flow-file-name {
+  display: inline-flex;
+  align-items: center;
 }
-
 
 table {
   width: 100%;
@@ -263,7 +286,7 @@ table {
 }
 table td {
   background: var(--container-background-color);
-  padding: 8px 8px 0 4px;
+  padding: 4px;
 }
 
 .data-flow-table {
@@ -284,20 +307,19 @@ tr .data-flow-number {
   padding: 4px;
 }
 .data-flow-circle{
-  width: 16px;
-  height: 16px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 50%;
-  background-color: var(--circle-color);
-  color: var(--text-color);
+  position: absolute;
+  top: 50%;
+  z-index: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  position: inherit;
-  left: 0;
-  top: 50%;
-  z-index: 1;
+  width: 16px;
+  height: 16px;
+  margin-top:-8px;
+  font-size: 12px;
+  border-radius: 50%;
+  background-color: var(--background-color);
+  color: var(--text-color);
 }
 
 
@@ -307,23 +329,27 @@ tr .data-flow-number {
   top: 0;
   bottom: 0;
   transform: translateX(-50%);
-  border-left: 1px dashed var(--text-color);
+  border-left: 1px dashed var(--vscode-breadcrumb-foreground);
   z-index: 0;
 }
-table > tbody > tr:first-child > td:first-child .data-flow-line {
+table > tbody > tr:first-child .data-flow-line {
   top: 50%;
-  height: 50%;
+  bottom: 0;
 }
 
-table > tbody > tr:last-child > td:first-child .data-flow-line {
+table > tbody > tr:last-child .data-flow-line {
   top: 0;
-  height: 10%;
+  height: 50%;
 }
 
 .data-flow-clickable-row {
   color: var(--link-color);
   font-weight: 400;
   text-align: right;
+  font-variant: tabular-nums;
+  width: 44px;
+  overflow:hidden;
+  text-overflow: ellipsis;
 }
 
 .data-flow-clickable-row:hover {
@@ -345,6 +371,8 @@ code {
 .data-flow-text code {
   background: transparent none;
   color: var(--text-color);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 1.2rem;
 }
 
 .data-flow-delimiter {
@@ -355,7 +383,7 @@ code {
   display: flex;
   list-style-type: none;
   overflow: hidden;
-  padding: 0;
+  padding: 0 2rem;
 }
 
 .tab-content {
@@ -369,13 +397,13 @@ code {
 
 
 .tab-item {
-  font-weight: 500;
   float: left;
   display: block;
   text-align: center;
-  padding: 10px 16px 8px 16px;
+  padding: 10px 0 4px;
   text-decoration: none;
-  margin-right: 4px;
+  margin-right: 16px;
+  font-size: 1.3rem;
   cursor: pointer;
   transition: background-color 0.3s, border-color 0.3s;
 }
@@ -597,10 +625,11 @@ button.sn-apply-fix:disabled{
 }
 
 .tab-item:hover {
-  background-color: #3474f0;
+  color: var(--vscode-badge-foreground);
+  cursor: pointer;
 }
 .tab-item.is-selected {
-  border-bottom: 3px solid #3474f0;
+  border-bottom: 3px solid var(--vscode-badge-background);
 }
 
 .example-line.added {
@@ -609,9 +638,7 @@ button.sn-apply-fix:disabled{
 .example-line.removed {
   background-color: var(--example-line-removed-color);
 }
-.tab-item.is-selected {
-  border-bottom: 3px solid #3474f0;
-}
+
 
 button.generate-ai-fix:hover,
 button.sn-apply-fix:hover {
