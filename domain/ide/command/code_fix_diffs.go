@@ -70,7 +70,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 
 	issuePath := uri2.PathFromUri(lsp.DocumentURI(issueURI))
 
-	relPath, err := filepath.Rel(folderPath, issuePath)
+	relPath, err := filepath.Rel(string(folderPath), string(issuePath))
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 	}
 
 	issue := cmd.issueProvider.Issue(id)
-	if issue.ID == "" {
+	if issue.GetID() == "" {
 		return nil, errors.New("failed to find issue")
 	}
 
@@ -94,12 +94,12 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		logger.Err(err).Msg("failed to get html renderer")
 		return nil, err
 	}
-	go cmd.handleResponse(ctx, cmd.c, folderPath, relPath, issue, htmlRenderer)
+	go cmd.handleResponse(ctx, cmd.c, string(folderPath), relPath, issue, htmlRenderer)
 
 	return nil, err
 }
 
-func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, folderPath string, relPath string, issue snyk.Issue, htmlRenderer *code.HtmlRenderer) {
+func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, folderPath string, relPath string, issue types.Issue, htmlRenderer *code.HtmlRenderer) {
 	logger := c.Logger().With().Str("method", "codeFixDiffs.handleResponse").Logger()
 	aiFixHandler := htmlRenderer.AiFixHandler
 
@@ -107,7 +107,7 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, f
 
 	aiFixHandler.SetAiFixDiffState(code.AiFixInProgress, nil, nil, setStateCallback)
 
-	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, folderPath, relPath, issue)
+	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, types.FilePath(folderPath), types.FilePath(relPath), issue)
 	if err == nil && len(suggestions) == 0 {
 		logger.Info().Msg("Autofix run successfully but there were no good fixes")
 		aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, nil, nil, setStateCallback)
@@ -122,18 +122,18 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, f
 	aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, suggestions, nil, setStateCallback)
 }
 
-func (cmd *codeFixDiffs) sendShowDocumentRequest(logger zerolog.Logger, issue snyk.Issue, srv types.Server) {
-	snykUri := code.SnykMagnetUri(issue, code.ShowInDetailPanelIdeCommand)
+func (cmd *codeFixDiffs) sendShowDocumentRequest(logger zerolog.Logger, issue types.Issue, srv types.Server) {
+	snykUri, _ := code.SnykMagnetUri(issue, code.ShowInDetailPanelIdeCommand)
 	logger.Debug().
 		Str("method", "code.sendShowDocumentRequest").
 		Msg("showing Document")
 
 	params := types.ShowDocumentParams{
 		Uri:       lsp.DocumentURI(snykUri),
-		Selection: converter.ToRange(issue.Range),
+		Selection: converter.ToRange(issue.GetRange()),
 	}
 	_, err := srv.Callback(context.Background(), "window/showDocument", params)
 	if err != nil {
-		logger.Err(err).Msgf("failed to send snyk window/showDocument callback for file %s", issue.AffectedFilePath)
+		logger.Err(err).Msgf("failed to send snyk window/showDocument callback for file %s", issue.GetAffectedFilePath())
 	}
 }

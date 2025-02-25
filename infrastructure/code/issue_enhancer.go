@@ -86,7 +86,7 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []types.Issu
 			codeActionShowDocument := b.createShowDocumentCodeAction(issues[i])
 			issues[i].SetCodeActions(append(issues[i].GetCodeActions(), codeActionShowDocument))
 
-			uri, err := ideSnykURI(issues[i], ShowInDetailPanelIdeCommand)
+			uri, err := SnykMagnetUri(issues[i], ShowInDetailPanelIdeCommand)
 			if err != nil {
 				b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
 				return
@@ -111,7 +111,7 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []types.Issu
 // returns the deferred code action CodeAction which calls autofix.
 func (b *IssueEnhancer) createShowDocumentCodeAction(issue types.Issue) (codeAction types.CodeAction) {
 	method := "code.createShowDocumentCodeAction"
-	uri, err := ideSnykURI(issue, ShowInDetailPanelIdeCommand)
+	uri, err := SnykMagnetUri(issue, ShowInDetailPanelIdeCommand)
 	if err != nil {
 		b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
 		return nil
@@ -141,8 +141,8 @@ func (b *IssueEnhancer) autofixShowDetailsFunc(ctx context.Context, issue types.
 	return f
 }
 
-func getSnykShowDocumentCommand(issue snyk.Issue, action string) *types.CommandData {
-	uri := SnykMagnetUri(issue, action)
+func getSnykShowDocumentCommand(issue types.Issue, action string) *types.CommandData {
+	uri, _ := SnykMagnetUri(issue, action)
 
 	commandData := &types.CommandData{
 		Title:     types.NavigateToRangeCommand,

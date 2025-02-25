@@ -18,12 +18,12 @@ package code
 
 import (
 	"context"
+	"github.com/snyk/snyk-ls/internal/types"
 	"time"
 
 	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 )
 
 type AiFixHandler struct {
@@ -51,7 +51,7 @@ type aiResultState struct {
 
 const explainTimeout = 5 * time.Minute
 
-func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config.Config, issue snyk.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
+func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config.Config, issue types.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
 	logger := c.Logger().With().Str("method", "EnrichWithExplain").Logger()
 	if ctx.Err() != nil {
 		logger.Debug().Msgf("EnrichWithExplain context canceled")
@@ -66,9 +66,9 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	var diffs []string
 	diffs = getDiffListFromSuggestions(suggestions, diffs)
 
-	explanations, err := fixHandler.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.ID, Diffs: diffs})
+	explanations, err := fixHandler.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs})
 	if err != nil {
-		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.AdditionalData.GetKey())
+		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.GetAdditionalData().GetKey())
 		return
 	}
 	for j := range len(explanations) {
@@ -101,13 +101,13 @@ func (fixHandler *AiFixHandler) SetAutoTriggerAiFix(isEnabled bool) {
 	fixHandler.autoTriggerAiFix = isEnabled
 }
 
-func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue snyk.Issue) {
-	if issue.AdditionalData.GetKey() == fixHandler.currentIssueId {
+func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue types.Issue) {
+	if issue.GetAdditionalData().GetKey() == fixHandler.currentIssueId {
 		return
 	}
 
 	fixHandler.aiFixDiffState = aiResultState{status: AiFixNotStarted}
-	fixHandler.currentIssueId = issue.AdditionalData.GetKey()
+	fixHandler.currentIssueId = issue.GetAdditionalData().GetKey()
 	if fixHandler.explainCancelFunc != nil {
 		fixHandler.explainCancelFunc()
 	}

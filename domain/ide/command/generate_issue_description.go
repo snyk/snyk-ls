@@ -60,7 +60,7 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 	if issue.GetProduct() == product.ProductInfrastructureAsCode {
 		return getIacHtml(c, logger, issue)
 	} else if issue.GetProduct() == product.ProductCode {
-		return getCodeHtml(c, logger, issue)
+		return getCodeHtml(c, logger, issue, cmd.deepCodeLLMBinding)
 	} else if issue.GetProduct() == product.ProductOpenSource {
 		return getOssHtml(c, logger, issue)
 	}

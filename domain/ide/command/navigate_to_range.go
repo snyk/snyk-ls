@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 	"encoding/json"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"strings"
 
 	"github.com/snyk/code-client-go/llm"
