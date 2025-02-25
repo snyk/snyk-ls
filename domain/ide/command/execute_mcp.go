@@ -50,10 +50,10 @@ func (cmd *executeMcpCallCommand) Execute(ctx context.Context) (any, error) {
 	}
 	clientEndpoint := cmd.baseURL + "/sse"
 
-	if len(cmd.command.Arguments) != 1 {
-		return nil, errors.New("invalid number of arguments (1 expected)")
+	args := cmd.command.Arguments
+	if len(args) < 1 {
+		return nil, errors.New("invalid number of arguments (>0 expected)")
 	}
-
 	mcpCommand, ok := cmd.command.Arguments[0].(string)
 	if !ok {
 		return nil, errors.New("invalid argument type (string expected)")
@@ -94,6 +94,11 @@ func (cmd *executeMcpCallCommand) Execute(ctx context.Context) (any, error) {
 
 	callToolRequest := mcp.CallToolRequest{}
 	callToolRequest.Params.Name = mcpCommand
+
+	if len(args) > 1 {
+		// currently undefined
+		logger.Debug().Msg("got more than one argument, ignoring (this should not happen)")
+	}
 
 	logger.Debug().Msgf("Executing mcp command: %s", mcpCommand)
 	result, err := mcpClient.CallTool(ctx, callToolRequest)
