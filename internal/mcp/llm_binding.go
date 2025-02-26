@@ -98,9 +98,9 @@ func (m *McpLLMBinding) Start() error {
 	m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("starting")
 	go func() {
 		// sleep initially for a few milliseconds so we actually can start the server
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		for !isPortInUse(m.baseURL) {
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 
 		m.mutex.Lock()

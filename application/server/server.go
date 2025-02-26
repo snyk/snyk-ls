@@ -465,10 +465,14 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 			)
 			logger.Info().Msg(msg)
 		}
-		mcpServerURL := c.GetMCPServerURL()
-		if mcpServerURL != nil {
-			di.Notifier().Send(types.McpServerURLParams{URL: mcpServerURL.String()})
-		}
+		defer func() {
+			// delay sending the mcp server URL
+			for c.GetMCPServerURL() == nil {
+				// wait until the server URL is available
+				time.Sleep(500 * time.Millisecond)
+			}
+			di.Notifier().Send(types.McpServerURLParams{URL: c.GetMCPServerURL().String()})
+		}()
 		return nil, nil
 	})
 }
