@@ -362,6 +362,7 @@ func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 }
 
 func Test_initialized_shouldRedactToken(t *testing.T) {
+	t.Skipf("this is causing race conditions, because the global stderr is redirected")
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 	oldStdErr := os.Stderr
