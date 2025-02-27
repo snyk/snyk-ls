@@ -124,5 +124,4 @@ func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue snyk.Issue) {
 		fixHandler.explainCancelFunc()
 	}
 	fixHandler.explainCancelFunc = nil
-	fixHandler.autoTriggerAiFix = false
 }

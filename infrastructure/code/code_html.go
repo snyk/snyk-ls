@@ -187,6 +187,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 		"AiFixError":         aiFixErr,
 		"AutoTriggerAiFix":   renderer.AiFixHandler.autoTriggerAiFix,
 	}
+	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
 
 	if issue.IsIgnored {
 		data["IgnoreDetails"] = prepareIgnoreDetailsRow(issue.IgnoreDetails)
@@ -200,7 +201,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue snyk.Issue) string {
 	}
 
 	var result = buffer.String()
-	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
 	return result
 }
 
