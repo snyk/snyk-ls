@@ -110,21 +110,24 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 
 func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, deltaIssues []types.Issue) {
 	logger := renderer.c.Logger().With().Str("method", "getIssuesFromFolders").Logger()
+	issueTypes := renderer.c.DisplayableIssueTypes()
 
 	for _, f := range renderer.c.Workspace().Folders() {
-		if dp, ok := f.(delta.Provider); ok {
-			deltaIssues = append(deltaIssues, renderer.getDeltaIssuesForFolder(dp)...)
+		if ip, ok := f.(snyk.FilteringIssueProvider); ok {
+			// Note that IssueProvider.Issues() does not return enriched issues (i.e, we don't know if they're new), so we
+			// also need to get the deltas as a separate operation later.
+			for _, issues := range ip.FilterIssues(ip.Issues(), issueTypes) {
+				allIssues = append(allIssues, issues...)
+			}
 		} else {
-			logger.Error().Msgf("Failed to get cast folder %s to interface delta.Provider", f.Name())
-		}
-
-		ip, ok := f.(snyk.IssueProvider)
-		if !ok {
-			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.IssueProvider", f.Name())
+			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.FilteringIssueProvider", f.Name())
 			return allIssues, deltaIssues
 		}
-		for _, issues := range ip.Issues() {
-			allIssues = append(allIssues, issues...)
+
+		if dp, ok := f.(delta.Provider); ok {
+			deltaIssues = append(deltaIssues, dp.GetDeltaForAllProducts(issueTypes)...)
+		} else {
+			logger.Error().Msgf("Failed to get cast folder %s to interface delta.Provider", f.Name())
 		}
 	}
 
