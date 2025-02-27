@@ -19,11 +19,12 @@ package scanstates
 import (
 	"bytes"
 	_ "embed"
-	"github.com/snyk/snyk-ls/domain/snyk/delta"
+
 	"html/template"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
