@@ -71,36 +71,38 @@ func (cmd *executeMcpCallCommand) Execute(ctx context.Context) (any, error) {
 		}
 	}(mcpClient)
 
-	// start
-	err = mcpClient.Start(context.Background())
-	if err != nil {
-		logger.Error().Err(err).Msg("Error starting mcp client")
-		return nil, err
-	}
+	go func() {
+		// start
+		err = mcpClient.Start(context.Background())
+		if err != nil {
+			logger.Error().Err(err).Msg("Error starting mcp client")
+			return
+		}
 
-	// initialize
-	initRequest := mcp.InitializeRequest{}
-	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
-	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    "snyk-lsp-mcp-bridge",
-		Version: config.Version,
-	}
+		// initialize
+		initRequest := mcp.InitializeRequest{}
+		initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
+		initRequest.Params.ClientInfo = mcp.Implementation{
+			Name:    "snyk-lsp-mcp-bridge",
+			Version: config.Version,
+		}
 
-	_, err = mcpClient.Initialize(ctx, initRequest)
-	if err != nil {
-		logger.Error().Err(err).Msg("Error initializing mcp client")
-		return nil, err
-	}
+		_, err = mcpClient.Initialize(ctx, initRequest)
+		if err != nil {
+			logger.Error().Err(err).Msg("Error initializing mcp client")
+			return
+		}
 
-	callToolRequest := mcp.CallToolRequest{}
-	callToolRequest.Params.Name = mcpCommand
+		callToolRequest := mcp.CallToolRequest{}
+		callToolRequest.Params.Name = mcpCommand
 
-	if len(args) > 1 {
-		// currently undefined
-		logger.Debug().Msg("got more than one argument, ignoring (this should not happen)")
-	}
+		if len(args) > 1 {
+			// currently undefined
+			logger.Debug().Msg("got more than one argument, ignoring (this should not happen)")
+		}
 
-	logger.Debug().Msgf("Executing mcp command: %s", mcpCommand)
-	result, err := mcpClient.CallTool(ctx, callToolRequest)
-	return result, err
+		logger.Debug().Msgf("Executing mcp command: %s", mcpCommand)
+		mcpClient.CallTool(ctx, callToolRequest)
+	}()
+	return nil, err
 }
