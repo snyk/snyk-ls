@@ -19,6 +19,8 @@ const generateAIFixButton = document.getElementById('generate-ai-fix');
 
 const fixLoadingIndicatorElem = document.getElementById('fix-loading-indicator');
 
+let suggestion = []
+
 generateAIFixButton?.addEventListener('click', generateAIFix)
 retryGenerateFixButton?.addEventListener('click', retryGenerateAIFix);
 applyFixButton?.addEventListener('click', applyFix);
@@ -29,6 +31,12 @@ function generateAIFix() {
 
   toggleElement(generateAIFixButton, 'hide');
   toggleElement(fixLoadingIndicatorElem, 'show');
+
+  const issueId = generateAIFixButton.getAttribute('issue-id');
+  const folderPath = generateAIFixButton.getAttribute('folder-path');
+  const filePath = generateAIFixButton.getAttribute('file-path');
+  const generateFixQueryString = folderPath + '@|@' + filePath + '@|@' + issueId
+
   ${ideGenerateAIFix}
 }
 
