@@ -633,7 +633,6 @@ func buildOneLineTextEdit(startLine int, endLine int, text string) types.TextEdi
 func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
 	for _, suggestion := range s.AutofixSuggestions {
-
 		decodedPath, unifiedDiff := getPathAndUnifiedDiff(baseDir, filePath, suggestion.Value)
 		if decodedPath == "" || unifiedDiff == "" {
 			continue

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/snyk/code-client-go/llm"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
