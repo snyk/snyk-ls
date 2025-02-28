@@ -25,17 +25,15 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type executeMcpCallCommand struct {
-	command     types.CommandData
-	authService authentication.AuthenticationService
-	notifier    noti.Notifier
-	logger      *zerolog.Logger
-	baseURL     string
+	command  types.CommandData
+	notifier noti.Notifier
+	logger   *zerolog.Logger
+	baseURL  string
 }
 
 func (cmd *executeMcpCallCommand) Command() types.CommandData {
