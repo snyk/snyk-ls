@@ -87,6 +87,8 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 		}, nil
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
+	case types.ExecuteMCPToolCall:
+		return &executeMcpCallCommand{command: commandData, notifier: notifier, logger: c.Logger(), baseURL: c.GetMCPServerURL().String()}, nil
 	case types.ClearCacheCommand:
 		return &clearCache{command: commandData, c: c}, nil
 	case types.GenerateIssueDescriptionCommand:
