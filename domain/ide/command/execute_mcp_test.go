@@ -91,10 +91,9 @@ func Test_executeMcpCallCommand(t *testing.T) {
 			CommandId: types.ExecuteMCPToolCall,
 			Arguments: []any{mcp.SnykScanWorkspaceScan},
 		},
-		authService: nil,
-		notifier:    noti.NewMockNotifier(),
-		logger:      c.Logger(),
-		baseURL:     c.GetMCPServerURL().String(),
+		notifier: noti.NewMockNotifier(),
+		logger:   c.Logger(),
+		baseURL:  c.GetMCPServerURL().String(),
 	}
 
 	// execute command
