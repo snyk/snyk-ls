@@ -2,7 +2,7 @@
 // +build !race
 
 /*
- * © 2025 Snyk Limited
+ * © 2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,30 +17,33 @@
  * limitations under the License.
  */
 
-package mcp
+package command
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/internal/mcp"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// Test_WorkspaceScan does not run in race mode, due to races in the underlying framework
-func Test_WorkspaceScan(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+func Test_executeMcpCallCommand(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetAutomaticScanning(false)
+
+	// start mcp server
 	sc := scanner.NewTestScanner()
 	scanNotifier := scanner.NewMockScanNotifier()
 	hoverService := hover.NewFakeHoverService()
@@ -63,52 +66,40 @@ func Test_WorkspaceScan(t *testing.T) {
 	)
 
 	w.AddFolder(f)
-
 	c.SetWorkspace(w)
-	server := NewMcpLLMBinding(c, WithScanner(sc), WithLogger(c.Logger()))
 
+	mcpBinding := mcp.NewMcpLLMBinding(c, mcp.WithLogger(c.Logger()), mcp.WithScanner(sc))
 	go func() {
-		err := server.Start()
-		assert.NoError(t, err)
+		_ = mcpBinding.Start()
 	}()
 
+	t.Cleanup(func() {
+		timeout, cancelFunc := context.WithTimeout(context.Background(), time.Second)
+		mcpBinding.Shutdown(timeout)
+		defer cancelFunc()
+	})
+
+	// wait for mcp server to start
 	assert.Eventually(t, func() bool {
-		server.mutex.Lock()
-		defer server.mutex.Unlock()
-		portInUse := isPortInUse(server.baseURL)
-		return portInUse && server.baseURL == c.GetMCPServerURL()
-	}, time.Minute, time.Second)
+		return mcpBinding.Started()
+	}, time.Minute, time.Millisecond)
 
-	clientEndpoint := server.baseURL.String() + "/sse"
-
-	mcpClient, err := client.NewSSEMCPClient(clientEndpoint)
-	assert.NoError(t, err)
-	defer mcpClient.Close()
-
-	// start
-	err = mcpClient.Start(context.Background())
-	assert.NoError(t, err)
-
-	// initialize
-	initRequest := mcp.InitializeRequest{}
-	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
-	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    "example-client",
-		Version: "1.0.0",
+	// create command
+	command := executeMcpCallCommand{
+		command: types.CommandData{
+			Title:     "Execute Snyk Scan",
+			CommandId: types.ExecuteMCPToolCall,
+			Arguments: []any{mcp.SnykScanWorkspaceScan},
+		},
+		notifier: noti.NewMockNotifier(),
+		logger:   c.Logger(),
+		baseURL:  c.GetMCPServerURL().String(),
 	}
 
-	_, err = mcpClient.Initialize(context.Background(), initRequest)
-	assert.NoError(t, err)
-
-	toolsRequest := mcp.ListToolsRequest{}
-	tools, err := mcpClient.ListTools(context.Background(), toolsRequest)
-	assert.NoError(t, err)
-	assert.Len(t, tools.Tools, 1)
-
-	scanRequest := mcp.CallToolRequest{}
-	scanRequest.Params.Name = SnykScanWorkspaceScan
-
-	result, err := mcpClient.CallTool(context.Background(), scanRequest)
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
+	// execute command
+	_, err := command.Execute(context.Background())
+	require.NoError(t, err)
+	require.Eventuallyf(t, func() bool {
+		return sc.Calls() > 0
+	}, time.Minute, time.Millisecond, "should have called the scanner")
 }

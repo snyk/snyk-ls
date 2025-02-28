@@ -19,10 +19,13 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -40,6 +43,7 @@ type McpLLMBinding struct {
 	baseURL                   *url.URL
 	forwardingResultProcessor types.ScanResultProcessor
 	mutex                     sync.Mutex
+	started                   bool
 }
 
 func NewMcpLLMBinding(c *config.Config, opts ...McpOption) *McpLLMBinding {
@@ -92,10 +96,25 @@ func (m *McpLLMBinding) Start() error {
 	m.mutex.Unlock()
 
 	m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("starting")
-	m.c.SetMCPServerURL(m.baseURL)
+	go func() {
+		// sleep initially for a few milliseconds so we actually can start the server
+		time.Sleep(100 * time.Millisecond)
+		for !isPortInUse(m.baseURL) {
+			time.Sleep(10 * time.Millisecond)
+		}
+
+		m.mutex.Lock()
+		m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("started")
+		m.started = true
+		m.c.SetMCPServerURL(m.baseURL)
+		m.mutex.Unlock()
+	}()
 	err = m.sseServer.Start(m.baseURL.Host)
 	if err != nil {
-		m.logger.Error().Err(err).Msg("Error starting MCP SSE server")
+		// expect http.ErrServerClosed when shutting down
+		if !errors.Is(err, http.ErrServerClosed) {
+			m.logger.Error().Err(err).Msg("Error starting MCP SSE server")
+		}
 		return err
 	}
 	return nil
@@ -107,6 +126,12 @@ func (m *McpLLMBinding) Shutdown(ctx context.Context) {
 
 	err := m.sseServer.Shutdown(ctx)
 	if err != nil {
-		m.logger.Error().Err(err).Msg("Error shutting down SSE server")
+		m.logger.Error().Err(err).Msg("Error shutting down MCP SSE server")
 	}
+}
+
+func (m *McpLLMBinding) Started() bool {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.started
 }
