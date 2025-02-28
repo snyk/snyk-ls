@@ -99,6 +99,11 @@
           class="tab-item {{if not .IsIgnored}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
           Fix Analysis
         </span>
+        {{if gt (len .DataFlow) 0}}
+        <span data-tab="data-flow-data-tab" id="data-flow-tab" class="tab-item sn-data-flow data-flow-tab">
+          Data Flow
+        </span>
+        {{end}}
         {{if .IssueOverview}}
         <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item sn-vuln-overview vuln-overview-tab">
           Issue Overview
@@ -148,41 +153,6 @@
           </section>
           <!-- Data Flow and Fixed Code Examples -->
           <div id="no-ai-fix-wrapper">
-            <!-- Data Flow -->
-            <section class="data-flow-section delimiter-top">
-              <h2 class="data-flow-header">
-                Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
-              </h2>
-              <div class="data-flow-body">
-                {{range $fileName := .DataFlowKeys}}
-                <div class="data-flow-file">
-                  {{$.FileIcon}}
-                  <span class="data-flow-file-name">{{$fileName}}</span>
-                </div>
-                <table class="data-flow-table">
-                  <tbody>
-                  {{range index $.DataFlowTable $fileName}}
-                  <tr class="data-flow-row">
-                    <td class="data-flow-number">
-                      <div class="data-flow-circle">{{.Number}}</div>
-                      <div class="data-flow-line"></div>
-                    </td>
-                    <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
-                        end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
-                      {{.StartLineValue}}
-                    </td>
-                    <td class="delimiter data-flow-delimiter">|</td>
-                    <td class="data-flow-text">
-                      <code>{{.Content}}</code>
-                    </td>
-                  </tr>
-                  {{end}}
-                  </tbody>
-
-                </table>
-                {{end}}
-              </div>
-            </section>
 
             <!-- Fixed Code Examples -->
             <section class="example-fixes delimiter-top {{if .HasAIFix}}hidden{{end}}">
@@ -343,6 +313,44 @@
           </section>
         </div>
         <!-- End Vulnerability Overview section -->
+
+        <!-- Data Flow -->
+        <div id="data-flow-content" class="tab-content main-tab-content" data-content="data-flow-data-tab">
+          <section class="data-flow-section delimiter-top">
+            <h2 class="data-flow-header">
+              Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
+            </h2>
+            <div class="data-flow-body">
+              {{range $fileName := .DataFlowKeys}}
+              <div class="data-flow-file">
+                {{$.FileIcon}}
+                <span class="data-flow-file-name">{{$fileName}}</span>
+              </div>
+              <table class="data-flow-table">
+                <tbody>
+                {{range index $.DataFlowTable $fileName}}
+                <tr class="data-flow-row">
+                  <td class="data-flow-number data-flow-row-item">
+                    <div class="data-flow-circle">{{.Number}}</div>
+                    <div class="data-flow-line"></div>
+                  </td>
+                  <td class="data-flow-clickable-row data-flow-row-item" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
+                      end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
+                    {{.StartLineValue}}
+                  </td>
+                  <td class="delimiter data-flow-delimiter">|</td>
+                  <td class="data-flow-text">
+                    <code>{{.Content}}</code>
+                  </td>
+                </tr>
+                {{end}}
+                </tbody>
+
+              </table>
+              {{end}}
+            </div>
+          </section>
+        </div>
       </div>
     </article>
   </main>
@@ -382,11 +390,10 @@
      * @property {ExampleLine[]} ExampleLines - An array of line changes.
      */
 
-    // Constants for class and ID names
+// Constants for class and ID names
     var MAIN_TAB_NAV_SELECTOR = '.main-tabs-nav';
     var MAIN_TAB_ITEM_SELECTOR = '.main-tabs-nav .tab-item';
     var MAIN_TAB_CONTENT_SELECTOR = '.tab-container > .main-tab-content';
-
     var EXAMPLE_COUNTER = 'example-counter';
     var EXAMPLE_PREVIOUS = 'previous-example';
     var EXAMPLE_NEXT = 'next-example';
@@ -395,7 +402,7 @@
 
     // Utility functions
     function toggleIsSelectedClass(elements, shouldToggle) {
-      if(!elements){
+      if (!elements) {
         return;
       }
       for (var i = 0; i < elements.length; i++) {
@@ -409,25 +416,22 @@
         }
       }
     }
-
-
-
     function polyfillClosest() {
       if (!Element.prototype.closest) {
         Element.prototype.closest = function (s) {
           var matches = (this.document || this.ownerDocument).querySelectorAll(s),
-            i, el = this;
+            i,
+            el = this;
           do {
             i = matches.length;
-            while (--i >= 0 && matches.item(i) !== el) {};
-          } while ((i < 0) && (el = el.parentElement));
+            while (--i >= 0 && matches.item(i) !== el) {}
+            ;
+          } while (i < 0 && (el = el.parentElement));
           return el;
         };
       }
     }
-
     polyfillClosest();
-
     document.addEventListener('DOMContentLoaded', function () {
       var exampleCounter = document.getElementById(EXAMPLE_COUNTER);
       var examplePrevious = document.getElementById(EXAMPLE_PREVIOUS);
@@ -437,14 +441,12 @@
       var mainTabLinks = document.querySelectorAll(MAIN_TAB_ITEM_SELECTOR);
       var mainTabContents = document.querySelectorAll(MAIN_TAB_CONTENT_SELECTOR);
       var mainTabNav = document.querySelector(MAIN_TAB_NAV_SELECTOR);
-
       var exampleCount = 0;
 
       /** @type {ExampleCommitFix[]} */
       var exampleCommitFixes = JSON.parse("{{.CommitFixes}}" || '[]');
-
       function showCurrentExample() {
-        if(!allExamplesDetail){
+        if (!allExamplesDetail) {
           return;
         }
         for (var i = 0; i < allExamplesDetail.length; i++) {
@@ -457,34 +459,30 @@
             }
           }
         }
-        if(exampleCounter){
+        if (exampleCounter) {
           exampleCounter.textContent = exampleCount + 1;
         }
-
-        if(exampleRepoAnchor && exampleCommitFixes){
+        if (exampleRepoAnchor && exampleCommitFixes) {
           exampleRepoAnchor.textContent = exampleCommitFixes[exampleCount].RepoName;
           exampleRepoAnchor.href = exampleCommitFixes[exampleCount].RepoLink;
         }
       }
-
       function previousExample() {
         if (exampleCount > 0) {
           exampleCount--;
           showCurrentExample();
         }
       }
-
       function nextExample() {
         if (exampleCount < exampleCommitFixes.length - 1) {
           exampleCount++;
           showCurrentExample();
         }
       }
-      if(mainTabNav) {
+      if (mainTabNav) {
         mainTabNav.onclick = function (event) {
           var clickedTab = event.target.closest('.tab-item');
           if (!clickedTab) return;
-
           var selectedTab = clickedTab.getAttribute('data-tab');
 
           // Toggle selected tab and content
@@ -496,7 +494,7 @@
           });
         };
       }
-      if (examplePrevious){
+      if (examplePrevious) {
         examplePrevious.onclick = previousExample;
       }
       if (exampleNext) {
@@ -510,18 +508,18 @@
       {{if eq .AiFixDiffStatus "SUCCESS"}}
       showCurrentDiff();
       {{end}}
-
     });
   </script>
   <!-- Embedded script from LS  -->
   <script nonce="{{.Nonce}}">
+    var suggestion = JSON.parse("{{.AiFixResult}}" || "[]")
     {{.Scripts}}
     // some IDEs take longer to inject their handler functions
     // TODO: Should we add an event listener when the IDE functions are loaded?
     {{if .AutoTriggerAiFix }}
-    setTimeout(() => {
+    setTimeout(function () {
       generateAIFix();
-    }, 500)
+    }, 500);
     {{end}}
 </script>
   <!-- Custom IDE specific scripts  -->
