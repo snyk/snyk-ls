@@ -108,7 +108,6 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 
 	for _, f := range renderer.c.Workspace().Folders() {
 		if ip, ok := f.(snyk.FilteringIssueProvider); ok {
-
 			// Note that IssueProvider.Issues() does not return enriched issues (i.e, we don't know if they're new). so we
 			// also need to get the deltas as a separate operation later.
 			// TODO Find the root cause of the issues not being enriched. This is likely an unwanted pointer dereference.
@@ -128,10 +127,6 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 	}
 
 	return allIssues, deltaIssues
-}
-
-func (renderer *HtmlRenderer) getDeltaIssuesForFolder(dp delta.Provider) []types.Issue {
-	return dp.GetDeltaForAllProducts(renderer.c.DisplayableIssueTypes())
 }
 
 func fixableIssueCount(issues []types.Issue) (fixableIssueCount int) {
