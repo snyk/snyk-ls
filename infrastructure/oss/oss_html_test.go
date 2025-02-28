@@ -153,6 +153,7 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 		Description: "- list",
 		From:        []string{"1", "2", "3", "4"},
 		CVSSv3:      "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+		CvssScore:   5.0,
 	}
 
 	issue2 := snyk.OssIssueData{

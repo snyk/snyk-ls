@@ -33,16 +33,13 @@ func isPortInUse(u *url.URL) bool {
 	if err != nil {
 		return true
 	}
-	defer func(listener net.Listener) {
-		_ = listener.Close()
-	}(listener)
+	listener.Close()
 	return false
 }
 
 func determineFreePort() int {
 	port := DefaultPort
 	for range 1000 {
-		port++
 		u, err := url.Parse(fmt.Sprintf("http://%s:%d", DefaultHost, port))
 		if err != nil {
 			// this should not ever happen. so if it does, we panic
@@ -52,6 +49,7 @@ func determineFreePort() int {
 		if !inUse {
 			break
 		}
+		port++
 	}
 	return port
 }
