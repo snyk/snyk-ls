@@ -46,7 +46,6 @@ func (cmd *executeMcpCallCommand) Execute(ctx context.Context) (any, error) {
 		logger.Warn().Msg("No base URL set, cannot execute mcp command")
 		return nil, nil
 	}
-	clientEndpoint := cmd.baseURL + "/sse"
 
 	args := cmd.command.Arguments
 	if len(args) < 1 {
@@ -57,6 +56,7 @@ func (cmd *executeMcpCallCommand) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("invalid argument type (string expected)")
 	}
 
+	clientEndpoint := cmd.baseURL + "/sse"
 	mcpClient, err := client.NewSSEMCPClient(clientEndpoint)
 	if err != nil {
 		logger.Error().Err(err).Msg("Error creating mcp client")
