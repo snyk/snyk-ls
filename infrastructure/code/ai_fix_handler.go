@@ -18,6 +18,7 @@ package code
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/snyk/code-client-go/llm"
@@ -49,6 +50,23 @@ type aiResultState struct {
 }
 
 const explainTimeout = 5 * time.Minute
+
+func (fixHandler *AiFixHandler) GetCurrentIssueId() string {
+	return fixHandler.currentIssueId
+}
+
+func (fixHandler *AiFixHandler) GetResults(fixId string) (filePath string, diff string, err error) {
+	for _, suggestion := range fixHandler.aiFixDiffState.result {
+		if suggestion.FixId == fixId {
+			for k, v := range suggestion.UnifiedDiffsPerFile {
+				filePath = k
+				diff += v
+			}
+			return filePath, diff, nil
+		}
+	}
+	return "", "", fmt.Errorf("no suggestion found for fixId: %s", fixId)
+}
 
 func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config.Config, issue types.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
 	logger := c.Logger().With().Str("method", "EnrichWithExplain").Logger()

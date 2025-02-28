@@ -80,7 +80,7 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 	go func() {
 		issue := cmd.issueProvider.Issue(htmlRenderer.AiFixHandler.GetCurrentIssueId())
 		actionCommandMap, err := cmd.autofixFeedbackActions(fixId)
-		successMessage := "Congratulations! 🎉 You’ve just fixed this " + issue.ID + " issue."
+		successMessage := "Congratulations! 🎉 You’ve just fixed this " + issue.GetID() + " issue."
 		if err != nil {
 			cmd.notifier.SendShowMessage(sglsp.Info, successMessage)
 		} else {
@@ -100,11 +100,11 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 	return nil, nil
 }
 
-func (cmd *applyAiFixEditCommand) getWorkspaceEdit(htmlRenderer *code.HtmlRenderer, fixId string) (snyk.WorkspaceEdit, error) {
+func (cmd *applyAiFixEditCommand) getWorkspaceEdit(htmlRenderer *code.HtmlRenderer, fixId string) (types.WorkspaceEdit, error) {
 	path, diff, err := htmlRenderer.AiFixHandler.GetResults(fixId)
 	if err != nil {
 		cmd.logger.Debug().Str("method", "applyAiFixEditCommand.Execute").Msgf("Unable to get the fix fix for %s", fixId)
-		return snyk.WorkspaceEdit{}, err
+		return types.WorkspaceEdit{}, err
 	}
 
 	workspaceEdit := code.CreateWorkspaceEditFromDiff(path, diff)
