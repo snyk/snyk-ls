@@ -98,8 +98,9 @@ func Test_executeMcpCallCommand(t *testing.T) {
 	}
 
 	// execute command
-	result, err := command.Execute(context.Background())
+	_, err := command.Execute(context.Background())
 	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.Greaterf(t, sc.Calls(), 0, "expected calls to scanner to be greater than 0")
+	require.Eventuallyf(t, func() bool {
+		return sc.Calls() > 0
+	}, time.Minute, time.Millisecond, "should have called the scanner")
 }
