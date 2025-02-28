@@ -258,7 +258,6 @@ footer {
 
 
 table {
-  width: 100%;
   border-collapse: collapse;
 }
 table td {
@@ -268,14 +267,13 @@ table td {
 
 .data-flow-table {
   background-color: var(--code-background-color);
-  margin-top: 4px;
+  margin-top: 0.6rem;
 }
 
 .data-flow-row {
   border-collapse: collapse;
   vertical-align: baseline;
 }
-
 /* Data flow number bubbles */
 tr .data-flow-number {
   position: relative;
@@ -310,10 +308,6 @@ tr .data-flow-number {
   border-left: 1px dashed var(--text-color);
   z-index: 0;
 }
-table > tbody > tr:first-child > td:first-child .data-flow-line {
-  top: 50%;
-  height: 50%;
-}
 
 table > tbody > tr:last-child > td:first-child .data-flow-line {
   top: 0;
@@ -335,6 +329,7 @@ table > tbody > tr:last-child > td:first-child .data-flow-line {
   margin-right: 8px;
   font-weight: 400;
   word-break: break-all;
+  width: 100%;
 }
 
 code {
@@ -387,7 +382,8 @@ code {
 .example-fixes-header,
 .ignore-details-tab,
 .fix-analysis-tab,
-.vuln-overview-tab{
+.vuln-overview-tab,
+.data-flow-tab{
   text-transform: uppercase;
 }
 
@@ -594,10 +590,6 @@ button.sn-apply-fix:disabled{
 
 .sn-ai-fix-error {
   padding-top: 20px;
-}
-
-.tab-item:hover {
-  background-color: #3474f0;
 }
 .tab-item.is-selected {
   border-bottom: 3px solid #3474f0;

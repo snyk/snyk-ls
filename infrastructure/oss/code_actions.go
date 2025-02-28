@@ -132,9 +132,8 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath types.FilePath, issueRange
 		}
 
 		singleTextEdit := types.TextEdit{
-			FullText: string(fileContent),
-			Range:    issueRange,
-			NewText:  quickfixEdit,
+			Range:   issueRange,
+			NewText: quickfixEdit,
 		}
 		edit.Changes = make(map[string][]types.TextEdit)
 		edit.Changes[filePathString] = []types.TextEdit{singleTextEdit}

@@ -30,6 +30,7 @@ import (
 type AutofixUnifiedDiffSuggestion struct {
 	FixId               string            `json:"fixId"`
 	UnifiedDiffsPerFile map[string]string `json:"unifiedDiffsPerFile"`
+	FullTextPerFile     map[string]string `json:"fullTextPerFile"`
 	Explanation         string            `json:"explanation"`
 }
 

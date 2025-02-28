@@ -81,7 +81,7 @@ type HtmlRenderer struct {
 var codeRenderer *HtmlRenderer
 
 func GetHTMLRenderer(c *config.Config, deepCodeLLMBinding llm.DeepCodeLLMBinding) (*HtmlRenderer, error) {
-	if codeRenderer != nil {
+	if codeRenderer != nil && codeRenderer.c == c {
 		return codeRenderer, nil
 	}
 
@@ -189,6 +189,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"AiFixError":         aiFixErr,
 		"AutoTriggerAiFix":   autoTriggerAiFix,
 	}
+	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
 
 	if issue.GetIsIgnored() {
 		data["IgnoreDetails"] = prepareIgnoreDetailsRow(issue.GetIgnoreDetails())
@@ -202,7 +203,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	}
 
 	var result = buffer.String()
-	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
 	return result
 }
 

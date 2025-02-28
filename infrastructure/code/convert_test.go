@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2025 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -878,67 +878,6 @@ func Test_getCodeIssueType(t *testing.T) {
 	})
 }
 
-func Test_AutofixResponse_toAutofixSuggestion(t *testing.T) {
-	response := AutofixResponse{
-		Status: "COMPLETE",
-	}
-	fixes := []autofixResponseSingleFix{{
-		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
-		Value: "test1",
-	}, {
-		Id:    "123e4567-e89b-12d3-a456-426614174000/2",
-		Value: "test2",
-	}}
-	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
-	filePath := types.FilePath("file.js")
-	baseDir := types.FilePath(t.TempDir())
-	err := os.WriteFile(filepath.Join(string(baseDir), string(filePath)), []byte("test test test"), 0666)
-	require.NoError(t, err)
-	edits := response.toAutofixSuggestions(baseDir, filePath)
-	editValues := make([]string, 0)
-	for _, edit := range edits {
-		change := edit.AutofixEdit.Changes[ToAbsolutePath(baseDir, filePath)][0]
-		editValues = append(editValues, change.NewText)
-	}
-
-	assert.Contains(t, editValues, "test1", "test2")
-}
-
-func Test_AutofixResponse_toAutofixSuggestion_HtmlEncodedFilePath(t *testing.T) {
-	response := AutofixResponse{
-		Status: "COMPLETE",
-	}
-	fixes := []autofixResponseSingleFix{{
-		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
-		Value: "test1",
-	}, {
-		Id:    "123e4567-e89b-12d3-a456-426614174000/2",
-		Value: "test2",
-	}}
-	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
-	filePath := "file_with space.js"
-	baseDir := types.FilePath(t.TempDir())
-	err := os.WriteFile(filepath.Join(string(baseDir), filePath), []byte("test test test"), 0666)
-	require.NoError(t, err)
-	// Here, we provide the HTML encoded path and expect toAutofixSuggestions to decode it.
-	edits := response.toAutofixSuggestions(baseDir, "file_with%20space.js")
-	editValues := make([]string, 0)
-	editFilePaths := make([]string, 0)
-	for _, edit := range edits {
-		change := edit.AutofixEdit.Changes[ToAbsolutePath(baseDir, types.FilePath(filePath))][0]
-		editValues = append(editValues, change.NewText)
-
-		for key := range edit.AutofixEdit.Changes {
-			editFilePaths = append(editFilePaths, key)
-		}
-	}
-
-	assert.Contains(t, editValues, "test1", "test2")
-	for _, filePath := range editFilePaths {
-		assert.Contains(t, filePath, "file_with space.js")
-	}
-}
-
 func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
 	response := AutofixResponse{
 		Status: "COMPLETE",
@@ -1125,6 +1064,124 @@ func Test_ParseDateFromString(t *testing.T) {
 			} else {
 				assert.Equal(t, tt.want, got)
 			}
+		})
+	}
+}
+
+func TestCreateAutofixWorkspaceEdit(t *testing.T) {
+	tempFilePath := filepath.Join(os.TempDir(), "test.txt")
+
+	originalFileContent := `
+ one
+ two
+ three_but_with_a_bug
+ three_but_with_a_bug
+ four
+ five
+ eight
+ nine
+ ten
+`
+	goodDiff := `
+--- ` + tempFilePath + `
++++ ` + tempFilePath + `
+@@ -2,4 +2,3 @@
+ two
+-three_but_with_a_bug
+-three_but_with_a_bug
++three
+ four
+@@ -4,4 +4,6 @@
+ four
+ five
++six
++seven
+ eight
+ nine
+`
+	malformedDiff := `
+--- ` + tempFilePath + `
++++ ` + tempFilePath + `
+@ -2,400000000 +2,3 @
+ two
+-three_but_with_a_bug
+-three_but_with_a_bug
++three
+ four
+@@ -400,4 +400,6 @@
+ four
+`
+	tests := []struct {
+		name         string
+		diff         string
+		filePath     string
+		fileContents string
+		expectedEdit types.WorkspaceEdit
+	}{
+		{"Multi line diff results in multiple TextEdits",
+			goodDiff,
+			tempFilePath,
+			originalFileContent,
+			types.WorkspaceEdit{Changes: map[string][]types.TextEdit{
+				tempFilePath: []types.TextEdit{
+					// WorkspaceEdit for the correctly formatted diff will contain 5 TextEdits: 2 deletions and 3 insertions.
+					types.TextEdit{
+						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 3, Character: 0}},
+						NewText: "",
+					},
+					types.TextEdit{
+						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 3, Character: 0}},
+						NewText: "",
+					},
+					types.TextEdit{
+						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 2, Character: 0}},
+						NewText: "three\n",
+					},
+					types.TextEdit{
+						Range:   types.Range{Start: types.Position{Line: 4, Character: 0}, End: types.Position{Line: 4, Character: 0}},
+						NewText: "six\n",
+					},
+					types.TextEdit{
+						Range:   types.Range{Start: types.Position{Line: 5, Character: 0}, End: types.Position{Line: 5, Character: 0}},
+						NewText: "seven\n",
+					},
+				},
+			}},
+		},
+		{"Malformed diff produces empty WorkspaceEdit",
+			malformedDiff,
+			tempFilePath,
+			originalFileContent,
+			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
+		},
+		{"Short file produces empty WorkspaceEdit",
+			goodDiff,
+			tempFilePath,
+			"one",
+			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
+		},
+		{"Missing file produces empty WorkspaceEdit",
+			goodDiff,
+			"/this/file/does/not/exist",
+			originalFileContent,
+			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// If we're testing with a valid file path, create it for the test to use.
+			if tt.filePath == tempFilePath {
+				err := os.WriteFile(tempFilePath, []byte(tt.fileContents), 0666)
+				assert.NoError(t, err)
+
+				testContents, err := os.ReadFile(tt.filePath)
+				assert.NoError(t, err)
+				assert.Equalf(t, tt.fileContents, string(testContents), "File contents: %v", string(testContents))
+			}
+
+			// Create a WorkSpaceEdit for the file, and check against the reference.
+			assert.Equalf(t, tt.expectedEdit, CreateWorkspaceEditFromDiff(tt.filePath, tt.diff),
+				"CreateWorkspaceEditFromDiff(%v, %v)", tt.filePath, tt.diff)
 		})
 	}
 }

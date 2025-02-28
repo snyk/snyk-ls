@@ -58,15 +58,6 @@ type SnykCodeClient interface {
 		error,
 	)
 
-	GetAutofixSuggestions(
-		ctx context.Context,
-		options AutofixOptions,
-		baseDir types.FilePath,
-	) ([]AutofixSuggestion,
-		AutofixStatus,
-		error,
-	)
-
 	SubmitAutofixFeedback(ctx context.Context, fixId string, result string) error
 
 	getAutofixResponse(ctx context.Context, options AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error)

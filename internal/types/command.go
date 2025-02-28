@@ -42,9 +42,10 @@ const (
 	ClearCacheCommand               = "snyk.clearCache"
 	GenerateIssueDescriptionCommand = "snyk.generateIssueDescription"
 	// Snyk Code specific commands
-	CodeFixCommand        = "snyk.code.fix"
-	CodeSubmitFixFeedback = "snyk.code.submitFixFeedback"
-	CodeFixDiffsCommand   = "snyk.code.fixDiffs"
+	CodeFixCommand          = "snyk.code.fix"
+	CodeFixDiffsCommand     = "snyk.code.fixDiffs"
+	CodeFixApplyEditCommand = "snyk.code.fixApplyEdit"
+	CodeSubmitFixFeedback   = "snyk.code.submitFixFeedback"
 
 	// bridging commands
 	ExecuteCLICommand  = "snyk.executeCLI"

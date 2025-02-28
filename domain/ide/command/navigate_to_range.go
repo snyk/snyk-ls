@@ -19,7 +19,7 @@ package command
 import (
 	"context"
 	"encoding/json"
-	"github.com/snyk/snyk-ls/infrastructure/code"
+
 	"strings"
 
 	"github.com/snyk/code-client-go/llm"
@@ -30,6 +30,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
