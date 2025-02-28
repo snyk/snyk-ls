@@ -100,7 +100,10 @@ func (cmd *executeMcpCallCommand) Execute(ctx context.Context) (any, error) {
 		}
 
 		logger.Debug().Msgf("Executing mcp command: %s", mcpCommand)
-		mcpClient.CallTool(ctx, callToolRequest)
+		_, err := mcpClient.CallTool(ctx, callToolRequest)
+		if err != nil {
+			logger.Error().Err(err).Msg("error executing tool request")
+		}
 	}()
 	return nil, err
 }
