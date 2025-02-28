@@ -63,13 +63,6 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 
 	if state.AnyScanSucceededReference || state.AnyScanSucceededWorkingDirectory {
 		allIssues, deltaIssues = renderer.getIssuesFromFolders()
-		deltaIssues = []types.Issue{}
-
-		for _, issue := range allIssues {
-			if issue.GetIsNew() {
-				deltaIssues = append(deltaIssues, issue)
-			}
-		}
 
 		if isDeltaEnabled {
 			currentIssuesFound = len(deltaIssues)
