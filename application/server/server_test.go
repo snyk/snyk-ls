@@ -101,7 +101,7 @@ func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) 
 		c = testutil.UnitTest(t)
 	}
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
-	loc := startServer(callBackFn, jsonRPCRecorder)
+	loc := startServer(c, callBackFn, jsonRPCRecorder)
 	di.TestInit(t)
 	cleanupChannels()
 
@@ -125,7 +125,7 @@ func cleanupChannels() {
 
 type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
 
-func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder) server.Local {
+func startServer(c *config.Config, callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder) server.Local {
 	var srv *jrpc2.Server
 
 	opts := &server.LocalOptions{
@@ -145,9 +145,9 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRe
 			AllowPush:   true,
 			Concurrency: 0, // set concurrency to < 1 causes initialization with number of cores
 			Logger: func(text string) {
-				config.CurrentConfig().Logger().Trace().Str("method", "json-rpc").Msg(text)
+				c.Logger().Trace().Str("method", "json-rpc").Msg(text)
 			},
-			RPCLog: RPCLogger{c: config.CurrentConfig()},
+			RPCLog: RPCLogger{c: c},
 		},
 	}
 
@@ -155,7 +155,6 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRe
 	loc := server.NewLocal(handlers, opts)
 	srv = loc.Server
 
-	c := config.CurrentConfig()
 	c.SetLogLevel(zerolog.LevelDebugValue)
 	// we don't want lsp logging in test runs
 	c.ConfigureLogging(nil)

@@ -17,6 +17,7 @@
 package testutil
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -119,6 +120,9 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 	c.SetToken(testsupport.GetEnvironmentToken(useConsistentIgnores))
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
+	u, err := url.Parse("http://localhost:1111")
+	require.NoError(t, err)
+	c.SetMCPServerURL(u)
 	redirectConfigAndDataHome(t, c)
 
 	config.SetCurrentConfig(c)

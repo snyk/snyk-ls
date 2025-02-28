@@ -113,7 +113,7 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 	handlers["initialize"] = initializeHandler(srv)
-	handlers["initialized"] = initializedHandler(srv)
+	handlers["initialized"] = initializedHandler(c, srv)
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
 	handlers["textDocument/didClose"] = noOpHandler()
 	handlers[textDocumentDidOpenOperation] = textDocumentDidOpenHandler(c)
@@ -401,13 +401,12 @@ func getDownloadURL(c *config.Config) (u string) {
 	}
 }
 
-func initializedHandler(srv *jrpc2.Server) handler.Func {
+func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		// Logging these messages only after the client has been initialized.
 		// Logging to the client is only allowed after the client has been initialized according to LSP protocol.
 		// No reason to log the method name for these messages, because some of these values are empty and the messages
 		// looks weird when including the method name.
-		c := config.CurrentConfig()
 		initialLogger := c.Logger()
 		// only set our config to initialized after leaving the func
 		defer func() {
