@@ -20,6 +20,7 @@ import (
 	codeClient "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // A Sentry implementation of our error reporter that respects user preferences regarding tracking
@@ -34,7 +35,7 @@ func (c codeErrorReporter) FlushErrorReporting() {
 
 func (c *codeErrorReporter) CaptureError(err error, options codeClient.ErrorReporterOptions) bool {
 	if options.ErrorDiagnosticPath != "" {
-		return c.errorReporter.CaptureErrorAndReportAsIssue(options.ErrorDiagnosticPath, err)
+		return c.errorReporter.CaptureErrorAndReportAsIssue(types.FilePath(options.ErrorDiagnosticPath), err)
 	} else {
 		return c.errorReporter.CaptureError(err)
 	}

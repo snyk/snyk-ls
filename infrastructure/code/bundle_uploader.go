@@ -17,6 +17,7 @@
 package code
 
 import (
+	"bytes"
 	"context"
 	"math"
 	"os"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -86,30 +88,35 @@ func (b *BundleUploader) Upload(ctx context.Context, bundle Bundle, t *progress.
 			}
 			uploadedFiles += len(uploadBatch.documents)
 			// Clear out documents in uploaded batch
-			uploadBatch.documents = make(map[string]BundleFile)
+			uploadBatch.documents = make(map[types.FilePath]BundleFile)
 			percentage := float64(i) / float64(len(uploadBatches)) * 100
 			t.Report(int(math.RoundToEven(percentage)))
 		}
 	}
 	// bundle doesn't need file map anymore since they are already grouped and uploaded
-	bundle.Files = make(map[string]BundleFile)
+	bundle.Files = make(map[types.FilePath]BundleFile)
 
 	return bundle, nil
 }
 
-func (b *BundleUploader) enrichBatchWithFileContent(uploadBatch *UploadBatch, workDir string, logger zerolog.Logger) {
+func (b *BundleUploader) enrichBatchWithFileContent(uploadBatch *UploadBatch, workDir types.FilePath, logger zerolog.Logger) {
 	for filePath, bundleFile := range uploadBatch.documents {
 		absPath, err := DecodePath(ToAbsolutePath(workDir, filePath))
 		if err != nil {
-			logger.Error().Err(err).Str("file", filePath).Msg("Failed to decode Path")
+			logger.Error().Err(err).Str("file", string(filePath)).Msg("Failed to decode Path")
 			continue
 		}
 		content, err := os.ReadFile(absPath)
 		if err != nil {
-			logger.Error().Err(err).Str("file", filePath).Msg("Failed to read bundle file")
+			logger.Error().Err(err).Str("file", string(filePath)).Msg("Failed to read bundle file")
 			continue
 		}
-		bundleFile.Content = string(content)
+		utf8Content, err := util.ConvertToUTF8(bytes.NewReader(content))
+		if err != nil {
+			logger.Error().Err(err).Str("file", string(filePath)).Msg("Failed to convert bundle file to UTF-8")
+			continue
+		}
+		bundleFile.Content = string(utf8Content)
 		uploadBatch.documents[filePath] = bundleFile
 	}
 }
@@ -131,10 +138,10 @@ func (b *BundleUploader) groupInBatches(ctx context.Context, bundle Bundle, t *p
 
 		file := bundle.Files[filePath]
 		if uploadBatch.canFitFile(filePath, file.Size) {
-			b.c.Logger().Trace().Str("path", filePath).Int("size", file.Size).Msgf("added to bundle #%v", len(batches))
+			b.c.Logger().Trace().Str("path", string(filePath)).Int("size", file.Size).Msgf("added to bundle #%v", len(batches))
 			uploadBatch.documents[filePath] = file
 		} else {
-			b.c.Logger().Trace().Str("path", filePath).Int("size",
+			b.c.Logger().Trace().Str("path", string(filePath)).Int("size",
 				file.Size).Msgf("created new bundle - %v bundles in this upload so far", len(batches))
 			newUploadBatch := NewUploadBatch()
 			newUploadBatch.documents[filePath] = file
@@ -176,10 +183,10 @@ func (b *BundleUploader) isSupported(ctx context.Context, file string) (bool, er
 	return isSupportedExtension || isSupportedConfigFile, nil
 }
 
-func (sc *Scanner) getFileFrom(filePath string, content []byte) BundleFile {
+func (sc *Scanner) getFileFrom(filePath string, utf8FileContent []byte) BundleFile {
 	file := BundleFile{
-		Hash: util.Hash(content),
-		Size: len(content),
+		Hash: util.HashWithoutConversion(utf8FileContent),
+		Size: len(utf8FileContent),
 	}
 	sc.C.Logger().Trace().Str("method", "getFileFrom").Str("hash", file.Hash).Str("filePath", filePath).Send()
 	return file

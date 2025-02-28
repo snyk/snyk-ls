@@ -39,7 +39,6 @@ const (
 	GetFeatureFlagStatus            = "snyk.getFeatureFlagStatus"
 	GetActiveUserCommand            = "snyk.getActiveUser"
 	ReportAnalyticsCommand          = "snyk.reportAnalytics"
-	ExecuteCLICommand               = "snyk.executeCLI"
 	ClearCacheCommand               = "snyk.clearCache"
 	GenerateIssueDescriptionCommand = "snyk.generateIssueDescription"
 	// Snyk Code specific commands
@@ -47,6 +46,10 @@ const (
 	CodeFixDiffsCommand   = "snyk.code.fixDiffs"
 	CodeSubmitFixFeedback = "snyk.code.submitFixFeedback"
 	ApplyEditCommand      = "snyk.applyEdit"
+
+	// bridging commands
+	ExecuteCLICommand  = "snyk.executeCLI"
+	ExecuteMCPToolCall = "snyk.executeMCPToolCall"
 )
 
 var (

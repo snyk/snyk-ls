@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,15 +24,15 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var mockTextEdit = TextEdit{
-	Range: Range{
-		Start: Position{Line: 1, Character: 2},
-		End:   Position{Line: 3, Character: 4}},
+var mockTextEdit = types.TextEdit{
+	Range: types.Range{
+		Start: types.Position{Line: 1, Character: 2},
+		End:   types.Position{Line: 3, Character: 4}},
 	NewText: "someText",
 }
 
-var mockEdit = &WorkspaceEdit{
-	Changes: map[string][]TextEdit{
+var mockEdit = &types.WorkspaceEdit{
+	Changes: map[string][]types.TextEdit{
 		"someUri": {mockTextEdit},
 	},
 }
@@ -41,7 +41,7 @@ var mockCommand = &types.CommandData{
 	Title: "command",
 }
 
-var mockDeferredEdit = func() *WorkspaceEdit {
+var mockDeferredEdit = func() *types.WorkspaceEdit {
 	return mockEdit
 }
 
@@ -69,8 +69,8 @@ func Test_NewDeferredCodeAction(t *testing.T) {
 
 	assertActionsInitializedCorrectly(t,
 		err,
-		action,
-		(*WorkspaceEdit)(nil),
+		&action,
+		(*types.WorkspaceEdit)(nil),
 		(*types.CommandData)(nil),
 		&mockDeferredEdit,
 		&mockDeferredCommand)
@@ -79,17 +79,17 @@ func Test_NewDeferredCodeAction(t *testing.T) {
 
 func assertActionsInitializedCorrectly(t *testing.T,
 	err error,
-	action CodeAction,
-	expectedEdit *WorkspaceEdit,
+	action types.CodeAction,
+	expectedEdit *types.WorkspaceEdit,
 	expectedCommand *types.CommandData,
-	mockDeferredEdit *func() *WorkspaceEdit,
+	mockDeferredEdit *func() *types.WorkspaceEdit,
 	mockDeferredCommand *func() *types.CommandData,
 ) {
 	t.Helper()
 	assert.NoError(t, err)
-	assert.Equal(t, "title", action.Title)
-	assert.Equal(t, expectedEdit, action.Edit)
-	assert.Equal(t, expectedCommand, action.Command)
-	assert.Equal(t, mockDeferredEdit, action.DeferredEdit)
-	assert.Equal(t, mockDeferredCommand, action.DeferredCommand)
+	assert.Equal(t, "title", action.GetTitle())
+	assert.Equal(t, expectedEdit, action.GetEdit())
+	assert.Equal(t, expectedCommand, action.GetCommand())
+	assert.Equal(t, mockDeferredEdit, action.GetDeferredEdit())
+	assert.Equal(t, mockDeferredCommand, action.GetDeferredCommand())
 }

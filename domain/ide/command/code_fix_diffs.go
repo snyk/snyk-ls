@@ -63,7 +63,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 
 	issuePath := uri2.PathFromUri(lsp.DocumentURI(issueURI))
 
-	relPath, err := filepath.Rel(folderPath, issuePath)
+	relPath, err := filepath.Rel(string(folderPath), string(issuePath))
 	if err != nil {
 		return nil, err
 	}
@@ -78,11 +78,11 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 	}
 
 	issue := cmd.issueProvider.Issue(id)
-	if issue.ID == "" {
+	if issue.GetID() == "" {
 		return nil, errors.New("failed to find issue")
 	}
 
-	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, folderPath, relPath, issue)
+	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, folderPath, types.FilePath(relPath), issue)
 	if err == nil && len(suggestions) == 0 {
 		logger.Info().Msg("Autofix run successfully but there were no good fixes")
 		return suggestions, nil

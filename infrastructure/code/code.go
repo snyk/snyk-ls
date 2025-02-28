@@ -17,10 +17,12 @@
 package code
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rs/zerolog"
 
@@ -33,6 +35,7 @@ import (
 	"github.com/snyk/code-client-go/scan"
 
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -71,8 +74,8 @@ type Scanner struct {
 	bundleHashesMutex sync.RWMutex
 	changedFilesMutex sync.RWMutex
 	scanStatusMutex   sync.RWMutex
-	runningScans      map[string]*ScanStatus
-	changedPaths      map[string]map[string]bool // tracks files that were changed since the last scan per workspace folder
+	runningScans      map[types.FilePath]*ScanStatus
+	changedPaths      map[types.FilePath]map[types.FilePath]bool // tracks files that were changed since the last scan per workspace folder
 	learnService      learn.Service
 	fileFilters       *xsync.MapOf[string, *filefilter.FileFilter]
 	notifier          notification.Notifier
@@ -80,26 +83,26 @@ type Scanner struct {
 	// global map to store last used bundle hashes for each workspace folder
 	// these are needed when we want to retrieve auto-fixes for a previously
 	// analyzed folder
-	bundleHashes map[string]string
+	bundleHashes map[types.FilePath]string
 	codeScanner  codeClient.CodeScanner
 	// this is the local scanner issue cache. In the future, it should be used as source of truth for the issues
 	// the cache in workspace/folder should just delegate to this cache
-	issueCache          *imcache.Cache[string, []snyk.Issue]
-	cacheRemovalHandler func(path string)
+	issueCache          *imcache.Cache[types.FilePath, []types.Issue]
+	cacheRemovalHandler func(path types.FilePath)
 	C                   *config.Config
 }
 
-func (sc *Scanner) BundleHashes() map[string]string {
+func (sc *Scanner) BundleHashes() map[types.FilePath]string {
 	sc.bundleHashesMutex.RLock()
 	defer sc.bundleHashesMutex.RUnlock()
 	return sc.bundleHashes
 }
 
-func (sc *Scanner) AddBundleHash(key, value string) {
+func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashesMutex.Lock()
 	defer sc.bundleHashesMutex.Unlock()
 	if sc.bundleHashes == nil {
-		sc.bundleHashes = make(map[string]string)
+		sc.bundleHashes = make(map[types.FilePath]string)
 	}
 	sc.bundleHashes[key] = value
 }
@@ -109,17 +112,17 @@ func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, repor
 		BundleUploader: bundleUploader,
 		SnykApiClient:  apiClient,
 		errorReporter:  reporter,
-		runningScans:   map[string]*ScanStatus{},
-		changedPaths:   map[string]map[string]bool{},
+		runningScans:   map[types.FilePath]*ScanStatus{},
+		changedPaths:   map[types.FilePath]map[types.FilePath]bool{},
 		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
 		learnService:   learnService,
 		notifier:       notifier,
-		bundleHashes:   map[string]string{},
+		bundleHashes:   map[types.FilePath]string{},
 		codeScanner:    codeScanner,
 		C:              bundleUploader.c,
 	}
-	sc.issueCache = imcache.New[string, []snyk.Issue](
-		imcache.WithDefaultExpirationOption[string, []snyk.Issue](time.Hour * 12),
+	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
+		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
 	)
 	return sc
 }
@@ -138,7 +141,7 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string, _ *types.FolderConfig) (issues []snyk.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
 	logger := sc.C.Logger().With().Str("method", "code.Scan").Logger()
 	if !sc.C.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
@@ -162,7 +165,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string, _ *
 
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[folderPath] == nil {
-		sc.changedPaths[folderPath] = map[string]bool{}
+		sc.changedPaths[folderPath] = map[types.FilePath]bool{}
 	}
 	sc.changedPaths[folderPath][path] = true
 	sc.changedFilesMutex.Unlock()
@@ -173,7 +176,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string, _ *
 	scanStatus := NewScanStatus()
 	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
 	if isAlreadyWaiting {
-		return []snyk.Issue{}, nil // Returning an empty slice implies that no issues were found
+		return []types.Issue{}, nil // Returning an empty slice implies that no issues were found
 	}
 	defer func() {
 		sc.scanStatusMutex.Lock()
@@ -187,7 +190,7 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string, _ *
 	sc.changedFilesMutex.Lock()
 	if len(sc.changedPaths[folderPath]) <= 0 {
 		sc.changedFilesMutex.Unlock()
-		return []snyk.Issue{}, nil
+		return []types.Issue{}, nil
 	}
 
 	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
@@ -206,13 +209,13 @@ func (sc *Scanner) Scan(ctx context.Context, path string, folderPath string, _ *
 	return results, err
 }
 
-func filterCodeIssues(c *config.Config, issues []snyk.Issue) []snyk.Issue {
+func filterCodeIssues(c *config.Config, issues []types.Issue) []types.Issue {
 	if c.IsSnykCodeSecurityEnabled() && c.IsSnykCodeQualityEnabled() {
 		return issues
 	}
-	var result []snyk.Issue
+	var result []types.Issue
 	for _, issue := range issues {
-		additionalData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+		additionalData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 		if !ok {
 			continue
 		}
@@ -224,7 +227,7 @@ func filterCodeIssues(c *config.Config, issues []snyk.Issue) []snyk.Issue {
 	return result
 }
 
-func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger zerolog.Logger, filesToBeScanned map[string]bool) (results []snyk.Issue, err error) {
+func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 	ctx, cancel := context.WithCancel(span.Context())
@@ -234,13 +237,13 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 	// monitor external tracker & context cancellations
 	go func() { t.CancelOrDone(cancel, ctx.Done()) }()
 
-	t.BeginWithMessage("Snyk Code: scanning "+folderPath, "starting scan")
-	defer t.EndWithMessage("Snyk Code: scan of " + folderPath + " done")
+	t.BeginWithMessage(string("Snyk Code: scanning "+folderPath), "starting scan")
+	defer t.EndWithMessage(string("Snyk Code: scan of " + folderPath + " done"))
 
-	fileFilter, _ := sc.fileFilters.Load(folderPath)
+	fileFilter, _ := sc.fileFilters.Load(string(folderPath))
 	if fileFilter == nil {
-		fileFilter = filefilter.NewFileFilter(folderPath, &logger)
-		sc.fileFilters.Store(folderPath, fileFilter)
+		fileFilter = filefilter.NewFileFilter(string(folderPath), &logger)
+		sc.fileFilters.Store(string(folderPath), fileFilter)
 	}
 	files := fileFilter.FindNonIgnoredFiles(t)
 
@@ -258,41 +261,41 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath string, logger ze
 }
 
 // Populate HTML template
-func (sc *Scanner) enhanceIssuesDetails(issues []snyk.Issue, folderPath string) {
+func (sc *Scanner) enhanceIssuesDetails(issues []types.Issue, folderPath types.FilePath) {
 	logger := sc.C.Logger().With().Str("method", "issue_enhancer.enhanceIssuesDetails").Logger()
 
 	for i := range issues {
-		issue := &issues[i]
-		issueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+		issue := issues[i]
+		issueData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 		if !ok {
 			logger.Error().Msg("Failed to fetch additional data")
 			continue
 		}
 
-		lesson, err := sc.learnService.GetLesson(issue.Ecosystem, issue.ID, issue.CWEs, issue.CVEs, issue.IssueType)
+		lesson, err := sc.learnService.GetLesson(issue.GetEcosystem(), issue.GetID(), issue.GetCWEs(), issue.GetCVEs(), issue.GetIssueType())
 		if err != nil {
 			logger.Warn().Err(err).Msg("Failed to get lesson")
 			sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: ""})
 		} else if lesson != nil && lesson.Url != "" {
-			issue.LessonUrl = lesson.Url
+			issue.SetLessonUrl(lesson.Url)
 		}
-		issue.AdditionalData = issueData
+		issue.SetAdditionalData(issueData)
 	}
 }
 
 // getFilesToBeScanned returns a map of files that need to be scanned and removes them from the changedPaths set.
 // This function also analyzes interfile dependencies, taking into account the dataflow between files.
-func (sc *Scanner) getFilesToBeScanned(folderPath string) map[string]bool {
+func (sc *Scanner) getFilesToBeScanned(folderPath types.FilePath) map[types.FilePath]bool {
 	logger := config.CurrentConfig().Logger().With().Str("method", "code.getFilesToBeScanned").Logger()
-	changedFiles := make(map[string]bool)
+	changedFiles := make(map[types.FilePath]bool)
 	for changedPath := range sc.changedPaths[folderPath] {
 		if uri.IsDirectory(changedPath) {
-			logger.Debug().Str("path", changedPath).Msg("skipping directory")
+			logger.Debug().Any("path", changedPath).Msg("skipping directory")
 			continue
 		}
 		changedFiles[changedPath] = true
 		delete(sc.changedPaths[folderPath], changedPath)
-		logger.Debug().Str("path", changedPath).Msg("added to changed files")
+		logger.Debug().Any("path", changedPath).Msg("added to changed files")
 
 		// determine interfile dependencies
 		cache := sc.issueCache.GetAll()
@@ -301,7 +304,7 @@ func (sc *Scanner) getFilesToBeScanned(folderPath string) map[string]bool {
 			for _, referencedFile := range referencedFiles {
 				if referencedFile == changedPath {
 					changedFiles[filePath] = true
-					logger.Debug().Str("path", filePath).Str("referencedFile", referencedFile).Msg("added to changed files")
+					logger.Debug().Any("path", filePath).Any("referencedFile", referencedFile).Msg("added to changed files")
 				}
 			}
 		}
@@ -309,13 +312,13 @@ func (sc *Scanner) getFilesToBeScanned(folderPath string) map[string]bool {
 	return changedFiles
 }
 
-func getReferencedFiles(issues []snyk.Issue) []string {
-	var referencedFiles []string
+func getReferencedFiles(issues []types.Issue) []types.FilePath {
+	var referencedFiles []types.FilePath
 	for _, issue := range issues {
-		if issue.AdditionalData == nil {
+		if issue.GetAdditionalData() == nil {
 			continue
 		}
-		codeIssueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+		codeIssueData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 		if !ok {
 			continue
 		}
@@ -326,7 +329,7 @@ func getReferencedFiles(issues []snyk.Issue) []string {
 	return referencedFiles
 }
 
-func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath string) bool {
+func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.FilePath) bool {
 	waitForPreviousScan := false
 	scanStatus.isRunning = true
 	sc.scanStatusMutex.Lock()
@@ -355,7 +358,7 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath string
 	return false
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, path string, changedFiles map[string]bool, t *progress.Tracker) (issues []snyk.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, path types.FilePath, changedFiles map[types.FilePath]bool, t *progress.Tracker) (issues []types.Issue, err error) {
 	if ctx.Err() != nil {
 		progress.Cancel(t.GetToken())
 		sc.C.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
@@ -370,7 +373,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, pa
 
 	bundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles, t)
 
-	errorReporterOptions := codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: path}
+	errorReporterOptions := codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: string(path)}
 
 	if err != nil {
 		if isNoFilesError(err) {
@@ -413,12 +416,12 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, pa
 	if ctx.Err() != nil || t.IsCanceled() {
 		progress.Cancel(t.GetToken())
 		sc.C.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
-		return []snyk.Issue{}, nil
+		return []types.Issue{}, nil
 	}
 	return issues, err
 }
 
-func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path string, files <-chan string, changedFiles map[string]bool, t *progress.Tracker) (issues []snyk.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path types.FilePath, files <-chan string, changedFiles map[types.FilePath]bool, t *progress.Tracker) (issues []types.Issue, err error) {
 	if ctx.Err() != nil {
 		progress.Cancel(t.GetToken())
 		sc.C.Logger().Info().Msg("Canceling Code scanner received cancellation signal")
@@ -432,15 +435,21 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path string,
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 	logger.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
 
-	target, err := scan.NewRepositoryTarget(path)
+	target, err := scan.NewRepositoryTarget(string(path))
 
 	if err != nil {
 		logger.Warn().Msg("could not determine repository URL (target)")
 	}
 
-	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)
+	// convert changedFiles to map[string]bool
+	stringChangedFiles := make(map[string]bool)
+	for k, v := range changedFiles {
+		stringChangedFiles[string(k)] = v
+	}
+
+	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, stringChangedFiles)
 	if err != nil || ctx.Err() != nil {
-		return []snyk.Issue{}, err
+		return []types.Issue{}, err
 	}
 	sc.bundleHashesMutex.Lock()
 	sc.bundleHashes[path] = bundleHash
@@ -449,7 +458,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path string,
 	converter := SarifConverter{sarif: *sarif, c: sc.C}
 	issues, err = converter.toIssues(path)
 	if err != nil {
-		return []snyk.Issue{}, err
+		return []types.Issue{}, err
 	}
 	issueEnhancer := newIssueEnhancer(
 		sc.BundleUploader.SnykCode,
@@ -476,15 +485,16 @@ func isNoFilesError(err error) bool {
 	return ok
 }
 
-func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath string, filePaths <-chan string, changedFiles map[string]bool, t *progress.Tracker) (Bundle, error) {
+//nolint:gocyclo // we will address cyclomatic complexity, but that's gonna be done when we move this to code-client-go
+func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath types.FilePath, filePaths <-chan string, changedFiles map[types.FilePath]bool, t *progress.Tracker) (Bundle, error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
 	t.ReportWithMessage(15, "creating file bundle")
 
-	var limitToFiles []string
-	fileHashes := make(map[string]string)
-	bundleFiles := make(map[string]BundleFile)
+	var limitToFiles []types.FilePath
+	fileHashes := make(map[types.FilePath]string)
+	bundleFiles := make(map[types.FilePath]BundleFile)
 	noFiles := true
 	for absoluteFilePath := range filePaths {
 		if ctx.Err() != nil || t.IsCanceled() {
@@ -516,18 +526,23 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 			continue
 		}
 
-		relativePath, err := ToRelativeUnixPath(rootPath, absoluteFilePath)
+		utf8FileContent, err := util.ConvertToUTF8(bytes.NewReader(fileContent))
+		if err != nil || !utf8.Valid(utf8FileContent) {
+			continue
+		}
+
+		relativePath, err := ToRelativeUnixPath(rootPath, types.FilePath(absoluteFilePath))
 		if err != nil {
-			sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: rootPath})
+			sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: string(rootPath)})
 		}
 		relativePath = EncodePath(relativePath)
 
 		// TODO: Check if we need to calculate hash for createBundle and if we can't calculate when triggering uploadBatch.
-		bundleFile := sc.getFileFrom(absoluteFilePath, fileContent)
+		bundleFile := sc.getFileFrom(absoluteFilePath, utf8FileContent)
 		bundleFiles[relativePath] = bundleFile
 		fileHashes[relativePath] = bundleFile.Hash
 
-		if changedFiles[absoluteFilePath] {
+		if changedFiles[types.FilePath(absoluteFilePath)] {
 			limitToFiles = append(limitToFiles, relativePath)
 		}
 	}

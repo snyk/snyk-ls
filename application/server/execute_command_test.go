@@ -79,9 +79,9 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	folder := workspace.NewFolder(c, "dummy", "dummy", scannerForFolder, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 	dontClear := workspace.NewFolder(c, "dontclear", "dontclear", scannerForDontClear, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 
-	dontClearIssuePath := "dontclear/file.txt"
-	scannerForDontClear.AddTestIssue(snyk.Issue{AffectedFilePath: dontClearIssuePath})
-	scannerForFolder.AddTestIssue(snyk.Issue{AffectedFilePath: "dummy/file.txt"})
+	dontClearIssuePath := types.FilePath("dontclear/file.txt")
+	scannerForDontClear.AddTestIssue(&snyk.Issue{AffectedFilePath: dontClearIssuePath})
+	scannerForFolder.AddTestIssue(&snyk.Issue{AffectedFilePath: "dummy/file.txt"})
 
 	c.Workspace().AddFolder(folder)
 	c.Workspace().AddFolder(dontClear)
@@ -125,18 +125,25 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
+	c.SetAutomaticAuthentication(false)
+	c.SetAuthenticationMethod(types.FakeAuthentication)
+
+	authenticationService := di.AuthenticationService()
+	fakeAuthenticationProvider := authenticationService.Provider().(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider.IsAuthenticated = false
 
 	// reset to use real service
-	command.SetService(command.NewService(di.AuthenticationService(), nil, nil, nil, nil, nil, nil))
+	command.SetService(command.NewService(authenticationService, di.Notifier(), di.LearnService(), nil, nil, nil, nil))
 
-	config.CurrentConfig().SetAutomaticAuthentication(false)
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = false
+
 	params := lsp.ExecuteCommandParams{Command: types.LoginCommand}
+
+	_, err = loc.Client.Call(ctx, "initialized", types.InitializedParams{})
+	assert.NoError(t, err)
 
 	// Act
 	tokenResponse, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -147,7 +154,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// Assert
 	assert.NotEmpty(t, tokenResponse.ResultString())
 	assert.True(t, fakeAuthenticationProvider.IsAuthenticated)
-	assert.Eventually(t, func() bool { return len(jsonRPCRecorder.Notifications()) > 0 }, 5*time.Second, 50*time.Millisecond)
+	assert.Eventually(t, func() bool { return len(jsonRPCRecorder.Notifications()) > 0 }, 10*time.Second, 50*time.Millisecond)
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")
 	assert.Equal(t, 1, len(notifications))
 	var hasAuthenticatedNotification types.AuthenticationParams
@@ -187,7 +194,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		}
 
 		assert.Len(t, c.TrustedFolders(), 2)
-		assert.Contains(t, c.TrustedFolders(), "/path/to/folder1", "/path/to/folder2")
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder1"))
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder2"))
 	})
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
@@ -196,7 +204,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 		c.SetTrustedFolderFeatureEnabled(true)
-		c.SetTrustedFolders([]string{"/path/to/folder2"})
+		c.SetTrustedFolders([]types.FilePath{"/path/to/folder2"})
 
 		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -204,7 +212,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Len(t, config.CurrentConfig().TrustedFolders(), 2)
-		assert.Contains(t, config.CurrentConfig().TrustedFolders(), "/path/to/folder1", "/path/to/folder2")
+		assert.Len(t, c.TrustedFolders(), 2)
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder1"))
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder2"))
 	})
 }

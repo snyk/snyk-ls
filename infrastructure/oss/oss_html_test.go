@@ -27,6 +27,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
@@ -51,9 +52,9 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issue2)
 
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:             "randomId",
-		Severity:       snyk.Critical,
+		Severity:       types.Critical,
 		AdditionalData: issueAdditionalData,
 	}
 
@@ -91,9 +92,9 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 		Lesson:      "something",
 	}
 
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:             "randomId",
-		Severity:       snyk.Critical,
+		Severity:       types.Critical,
 		AdditionalData: issueAdditionalData,
 	}
 
@@ -126,9 +127,9 @@ func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 		},
 	}
 
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:             "randomId",
-		Severity:       snyk.Critical,
+		Severity:       types.Critical,
 		AdditionalData: issueAdditionalData,
 	}
 
@@ -152,6 +153,7 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 		Description: "- list",
 		From:        []string{"1", "2", "3", "4"},
 		CVSSv3:      "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+		CvssScore:   5.0,
 	}
 
 	issue2 := snyk.OssIssueData{
@@ -179,9 +181,9 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issue3)
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issue4)
 
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:             "randomId",
-		Severity:       snyk.Critical,
+		Severity:       types.Critical,
 		AdditionalData: issueAdditionalData,
 	}
 
@@ -227,9 +229,9 @@ func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
 		},
 	}
 
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:             "randomId",
-		Severity:       snyk.Low,
+		Severity:       types.Low,
 		AdditionalData: issueAdditionalData,
 	}
 
@@ -254,16 +256,16 @@ func Test_OssDetailsPanel_html_withSeverityChangePolicy(t *testing.T) {
 		From:        []string{"1", "2", "3", "4"},
 		AppliedPolicyRules: snyk.AppliedPolicyRules{
 			SeverityChange: snyk.SeverityChange{
-				OriginalSeverity: snyk.Critical.String(),
-				NewSeverity:      snyk.Low.String(),
+				OriginalSeverity: types.Critical.String(),
+				NewSeverity:      types.Low.String(),
 				Reason:           "Changing severity to low due to internal risk assessment.",
 			},
 		},
 	}
 
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:             "randomId",
-		Severity:       snyk.Low,
+		Severity:       types.Low,
 		AdditionalData: issueAdditionalData,
 	}
 
@@ -288,9 +290,9 @@ func Test_OssDetailsPanel_html_hasCSS(t *testing.T) {
 
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
 
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:             "randomId",
-		Severity:       snyk.Critical,
+		Severity:       types.Critical,
 		AdditionalData: issueAdditionalData,
 	}
 

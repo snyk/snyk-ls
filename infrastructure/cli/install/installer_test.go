@@ -156,11 +156,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	// prepare
 	ctx := context.Background()
 	i := NewInstaller(error_reporting.NewTestErrorReporter(), func() *http.Client { return http.DefaultClient })
-	cliDir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(t, err, "Failed to create temp dir")
-	}
-	defer func() { _ = os.Remove(cliDir) }()
+	cliDir := t.TempDir()
 
 	fakeCliFile := testsupport.CreateTempFile(t, cliDir)
 	_ = fakeCliFile.Close()
@@ -168,7 +164,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	cliFilePath := path.Join(cliDir, cliDiscovery.ExecutableName(false))
 	config.CurrentConfig().CliSettings().SetPath(cliFilePath)
 
-	err = os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
+	err := os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
 	if err != nil {
 		t.Fatal(err, "Error renaming temp file")
 	}

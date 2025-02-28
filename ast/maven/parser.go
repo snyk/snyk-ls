@@ -26,6 +26,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Parser struct {
@@ -53,11 +54,11 @@ func New(c *config.Config) Parser {
 	}
 }
 
-func (p *Parser) Parse(content string, path string) *ast.Tree {
+func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
 	tree := p.initTree(path, content)
 	d := xml.NewDecoder(strings.NewReader(content))
 	var offset int64
-	pomDir := filepath.Dir(path)
+	pomDir := filepath.Dir(string(path))
 	for {
 		token, err := d.Token()
 		offset = d.InputOffset()
@@ -107,7 +108,7 @@ func (p *Parser) Parse(content string, path string) *ast.Tree {
 					p.config.Logger().Err(err).Msg("Couldn't read Parent file")
 					continue
 				}
-				parentTree := p.Parse(string(content), parentAbsPath)
+				parentTree := p.Parse(string(content), types.FilePath(parentAbsPath))
 				tree.ParentTree = parentTree
 			}
 		default:
@@ -116,11 +117,11 @@ func (p *Parser) Parse(content string, path string) *ast.Tree {
 	return tree
 }
 
-func addDepsFromBOM(path string, tree *ast.Tree, dep Dependency) {
+func addDepsFromBOM(path types.FilePath, tree *ast.Tree, dep Dependency) {
 	// todo retrieve, potentially from configured repos (not parsed yet)
 }
 
-func (p *Parser) initTree(path string, content string) *ast.Tree {
+func (p *Parser) initTree(path types.FilePath, content string) *ast.Tree {
 	var currentLine = 0
 	root := ast.Node{
 		Line:      currentLine,
@@ -129,13 +130,13 @@ func (p *Parser) initTree(path string, content string) *ast.Tree {
 		DocOffset: 0,
 		Parent:    nil,
 		Children:  nil,
-		Name:      path,
+		Name:      string(path),
 		Value:     content,
 	}
 
 	root.Tree = &ast.Tree{
 		Root:     &root,
-		Document: path,
+		Document: string(path),
 	}
 	return root.Tree
 }

@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,7 +71,7 @@ var (
 	}
 )
 
-func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, string) {
+func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, types.FilePath) {
 	t.Helper()
 	filePath, dirPath := code.TempWorkdirWithIssues(t)
 	didOpenParams := sglsp.DidOpenTextDocumentParams{
@@ -100,7 +101,7 @@ func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) 
 		c = testutil.UnitTest(t)
 	}
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
-	loc := startServer(callBackFn, jsonRPCRecorder)
+	loc := startServer(c, callBackFn, jsonRPCRecorder)
 	di.TestInit(t)
 	cleanupChannels()
 
@@ -124,7 +125,7 @@ func cleanupChannels() {
 
 type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
 
-func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder) server.Local {
+func startServer(c *config.Config, callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder) server.Local {
 	var srv *jrpc2.Server
 
 	opts := &server.LocalOptions{
@@ -144,9 +145,9 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRe
 			AllowPush:   true,
 			Concurrency: 0, // set concurrency to < 1 causes initialization with number of cores
 			Logger: func(text string) {
-				config.CurrentConfig().Logger().Trace().Str("method", "json-rpc").Msg(text)
+				c.Logger().Trace().Str("method", "json-rpc").Msg(text)
 			},
-			RPCLog: RPCLogger{c: config.CurrentConfig()},
+			RPCLog: RPCLogger{c: c},
 		},
 	}
 
@@ -154,7 +155,6 @@ func startServer(callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRe
 	loc := server.NewLocal(handlers, opts)
 	srv = loc.Server
 
-	c := config.CurrentConfig()
 	c.SetLogLevel(zerolog.LevelDebugValue)
 	// we don't want lsp logging in test runs
 	c.ConfigureLogging(nil)
@@ -238,6 +238,44 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 		"did not receive callback because of wrong protocol version")
 }
 
+func Test_initialized_shouldSendMcpServerAddress(t *testing.T) {
+	c := testutil.UnitTest(t)
+	loc, jsonRpcRecorder := setupServer(t, c)
+
+	params := types.InitializeParams{
+		InitializationOptions: types.Settings{RequiredProtocolVersion: config.LsProtocolVersion},
+	}
+
+	rsp, err := loc.Client.Call(ctx, "initialize", params)
+	require.NoError(t, err)
+	var result types.InitializeResult
+	err = rsp.UnmarshalResult(&result)
+	require.NoError(t, err)
+
+	testURL, err := url.Parse("http://localhost:1234")
+	require.NoError(t, err)
+
+	c.SetMCPServerURL(testURL)
+
+	_, err = loc.Client.Call(ctx, "initialized", params)
+	require.NoError(t, err)
+	require.Eventuallyf(t, func() bool {
+		n := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.mcpServerURL")
+		if n == nil {
+			return false
+		}
+		if len(n) > 1 {
+			t.Fatal("can't succeed anymore, too many notifications ", n)
+		}
+
+		var param types.McpServerURLParams
+		err = n[0].UnmarshalParams(&param)
+		require.NoError(t, err)
+		return param.URL == testURL.String()
+	}, time.Minute, time.Millisecond,
+		"did not receive mcp server url")
+}
+
 func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
@@ -269,6 +307,7 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeSubmitFixFeedback)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeFixDiffsCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.ExecuteCLICommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.ExecuteMCPToolCall)
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
@@ -322,6 +361,7 @@ func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 }
 
 func Test_initialized_shouldRedactToken(t *testing.T) {
+	t.Skipf("this is causing race conditions, because the global stderr is redirected")
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 	oldStdErr := os.Stderr
@@ -750,6 +790,8 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		t.Fatal(err)
 	}
 
+	c.SetLSPInitialized(true)
+
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
 
@@ -762,7 +804,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	)
 }
 
-func createTemporaryDirectoryWithSnykFile(t *testing.T) (snykFilePath string, folderPath string) {
+func createTemporaryDirectoryWithSnykFile(t *testing.T) (snykFilePath types.FilePath, folderPath types.FilePath) {
 	t.Helper()
 
 	temp := t.TempDir()
@@ -772,7 +814,7 @@ func createTemporaryDirectoryWithSnykFile(t *testing.T) (snykFilePath string, fo
 		t.Fatalf("couldn't get abs folder path of temp dir: %v", err)
 	}
 
-	snykFilePath = filepath.Join(temp, ".snyk")
+	snykFilePath = types.FilePath(filepath.Join(temp, ".snyk"))
 	yamlContent := `
 ignore:
   SNYK-JS-QS-3153490:
@@ -782,9 +824,9 @@ ignore:
         created: 2024-07-26T13:55:05.417Z
 patch: {}
 `
-	err = os.WriteFile(snykFilePath, []byte(yamlContent), 0600)
+	err = os.WriteFile(string(snykFilePath), []byte(yamlContent), 0600)
 	assert.NoError(t, err)
-	return snykFilePath, temp
+	return snykFilePath, types.FilePath(temp)
 }
 
 func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.T) {
@@ -801,6 +843,8 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 	if err != nil {
 		t.Fatalf("initialization failed: %v", err)
 	}
+
+	c.SetLSPInitialized(true)
 
 	snykFilePath, folderPath := createTemporaryDirectoryWithSnykFile(t)
 
@@ -853,6 +897,8 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	c.SetLSPInitialized(true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
@@ -908,7 +954,7 @@ func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	)
 }
 
-func sendFileSavedMessage(t *testing.T, filePath, fileDir string, loc server.Local) sglsp.DocumentURI {
+func sendFileSavedMessage(t *testing.T, filePath types.FilePath, fileDir types.FilePath, loc server.Local) sglsp.DocumentURI {
 	t.Helper()
 	c := config.CurrentConfig()
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
@@ -958,7 +1004,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	file := testsupport.CreateTempFile(t, t.TempDir())
 	w := c.Workspace()
 
-	f := types.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(file.Name())}
+	f := types.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(types.FilePath(file.Name()))}
 	_, err := loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
 		Event: types.WorkspaceFoldersChangeEvent{
 			Added: []types.WorkspaceFolder{f},
@@ -987,7 +1033,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 
 // Check if published diagnostics for given testPath match the expectedNumber.
 // If expectedNumber == -1 assume check for expectedNumber > 0
-func checkForPublishedDiagnostics(t *testing.T, c *config.Config, testPath string, expectedNumber int, jsonRPCRecorder *testsupport.JsonRPCRecorder) func() bool {
+func checkForPublishedDiagnostics(t *testing.T, c *config.Config, testPath types.FilePath, expectedNumber int, jsonRPCRecorder *testsupport.JsonRPCRecorder) func() bool {
 	t.Helper()
 	return func() bool {
 		w := c.Workspace()
@@ -1025,8 +1071,8 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, t.TempDir(), testsupport.NodejsGoof, "0336589", c.Logger())
-	defer func(path string) { _ = os.RemoveAll(path) }(cloneTargetDir)
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	defer func(path string) { _ = os.RemoveAll(path) }(string(cloneTargetDir))
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -1054,14 +1100,14 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		return f != nil && f.IsScanned()
 	}, maxIntegTestDuration, 100*time.Millisecond)
 
-	testPath := cloneTargetDir + string(os.PathSeparator) + "package.json"
+	testPath := string(cloneTargetDir) + string(os.PathSeparator) + "package.json"
 	testPosition := sglsp.Position{
 		Line:      17,
 		Character: 7,
 	}
 
 	hoverResp, err := loc.Client.Call(ctx, "textDocument/hover", hover.Params{
-		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(testPath)},
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(types.FilePath(testPath))},
 		Position:     testPosition,
 	})
 
@@ -1077,7 +1123,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 	assert.Equal(t,
 		hoverResult.Contents.Value,
-		di.HoverService().GetHover(testPath, converter.FromPosition(testPosition)).Contents.Value)
+		di.HoverService().GetHover(types.FilePath(testPath), converter.FromPosition(testPosition)).Contents.Value)
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 

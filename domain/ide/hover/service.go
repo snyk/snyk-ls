@@ -22,21 +22,21 @@ import (
 	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Service interface {
-	DeleteHover(p product.Product, path string)
+	DeleteHover(p product.Product, path types.FilePath)
 	Channel() chan DocumentHovers
 	ClearAllHovers()
-	GetHover(path string, pos snyk.Position) Result
+	GetHover(path types.FilePath, pos types.Position) Result
 }
 
 type hoversByProduct map[product.Product][]Hover[Context]
 
 type DefaultHoverService struct {
-	hoversByFilePath map[string]hoversByProduct
+	hoversByFilePath map[types.FilePath]hoversByProduct
 	hoverIndexes     map[string]bool
 	hoverChan        chan DocumentHovers
 	mutex            *sync.RWMutex
@@ -45,7 +45,7 @@ type DefaultHoverService struct {
 
 func NewDefaultService(c *config.Config) Service {
 	s := &DefaultHoverService{}
-	s.hoversByFilePath = make(map[string]hoversByProduct)
+	s.hoversByFilePath = make(map[types.FilePath]hoversByProduct)
 	s.hoverIndexes = make(map[string]bool)
 	s.hoverChan = make(chan DocumentHovers, 10000)
 	s.mutex = &sync.RWMutex{}
@@ -54,9 +54,9 @@ func NewDefaultService(c *config.Config) Service {
 	return s
 }
 
-func (s *DefaultHoverService) isHoverForPosition(hover Hover[Context], pos snyk.Position) bool {
+func (s *DefaultHoverService) isHoverForPosition(hover Hover[Context], pos types.Position) bool {
 	hoverRange := hover.Range
-	posRange := snyk.Range{Start: pos, End: pos}
+	posRange := types.Range{Start: pos, End: pos}
 	overlaps := hoverRange.Overlaps(posRange)
 	s.c.Logger().Trace().Str("method", "isHoverForPosition").Msgf("hover: %v, pos: %v, overlaps: %v", hoverRange, pos, overlaps)
 	return overlaps
@@ -85,14 +85,14 @@ func (s *DefaultHoverService) registerHovers(result DocumentHovers) {
 	}
 }
 
-func (s *DefaultHoverService) DeleteHover(p product.Product, path string) {
+func (s *DefaultHoverService) DeleteHover(p product.Product, path types.FilePath) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if _, exists := s.hoversByFilePath[path]; exists {
 		delete(s.hoversByFilePath[path], p)
 	}
 	for indexKey := range s.hoverIndexes {
-		document := path
+		document := string(path)
 		if strings.Contains(indexKey, document) && strings.Contains(indexKey, p.ToProductCodename()) {
 			s.c.Logger().Debug().
 				Str("method", "DeleteHover").
@@ -112,11 +112,11 @@ func (s *DefaultHoverService) Channel() chan DocumentHovers {
 func (s *DefaultHoverService) ClearAllHovers() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.hoversByFilePath = map[string]hoversByProduct{}
+	s.hoversByFilePath = map[types.FilePath]hoversByProduct{}
 	s.hoverIndexes = map[string]bool{}
 }
 
-func (s *DefaultHoverService) GetHover(path string, pos snyk.Position) Result {
+func (s *DefaultHoverService) GetHover(path types.FilePath, pos types.Position) Result {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -142,7 +142,7 @@ func (s *DefaultHoverService) createHoverListener() {
 		result := <-s.hoverChan
 		s.c.Logger().Trace().
 			Str("method", "createHoverListener").
-			Str("uri", result.Path).
+			Str("uri", string(result.Path)).
 			Msg("reading hover from chan.")
 
 		s.registerHovers(result)

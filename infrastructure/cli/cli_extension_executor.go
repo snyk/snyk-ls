@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type ExtensionExecutor struct {
@@ -45,10 +46,9 @@ func NewExtensionExecutor(c *config.Config) Executor {
 	}
 }
 
-func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir string) (resp []byte, err error) {
+func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error) {
 	method := "ExtensionExecutor.Execute"
-	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd[1:]).Str("workingDir",
-		workingDir).Msg("calling legacycli extension")
+	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd[1:]).Str("workingDir", string(workingDir)).Msg("calling legacycli extension")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(c.cliTimeout))
@@ -67,16 +67,16 @@ func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir
 	return output, err
 }
 
-func (c ExtensionExecutor) doExecute(_ context.Context, cmd []string, workingDir string) ([]byte, error) {
+func (c ExtensionExecutor) doExecute(_ context.Context, cmd []string, workingDir types.FilePath) ([]byte, error) {
 	engine := config.CurrentConfig().Engine()
 	engine.GetConfiguration().Set(configuration.TIMEOUT, c.cliTimeout.Seconds())
 
 	legacyCLI := workflow.NewWorkflowIdentifier("legacycli")
 	legacyCLIConfig := config.CurrentConfig().Engine().GetConfiguration().Clone()
-	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
+	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, string(workingDir))
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
-	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), workingDir)
+	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
 
 	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
 	if len(data) > 0 {

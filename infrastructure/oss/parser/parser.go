@@ -21,7 +21,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Dependency struct {
@@ -29,7 +29,7 @@ type Dependency struct {
 	GroupID    string
 	ArtifactID string
 	Version    string
-	Range      snyk.Range
+	Range      types.Range
 }
 
 func (d Dependency) String() string {
@@ -38,7 +38,7 @@ func (d Dependency) String() string {
 
 type DependencyParser interface {
 	// Parse analyzes the given files contents and returns the found dependencies
-	Parse(filePath string) (dependencies []Dependency, err error)
+	Parse(filePath types.FilePath) (dependencies []Dependency, err error)
 	ParseContent(content string) (dependencies []Dependency, err error)
 }
 
@@ -47,8 +47,8 @@ var parserConstructors = map[string]func(config *config.Config) DependencyParser
 	".htm":  func(config *config.Config) DependencyParser { return NewHTMLParser(config) },
 }
 
-func NewParser(config *config.Config, path string) DependencyParser {
-	ext := filepath.Ext(path)
+func NewParser(config *config.Config, path types.FilePath) DependencyParser {
+	ext := filepath.Ext(string(path))
 	parserConstructor := parserConstructors[ext]
 	if parserConstructor == nil {
 		return nil

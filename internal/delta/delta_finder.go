@@ -52,17 +52,17 @@ func WithDiffer(differ Differ) func(*Finder) {
 	}
 }
 
-func (f *Finder) Enrich(baseList, currentList []Identifiable) (enrichedList []Identifiable, err error) {
-	deltaList, err := f.Diff(baseList, currentList)
+func (f *Finder) DiffAndEnrich(baseList, allIssues []Identifiable) ([]Identifiable, error) {
+	newIssueList, err := f.Diff(baseList, allIssues)
 	if err != nil {
 		return nil, err
 	}
-	// Enrich IsNew property
+
 	if f.enricher != nil {
-		currentList = f.enricher.EnrichWithIsNew(currentList, deltaList)
+		allIssues = f.enricher.EnrichWithIsNew(allIssues, newIssueList)
 	}
 
-	return currentList, nil
+	return allIssues, nil
 }
 
 func (f *Finder) Diff(baseList, currentList []Identifiable) (diffList []Identifiable, err error) {
@@ -79,18 +79,20 @@ func (f *Finder) Diff(baseList, currentList []Identifiable) (diffList []Identifi
 	}
 
 	if f.enricher != nil {
-		f.enricher.EnrichWithId(baseList)
+		baseList = f.enricher.EnrichWithId(baseList)
 	}
 
 	if f.matcher != nil {
-		// Match ids from baseList to currentList if the issue is similar.
+		// Match ids from baseList to currentList if the issue is similar
+		// Set the GlobalIdentifier to the matched issue's global identifier
 		currentList, err = f.matcher.Match(baseList, currentList)
 		if err != nil {
 			return nil, err
 		}
-		// Ensure new findings have ids
+
+		// Ensure new findings have ids, if there's no match
 		if f.enricher != nil {
-			f.enricher.EnrichWithId(currentList)
+			currentList = f.enricher.EnrichWithId(currentList)
 		}
 	}
 

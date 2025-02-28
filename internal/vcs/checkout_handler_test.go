@@ -27,7 +27,7 @@ import (
 
 func TestCheckoutHandler_ShouldCheckout(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
 	_, _ = initGitRepo(t, repoPath, false)
 	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
 
@@ -42,7 +42,7 @@ func TestCheckoutHandler_ShouldCheckout(t *testing.T) {
 
 func TestCheckoutHandler_InvalidGitRepo(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
 	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
 
 	err := ch.CheckoutBaseBranch(c.Logger(), getFolderConfig(repoPath))
@@ -54,7 +54,7 @@ func TestCheckoutHandler_InvalidGitRepo(t *testing.T) {
 
 func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 	c := testutil.UnitTest(t)
-	repoPath := t.TempDir()
+	repoPath := types.FilePath(t.TempDir())
 	_, _ = initGitRepo(t, repoPath, false)
 
 	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
@@ -79,7 +79,7 @@ func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 	ch.CleanupFunc()()
 }
 
-func getFolderConfig(path string) *types.FolderConfig {
+func getFolderConfig(path types.FilePath) *types.FolderConfig {
 	return &types.FolderConfig{
 		FolderPath: path,
 	}

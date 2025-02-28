@@ -59,7 +59,7 @@ func (n *Node) Accept(v Visitor) {
 }
 
 func (n *Node) String() string {
-	return fmt.Sprintf("Name=%s, Value=%s, Position=%d:%d:%d, Tree=%s, Parent=%s, LinkedParentDependencyNode=%s", n.Name, n.Value, n.Line, n.StartChar, n.EndChar, n.Tree, n.Parent, n.LinkedParentDependencyNode)
+	return fmt.Sprintf("Name=%s, Value=%s, CodeFlowPositionInFile=%d:%d:%d, Tree=%s, Parent=%s, LinkedParentDependencyNode=%s", n.Name, n.Value, n.Line, n.StartChar, n.EndChar, n.Tree, n.Parent, n.LinkedParentDependencyNode)
 }
 
 func (n *Node) DebugString() string {
