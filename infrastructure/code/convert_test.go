@@ -1171,12 +1171,12 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// If we're testing with a valid file path, create it for the test to use.
 			if tt.filePath == tempFilePath {
-				err := os.WriteFile(tempFilePath, []byte(originalFileContent), 0666)
+				err := os.WriteFile(tempFilePath, []byte(tt.fileContents), 0666)
 				assert.NoError(t, err)
 
 				testContents, err := os.ReadFile(tt.filePath)
 				assert.NoError(t, err)
-				assert.Equalf(t, originalFileContent, string(testContents), "File contents: %v", string(testContents))
+				assert.Equalf(t, tt.fileContents, string(testContents), "File contents: %v", string(testContents))
 			}
 
 			// Create a WorkSpaceEdit for the file, and check against the reference.
