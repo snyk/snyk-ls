@@ -111,7 +111,7 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 			// Note that IssueProvider.Issues() does not return enriched issues (i.e, we don't know if they're new). so we
 			// also need to get the deltas as a separate operation later.
 			// TODO Find the root cause of the issues not being enriched. This is likely an unwanted pointer dereference.
-			for _, issues := range ip.FilterIssues(ip.Issues(), issueTypes) {
+			for _, issues := range ip.Issues() {
 				allIssues = append(allIssues, issues...)
 			}
 		} else {
