@@ -139,6 +139,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	params := lsp.ExecuteCommandParams{Command: types.LoginCommand}
 
 	_, err = loc.Client.Call(ctx, "initialized", types.InitializedParams{})

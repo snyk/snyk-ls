@@ -52,6 +52,7 @@ func UnitTest(t *testing.T) *config.Config {
 	c.ConfigureLogging(nil)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	c.SetTrustedFolderFeatureEnabled(false)
+	setMCPServerURL(t, c)
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
@@ -120,9 +121,7 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 	c.SetToken(testsupport.GetEnvironmentToken(useConsistentIgnores))
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
-	u, err := url.Parse("http://localhost:1111")
-	require.NoError(t, err)
-	c.SetMCPServerURL(u)
+	setMCPServerURL(t, c)
 	redirectConfigAndDataHome(t, c)
 
 	config.SetCurrentConfig(c)
@@ -131,6 +130,13 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 		cleanupFakeCliFile(c)
 	})
 	return c
+}
+
+func setMCPServerURL(t *testing.T, c *config.Config) {
+	t.Helper()
+	u, err := url.Parse("http://localhost:1111")
+	require.NoError(t, err)
+	c.SetMCPServerURL(u)
 }
 
 func redirectConfigAndDataHome(t *testing.T, c *config.Config) {
