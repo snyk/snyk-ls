@@ -86,7 +86,7 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 
 	explanations, err := fixHandler.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs})
 	if err != nil {
-		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.GetAdditionalData().GetKey())
+		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.GetID())
 		return
 	}
 	for j := range len(explanations) {
