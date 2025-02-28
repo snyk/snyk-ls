@@ -36,7 +36,6 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/subosito/gotenv v1.6.0
 	github.com/writeas/go-strip-markdown v2.0.1+incompatible
-	github.com/xtgo/uuid v0.0.0-20140804021211-a0b114877d4c
 	go.lsp.dev/uri v0.3.0
 	golang.org/x/exp v0.0.0-20250215185904-eff6e970281f
 	golang.org/x/mod v0.23.0
