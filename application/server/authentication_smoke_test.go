@@ -70,6 +70,7 @@ func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenS
 	c.SetSnykOssEnabled(true)
 	// we have to reset the token, as smoketest automatically grab it from env
 	c.SetToken("")
+	c.SetLSPInitialized(true)
 	di.Init()
 
 	clientParams := types.InitializeParams{

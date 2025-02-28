@@ -30,7 +30,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "^1.24.0"
+          go-version: "^1.23.0"
 
       - name: Lint source code
         run: |
@@ -49,7 +49,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "^1.24.0"
+          go-version: "^1.23.0"
 
       - name: Set up Snyk CLI
         uses: snyk/actions/setup@master
@@ -98,7 +98,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "^1.24.0"
+          go-version: "^1.23.6"
 
       - name: Cache Pact CLI tools
         if: matrix.os != 'windows-latest'
@@ -219,7 +219,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "^1.24.0"
+          go-version: "^1.23.6"
 
       - name: update licenses
         run: |
@@ -250,7 +250,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "^1.24.0"
+          go-version: "^1.23.6"
 
       - name: Create License Report
         id: create_license_report
