@@ -42,20 +42,11 @@ type IssueEnhancer struct {
 	notifier      notification.Notifier
 	learnService  learn.Service
 	requestId     string
-	rootPath      string
+	rootPath      types.FilePath
 	c             *config.Config
 }
 
-func newIssueEnhancer(
-	SnykCode SnykCodeClient,
-	instrumentor codeClientObservability.Instrumentor,
-	errorReporter codeClientObservability.ErrorReporter,
-	notifier notification.Notifier,
-	learnService learn.Service,
-	requestId string,
-	rootPath string,
-	c *config.Config,
-) IssueEnhancer {
+func newIssueEnhancer(SnykCode SnykCodeClient, instrumentor codeClientObservability.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, c *config.Config) IssueEnhancer {
 	return IssueEnhancer{
 		SnykCode:      SnykCode,
 		instrumentor:  instrumentor,
@@ -69,7 +60,7 @@ func newIssueEnhancer(
 }
 
 // Adds code actions and code lenses for issues found
-func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue) {
+func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []types.Issue) {
 	method := "addCodeActions"
 
 	autoFixEnabled := getCodeSettings().isAutofixEnabled.Get()
@@ -83,7 +74,7 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 	}
 
 	for i := range issues {
-		issueData, ok := issues[i].AdditionalData.(snyk.CodeIssueData)
+		issueData, ok := issues[i].GetAdditionalData().(snyk.CodeIssueData)
 		if !ok {
 			b.c.Logger().Error().Str("method", method).Msg("Failed to fetch additional data")
 			continue
@@ -91,32 +82,41 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []snyk.Issue
 
 		issueData.HasAIFix = autoFixEnabled && issueData.IsAutofixable
 
-		if issueData.HasAIFix && !issues[i].IsIgnored {
-			codeActionShowDocument := *b.createShowDocumentCodeAction(issues[i])
-			issues[i].CodeActions = append(issues[i].CodeActions, codeActionShowDocument)
+		if issueData.HasAIFix && !issues[i].GetIsIgnored() {
+			codeActionShowDocument := b.createShowDocumentCodeAction(issues[i])
+			issues[i].SetCodeActions(append(issues[i].GetCodeActions(), codeActionShowDocument))
 
-			uri := SnykMagnetUri(issues[i], ShowInDetailPanelIdeCommand)
-
-			issues[i].CodelensCommands = append(issues[i].CodelensCommands, types.CommandData{
+			uri, err := SnykMagnetUri(issues[i], ShowInDetailPanelIdeCommand)
+			if err != nil {
+				b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
+				return
+			}
+			issues[i].SetCodelensCommands(append(issues[i].GetCodelensCommands(), types.CommandData{
 				Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
 				CommandId: types.NavigateToRangeCommand,
-				Arguments: []any{uri, issues[i].Range},
-			})
+				Arguments: []any{uri, issues[i].GetRange()},
+			}))
 		}
-		issues[i].AdditionalData = issueData
+		issues[i].SetAdditionalData(issueData)
 
 		if learnEnabled {
 			action := b.createOpenSnykLearnCodeAction(issues[i])
 			if action != nil {
-				issues[i].CodeActions = append(issues[i].CodeActions, *action)
+				issues[i].SetCodeActions(append(issues[i].GetCodeActions(), action))
 			}
 		}
 	}
 }
 
 // returns the deferred code action CodeAction which calls autofix.
-func (b *IssueEnhancer) createShowDocumentCodeAction(issue snyk.Issue) (codeAction *snyk.CodeAction) {
-	uri := SnykMagnetUri(issue, ShowInDetailPanelIdeCommand)
+func (b *IssueEnhancer) createShowDocumentCodeAction(issue types.Issue) (codeAction types.CodeAction) {
+	method := "code.createShowDocumentCodeAction"
+	uri, err := SnykMagnetUri(issue, ShowInDetailPanelIdeCommand)
+	if err != nil {
+		b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
+		return nil
+	}
+
 	title := fmt.Sprintf("⚡ Fix this issue: %s (Snyk)", issueTitle(issue))
 
 	codeAction = &snyk.CodeAction{
@@ -124,13 +124,13 @@ func (b *IssueEnhancer) createShowDocumentCodeAction(issue snyk.Issue) (codeActi
 		Command: &types.CommandData{
 			Title:     title,
 			CommandId: types.NavigateToRangeCommand,
-			Arguments: []any{uri, issue.Range},
+			Arguments: []any{uri, issue.GetRange()},
 		},
 	}
 	return codeAction
 }
 
-func (b *IssueEnhancer) autofixShowDetailsFunc(ctx context.Context, issue snyk.Issue) func() *types.CommandData {
+func (b *IssueEnhancer) autofixShowDetailsFunc(ctx context.Context, issue types.Issue) func() *types.CommandData {
 	f := func() *types.CommandData {
 		method := "code.autofixShowDetailsFunc"
 		s := b.instrumentor.StartSpan(ctx, method)
@@ -141,20 +141,20 @@ func (b *IssueEnhancer) autofixShowDetailsFunc(ctx context.Context, issue snyk.I
 	return f
 }
 
-func getSnykShowDocumentCommand(issue snyk.Issue, action string) *types.CommandData {
-	uri := SnykMagnetUri(issue, action)
+func getSnykShowDocumentCommand(issue types.Issue, action string) *types.CommandData {
+	uri, _ := SnykMagnetUri(issue, action)
 
 	commandData := &types.CommandData{
 		Title:     types.NavigateToRangeCommand,
 		CommandId: types.NavigateToRangeCommand,
-		Arguments: []any{uri, issue.Range},
+		Arguments: []any{uri, issue.GetRange()},
 	}
 	return commandData
 }
 
-func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *snyk.CodeAction) {
+func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue types.Issue) (ca types.CodeAction) {
 	title := fmt.Sprintf("Learn more about %s (Snyk)", issueTitle(issue))
-	lesson, err := b.learnService.GetLesson(issue.Ecosystem, issue.ID, issue.CWEs, issue.CVEs, issue.IssueType)
+	lesson, err := b.learnService.GetLesson(issue.GetEcosystem(), issue.GetID(), issue.GetCWEs(), issue.GetCVEs(), issue.GetIssueType())
 	if err != nil {
 		b.c.Logger().Err(err).Msg("failed to get lesson")
 		b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: ""})
@@ -174,7 +174,7 @@ func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue snyk.Issue) (ca *sny
 	return ca
 }
 
-func getShardKey(folderPath string, authToken string) string {
+func getShardKey(folderPath types.FilePath, authToken string) string {
 	if len(folderPath) > 0 {
 		return util.Hash([]byte(folderPath))
 	}
@@ -185,38 +185,38 @@ func getShardKey(folderPath string, authToken string) string {
 	return ""
 }
 
-func issueTitle(issue snyk.Issue) string {
-	if issue.AdditionalData == nil {
-		return issue.ID
+func issueTitle(issue types.Issue) string {
+	if issue.GetAdditionalData() == nil {
+		return issue.GetID()
 	}
 
-	codeIssueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	codeIssueData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 	if ok && codeIssueData.Title != "" {
 		return codeIssueData.Title
 	}
 
-	return issue.ID
+	return issue.GetID()
 }
 
-func issueId(issue snyk.Issue) string {
-	if issue.AdditionalData == nil {
-		return issue.ID
+func issueId(issue types.Issue) string {
+	if issue.GetAdditionalData() == nil {
+		return issue.GetID()
 	}
 
-	codeIssueData, ok := issue.AdditionalData.(snyk.CodeIssueData)
+	codeIssueData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 	if ok && codeIssueData.GetKey() != "" {
 		return codeIssueData.GetKey()
 	}
 
-	return issue.ID
+	return issue.GetID()
 }
 
-func SnykMagnetUri(issue snyk.Issue, ideAction string) string {
+func SnykMagnetUri(issue types.Issue, ideAction string) (string, error) {
 	u := &url.URL{
 		Scheme:   "snyk",
-		Path:     issue.AffectedFilePath,
-		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.Product)), url.QueryEscape(issueId(issue)), ideAction),
+		Path:     string(issue.GetAffectedFilePath()),
+		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.GetProduct())), url.QueryEscape(issueId(issue)), ideAction),
 	}
 
-	return u.String()
+	return u.String(), nil
 }

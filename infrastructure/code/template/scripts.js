@@ -150,6 +150,12 @@ function showCurrentDiff() {
   // IntelliJ way of getting file ? TODO: Investigate
   var filePath = showSuggestion.filePath ? showSuggestion.filePath : getFilePathFromFix(diffSuggestion);
   var patch = diffSuggestion.unifiedDiffsPerFile[filePath];
+  if(diffSuggestion.explanation.length){
+    const explainFixHeader = document.getElementById("ai-explain-header")
+    if(explainFixHeader){
+      toggleElement(explainFixHeader, 'show')
+    }
+  }
   fixExplainText.innerText = diffSuggestion.explanation;
   console.log();
   // clear all elements

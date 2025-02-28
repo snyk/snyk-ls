@@ -17,8 +17,8 @@
 package persistence
 
 import (
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var _ ScanSnapshotPersister = (*NopScanPersister)(nil)
@@ -30,21 +30,21 @@ func NewNopScanPersister() *NopScanPersister {
 	return &NopScanPersister{}
 }
 
-func (n NopScanPersister) Exists(_, _ string, _ product.Product) bool {
+func (n NopScanPersister) Exists(_ types.FilePath, _ string, _ product.Product) bool {
 	return false
 }
 
-func (n NopScanPersister) Clear(_ []string, _ bool) {
+func (n NopScanPersister) Clear(_ []types.FilePath, _ bool) {
 }
 
-func (n NopScanPersister) Init(_ []string) error {
+func (n NopScanPersister) Init(folderPath []types.FilePath) error {
 	return nil
 }
 
-func (n NopScanPersister) Add(_, _ string, _ []snyk.Issue, _ product.Product) error {
+func (n NopScanPersister) Add(_ types.FilePath, _ string, _ []types.Issue, _ product.Product) error {
 	return nil
 }
 
-func (n NopScanPersister) GetPersistedIssueList(_ string, _ product.Product) ([]snyk.Issue, error) {
+func (n NopScanPersister) GetPersistedIssueList(_ types.FilePath, _ product.Product) ([]types.Issue, error) {
 	return nil, nil
 }

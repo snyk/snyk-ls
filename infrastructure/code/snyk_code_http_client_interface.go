@@ -19,21 +19,21 @@ package code
 import (
 	"context"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type AnalysisOptions struct {
 	bundleHash   string
 	shardKey     string
-	limitToFiles []string
+	limitToFiles []types.FilePath
 	severity     int
 }
 
 type AutofixOptions struct {
 	bundleHash string
 	shardKey   string
-	filePath   string
-	issue      snyk.Issue
+	filePath   types.FilePath
+	issue      types.Issue
 }
 
 type SnykCodeClient interface {
@@ -43,22 +43,17 @@ type SnykCodeClient interface {
 
 	CreateBundle(
 		ctx context.Context,
-		files map[string]string,
-	) (newBundleHash string, missingFiles []string, err error)
+		files map[types.FilePath]string,
+	) (newBundleHash string, missingFiles []types.FilePath, err error)
 
-	ExtendBundle(
-		ctx context.Context,
-		bundleHash string,
-		files map[string]BundleFile,
-		removedFiles []string,
-	) (newBundleHash string, missingFiles []string, err error)
+	ExtendBundle(ctx context.Context, bundleHash string, files map[types.FilePath]BundleFile, removedFiles []types.FilePath) (newBundleHash string, missingFiles []types.FilePath, err error)
 
 	RunAnalysis(
 		ctx context.Context,
 		options AnalysisOptions,
-		baseDir string,
+		baseDir types.FilePath,
 	) (
-		[]snyk.Issue,
+		[]types.Issue,
 		AnalysisStatus,
 		error,
 	)
@@ -67,9 +62,5 @@ type SnykCodeClient interface {
 
 	getAutofixResponse(ctx context.Context, options AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error)
 
-	GetAutofixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (
-		unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion,
-		status AutofixStatus,
-		err error,
-	)
+	GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error)
 }

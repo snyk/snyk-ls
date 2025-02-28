@@ -26,6 +26,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
@@ -34,7 +35,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		Range:     getIssueRange(),
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		ID:        "go/NoHardcodedCredentials/test",
@@ -98,7 +99,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		Range:     getIssueRange(),
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		ID:        "go/NoHardcodedCredentials/test",
@@ -133,13 +134,13 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:        "java/DontUsePrintStackTrace",
 		Severity:  2,
 		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		IsIgnored: true,
-		IgnoreDetails: &snyk.IgnoreDetails{
+		IgnoreDetails: &types.IgnoreDetails{
 			Category:   "wont-fix",
 			Reason:     getIgnoreReason("long"),
 			Expiration: "",
@@ -180,13 +181,13 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:        "scala/DontUsePrintStackTrace",
 		Severity:  2,
 		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		IsIgnored: true,
-		IgnoreDetails: &snyk.IgnoreDetails{
+		IgnoreDetails: &types.IgnoreDetails{
 			Category:   "temporary-ignore",
 			Reason:     getIgnoreReason("long"),
 			Expiration: "2023-08-26T13:16:53.177Z",
@@ -218,13 +219,13 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		ID:        "java/DontUsePrintStackTrace",
 		Severity:  2,
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		IsIgnored: true,
 		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
-		IgnoreDetails: &snyk.IgnoreDetails{
+		IgnoreDetails: &types.IgnoreDetails{
 			Category:   "wont-fix",
 			Reason:     getIgnoreReason("short"),
 			Expiration: "13 days",
@@ -289,7 +290,7 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		Range:     getIssueRange(),
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		ID:        "go/NoHardcodedCredentials/test",
@@ -319,12 +320,12 @@ func getDataFlowElements() []snyk.DataFlowElement {
 		{
 			Content:  "if (!vulnLines.every(e => selectedLines.includes(e))) return false",
 			FilePath: "juice-shop/routes/vulnCodeSnippet.ts",
-			FlowRange: snyk.Range{
-				End: snyk.Position{
+			FlowRange: types.Range{
+				End: types.Position{
 					Character: 42,
 					Line:      67,
 				},
-				Start: snyk.Position{
+				Start: types.Position{
 					Character: 28,
 					Line:      67,
 				},
@@ -334,12 +335,12 @@ func getDataFlowElements() []snyk.DataFlowElement {
 		{
 			Content:  "import * as http from 'http';",
 			FilePath: "main.ts",
-			FlowRange: snyk.Range{
-				End: snyk.Position{
+			FlowRange: types.Range{
+				End: types.Position{
 					Character: 33,
 					Line:      4,
 				},
-				Start: snyk.Position{
+				Start: types.Position{
 					Character: 13,
 					Line:      4,
 				},
@@ -349,12 +350,12 @@ func getDataFlowElements() []snyk.DataFlowElement {
 		{
 			Content:  "import { ExpressAdapter } from '@nestjs/platform-express';",
 			FilePath: "main.ts",
-			FlowRange: snyk.Range{
-				End: snyk.Position{
+			FlowRange: types.Range{
+				End: types.Position{
 					Character: 23,
 					Line:      5,
 				},
-				Start: snyk.Position{
+				Start: types.Position{
 					Character: 8,
 					Line:      5,
 				},
@@ -364,12 +365,12 @@ func getDataFlowElements() []snyk.DataFlowElement {
 		{
 			Content:  "import { LoggerFactory } from './log';",
 			FilePath: "main.ts",
-			FlowRange: snyk.Range{
-				End: snyk.Position{
+			FlowRange: types.Range{
+				End: types.Position{
 					Character: 10,
 					Line:      9,
 				},
-				Start: snyk.Position{
+				Start: types.Position{
 					Character: 9,
 					Line:      97,
 				},
@@ -379,13 +380,13 @@ func getDataFlowElements() []snyk.DataFlowElement {
 	}
 }
 
-func getIssueRange() snyk.Range {
-	return snyk.Range{
-		Start: snyk.Position{
+func getIssueRange() types.Range {
+	return types.Range{
+		Start: types.Position{
 			Line:      67,
 			Character: 28,
 		},
-		End: snyk.Position{
+		End: types.Position{
 			Line:      67,
 			Character: 42,
 		},
@@ -407,7 +408,7 @@ func Test_Prepare_DataFlowTable(t *testing.T) {
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
 	repoCount := 54387
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",
 			DataFlow:           dataFlow,

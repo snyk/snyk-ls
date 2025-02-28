@@ -31,6 +31,10 @@ const (
 	FocusOut   TextDocumentSaveReason = 2
 )
 
+type McpServerURLParams struct {
+	URL string `json:"url"`
+}
+
 type TextDocumentSaveReason int
 
 type DiagnosticResult struct {
@@ -544,11 +548,11 @@ type ScanCommandConfig struct {
 // IDE sends this as part of the settings/initialization
 // LS sends this via the $/snyk.folderConfig notification
 type FolderConfig struct {
-	FolderPath           string                                `json:"folderPath"`
+	FolderPath           FilePath                              `json:"folderPath"`
 	BaseBranch           string                                `json:"baseBranch"`
 	LocalBranches        []string                              `json:"localBranches,omitempty"`
 	AdditionalParameters []string                              `json:"additionalParameters,omitempty"`
-	ReferenceFolderPath  string                                `json:"referenceFolderPath,omitempty"`
+	ReferenceFolderPath  FilePath                              `json:"referenceFolderPath,omitempty"`
 	ScanCommandConfig    map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
 }
 
@@ -876,7 +880,7 @@ type CodeActionParams struct {
  * A deferred code action would have both Edit & Command omitted, and when invoked by the user, the server would send
  * a new CodeAction with the Edit and/or Command fields populated.
  */
-type CodeAction struct {
+type LSPCodeAction struct {
 	/**
 	 * A short, human-readable, title for this code action.
 	 */
@@ -1068,7 +1072,7 @@ type LogTraceParams struct {
 }
 
 type SnykTrustedFoldersParams struct {
-	TrustedFolders []string `json:"trustedFolders"`
+	TrustedFolders []FilePath `json:"trustedFolders"`
 }
 
 type ScanStatus string
@@ -1086,7 +1090,7 @@ type SnykScanParams struct {
 	// Product under scan (Snyk Code, Snyk Open Source, etc...)
 	Product string `json:"product"`
 	// FolderPath is the root-folder of the current scan
-	FolderPath string `json:"folderPath"`
+	FolderPath FilePath `json:"folderPath"`
 	// Error Message
 	ErrorMessage string `json:"errorMessage,omitempty"`
 	// CliError contains structured error information from the CLI
@@ -1098,7 +1102,7 @@ type ScanIssue struct { // TODO - convert this to a generic type
 	Id                  string                      `json:"id"`
 	Title               string                      `json:"title"`
 	Severity            string                      `json:"severity"`
-	FilePath            string                      `json:"filePath"`
+	FilePath            FilePath                    `json:"filePath"`
 	Range               sglsp.Range                 `json:"range"`
 	IsIgnored           bool                        `json:"isIgnored"`
 	IsNew               bool                        `json:"isNew"`
@@ -1136,7 +1140,7 @@ type OssIssueData struct {
 	IsPatchable       bool           `json:"isPatchable"`
 	IsUpgradable      bool           `json:"isUpgradable"`
 	ProjectName       string         `json:"projectName"`
-	DisplayTargetFile string         `json:"displayTargetFile"`
+	DisplayTargetFile FilePath       `json:"displayTargetFile"`
 	MatchingIssues    []OssIssueData `json:"matchingIssues"`
 	Lesson            string         `json:"lessonUrl,omitempty"`
 }
@@ -1148,7 +1152,7 @@ type OssIdentifiers struct {
 
 type DataflowElement struct {
 	Position  int         `json:"position"`
-	FilePath  string      `json:"filePath"`
+	FilePath  FilePath    `json:"filePath"`
 	FlowRange sglsp.Range `json:"flowRange"`
 	Content   string      `json:"content"`
 }
@@ -1185,11 +1189,11 @@ type Marker struct {
 }
 
 type MarkerPosition struct {
-	Position
+	CodeFlowPositionInFile
 	File string `json:"file"`
 }
 
-type Position struct {
+type CodeFlowPositionInFile struct {
 	Cols Point `json:"cols"`
 	Rows Point `json:"rows"`
 }

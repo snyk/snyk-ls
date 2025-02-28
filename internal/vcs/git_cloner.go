@@ -26,12 +26,14 @@ import (
 	"github.com/otiai10/copy"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func Clone(logger *zerolog.Logger, srcRepoPath string, destinationPath string, targetBranchName string) (*git.Repository, error) {
+func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath types.FilePath, targetBranchName string) (*git.Repository, error) {
 	targetBranchReferenceName := plumbing.NewBranchReferenceName(targetBranchName)
-	clonedRepo, err := git.PlainClone(destinationPath, false, &git.CloneOptions{
-		URL:           srcRepoPath,
+	clonedRepo, err := git.PlainClone(string(destinationPath), false, &git.CloneOptions{
+		URL:           string(srcRepoPath),
 		ReferenceName: targetBranchReferenceName,
 		SingleBranch:  true,
 	})
@@ -59,8 +61,8 @@ func Clone(logger *zerolog.Logger, srcRepoPath string, destinationPath string, t
 	return clonedRepo, nil
 }
 
-func patchClonedRepoRemoteOrigin(logger *zerolog.Logger, srcRepoPath string, clonedRepo *git.Repository) error {
-	srcRepo, err := git.PlainOpen(srcRepoPath)
+func patchClonedRepoRemoteOrigin(logger *zerolog.Logger, srcRepoPath types.FilePath, clonedRepo *git.Repository) error {
+	srcRepo, err := git.PlainOpen(string(srcRepoPath))
 	if err != nil {
 		logger.Error().Err(err).Msgf("Could not open source repo: %s", srcRepoPath)
 		return err
@@ -104,8 +106,8 @@ func patchClonedRepoRemoteOrigin(logger *zerolog.Logger, srcRepoPath string, clo
 	return nil
 }
 
-func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath string, destinationRepoPath string, targetBranchReferenceName plumbing.ReferenceName) *git.Repository {
-	repo, err := git.PlainOpen(srcRepoPath)
+func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationRepoPath types.FilePath, targetBranchReferenceName plumbing.ReferenceName) *git.Repository {
+	repo, err := git.PlainOpen(string(srcRepoPath))
 	if err != nil {
 		return nil
 	}
@@ -114,8 +116,8 @@ func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath string, destination
 		logger.Debug().Msgf("Branch %s does not exist in repo %s. Exiting", targetBranchReferenceName.Short(), srcRepoPath)
 		return nil
 	}
-	gitSrcRepoPath := filepath.Join(srcRepoPath, ".git")
-	gitDestRepoPath := filepath.Join(destinationRepoPath, ".git")
+	var gitSrcRepoPath = filepath.Join(string(srcRepoPath), ".git")
+	gitDestRepoPath := filepath.Join(string(destinationRepoPath), ".git")
 	logger.Debug().Msgf("Attemping to copy repo .git folder from: %s to: %s ", gitSrcRepoPath, gitDestRepoPath)
 	err = copy.Copy(gitSrcRepoPath, gitDestRepoPath)
 	if err != nil {
@@ -123,7 +125,7 @@ func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath string, destination
 		return nil
 	}
 	logger.Debug().Msg("Copy operation succeeded")
-	targetRepo, checkOutErr := resetAndCheckoutRepo(destinationRepoPath, targetBranchReferenceName)
+	targetRepo, checkOutErr := resetAndCheckoutRepo(string(destinationRepoPath), targetBranchReferenceName)
 	if checkOutErr != nil {
 		logger.Debug().Err(checkOutErr).Msgf("Could not checkout target branch %s. Exiting", targetBranchReferenceName.Short())
 		return nil
@@ -131,10 +133,10 @@ func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath string, destination
 	return targetRepo
 }
 
-func LocalRepoHasChanges(conf configuration.Configuration, logger *zerolog.Logger, repoPath string) (bool, error) {
-	currentRepo, err := git.PlainOpen(repoPath)
+func LocalRepoHasChanges(conf configuration.Configuration, logger *zerolog.Logger, repoPath types.FilePath) (bool, error) {
+	currentRepo, err := git.PlainOpen(string(repoPath))
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to open current repo " + repoPath)
+		logger.Error().Err(err).Msg(string("Failed to open current repo " + repoPath))
 		return false, err
 	}
 
@@ -142,7 +144,7 @@ func LocalRepoHasChanges(conf configuration.Configuration, logger *zerolog.Logge
 
 	currentRepoBranch, err := currentRepo.Head()
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get HEAD for " + repoPath)
+		logger.Error().Err(err).Msg(string("Failed to get HEAD for " + repoPath))
 		return false, err
 	}
 

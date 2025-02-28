@@ -705,8 +705,13 @@ button.sn-apply-fix:hover {
 }
 
 .sn-msg-4 {
-  animation: inference 4s ease-in infinite;
+  animation: reduce 4s ease-in;
   animation-delay: 12s;
+}
+
+.sn-msg-5 {
+  animation: inference 4s ease-in infinite;
+  animation-delay: 16s;
 }
 
 #s0 {
@@ -868,4 +873,8 @@ button.sn-apply-fix:hover {
 
 .hidden {
   display: none;
+}
+
+.explain-wrapper{
+  margin-top: 1rem;
 }

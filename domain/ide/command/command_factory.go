@@ -39,7 +39,7 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 
 	switch commandData.CommandId {
 	case types.NavigateToRangeCommand:
-		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger(), deepCodeLLMBinding: deepCodeLLMBinding}, nil
+		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger(), deepCodeLLMBinding: deepCodeLLMBinding, c: c}, nil
 	case types.WorkspaceScanCommand:
 		return &workspaceScanCommand{command: commandData, srv: srv, c: c}, nil
 	case types.WorkspaceFolderScanCommand:
@@ -83,6 +83,7 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 			issueProvider:      issueProvider,
 			notifier:           notifier,
 			deepCodeLLMBinding: deepCodeLLMBinding,
+			c:                  c,
 		}, nil
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil

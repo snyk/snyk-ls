@@ -20,22 +20,23 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 type DataFlowElement struct {
 	Position  int
-	FilePath  string
-	FlowRange Range
+	FilePath  types.FilePath
+	FlowRange types.Range
 	Content   string
 }
 
 func (d *DataFlowElement) String() string {
-	return fmt.Sprintf("Position=%d, FilePath=%s, FlowRange %s, Content=%s", d.Position, d.FilePath, d.FlowRange.String(), d.Content)
+	return fmt.Sprintf("CodeFlowPositionInFile=%d, FilePath=%s, FlowRange %s, Content=%s", d.Position, d.FilePath, d.FlowRange.String(), d.Content)
 }
 
 func (d *DataFlowElement) ToMarkDown() (markdown string) {
-	fileName := filepath.Base(d.FilePath)
+	fileName := filepath.Base(string(d.FilePath))
 	fileURI := uri.PathToUri(d.FilePath)
 	line := d.FlowRange.Start.Line + 1 // range is 0-based
 	markdown = fmt.Sprintf(

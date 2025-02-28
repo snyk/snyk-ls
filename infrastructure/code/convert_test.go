@@ -35,10 +35,11 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func getSarifResponseJson(filePath string) string {
-	filePath = strings.ReplaceAll(filePath, `\`, `\\`)
+func getSarifResponseJson(filePath types.FilePath) string {
+	filePath = types.FilePath(strings.ReplaceAll(string(filePath), `\`, `\\`))
 	return fmt.Sprintf(`{
   "type": "sarif",
   "progress": 1,
@@ -630,37 +631,37 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	references := referencesForSampleSarifResponse()
 
 	issue := issues[0]
-	codeIssueData := issue.AdditionalData.(snyk.CodeIssueData)
+	codeIssueData := issue.GetAdditionalData().(snyk.CodeIssueData)
 
 	assert.Equal(t,
 		"DontUsePrintStackTrace: Printing the stack trace of java.lang.InterruptedException. Production code ...",
-		issue.Message)
-	assert.Equal(t, snyk.CodeQualityIssue, issue.IssueType)
-	assert.Equal(t, snyk.Low, issue.Severity)
-	assert.Equal(t, path, issue.AffectedFilePath)
-	assert.Equal(t, snyk.Range{Start: snyk.Position{Line: 5, Character: 6}, End: snyk.Position{Line: 5, Character: 6}}, issue.Range)
-	assert.Equal(t, product.ProductCode, issue.Product)
-	assert.Equal(t, issueDescriptionURL, issue.IssueDescriptionURL)
-	assert.Equal(t, references, issue.References)
-	assert.Contains(t, issue.FormattedMessage, "Example Commit Fixes")
+		issue.GetMessage())
+	assert.Equal(t, types.CodeQualityIssue, issue.GetIssueType())
+	assert.Equal(t, types.Low, issue.GetSeverity())
+	assert.Equal(t, types.FilePath(path), issue.GetAffectedFilePath())
+	assert.Equal(t, types.Range{Start: types.Position{Line: 5, Character: 6}, End: types.Position{Line: 5, Character: 6}}, issue.GetRange())
+	assert.Equal(t, product.ProductCode, issue.GetProduct())
+	assert.Equal(t, issueDescriptionURL, issue.GetIssueDescriptionURL())
+	assert.Equal(t, references, issue.GetReferences())
+	assert.Contains(t, issue.GetFormattedMessage(), "Example Commit Fixes")
 	assert.Equal(t, markersForSampleSarifResponse(path), codeIssueData.Markers)
 	assert.Equal(t, 550, codeIssueData.PriorityScore)
-	assert.Equal(t, resp.Sarif.Runs[0].Tool.Driver.Rules[0].Properties.Cwe, issue.CWEs)
-	assert.Nil(t, issue.IgnoreDetails)
-	assert.False(t, issue.IsIgnored)
+	assert.Equal(t, resp.Sarif.Runs[0].Tool.Driver.Rules[0].Properties.Cwe, issue.GetCWEs())
+	assert.Nil(t, issue.GetIgnoreDetails())
+	assert.False(t, issue.GetIsIgnored())
 	dataFlow := codeIssueData.DataFlow
-	assert.Equal(t, issue.AffectedFilePath, dataFlow[0].FilePath)
-	assert.Equal(t, issue.AffectedFilePath, dataFlow[1].FilePath)
-	assert.Equal(t, issue.AffectedFilePath, dataFlow[2].FilePath)
-	assert.Equal(t, issue.AffectedFilePath, dataFlow[3].FilePath)
+	assert.Equal(t, issue.GetAffectedFilePath(), dataFlow[0].FilePath)
+	assert.Equal(t, issue.GetAffectedFilePath(), dataFlow[1].FilePath)
+	assert.Equal(t, issue.GetAffectedFilePath(), dataFlow[2].FilePath)
+	assert.Equal(t, issue.GetAffectedFilePath(), dataFlow[3].FilePath)
 }
 
-func referencesForSampleSarifResponse() []snyk.Reference {
+func referencesForSampleSarifResponse() []types.Reference {
 	exampleCommitFix1, _ := url.Parse("https://github.com/apache/flink/commit/5d7c5620804eddd59206b24c87ffc89c12fd1184?diff=split#diff-86ec3e3884662ba3b5f4bb5050221fd6L94")
 	exampleCommitFix2, _ := url.Parse("https://github.com/rtr-nettest/open-rmbt/commit/0fa9d5547c5300cf8162b8f31a40aea6847a5c32?diff=split#diff-7e23eb1aa3b7b4d5db89bfd2860277e5L75")
 	exampleCommitFix3, _ := url.Parse("https://github.com/wso2/developer-studio/commit/cfd84b83349e67de4b0239733bc6ed01287856b7?diff=split#diff-645425e844adc2eab8197719cbb2fe8dL285")
 
-	references := []snyk.Reference{
+	references := []types.Reference{
 		{Title: "improve logging and testing", Url: exampleCommitFix1},
 		{Title: "more tests, exceptions", Url: exampleCommitFix2},
 		{Title: "log errors to the log file", Url: exampleCommitFix3},
@@ -717,7 +718,7 @@ func Test_getFormattedMessage(t *testing.T) {
 	testResult := run.Results[0]
 
 	sarifConverter := SarifConverter{sarif: sarifResponse, c: c}
-	msg := sarifConverter.formattedMessageMarkdown(testResult, sarifConverter.getRule(run, "1"), filepath.Dir(p))
+	msg := sarifConverter.formattedMessageMarkdown(testResult, sarifConverter.getRule(run, "1"), types.FilePath(filepath.Dir(p)))
 
 	assert.Contains(t, msg, "Example Commit Fixes")
 	assert.Contains(t, msg, "Data Flow")
@@ -726,20 +727,20 @@ func Test_getFormattedMessage(t *testing.T) {
 func setupConversionTests(t *testing.T,
 	activateSnykCodeSecurity bool,
 	activateSnykCodeQuality bool,
-) (path string, issues []snyk.Issue, response codeClientSarif.SarifResponse) {
+) (path string, issues []types.Issue, response codeClientSarif.SarifResponse) {
 	t.Helper()
 	testutil.UnitTest(t)
 	c := config.CurrentConfig()
 	c.EnableSnykCodeSecurity(activateSnykCodeSecurity)
 	c.EnableSnykCodeQuality(activateSnykCodeQuality)
-	temp := t.TempDir()
-	path = filepath.Join(temp, "File With Spaces.java")
+	temp := types.FilePath(t.TempDir())
+	path = filepath.Join(string(temp), "File With Spaces.java")
 	err := os.WriteFile(path, []byte(strings.Repeat("aa\n", 1000)), 0660)
 	if err != nil {
 		t.Fatal(err, "couldn't write test file")
 	}
 
-	relPath, err := ToRelativeUnixPath(temp, path)
+	relPath, err := ToRelativeUnixPath(temp, types.FilePath(path))
 	encodedPath := EncodePath(relPath)
 	if err != nil {
 		t.Fatal(err, "couldn't get relative path")
@@ -837,7 +838,7 @@ func Test_getCodeIssueType(t *testing.T) {
 
 		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		sarifConverter.getCodeIssueType(testRule)
-		assert.Equal(t, snyk.CodeSecurityVulnerability, sarifConverter.getCodeIssueType(testRule))
+		assert.Equal(t, types.CodeSecurityVulnerability, sarifConverter.getCodeIssueType(testRule))
 	})
 
 	t.Run("Security issue - multiple categories", func(t *testing.T) {
@@ -849,7 +850,7 @@ func Test_getCodeIssueType(t *testing.T) {
 
 		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		sarifConverter.getCodeIssueType(testRule)
-		assert.Equal(t, snyk.CodeSecurityVulnerability, sarifConverter.getCodeIssueType(testRule))
+		assert.Equal(t, types.CodeSecurityVulnerability, sarifConverter.getCodeIssueType(testRule))
 	})
 
 	t.Run("Quality - single category", func(t *testing.T) {
@@ -861,7 +862,7 @@ func Test_getCodeIssueType(t *testing.T) {
 
 		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		sarifConverter.getCodeIssueType(testRule)
-		assert.Equal(t, snyk.CodeQualityIssue, sarifConverter.getCodeIssueType(testRule))
+		assert.Equal(t, types.CodeQualityIssue, sarifConverter.getCodeIssueType(testRule))
 	})
 
 	t.Run("Quality - multiple categories", func(t *testing.T) {
@@ -873,7 +874,7 @@ func Test_getCodeIssueType(t *testing.T) {
 
 		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
 		sarifConverter.getCodeIssueType(testRule)
-		assert.Equal(t, snyk.CodeQualityIssue, sarifConverter.getCodeIssueType(testRule))
+		assert.Equal(t, types.CodeQualityIssue, sarifConverter.getCodeIssueType(testRule))
 	})
 }
 
@@ -887,10 +888,10 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
 	}}
 	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
 	filePath := "file.js"
-	baseDir := t.TempDir()
-	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("var x = new Array();"), 0666)
+	baseDir := types.FilePath(t.TempDir())
+	err := os.WriteFile(filepath.Join(string(baseDir), filePath), []byte("var x = new Array();"), 0666)
 	require.NoError(t, err)
-	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir, filePath)
+	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir, types.FilePath(filePath))
 
 	assert.Equal(t, len(unifiedDiffSuggestions), 1)
 	assert.Equal(t, unifiedDiffSuggestions[0].FixId, "123e4567-e89b-12d3-a456-426614174000/1")
@@ -907,8 +908,8 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions_HtmlEncodedFilePath(t *testin
 	}}
 	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
 	filePath := "file_with space.js"
-	baseDir := t.TempDir()
-	err := os.WriteFile(filepath.Join(baseDir, filePath), []byte("var x = new Array();"), 0666)
+	baseDir := types.FilePath(t.TempDir())
+	err := os.WriteFile(filepath.Join(string(baseDir), filePath), []byte("var x = new Array();"), 0666)
 	require.NoError(t, err)
 	// Here we provide the HTML encoded path and it should be decoded in the function to read the correct file.
 	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir, "file_with%20space.js")
@@ -1115,33 +1116,33 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 		diff         string
 		filePath     string
 		fileContents string
-		expectedEdit snyk.WorkspaceEdit
+		expectedEdit types.WorkspaceEdit
 	}{
 		{"Multi line diff results in multiple TextEdits",
 			goodDiff,
 			tempFilePath,
 			originalFileContent,
-			snyk.WorkspaceEdit{Changes: map[string][]snyk.TextEdit{
-				tempFilePath: []snyk.TextEdit{
+			types.WorkspaceEdit{Changes: map[string][]types.TextEdit{
+				tempFilePath: []types.TextEdit{
 					// WorkspaceEdit for the correctly formatted diff will contain 5 TextEdits: 2 deletions and 3 insertions.
-					snyk.TextEdit{
-						Range:   snyk.Range{Start: snyk.Position{Line: 2, Character: 0}, End: snyk.Position{Line: 3, Character: 0}},
+					types.TextEdit{
+						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 3, Character: 0}},
 						NewText: "",
 					},
-					snyk.TextEdit{
-						Range:   snyk.Range{Start: snyk.Position{Line: 2, Character: 0}, End: snyk.Position{Line: 3, Character: 0}},
+					types.TextEdit{
+						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 3, Character: 0}},
 						NewText: "",
 					},
-					snyk.TextEdit{
-						Range:   snyk.Range{Start: snyk.Position{Line: 2, Character: 0}, End: snyk.Position{Line: 2, Character: 0}},
+					types.TextEdit{
+						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 2, Character: 0}},
 						NewText: "three\n",
 					},
-					snyk.TextEdit{
-						Range:   snyk.Range{Start: snyk.Position{Line: 4, Character: 0}, End: snyk.Position{Line: 4, Character: 0}},
+					types.TextEdit{
+						Range:   types.Range{Start: types.Position{Line: 4, Character: 0}, End: types.Position{Line: 4, Character: 0}},
 						NewText: "six\n",
 					},
-					snyk.TextEdit{
-						Range:   snyk.Range{Start: snyk.Position{Line: 5, Character: 0}, End: snyk.Position{Line: 5, Character: 0}},
+					types.TextEdit{
+						Range:   types.Range{Start: types.Position{Line: 5, Character: 0}, End: types.Position{Line: 5, Character: 0}},
 						NewText: "seven\n",
 					},
 				},
@@ -1151,19 +1152,19 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 			malformedDiff,
 			tempFilePath,
 			originalFileContent,
-			snyk.WorkspaceEdit{Changes: map[string][]snyk.TextEdit(nil)},
+			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
 		},
 		{"Short file produces empty WorkspaceEdit",
 			goodDiff,
 			tempFilePath,
 			"one",
-			snyk.WorkspaceEdit{Changes: map[string][]snyk.TextEdit(nil)},
+			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
 		},
 		{"Missing file produces empty WorkspaceEdit",
 			goodDiff,
 			"/this/file/does/not/exist",
 			originalFileContent,
-			snyk.WorkspaceEdit{Changes: map[string][]snyk.TextEdit(nil)},
+			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
 		},
 	}
 	for _, tt := range tests {

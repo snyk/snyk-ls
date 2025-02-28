@@ -152,6 +152,7 @@ linters:
     # TODO(unparam): revisit
     #- unparam
     - usestdlibvars
+    - usetesting
     - wastedassign
     - whitespace
     # TODO(wrapcheck): wrap errors in a followup

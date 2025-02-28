@@ -25,8 +25,8 @@ import (
 	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/adrg/xdg"
 
@@ -65,7 +65,7 @@ var snykCodeBundleUploader *code.BundleUploader
 var snykCodeScanner *code.Scanner
 var deepCodeLLMBinding llm.DeepCodeLLMBinding
 var infrastructureAsCodeScanner *iac.Scanner
-var openSourceScanner snyk.ProductScanner
+var openSourceScanner types.ProductScanner
 var scanInitializer initialize.Initializer
 var authenticationService authentication.AuthenticationService
 var learnService learn.Service

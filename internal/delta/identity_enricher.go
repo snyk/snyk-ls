@@ -17,14 +17,18 @@
 package delta
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
+
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var _ Enricher = (*FindingsEnricher)(nil)
 
 type Enricher interface {
 	EnrichWithId(issueList []Identifiable) []Identifiable
-	EnrichWithIsNew(issueList, deltaList []Identifiable) []Identifiable
+	EnrichWithIsNew(issueList, newIssueList []Identifiable) []Identifiable
 }
 
 type FindingsEnricher struct {
@@ -37,21 +41,35 @@ func NewFindingsEnricher() *FindingsEnricher {
 func (_ FindingsEnricher) EnrichWithId(issueList []Identifiable) []Identifiable {
 	for i := range issueList {
 		if issueList[i].GetGlobalIdentity() == "" {
-			issueList[i].SetGlobalIdentity(uuid.New().String())
+			var id string
+			if issue, ok := issueList[i].(IdentifiableFingerprintablePathable); ok {
+				id = generateGlobalID(issue)
+			} else {
+				id = uuid.New().String()
+			}
+			issueList[i].SetGlobalIdentity(id)
 		}
 	}
 
 	return issueList
 }
 
-func (_ FindingsEnricher) EnrichWithIsNew(issueList, deltaList []Identifiable) []Identifiable {
-	for i := range issueList {
-		for j := range deltaList {
-			if issueList[i].GetGlobalIdentity() == deltaList[j].GetGlobalIdentity() {
-				issueList[i].SetIsNew(true)
+func generateGlobalID(i IdentifiableFingerprintablePathable) string {
+	globalIdentity := fmt.Sprintf("%s@@@%s", i.GetFingerprint(), i.GetPath())
+	return util.HashWithoutConversion([]byte(globalIdentity))
+}
+
+func (_ FindingsEnricher) EnrichWithIsNew(allCurrentIssues, newIssues []Identifiable) []Identifiable {
+	for i := range allCurrentIssues {
+		for j := range newIssues {
+			// everything in delta list is new
+			newIssues[j].SetIsNew(true)
+			if allCurrentIssues[i].GetGlobalIdentity() == newIssues[j].GetGlobalIdentity() {
+				// issues that have the same id as a new issue are also new
+				allCurrentIssues[i].SetIsNew(true)
 			}
 		}
 	}
 
-	return issueList
+	return allCurrentIssues
 }

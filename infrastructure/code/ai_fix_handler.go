@@ -18,14 +18,11 @@ package code
 
 import (
 	"context"
-	"fmt"
-	"sync"
 	"time"
 
 	"github.com/snyk/code-client-go/llm"
-
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type AiFixHandler struct {
@@ -53,24 +50,7 @@ type aiResultState struct {
 
 const explainTimeout = 5 * time.Minute
 
-func (fixHandler *AiFixHandler) GetCurrentIssueId() string {
-	return fixHandler.currentIssueId
-}
-
-func (fixHandler *AiFixHandler) GetResults(fixId string) (filePath string, diff string, err error) {
-	for _, suggestion := range fixHandler.aiFixDiffState.result {
-		if suggestion.FixId == fixId {
-			for k, v := range suggestion.UnifiedDiffsPerFile {
-				filePath = k
-				diff += v
-			}
-			return filePath, diff, nil
-		}
-	}
-	return "", "", fmt.Errorf("no suggestion found for fixId: %s", fixId)
-}
-
-func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config.Config, issue snyk.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
+func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config.Config, issue types.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
 	logger := c.Logger().With().Str("method", "EnrichWithExplain").Logger()
 	if ctx.Err() != nil {
 		logger.Debug().Msgf("EnrichWithExplain context canceled")
@@ -82,24 +62,31 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	if len(suggestions) == 0 {
 		return
 	}
-	var wg sync.WaitGroup
+	var diffs []string
+	diffs = getDiffListFromSuggestions(suggestions, diffs)
+
+	explanations, err := fixHandler.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs})
+	if err != nil {
+		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.GetAdditionalData().GetKey())
+		return
+	}
+	for j := range len(explanations) {
+		if j < len(diffs) {
+			suggestions[j].Explanation = explanations[diffs[j]]
+		}
+	}
+}
+
+func getDiffListFromSuggestions(suggestions []AutofixUnifiedDiffSuggestion, diffs []string) []string {
+	// Suggestion diffs may be coming from different files
 	for i := range suggestions {
 		diff := ""
 		for _, v := range suggestions[i].UnifiedDiffsPerFile {
 			diff += v
 		}
-		wg.Add(1)
-		go func() {
-			response, err := fixHandler.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.ID, Diff: diff})
-			wg.Done()
-			if err != nil {
-				logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.AdditionalData.GetKey())
-				return
-			}
-			suggestions[i].Explanation = response
-		}()
+		diffs = append(diffs, diff)
 	}
-	wg.Wait()
+	return diffs
 }
 
 func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, suggestions []AutofixUnifiedDiffSuggestion, err error, callback func()) {
@@ -113,13 +100,13 @@ func (fixHandler *AiFixHandler) SetAutoTriggerAiFix(isEnabled bool) {
 	fixHandler.autoTriggerAiFix = isEnabled
 }
 
-func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue snyk.Issue) {
-	if issue.AdditionalData.GetKey() == fixHandler.currentIssueId {
+func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue types.Issue) {
+	if issue.GetAdditionalData().GetKey() == fixHandler.currentIssueId {
 		return
 	}
 
 	fixHandler.aiFixDiffState = aiResultState{status: AiFixNotStarted}
-	fixHandler.currentIssueId = issue.AdditionalData.GetKey()
+	fixHandler.currentIssueId = issue.GetAdditionalData().GetKey()
 	if fixHandler.explainCancelFunc != nil {
 		fixHandler.explainCancelFunc()
 	}

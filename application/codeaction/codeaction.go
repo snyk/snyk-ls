@@ -37,8 +37,8 @@ type CodeActionsService struct {
 }
 
 type cachedAction struct {
-	issue  snyk.Issue
-	action snyk.CodeAction
+	issue  types.Issue
+	action types.CodeAction
 }
 
 func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, codeApiClient code.SnykCodeClient) *CodeActionsService {
@@ -53,7 +53,7 @@ func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirty
 	}
 }
 
-func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []types.CodeAction {
+func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []types.LSPCodeAction {
 	c.logger.Debug().Msg("Received code action request")
 	if c.fileWatcher.IsDirty(params.TextDocument.URI) {
 		c.logger.Debug().Msg("File is dirty, skipping code actions")
@@ -67,7 +67,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 
 	quickFixGroupables := c.getQuickFixGroupablesAndCache(issues)
 
-	var updatedIssues []snyk.Issue
+	var updatedIssues []types.Issue
 	if len(quickFixGroupables) != 0 {
 		updatedIssues = c.updateIssuesWithQuickFix(quickFixGroupables, issues)
 	} else {
@@ -79,7 +79,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	return actions
 }
 
-func (c *CodeActionsService) updateIssuesWithQuickFix(quickFixGroupables []types.Groupable, issues []snyk.Issue) []snyk.Issue {
+func (c *CodeActionsService) updateIssuesWithQuickFix(quickFixGroupables []types.Groupable, issues []types.Issue) []types.Issue {
 	// we only allow one quickfix, so it needs to be grouped
 	quickFix := c.getQuickFixAction(quickFixGroupables)
 	fixable := len(quickFixGroupables)
@@ -93,49 +93,46 @@ func (c *CodeActionsService) updateIssuesWithQuickFix(quickFixGroupables []types
 	if unfixable > 0 {
 		unfixableSuffix = fmt.Sprintf(" (%d unfixable)", unfixable)
 	}
-	quickFix.Title = fmt.Sprintf("%s and fix %d issue%s%s", quickFix.Title, fixable, plural, unfixableSuffix)
+	quickFix.SetTitle(fmt.Sprintf("%s and fix %d issue%s%s", quickFix.GetTitle(), fixable, plural, unfixableSuffix))
 
-	var updatedIssues []snyk.Issue
+	var updatedIssues []types.Issue
 	for _, issue := range issues {
-		groupedActions := []snyk.CodeAction{}
-		if quickFix != nil {
-			groupedActions = append(groupedActions, *quickFix)
-		}
+		groupedActions := append([]types.CodeAction{}, quickFix)
 
-		for _, action := range issue.CodeActions {
-			if action.GroupingType == types.Quickfix {
+		for _, action := range issue.GetCodeActions() {
+			if action.GetGroupingType() == types.Quickfix {
 				continue
 			}
 			groupedActions = append(groupedActions, action)
 		}
 
-		issue.CodeActions = groupedActions
+		issue.SetCodeActions(groupedActions)
 		updatedIssues = append(updatedIssues, issue)
 	}
 
 	return updatedIssues
 }
 
-func (c *CodeActionsService) getQuickFixAction(quickFixGroupables []types.Groupable) *snyk.CodeAction {
+func (c *CodeActionsService) getQuickFixAction(quickFixGroupables []types.Groupable) types.CodeAction {
 	// right now we can always group by max semver version, as
 	// code only has one quickfix available, and iac none at all
-	var quickFix *snyk.CodeAction
-	qf, ok := types.MaxSemver(c.logger)(quickFixGroupables).(snyk.CodeAction)
-	if !ok {
+	var quickFix types.CodeAction
+	qf, ok := types.MaxSemver(c.logger)(quickFixGroupables).(types.CodeAction)
+	if qf == nil || !ok {
 		c.logger.Warn().Msg("grouping quick fix actions failed")
 		quickFix = nil
 	} else {
-		quickFix = &qf
+		quickFix = qf
+		c.logger.Debug().Msgf("chose quickfix %s", quickFix.GetTitle())
 	}
-	c.logger.Debug().Msgf("chose quickfix %s", quickFix.Title)
 	return quickFix
 }
 
-func (c *CodeActionsService) getQuickFixGroupablesAndCache(issues []snyk.Issue) []types.Groupable {
+func (c *CodeActionsService) getQuickFixGroupablesAndCache(issues []types.Issue) []types.Groupable {
 	quickFixGroupables := []types.Groupable{}
 	for _, issue := range issues {
-		for _, action := range issue.CodeActions {
-			if action.GroupingType == types.Quickfix {
+		for _, action := range issue.GetCodeActions() {
+			if action.GetGroupingType() == types.Quickfix {
 				quickFixGroupables = append(quickFixGroupables, action)
 			}
 			c.cacheCodeAction(action, issue)
@@ -144,17 +141,17 @@ func (c *CodeActionsService) getQuickFixGroupablesAndCache(issues []snyk.Issue) 
 	return quickFixGroupables
 }
 
-func (c *CodeActionsService) cacheCodeAction(action snyk.CodeAction, issue snyk.Issue) {
-	if action.Uuid != nil {
+func (c *CodeActionsService) cacheCodeAction(action types.CodeAction, issue types.Issue) {
+	if action.GetUuid() != nil {
 		cached := cachedAction{
 			issue:  issue,
 			action: action,
 		}
-		c.actionsCache[*action.Uuid] = cached
+		c.actionsCache[*action.GetUuid()] = cached
 	}
 }
 
-func (c *CodeActionsService) ResolveCodeAction(action types.CodeAction) (types.CodeAction, error) {
+func (c *CodeActionsService) ResolveCodeAction(action types.LSPCodeAction) (types.LSPCodeAction, error) {
 	c.logger.Debug().Msg("Received code action resolve request")
 	t := time.Now()
 
@@ -172,14 +169,14 @@ func (c *CodeActionsService) ResolveCodeAction(action types.CodeAction) (types.C
 	key := uuid.UUID(*action.Data)
 	cached, found := c.actionsCache[key]
 	if !found {
-		return types.CodeAction{}, errors.New(fmt.Sprint("could not find cached action for uuid ", key))
+		return types.LSPCodeAction{}, errors.New(fmt.Sprint("could not find cached action for uuid ", key))
 	}
 
 	// only delete cache entry after it's been resolved
 	defer delete(c.actionsCache, key)
-	edit := (*cached.action.DeferredEdit)()
+	edit := (*cached.action.GetDeferredEdit())()
 	resolvedAction := cached.action
-	resolvedAction.Edit = edit
+	resolvedAction.SetEdit(edit)
 	elapsed := time.Since(t)
 	elapsedSeconds := int(elapsed.Seconds())
 	codeAction := converter.ToCodeAction(cached.issue, resolvedAction)

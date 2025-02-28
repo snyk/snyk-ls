@@ -68,7 +68,7 @@ func (cmd *executeCLICommand) Execute(ctx context.Context) (any, error) {
 
 	args = cmd.cli.ExpandParametersFromConfig(args)
 	var exitCode int
-	resp, err := cmd.cli.Execute(ctx, args, workDir)
+	resp, err := cmd.cli.Execute(ctx, args, types.FilePath(workDir))
 	if err != nil {
 		var exitError *exec.ExitError
 		if errors.As(err, &exitError) {

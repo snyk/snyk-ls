@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 	"encoding/json"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"strings"
 
 	"github.com/snyk/code-client-go/llm"
@@ -29,8 +30,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -40,6 +39,7 @@ type navigateToRangeCommand struct {
 	srv                types.Server
 	logger             *zerolog.Logger
 	deepCodeLLMBinding llm.DeepCodeLLMBinding
+	c                  *config.Config
 }
 
 func (cmd *navigateToRangeCommand) Command() types.CommandData {
@@ -52,7 +52,7 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		cmd.logger.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
 	}
 	// convert to correct type
-	var myRange snyk.Range
+	var myRange types.Range
 	args := cmd.command.Arguments
 	marshal, err := json.Marshal(args[1])
 	if err != nil {
@@ -63,18 +63,21 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		return nil, errors.Wrap(err, "couldn't unmarshal range from json")
 	}
 
-	path, ok := args[0].(string)
+	path, ok := args[0].(types.FilePath)
 	if !ok {
 		return nil, errors.Errorf("invalid range path: %s", args[0])
 	}
 
 	var documentUri sglsp.DocumentURI
-	if !strings.HasPrefix(path, "snyk://") {
+	if !strings.HasPrefix(string(path), "snyk://") {
 		documentUri = uri.PathToUri(path)
 	} else {
 		documentUri = sglsp.DocumentURI(path)
-		renderer, _ := code.GetHTMLRenderer(config.CurrentConfig(), cmd.deepCodeLLMBinding)
-		renderer.AiFixHandler.SetAutoTriggerAiFix(true)
+		// TODO: move this to a new command to process snyk magnet link
+		renderer, rendererErr := code.GetHTMLRenderer(cmd.c, cmd.deepCodeLLMBinding)
+		if rendererErr == nil {
+			renderer.AiFixHandler.SetAutoTriggerAiFix(true)
+		}
 	}
 
 	params := types.ShowDocumentParams{

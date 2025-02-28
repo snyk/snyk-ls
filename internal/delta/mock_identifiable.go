@@ -16,6 +16,8 @@
 
 package delta
 
+import "github.com/snyk/snyk-ls/internal/types"
+
 var _ Identifiable = (*mockIdentifiable)(nil)
 var _ Fingerprintable = (*mockIdentifiable)(nil)
 var _ Locatable = (*mockIdentifiable)(nil)
@@ -26,14 +28,14 @@ type mockIdentifiable struct {
 	fingerprint    string
 	isNew          bool
 	ruleId         string
-	path           string
+	path           types.FilePath
 	startLine      int
 	endLine        int
 	startColumn    int
 	endColumn      int
 }
 
-func (m *mockIdentifiable) Path() string {
+func (m *mockIdentifiable) GetPath() types.FilePath {
 	return m.path
 }
 
@@ -57,7 +59,7 @@ func (m *mockIdentifiable) GetFingerprint() string {
 	return m.fingerprint
 }
 
-func (m *mockIdentifiable) RuleId() string {
+func (m *mockIdentifiable) GetRuleID() string {
 	return m.ruleId
 }
 
