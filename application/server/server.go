@@ -142,6 +142,17 @@ func textDocumentDidChangeHandler() jrpc2.Handler {
 		pathFromUri := uri.PathFromUri(params.TextDocument.URI)
 		logger.Trace().Msgf("RECEIVING for %s", pathFromUri)
 
+		folder := c.Workspace().GetFolderContaining(pathFromUri)
+		if folder == nil {
+			logger.Warn().Msg(string("No folder found for file " + pathFromUri))
+			return nil, nil
+		}
+
+		if !folder.IsTrusted() {
+			logger.Warn().Msg(string("folder not trusted for file " + pathFromUri))
+			return nil, nil
+		}
+
 		di.FileWatcher().SetFileAsChanged(params.TextDocument.URI)
 
 		debouncedCallback := func() {
@@ -672,11 +683,16 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 		filePathString := string(filePath)
 		logger := c.Logger().With().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", filePathString).Logger()
-
 		logger.Info().Msg("Receiving")
+
 		folder := c.Workspace().GetFolderContaining(filePath)
 		if folder == nil {
 			logger.Warn().Msg("No folder found for file " + filePathString)
+			return nil, nil
+		}
+
+		if !folder.IsTrusted() {
+			logger.Warn().Msg("folder not trusted for file " + filePathString)
 			return nil, nil
 		}
 
@@ -719,6 +735,15 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
 		f := c.Workspace().GetFolderContaining(filePath)
+		if f == nil {
+			logger.Warn().Msg(string("No folder found for file " + filePath))
+			return nil, nil
+		}
+
+		if !f.IsTrusted() {
+			logger.Warn().Msg(string("folder not trusted for file " + filePath))
+			return nil, nil
+		}
 
 		if f != nil && autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
 			go f.ScanFolder(bgCtx)
