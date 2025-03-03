@@ -80,9 +80,9 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []types.Issu
 			continue
 		}
 
-		issueData.HasAIFix = autoFixEnabled && issueData.IsAutofixable
+		issueData.HasAIFix = autoFixEnabled && issueData.IsAutofixable && !issues[i].GetIsIgnored()
 
-		if issueData.HasAIFix && !issues[i].GetIsIgnored() {
+		if issueData.HasAIFix {
 			codeActionShowDocument := b.createShowDocumentCodeAction(issues[i])
 			issues[i].SetCodeActions(append(issues[i].GetCodeActions(), codeActionShowDocument))
 

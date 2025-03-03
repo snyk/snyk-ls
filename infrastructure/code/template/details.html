@@ -94,15 +94,16 @@
         <span data-tab="ignore-details" id="ignore-details-tab" class="tab-item is-selected ignore-details-tab">
           Ignore Details
         </span>
-        {{end}}
+        {{else}}
         <span data-tab="fix-analysis" id="fix-analysis-tab"
-          class="tab-item {{if not .IsIgnored}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
+          class="tab-item is-selected sn-fix-analysis fix-analysis-tab">
           Fix Analysis
         </span>
         {{if gt (len .DataFlow) 0}}
         <span data-tab="data-flow-data-tab" id="data-flow-tab" class="tab-item sn-data-flow data-flow-tab">
           Data Flow
         </span>
+        {{end}}
         {{end}}
         {{if .IssueOverview}}
         <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item sn-vuln-overview vuln-overview-tab">
