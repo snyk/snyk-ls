@@ -17,7 +17,6 @@
 package di
 
 import (
-	"net/url"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -180,10 +179,8 @@ func initInfrastructure(c *config.Config) {
 }
 
 func initApplication(c *config.Config) {
-	explainEndpoint, _ := url.Parse("http://localhost:10000/explain")
 
 	deepCodeLLMBinding = llm.NewDeepcodeLLMBinding(
-		llm.WithEndpoint(explainEndpoint),
 		llm.WithLogger(c.Logger()),
 		llm.WithOutputFormat(llm.HTML),
 		llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
