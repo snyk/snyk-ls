@@ -64,14 +64,14 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		return nil, errors.Wrap(err, "couldn't unmarshal range from json")
 	}
 
-	path, ok := args[0].(types.FilePath)
+	path, ok := args[0].(string)
 	if !ok {
 		return nil, errors.Errorf("invalid range path: %s", args[0])
 	}
 
 	var documentUri sglsp.DocumentURI
-	if !strings.HasPrefix(string(path), "snyk://") {
-		documentUri = uri.PathToUri(path)
+	if !strings.HasPrefix(path, "snyk://") {
+		documentUri = uri.PathToUri(types.FilePath(path))
 	} else {
 		documentUri = sglsp.DocumentURI(path)
 		// TODO: move this to a new command to process snyk magnet link

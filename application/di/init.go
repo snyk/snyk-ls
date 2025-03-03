@@ -179,7 +179,6 @@ func initInfrastructure(c *config.Config) {
 }
 
 func initApplication(c *config.Config) {
-
 	deepCodeLLMBinding = llm.NewDeepcodeLLMBinding(
 		llm.WithLogger(c.Logger()),
 		llm.WithOutputFormat(llm.HTML),
