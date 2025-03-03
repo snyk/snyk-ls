@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package code
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net/url"
 	"os"
 	"regexp"
@@ -559,82 +558,118 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir types.File
 	return markers, nil
 }
 
-// createAutofixWorkspaceEdit turns the returned fix into an edit.
-func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string) (edit types.WorkspaceEdit) {
-	fileContent, err := os.ReadFile(absoluteFilePath)
-	if err != nil {
+// CreateWorkspaceEditFromDiff turns the returned fix (in diff format) into a series of TextEdits in a WorkspaceEdit.
+func CreateWorkspaceEditFromDiff(absoluteFilePath string, diff string) (edit types.WorkspaceEdit) {
+	fileContentBytes, err := os.ReadFile(absoluteFilePath)
+	if err != nil || len(fileContentBytes) == 0 {
 		return edit
 	}
-	singleTextEdit := types.TextEdit{
-		Range: types.Range{
-			// TODO(alex.gronskiy): should be changed to an actual hunk-like edit instead of
-			// this "replace-the-whole-file" strategy
-			Start: types.Position{
-				Line:      0,
-				Character: 0},
-			End: types.Position{
-				Line:      math.MaxInt32,
-				Character: 0},
-		},
-		NewText:  fixedSourceCode,
-		FullText: string(fileContent),
+	fileContentLineStrings := strings.Split(string(fileContentBytes), "\n")
+
+	var textEdits []types.TextEdit
+
+	var hunkLine = 0   // Location in the current hunk
+	var hunkOffset = 0 // Whether we need to offset the current hunk based on previous edits.
+
+	// Loop over the diff. Diffs will always use \n instead of \r\n, so no need to sanitize (see getUnifiedDiff).
+	for _, line := range strings.Split(diff, "\n") {
+		// If we are being asked to make changes outside the original file, abort and return an empty edit.
+		if hunkLine-hunkOffset > len(fileContentLineStrings) {
+			return edit
+		}
+
+		if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") {
+			continue // We ignore header lines
+		} else if strings.HasPrefix(line, "@@") {
+			r := regexp.MustCompile(`@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@`)
+			matches := r.FindStringSubmatch(line)
+			if matches == nil {
+				return edit // We have a badly formatted diff, so abort.
+			}
+
+			hunkLine, _ = strconv.Atoi(matches[1]) // Apply the edit from the first line of the original file in the diff
+			hunkLine -= 1                          // TextEdit range is 0-indexed, whereas LSP diff is 1-indexed
+			hunkLine += hunkOffset                 // Account for any previous additions or deletions.
+		} else if strings.HasPrefix(line, "-") {
+			textEdit := buildOneLineTextEdit(hunkLine, hunkLine+1, "")
+			textEdits = append(textEdits, textEdit)
+			hunkOffset -= 1 // We've removed a line, so future hunks will be offset with respect to the diff.
+		} else if strings.HasPrefix(line, "+") {
+			textEdit := buildOneLineTextEdit(hunkLine, hunkLine, strings.TrimPrefix(line, "+")+"\n")
+			textEdits = append(textEdits, textEdit)
+			hunkOffset += 1 // We've added a line, so future hunks will be offset with respect to the diff.
+			hunkLine += 1   // We've added a line, so increment the pointer in our current hunk.
+		} else if strings.HasPrefix(line, " ") {
+			hunkLine += 1 // We skip over unchanged lines, so increment the pointer in our current hunk.
+		}
 	}
+
 	edit.Changes = make(map[string][]types.TextEdit)
-	edit.Changes[absoluteFilePath] = []types.TextEdit{singleTextEdit}
+	edit.Changes[absoluteFilePath] = textEdits
+
 	return edit
 }
 
-// toAutofixSuggestionsIssues converts the HTTP json-first payload to the domain type
-func (s *AutofixResponse) toAutofixSuggestions(baseDir types.FilePath, filePath types.FilePath) (fixSuggestions []AutofixSuggestion) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "toAutofixSuggestions").Logger()
-	for _, suggestion := range s.AutofixSuggestions {
-		decodedPath, err := DecodePath(ToAbsolutePath(baseDir, filePath))
-		if err != nil {
-			logger.Err(err).Msgf("cannot decode filePath %s", filePath)
-			continue
-		}
-		d := AutofixSuggestion{
-			FixId:       suggestion.Id,
-			AutofixEdit: createAutofixWorkspaceEdit(decodedPath, suggestion.Value),
-		}
-		fixSuggestions = append(fixSuggestions, d)
+func buildOneLineTextEdit(startLine int, endLine int, text string) types.TextEdit {
+	if startLine > endLine {
+		return types.TextEdit{} // We should never reach this. Return an empty edit if the input it invalid.
 	}
 
-	return fixSuggestions
+	return types.TextEdit{
+		Range: types.Range{
+			Start: types.Position{
+				Line:      startLine,
+				Character: 0,
+			},
+			End: types.Position{
+				Line:      endLine,
+				Character: 0,
+			},
+		},
+		NewText: text,
+	}
 }
 
 func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {
-	logger := config.CurrentConfig().Logger().With().Str("method", "toUnifiedDiffSuggestions").Logger()
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
 	for _, suggestion := range s.AutofixSuggestions {
-		path, err := DecodePath(ToAbsolutePath(baseDir, filePath))
-		if err != nil {
-			logger.Err(err).Msgf("cannot decode filePath %s", filePath)
-		}
-		logger.Debug().Msgf("File path %s", path)
-		fileContent, err := os.ReadFile(path)
-		if err != nil {
-			logger.Err(err).Msgf("cannot read fileContent %s", path)
-			return fixSuggestions
-		}
-		contentBefore := string(fileContent)
-		// Workaround: AI Suggestion API only returns \n new lines. It doesn't consider carriage returns.
-		contentBefore = strings.Replace(contentBefore, "\r\n", "\n", -1)
-		edits := myers.ComputeEdits(span.URIFromPath(string(baseDir)), contentBefore, suggestion.Value)
-		unifiedDiff := fmt.Sprint(gotextdiff.ToUnified(string(baseDir), string(baseDir+"-fixed"), contentBefore, edits))
-
-		logger.Trace().Msg(unifiedDiff)
-
-		if len(edits) == 0 {
-			return fixSuggestions
+		decodedPath, unifiedDiff := getPathAndUnifiedDiff(baseDir, filePath, suggestion.Value)
+		if decodedPath == "" || unifiedDiff == "" {
+			continue
 		}
 
 		d := AutofixUnifiedDiffSuggestion{
 			FixId:               suggestion.Id,
 			UnifiedDiffsPerFile: map[string]string{},
 		}
-		d.UnifiedDiffsPerFile[path] = unifiedDiff
+
+		d.UnifiedDiffsPerFile[string(decodedPath)] = string(unifiedDiff)
 		fixSuggestions = append(fixSuggestions, d)
 	}
 	return fixSuggestions
+}
+
+func getPathAndUnifiedDiff(baseDir types.FilePath, filePath types.FilePath, newText string) (decodedPath types.FilePath, unifiedDiff types.FilePath) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "getUnifiedDiff").Logger()
+
+	decodedPathString, err := DecodePath(ToAbsolutePath(baseDir, filePath))
+	decodedPath = types.FilePath(decodedPathString)
+	if err != nil {
+		logger.Err(err).Msgf("cannot decode filePath %s", filePath)
+		return
+	}
+	logger.Debug().Msgf("File decodedPath %s", decodedPath)
+
+	fileContent, err := os.ReadFile(decodedPathString)
+	if err != nil {
+		logger.Err(err).Msgf("cannot read fileContent %s", decodedPath)
+		return
+	}
+
+	// Workaround: AI Suggestion API only returns \n new lines. It doesn't consider carriage returns.
+	contentBefore := strings.Replace(string(fileContent), "\r\n", "\n", -1)
+	edits := myers.ComputeEdits(span.URIFromPath(decodedPathString), contentBefore, newText)
+	unifiedDiff = types.FilePath(fmt.Sprint(gotextdiff.ToUnified(decodedPathString, decodedPathString+"fixed", contentBefore, edits)))
+
+	return decodedPath, unifiedDiff
 }

@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -74,9 +75,16 @@ var customScripts string
 type HtmlRenderer struct {
 	c              *config.Config
 	globalTemplate *template.Template
+	AiFixHandler   *AiFixHandler
 }
 
-func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
+var codeRenderer *HtmlRenderer
+
+func GetHTMLRenderer(c *config.Config, deepCodeLLMBinding llm.DeepCodeLLMBinding) (*HtmlRenderer, error) {
+	if codeRenderer != nil && codeRenderer.c == c {
+		return codeRenderer, nil
+	}
+
 	funcMap := template.FuncMap{
 		"repoName":      getRepoName,
 		"trimCWEPrefix": html.TrimCWEPrefix,
@@ -89,10 +97,15 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 		return nil, err
 	}
 
-	return &HtmlRenderer{
+	codeRenderer = &HtmlRenderer{
 		c:              c,
 		globalTemplate: globalTemplate,
-	}, nil
+	}
+	codeRenderer.AiFixHandler = &AiFixHandler{
+		aiFixDiffState:  aiResultState{status: AiFixNotStarted},
+		deepCodeBinding: deepCodeLLMBinding,
+	}
+	return codeRenderer, nil
 }
 
 func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types.FilePath {
@@ -110,6 +123,8 @@ func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types
 }
 
 func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
+	autoTriggerAiFix := renderer.AiFixHandler.autoTriggerAiFix
+	renderer.AiFixHandler.resetAiFixCacheIfDifferent(issue)
 	additionalData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 	if !ok {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
@@ -124,6 +139,16 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
 	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
+	var aiFixErr string
+	if renderer.AiFixHandler.aiFixDiffState.err != nil {
+		aiFixErr = renderer.AiFixHandler.aiFixDiffState.err.Error()
+	}
+
+	aiFixResult := "{}"
+	aiFixSerialized, err := json.Marshal(renderer.AiFixHandler.aiFixDiffState.result)
+	if err == nil && string(aiFixSerialized) != "null" {
+		aiFixResult = string(aiFixSerialized)
+	}
 	data := map[string]any{
 		"IssueTitle":         additionalData.Title,
 		"IssueMessage":       additionalData.Message,
@@ -159,7 +184,12 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"Styles":             template.CSS(panelStylesTemplate),
 		"Scripts":            template.JS(customScripts),
 		"Nonce":              nonce,
+		"AiFixResult":        aiFixResult,
+		"AiFixDiffStatus":    renderer.AiFixHandler.aiFixDiffState.status,
+		"AiFixError":         aiFixErr,
+		"AutoTriggerAiFix":   autoTriggerAiFix,
 	}
+	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
 
 	if issue.GetIsIgnored() {
 		data["IgnoreDetails"] = prepareIgnoreDetailsRow(issue.GetIgnoreDetails())
@@ -172,7 +202,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		return ""
 	}
 
-	return buffer.String()
+	var result = buffer.String()
+	return result
 }
 
 func getLineToIgnoreAction(issue types.Issue) int {

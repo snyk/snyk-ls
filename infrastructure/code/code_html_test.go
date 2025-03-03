@@ -1,5 +1,5 @@
 /*
- * © 2023-2024 Snyk Limited
+ * © 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, nil)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -118,7 +118,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, nil)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
@@ -159,7 +159,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, nil)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -198,7 +198,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, nil)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -211,7 +211,10 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	customEndpoint := "https://app.dev.snyk.io"
-	c.UpdateApiEndpoints(customEndpoint + "/api")
+	didUpdate := c.UpdateApiEndpoints(customEndpoint + "/api")
+	assert.True(t, didUpdate)
+	newEndpoint := c.SnykUI()
+	assert.Equalf(t, customEndpoint, newEndpoint, "Failed to update endpoint, currently %v", newEndpoint)
 
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
@@ -240,12 +243,12 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, nil)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// assert Ignore Details section - Ignore link must be the custom endpoint
-	assert.Contains(t, codePanelHtml, customEndpoint)
+	assert.Containsf(t, codePanelHtml, customEndpoint, "HTML does not contain link to custom endpoint %s", codePanelHtml)
 }
 
 func getFixes() []snyk.ExampleCommitFix {
@@ -306,7 +309,7 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, nil)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section

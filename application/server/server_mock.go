@@ -1,5 +1,5 @@
 /*
- * © 2022-2025 Snyk Limited
+ * © 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,26 +14,25 @@
  * limitations under the License.
  */
 
-package types
+package server
 
-type TextEdit struct {
+import (
+	"context"
 
-	/**
-	 * The range of the text document to be manipulated. To insert
-	 * text into a document create a range where start === end.
-	 */
-	Range Range
+	"github.com/creachadair/jrpc2"
 
-	/**
-	 * The string to be inserted. For delete operations use an
-	 * empty string.
-	 */
-	NewText string
+	"github.com/snyk/snyk-ls/internal/concurrency"
+)
+
+type ServerImplMock struct{}
+
+var notified = concurrency.AtomicBool{}
+
+func (b *ServerImplMock) Callback(_ context.Context, _ string, _ any) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
+	notified.Set(true)
+	return nil, nil
 }
-
-type WorkspaceEdit struct {
-	/**
-	 * Holds changes to existing resources, keyed on the affected file path.
-	 */
-	Changes map[string][]TextEdit
+func (b *ServerImplMock) Notify(_ context.Context, _ string, _ any) error {
+	notified.Set(true)
+	return nil
 }

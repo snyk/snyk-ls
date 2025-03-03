@@ -21,6 +21,8 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/snyk/code-client-go/llm"
+
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -60,6 +62,7 @@ var snykApiClient snyk_api.SnykApiClient
 var snykCodeClient code.SnykCodeClient
 var snykCodeBundleUploader *code.BundleUploader
 var snykCodeScanner *code.Scanner
+var deepCodeLLMBinding llm.DeepCodeLLMBinding
 var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner types.ProductScanner
 var scanInitializer initialize.Initializer
@@ -176,11 +179,19 @@ func initInfrastructure(c *config.Config) {
 }
 
 func initApplication(c *config.Config) {
+	deepCodeLLMBinding = llm.NewDeepcodeLLMBinding(
+		llm.WithLogger(c.Logger()),
+		llm.WithOutputFormat(llm.HTML),
+		llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
+			return c.Engine().GetNetworkAccess().GetHttpClient()
+		}),
+	)
+
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator) // don't use getters or it'll deadlock
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
-	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeClient, snykCodeScanner, snykCli))
+	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeClient, snykCodeScanner, snykCli, deepCodeLLMBinding))
 }
 
 /*

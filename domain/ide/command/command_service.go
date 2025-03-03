@@ -20,6 +20,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/snyk/code-client-go/llm"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -35,24 +36,26 @@ import (
 var instance types.CommandService
 
 type serviceImpl struct {
-	authService   authentication.AuthenticationService
-	notifier      noti.Notifier
-	learnService  learn.Service
-	issueProvider snyk.IssueProvider
-	codeApiClient SnykCodeHttpClient
-	codeScanner   *code.Scanner
-	cli           cli.Executor
+	authService        authentication.AuthenticationService
+	notifier           noti.Notifier
+	learnService       learn.Service
+	issueProvider      snyk.IssueProvider
+	codeApiClient      SnykCodeHttpClient
+	codeScanner        *code.Scanner
+	cli                cli.Executor
+	deepCodeLLMBinding llm.DeepCodeLLMBinding
 }
 
-func NewService(authService authentication.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner, cli cli.Executor) types.CommandService {
+func NewService(authService authentication.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner, cli cli.Executor, deepCodeLLMBinding llm.DeepCodeLLMBinding) types.CommandService {
 	return &serviceImpl{
-		authService:   authService,
-		notifier:      notifier,
-		learnService:  learnService,
-		issueProvider: issueProvider,
-		codeApiClient: codeApiClient,
-		codeScanner:   codeScanner,
-		cli:           cli,
+		authService:        authService,
+		notifier:           notifier,
+		learnService:       learnService,
+		issueProvider:      issueProvider,
+		codeApiClient:      codeApiClient,
+		codeScanner:        codeScanner,
+		cli:                cli,
+		deepCodeLLMBinding: deepCodeLLMBinding,
 	}
 }
 
@@ -77,7 +80,7 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 
-	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.learnService, s.notifier, s.issueProvider, s.codeApiClient, s.codeScanner, s.cli)
+	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.learnService, s.notifier, s.issueProvider, s.codeApiClient, s.codeScanner, s.cli, s.deepCodeLLMBinding)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err

@@ -10,7 +10,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/erni27/imcache v1.2.1
 	github.com/getsentry/sentry-go v0.31.1
-	github.com/go-git/go-git/v5 v5.13.2
+	github.com/go-git/go-git/v5 v5.14.0
 	github.com/golang/mock v1.6.0
 	github.com/gomarkdown/markdown v0.0.0-20250207164621-7a1f277a159e
 	github.com/google/uuid v1.6.0
@@ -27,7 +27,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/code-client-go v1.14.1
+	github.com/snyk/code-client-go v1.16.0
 	github.com/snyk/go-application-framework v0.0.0-20250227083553-00bc4ff7bf57
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.6

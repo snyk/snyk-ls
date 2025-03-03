@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2025 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,20 +121,10 @@ func ToWorkspaceEdit(edit *types.WorkspaceEdit) *sglsp.WorkspaceEdit {
 
 func ToTextEdits(edits []types.TextEdit) (lspEdits []sglsp.TextEdit) {
 	for _, edit := range edits {
-		unsanitized := edit
-		edit.SanitizeRange()
-		if edit.NewText == "" && isEmpty(edit.Range) {
-			config.CurrentConfig().Logger().Warn().Msg("skipping unsanitized edit in range: " + unsanitized.Range.String())
-			continue
-		}
 		textEdit := ToTextEdit(edit)
 		lspEdits = append(lspEdits, textEdit)
 	}
 	return lspEdits
-}
-
-func isEmpty(r types.Range) bool {
-	return r.Start == types.Position{} && r.End == types.Position{}
 }
 
 func ToTextEdit(edit types.TextEdit) sglsp.TextEdit {
