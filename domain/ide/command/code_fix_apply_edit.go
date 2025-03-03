@@ -69,15 +69,12 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 		Edit:  converter.ToWorkspaceEdit(&workspaceEdit),
 	})
 
+	// send feedback asynchronously, so people can actually see the changes done by the fix
 	go func() {
 		err := cmd.apiClient.SubmitAutofixFeedback(ctx, fixId, code.FixAppliedUserEvent)
 		if err != nil {
 			cmd.logger.Err(err).Str("fixId", fixId).Str("feedback", code.FixAppliedUserEvent).Msg("failed to submit autofix feedback")
 		}
-	}()
-
-	// send feedback asynchronously, so people can actually see the changes done by the fix
-	go func() {
 		issue := cmd.issueProvider.Issue(htmlRenderer.AiFixHandler.GetCurrentIssueId())
 		actionCommandMap, err := cmd.autofixFeedbackActions(fixId)
 		successMessage := "Congratulations! 🎉 You’ve just fixed this " + issue.GetID() + " issue."

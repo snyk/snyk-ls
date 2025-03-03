@@ -556,7 +556,10 @@ button {
   background: var(--generated-ai-fix-button-background-color);
 }
 
-
+button:disabled,button.generate-ai-fix:disabled,
+button.sn-apply-fix:disabled{
+  cursor:not-allowed;
+}
 button.generate-ai-fix,
 button.sn-apply-fix {
   border-radius: 4px;

@@ -171,13 +171,15 @@ func Test_addIssueActions(t *testing.T) {
 func Test_ideSnykURI(t *testing.T) {
 	t.Run("generates correct URI", func(t *testing.T) {
 		issue, ideAction, expectedURI := setupAiFixTestData()
-		actualURI, _ := SnykMagnetUri(issue, ideAction)
+		actualURI, err := SnykMagnetUri(issue, ideAction)
+		assert.NoError(t, err)
 		assert.Equal(t, expectedURI, actualURI)
 	})
 
 	t.Run("handles missing Key in additional data", func(t *testing.T) {
 		issue, ideAction, expectedURI := setupAiFixTestData()
-		actualURI, _ := SnykMagnetUri(issue, ideAction)
+		actualURI, err := SnykMagnetUri(issue, ideAction)
+		assert.NoError(t, err)
 		assert.Equal(t, expectedURI, actualURI)
 	})
 }
