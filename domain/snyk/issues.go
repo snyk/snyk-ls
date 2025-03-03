@@ -305,6 +305,9 @@ func (i *Issue) GetGlobalIdentity() string {
 }
 
 func (i *Issue) SetGlobalIdentity(id string) {
+	i.m.Lock()
+	defer i.m.Unlock()
+
 	i.GlobalIdentity = id
 }
 

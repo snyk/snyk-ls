@@ -244,9 +244,7 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 		return false
 	}
 
-	if a.authProvider == nil {
-		a.configureProviders(a.c)
-	}
+	a.handleProviderInconsistencies()
 
 	var user string
 	var err error
@@ -276,6 +274,28 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	return true
 }
 
+// configure providers, if needed, as specified in the config
+func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
+	msg := fmt.Sprintf("inconsistent auth provider, resetting (authMethod: %s, authenticator: %s)", a.c.AuthenticationMethod(), reflect.TypeOf(a.authProvider))
+	var ok = true
+	if a.authProvider == nil {
+		ok = false
+		msg = "auth provider is not set, resetting to default"
+	} else if a.c.AuthenticationMethod() == types.OAuthAuthentication {
+		_, ok = a.authProvider.(*OAuth2Provider)
+	} else if a.c.AuthenticationMethod() == types.TokenAuthentication {
+		_, ok = a.authProvider.(*CliAuthenticationProvider)
+	} else if a.c.AuthenticationMethod() == types.FakeAuthentication {
+		_, fake := a.authProvider.(*FakeAuthenticationProvider)
+		_, cli := a.authProvider.(*CliAuthenticationProvider)
+		ok = fake || cli
+	}
+	if !ok {
+		a.c.Logger().Warn().Msg(msg)
+		a.configureProviders(a.c)
+	}
+}
+
 func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	logger.
 		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
@@ -299,6 +319,7 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 			return true
 
 		default:
+			logger.Err(err).Msg("unspecified error during auth: not logging out")
 			return false
 		}
 	}
