@@ -277,7 +277,7 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 // configure providers, if needed, as specified in the config
 func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 	msg := fmt.Sprintf("inconsistent auth provider, resetting (authMethod: %s, authenticator: %s)", a.c.AuthenticationMethod(), reflect.TypeOf(a.authProvider))
-	var ok = true
+	var ok bool
 	switch {
 	case a.authProvider == nil:
 		ok = false
