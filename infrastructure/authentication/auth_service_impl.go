@@ -278,17 +278,21 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 	msg := fmt.Sprintf("inconsistent auth provider, resetting (authMethod: %s, authenticator: %s)", a.c.AuthenticationMethod(), reflect.TypeOf(a.authProvider))
 	var ok = true
-	if a.authProvider == nil {
+	switch {
+	case a.authProvider == nil:
 		ok = false
 		msg = "auth provider is not set, resetting to default"
-	} else if a.c.AuthenticationMethod() == types.OAuthAuthentication {
+	case a.c.AuthenticationMethod() == types.OAuthAuthentication:
 		_, ok = a.authProvider.(*OAuth2Provider)
-	} else if a.c.AuthenticationMethod() == types.TokenAuthentication {
+	case a.c.AuthenticationMethod() == types.TokenAuthentication:
 		_, ok = a.authProvider.(*CliAuthenticationProvider)
-	} else if a.c.AuthenticationMethod() == types.FakeAuthentication {
+	case a.c.AuthenticationMethod() == types.FakeAuthentication:
 		_, fake := a.authProvider.(*FakeAuthenticationProvider)
 		_, cli := a.authProvider.(*CliAuthenticationProvider)
 		ok = fake || cli
+	default:
+		ok = false
+		msg = fmt.Sprintf("Unsupported authentication method: %s", a.c.AuthenticationMethod())
 	}
 	if !ok {
 		a.c.Logger().Warn().Msg(msg)
