@@ -238,7 +238,7 @@ func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs
 	folderConfigArgs := folderConfig.AdditionalParameters
 
 	// this asks the client for the current SDK and blocks on it
-	additionalParameters := cliScanner.updateSDKs(workDir)
+	additionalParameters := cliScanner.updateSDKs(folderConfig.FolderPath)
 
 	if len(folderConfigArgs) > 0 {
 		additionalParameters = append(additionalParameters, folderConfigArgs...)

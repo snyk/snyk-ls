@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/storage"
 	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func IntegTest(t *testing.T) *config.Config {
@@ -52,6 +53,7 @@ func UnitTest(t *testing.T) *config.Config {
 	c.ConfigureLogging(nil)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	c.SetTrustedFolderFeatureEnabled(false)
+	c.SetAuthenticationMethod(types.FakeAuthentication)
 	setMCPServerURL(t, c)
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
@@ -119,6 +121,7 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 	c := config.New()
 	c.ConfigureLogging(nil)
 	c.SetToken(testsupport.GetEnvironmentToken(useConsistentIgnores))
+	c.SetAuthenticationMethod(types.TokenAuthentication)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
 	setMCPServerURL(t, c)
