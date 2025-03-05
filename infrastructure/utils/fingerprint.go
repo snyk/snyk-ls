@@ -38,7 +38,7 @@ func CalculateFingerprintFromAdditionalData(issue types.Issue) string {
 			dependencyChainHash = normalizeArray(additionalData.From)
 		}
 		// Fingerprint for OSS Issues is: name@version@fromArrayHash
-		preHash = fmt.Sprintf("%s|%s|%s", additionalData.PackageName, additionalData.Version, dependencyChainHash)
+		preHash = fmt.Sprintf("%s|%s|%s|%s", additionalData.PackageName, additionalData.Version, dependencyChainHash, issue.GetRuleID())
 	case snyk.IaCIssueData:
 		// No need to normalize and change order of the array for IaC since order matters
 		preHash = strings.Join(additionalData.Path, "|")
