@@ -664,19 +664,12 @@ func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesB
 	f.scanStateAggregator.SummaryEmitter().Emit(f.scanStateAggregator.StateSnapshot())
 	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	deltaErr := f.hasDeltaError(p)
-	if deltaErr != nil {
-		f.sendScanError(p, deltaErr)
+	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.c.IsDeltaFindingsEnabled())
+	if scanErr != nil {
+		f.sendScanError(p, scanErr)
 	} else {
 		f.sendSuccess(p)
 	}
-}
-
-func (f *Folder) hasDeltaError(p product.Product) error {
-	if f.c.IsDeltaFindingsEnabled() {
-		return f.scanStateAggregator.GetScanErr(f.path, p, true)
-	}
-	return nil
 }
 
 func (f *Folder) getUniqueIssueID(issue types.Issue) string {
