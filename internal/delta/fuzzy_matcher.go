@@ -84,7 +84,7 @@ func (_ FuzzyMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]I
 	existingAssignedIds := make(map[string]bool)
 
 	for index, issue := range currentIssueList {
-		if issue.GetGlobalIdentity() != "" && !existingAssignedIds[issue.GetGlobalIdentity()] {
+		if issue.GetGlobalIdentity() != "" {
 			existingAssignedIds[issue.GetGlobalIdentity()] = true
 			continue
 		}
