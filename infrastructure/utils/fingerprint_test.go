@@ -33,8 +33,9 @@ func TestCalculateFingerprintFromAdditionalData_OssIssueData(t *testing.T) {
 			Version: "1.0.0",
 			From:    []string{"dir", "dep1", "dep2"},
 		},
+		ID: "my-issue-id",
 	}
-	expectedHash := sha256.Sum256([]byte("pkg|1.0.0|dep1|dep2"))
+	expectedHash := sha256.Sum256([]byte("pkg|1.0.0|dep1|dep2|my-issue-id"))
 	assert.Equal(t, fmt.Sprintf("%x", expectedHash), CalculateFingerprintFromAdditionalData(issue))
 
 	// Test with single "from" element
@@ -43,8 +44,9 @@ func TestCalculateFingerprintFromAdditionalData_OssIssueData(t *testing.T) {
 			Version: "2.0.0",
 			From:    []string{"dep1"},
 		},
+		ID: "my-issue-id",
 	}
-	expectedHash = sha256.Sum256([]byte("pkg2|2.0.0|dep1"))
+	expectedHash = sha256.Sum256([]byte("pkg2|2.0.0|dep1|my-issue-id"))
 	assert.Equal(t, fmt.Sprintf("%x", expectedHash), CalculateFingerprintFromAdditionalData(issue))
 
 	// Test with empty "from" element
@@ -53,8 +55,9 @@ func TestCalculateFingerprintFromAdditionalData_OssIssueData(t *testing.T) {
 			Version: "3.0.0",
 			From:    []string{},
 		},
+		ID: "my-issue-id",
 	}
-	expectedHash = sha256.Sum256([]byte("pkg3|3.0.0|"))
+	expectedHash = sha256.Sum256([]byte("pkg3|3.0.0||my-issue-id"))
 	assert.Equal(t, fmt.Sprintf("%x", expectedHash), CalculateFingerprintFromAdditionalData(issue))
 
 	// Test with "from" containing spaces
@@ -63,8 +66,9 @@ func TestCalculateFingerprintFromAdditionalData_OssIssueData(t *testing.T) {
 			Version: "4.0.0",
 			From:    []string{"dir", "dep1 with spaces", " dep2 with spaces "},
 		},
+		ID: "my-issue-id",
 	}
-	expectedHash = sha256.Sum256([]byte("pkg4|4.0.0|dep1|with|spaces|dep2|with|spaces"))
+	expectedHash = sha256.Sum256([]byte("pkg4|4.0.0|dep1|with|spaces|dep2|with|spaces|my-issue-id"))
 	assert.Equal(t, fmt.Sprintf("%x", expectedHash), CalculateFingerprintFromAdditionalData(issue))
 }
 
