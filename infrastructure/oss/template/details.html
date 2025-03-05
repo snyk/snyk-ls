@@ -86,7 +86,7 @@
         <div class="label font-light">Introduced through</div>
         <div class="content">
           {{range $i, $element := .IntroducedThroughs}}
-          <a href="{{$element.SnykUI}}/test/{{$element.PackageManager}}">{{$element.Module}}</a>
+          {{$element.Module}}
           {{ if lt $i (idxMinusOne (len $.IntroducedThroughs)) }}, {{end}}
           {{end}}
         </div>
