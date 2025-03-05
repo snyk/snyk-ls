@@ -539,6 +539,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	currentFindingIdentifiable := make([]delta.Identifiable, len(currentFlatIssueList))
 	for i := range currentFlatIssueList {
 		currentFindingIdentifiable[i] = currentFlatIssueList[i]
+		currentFindingIdentifiable[i].SetGlobalIdentity("")
 	}
 
 	df := delta2.NewDeltaFinderForProduct(p)

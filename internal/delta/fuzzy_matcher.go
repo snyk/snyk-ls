@@ -84,7 +84,7 @@ func (_ FuzzyMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]I
 	existingAssignedIds := make(map[string]bool)
 
 	for index, issue := range currentIssueList {
-		if issue.GetGlobalIdentity() != "" {
+		if issue.GetGlobalIdentity() != "" && !existingAssignedIds[issue.GetGlobalIdentity()] {
 			existingAssignedIds[issue.GetGlobalIdentity()] = true
 			continue
 		}
@@ -138,7 +138,7 @@ func findMatches(currentIssue Identifiable, index int, baseIssues []Identifiable
 			hd*weights.RecentHistoryDistance +
 			fd*weights.FingerprintConfidence
 
-		if overallConfidence == 1 {
+		if overallConfidence >= 1 {
 			similarIssues = append(similarIssues, IssueConfidence{
 				BaseUUID:           baseIssue.GetGlobalIdentity(),
 				IssueIDResultIndex: index,
