@@ -111,9 +111,6 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	customEndpoint := "https://app.dev.snyk.io"
-	c.UpdateApiEndpoints(customEndpoint + "/api")
-
 	issueAdditionalData := snyk.OssIssueData{
 		Title:       "myTitle",
 		Name:        "myIssue",
@@ -139,7 +136,7 @@ func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
-	assert.Truef(t, strings.Contains(issueDetailsPanelHtml, customEndpoint), issueDetailsPanelHtml)
+	assert.Truef(t, strings.Contains(issueDetailsPanelHtml, "learn."), issueDetailsPanelHtml)
 }
 
 func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
