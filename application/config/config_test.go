@@ -71,6 +71,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, "", c.LogPath(), "Logpath should be empty by default")
 	assert.Equal(t, "md", c.Format(), "Message format should be md by default")
 	assert.Equal(t, types.DefaultSeverityFilter(), c.FilterSeverity(), "All severities should be enabled by default")
+	assert.Equal(t, types.DefaultIssueViewOptions(), c.IssueViewOptions(), "Only open issues should be shown by default")
 	assert.Empty(t, c.trustedFolders)
 	assert.Equal(t, types.TokenAuthentication, c.authenticationMethod)
 }
@@ -179,6 +180,25 @@ func Test_SetSeverityFilter(t *testing.T) {
 		assert.True(t, modified)
 
 		modified = c.SetSeverityFilter(lowExcludedFilter)
+		assert.False(t, modified)
+	})
+}
+
+func Test_SetIssueViewOptions(t *testing.T) {
+	t.Run("Saves filter", func(t *testing.T) {
+		c := New()
+		c.SetIssueViewOptions(types.NewIssueViewOptions(false, true))
+		assert.Equal(t, types.NewIssueViewOptions(false, true), c.IssueViewOptions())
+	})
+
+	t.Run("Returns correctly", func(t *testing.T) {
+		c := New()
+		ignoredOnlyFilter := types.NewIssueViewOptions(false, true)
+
+		modified := c.SetIssueViewOptions(ignoredOnlyFilter)
+		assert.True(t, modified)
+
+		modified = c.SetIssueViewOptions(ignoredOnlyFilter)
 		assert.False(t, modified)
 	})
 }

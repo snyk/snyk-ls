@@ -633,7 +633,7 @@ func (f *Folder) FilterIssues(
 		}
 		for _, issue := range issueSlice {
 			// Logging here will spam the logs
-			if isVisibleSeverity(f.c, issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
+			if isVisibleSeverity(f.c, issue) && isVisibleForIssueViewOptions(f.c, issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
 				filteredIssues[path] = append(filteredIssues[path], issue)
 			}
 		}
@@ -658,6 +658,19 @@ func isVisibleSeverity(c *config.Config, issue types.Issue) bool {
 		return c.FilterSeverity().Low
 	}
 	return false
+}
+
+func isVisibleForIssueViewOptions(c *config.Config, issue types.Issue) bool {
+	logger := c.Logger().With().Str("method", "isVisibleForIssueViewOptions").Logger()
+
+	issueViewOptions := c.IssueViewOptions()
+	logger.Debug().Interface("issueViewOptions", issueViewOptions).Msg("Filtering issues by issue view options")
+
+	if issue.GetIsIgnored() {
+		return issueViewOptions.IgnoredIssues
+	} else {
+		return issueViewOptions.OpenIssues
+	}
 }
 
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {
