@@ -18,11 +18,12 @@ package error_reporting
 
 import (
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type testErrorReporter struct{}
 
-func (s *testErrorReporter) CaptureErrorAndReportAsIssue(path string, err error) bool {
+func (s *testErrorReporter) CaptureErrorAndReportAsIssue(path types.FilePath, err error) bool {
 	logger := config.CurrentConfig().Logger()
 	logger.Log().Err(err).Msg("An error has been captured by the testing error reporter")
 	return true

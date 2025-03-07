@@ -20,46 +20,49 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"time"
-
-	"github.com/snyk/snyk-ls/internal/delta"
+	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/delta"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
-type Reference struct {
-	Title string
-	Url   *url.URL
-}
+var (
+	_ delta.Fingerprintable = (*Issue)(nil)
+	_ delta.Identifiable    = (*Issue)(nil)
+	_ delta.Locatable       = (*Issue)(nil)
+	_ delta.Pathable        = (*Issue)(nil)
+	_ types.Issue           = (*Issue)(nil)
+)
 
 // Issue models a problem, vulnerability, or situation within your code that requires your attention
 type Issue struct {
 	// ID uniquely identifies the issue, it is intended to be human-readable. It's also rule id
 	ID        string
-	Severity  Severity
-	IssueType Type
+	Severity  types.Severity
+	IssueType types.IssueType
 	IsIgnored bool // If not explicitly it will default to false, so it doesn't break backwards
 	IsNew     bool
 	// compatibility
-	IgnoreDetails *IgnoreDetails // It defaults to nil, so it doesn't break backwards compatibility
+	IgnoreDetails *types.IgnoreDetails // It defaults to nil, so it doesn't break backwards compatibility
 	// Range identifies the location of this issue in its source of origin (e.g. line & character start & end)
-	Range Range
+	Range types.Range
 	// Message is a human-readable description of the issue
 	Message string
 	// todo [jc] this contains a formatted longest message for hovers, this needs to be pushed up and rendered in presentation. [bd] shouldn't the content and formatting be decided by the product?
 	FormattedMessage string
 	// AffectedFilePath is the file path to the file where the issue was found
-	AffectedFilePath string
+	AffectedFilePath types.FilePath
 	// Product is the Snyk product, e.g. Snyk Open Source
 	Product product.Product // todo: can we avoid it, if it's part of a scanner interface already?
 	// References deliver additional information
-	References []Reference
+	References []types.Reference
 	// IssueDescriptionURL contains a Uri to display more information
 	IssueDescriptionURL *url.URL
 	// CodeActions can contain workspace edits or commands to be executed
-	CodeActions []CodeAction
+	CodeActions []types.CodeAction `json:"-"` // don't marshall/unmarshall as this is an interface and we don't need it
 	// CodelensCommands that can be executed via a codelens
 	CodelensCommands []types.CommandData
 	// The Ecosystem of the issue, e.g. npm, maven, nuget, etc.
@@ -69,80 +72,269 @@ type Issue struct {
 	// A slice of the CVEs of the issue
 	CVEs []string
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
-	AdditionalData IssueAdditionalData `json:"additionalData"`
+	AdditionalData types.IssueAdditionalData `json:"additionalData"`
 	// Learn Service Lesson URL
 	LessonUrl      string `json:"url"`
 	Fingerprint    string
 	GlobalIdentity string
+	m              sync.RWMutex
 }
 
-var _ delta.Identifiable = (*Issue)(nil)
-var _ delta.Fingerprintable = (*Issue)(nil)
-var _ delta.Locatable = (*Issue)(nil)
-var _ delta.Pathable = (*Issue)(nil)
+func (i *Issue) Clone() *Issue {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return &Issue{
+		ID:                  i.ID,
+		Severity:            i.Severity,
+		IssueType:           i.IssueType,
+		IsIgnored:           i.IsIgnored,
+		IsNew:               i.IsNew,
+		IgnoreDetails:       i.IgnoreDetails,
+		Range:               i.Range,
+		Message:             i.Message,
+		FormattedMessage:    i.FormattedMessage,
+		AffectedFilePath:    i.AffectedFilePath,
+		Product:             i.Product,
+		References:          i.References,
+		IssueDescriptionURL: i.IssueDescriptionURL,
+		CodeActions:         i.CodeActions,
+		CodelensCommands:    i.CodelensCommands,
+		Ecosystem:           i.Ecosystem,
+		CWEs:                i.CWEs,
+		CVEs:                i.CVEs,
+		AdditionalData:      i.AdditionalData,
+		LessonUrl:           i.LessonUrl,
+		Fingerprint:         i.Fingerprint,
+		GlobalIdentity:      i.GlobalIdentity,
+		m:                   sync.RWMutex{},
+	}
+}
+
+func (i *Issue) SetRange(r types.Range) {
+	i.m.Lock()
+	defer i.m.Unlock()
+	i.Range = r
+}
+
+func (i *Issue) GetReferences() []types.Reference {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.References
+}
+
+func (i *Issue) SetCodeActions(actions []types.CodeAction) {
+	i.m.Lock()
+	defer i.m.Unlock()
+
+	i.CodeActions = actions
+}
+
+func (i *Issue) SetCodelensCommands(lenses []types.CommandData) {
+	i.m.Lock()
+	defer i.m.Unlock()
+
+	i.CodelensCommands = lenses
+}
+
+func (i *Issue) GetCodelensCommands() []types.CommandData {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.CodelensCommands
+}
+
+func (i *Issue) GetCodeActions() []types.CodeAction {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.CodeActions
+}
+
+func (i *Issue) GetIssueDescriptionURL() *url.URL {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.IssueDescriptionURL
+}
+
+func (i *Issue) GetEcosystem() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.Ecosystem
+}
+
+func (i *Issue) GetCWEs() []string {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.CWEs
+}
+
+func (i *Issue) GetCVEs() []string {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.CVEs
+}
+
+func (i *Issue) GetIssueType() types.IssueType {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.IssueType
+}
+
+func (i *Issue) GetLessonUrl() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.LessonUrl
+}
+
+func (i *Issue) GetID() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.ID
+}
+
+func (i *Issue) GetDescription() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.Message
+}
+
+func (i *Issue) GetRange() types.Range {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.Range
+}
+
+func (i *Issue) GetMessage() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.Message
+}
+
+func (i *Issue) GetFormattedMessage() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.FormattedMessage
+}
+
+func (i *Issue) GetAffectedFilePath() types.FilePath {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.AffectedFilePath
+}
+
+func (i *Issue) GetIsIgnored() bool {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.IsIgnored
+}
+
+func (i *Issue) GetSeverity() types.Severity {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.Severity
+}
+
+func (i *Issue) GetIgnoreDetails() *types.IgnoreDetails {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.IgnoreDetails
+}
+
+func (i *Issue) GetProduct() product.Product {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.Product
+}
+
+func (i *Issue) GetAdditionalData() types.IssueAdditionalData {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.AdditionalData
+}
+
+func (i *Issue) SetLessonUrl(url string) {
+	i.m.Lock()
+	defer i.m.Unlock()
+	i.LessonUrl = url
+}
+
+func (i *Issue) SetAdditionalData(data types.IssueAdditionalData) {
+	i.m.Lock()
+	defer i.m.Unlock()
+	i.AdditionalData = data
+}
 
 func (i *Issue) StartLine() int {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Range.Start.Line
 }
 
 func (i *Issue) EndLine() int {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Range.End.Line
 }
 
 func (i *Issue) StartColumn() int {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Range.Start.Character
 }
 
 func (i *Issue) EndColumn() int {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Range.End.Character
 }
 
 func (i *Issue) GetIsNew() bool {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.IsNew
 }
 
 func (i *Issue) SetIsNew(isNew bool) {
+	i.m.Lock()
+	defer i.m.Unlock()
 	i.IsNew = isNew
 }
 
 func (i *Issue) GetGlobalIdentity() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.GlobalIdentity
 }
 
-func (i *Issue) SetGlobalIdentity(globalIdentity string) {
-	i.GlobalIdentity = globalIdentity
+func (i *Issue) SetGlobalIdentity(id string) {
+	i.m.Lock()
+	defer i.m.Unlock()
+
+	i.GlobalIdentity = id
 }
 
-func (i *Issue) Path() string {
+func (i *Issue) GetPath() types.FilePath {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.AffectedFilePath
 }
 
 func (i *Issue) GetFingerprint() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.Fingerprint
 }
 
 func (i *Issue) SetFingerPrint(fingerprint string) {
+	i.m.Lock()
+	defer i.m.Unlock()
+
 	i.Fingerprint = fingerprint
+	i.GlobalIdentity = util.HashWithoutConversion([]byte(fingerprint))
 }
 
-func (i *Issue) RuleId() string {
+func (i *Issue) GetRuleID() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
 	return i.ID
-}
-
-type IssueAdditionalData interface {
-	json.Marshaler
-	GetKey() string
-	GetTitle() string
-	IsFixable() bool
-	GetFilterableIssueType() product.FilterableIssueType
-}
-
-type IgnoreDetails struct {
-	Category   string
-	Reason     string
-	Expiration string
-	IgnoredOn  time.Time
-	IgnoredBy  string
 }
 
 type ExampleCommitFix struct {
@@ -198,9 +390,9 @@ func (i *Issue) GetFilterableIssueType() product.FilterableIssueType {
 		return product.FilterableIssueTypeInfrastructureAsCode
 	case product.ProductCode:
 		switch i.IssueType {
-		case CodeQualityIssue:
+		case types.CodeQualityIssue:
 			return product.FilterableIssueTypeCodeQuality
-		case CodeSecurityVulnerability:
+		case types.CodeSecurityVulnerability:
 			return product.FilterableIssueTypeCodeSecurity
 		default:
 			const msg = "Failed to resolve code issue type. Product is Code, but issue type unspecified. Defaulting to Security issue type"
@@ -213,35 +405,10 @@ func (i *Issue) GetFilterableIssueType() product.FilterableIssueType {
 }
 
 func (i *Issue) String() string {
-	return fmt.Sprintf("%s, ID: %s, Range: %s", i.AffectedFilePath, i.ID, i.Range)
+	return fmt.Sprintf("%s, ID: %s, Range: %s", i.GetAffectedFilePath(), i.GetID(), i.GetRange())
 }
 
 type Severity int8
-
-// Type of issue, these will typically match 1o1 to Snyk product lines but are not necessarily coupled to those.
-type Type int8
-
-const (
-	Critical Severity = iota
-	High
-	Medium
-	Low
-)
-
-func (s Severity) String() string {
-	switch s {
-	case Critical:
-		return "critical"
-	case High:
-		return "high"
-	case Medium:
-		return "medium"
-	case Low:
-		return "low"
-	default:
-		return "unknown"
-	}
-}
 
 func (i *Issue) UnmarshalJSON(data []byte) error {
 	type IssueAlias Issue
@@ -289,12 +456,9 @@ func (i *Issue) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-const (
-	PackageHealth Type = iota
-	CodeQualityIssue
-	CodeSecurityVulnerability
-	LicenseIssue
-	DependencyVulnerability
-	InfrastructureIssue
-	ContainerVulnerability
-)
+func (i *Issue) SetID(id string) {
+	i.m.Lock()
+	defer i.m.Unlock()
+
+	i.ID = id
+}

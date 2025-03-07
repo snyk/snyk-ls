@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package code
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net/url"
 	"os"
 	"regexp"
@@ -38,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/filesystem"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -49,22 +49,22 @@ func createRuleLink() (u *url.URL) {
 	return u
 }
 
-func issueSeverityToMarkdown(severity snyk.Severity) string {
+func issueSeverityToMarkdown(severity types.Severity) string {
 	switch severity {
-	case snyk.Critical:
+	case types.Critical:
 		return "🔥 Critical Severity"
-	case snyk.High:
+	case types.High:
 		return "🚨 High Severity"
-	case snyk.Medium:
+	case types.Medium:
 		return "⚠️ Medium Severity"
-	case snyk.Low:
+	case types.Low:
 		return "⬇️ Low Severity"
 	default:
 		return "❔️ Unknown Severity"
 	}
 }
 
-func (c *exampleCommit) toReference() (reference snyk.Reference) {
+func (c *exampleCommit) toReference() (reference types.Reference) {
 	conf := config.CurrentConfig()
 	commitURLString := c.fix.CommitURL
 	commitURL, err := url.Parse(commitURLString)
@@ -74,7 +74,7 @@ func (c *exampleCommit) toReference() (reference snyk.Reference) {
 			Str("commitURL", commitURLString).
 			Msgf("cannot parse commit url")
 	}
-	return snyk.Reference{Title: c.description, Url: commitURL}
+	return types.Reference{Title: c.description, Url: commitURL}
 }
 
 type SarifConverter struct {
@@ -82,23 +82,23 @@ type SarifConverter struct {
 	c     *config.Config
 }
 
-func (s *SarifConverter) getReferences(r codeClientSarif.Rule) (references []snyk.Reference) {
+func (s *SarifConverter) getReferences(r codeClientSarif.Rule) (references []types.Reference) {
 	for _, commit := range s.getExampleCommits(r) {
 		references = append(references, commit.toReference())
 	}
 	return references
 }
 
-func (s *SarifConverter) getCodeIssueType(r codeClientSarif.Rule) snyk.Type {
+func (s *SarifConverter) getCodeIssueType(r codeClientSarif.Rule) types.IssueType {
 	isSecurity := slices.ContainsFunc(r.Properties.Categories, func(category string) bool {
 		return strings.ToLower(category) == "security"
 	})
 
 	if isSecurity {
-		return snyk.CodeSecurityVulnerability
+		return types.CodeSecurityVulnerability
 	}
 
-	return snyk.CodeQualityIssue
+	return types.CodeQualityIssue
 }
 
 func (s *SarifConverter) cwe(r codeClientSarif.Rule) string {
@@ -126,7 +126,7 @@ func (s *SarifConverter) cwe(r codeClientSarif.Rule) string {
 	return builder.String()
 }
 
-func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir string) (dataflow []snyk.DataFlowElement) {
+func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir types.FilePath) (dataflow []snyk.DataFlowElement) {
 	flows := r.CodeFlows
 	dedupMap := map[string]bool{}
 	for _, cFlow := range flows {
@@ -135,24 +135,24 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir string) (
 			for _, tFlowLocation := range tFlow.Locations {
 				method := "getCodeFlow"
 				physicalLoc := tFlowLocation.Location.PhysicalLocation
-				path, err := DecodePath(ToAbsolutePath(baseDir, physicalLoc.ArtifactLocation.URI))
+				path, err := DecodePath(ToAbsolutePath(baseDir, types.FilePath(physicalLoc.ArtifactLocation.URI)))
 				if err != nil {
 					s.c.Logger().Error().
 						Err(err).
 						Msg("failed to convert URI to absolute path: base directory: " +
-							baseDir +
+							string(baseDir) +
 							", URI: " +
 							physicalLoc.ArtifactLocation.URI)
 					continue
 				}
 				region := physicalLoc.Region
 				myRange :=
-					snyk.Range{
-						Start: snyk.Position{
+					types.Range{
+						Start: types.Position{
 							Line:      region.StartLine - 1,
 							Character: region.StartColumn - 1,
 						},
-						End: snyk.Position{
+						End: types.Position{
 							Line:      region.EndLine - 1,
 							Character: region.EndColumn,
 						}}
@@ -166,7 +166,7 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir string) (
 					}
 					d := snyk.DataFlowElement{
 						Position:  len(dataflow),
-						FilePath:  path,
+						FilePath:  types.FilePath(path),
 						FlowRange: myRange,
 						Content:   content,
 					}
@@ -206,7 +206,7 @@ func (s *SarifConverter) detailsOrEmpty(r codeClientSarif.Rule) string {
 	return ""
 }
 
-func (s *SarifConverter) formattedMessageMarkdown(r codeClientSarif.Result, rule codeClientSarif.Rule, baseDir string) string {
+func (s *SarifConverter) formattedMessageMarkdown(r codeClientSarif.Result, rule codeClientSarif.Rule, baseDir types.FilePath) string {
 	hoverVerbosity := s.c.HoverVerbosity()
 	var builder strings.Builder
 	const separator = "\n\n\n\n"
@@ -304,7 +304,7 @@ func (s *SarifConverter) getRule(r codeClientSarif.Run, id string) codeClientSar
 	return codeClientSarif.Rule{}
 }
 
-func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err error) {
+func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue, err error) {
 	runs := s.sarif.Sarif.Runs
 	if len(runs) == 0 {
 		return issues, nil
@@ -316,12 +316,12 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 	for _, result := range r.Results {
 		for _, loc := range result.Locations {
 			// Response contains encoded relative paths that should be decoded and converted to absolute.
-			absPath, err := DecodePath(ToAbsolutePath(baseDir, loc.PhysicalLocation.ArtifactLocation.URI))
+			absPath, err := DecodePath(ToAbsolutePath(baseDir, types.FilePath(loc.PhysicalLocation.ArtifactLocation.URI)))
 			if err != nil {
 				s.c.Logger().Error().
 					Err(err).
 					Msg("failed to convert URI to absolute path: base directory: " +
-						baseDir +
+						string(baseDir) +
 						", URI: " +
 						loc.PhysicalLocation.ArtifactLocation.URI)
 				errs = errors.Join(errs, err)
@@ -335,12 +335,12 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 			endLine := util.Max(position.EndLine-1, startLine)
 			startCol := position.StartColumn - 1
 			endCol := util.Max(position.EndColumn-1, 0)
-			myRange := snyk.Range{
-				Start: snyk.Position{
+			myRange := types.Range{
+				Start: types.Position{
 					Line:      startLine,
 					Character: startCol,
 				},
-				End: snyk.Position{
+				End: types.Position{
 					Line:      endLine,
 					Character: endCol,
 				},
@@ -370,7 +370,7 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 
 			issueType := s.getCodeIssueType(testRule)
 			isSecurityType := true
-			if issueType == snyk.CodeQualityIssue {
+			if issueType == types.CodeQualityIssue {
 				isSecurityType = false
 			}
 
@@ -402,14 +402,14 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 				DataFlow:           s.getCodeFlow(result, baseDir),
 			}
 
-			d := snyk.Issue{
+			d := &snyk.Issue{
 				ID:                  result.RuleID,
 				Range:               myRange,
 				Severity:            issueSeverity(result.Level),
 				Message:             message,
 				FormattedMessage:    formattedMessage,
 				IssueType:           issueType,
-				AffectedFilePath:    absPath,
+				AffectedFilePath:    types.FilePath(absPath),
 				Product:             product.ProductCode,
 				IssueDescriptionURL: ruleLink,
 				References:          s.getReferences(testRule),
@@ -427,9 +427,9 @@ func (s *SarifConverter) toIssues(baseDir string) (issues []snyk.Issue, err erro
 	return issues, errs
 }
 
-func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, *snyk.IgnoreDetails) {
+func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, *types.IgnoreDetails) {
 	isIgnored := false
-	var ignoreDetails *snyk.IgnoreDetails
+	var ignoreDetails *types.IgnoreDetails
 
 	// this can be an array of multiple suppressions in SARIF
 	// but we only store one ignore for now
@@ -445,7 +445,7 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 		if reason == "" {
 			reason = "None given"
 		}
-		ignoreDetails = &snyk.IgnoreDetails{
+		ignoreDetails = &types.IgnoreDetails{
 			Category:   string(suppression.Properties.Category),
 			Reason:     reason,
 			Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
@@ -483,7 +483,7 @@ func parseDateFromString(date string) time.Time {
 	return time.Now().UTC()
 }
 
-func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([]snyk.Marker, error) {
+func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir types.FilePath) ([]snyk.Marker, error) {
 	markers := make([]snyk.Marker, 0)
 
 	// Example markdown string:
@@ -517,12 +517,12 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([
 			startCol := loc.Location.PhysicalLocation.Region.StartColumn - 1
 			endCol := loc.Location.PhysicalLocation.Region.EndColumn
 
-			filePath, err := DecodePath(ToAbsolutePath(baseDir, loc.Location.PhysicalLocation.ArtifactLocation.URI))
+			filePath, err := DecodePath(ToAbsolutePath(baseDir, types.FilePath(loc.Location.PhysicalLocation.ArtifactLocation.URI)))
 			if err != nil {
 				s.c.Logger().Error().
 					Err(err).
 					Msg("failed to convert URI to absolute path: base directory: " +
-						baseDir +
+						string(baseDir) +
 						", URI: " +
 						loc.Location.PhysicalLocation.ArtifactLocation.URI)
 				return []snyk.Marker{}, err
@@ -558,82 +558,118 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir string) ([
 	return markers, nil
 }
 
-// createAutofixWorkspaceEdit turns the returned fix into an edit.
-func createAutofixWorkspaceEdit(absoluteFilePath string, fixedSourceCode string) (edit snyk.WorkspaceEdit) {
-	fileContent, err := os.ReadFile(absoluteFilePath)
-	if err != nil {
+// CreateWorkspaceEditFromDiff turns the returned fix (in diff format) into a series of TextEdits in a WorkspaceEdit.
+func CreateWorkspaceEditFromDiff(absoluteFilePath string, diff string) (edit types.WorkspaceEdit) {
+	fileContentBytes, err := os.ReadFile(absoluteFilePath)
+	if err != nil || len(fileContentBytes) == 0 {
 		return edit
 	}
-	singleTextEdit := snyk.TextEdit{
-		Range: snyk.Range{
-			// TODO(alex.gronskiy): should be changed to an actual hunk-like edit instead of
-			// this "replace-the-whole-file" strategy
-			Start: snyk.Position{
-				Line:      0,
-				Character: 0},
-			End: snyk.Position{
-				Line:      math.MaxInt32,
-				Character: 0},
-		},
-		NewText:  fixedSourceCode,
-		FullText: string(fileContent),
+	fileContentLineStrings := strings.Split(string(fileContentBytes), "\n")
+
+	var textEdits []types.TextEdit
+
+	var hunkLine = 0   // Location in the current hunk
+	var hunkOffset = 0 // Whether we need to offset the current hunk based on previous edits.
+
+	// Loop over the diff. Diffs will always use \n instead of \r\n, so no need to sanitize (see getUnifiedDiff).
+	for _, line := range strings.Split(diff, "\n") {
+		// If we are being asked to make changes outside the original file, abort and return an empty edit.
+		if hunkLine-hunkOffset > len(fileContentLineStrings) {
+			return edit
+		}
+
+		if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") {
+			continue // We ignore header lines
+		} else if strings.HasPrefix(line, "@@") {
+			r := regexp.MustCompile(`@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@`)
+			matches := r.FindStringSubmatch(line)
+			if matches == nil {
+				return edit // We have a badly formatted diff, so abort.
+			}
+
+			hunkLine, _ = strconv.Atoi(matches[1]) // Apply the edit from the first line of the original file in the diff
+			hunkLine -= 1                          // TextEdit range is 0-indexed, whereas LSP diff is 1-indexed
+			hunkLine += hunkOffset                 // Account for any previous additions or deletions.
+		} else if strings.HasPrefix(line, "-") {
+			textEdit := buildOneLineTextEdit(hunkLine, hunkLine+1, "")
+			textEdits = append(textEdits, textEdit)
+			hunkOffset -= 1 // We've removed a line, so future hunks will be offset with respect to the diff.
+		} else if strings.HasPrefix(line, "+") {
+			textEdit := buildOneLineTextEdit(hunkLine, hunkLine, strings.TrimPrefix(line, "+")+"\n")
+			textEdits = append(textEdits, textEdit)
+			hunkOffset += 1 // We've added a line, so future hunks will be offset with respect to the diff.
+			hunkLine += 1   // We've added a line, so increment the pointer in our current hunk.
+		} else if strings.HasPrefix(line, " ") {
+			hunkLine += 1 // We skip over unchanged lines, so increment the pointer in our current hunk.
+		}
 	}
-	edit.Changes = make(map[string][]snyk.TextEdit)
-	edit.Changes[absoluteFilePath] = []snyk.TextEdit{singleTextEdit}
+
+	edit.Changes = make(map[string][]types.TextEdit)
+	edit.Changes[absoluteFilePath] = textEdits
+
 	return edit
 }
 
-// toAutofixSuggestionsIssues converts the HTTP json-first payload to the domain type
-func (s *AutofixResponse) toAutofixSuggestions(baseDir string, filePath string) (fixSuggestions []AutofixSuggestion) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "toAutofixSuggestions").Logger()
-	for _, suggestion := range s.AutofixSuggestions {
-		decodedPath, err := DecodePath(ToAbsolutePath(baseDir, filePath))
-		if err != nil {
-			logger.Err(err).Msgf("cannot decode filePath %s", filePath)
-			continue
-		}
-		d := AutofixSuggestion{
-			FixId:       suggestion.Id,
-			AutofixEdit: createAutofixWorkspaceEdit(decodedPath, suggestion.Value),
-		}
-		fixSuggestions = append(fixSuggestions, d)
+func buildOneLineTextEdit(startLine int, endLine int, text string) types.TextEdit {
+	if startLine > endLine {
+		return types.TextEdit{} // We should never reach this. Return an empty edit if the input it invalid.
 	}
 
-	return fixSuggestions
+	return types.TextEdit{
+		Range: types.Range{
+			Start: types.Position{
+				Line:      startLine,
+				Character: 0,
+			},
+			End: types.Position{
+				Line:      endLine,
+				Character: 0,
+			},
+		},
+		NewText: text,
+	}
 }
 
-func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir string, filePath string) []AutofixUnifiedDiffSuggestion {
-	logger := config.CurrentConfig().Logger().With().Str("method", "toUnifiedDiffSuggestions").Logger()
+func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
 	for _, suggestion := range s.AutofixSuggestions {
-		path, err := DecodePath(ToAbsolutePath(baseDir, filePath))
-		if err != nil {
-			logger.Err(err).Msgf("cannot decode filePath %s", filePath)
-		}
-		logger.Debug().Msgf("File path %s", path)
-		fileContent, err := os.ReadFile(path)
-		if err != nil {
-			logger.Err(err).Msgf("cannot read fileContent %s", path)
-			return fixSuggestions
-		}
-		contentBefore := string(fileContent)
-		// Workaround: AI Suggestion API only returns \n new lines. It doesn't consider carriage returns.
-		contentBefore = strings.Replace(contentBefore, "\r\n", "\n", -1)
-		edits := myers.ComputeEdits(span.URIFromPath(baseDir), contentBefore, suggestion.Value)
-		unifiedDiff := fmt.Sprint(gotextdiff.ToUnified(baseDir, baseDir+"-fixed", contentBefore, edits))
-
-		logger.Trace().Msg(unifiedDiff)
-
-		if len(edits) == 0 {
-			return fixSuggestions
+		decodedPath, unifiedDiff := getPathAndUnifiedDiff(baseDir, filePath, suggestion.Value)
+		if decodedPath == "" || unifiedDiff == "" {
+			continue
 		}
 
 		d := AutofixUnifiedDiffSuggestion{
 			FixId:               suggestion.Id,
 			UnifiedDiffsPerFile: map[string]string{},
 		}
-		d.UnifiedDiffsPerFile[path] = unifiedDiff
+
+		d.UnifiedDiffsPerFile[string(decodedPath)] = string(unifiedDiff)
 		fixSuggestions = append(fixSuggestions, d)
 	}
 	return fixSuggestions
+}
+
+func getPathAndUnifiedDiff(baseDir types.FilePath, filePath types.FilePath, newText string) (decodedPath types.FilePath, unifiedDiff types.FilePath) {
+	logger := config.CurrentConfig().Logger().With().Str("method", "getUnifiedDiff").Logger()
+
+	decodedPathString, err := DecodePath(ToAbsolutePath(baseDir, filePath))
+	decodedPath = types.FilePath(decodedPathString)
+	if err != nil {
+		logger.Err(err).Msgf("cannot decode filePath %s", filePath)
+		return
+	}
+	logger.Debug().Msgf("File decodedPath %s", decodedPath)
+
+	fileContent, err := os.ReadFile(decodedPathString)
+	if err != nil {
+		logger.Err(err).Msgf("cannot read fileContent %s", decodedPath)
+		return
+	}
+
+	// Workaround: AI Suggestion API only returns \n new lines. It doesn't consider carriage returns.
+	contentBefore := strings.Replace(string(fileContent), "\r\n", "\n", -1)
+	edits := myers.ComputeEdits(span.URIFromPath(decodedPathString), contentBefore, newText)
+	unifiedDiff = types.FilePath(fmt.Sprint(gotextdiff.ToUnified(decodedPathString, decodedPathString+"fixed", contentBefore, edits)))
+
+	return decodedPath, unifiedDiff
 }

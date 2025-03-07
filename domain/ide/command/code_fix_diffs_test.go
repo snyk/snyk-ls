@@ -21,8 +21,11 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/creachadair/jrpc2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -38,20 +41,28 @@ func Test_codeFixDiffs_Command(t *testing.T) {
 
 type mockIssueProvider struct {
 }
+type ServerImplMock struct{}
+
+func (b *ServerImplMock) Callback(_ context.Context, _ string, _ any) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
+	return nil, nil
+}
+func (b *ServerImplMock) Notify(_ context.Context, _ string, _ any) error {
+	return nil
+}
 
 func (m mockIssueProvider) Issues() snyk.IssuesByFile {
 	panic("this should not be called")
 }
 
-func (m mockIssueProvider) IssuesForFile(_ string) []snyk.Issue {
+func (m mockIssueProvider) IssuesForFile(path types.FilePath) []types.Issue {
 	panic("this should not be called")
 }
 
-func (m mockIssueProvider) IssuesForRange(_ string, _ snyk.Range) []snyk.Issue {
+func (m mockIssueProvider) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
 	panic("this should not be called")
 }
-func (m mockIssueProvider) Issue(key string) snyk.Issue {
-	return snyk.Issue{ID: key}
+func (m mockIssueProvider) Issue(key string) types.Issue {
+	return &snyk.Issue{ID: key}
 }
 
 func Test_codeFixDiffs_Execute(t *testing.T) {
@@ -72,8 +83,11 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		C:              c,
 	}
 	cut := codeFixDiffs{
-		notifier:    notification.NewMockNotifier(),
-		codeScanner: codeScanner,
+		notifier:           notification.NewMockNotifier(),
+		codeScanner:        codeScanner,
+		c:                  c,
+		srv:                &ServerImplMock{},
+		deepCodeLLMBinding: llm.NewDeepcodeLLMBinding(),
 	}
 	if runtime.GOOS == "windows" {
 		codeScanner.AddBundleHash("\\folderPath", "bundleHash")
@@ -89,7 +103,9 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 		suggestions, err := cut.Execute(context.Background())
 
-		require.NotEmptyf(t, suggestions, "suggestions should not be empty")
+		// Code fix diffs command doesn't return suggestions anymore
+		// TODO: handle getting the suggestions
+		require.Emptyf(t, suggestions, "suggestions should not be empty")
 		require.NoError(t, err)
 	})
 

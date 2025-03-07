@@ -10,8 +10,8 @@ import (
 	"github.com/golang/mock/gomock"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // MockService is a mock of Service interface.
@@ -53,7 +53,7 @@ func (mr *MockServiceMockRecorder) GetAllLessons() *gomock.Call {
 }
 
 // GetLesson mocks base method.
-func (m *MockService) GetLesson(arg0, arg1 string, arg2, arg3 []string, arg4 snyk.Type) (*learn.Lesson, error) {
+func (m *MockService) GetLesson(arg0, arg1 string, arg2, arg3 []string, arg4 types.IssueType) (*learn.Lesson, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLesson", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(*learn.Lesson)

@@ -22,15 +22,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // AutofixUnifiedDiffSuggestion represents the diff between the original and the fixed source code.
 type AutofixUnifiedDiffSuggestion struct {
 	FixId               string            `json:"fixId"`
 	UnifiedDiffsPerFile map[string]string `json:"unifiedDiffsPerFile"`
+	FullTextPerFile     map[string]string `json:"fullTextPerFile"`
+	Explanation         string            `json:"explanation"`
 }
 
 func (a AutofixUnifiedDiffSuggestion) String() string {
@@ -41,11 +42,7 @@ func (a AutofixUnifiedDiffSuggestion) GetUnifiedDiffForFile(filePath string) str
 	return a.UnifiedDiffsPerFile[filePath]
 }
 
-func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir string, options AutofixOptions) (
-	unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion,
-	status AutofixStatus,
-	err error,
-) {
+func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
 	method := "GetAutofixDiffs"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -99,12 +96,7 @@ func (s *SnykCodeHTTPClient) getAutofixResponse(ctx context.Context, options Aut
 	return response, status, nil
 }
 
-func (sc *Scanner) GetAutofixDiffs(
-	ctx context.Context,
-	baseDir string,
-	filePath string,
-	issue snyk.Issue,
-) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
+func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, filePath types.FilePath, issue types.Issue) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
 	method := "GetAutofixDiffs"
 	logger := sc.C.Logger().With().Str("method", method).Logger()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, method)
@@ -124,7 +116,7 @@ func (sc *Scanner) GetAutofixDiffs(
 	}
 	options := AutofixOptions{
 		bundleHash: bundleHash,
-		shardKey:   getShardKey(baseDir, config.CurrentConfig().Token()),
+		shardKey:   getShardKey(baseDir, sc.C.Token()),
 		filePath:   encodedNormalizedPath,
 		issue:      issue,
 	}
@@ -157,7 +149,7 @@ func (sc *Scanner) GetAutofixDiffs(
 	}
 }
 
-func toEncodedNormalizedPath(rootPath string, filePath string) (string, error) {
+func toEncodedNormalizedPath(rootPath types.FilePath, filePath types.FilePath) (types.FilePath, error) {
 	relativePath, err := ToRelativeUnixPath(rootPath, filePath)
 	if err != nil {
 		// couldn't make it relative, so it's already relative

@@ -28,6 +28,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	mcp2 "github.com/snyk/snyk-ls/internal/mcp"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -77,9 +78,27 @@ func Start(c *config.Config) {
 	di.Init()
 	initHandlers(srv, handlers, c)
 
-	logger.Info().Msg("Starting up...")
-	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
+	// start mcp server
+	logger.Info().Msg("Starting up MCP Server...")
+	var mcpServer *mcp2.McpLLMBinding
+	go func() {
+		mcpServer = mcp2.NewMcpLLMBinding(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()))
+		err := mcpServer.Start()
+		if err != nil {
+			c.Logger().Err(err).Msg("failed to start mcp server")
+		}
+	}()
 
+	// shutdown mcp server once the lsp returns from wait status
+	defer func() {
+		if mcpServer != nil {
+			logger.Info().Msg("Shutting down MCP Server...")
+			mcpServer.Shutdown(context.Background())
+		}
+	}()
+
+	logger.Info().Msg("Starting up Language Server...")
+	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
 	status := srv.WaitStatus()
 	if status.Err != nil {
 		logger.Err(status.Err).Msg("server stopped because of error")
@@ -89,11 +108,12 @@ func Start(c *config.Config) {
 }
 
 const textDocumentDidOpenOperation = "textDocument/didOpen"
+
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 	handlers["initialize"] = initializeHandler(srv)
-	handlers["initialized"] = initializedHandler(srv)
+	handlers["initialized"] = initializedHandler(c, srv)
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
 	handlers["textDocument/didClose"] = noOpHandler()
 	handlers[textDocumentDidOpenOperation] = textDocumentDidOpenHandler(c)
@@ -115,12 +135,23 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 }
 
 func textDocumentDidChangeHandler() jrpc2.Handler {
-	debouncerMap := make(map[string]*debounce.Debouncer)
+	debouncerMap := make(map[types.FilePath]*debounce.Debouncer)
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
 		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "TextDocumentDidChangeHandler").Logger()
 		pathFromUri := uri.PathFromUri(params.TextDocument.URI)
 		logger.Trace().Msgf("RECEIVING for %s", pathFromUri)
+
+		folder := c.Workspace().GetFolderContaining(pathFromUri)
+		if folder == nil {
+			logger.Warn().Msg(string("No folder found for file " + pathFromUri))
+			return nil, nil
+		}
+
+		if !folder.IsTrusted() {
+			logger.Warn().Msg(string("folder not trusted for file " + pathFromUri))
+			return nil, nil
+		}
 
 		di.FileWatcher().SetFileAsChanged(params.TextDocument.URI)
 
@@ -298,10 +329,12 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 						types.CodeFixCommand,
 						types.CodeSubmitFixFeedback,
 						types.CodeFixDiffsCommand,
+						types.CodeFixApplyEditCommand,
 						types.ExecuteCLICommand,
 						types.ClearCacheCommand,
 						types.GenerateIssueDescriptionCommand,
 						types.ReportAnalyticsCommand,
+						types.ExecuteMCPToolCall,
 					},
 				},
 			},
@@ -380,14 +413,17 @@ func getDownloadURL(c *config.Config) (u string) {
 	}
 }
 
-func initializedHandler(srv *jrpc2.Server) handler.Func {
+func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		// Logging these messages only after the client has been initialized.
 		// Logging to the client is only allowed after the client has been initialized according to LSP protocol.
 		// No reason to log the method name for these messages, because some of these values are empty and the messages
 		// looks weird when including the method name.
-		c := config.CurrentConfig()
 		initialLogger := c.Logger()
+		// only set our config to initialized after leaving the func
+		defer func() {
+			c.SetLSPInitialized(true)
+		}()
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
 		initialLogger.Info().Msgf("CLI Path: %s", c.CliSettings().Path())
 		initialLogger.Info().Msgf("CLI Installed? %t", c.CliSettings().Installed())
@@ -440,8 +476,14 @@ func initializedHandler(srv *jrpc2.Server) handler.Func {
 			)
 			logger.Info().Msg(msg)
 		}
-
-		logger.Debug().Msg("trying to get trusted status for untrusted folders")
+		defer func() {
+			// delay sending the mcp server URL
+			for c.GetMCPServerURL() == nil {
+				// wait until the server URL is available
+				time.Sleep(500 * time.Millisecond)
+			}
+			di.Notifier().Send(types.McpServerURLParams{URL: c.GetMCPServerURL().String()})
+		}()
 		return nil, nil
 	})
 }
@@ -492,7 +534,7 @@ func startOfflineDetection(c *config.Config) { //nolint:unused // this is gonna 
 
 func deleteExpiredCache(c *config.Config) {
 	w := c.Workspace()
-	var folderList []string
+	var folderList []types.FilePath
 	for _, f := range w.Folders() {
 		folderList = append(folderList, f.Path())
 	}
@@ -540,7 +582,7 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 		} else if params.RootPath != "" {
 			f := workspace.NewFolder(
 				c,
-				params.RootPath,
+				types.FilePath(params.RootPath),
 				params.ClientInfo.Name,
 				di.Scanner(),
 				di.HoverService(),
@@ -640,12 +682,18 @@ func logError(logger *zerolog.Logger, err error, method string) {
 func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidOpenTextDocumentParams) (any, error) {
 		filePath := uri.PathFromUri(params.TextDocument.URI)
-		logger := c.Logger().With().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", filePath).Logger()
-
+		filePathString := string(filePath)
+		logger := c.Logger().With().Str("method", "TextDocumentDidOpenHandler").Str("documentURI", filePathString).Logger()
 		logger.Info().Msg("Receiving")
+
 		folder := c.Workspace().GetFolderContaining(filePath)
 		if folder == nil {
-			logger.Warn().Msg("No folder found for file " + filePath)
+			logger.Warn().Msg("No folder found for file " + filePathString)
+			return nil, nil
+		}
+
+		if !folder.IsTrusted() {
+			logger.Warn().Msg("folder not trusted for file " + filePathString)
 			return nil, nil
 		}
 
@@ -687,21 +735,26 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
-		f := c.Workspace().GetFolderContaining(filePath)
-
-		if f != nil && autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
-			go f.ScanFolder(bgCtx)
+		folder := c.Workspace().GetFolderContaining(filePath)
+		if folder == nil {
+			logger.Warn().Msg(string("No folder found for file " + filePath))
 			return nil, nil
 		}
 
-		if f != nil {
-			if autoScanEnabled {
-				go f.ScanFile(bgCtx, filePath)
-			} else {
-				logger.Warn().Msg("Not scanning, auto-scan is disabled")
-			}
-		} else if autoScanEnabled {
-			logger.Warn().Str("documentURI", filePath).Msg("Not scanning, file not part of workspace")
+		if !folder.IsTrusted() {
+			logger.Warn().Msg(string("folder not trusted for file " + filePath))
+			return nil, nil
+		}
+
+		if autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
+			go folder.ScanFolder(bgCtx)
+			return nil, nil
+		}
+
+		if autoScanEnabled {
+			go folder.ScanFile(bgCtx, filePath)
+		} else {
+			logger.Warn().Msg("Not scanning, auto-scan is disabled")
 		}
 		return nil, nil
 	})

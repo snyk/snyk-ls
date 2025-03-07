@@ -70,10 +70,11 @@ func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenS
 	c.SetSnykOssEnabled(true)
 	// we have to reset the token, as smoketest automatically grab it from env
 	c.SetToken("")
+	c.SetLSPInitialized(true)
 	di.Init()
 
 	clientParams := types.InitializeParams{
-		WorkspaceFolders: []types.WorkspaceFolder{{Uri: uri.PathToUri(t.TempDir()), Name: t.Name()}},
+		WorkspaceFolders: []types.WorkspaceFolder{{Uri: uri.PathToUri(types.FilePath(t.TempDir())), Name: t.Name()}},
 		InitializationOptions: types.Settings{
 			Token:                       tokenString,
 			EnableTrustedFoldersFeature: "false",

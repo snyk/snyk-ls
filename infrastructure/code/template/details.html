@@ -94,11 +94,17 @@
         <span data-tab="ignore-details" id="ignore-details-tab" class="tab-item is-selected ignore-details-tab">
           Ignore Details
         </span>
-        {{end}}
+        {{else}}
         <span data-tab="fix-analysis" id="fix-analysis-tab"
-          class="tab-item {{if not .IsIgnored}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
+          class="tab-item is-selected sn-fix-analysis fix-analysis-tab">
           Fix Analysis
         </span>
+        {{if gt (len .DataFlow) 0}}
+        <span data-tab="data-flow-data-tab" id="data-flow-tab" class="tab-item sn-data-flow data-flow-tab">
+          Data Flow
+        </span>
+        {{end}}
+        {{end}}
         {{if .IssueOverview}}
         <span data-tab="vuln-overview" id="vuln-overview-tab" class="tab-item sn-vuln-overview vuln-overview-tab">
           Issue Overview
@@ -241,51 +247,71 @@
           <!-- AI Fix -->
           <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
             <!-- AI fix buttons -->
+            {{if or (eq .AiFixDiffStatus "NOT_STARTED") (eq .AiFixDiffStatus "IN_PROGRESS")}}
             <section id="fix-wrapper" class="ai-fix delimiter-top">
               <h2 class="ai-fix-header">
                 DeepCode AI Fixes
               </h2>
-
-              <p>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
+              <p class='{{if ne .AiFixDiffStatus "NOT_STARTED"}}hidden{{end}}'>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
 
               <div class="sn-fix-wrapper">
+                {{if eq .AiFixDiffStatus "NOT_STARTED"}}
                 <button id="generate-ai-fix" folder-path="{{.FolderPath}}" file-path="{{.FilePath}}"
                   issue-id="{{.IssueId}}" class="generate-ai-fix">✨ Generate AI fix</button>
-
-                <div id="fix-loading-indicator" class="sn-loading hidden">
+                {{end}}
+                {{if eq .AiFixDiffStatus "IN_PROGRESS"}}
+                <div id="fix-loading-indicator" class="sn-loading">
                   <div class="sn-loading-icon">
                     {{.ScanAnimation}}
                   </div>
                   <div class="sn-loading-wrapper">
                     <div class="sn-loading-message sn-msg-1">
-                      <span class="sn-loading-title">1<span class="font-light">/4</span> Code Reduction...</span>
+                      <span class="sn-loading-title">1<span class="font-light">/5</span> Code Reduction...</span>
                       <p class="sn-loading-description">Reduces the given files to a smaller and relevant code snippet.
                       </p>
                     </div>
                     <div class="sn-loading-message sn-msg-2">
-                      <span class="sn-loading-title">2<span class="font-light">/4</span> Parsing...</span>
+                      <span class="sn-loading-title">2<span class="font-light">/5</span> Parsing...</span>
                       <p class="sn-loading-description">Analyzing symbols and generating the graph representation.</p>
                     </div>
                     <div class="sn-loading-message sn-msg-3">
-                      <span class="sn-loading-title">3<span class="font-light">/4</span> Static Analysis...</span>
+                      <span class="sn-loading-title">3<span class="font-light">/5</span> Static Analysis...</span>
                       <p class="sn-loading-description">Examining the vulnerability code without having to execute the
                         program.</p>
                     </div>
                     <div class="sn-loading-message sn-msg-4">
-                      <span class="sn-loading-title">4<span class="font-light">/4</span> Inferencing...</span>
+                      <span class="sn-loading-title">4<span class="font-light">/5</span> Inferencing...</span>
                       <p class="sn-loading-description">Feeding the reduced code to our neural network to obtain the
                         prediction.</p>
                     </div>
+                    <div class="sn-loading-message sn-msg-5">
+                      <span class="sn-loading-title">5<span class="font-light">/5</span> Explaining...</span>
+                      <p class="sn-loading-description">Generating AI explanations for the fixes.</p>
+                    </div>
                   </div>
                 </div>
+                {{end}}
               </div>
             </section>
-
+            {{end}}
             <!-- AI fixes -->
-            <section id="fixes-section" class="sn-ai-fixes delimiter-top hidden">
+            {{if eq .AiFixDiffStatus "SUCCESS"}}
+            <section id="fixes-section" class="sn-ai-fixes delimiter-top">
+              {{if eq .AiFixResult "{}"}}
               <div id="info-no-diffs" class="font-light">
-                There are no fix diffs for this issue.
+                <h3 class="ai-fix-header">No AI Fix Available:</h3>
+                We couldn’t generate fixes that meet our high-quality standards.
+                <br>
+                To ensure your code remains secure and error-free, no automatic fix suggestion will be recommended for this issue.
+                <br>
+                You can review suggested areas to improve or retry once updates have been made.
+                <br>
+                Read more in our
+                <a class="styled-link" href="https://docs.snyk.io/scan-with-snyk/snyk-code/manage-code-vulnerabilities/fix-code-vulnerabilities-automatically#limitations">
+                [documentation]
+                </a>
               </div>
+              {{else}}
               <div id="diff-top" class="row between">
                 <div id="info-top" class="font-light">⚡️ Here are <span id="diff-number"></span> AI-generated solutions
                 </div>
@@ -304,11 +330,19 @@
                 </div>
               </div>
               <div id="diff"></div>
-              <button id="apply-fix" class="button sn-apply-fix">Apply fix</button>
+              <div class="explain-wrapper">
+                <h2 id="ai-explain-header" class="hidden">Explanation: </h2>
+                <div id="fix-explain-text" class="suggestion-text">
+                </div>
+                <button id="apply-fix" class="button sn-apply-fix">Apply fix</button>
+              </div>
+              {{end}}
             </section>
+            {{end}}
 
             <!-- AI fix errors -->
-            <section id="fixes-error-section" class="sn-ai-fix-error delimiter-top hidden">
+            {{if eq .AiFixDiffStatus "ERROR"}}
+            <section id="fixes-error-section" class="sn-ai-fix-error delimiter-top">
               <div id="info-no-diffs" class="font-light">
                 ⚠️ Failed to generate the fix. Please try again.
               </div>
@@ -317,6 +351,7 @@
                         issue-id="{{.IssueId}}" class="button generate-ai-fix">✨ Retry AI fix</button>
               </div>
             </section>
+            {{end}}
           </div>
         </div>
         <!-- End Fix Analysis section -->
@@ -331,10 +366,51 @@
           </section>
         </div>
         <!-- End Vulnerability Overview section -->
+
+        <!-- Data Flow -->
+        <div id="data-flow-content" class="tab-content main-tab-content" data-content="data-flow-data-tab">
+          <section class="data-flow-section delimiter-top">
+            <h2 class="data-flow-header">
+              Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
+            </h2>
+            <div class="data-flow-body">
+              {{range $fileName := .DataFlowKeys}}
+              <div class="data-flow-file">
+                {{$.FileIcon}}
+                <span class="data-flow-file-name">{{$fileName}}</span>
+              </div>
+              <table class="data-flow-table">
+                <tbody>
+                {{range index $.DataFlowTable $fileName}}
+                <tr class="data-flow-row">
+                  <td class="data-flow-number data-flow-row-item">
+                    <div class="data-flow-circle">{{.Number}}</div>
+                    <div class="data-flow-line"></div>
+                  </td>
+                  <td class="data-flow-clickable-row data-flow-row-item" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
+                      end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
+                    {{.StartLineValue}}
+                  </td>
+                  <td class="delimiter data-flow-delimiter">|</td>
+                  <td class="data-flow-text">
+                    <code>{{.Content}}</code>
+                  </td>
+                </tr>
+                {{end}}
+                </tbody>
+
+              </table>
+              {{end}}
+            </div>
+          </section>
+        </div>
       </div>
     </article>
   </main>
 
+  <div id="suggestionDiv" class="hidden">
+    {{.AiFixResult}}
+  </div>
   <!-- Ignore In Line Actions -->
   {{if not .IsIgnored}}
   <footer class="ignore-action-container hidden">
@@ -367,11 +443,10 @@
      * @property {ExampleLine[]} ExampleLines - An array of line changes.
      */
 
-    // Constants for class and ID names
+// Constants for class and ID names
     var MAIN_TAB_NAV_SELECTOR = '.main-tabs-nav';
     var MAIN_TAB_ITEM_SELECTOR = '.main-tabs-nav .tab-item';
     var MAIN_TAB_CONTENT_SELECTOR = '.tab-container > .main-tab-content';
-
     var EXAMPLE_COUNTER = 'example-counter';
     var EXAMPLE_PREVIOUS = 'previous-example';
     var EXAMPLE_NEXT = 'next-example';
@@ -380,7 +455,7 @@
 
     // Utility functions
     function toggleIsSelectedClass(elements, shouldToggle) {
-      if(!elements){
+      if (!elements) {
         return;
       }
       for (var i = 0; i < elements.length; i++) {
@@ -394,9 +469,6 @@
         }
       }
     }
-
-
-
     function polyfillClosest() {
       if (!Element.prototype.closest) {
         Element.prototype.closest = function (s) {
@@ -410,9 +482,7 @@
         };
       }
     }
-
     polyfillClosest();
-
     document.addEventListener('DOMContentLoaded', function () {
       var exampleCounter = document.getElementById(EXAMPLE_COUNTER);
       var examplePrevious = document.getElementById(EXAMPLE_PREVIOUS);
@@ -422,14 +492,12 @@
       var mainTabLinks = document.querySelectorAll(MAIN_TAB_ITEM_SELECTOR);
       var mainTabContents = document.querySelectorAll(MAIN_TAB_CONTENT_SELECTOR);
       var mainTabNav = document.querySelector(MAIN_TAB_NAV_SELECTOR);
-
       var exampleCount = 0;
 
       /** @type {ExampleCommitFix[]} */
       var exampleCommitFixes = JSON.parse("{{.CommitFixes}}" || '[]');
-
       function showCurrentExample() {
-        if(!allExamplesDetail){
+        if (!allExamplesDetail) {
           return;
         }
         for (var i = 0; i < allExamplesDetail.length; i++) {
@@ -442,34 +510,30 @@
             }
           }
         }
-        if(exampleCounter){
+        if (exampleCounter) {
           exampleCounter.textContent = exampleCount + 1;
         }
-
-        if(exampleRepoAnchor && exampleCommitFixes){
+        if (exampleRepoAnchor && exampleCommitFixes) {
           exampleRepoAnchor.textContent = exampleCommitFixes[exampleCount].RepoName;
           exampleRepoAnchor.href = exampleCommitFixes[exampleCount].RepoLink;
         }
       }
-
       function previousExample() {
         if (exampleCount > 0) {
           exampleCount--;
           showCurrentExample();
         }
       }
-
       function nextExample() {
         if (exampleCount < exampleCommitFixes.length - 1) {
           exampleCount++;
           showCurrentExample();
         }
       }
-      if(mainTabNav) {
+      if (mainTabNav) {
         mainTabNav.onclick = function (event) {
           var clickedTab = event.target.closest('.tab-item');
           if (!clickedTab) return;
-
           var selectedTab = clickedTab.getAttribute('data-tab');
 
           // Toggle selected tab and content
@@ -481,19 +545,34 @@
           });
         };
       }
-      if (examplePrevious){
+      if (examplePrevious) {
         examplePrevious.onclick = previousExample;
       }
       if (exampleNext) {
         exampleNext.onclick = nextExample;
       }
       showCurrentExample();
+      {{if ne .AiFixDiffStatus "NOT_STARTED"}}
+      window.scrollTo(0, document.body.scrollHeight);
+      {{end}}
+
+      {{if eq .AiFixDiffStatus "SUCCESS"}}
+      showCurrentDiff();
+      {{end}}
     });
   </script>
   <!-- Embedded script from LS  -->
   <script nonce="{{.Nonce}}">
+    var suggestion = JSON.parse("{{.AiFixResult}}" || "[]")
     {{.Scripts}}
-  </script>
+    // some IDEs take longer to inject their handler functions
+    // TODO: Should we add an event listener when the IDE functions are loaded?
+    {{if .AutoTriggerAiFix }}
+    setTimeout(function () {
+      generateAIFix();
+    }, 500);
+    {{end}}
+</script>
   <!-- Custom IDE specific scripts  -->
   <script nonce="{{.Nonce}}">
     ${ideScript}

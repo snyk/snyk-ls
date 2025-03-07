@@ -22,9 +22,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/code-client-go/llm"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -33,10 +36,13 @@ import (
 )
 
 type codeFixDiffs struct {
-	command       types.CommandData
-	notifier      notification.Notifier
-	issueProvider snyk.IssueProvider
-	codeScanner   *code.Scanner
+	command            types.CommandData
+	srv                types.Server
+	notifier           notification.Notifier
+	issueProvider      snyk.IssueProvider
+	codeScanner        *code.Scanner
+	deepCodeLLMBinding llm.DeepCodeLLMBinding
+	c                  *config.Config
 }
 
 func (cmd *codeFixDiffs) Command() types.CommandData {
@@ -44,7 +50,8 @@ func (cmd *codeFixDiffs) Command() types.CommandData {
 }
 
 func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "codeFixDiffs.Execute").Logger()
+	logger := cmd.c.Logger().With().Str("method", "codeFixDiffs.Execute").Logger()
+
 	args := cmd.command.Arguments
 	if len(args) < 3 {
 		return nil, errors.New("missing required arguments")
@@ -63,7 +70,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 
 	issuePath := uri2.PathFromUri(lsp.DocumentURI(issueURI))
 
-	relPath, err := filepath.Rel(folderPath, issuePath)
+	relPath, err := filepath.Rel(string(folderPath), string(issuePath))
 	if err != nil {
 		return nil, err
 	}
@@ -78,19 +85,55 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 	}
 
 	issue := cmd.issueProvider.Issue(id)
-	if issue.ID == "" {
+	if issue.GetID() == "" {
 		return nil, errors.New("failed to find issue")
 	}
 
-	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, folderPath, relPath, issue)
+	htmlRenderer, err := code.GetHTMLRenderer(cmd.c, cmd.deepCodeLLMBinding)
+	if err != nil {
+		logger.Err(err).Msg("failed to get html renderer")
+		return nil, err
+	}
+	go cmd.handleResponse(ctx, cmd.c, string(folderPath), relPath, issue, htmlRenderer)
+
+	return nil, err
+}
+
+func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, folderPath string, relPath string, issue types.Issue, htmlRenderer *code.HtmlRenderer) {
+	logger := c.Logger().With().Str("method", "codeFixDiffs.handleResponse").Logger()
+	aiFixHandler := htmlRenderer.AiFixHandler
+
+	setStateCallback := func() { cmd.sendShowDocumentRequest(logger, issue, cmd.srv) }
+
+	aiFixHandler.SetAiFixDiffState(code.AiFixInProgress, nil, nil, setStateCallback)
+
+	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, types.FilePath(folderPath), types.FilePath(relPath), issue)
 	if err == nil && len(suggestions) == 0 {
 		logger.Info().Msg("Autofix run successfully but there were no good fixes")
-		return suggestions, nil
+		aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, nil, nil, setStateCallback)
+		return
 	}
 	if err != nil {
-		// as long as the backend service doesn't support good error handling, we'll just log the error
 		logger.Err(err).Msgf("received an error from API: %s", err.Error())
-		return suggestions, nil
+		aiFixHandler.SetAiFixDiffState(code.AiFixError, nil, err, setStateCallback)
+		return
 	}
-	return suggestions, err
+	aiFixHandler.EnrichWithExplain(ctx, c, issue, suggestions)
+	aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, suggestions, nil, setStateCallback)
+}
+
+func (cmd *codeFixDiffs) sendShowDocumentRequest(logger zerolog.Logger, issue types.Issue, srv types.Server) {
+	snykUri, _ := code.SnykMagnetUri(issue, code.ShowInDetailPanelIdeCommand)
+	logger.Debug().
+		Str("method", "code.sendShowDocumentRequest").
+		Msg("showing Document")
+
+	params := types.ShowDocumentParams{
+		Uri:       lsp.DocumentURI(snykUri),
+		Selection: converter.ToRange(issue.GetRange()),
+	}
+	_, err := srv.Callback(context.Background(), "window/showDocument", params)
+	if err != nil {
+		logger.Err(err).Msgf("failed to send snyk window/showDocument callback for file %s", issue.GetAffectedFilePath())
+	}
 }

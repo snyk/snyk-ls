@@ -176,6 +176,17 @@ Right now the language server supports the following actions:
   - params: `types.PublishDiagnosticsParams`
   - note: alias for textDocument/publishDiagnostics
 
+
+- MCP Server URL Notification to publish the listening address. The server listens for `POST` requests on `/messages` and for SSE subscriptions on `/sse`. An example can be found in the mcp package in the smoke test.
+  - method: `$/snyk.mcpServerURL`
+  - params: `types.McpServerURLParams`
+  - example:
+  ```json5
+  {
+    "url": "https://127.0.0.1:7595"
+  }
+  ``` 
+
 - Authentication Notification
   - method: `$/snyk.hasAuthenticated`
   - params: `types.AuthenticationParams`
@@ -232,7 +243,7 @@ Right now the language server supports the following actions:
     },
   }
   ```
-  - Summary Panel Status Notification
+- Summary Panel Status Notification
   - method: `$/snyk.scanSummary`
   - params: `types.ScanSummary`
   - example:
@@ -389,6 +400,14 @@ Right now the language server supports the following actions:
          // WHEN
          comp.changePassword();
   ```
+- `Code Fix Apply Edit Command` triggers an autofix and applies the changes of the first suggestion
+  - command: `snyk.code.fixApplyEdit`
+  - args:
+    - `fixId` string
+  - returns an WorkspaceEdit:
+<https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspaceEdit>
+  
+  
 - `Feature Flag Status Command` triggers the api call to check if a feature flag is enabled
   - command: `snyk.getFeatureFlagStatus`
   - args:

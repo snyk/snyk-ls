@@ -75,10 +75,10 @@ func Test_Scan(t *testing.T) {
 	c.ConfigureLogging(nil)
 	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
 
-	issues, _ := scanner.Scan(ctx, path, workingDir, nil)
+	issues, _ := scanner.Scan(ctx, types.FilePath(path), types.FilePath(workingDir), nil)
 
 	assert.NotEqual(t, 0, len(issues))
-	assert.True(t, strings.Contains(issues[0].Message, "<p>"))
+	assert.True(t, strings.Contains(issues[0].GetMessage(), "<p>"))
 	if spanRecorder, ok := instrumentor.(performance.SpanRecorder); ok {
 		spans := spanRecorder.Spans()
 		assert.Equal(t, "cliScanner.Scan", spans[0].GetOperation())
@@ -86,8 +86,8 @@ func Test_Scan(t *testing.T) {
 		t.Fail()
 	}
 
-	myRange := snyk.Range{Start: snyk.Position{Line: 17}, End: snyk.Position{Line: 17}}
-	values, err := scanner.(snyk.InlineValueProvider).GetInlineValues(path, myRange)
+	myRange := types.Range{Start: types.Position{Line: 17}, End: types.Position{Line: 17}}
+	values, err := scanner.(snyk.InlineValueProvider).GetInlineValues(types.FilePath(path), myRange)
 	assert.NoError(t, err)
 	assert.Greaterf(t, len(values), 0, "no inline values after scan")
 }

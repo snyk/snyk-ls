@@ -19,11 +19,13 @@ package scanstates
 import (
 	"bytes"
 	_ "embed"
+
 	"html/template"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/delta"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 //go:embed template/details.html
@@ -53,8 +55,8 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 
 func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	logger := renderer.c.Logger().With().Str("method", "GetSummaryHtml").Logger()
-	var allIssues []snyk.Issue
-	var deltaIssues []snyk.Issue
+	var allIssues []types.Issue
+	var deltaIssues []types.Issue
 	var currentIssuesFound int
 	var currentFixableIssueCount int
 	isDeltaEnabled := renderer.c.IsDeltaFindingsEnabled()
@@ -100,36 +102,36 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	return buffer.String()
 }
 
-func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []snyk.Issue, deltaIssues []snyk.Issue) {
+func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, deltaIssues []types.Issue) {
 	logger := renderer.c.Logger().With().Str("method", "getIssuesFromFolders").Logger()
+	issueTypes := renderer.c.DisplayableIssueTypes()
 
 	for _, f := range renderer.c.Workspace().Folders() {
-		if dp, ok := f.(delta.Provider); ok {
-			deltaIssues = append(deltaIssues, renderer.getDeltaIssuesForFolder(dp)...)
+		if ip, ok := f.(snyk.FilteringIssueProvider); ok {
+			// Note that IssueProvider.Issues() does not return enriched issues (i.e, we don't know if they're new). so we
+			// also need to get the deltas as a separate operation later.
+			// TODO Find the root cause of the issues not being enriched. This is likely an unwanted pointer dereference.
+			for _, issues := range ip.Issues() {
+				allIssues = append(allIssues, issues...)
+			}
 		} else {
-			logger.Error().Msgf("Failed to get cast folder %s to interface delta.Provider", f.Name())
-		}
-
-		ip, ok := f.(snyk.IssueProvider)
-		if !ok {
-			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.IssueProvider", f.Name())
+			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.FilteringIssueProvider", f.Name())
 			return allIssues, deltaIssues
 		}
-		for _, issues := range ip.Issues() {
-			allIssues = append(allIssues, issues...)
+
+		if dp, ok := f.(delta.Provider); ok {
+			deltaIssues = append(deltaIssues, dp.GetDeltaForAllProducts(issueTypes)...)
+		} else {
+			logger.Error().Msgf("Failed to get cast folder %s to interface delta.Provider", f.Name())
 		}
 	}
 
 	return allIssues, deltaIssues
 }
 
-func (renderer *HtmlRenderer) getDeltaIssuesForFolder(dp delta.Provider) []snyk.Issue {
-	return dp.GetDeltaForAllProducts(renderer.c.DisplayableIssueTypes())
-}
-
-func fixableIssueCount(issues []snyk.Issue) (fixableIssueCount int) {
+func fixableIssueCount(issues []types.Issue) (fixableIssueCount int) {
 	for _, issue := range issues {
-		if issue.AdditionalData.IsFixable() {
+		if issue.GetAdditionalData().IsFixable() {
 			fixableIssueCount++
 		}
 	}

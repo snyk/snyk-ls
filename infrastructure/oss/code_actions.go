@@ -32,7 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath string, issueDepNode *ast.Node) (actions []snyk.CodeAction) {
+func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath types.FilePath, issueDepNode *ast.Node) (actions []types.CodeAction) {
 	c := config.CurrentConfig()
 	if issueDepNode == nil {
 		c.Logger().Debug().Str("issue", i.Id).Msg("skipping adding code action, as issueDepNode is empty")
@@ -41,17 +41,17 @@ func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting
 
 	// let's see if we can offer a quickfix here
 	// value has the version information, so if it's empty, we'll need to look at the parent
-	var quickFixAction *snyk.CodeAction
+	var quickFixAction types.CodeAction
 	if issueDepNode.Tree != nil && issueDepNode.Value == "" {
 		fixNode := issueDepNode.LinkedParentDependencyNode
 		if fixNode != nil {
-			quickFixAction = i.AddQuickFixAction(fixNode.Tree.Document, getRangeFromNode(fixNode), []byte(fixNode.Tree.Root.Value), true)
+			quickFixAction = i.AddQuickFixAction(types.FilePath(fixNode.Tree.Document), getRangeFromNode(fixNode), []byte(fixNode.Tree.Root.Value), true)
 		}
 	} else {
 		quickFixAction = i.AddQuickFixAction(affectedFilePath, getRangeFromNode(issueDepNode), nil, false)
 	}
 	if quickFixAction != nil {
-		actions = append(actions, *quickFixAction)
+		actions = append(actions, quickFixAction)
 	}
 
 	if c.IsSnykOpenBrowserActionEnabled() {
@@ -72,16 +72,15 @@ func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting
 
 	codeAction := i.AddSnykLearnAction(learnService, ep)
 	if codeAction != nil {
-		actions = append(actions, *codeAction)
+		actions = append(actions, codeAction)
 	}
 
 	return actions
 }
 
-func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_reporting.ErrorReporter) (action *snyk.
-	CodeAction) {
+func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_reporting.ErrorReporter) (action types.CodeAction) {
 	if config.CurrentConfig().IsSnykLearnCodeActionsEnabled() {
-		lesson, err := learnService.GetLesson(i.PackageManager, i.Id, i.Identifiers.CWE, i.Identifiers.CVE, snyk.DependencyVulnerability)
+		lesson, err := learnService.GetLesson(i.PackageManager, i.Id, i.Identifiers.CWE, i.Identifiers.CVE, types.DependencyVulnerability)
 		if err != nil {
 			msg := "failed to get lesson"
 			config.CurrentConfig().Logger().Err(err).Msg(msg)
@@ -106,38 +105,38 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 	return action
 }
 
-func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Range, fileContent []byte, addFileNameToFixTitle bool) *snyk.CodeAction {
+func (i *ossIssue) AddQuickFixAction(affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, addFileNameToFixTitle bool) types.CodeAction {
 	logger := config.CurrentConfig().Logger().With().Str("method", "oss.AddQuickFixAction").Logger()
 	if !config.CurrentConfig().IsSnykOSSQuickFixCodeActionsEnabled() {
 		return nil
 	}
 	logger.Debug().Msg("create deferred quickfix code action")
+	filePathString := string(affectedFilePath)
 	quickfixEdit := i.getQuickfixEdit(affectedFilePath)
 	if quickfixEdit == "" {
 		return nil
 	}
 	upgradeMessage := "⚡️ Upgrade to " + quickfixEdit
 	if addFileNameToFixTitle {
-		upgradeMessage += " [ in file: " + affectedFilePath + " ]"
+		upgradeMessage += " [ in file: " + filePathString + " ]"
 	}
-	autofixEditCallback := func() *snyk.WorkspaceEdit {
-		edit := &snyk.WorkspaceEdit{}
+	autofixEditCallback := func() *types.WorkspaceEdit {
+		edit := &types.WorkspaceEdit{}
 		var err error
 		if fileContent == nil {
-			fileContent, err = os.ReadFile(affectedFilePath)
+			fileContent, err = os.ReadFile(filePathString)
 			if err != nil {
-				logger.Error().Err(err).Str("file", affectedFilePath).Msg("could not open file")
+				logger.Error().Err(err).Str("file", filePathString).Msg("could not open file")
 				return edit
 			}
 		}
 
-		singleTextEdit := snyk.TextEdit{
-			FullText: string(fileContent),
-			Range:    issueRange,
-			NewText:  quickfixEdit,
+		singleTextEdit := types.TextEdit{
+			Range:   issueRange,
+			NewText: quickfixEdit,
 		}
-		edit.Changes = make(map[string][]snyk.TextEdit)
-		edit.Changes[affectedFilePath] = []snyk.TextEdit{singleTextEdit}
+		edit.Changes = make(map[string][]types.TextEdit)
+		edit.Changes[filePathString] = []types.TextEdit{singleTextEdit}
 		return edit
 	}
 
@@ -156,7 +155,7 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath string, issueRange snyk.Ra
 	return &action
 }
 
-func (i *ossIssue) getQuickfixEdit(affectedFilePath string) string {
+func (i *ossIssue) getQuickfixEdit(affectedFilePath types.FilePath) string {
 	logger := config.CurrentConfig().Logger().With().Str("method", "oss.getQuickfixEdit").Logger()
 	hasUpgradePath := len(i.UpgradePath) > 1
 	if !hasUpgradePath {
@@ -183,7 +182,7 @@ func (i *ossIssue) getQuickfixEdit(affectedFilePath string) string {
 		depNameSplit := strings.Split(depName, ":")
 		depName = depNameSplit[len(depNameSplit)-1]
 		// TODO: remove once https://snyksec.atlassian.net/browse/OSM-1775 is fixed
-		if strings.Contains(affectedFilePath, "build.gradle") {
+		if strings.Contains(string(affectedFilePath), "build.gradle") {
 			return fmt.Sprintf("%s:%s", depName, depVersion)
 		}
 		return depVersion

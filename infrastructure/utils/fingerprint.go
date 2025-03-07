@@ -23,12 +23,13 @@ import (
 	"strings"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func CalculateFingerprintFromAdditionalData(issue snyk.Issue) string {
+func CalculateFingerprintFromAdditionalData(issue types.Issue) string {
 	var preHash string
 	var dependencyChainHash string
-	switch additionalData := issue.AdditionalData.(type) {
+	switch additionalData := issue.GetAdditionalData().(type) {
 	case snyk.OssIssueData:
 		// first element is directory name. It should not be considered for the fingerprint
 		if len(additionalData.From) > 1 {
@@ -37,7 +38,7 @@ func CalculateFingerprintFromAdditionalData(issue snyk.Issue) string {
 			dependencyChainHash = normalizeArray(additionalData.From)
 		}
 		// Fingerprint for OSS Issues is: name@version@fromArrayHash
-		preHash = fmt.Sprintf("%s|%s|%s", additionalData.PackageName, additionalData.Version, dependencyChainHash)
+		preHash = fmt.Sprintf("%s|%s|%s|%s", additionalData.PackageName, additionalData.Version, dependencyChainHash, issue.GetRuleID())
 	case snyk.IaCIssueData:
 		// No need to normalize and change order of the array for IaC since order matters
 		preHash = strings.Join(additionalData.Path, "|")

@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestMavenRangeFinder_Find(t *testing.T) {
@@ -48,7 +49,7 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 	var testContent, _ = os.ReadFile(testPath)
 
 	finder := mavenRangeFinder{
-		path:        testPath,
+		path:        types.FilePath(testPath),
 		fileContent: testContent,
 		c:           c,
 	}
@@ -85,7 +86,7 @@ func TestMavenRangeFinder_FindInPomHierarchy(t *testing.T) {
 	var testContent, _ = os.ReadFile(testPath)
 
 	finder := mavenRangeFinder{
-		path:        testPath,
+		path:        types.FilePath(testPath),
 		fileContent: testContent,
 		c:           c,
 	}

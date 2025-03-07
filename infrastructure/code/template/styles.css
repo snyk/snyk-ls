@@ -281,7 +281,6 @@ footer {
 }
 
 table {
-  width: 100%;
   border-collapse: collapse;
 }
 table td {
@@ -291,14 +290,13 @@ table td {
 
 .data-flow-table {
   background-color: var(--code-background-color);
-  margin-top: 4px;
+  margin-top: 0.6rem;
 }
 
 .data-flow-row {
   border-collapse: collapse;
   vertical-align: baseline;
 }
-
 /* Data flow number bubbles */
 tr .data-flow-number {
   position: relative;
@@ -361,6 +359,7 @@ table > tbody > tr:last-child .data-flow-line {
   margin-right: 8px;
   font-weight: 400;
   word-break: break-all;
+  width: 100%;
 }
 
 code {
@@ -415,7 +414,8 @@ code {
 .example-fixes-header,
 .ignore-details-tab,
 .fix-analysis-tab,
-.vuln-overview-tab{
+.vuln-overview-tab,
+.data-flow-tab{
   text-transform: uppercase;
 }
 
@@ -588,7 +588,10 @@ button {
   background: var(--generated-ai-fix-button-background-color);
 }
 
-
+button:disabled,button.generate-ai-fix:disabled,
+button.sn-apply-fix:disabled{
+  cursor:not-allowed;
+}
 button.generate-ai-fix,
 button.sn-apply-fix {
   border-radius: 4px;
@@ -740,8 +743,13 @@ button.sn-apply-fix:hover {
 }
 
 .sn-msg-4 {
-  animation: inference 4s ease-in infinite;
+  animation: reduce 4s ease-in;
   animation-delay: 12s;
+}
+
+.sn-msg-5 {
+  animation: inference 4s ease-in infinite;
+  animation-delay: 16s;
 }
 
 #s0 {
@@ -903,4 +911,8 @@ button.sn-apply-fix:hover {
 
 .hidden {
   display: none;
+}
+
+.explain-wrapper{
+  margin-top: 1rem;
 }

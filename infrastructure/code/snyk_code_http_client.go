@@ -36,9 +36,9 @@ import (
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code/encoding"
 )
 
@@ -49,20 +49,20 @@ const (
 )
 
 var (
-	issueSeverities = map[string]snyk.Severity{
-		"3":       snyk.High,
-		"2":       snyk.Medium,
-		"warning": snyk.Medium, // Sarif Level
-		"error":   snyk.High,   // Sarif Level
+	issueSeverities = map[string]types.Severity{
+		"3":       types.High,
+		"2":       types.Medium,
+		"warning": types.Medium, // Sarif Level
+		"error":   types.High,   // Sarif Level
 	}
 )
 
 var codeApiRegex = regexp.MustCompile(`^(deeproxy\.)?`)
 
-func issueSeverity(snykSeverity string) snyk.Severity {
+func issueSeverity(snykSeverity string) types.Severity {
 	sev, ok := issueSeverities[snykSeverity]
 	if !ok {
-		return snyk.Low
+		return types.Low
 	}
 	return sev
 }
@@ -75,13 +75,13 @@ type SnykCodeHTTPClient struct {
 }
 
 type bundleResponse struct {
-	BundleHash   string   `json:"bundleHash"`
-	MissingFiles []string `json:"missingFiles"`
+	BundleHash   string           `json:"bundleHash"`
+	MissingFiles []types.FilePath `json:"missingFiles"`
 }
 
 type extendBundleRequest struct {
-	Files        map[string]BundleFile `json:"files"`
-	RemovedFiles []string              `json:"removedFiles,omitempty"`
+	Files        map[types.FilePath]BundleFile `json:"files"`
+	RemovedFiles []types.FilePath              `json:"removedFiles,omitempty"`
 }
 
 type FiltersResponse struct {
@@ -123,8 +123,8 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (
 
 func (s *SnykCodeHTTPClient) CreateBundle(
 	ctx context.Context,
-	filesToFilehashes map[string]string,
-) (string, []string, error) {
+	filesToFilehashes map[types.FilePath]string,
+) (string, []types.FilePath, error) {
 	method := "code.CreateBundle"
 	s.c.Logger().Debug().Str("method", method).Msg("API: Creating bundle for " + strconv.Itoa(len(filesToFilehashes)) + " files")
 
@@ -312,12 +312,7 @@ var retryErrorCodes = map[int]bool{
 	http.StatusInternalServerError: true,
 }
 
-func (s *SnykCodeHTTPClient) ExtendBundle(
-	ctx context.Context,
-	bundleHash string,
-	files map[string]BundleFile,
-	removedFiles []string,
-) (string, []string, error) {
+func (s *SnykCodeHTTPClient) ExtendBundle(ctx context.Context, bundleHash string, files map[types.FilePath]BundleFile, removedFiles []types.FilePath) (string, []types.FilePath, error) {
 	method := "code.ExtendBundle"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -360,8 +355,8 @@ type AnalysisStatus struct {
 func (s *SnykCodeHTTPClient) RunAnalysis(
 	ctx context.Context,
 	options AnalysisOptions,
-	baseDir string,
-) ([]snyk.Issue, AnalysisStatus, error) {
+	baseDir types.FilePath,
+) ([]types.Issue, AnalysisStatus, error) {
 	method := "code.RunAnalysis"
 	span := s.instrumentor.StartSpan(ctx, method)
 	defer s.instrumentor.Finish(span)
@@ -463,32 +458,6 @@ type AutofixStatus struct {
 
 var failed = AutofixStatus{message: "FAILED"}
 
-func (s *SnykCodeHTTPClient) GetAutofixSuggestions(
-	ctx context.Context,
-	options AutofixOptions,
-	baseDir string,
-) (autofixSuggestions []AutofixSuggestion,
-	status AutofixStatus,
-	err error,
-) {
-	method := "code.GetAutofixSuggestions"
-	span := s.instrumentor.StartSpan(ctx, method)
-	defer s.instrumentor.Finish(span)
-	logger := s.c.Logger().With().
-		Str("method", method).
-		Str("requestId", span.GetTraceId()).Logger()
-
-	logger.Info().Msg("Started obtaining autofix suggestions")
-	defer logger.Info().Msg("Finished obtaining autofix suggestions")
-
-	autofixResponse, status, err := s.getAutofixResponse(ctx, options)
-	if err != nil {
-		return nil, status, err
-	}
-	suggestions := autofixResponse.toAutofixSuggestions(baseDir, options.filePath)
-	return suggestions, status, nil
-}
-
 func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOptions) (AutofixResponse, error) {
 	requestId, err := performance2.GetTraceId(ctx)
 	span := s.instrumentor.StartSpan(ctx, "code.RunAutofix")
@@ -536,7 +505,7 @@ func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte
 			Hash:     options.bundleHash,
 			FilePath: options.filePath,
 			RuleId:   ruleID,
-			LineNum:  options.issue.Range.Start.Line + 1,
+			LineNum:  options.issue.GetRange().Start.Line + 1,
 		},
 		AnalysisContext: newCodeRequestContext(),
 		IdeExtensionDetails: AutofixIdeExtensionDetails{

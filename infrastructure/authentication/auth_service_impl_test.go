@@ -175,6 +175,7 @@ func Test_Authenticate(t *testing.T) {
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		c.SetAuthenticationMethod(types.FakeAuthentication)
 
 		provider := FakeAuthenticationProvider{IsAuthenticated: true, C: c}
 		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())

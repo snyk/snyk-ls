@@ -28,6 +28,7 @@ import (
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
 	"github.com/snyk/snyk-ls/internal/testsupport"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -78,7 +79,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 		})
 
 		test := func() error {
-			files := make(map[string]string)
+			files := make(map[types.FilePath]string)
 			files[path1] = util.Hash([]byte(content))
 			bundleHash, missingFiles, err := client.CreateBundle(context.Background(), files)
 
@@ -119,7 +120,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 		})
 
 		test := func() error {
-			files := make(map[string]string)
+			files := make(map[types.FilePath]string)
 			files[path1] = util.Hash([]byte(content))
 			_, _, err := client.CreateBundle(context.Background(), files)
 
@@ -155,7 +156,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 
 		test := func() error {
 			filesExtend := createTestExtendMap()
-			var removedFiles []string
+			var removedFiles []types.FilePath
 
 			extendedBundleHash, missingFiles, err := client.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
 
@@ -199,7 +200,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 			analysisOptions := AnalysisOptions{
 				bundleHash:   bundleHash,
 				shardKey:     "shardKey",
-				limitToFiles: []string{"path/to/file1.go"},
+				limitToFiles: []types.FilePath{"path/to/file1.go"},
 				severity:     0,
 			}
 

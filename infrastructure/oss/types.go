@@ -101,6 +101,10 @@ func (r AppliedPolicyRules) toAppliedPolicyRules() snyk.AppliedPolicyRules {
 	}
 }
 
+var (
+	LearnLicenseUrl = "https://learn.snyk.io/lesson/license-policy-management/?loc=ide"
+)
+
 type Annotation struct {
 	Value  string `json:"value,omitempty"`
 	Reason string `json:"reason,omitempty"`
@@ -137,31 +141,42 @@ func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []sny
 	additionalData.Exploit = i.Exploit
 	additionalData.IsPatchable = i.IsPatchable
 	additionalData.ProjectName = scanResult.ProjectName
-	additionalData.DisplayTargetFile = targetFilePath
+	additionalData.DisplayTargetFile = types.FilePath(targetFilePath)
 	additionalData.Language = i.Language
 	additionalData.MatchingIssues = matchingIssues
-	if i.lesson != nil {
-		additionalData.Lesson = i.lesson.Url
+	if i.lesson != nil || i.isLicenseIssue() {
+		additionalData.Lesson = i.getLessonURL()
 	}
 	additionalData.Remediation = i.GetRemediation()
 	additionalData.AppliedPolicyRules = i.AppliedPolicyRules.toAppliedPolicyRules()
 	return additionalData
 }
 
-func (i *ossIssue) toReferences() []snyk.Reference {
-	var references []snyk.Reference
+func (i *ossIssue) isLicenseIssue() bool {
+	return i.License != ""
+}
+
+func (i *ossIssue) getLessonURL() string {
+	if i.isLicenseIssue() {
+		return LearnLicenseUrl
+	}
+	return i.lesson.Url
+}
+
+func (i *ossIssue) toReferences() []types.Reference {
+	var references []types.Reference
 	for _, ref := range i.References {
 		references = append(references, ref.toReference())
 	}
 	return references
 }
 
-func (r reference) toReference() snyk.Reference {
+func (r reference) toReference() types.Reference {
 	u, err := url.Parse(string(r.Url))
 	if err != nil {
 		config.CurrentConfig().Logger().Err(err).Msg("Unable to parse reference url: " + string(r.Url))
 	}
-	return snyk.Reference{
+	return types.Reference{
 		Url:   u,
 		Title: r.Title,
 	}
@@ -275,10 +290,10 @@ func (i *ossIssue) createCweLink() string {
 	return formattedCwe
 }
 
-func (i *ossIssue) ToIssueSeverity() snyk.Severity {
+func (i *ossIssue) ToIssueSeverity() types.Severity {
 	sev, ok := issuesSeverity[i.Severity]
 	if !ok {
-		return snyk.Low
+		return types.Low
 	}
 	return sev
 }

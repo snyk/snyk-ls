@@ -19,21 +19,21 @@ package hover
 import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Context any
 
 type Hover[T Context] struct {
 	Id      string
-	Range   snyk.Range
+	Range   types.Range
 	Message string
 	Context T // this normally contains snyk.Issue
 }
 
 type DocumentHovers struct {
-	Path    string
+	Path    types.FilePath
 	Product product.Product
 	Hover   []Hover[Context]
 }

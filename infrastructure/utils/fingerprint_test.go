@@ -28,48 +28,52 @@ import (
 
 func TestCalculateFingerprintFromAdditionalData_OssIssueData(t *testing.T) {
 	// Test with multiple "from" elements
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		AdditionalData: snyk.OssIssueData{PackageName: "pkg",
 			Version: "1.0.0",
 			From:    []string{"dir", "dep1", "dep2"},
 		},
+		ID: "my-issue-id",
 	}
-	expectedHash := sha256.Sum256([]byte("pkg|1.0.0|dep1|dep2"))
+	expectedHash := sha256.Sum256([]byte("pkg|1.0.0|dep1|dep2|my-issue-id"))
 	assert.Equal(t, fmt.Sprintf("%x", expectedHash), CalculateFingerprintFromAdditionalData(issue))
 
 	// Test with single "from" element
-	issue = snyk.Issue{
+	issue = &snyk.Issue{
 		AdditionalData: snyk.OssIssueData{PackageName: "pkg2",
 			Version: "2.0.0",
 			From:    []string{"dep1"},
 		},
+		ID: "my-issue-id",
 	}
-	expectedHash = sha256.Sum256([]byte("pkg2|2.0.0|dep1"))
+	expectedHash = sha256.Sum256([]byte("pkg2|2.0.0|dep1|my-issue-id"))
 	assert.Equal(t, fmt.Sprintf("%x", expectedHash), CalculateFingerprintFromAdditionalData(issue))
 
 	// Test with empty "from" element
-	issue = snyk.Issue{
+	issue = &snyk.Issue{
 		AdditionalData: snyk.OssIssueData{PackageName: "pkg3",
 			Version: "3.0.0",
 			From:    []string{},
 		},
+		ID: "my-issue-id",
 	}
-	expectedHash = sha256.Sum256([]byte("pkg3|3.0.0|"))
+	expectedHash = sha256.Sum256([]byte("pkg3|3.0.0||my-issue-id"))
 	assert.Equal(t, fmt.Sprintf("%x", expectedHash), CalculateFingerprintFromAdditionalData(issue))
 
 	// Test with "from" containing spaces
-	issue = snyk.Issue{
+	issue = &snyk.Issue{
 		AdditionalData: snyk.OssIssueData{PackageName: "pkg4",
 			Version: "4.0.0",
 			From:    []string{"dir", "dep1 with spaces", " dep2 with spaces "},
 		},
+		ID: "my-issue-id",
 	}
-	expectedHash = sha256.Sum256([]byte("pkg4|4.0.0|dep1|with|spaces|dep2|with|spaces"))
+	expectedHash = sha256.Sum256([]byte("pkg4|4.0.0|dep1|with|spaces|dep2|with|spaces|my-issue-id"))
 	assert.Equal(t, fmt.Sprintf("%x", expectedHash), CalculateFingerprintFromAdditionalData(issue))
 }
 
 func TestCalculateFingerprintFromAdditionalData_IaCIssueData(t *testing.T) {
-	issue := snyk.Issue{
+	issue := &snyk.Issue{
 		AdditionalData: snyk.IaCIssueData{Path: []string{"path1", "path2", "path3"}},
 	}
 
@@ -77,7 +81,7 @@ func TestCalculateFingerprintFromAdditionalData_IaCIssueData(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("%x", expectedHash), CalculateFingerprintFromAdditionalData(issue))
 
 	// Test with spaces in path
-	issue = snyk.Issue{
+	issue = &snyk.Issue{
 		AdditionalData: snyk.IaCIssueData{Path: []string{"path1 with spaces", " path2 with spaces"}},
 	}
 	expectedHash = sha256.Sum256([]byte("path1 with spaces| path2 with spaces"))

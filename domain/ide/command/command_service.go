@@ -20,6 +20,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/snyk/code-client-go/llm"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -35,24 +36,26 @@ import (
 var instance types.CommandService
 
 type serviceImpl struct {
-	authService   authentication.AuthenticationService
-	notifier      noti.Notifier
-	learnService  learn.Service
-	issueProvider snyk.IssueProvider
-	codeApiClient SnykCodeHttpClient
-	codeScanner   *code.Scanner
-	cli           cli.Executor
+	authService        authentication.AuthenticationService
+	notifier           noti.Notifier
+	learnService       learn.Service
+	issueProvider      snyk.IssueProvider
+	codeApiClient      SnykCodeHttpClient
+	codeScanner        *code.Scanner
+	cli                cli.Executor
+	deepCodeLLMBinding llm.DeepCodeLLMBinding
 }
 
-func NewService(authService authentication.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner, cli cli.Executor) types.CommandService {
+func NewService(authService authentication.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner, cli cli.Executor, deepCodeLLMBinding llm.DeepCodeLLMBinding) types.CommandService {
 	return &serviceImpl{
-		authService:   authService,
-		notifier:      notifier,
-		learnService:  learnService,
-		issueProvider: issueProvider,
-		codeApiClient: codeApiClient,
-		codeScanner:   codeScanner,
-		cli:           cli,
+		authService:        authService,
+		notifier:           notifier,
+		learnService:       learnService,
+		issueProvider:      issueProvider,
+		codeApiClient:      codeApiClient,
+		codeScanner:        codeScanner,
+		cli:                cli,
+		deepCodeLLMBinding: deepCodeLLMBinding,
 	}
 }
 
@@ -67,7 +70,7 @@ func Service() types.CommandService {
 	return instance
 }
 
-func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server types.Server) (any, error) {
+func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server types.Server) (any, error) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "command.serviceImpl.ExecuteCommandData").Logger()
 	if c.Offline() {
@@ -77,7 +80,7 @@ func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData 
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 
-	command, err := CreateFromCommandData(c, commandData, server, service.authService, service.learnService, service.notifier, service.issueProvider, service.codeApiClient, service.codeScanner, service.cli)
+	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.learnService, s.notifier, s.issueProvider, s.codeApiClient, s.codeScanner, s.cli, s.deepCodeLLMBinding)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err
@@ -90,8 +93,8 @@ func (service *serviceImpl) ExecuteCommandData(ctx context.Context, commandData 
 	}
 
 	if err != nil && strings.Contains(err.Error(), "400 Bad Request") {
-		service.notifier.SendShowMessage(sglsp.MTWarning, "Logging out automatically, available credentials are invalid. Please re-authenticate.")
-		service.authService.Logout(ctx)
+		s.notifier.SendShowMessage(sglsp.MTWarning, "Logging out automatically, available credentials are invalid. Please re-authenticate.")
+		s.authService.Logout(ctx)
 		return nil, nil
 	}
 

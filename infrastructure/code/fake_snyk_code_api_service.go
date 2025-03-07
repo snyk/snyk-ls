@@ -52,12 +52,12 @@ const (
 var (
 	FakeSnykCodeApiServiceMutex = &sync.Mutex{}
 
-	fakeRange = snyk.Range{
-		Start: snyk.Position{
+	fakeRange = types.Range{
+		Start: types.Position{
 			Line:      0,
 			Character: 3,
 		},
-		End: snyk.Position{
+		End: types.Position{
 			Line:      0,
 			Character: 7,
 		},
@@ -73,15 +73,15 @@ var (
 		Arguments: []any{"id", "path", fakeRange},
 	}
 
-	FakeIssue = snyk.Issue{
+	FakeIssue = &snyk.Issue{
 		ID:               "SNYK-123",
 		Range:            fakeRange,
-		Severity:         snyk.High,
+		Severity:         types.High,
 		Product:          product.ProductCode,
-		IssueType:        snyk.CodeQualityIssue,
+		IssueType:        types.CodeQualityIssue,
 		Message:          "This is a dummy error (severity error)",
 		CodelensCommands: []types.CommandData{FakeCommand, FakeFixCommand},
-		CodeActions:      []snyk.CodeAction{FakeCodeAction},
+		CodeActions:      []types.CodeAction{&FakeCodeAction},
 		AdditionalData: snyk.CodeIssueData{
 			Key:           uuid.New().String(),
 			IsAutofixable: true,
@@ -96,12 +96,12 @@ var (
 	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
-func TempWorkdirWithIssues(t *testing.T) (filePath string, folderPath string) {
+func TempWorkdirWithIssues(t *testing.T) (types.FilePath, types.FilePath) {
 	t.Helper()
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 
-	folderPath = t.TempDir()
+	folderPath := t.TempDir()
 
 	command := exec.Command("git", "init")
 	command.Dir = folderPath
@@ -113,21 +113,21 @@ func TempWorkdirWithIssues(t *testing.T) (filePath string, folderPath string) {
 	_, err = command.Output()
 	require.NoError(t, err)
 
-	filePath = filepath.Join(folderPath, "Dummy"+FakeFileExtension)
+	filePath := filepath.Join(folderPath, "Dummy"+FakeFileExtension)
 	classWithQualityIssue := "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n};"
 	err = os.WriteFile(filePath, []byte(classWithQualityIssue), 0600)
 	if err != nil {
 		t.Fatal(err, "couldn't create temp file for fake diagnostic")
 	}
-	FakeIssue.AffectedFilePath = filePath
-	return
+	FakeIssue.AffectedFilePath = types.FilePath(filePath)
+	return types.FilePath(filePath), types.FilePath(folderPath)
 }
 
 type FakeSnykCodeClient struct {
 	Calls                  map[string][][]any
 	HasCreatedNewBundle    bool
 	HasExtendedBundle      bool
-	ExtendBundleFiles      map[string]BundleFile
+	ExtendBundleFiles      map[types.FilePath]BundleFile
 	TotalBundleCount       int
 	ExtendedBundleCount    int
 	AnalysisDuration       time.Duration
@@ -143,7 +143,7 @@ type FakeSnykCodeClient struct {
 	FeedbackSent           string
 }
 
-func (f *FakeSnykCodeClient) GetAutofixDiffs(_ context.Context, _ string, _ AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
+func (f *FakeSnykCodeClient) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
 	f.AutofixStatus = AutofixStatus{message: completeStatus}
 	return f.UnifiedDiffSuggestions, f.AutofixStatus, nil
 }
@@ -211,8 +211,8 @@ func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (
 }
 
 func (f *FakeSnykCodeClient) CreateBundle(_ context.Context,
-	files map[string]string,
-) (bundleHash string, missingFiles []string, err error) {
+	files map[types.FilePath]string,
+) (bundleHash string, missingFiles []types.FilePath, err error) {
 	if f.FailOnCreateBundle {
 		return "", nil, errors.New("Mock Code client failed intentionally on CreateBundle")
 	}
@@ -229,12 +229,7 @@ func (f *FakeSnykCodeClient) CreateBundle(_ context.Context,
 	return util.Hash([]byte(fmt.Sprint(rand.Int()))), missingFiles, nil
 }
 
-func (f *FakeSnykCodeClient) ExtendBundle(
-	_ context.Context,
-	bundleHash string,
-	files map[string]BundleFile,
-	removedFiles []string,
-) (string, []string, error) {
+func (f *FakeSnykCodeClient) ExtendBundle(ctx context.Context, bundleHash string, files map[types.FilePath]BundleFile, removedFiles []types.FilePath) (string, []types.FilePath, error) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
 	f.HasExtendedBundle = true
@@ -254,8 +249,8 @@ var successfulResult = AnalysisStatus{
 func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
-	_ string,
-) ([]snyk.Issue, AnalysisStatus, error) {
+	_ types.FilePath,
+) ([]types.Issue, AnalysisStatus, error) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.currentConcurrentScans++
 	if f.currentConcurrentScans > f.maxConcurrentScans {
@@ -274,11 +269,13 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	FakeSnykCodeApiServiceMutex.Unlock()
 
 	FakeSnykCodeApiServiceMutex.Lock()
-	issues := []snyk.Issue{FakeIssue}
+	issueClone := FakeIssue.Clone()
+
+	issues := []types.Issue{issueClone}
 	if f.NoFixSuggestions {
-		if issueData, ok := issues[0].AdditionalData.(snyk.CodeIssueData); ok {
+		if issueData, ok := issues[0].GetAdditionalData().(snyk.CodeIssueData); ok {
 			issueData.IsAutofixable = false
-			issues[0].AdditionalData = issueData
+			issues[0].SetAdditionalData(issueData)
 		}
 	}
 	f.Options[options.bundleHash] = options
@@ -289,63 +286,6 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 		FakeIssue,
 	).Msg("fake backend call received & answered")
 	return issues, successfulResult, nil
-}
-
-func (f *FakeSnykCodeClient) GetAutofixSuggestions(
-	_ context.Context,
-	options AutofixOptions,
-	_ string,
-) ([]AutofixSuggestion, AutofixStatus, error) {
-	<-time.After(f.AnalysisDuration)
-	FakeSnykCodeApiServiceMutex.Lock()
-	params := []any{options.bundleHash, options.filePath, options.issue.ID, options.issue.Range.Start.Line}
-	f.addCall(params, RunAutofixOperation)
-	FakeSnykCodeApiServiceMutex.Unlock()
-
-	if f.NoFixSuggestions {
-		f.C.Logger().Trace().Str("method", "GetAutofixSuggestions").Interface("fakeAutofix",
-			"someAutofixSuggestion").Msg("fake backend call received & answered with no suggestions")
-		return nil, AutofixStatus{message: "COMPLETE"}, nil
-	}
-
-	suggestions := []AutofixSuggestion{
-		// First suggestion
-		{
-			FixId: "123e4567-e89b-12d3-a456-426614174000/1",
-			AutofixEdit: snyk.WorkspaceEdit{
-				Changes: map[string][]snyk.TextEdit{
-					options.filePath: {snyk.TextEdit{
-						FullText: FakeAutofixSuggestionNewText,
-						Range: snyk.Range{
-							Start: snyk.Position{Line: 0, Character: 0},
-							End:   snyk.Position{Line: 10000, Character: 0},
-						},
-						NewText: FakeAutofixSuggestionNewText,
-					}},
-				},
-			},
-		},
-		// Second suggestion -- currently dropped
-		{
-			FixId: "123e4567-e89b-12d3-a456-426614174000/2",
-			AutofixEdit: snyk.WorkspaceEdit{
-				Changes: map[string][]snyk.TextEdit{
-					options.filePath: {snyk.TextEdit{
-						FullText: "FAKE_AUTOFIX_UNUSED",
-						Range: snyk.Range{
-							Start: snyk.Position{Line: 0, Character: 0},
-							End:   snyk.Position{Line: 10000, Character: 0},
-						},
-						NewText: "FAKE_AUTOFIX_UNUSED",
-					}},
-				},
-			},
-		},
-	}
-
-	f.C.Logger().Trace().Str("method", "GetAutofixSuggestions").Interface("fakeAutofix",
-		"someAutofixSuggestion").Msg("fake backend call received & answered")
-	return suggestions, AutofixStatus{message: "COMPLETE"}, nil
 }
 
 func (f *FakeSnykCodeClient) SubmitAutofixFeedback(_ context.Context, _ string, feedback string) error {
