@@ -605,7 +605,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 
 	// Act
 	scanner.enhanceIssuesDetails(issues, "")
-	htmlRenderer, err := GetHTMLRenderer(c, nil)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.Nil(t, err)
 	html := htmlRenderer.GetDetailsHtml(issues[0])
 	// Assert

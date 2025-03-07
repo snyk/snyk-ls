@@ -54,7 +54,7 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 		return nil, fmt.Errorf("invalid edit")
 	}
 
-	htmlRenderer, err := code.GetHTMLRenderer(cmd.c, cmd.deepCodeLLMBinding)
+	htmlRenderer, err := code.GetHTMLRenderer(cmd.c)
 	if err != nil {
 		cmd.logger.Debug().Str("method", "applyAiFixEditCommand.Execute").Msgf("Unable to get the htmlRenderer")
 		return nil, err

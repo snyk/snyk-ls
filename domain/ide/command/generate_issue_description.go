@@ -79,7 +79,7 @@ func getOssHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (str
 }
 
 func getCodeHtml(c *config.Config, logger zerolog.Logger, issue types.Issue, deepCodeLLMBinding llm.DeepCodeLLMBinding) (string, error) {
-	htmlRender, err := code.GetHTMLRenderer(c, deepCodeLLMBinding)
+	htmlRender, err := code.GetHTMLRenderer(c)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Code HTML render")
 		return "", err

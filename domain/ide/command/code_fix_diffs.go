@@ -89,7 +89,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("failed to find issue")
 	}
 
-	htmlRenderer, err := code.GetHTMLRenderer(cmd.c, cmd.deepCodeLLMBinding)
+	htmlRenderer, err := code.GetHTMLRenderer(cmd.c)
 	if err != nil {
 		logger.Err(err).Msg("failed to get html renderer")
 		return nil, err

@@ -179,19 +179,11 @@ func initInfrastructure(c *config.Config) {
 }
 
 func initApplication(c *config.Config) {
-	deepCodeLLMBinding = llm.NewDeepcodeLLMBinding(
-		llm.WithLogger(c.Logger()),
-		llm.WithOutputFormat(llm.HTML),
-		llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
-			return c.Engine().GetNetworkAccess().GetHttpClient()
-		}),
-	)
-
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator) // don't use getters or it'll deadlock
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
-	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeClient, snykCodeScanner, snykCli, deepCodeLLMBinding))
+	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeClient, snykCodeScanner, snykCli))
 }
 
 /*

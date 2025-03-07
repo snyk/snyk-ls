@@ -133,7 +133,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	fakeAuthenticationProvider.IsAuthenticated = false
 
 	// reset to use real service
-	command.SetService(command.NewService(authenticationService, di.Notifier(), di.LearnService(), nil, nil, nil, nil, nil))
+	command.SetService(command.NewService(authenticationService, di.Notifier(), di.LearnService(), nil, nil, nil, nil))
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
