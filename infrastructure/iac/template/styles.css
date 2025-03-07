@@ -52,7 +52,7 @@ h2 {
 }
 
 h2, h3 {
-  font-size: 1rem;
+  font-size: 1.3rem;
   margin-block-start: 0;
   margin-block-end: 0.4rem;
   font-weight: 600;
@@ -87,11 +87,10 @@ h2, h3{
 }
 
 code {
-  background-color: var(--code-background-color);
   color: var(--text-color);
-  padding: 1px 3px;
+  padding: 2px 4px;
   border-radius: 4px;
-  font-size: 0.8rem;
+  font-family: monospace;
 }
 
 section {
@@ -140,6 +139,7 @@ section {
 
 .sn-fix-wrapper {
   background-color: var(--code-background-color);
+  border-radius: 4px;
 }
 
 .summary .summary-item {
@@ -148,7 +148,7 @@ section {
 }
 
 .summary-item p {
-  margin: 0 0 2rem 0;
+  margin: 0 0 1rem 0;
 }
 
 .summary .label {
@@ -172,8 +172,7 @@ section {
 }
 
 div.remediation {
-  padding: 16px 0 16px 8px;
-  background-color: var(--code-background-color);
+  padding: 1.6rem;
 }
 
 div.remediation p {

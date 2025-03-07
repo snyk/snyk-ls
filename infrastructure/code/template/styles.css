@@ -721,6 +721,7 @@ button.sn-apply-fix:hover {
 
 .sn-loading-description {
   margin-bottom: 0;
+  margin-top: .4rem;
   opacity: 0.75;
 }
 
