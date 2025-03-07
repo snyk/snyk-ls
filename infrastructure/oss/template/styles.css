@@ -109,7 +109,7 @@ section {
 }
 .delimiter {
   border-right: 1px solid var(--horizontal-border-color);
-  margin: 0 0.8rem 0 0.8rem;
+  margin: 0 0.8rem;
 }
 .summary .summary-item {
   display: flex;

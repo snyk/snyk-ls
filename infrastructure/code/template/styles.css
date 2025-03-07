@@ -216,8 +216,8 @@ footer {
 }
 
 .delimiter {
-  opacity: .5;
-  margin: 0 8px;
+  border-right: 1px solid var(--horizontal-border-color);
+  margin: 0 0.8rem;
 }
 .severity-title {
   text-transform: capitalize;
