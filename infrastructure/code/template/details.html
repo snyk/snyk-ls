@@ -154,44 +154,6 @@
           </section>
           <!-- Data Flow and Fixed Code Examples -->
           <div id="no-ai-fix-wrapper">
-            <!-- Data Flow -->
-            <section class="data-flow-section delimiter-top">
-              <h2 class="data-flow-header">
-                Data Flow - {{len .DataFlow}} {{if gt (len .DataFlow) 1}}steps{{else}}step{{end}}
-              </h2>
-              <div class="data-flow-body">
-                {{range $fileName := .DataFlowKeys}}
-                {{ $stepCount := len (index $.DataFlowTable $fileName) }}
-                <div class="data-flow-file">
-                  <span class="data-flow-file-name">{{$.FileIcon}} {{$fileName}}</span>
-                  <span class="data-flow-file-steps">{{$stepCount}} {{if eq $stepCount 1}}step{{else}}steps{{end}}</span>
-                </div>
-                <table class="data-flow-table">
-                  <tbody>
-                  {{range index $.DataFlowTable $fileName}}
-                  <tr class="data-flow-row">
-                    
-                    <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
-                        end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
-                      {{.StartLineValue}}
-                    </td>
-                    <!-- <td class="delimiter data-flow-delimiter">|</td> -->
-                    <td class="data-flow-text">
-                      <code>{{.Content}}</code>
-                    </td>
-                    <td class="data-flow-number">
-                      <div class="data-flow-circle">{{.Number}}</div>
-                      <div class="data-flow-line"></div>
-                    </td>
-                  </tr>
-                  {{end}}
-                  </tbody>
-
-                </table>
-                {{end}}
-              </div>
-            </section>
-
             <!-- Fixed Code Examples -->
             <section class="example-fixes delimiter-top {{if .HasAIFix}}hidden{{end}}">
               <h2 class="example-fixes-header">Fixed Code Examples</h2>
@@ -375,25 +337,27 @@
             </h2>
             <div class="data-flow-body">
               {{range $fileName := .DataFlowKeys}}
+              {{ $stepCount := len (index $.DataFlowTable $fileName) }}
               <div class="data-flow-file">
-                {{$.FileIcon}}
-                <span class="data-flow-file-name">{{$fileName}}</span>
+                <span class="data-flow-file-name">{{$.FileIcon}} {{$fileName}}</span>
+                <span class="data-flow-file-steps">{{$stepCount}} {{if eq $stepCount 1}}step{{else}}steps{{end}}</span>
               </div>
               <table class="data-flow-table">
                 <tbody>
                 {{range index $.DataFlowTable $fileName}}
                 <tr class="data-flow-row">
-                  <td class="data-flow-number data-flow-row-item">
-                    <div class="data-flow-circle">{{.Number}}</div>
-                    <div class="data-flow-line"></div>
-                  </td>
-                  <td class="data-flow-clickable-row data-flow-row-item" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
+
+                  <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
                       end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
                     {{.StartLineValue}}
                   </td>
-                  <td class="delimiter data-flow-delimiter">|</td>
+                  <!-- <td class="delimiter data-flow-delimiter">|</td> -->
                   <td class="data-flow-text">
                     <code>{{.Content}}</code>
+                  </td>
+                  <td class="data-flow-number">
+                    <div class="data-flow-circle">{{.Number}}</div>
+                    <div class="data-flow-line"></div>
                   </td>
                 </tr>
                 {{end}}
