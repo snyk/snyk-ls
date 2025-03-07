@@ -37,54 +37,53 @@
 
 <body>
   <!-- Panel header -->
-  <header class="panel-header">
+  <section class="sn-issue-header">
     <!-- Ignore header -->
     {{if .IsIgnored}}
-    <div class="ignore-warning-wrapper">
-      <div class="ignore-warning ">
-        <svg class="ignore-warning-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
-          <path d="M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" fill="#D68000" />
-        </svg>
-        <span><strong>Ignored.</strong> This issue is currently ignored.</span>
-      </div>
+    <div class="sn-status-message mod-warning">
+      <svg class="sn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M1.25199 12.9165C0.663992 14.0677 1.13999 15 2.31599 15H13.684C14.86 15 15.336 14.0758 14.748 12.9165L9.071 1.86645C8.476 0.71524 7.524 0.707133 6.929 1.86645L1.25899 12.9165H1.25199ZM9 13H7V11H9V13ZM9 10H7V6H9V10Z" fill="currentColor"/>
+      </svg>
+        
+      <span>
+        <strong>Ignored.</strong> This issue is currently ignored.
+      </span>
     </div>
     {{end}}
-    <div class="severity-container">
+    <div class="sn-title-container">
       {{.SeverityIcon}}
-      <h2 class="severity-title">{{.IssueTitle}}</h2>
+      <h1 class="sn-issue-title">{{.IssueTitle}}</h1>
     </div>
-    <div class="severity-type-container">
+    <div class="sn-issue-meta">
       <div class="severity-type">{{.IssueType}}</div>
-      {{if gt (len .CWEs) 0}}
-      <span class="delimiter">|</span>
-      {{range $index, $cwe := .CWEs}}
-      <a class="cwe styled-link"  rel="noopener noreferrer"
-        href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>
-      {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
-      {{end}}
-      {{end}}
       {{if .IgnoreLineAction}}
-      <span class="delimiter">|</span>
+      <span class="delimiter"></span>
       <div>Position line: <a class="styled-link" id="position-line">{{.IgnoreLineAction}}</a></div>
       {{end}}
       {{if ge .PriorityScore 0}}
       <span class="delimiter"></span>
       <div>Priority score: {{.PriorityScore}}</div>
       {{end}}
-      {{if .IsIgnored}}<div class="ignore-badge">IGNORED</div>{{end}}
+      {{if gt (len .CWEs) 0}}
+      <span class="delimiter"></span>
+      {{range $index, $cwe := .CWEs}}
+      <a class="cwe styled-link"  rel="noopener noreferrer"
+        href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>
+      {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
+      {{end}}
+      {{end}}
+      {{if .IsIgnored}}<div class="sn-ignore-badge">IGNORED</div>{{end}}
     </div>
     {{if .LessonUrl}}
-    <div class="lesson-container">
-      <div class="lesson-icon">
-        {{.LessonIcon}}
-      </div>
+    <div class="sn-learn">
+      <div class="lesson-icon">{{.LessonIcon}}</div>
       <a class="lesson-link styled-link is-external"  rel="noopener noreferrer" href="{{.LessonUrl}}">
-        Learn about this vulnerability
+        Learn about this issue type
         {{.ExternalIcon}}
       </a>
     </div>
     {{end}}
-  </header>
+  </section>
 
   <main class="code-issue-container">
     <!-- Tabs Issue Overview Container -->

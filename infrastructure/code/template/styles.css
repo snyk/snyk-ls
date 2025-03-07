@@ -16,7 +16,6 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');
 :root {
-  font-size: 10px;
   --container-paddding: 20px;
   --input-padding-vertical: 6px;
   --input-padding-horizontal: 4px;
@@ -29,7 +28,7 @@
   --text-color: var(--vscode-foreground);
   --link-color: var(--vscode-textLink-foreground);
   --scroll-bar-hover-background-color: #595a5c;
-  --horizontal-border-color: var();
+  --horizontal-border-color: var(--vscode-textPreformat-background);
   --code-background-color: var(--vscode-editor-background);
   --tab-active-background-color: var(--vscode-tab-activeBackground);
   --input-border: var(--vscode-input-border);
@@ -41,6 +40,7 @@
   --generated-ai-fix-button-background-color: var(--vscode-button-background);
   --disabled-background-color: var(--vscode-foreground);
   --circle-color: var(--vscode-badge-background);
+  font-size: 10px;
 }
 
 ::-webkit-scrollbar {
@@ -60,13 +60,6 @@
 *:after {
   box-sizing: border-box;
 }
-
-a, .link {
-  color: var(--link-color);
-  cursor: pointer;
-  text-decoration: none;
-}
-
 body {
   padding: 0;
   background-color: var(--background-color);
@@ -78,16 +71,26 @@ body {
   overflow-x: hidden;
 }
 
-h2 {
-  margin: initial;
+a, .link {
+  color: var(--link-color);
+  cursor: pointer;
+  text-decoration: none;
 }
 
-h2, h3 {
-  text-transform: uppercase;
+h2 {
   font-size: 2rem;
-  margin-block-start: 0;
-  margin-block-end: 0.4rem;
-  font-weight: 500;
+  margin: 0;
+}
+
+.issue-overview h2, .issue-overview h3 {
+  line-height: 1.25rem;
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+p + h2, p + h3 {
+  margin-top: 2rem;
 }
 
 pre {
@@ -131,18 +134,37 @@ main {
   cursor: pointer;
 }
 
-.ignore-warning-wrapper,
-header,
-footer {
-  padding: 0px 20px 5px 20px;
-}
-
-.panel-header {
+/* - - - Issue Header - - - */
+.sn-issue-header {
   display: flex;
   flex-direction: column;
   background-image: linear-gradient(0, transparent, var(--vscode-tab-activeBackground));
-  margin: inherit;
 }
+
+
+/* - - - Status message - - - */
+.sn-status-message {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: .8rem 1.6rem;
+  border-radius: .4rem;
+  width: 100%;
+  margin-bottom: 2rem;
+}
+
+.sn-status-message.mod-warning {
+  background: var(--vscode-activityWarningBadge-background);
+  color: var(--vscode-activityWarningBadge-foreground);
+}
+
+.sn-status-message .sn-icon {
+  width: 16px;
+  flex-shrink: 0;
+  margin-right: 0.8rem;
+}
+
+
 
 .code-issue-panel {
   margin-bottom: 30px;
@@ -155,7 +177,7 @@ footer {
 .ai-fix-header,
 .overview-text>h2, .overview-text>h3 {
   line-height: 1.25rem;
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   font-weight: 600;
   margin-bottom: 10px;
 }
@@ -166,34 +188,33 @@ footer {
   flex-shrink: 0;
 }
 
-.severity-title {
-  padding-left: 8px;
+.sn-issue-title {
   font-size: 2rem;
   font-weight: 500;
-  margin-bottom: 0;
+  margin: 0;
 }
 
-.severity-container {
+.sn-title-container {
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding-bottom: 10px;
-  padding-top: 20px;
+  gap: 10px;
 }
 
-.severity-type-container {
+.sn-issue-meta {
   display: flex;
+  flex-wrap: wrap;
   flex-direction: row;
   align-items: center;
-  margin-bottom: 1rem;
-  line-height: 1rem;
-  font-size: 1.3rem;
+  margin-top: 1rem;
+  line-height: 2rem;
 }
 
-.lesson-container {
+.sn-learn {
   display: flex;
   align-items: center;
   gap: 0.5em;
+  margin-top: 10px;
 }
 
 .lesson-icon {
@@ -216,45 +237,26 @@ footer {
 }
 
 .delimiter {
+  height: 10px;
   border-right: 1px solid var(--horizontal-border-color);
   margin: 0 0.8rem;
 }
-.severity-title {
+.sn-title {
   text-transform: capitalize;
 }
 
-.ignore-warning-icon {
+.sn-status-message .sn-icon {
   margin-right: 0.5em;
 }
 
-.ignore-warning-wrapper {
-  display: flex;
-  align-items: center;
-}
+.ignore-warning {}
 
-.ignore-warning {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  line-height: 1.125rem;
-  padding: 0.5em;
-  font-size: 0.85rem;
-  border-radius: 0.25em;
-  width: 100%;
-  box-sizing: border-box;
-  background: #FFF4ED;
-  color: #B6540B;
-  border: 1px solid #E27122;
-}
-
-.ignore-badge {
-  padding: 0.35em 0.35em;
-  border-radius: 0.25em;
+.sn-ignore-badge {
+  padding: .4rem .8rem;
+  border-radius: 1rem;
   margin-left: 1em;
-  background: #FFF4ED;
-  color: #B6540B;
-  font-size: 0.75rem;
-  border: 1px solid #E27122;
+  background: var(--vscode-activityWarningBadge-background);
+  color: var(--vscode-activityWarningBadge-foreground);
 }
 
 .example {
@@ -657,11 +659,6 @@ button.sn-apply-fix:hover {
   display: flex;
   flex-direction: row;
   width: 100%;
-}
-
-.suggestion-text {
-  padding: 0.4rem 0;
-  line-height: 1.6;
 }
 
 .suggestion-links {
