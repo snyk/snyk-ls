@@ -639,11 +639,17 @@ button.sn-apply-fix:disabled{
 
 .example-line.added {
   background-color: var(--example-line-added-color);
-  color: var(--text-color);
 }
 
 .example-line.removed {
   background-color: var(--example-line-removed-color);
+}
+
+.example-line.added > code {
+  color: var(--text-color);
+}
+
+.example-line.removed > code {
   color: var(--text-color);
 }
 
