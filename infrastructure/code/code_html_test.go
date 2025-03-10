@@ -75,8 +75,8 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `<code>import * as http from &#39;http&#39;;</code>`)
 
 	// assert Ignore Details section - Elements should not be present
-	assert.NotContains(t, codePanelHtml, `class=ignore-warning-wrapper`)
-	assert.NotContains(t, codePanelHtml, `class="ignore-badge"`)
+	assert.NotContains(t, codePanelHtml, `class="sn-status-message mod-warning"`)
+	assert.NotContains(t, codePanelHtml, `class="sn-ignore-badge"`)
 	assert.NotContains(t, codePanelHtml, `class="ignore-details-section"`)
 
 	// assert Fixes section
@@ -168,8 +168,8 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	assert.NotContains(t, codePanelHtml, `href="https://when-no-lesson-data-element-not-in-the-template"`)
 
 	// assert Ignore Details section - Elements should be present
-	assert.Contains(t, codePanelHtml, `class="ignore-warning-wrapper"`)
-	assert.Contains(t, codePanelHtml, `class="ignore-badge"`)
+	assert.Contains(t, codePanelHtml, `class="sn-status-message mod-warning"`)
+	assert.Contains(t, codePanelHtml, `class="sn-ignore-badge"`)
 	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
 	assert.Contains(t, codePanelHtml, `class="ignore-details-value">Ignored permanently</div>`)
 	assert.Contains(t, codePanelHtml, `class="ignore-details-value">No expiration</div>`) // Because category is "wont-fix"

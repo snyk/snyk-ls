@@ -42,7 +42,7 @@ func Test_IaC_Html_getIacHtml(t *testing.T) {
 	assert.Contains(t, iacPanelHtml, `href="https://security.snyk.io/rules/cloud/SNYK-CC-K8S-44">SNYK-CC-K8S-44</a>`, "HTML should contain a link to the issue documentation")
 
 	// Severity icon is rendered
-	assert.Contains(t, iacPanelHtml, `<div class="severity-container">`, "HTML should contain the severity icon container")
+	assert.Contains(t, iacPanelHtml, `<div class="sn-title-container">`, "HTML should contain the severity icon container")
 
 	// Reference section
 	assert.Contains(t, iacPanelHtml, `<a class="styled-link"  rel="noopener noreferrer" href="https://kubernetes.io/docs/reference/access-authn-authz/rbac/">https://kubernetes.io/docs/reference/access-authn-authz/rbac/</a>`, "HTML should contain the first reference")
