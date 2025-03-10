@@ -577,7 +577,7 @@ func (c *Config) SetSeverityFilter(severityFilter types.SeverityFilter) bool {
 	defer c.m.Unlock()
 
 	filterModified := c.filterSeverity != severityFilter
-	c.Logger().Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
+	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
 	c.filterSeverity = severityFilter
 	return filterModified
 }
@@ -587,7 +587,7 @@ func (c *Config) SetIssueViewOptions(issueViewOptions types.IssueViewOptions) bo
 	defer c.m.Unlock()
 
 	issueViewOptionsModified := c.issueViewOptions != issueViewOptions
-	c.Logger().Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options:")
+	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options:")
 	c.issueViewOptions = issueViewOptions
 	return issueViewOptionsModified
 }
