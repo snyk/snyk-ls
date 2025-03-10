@@ -475,7 +475,8 @@ table > tbody > tr:last-child .data-flow-line {
   white-space: pre-wrap;
   font-weight: 400;
   background-color: transparent;
-  overflow-wrap: anywhere
+  overflow-wrap: anywhere;
+  color: var(--dimmed-text-color);
 }
 
 .example-line.added>code::before,
@@ -639,10 +640,18 @@ button.sn-apply-fix:disabled{
 .example-line.added {
   background-color: var(--example-line-added-color);
 }
+
 .example-line.removed {
   background-color: var(--example-line-removed-color);
 }
 
+.example-line.added > code {
+  color: var(--text-color);
+}
+
+.example-line.removed > code {
+  color: var(--text-color);
+}
 
 button.generate-ai-fix:hover,
 button.sn-apply-fix:hover {
