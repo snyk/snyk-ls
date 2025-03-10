@@ -41,7 +41,6 @@
   --disabled-background-color: var(--vscode-foreground);
   --circle-color: var(--vscode-badge-background);
   /* New variables - March 2025 */
-  --circle-text: var(--vscode-badge-foreground);
   --dimmed-text-color: var(--vscode-editorCodeLens-foreground);
   --warning-background: var(--vscode-activityWarningBadge-background);
   --warning-text: var(--vscode-activityWarningBadge-foreground);
@@ -634,7 +633,7 @@ button.sn-apply-fix:disabled{
 }
 
 .tab-item:hover {
-  color: var(--circle-text);
+  color: var(--circle-color);
   cursor: pointer;
 }
 .tab-item.is-selected {
