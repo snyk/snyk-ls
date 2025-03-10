@@ -10,6 +10,7 @@
   --tab-is-selected-color : var();
   --container-background-color: var(--vscode-editor-background);
   --editor-font-family: var(--vscode-editor-font-family);
+  --tab-active-background-color: var(--vscode-tab-activeBackground);
   /* New variables - March 2025 */
   --dimmed-text-color: var(--vscode-editorCodeLens-foreground);
   font-size: 10px;
@@ -97,7 +98,7 @@ section {
 .sn-issue-header {
   display: flex;
   flex-direction: column;
-  background-image: linear-gradient(0, transparent, var(--vscode-tab-activeBackground));
+  background-image: linear-gradient(0, transparent, var(--tab-active-background-color));
 }
 
 .sn-title-container {

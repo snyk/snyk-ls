@@ -7,7 +7,6 @@
   --text-color: var(--vscode-foreground);
   --link-color: var(--vscode-textLink-foreground);
   --scroll-bar-hover-background-color: var(#595a5c);
-  --horizontal-border-color: var();
   --code-background-color: var(--vscode-editor-background);
   --horizontal-border-color: var(--vscode-textPreformat-background);
   font-size: 10px;
