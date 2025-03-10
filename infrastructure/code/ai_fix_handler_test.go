@@ -17,10 +17,13 @@
 package code
 
 import (
-	"github.com/google/uuid"
-	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/snyk/snyk-ls/internal/testutil"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_getExplain_Endpoint(t *testing.T) {
