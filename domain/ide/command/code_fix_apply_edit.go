@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/code-client-go/llm"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -35,13 +34,12 @@ import (
 )
 
 type applyAiFixEditCommand struct {
-	command            types.CommandData
-	issueProvider      snyk.IssueProvider
-	notifier           notification.Notifier
-	deepCodeLLMBinding llm.DeepCodeLLMBinding
-	apiClient          SnykCodeHttpClient
-	c                  *config.Config
-	logger             *zerolog.Logger
+	command       types.CommandData
+	issueProvider snyk.IssueProvider
+	notifier      notification.Notifier
+	apiClient     SnykCodeHttpClient
+	c             *config.Config
+	logger        *zerolog.Logger
 }
 
 func (cmd *applyAiFixEditCommand) Command() types.CommandData {
