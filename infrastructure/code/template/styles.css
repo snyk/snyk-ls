@@ -263,6 +263,10 @@ main {
   color: var(--warning-text);
 }
 
+.example-line > code {
+  color: var(--text-color);
+}
+
 .example {
   background-color: var(--code-background-color);
   border: 1px solid var(--input-border);
