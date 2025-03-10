@@ -24,24 +24,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self' ${cspSource}; style-src 'self' 'nonce-${nonce}' ${cspSource}; script-src 'nonce-${nonce}' ${cspSource};">
-
+    
+  ${ideStyle}
   <style nonce="${nonce}">
     {{.Styles}}
   </style>
 
   ${headerEnd}
 
-  ${ideStyle}
 </head>
 
 <body>
   <div class="suggestion">
-    <section class="suggestion--header">
-      <div class="severity">
+    <section class="sn-issue-header">
+      <div class="sn-title-container">
         {{.SeverityIcon}}
+        <h1 class="sn-issue-title">{{.IssueTitle}}</h1>
       </div>
-      <div class="suggestion-text">{{.IssueTitle}}</div>
-      <div class="identifiers">
+      <div class="sn-issue-meta">
         {{.IssueType}}
         {{if gt (len .CVEs) 0}}
         <span class="delimiter"> </span>
@@ -61,19 +61,22 @@
         {{end}}
         {{end}}
 
-      {{if ne .CvssScore "0.0" }}
-      <span class="delimiter"> </span>
-      <a class="cvssscore styled-link"  rel="noopener noreferrer" href="https://www.first.org/cvss/calculator/3.1#{{.CVSSv3}}">CVSS {{.CvssScore}}</a>
-      {{end}}
+        {{if ne .CvssScore "0.0" }}
+        <span class="delimiter"> </span>
+        <a class="cvssscore styled-link"  rel="noopener noreferrer" href="https://www.first.org/cvss/calculator/3.1#{{.CVSSv3}}">CVSS {{.CvssScore}}</a>
+        {{end}}
 
         <span class="delimiter"> </span>
         <a class="styled-link"  rel="noopener noreferrer"
           href="https://snyk.io/vuln/{{.IssueId}}">{{.IssueId}}</a>
       </div>
       {{ if .LessonUrl }}
-      <div class="learn" id="learn">
+      <div class="sn-learn" id="learn">
         {{.LessonIcon}}
-        <a class="learn--link" id="learn--link" href="{{.LessonUrl}}">Learn about this issue</a>
+        <a class="learn--link lesson-link" id="learn--link" href="{{.LessonUrl}}">
+          Learn about this issue type
+          {{.ExternalIcon}}
+        </a>
       </div>
       {{end}}
     </section>
@@ -127,7 +130,7 @@
       </div>
     </section>
     <section class="delimiter-top">
-      <div id="overview" class="vulnerability-overview">
+      <div id="overview" class="issue-overview">
         {{.IssueOverview}}
       </div>
     </section>
@@ -157,7 +160,7 @@
   </div>
   <script nonce="${nonce}">
     if (document.getElementById("learn--link") && document.getElementById("learn")) {
-      document.getElementById("learn").className = "learn show";
+      document.getElementById("learn").className = "sn-learn show";
     }
     if (document.getElementById("more-detailed-paths--link")) {
       document.getElementById("more-detailed-paths--link").onclick = function() {
