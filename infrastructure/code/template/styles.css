@@ -263,10 +263,6 @@ main {
   color: var(--warning-text);
 }
 
-.example-line > code {
-  color: var(--text-color);
-}
-
 .example {
   background-color: var(--code-background-color);
   border: 1px solid var(--input-border);
@@ -479,7 +475,8 @@ table > tbody > tr:last-child .data-flow-line {
   white-space: pre-wrap;
   font-weight: 400;
   background-color: transparent;
-  overflow-wrap: anywhere
+  overflow-wrap: anywhere;
+  color: var(--text-color);
 }
 
 .example-line.added>code::before,
