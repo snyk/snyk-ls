@@ -37,17 +37,16 @@
 <body>
 <div class="suggestion">
   <!-- Panel header -->
-  <header class="panel-header">
-    <div class="severity-container">
+  <section class="sn-issue-header">
+    <div class="sn-title-container">
       {{.SeverityIcon}}
-      <h2 class="severity-title">{{.Issue.AdditionalData.Title}}</h2>
+      <h1 class="sn-issue-title">{{.Issue.AdditionalData.Title}}</h1>
     </div>
-    <div class="severity-type-container">
+    <div class="sn-issue-meta">
       <div class="severity-type">Issue</div>
       <span class="delimiter"></span>
-      <a class="styled-link"  rel="noopener noreferrer"
-         href="{{.Issue.AdditionalData.Documentation}}">{{.Issue.ID}}</a>
-  </header>
+      <a class="styled-link" rel="noopener noreferrer" href="{{.Issue.AdditionalData.Documentation}}">{{.Issue.ID}}</a>
+  </section>
   <section class="delimiter-top summary">
     <div class="summary-item description">
       <div class="label">Description</div>
