@@ -113,6 +113,7 @@ code {
   padding: 2px 4px;
   font-family: monospace;
   color: var(--dimmed-text-color);
+  background-color: var(--code-background-color);
 }
 
 section {
@@ -365,11 +366,6 @@ table > tbody > tr:last-child .data-flow-line {
   font-weight: 400;
   word-break: break-all;
   width: 100%;
-}
-
-code {
-  background-color: var(--code-background-color);
-  color: var(--text-color);
 }
 
 .data-flow-text code {
