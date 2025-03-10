@@ -40,6 +40,11 @@
   --generated-ai-fix-button-background-color: var(--vscode-button-background);
   --disabled-background-color: var(--vscode-foreground);
   --circle-color: var(--vscode-badge-background);
+  /* New variables - March 2025 */
+  --circle-text: var(--vscode-badge-foreground);
+  --dimmed-text-color: var(--vscode-editorCodeLens-foreground);
+  --warning-background: var(--vscode-activityWarningBadge-background);
+  --warning-text: var(--vscode-activityWarningBadge-foreground);
   font-size: 10px;
 }
 
@@ -108,7 +113,7 @@ pre code {
 code {
   padding: 2px 4px;
   font-family: monospace;
-  color: var(--vscode-editorCodeLens-foreground);
+  color: var(--dimmed-text-color);
 }
 
 section {
@@ -154,8 +159,8 @@ main {
 }
 
 .sn-status-message.mod-warning {
-  background: var(--vscode-activityWarningBadge-background);
-  color: var(--vscode-activityWarningBadge-foreground);
+  background: var(--warning-background);
+  color: var(--warning-text);
 }
 
 .sn-status-message .sn-icon {
@@ -254,8 +259,8 @@ main {
   border-radius: 2rem;
   margin-left: 1em;
   line-height: 1;
-  background: var(--vscode-activityWarningBadge-background);
-  color: var(--vscode-activityWarningBadge-foreground);
+  background: var(--warning-background);
+  color: var(--warning-text);
 }
 
 .example {
@@ -268,7 +273,7 @@ main {
   justify-content: space-between;
   align-items: center;
   margin-top: 10px;
-  color: var(--vscode-editorCodeLens-foreground);
+  color: var(--dimmed-text-color);
 }
 
 .data-flow-file-icon {
@@ -328,7 +333,7 @@ tr .data-flow-number {
   top: 0;
   bottom: 0;
   transform: translateX(-50%);
-  border-left: 1px dashed var(--vscode-breadcrumb-foreground);
+  border-left: 1px dashed var(--dimmed-text-color);
   z-index: 0;
 }
 table > tbody > tr:first-child .data-flow-line {
@@ -371,7 +376,7 @@ code {
 .data-flow-text code {
   background: transparent none;
   color: var(--text-color);
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--editor-font-family);
   font-size: 1.2rem;
 }
 
@@ -629,11 +634,11 @@ button.sn-apply-fix:disabled{
 }
 
 .tab-item:hover {
-  color: var(--vscode-badge-foreground);
+  color: var(--circle-text);
   cursor: pointer;
 }
 .tab-item.is-selected {
-  border-bottom: 3px solid var(--vscode-badge-background);
+  border-bottom: 3px solid var(--link-color);
 }
 
 .example-line.added {

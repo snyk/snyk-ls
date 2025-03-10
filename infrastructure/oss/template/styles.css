@@ -10,6 +10,8 @@
   --tab-is-selected-color : var();
   --container-background-color: var(--vscode-editor-background);
   --editor-font-family: var(--vscode-editor-font-family);
+  /* New variables - March 2025 */
+  --dimmed-text-color: var(--vscode-editorCodeLens-foreground);
   font-size: 10px;
 }
 ::-webkit-scrollbar {
@@ -53,17 +55,17 @@ pre code {
 code {
   padding: 2px 4px;
   font-family: monospace;
-  color: var(--vscode-editorCodeLens-foreground);
+  color: var(--dimmed-text-color);
 }
 
 table {
-  border: 1px solid var(--vscode-input-border);
+  border: 1px solid var(--border-color);
   border-collapse: collapse;
   margin-bottom: 2rem;
 }
 
 th, td {
-  border: 1px solid var(--vscode-input-border);
+  border: 1px solid var(--border-color);
   padding: 1rem;
 }
 
