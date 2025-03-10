@@ -208,20 +208,16 @@
           <!-- AI Fix -->
           <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
             <!-- AI fix buttons -->
-            {{if or (eq .AiFixDiffStatus "NOT_STARTED") (eq .AiFixDiffStatus "IN_PROGRESS")}}
-            <section id="fix-wrapper" class="ai-fix delimiter-top">
+            <section id="fix-wrapper" class="ai-fix delimiter-top {{if or (eq .AiFixDiffStatus "NOT_STARTED") (eq .AiFixDiffStatus "IN_PROGRESS")}} show {{else}} hidden {{end}} ">
               <h2 class="ai-fix-header">
                 DeepCode AI Fixes
               </h2>
               <p class='{{if ne .AiFixDiffStatus "NOT_STARTED"}}hidden{{end}}'>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
 
               <div class="sn-fix-wrapper">
-                {{if eq .AiFixDiffStatus "NOT_STARTED"}}
                 <button id="generate-ai-fix" folder-path="{{.FolderPath}}" file-path="{{.FilePath}}"
-                  issue-id="{{.IssueId}}" class="generate-ai-fix">✨ Generate AI fix</button>
-                {{end}}
-                {{if eq .AiFixDiffStatus "IN_PROGRESS"}}
-                <div id="fix-loading-indicator" class="sn-loading">
+                  issue-id="{{.IssueId}}" class="generate-ai-fix {{if eq .AiFixDiffStatus "NOT_STARTED"}} show {{else}} hidden {{end}}">✨ Generate AI fix</button>
+                <div id="fix-loading-indicator" class="sn-loading {{if eq .AiFixDiffStatus "IN_PROGRESS"}} show {{else}} hidden {{end}}">
                   <div class="sn-loading-icon">
                     {{.ScanAnimation}}
                   </div>
@@ -251,15 +247,11 @@
                     </div>
                   </div>
                 </div>
-                {{end}}
               </div>
             </section>
-            {{end}}
             <!-- AI fixes -->
-            {{if eq .AiFixDiffStatus "SUCCESS"}}
-            <section id="fixes-section" class="sn-ai-fixes delimiter-top">
-              {{if eq .AiFixResult "{}"}}
-              <div id="info-no-diffs" class="font-light">
+            <section id="fixes-section" class="sn-ai-fixes delimiter-top {{if eq .AiFixDiffStatus "SUCCESS"}} show {{else}} hidden {{end}}">
+              <div id="info-no-diffs" class="font-light {{if eq .AiFixResult "{}"}} show {{else}} hidden {{end}}">
                 <h3 class="ai-fix-header">No AI Fix Available:</h3>
                 We couldn’t generate fixes that meet our high-quality standards.
                 <br>
@@ -272,47 +264,44 @@
                 [documentation]
                 </a>
               </div>
-              {{else}}
-              <div id="diff-top" class="row between">
-                <div id="info-top" class="font-light">⚡️ Here are <span id="diff-number"></span> AI-generated solutions
+
+              <div class="diffs-section {{if eq .AiFixResult "{}"}} hidden {{else}} show {{end}}">
+                <div id="diff-top" class="row between">
+                  <div id="info-top" class="font-light">⚡️ Here are <span id="diff-number"></span> AI-generated solutions
+                  </div>
+                  <div class="diffs-nav">
+                          <span id="previous-diff" class="arrow" title="Previous diff">
+                            {{.ArrowLeftDark}}
+                            {{.ArrowLeftLight}}
+                          </span>
+                    <span id="diff-text">
+                            AI solution <strong id="diff-counter">1</strong>/<span id="diff-number2"></span>
+                          </span>
+                    <span id="next-diff" class="arrow" title="Next diff">
+                            {{.ArrowRightDark}}
+                            {{.ArrowRightLight}}
+                          </span>
+                  </div>
                 </div>
-                <div class="diffs-nav">
-                  <span id="previous-diff" class="arrow" title="Previous diff">
-                    {{.ArrowLeftDark}}
-                    {{.ArrowLeftLight}}
-                  </span>
-                  <span id="diff-text">
-                    AI solution <strong id="diff-counter">1</strong>/<span id="diff-number2"></span>
-                  </span>
-                  <span id="next-diff" class="arrow" title="Next diff">
-                    {{.ArrowRightDark}}
-                    {{.ArrowRightLight}}
-                  </span>
+                <div id="diff"></div>
+                <div class="explain-wrapper">
+                  <h2 id="ai-explain-header" class="hidden">Explanation: </h2>
+                  <div id="fix-explain-text" class="suggestion-text">
+                  </div>
+                  <button id="apply-fix" class="button sn-apply-fix">Apply fix</button>
                 </div>
               </div>
-              <div id="diff"></div>
-              <div class="explain-wrapper">
-                <h2 id="ai-explain-header" class="hidden">Explanation: </h2>
-                <div id="fix-explain-text" class="suggestion-text">
-                </div>
-                <button id="apply-fix" class="button sn-apply-fix">Apply fix</button>
-              </div>
-              {{end}}
             </section>
-            {{end}}
 
             <!-- AI fix errors -->
-            {{if eq .AiFixDiffStatus "ERROR"}}
-            <section id="fixes-error-section" class="sn-ai-fix-error delimiter-top">
+            <section id="fixes-error-section" class="sn-ai-fix-error delimiter-top {{if eq .AiFixDiffStatus "ERROR"}} show {{else}} hidden {{end}}">
               <div id="info-no-diffs" class="font-light">
                 ⚠️ Failed to generate the fix. Please try again.
               </div>
               <div class="sn-fix-wrapper">
-                <button id="retry-generate-fix" folder-path="{{.FolderPath}}" file-path="{{.FilePath}}"
-                        issue-id="{{.IssueId}}" class="button generate-ai-fix">✨ Retry AI fix</button>
+                <button id="retry-generate-fix" class="button generate-ai-fix">✨ Retry AI fix</button>
               </div>
             </section>
-            {{end}}
           </div>
         </div>
         <!-- End Fix Analysis section -->
