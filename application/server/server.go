@@ -129,7 +129,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 	handlers["exit"] = exit(srv)
 	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(srv, c)
 	handlers["workspace/willDeleteFiles"] = workspaceWillDeleteFilesHandler(c)
-	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(srv)
+	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(srv, c)
 	handlers["window/workDoneProgress/cancel"] = windowWorkDoneProgressCancelHandler()
 	handlers["workspace/executeCommand"] = executeCommandHandler(srv)
 }
