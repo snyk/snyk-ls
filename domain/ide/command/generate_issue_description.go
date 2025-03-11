@@ -53,7 +53,7 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 	}
 
 	issue := cmd.issueProvider.Issue(issueId)
-	if issue.GetID() == "" {
+	if issue == nil || issue.GetID() == "" {
 		return nil, errors.New("failed to find issue")
 	}
 

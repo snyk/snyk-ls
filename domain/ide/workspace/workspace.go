@@ -66,7 +66,7 @@ func (w *Workspace) Issue(key string) types.Issue {
 	for _, folder := range w.folders {
 		if issueProvider, ok := folder.(snyk.IssueProvider); ok {
 			issue := issueProvider.Issue(key)
-			if issue.GetID() != "" {
+			if issue != nil && issue.GetID() != "" {
 				return issue
 			}
 		}
