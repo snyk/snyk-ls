@@ -44,6 +44,9 @@ const (
 	AiFixSuccess    AiStatus = "SUCCESS"
 	AiFixError      AiStatus = "ERROR"
 )
+const (
+	ExplainApiVersion string = "2024-10-15"
+)
 
 type aiResultState struct {
 	status AiStatus
@@ -108,6 +111,10 @@ func getExplainEndpoint(c *config.Config) *url.URL {
 	if err != nil {
 		return &url.URL{}
 	}
+	queryParams := url.Values{}
+	queryParams.Add("version", ExplainApiVersion)
+	endpoint.RawQuery = queryParams.Encode()
+
 	return endpoint
 }
 
