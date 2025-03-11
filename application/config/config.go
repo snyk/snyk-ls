@@ -177,6 +177,7 @@ type Config struct {
 	automaticAuthentication          bool
 	tokenChangeChannels              []chan string
 	filterSeverity                   types.SeverityFilter
+	issueViewOptions                 types.IssueViewOptions
 	trustedFolders                   []types.FilePath
 	trustedFoldersFeatureEnabled     bool
 	activateSnykCodeSecurity         bool
@@ -264,6 +265,7 @@ func newConfig(engine workflow.Engine) *Config {
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = types.DefaultSeverityFilter()
+	c.issueViewOptions = types.DefaultIssueViewOptions()
 	c.UpdateApiEndpoints(DefaultSnykApiUrl)
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
@@ -457,7 +459,16 @@ func (c *Config) IntegrationName() string {
 func (c *Config) IntegrationVersion() string {
 	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_VERSION)
 }
-func (c *Config) FilterSeverity() types.SeverityFilter { return c.filterSeverity }
+func (c *Config) FilterSeverity() types.SeverityFilter {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.filterSeverity
+}
+func (c *Config) IssueViewOptions() types.IssueViewOptions {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.issueViewOptions
+}
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -570,15 +581,23 @@ func (c *Config) SetSnykAdvisorEnabled(enabled bool) {
 }
 
 func (c *Config) SetSeverityFilter(severityFilter types.SeverityFilter) bool {
-	emptySeverityFilter := types.SeverityFilter{}
-	if severityFilter == emptySeverityFilter {
-		return false
-	}
+	c.m.Lock()
+	defer c.m.Unlock()
 
 	filterModified := c.filterSeverity != severityFilter
-	c.Logger().Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
+	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
 	c.filterSeverity = severityFilter
 	return filterModified
+}
+
+func (c *Config) SetIssueViewOptions(issueViewOptions types.IssueViewOptions) bool {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	issueViewOptionsModified := c.issueViewOptions != issueViewOptions
+	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options:")
+	c.issueViewOptions = issueViewOptions
+	return issueViewOptionsModified
 }
 
 func (c *Config) SetToken(newTokenString string) {

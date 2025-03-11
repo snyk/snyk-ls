@@ -79,6 +79,7 @@ func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenS
 			Token:                       tokenString,
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              types.DefaultSeverityFilter(),
+			IssueViewOptions:            types.DefaultIssueViewOptions(),
 			AuthenticationMethod:        types.OAuthAuthentication,
 			AutomaticAuthentication:     "false",
 		},

@@ -498,6 +498,10 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "medium": true,
     "low": true,
   },
+  "issueViewOptions": { // Another filter to be applied for the determined issues
+    "openIssues": true,
+    "ignoredIssues": false,
+  },
   "sendErrorReports": "true", // Whether to report errors to Snyk - defaults to true
   "manageBinariesAutomatically": "true", // Whether CLI/LS binaries will be downloaded & updated automatically
   "enableTrustedFoldersFeature": "true", // Whether LS will prompt to trust a folder (default: true)

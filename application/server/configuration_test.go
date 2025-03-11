@@ -188,6 +188,7 @@ func Test_UpdateSettings(t *testing.T) {
 			CliPath:                      filepath.Join(t.TempDir(), "cli"),
 			Token:                        "a fancy token",
 			FilterSeverity:               types.DefaultSeverityFilter(),
+			IssueViewOptions:             types.DefaultIssueViewOptions(),
 			TrustedFolders:               []string{"trustedPath1", "trustedPath2"},
 			OsPlatform:                   "windows",
 			OsArch:                       "amd64",
@@ -234,6 +235,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, settings.CliPath, c.CliSettings().Path())
 		assert.Equal(t, types.DefaultSeverityFilter(), c.FilterSeverity())
+		assert.Equal(t, types.DefaultIssueViewOptions(), c.IssueViewOptions())
 		assert.Subset(t, []types.FilePath{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
 		assert.Equal(t, settings.OsPlatform, c.OsPlatform())
 		assert.Equal(t, settings.OsArch, c.OsArch())
@@ -406,6 +408,16 @@ func Test_UpdateSettings(t *testing.T) {
 			UpdateSettings(c, types.Settings{FilterSeverity: mixedSeverityFilter})
 
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
+		})
+	})
+
+	t.Run("issue view options", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		t.Run("filtering gets passed", func(t *testing.T) {
+			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
+			UpdateSettings(c, types.Settings{IssueViewOptions: mixedIssueViewOptions})
+
+			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 		})
 	})
 }

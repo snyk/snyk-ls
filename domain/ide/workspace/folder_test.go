@@ -238,12 +238,62 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 			mtx.Lock()
 			defer mtx.Unlock()
 
-			hasCorrectIssues := diagnostics[0].Code == "id1" && diagnostics[1].Code == "id3" && diagnostics[2].Code == "id5"
+			hasCorrectIssues := len(diagnostics) == 3 && diagnostics[0].Code == "id1" && diagnostics[1].Code == "id3" && diagnostics[2].Code == "id5"
 			return hasCorrectIssues
 		},
 		1*time.Second,
 		10*time.Millisecond,
 		"Expected to receive only critical issues",
+	)
+}
+
+func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssues(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	issueViewOptions := types.NewIssueViewOptions(false, true)
+	config.CurrentConfig().SetIssueViewOptions(issueViewOptions)
+
+	f := NewMockFolder(c, notification.NewNotifier())
+
+	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
+	data := types.ScanData{
+		Product: product.ProductOpenSource,
+		Issues: []types.Issue{
+			NewMockIssueWithIgnored("id1", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
+			NewMockIssueWithIgnored("id2", types.FilePath(filepath.Join(string(f.path), string(path1))), false),
+			NewMockIssueWithIgnored("id3", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
+			NewMockIssueWithIgnored("id4", types.FilePath(filepath.Join(string(f.path), string(path1))), false),
+			NewMockIssueWithIgnored("id5", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
+		},
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
+	}
+	f.ProcessResults(context.Background(), data)
+
+	mtx := &sync.Mutex{}
+	var diagnostics []types.Diagnostic
+
+	f.notifier.CreateListener(func(event any) {
+		switch params := event.(type) {
+		case types.PublishDiagnosticsParams:
+			mtx.Lock()
+			defer mtx.Unlock()
+			diagnostics = params.Diagnostics
+		}
+	})
+
+	assert.Eventually(
+		t,
+		func() bool {
+			mtx.Lock()
+			defer mtx.Unlock()
+
+			hasCorrectIssues := len(diagnostics) == 3 && diagnostics[0].Code == "id1" && diagnostics[1].Code == "id3" && diagnostics[2].Code == "id5"
+			return hasCorrectIssues
+		},
+		1*time.Second,
+		10*time.Millisecond,
+		"Expected to receive only ignored issues",
 	)
 }
 
@@ -355,7 +405,6 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 		Product:          product.ProductOpenSource,
 		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
 	}
-
 	highIssue := &snyk.Issue{
 		AffectedFilePath: filePath,
 		Severity:         types.High,
@@ -396,6 +445,61 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 	assert.Len(t, filteredDiagnostics[filePath], 2)
 	assert.Contains(t, filteredDiagnostics[filePath], criticalIssue)
 	assert.Contains(t, filteredDiagnostics[filePath], highIssue)
+}
+
+func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// arrange
+	filePath, folderPath := types.FilePath("test/path"), types.FilePath("test")
+
+	openIssue1 := &snyk.Issue{
+		AffectedFilePath: filePath,
+		IsIgnored:        false,
+		Product:          product.ProductOpenSource,
+		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
+	}
+	openIssue2 := &snyk.Issue{
+		AffectedFilePath: filePath,
+		IsIgnored:        false,
+		Product:          product.ProductOpenSource,
+		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
+	}
+	ignoredIssue1 := &snyk.Issue{
+		AffectedFilePath: filePath,
+		IsIgnored:        true,
+		Product:          product.ProductOpenSource,
+		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
+	}
+	ignoredIssue2 := &snyk.Issue{
+		AffectedFilePath: filePath,
+		IsIgnored:        true,
+		Product:          product.ProductOpenSource,
+		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
+	}
+
+	scannerRecorder := scanner.NewTestScanner()
+	scannerRecorder.Issues = []types.Issue{
+		openIssue1,
+		openIssue2,
+		ignoredIssue1,
+		ignoredIssue2,
+	}
+
+	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
+	ctx := context.Background()
+
+	c.SetSeverityFilter(types.NewSeverityFilter(true, true, false, false))
+	c.SetIssueViewOptions(types.NewIssueViewOptions(true, false))
+
+	// act
+	f.ScanFile(ctx, filePath)
+	filteredDiagnostics := f.filterDiagnostics(f.Issues())
+
+	// assert
+	assert.Len(t, filteredDiagnostics[filePath], 2)
+	assert.Contains(t, filteredDiagnostics[filePath], openIssue1)
+	assert.Contains(t, filteredDiagnostics[filePath], openIssue2)
 }
 
 func Test_ClearDiagnosticsByIssueType(t *testing.T) {
@@ -644,6 +748,13 @@ func NewMockIssue(id string, path types.FilePath) *snyk.Issue {
 func NewMockIssueWithSeverity(id string, path types.FilePath, severity types.Severity) *snyk.Issue {
 	issue := NewMockIssue(id, path)
 	issue.Severity = severity
+
+	return issue
+}
+
+func NewMockIssueWithIgnored(id string, path types.FilePath, ignored bool) *snyk.Issue {
+	issue := NewMockIssue(id, path)
+	issue.IsIgnored = ignored
 
 	return issue
 }
