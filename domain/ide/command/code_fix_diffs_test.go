@@ -25,8 +25,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/code-client-go/llm"
-
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -83,11 +81,10 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		C:              c,
 	}
 	cut := codeFixDiffs{
-		notifier:           notification.NewMockNotifier(),
-		codeScanner:        codeScanner,
-		c:                  c,
-		srv:                &ServerImplMock{},
-		deepCodeLLMBinding: llm.NewDeepcodeLLMBinding(),
+		notifier:    notification.NewMockNotifier(),
+		codeScanner: codeScanner,
+		c:           c,
+		srv:         &ServerImplMock{},
 	}
 	if runtime.GOOS == "windows" {
 		codeScanner.AddBundleHash("\\folderPath", "bundleHash")

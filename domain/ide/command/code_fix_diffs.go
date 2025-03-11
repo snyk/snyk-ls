@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/code-client-go/llm"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -36,13 +35,12 @@ import (
 )
 
 type codeFixDiffs struct {
-	command            types.CommandData
-	srv                types.Server
-	notifier           notification.Notifier
-	issueProvider      snyk.IssueProvider
-	codeScanner        *code.Scanner
-	deepCodeLLMBinding llm.DeepCodeLLMBinding
-	c                  *config.Config
+	command       types.CommandData
+	srv           types.Server
+	notifier      notification.Notifier
+	issueProvider snyk.IssueProvider
+	codeScanner   *code.Scanner
+	c             *config.Config
 }
 
 func (cmd *codeFixDiffs) Command() types.CommandData {
@@ -89,7 +87,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("failed to find issue")
 	}
 
-	htmlRenderer, err := code.GetHTMLRenderer(cmd.c, cmd.deepCodeLLMBinding)
+	htmlRenderer, err := code.GetHTMLRenderer(cmd.c)
 	if err != nil {
 		logger.Err(err).Msg("failed to get html renderer")
 		return nil, err
