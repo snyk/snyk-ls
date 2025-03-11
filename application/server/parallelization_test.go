@@ -81,6 +81,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              types.DefaultSeverityFilter(),
+			IssueViewOptions:            types.DefaultIssueViewOptions(),
 			AuthenticationMethod:        types.TokenAuthentication,
 			AutomaticAuthentication:     "false",
 			ManageBinariesAutomatically: "true",

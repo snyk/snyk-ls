@@ -407,6 +407,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			ManageBinariesAutomatically: "true",
 			CliPath:                     filepath.Join(t.TempDir(), "cli"),
 			FilterSeverity:              types.DefaultSeverityFilter(),
+			IssueViewOptions:            types.DefaultIssueViewOptions(),
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -469,6 +470,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 			ManageBinariesAutomatically: "true",
 			CliPath:                     filepath.Join(t.TempDir(), "cli"),
 			FilterSeverity:              types.DefaultSeverityFilter(),
+			IssueViewOptions:            types.DefaultIssueViewOptions(),
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -521,9 +523,10 @@ func Test_initialize_updatesSettings(t *testing.T) {
 
 	clientParams := types.InitializeParams{
 		InitializationOptions: types.Settings{
-			Organization:   expectedOrgId,
-			Token:          "xxx",
-			FilterSeverity: types.DefaultSeverityFilter(),
+			Organization:     expectedOrgId,
+			Token:            "xxx",
+			FilterSeverity:   types.DefaultSeverityFilter(),
+			IssueViewOptions: types.DefaultIssueViewOptions(),
 		},
 	}
 
