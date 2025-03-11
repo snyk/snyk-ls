@@ -73,7 +73,7 @@ func (sc *DelegatingConcurrentScanner) Issue(key string) types.Issue {
 	for _, scanner := range sc.scanners {
 		if s, ok := scanner.(snyk.IssueProvider); ok {
 			issue := s.Issue(key)
-			if issue.GetID() != "" {
+			if issue != nil && issue.GetID() != "" {
 				return issue
 			}
 		}
