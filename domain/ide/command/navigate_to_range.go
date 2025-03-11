@@ -19,10 +19,8 @@ package command
 import (
 	"context"
 	"encoding/json"
-
 	"strings"
 
-	"github.com/snyk/code-client-go/llm"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/pkg/errors"
@@ -36,11 +34,10 @@ import (
 )
 
 type navigateToRangeCommand struct {
-	command            types.CommandData
-	srv                types.Server
-	logger             *zerolog.Logger
-	deepCodeLLMBinding llm.DeepCodeLLMBinding
-	c                  *config.Config
+	command types.CommandData
+	srv     types.Server
+	logger  *zerolog.Logger
+	c       *config.Config
 }
 
 func (cmd *navigateToRangeCommand) Command() types.CommandData {
@@ -75,7 +72,7 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 	} else {
 		documentUri = sglsp.DocumentURI(path)
 		// TODO: move this to a new command to process snyk magnet link
-		renderer, rendererErr := code.GetHTMLRenderer(cmd.c, cmd.deepCodeLLMBinding)
+		renderer, rendererErr := code.GetHTMLRenderer(cmd.c)
 		if rendererErr == nil {
 			renderer.AiFixHandler.SetAutoTriggerAiFix(true)
 		}

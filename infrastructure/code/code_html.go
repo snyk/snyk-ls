@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -80,7 +79,7 @@ type HtmlRenderer struct {
 
 var codeRenderer *HtmlRenderer
 
-func GetHTMLRenderer(c *config.Config, deepCodeLLMBinding llm.DeepCodeLLMBinding) (*HtmlRenderer, error) {
+func GetHTMLRenderer(c *config.Config) (*HtmlRenderer, error) {
 	if codeRenderer != nil && codeRenderer.c == c {
 		return codeRenderer, nil
 	}
@@ -102,8 +101,7 @@ func GetHTMLRenderer(c *config.Config, deepCodeLLMBinding llm.DeepCodeLLMBinding
 		globalTemplate: globalTemplate,
 	}
 	codeRenderer.AiFixHandler = &AiFixHandler{
-		aiFixDiffState:  aiResultState{status: AiFixNotStarted},
-		deepCodeBinding: deepCodeLLMBinding,
+		aiFixDiffState: aiResultState{status: AiFixNotStarted},
 	}
 	return codeRenderer, nil
 }
