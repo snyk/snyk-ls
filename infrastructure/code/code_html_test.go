@@ -53,7 +53,7 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, nil)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -75,15 +75,15 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `<code>import * as http from &#39;http&#39;;</code>`)
 
 	// assert Ignore Details section - Elements should not be present
-	assert.NotContains(t, codePanelHtml, `class=ignore-warning-wrapper`)
-	assert.NotContains(t, codePanelHtml, `class="ignore-badge"`)
+	assert.NotContains(t, codePanelHtml, `class="sn-status-message mod-warning"`)
+	assert.NotContains(t, codePanelHtml, `class="sn-ignore-badge"`)
 	assert.NotContains(t, codePanelHtml, `class="ignore-details-section"`)
 
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="hidden">`)
 	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper"`)
 	assert.Contains(t, codePanelHtml, `<button id="generate-ai-fix" folder-path="" file-path=""
-                  issue-id="" class="generate-ai-fix">✨ Generate AI fix</button>`)
+                  issue-id="" class="generate-ai-fix`)
 	expectedFixesDescription := fmt.Sprintf(`This type of vulnerability was fixed in %d open source projects.`, repoCount)
 	assert.Regexp(t, regexp.MustCompile(expectedFixesDescription), codePanelHtml)
 	assert.Contains(t, codePanelHtml, `<span id="example-link" class="example-repo-link">`, "GitHub icon preceding the repo name is present")
@@ -118,7 +118,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, nil)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
@@ -159,7 +159,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, nil)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -168,8 +168,8 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	assert.NotContains(t, codePanelHtml, `href="https://when-no-lesson-data-element-not-in-the-template"`)
 
 	// assert Ignore Details section - Elements should be present
-	assert.Contains(t, codePanelHtml, `class="ignore-warning-wrapper"`)
-	assert.Contains(t, codePanelHtml, `class="ignore-badge"`)
+	assert.Contains(t, codePanelHtml, `class="sn-status-message mod-warning"`)
+	assert.Contains(t, codePanelHtml, `class="sn-ignore-badge"`)
 	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
 	assert.Contains(t, codePanelHtml, `class="ignore-details-value">Ignored permanently</div>`)
 	assert.Contains(t, codePanelHtml, `class="ignore-details-value">No expiration</div>`) // Because category is "wont-fix"
@@ -198,7 +198,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, nil)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -243,7 +243,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, nil)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -309,7 +309,7 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	}
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, nil)
+	htmlRenderer, err := GetHTMLRenderer(c)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section

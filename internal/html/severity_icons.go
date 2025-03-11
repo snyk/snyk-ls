@@ -25,25 +25,13 @@ import (
 func SeverityIcon(issue types.Issue) template.HTML {
 	switch issue.GetSeverity() {
 	case types.Critical:
-		return `<svg id="severity-icon" class="icon critical" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
-			 <rect width="16" height="16" rx="2" fill="#AB1A1A"/>
-			 <path d="M9.975 9.64h2.011a3.603 3.603 0 0 1-.545 1.743 3.24 3.24 0 0 1-1.338 1.19c-.57.284-1.256.427-2.06.427-.627 0-1.19-.107-1.688-.32a3.594 3.594 0 0 1-1.278-.936 4.158 4.158 0 0 1-.801-1.47C4.092 9.7 4 9.057 4 8.345v-.675c0-.712.094-1.356.283-1.93a4.255 4.255 0 0 1 .82-1.476 3.657 3.657 0 0 1 1.286-.936A4.114 4.114 0 0 1 8.057 3c.817 0 1.505.147 2.066.44.565.295 1.002.7 1.312 1.217.314.516.502 1.104.565 1.763H9.982c-.023-.392-.101-.723-.236-.995a1.331 1.331 0 0 0-.612-.621c-.27-.143-.628-.214-1.077-.214-.336 0-.63.062-.881.187a1.632 1.632 0 0 0-.633.568c-.17.254-.298.574-.383.962a6.61 6.61 0 0 0-.121 1.349v.688c0 .503.038.946.114 1.33.076.378.193.699.35.961.161.259.368.454.619.588.256.13.563.194.922.194.421 0 .769-.067 1.043-.2a1.39 1.39 0 0 0 .625-.595c.148-.263.236-.59.263-.982Z" fill="#fff"/>
-		 </svg>`
+		return template.HTML(`<svg id="severity-icon" class="severity-icon critical" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="16" fill="#AB1A1A"/><path d="M16.1752 11C17.98 11 19.5173 12.0972 20.1001 13.6333L21.9989 13.0004C21.1514 10.6698 18.8639 9 16.1752 9C12.7648 9 10.0001 11.6863 10.0001 15V17C10.0001 20.3137 12.7648 23 16.175 23C18.8639 23 21.1514 21.3302 21.9989 18.9996L20.1001 18.3667C19.5173 19.9028 17.98 21 16.175 21C16.172 21 16.1689 21 16.1659 21C13.8641 20.9956 12.0001 19.2064 12.0001 17V15C12.0001 12.7909 13.8694 11 16.1752 11Z" fill="white"/></svg>`)
 	case types.High:
-		return `<svg id="severity-icon" class="icon high" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
-			 <rect width="16" height="16" rx="2" fill="#CE5019"/>
-			 <path d="M10.5 7v2h-5V7h5ZM6 3v10H4V3h2Zm6 0v10h-2V3h2Z" fill="#fff"/>
-		 </svg>`
+		return template.HTML(`<svg id="severity-icon" class="severity-icon high" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="16" fill="#D93600"/><path d="M11 10H13V15H19V10H21V22H19V17H13V22H11V10Z" fill="white"/></svg>`)
 	case types.Medium:
-		return `<svg id="severity-icon" class="icon medium" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
-			 <rect width="16" height="16" rx="2" fill="#D68000"/>
-			 <path d="M3 3h2l2.997 7.607L11 3h2L9 13H7L3 3Zm0 0h2v10l-2-.001V3.001Zm8 0h2V13h-2V3Z" fill="#fff"/>
-		 </svg>`
+		return template.HTML(`<svg id="severity-icon" class="severity-icon medium" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="16" fill="#D68000"/><path d="M19.996 10H22.0002V22H20.0002V15.0058L16.9591 22H15.0408L12.0002 15.0071V22H10.0002L10 10L12.0002 10L12.004 10L16 19.1902L19.996 10Z" fill="white"/></svg>`)
 	case types.Low:
-		return `<svg id="severity-icon" class="icon low" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 16 16">
-			 <rect width="16" height="16" rx="2" fill="#88879E"/>
-			 <path d="M11 11v2H6.705v-2H11ZM7 3v10H5V3h2Z" fill="#fff"/>
-		 </svg>`
+		return template.HTML(`<svg id="severity-icon" class="severity-icon low" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="16" fill="#88879E"/><path d="M14 10H12V22H21V20H14V10Z" fill="white"/></svg>`)
 	default:
 		return ``
 	}

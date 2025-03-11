@@ -37,54 +37,53 @@
 
 <body>
   <!-- Panel header -->
-  <header class="panel-header">
+  <section class="sn-issue-header">
     <!-- Ignore header -->
     {{if .IsIgnored}}
-    <div class="ignore-warning-wrapper">
-      <div class="ignore-warning ">
-        <svg class="ignore-warning-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
-          <path d="M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" fill="#D68000" />
-        </svg>
-        <span><strong>Ignored.</strong> This issue is currently ignored.</span>
-      </div>
+    <div class="sn-status-message mod-warning">
+      <svg class="sn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M1.25199 12.9165C0.663992 14.0677 1.13999 15 2.31599 15H13.684C14.86 15 15.336 14.0758 14.748 12.9165L9.071 1.86645C8.476 0.71524 7.524 0.707133 6.929 1.86645L1.25899 12.9165H1.25199ZM9 13H7V11H9V13ZM9 10H7V6H9V10Z" fill="currentColor"/>
+      </svg>
+        
+      <span>
+        <strong>Ignored.</strong> This issue is currently ignored.
+      </span>
     </div>
     {{end}}
-    <div class="severity-container">
+    <div class="sn-title-container">
       {{.SeverityIcon}}
-      <h2 class="severity-title">{{.IssueTitle}}</h2>
+      <h1 class="sn-issue-title">{{.IssueTitle}}</h1>
     </div>
-    <div class="severity-type-container">
+    <div class="sn-issue-meta">
       <div class="severity-type">{{.IssueType}}</div>
+      {{if .IgnoreLineAction}}
+      <span class="delimiter"></span>
+      <div>Position line: <a class="styled-link" id="position-line">{{.IgnoreLineAction}}</a></div>
+      {{end}}
+      {{if ge .PriorityScore 0}}
+      <span class="delimiter"></span>
+      <div>Priority score: {{.PriorityScore}}</div>
+      {{end}}
       {{if gt (len .CWEs) 0}}
-      <span class="delimiter">|</span>
+      <span class="delimiter"></span>
       {{range $index, $cwe := .CWEs}}
       <a class="cwe styled-link"  rel="noopener noreferrer"
         href="https://cwe.mitre.org/data/definitions/{{trimCWEPrefix $cwe}}.html">{{$cwe}}</a>
       {{if ne $index (idxMinusOne (len $.CWEs))}}<span class="delimiter"></span>{{end}}
       {{end}}
       {{end}}
-      {{if .IgnoreLineAction}}
-      <span class="delimiter">|</span>
-      <div>Position line: <a class="styled-link" id="position-line">{{.IgnoreLineAction}}</a></div>
-      {{end}}
-      {{if ge .PriorityScore 0}}
-      <span class="delimiter">|</span>
-      <div>Priority score: {{.PriorityScore}}</div>
-      {{end}}
-      {{if .IsIgnored}}<div class="ignore-badge">IGNORED</div>{{end}}
+      {{if .IsIgnored}}<div class="sn-ignore-badge">IGNORED</div>{{end}}
     </div>
     {{if .LessonUrl}}
-    <div class="lesson-container">
-      <div class="lesson-icon">
-        {{.LessonIcon}}
-      </div>
+    <div class="sn-learn">
+      <div class="lesson-icon">{{.LessonIcon}}</div>
       <a class="lesson-link styled-link is-external"  rel="noopener noreferrer" href="{{.LessonUrl}}">
-        Learn about this vulnerability
+        Learn about this issue type
         {{.ExternalIcon}}
       </a>
     </div>
     {{end}}
-  </header>
+  </section>
 
   <main class="code-issue-container">
     <!-- Tabs Issue Overview Container -->
@@ -154,7 +153,6 @@
           </section>
           <!-- Data Flow and Fixed Code Examples -->
           <div id="no-ai-fix-wrapper">
-
             <!-- Fixed Code Examples -->
             <section class="example-fixes delimiter-top {{if .HasAIFix}}hidden{{end}}">
               <h2 class="example-fixes-header">Fixed Code Examples</h2>
@@ -210,20 +208,16 @@
           <!-- AI Fix -->
           <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
             <!-- AI fix buttons -->
-            {{if or (eq .AiFixDiffStatus "NOT_STARTED") (eq .AiFixDiffStatus "IN_PROGRESS")}}
-            <section id="fix-wrapper" class="ai-fix delimiter-top">
+            <section id="fix-wrapper" class="ai-fix delimiter-top {{if or (eq .AiFixDiffStatus "NOT_STARTED") (eq .AiFixDiffStatus "IN_PROGRESS")}} show {{else}} hidden {{end}} ">
               <h2 class="ai-fix-header">
                 DeepCode AI Fixes
               </h2>
               <p class='{{if ne .AiFixDiffStatus "NOT_STARTED"}}hidden{{end}}'>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
 
               <div class="sn-fix-wrapper">
-                {{if eq .AiFixDiffStatus "NOT_STARTED"}}
                 <button id="generate-ai-fix" folder-path="{{.FolderPath}}" file-path="{{.FilePath}}"
-                  issue-id="{{.IssueId}}" class="generate-ai-fix">✨ Generate AI fix</button>
-                {{end}}
-                {{if eq .AiFixDiffStatus "IN_PROGRESS"}}
-                <div id="fix-loading-indicator" class="sn-loading">
+                  issue-id="{{.IssueId}}" class="generate-ai-fix {{if eq .AiFixDiffStatus "NOT_STARTED"}} show {{else}} hidden {{end}}">✨ Generate AI fix</button>
+                <div id="fix-loading-indicator" class="sn-loading {{if eq .AiFixDiffStatus "IN_PROGRESS"}} show {{else}} hidden {{end}}">
                   <div class="sn-loading-icon">
                     {{.ScanAnimation}}
                   </div>
@@ -253,15 +247,11 @@
                     </div>
                   </div>
                 </div>
-                {{end}}
               </div>
             </section>
-            {{end}}
             <!-- AI fixes -->
-            {{if eq .AiFixDiffStatus "SUCCESS"}}
-            <section id="fixes-section" class="sn-ai-fixes delimiter-top">
-              {{if eq .AiFixResult "{}"}}
-              <div id="info-no-diffs" class="font-light">
+            <section id="fixes-section" class="sn-ai-fixes delimiter-top {{if eq .AiFixDiffStatus "SUCCESS"}} show {{else}} hidden {{end}}">
+              <div id="info-no-diffs" class="font-light {{if eq .AiFixResult "{}"}} show {{else}} hidden {{end}}">
                 <h3 class="ai-fix-header">No AI Fix Available:</h3>
                 We couldn’t generate fixes that meet our high-quality standards.
                 <br>
@@ -274,47 +264,44 @@
                 [documentation]
                 </a>
               </div>
-              {{else}}
-              <div id="diff-top" class="row between">
-                <div id="info-top" class="font-light">⚡️ Here are <span id="diff-number"></span> AI-generated solutions
+
+              <div class="diffs-section {{if eq .AiFixResult "{}"}} hidden {{else}} show {{end}}">
+                <div id="diff-top" class="row between">
+                  <div id="info-top" class="font-light">⚡️ Here are <span id="diff-number"></span> AI-generated solutions
+                  </div>
+                  <div class="diffs-nav">
+                          <span id="previous-diff" class="arrow" title="Previous diff">
+                            {{.ArrowLeftDark}}
+                            {{.ArrowLeftLight}}
+                          </span>
+                    <span id="diff-text">
+                            AI solution <strong id="diff-counter">1</strong>/<span id="diff-number2"></span>
+                          </span>
+                    <span id="next-diff" class="arrow" title="Next diff">
+                            {{.ArrowRightDark}}
+                            {{.ArrowRightLight}}
+                          </span>
+                  </div>
                 </div>
-                <div class="diffs-nav">
-                  <span id="previous-diff" class="arrow" title="Previous diff">
-                    {{.ArrowLeftDark}}
-                    {{.ArrowLeftLight}}
-                  </span>
-                  <span id="diff-text">
-                    AI solution <strong id="diff-counter">1</strong>/<span id="diff-number2"></span>
-                  </span>
-                  <span id="next-diff" class="arrow" title="Next diff">
-                    {{.ArrowRightDark}}
-                    {{.ArrowRightLight}}
-                  </span>
+                <div id="diff"></div>
+                <div class="explain-wrapper">
+                  <h2 id="ai-explain-header" class="hidden">Explanation: </h2>
+                  <div id="fix-explain-text" class="suggestion-text">
+                  </div>
+                  <button id="apply-fix" class="button sn-apply-fix">Apply fix</button>
                 </div>
               </div>
-              <div id="diff"></div>
-              <div class="explain-wrapper">
-                <h2 id="ai-explain-header" class="hidden">Explanation: </h2>
-                <div id="fix-explain-text" class="suggestion-text">
-                </div>
-                <button id="apply-fix" class="button sn-apply-fix">Apply fix</button>
-              </div>
-              {{end}}
             </section>
-            {{end}}
 
             <!-- AI fix errors -->
-            {{if eq .AiFixDiffStatus "ERROR"}}
-            <section id="fixes-error-section" class="sn-ai-fix-error delimiter-top">
+            <section id="fixes-error-section" class="sn-ai-fix-error delimiter-top {{if eq .AiFixDiffStatus "ERROR"}} show {{else}} hidden {{end}}">
               <div id="info-no-diffs" class="font-light">
                 ⚠️ Failed to generate the fix. Please try again.
               </div>
               <div class="sn-fix-wrapper">
-                <button id="retry-generate-fix" folder-path="{{.FolderPath}}" file-path="{{.FilePath}}"
-                        issue-id="{{.IssueId}}" class="button generate-ai-fix">✨ Retry AI fix</button>
+                <button id="retry-generate-fix" class="button generate-ai-fix">✨ Retry AI fix</button>
               </div>
             </section>
-            {{end}}
           </div>
         </div>
         <!-- End Fix Analysis section -->
@@ -338,25 +325,27 @@
             </h2>
             <div class="data-flow-body">
               {{range $fileName := .DataFlowKeys}}
+              {{ $stepCount := len (index $.DataFlowTable $fileName) }}
               <div class="data-flow-file">
-                {{$.FileIcon}}
-                <span class="data-flow-file-name">{{$fileName}}</span>
+                <span class="data-flow-file-name">{{$.FileIcon}} {{$fileName}}</span>
+                <span class="data-flow-file-steps">{{$stepCount}} {{if eq $stepCount 1}}step{{else}}steps{{end}}</span>
               </div>
               <table class="data-flow-table">
                 <tbody>
                 {{range index $.DataFlowTable $fileName}}
                 <tr class="data-flow-row">
-                  <td class="data-flow-number data-flow-row-item">
-                    <div class="data-flow-circle">{{.Number}}</div>
-                    <div class="data-flow-line"></div>
-                  </td>
-                  <td class="data-flow-clickable-row data-flow-row-item" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
+
+                  <td class="data-flow-clickable-row" file-path="{{.FilePath}}" start-line="{{.StartLine}}"
                       end-line="{{.EndLine}}" start-character="{{.StartCharacter}}" end-character="{{.EndCharacter}}">
                     {{.StartLineValue}}
                   </td>
-                  <td class="delimiter data-flow-delimiter">|</td>
+                  <!-- <td class="delimiter data-flow-delimiter">|</td> -->
                   <td class="data-flow-text">
                     <code>{{.Content}}</code>
+                  </td>
+                  <td class="data-flow-number">
+                    <div class="data-flow-circle">{{.Number}}</div>
+                    <div class="data-flow-line"></div>
                   </td>
                 </tr>
                 {{end}}

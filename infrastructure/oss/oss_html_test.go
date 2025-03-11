@@ -78,7 +78,7 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issueAdditionalData.From, " &gt; ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issue2.From, " &gt; ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "<li>list</li>"))
-	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this issue"))
+	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this issue type"))
 }
 
 func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
@@ -105,7 +105,7 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, "Learn about this issue"))
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, "Learn about this issue type"))
 }
 
 func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
@@ -204,7 +204,7 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issueAdditionalData.From, " &gt; ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issue2.From, " &gt; ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "<li>list</li>"))
-	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this issue"))
+	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this issue type"))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "...and"))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "https://www.first.org/cvss/calculator/3.1#CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P"))
 }

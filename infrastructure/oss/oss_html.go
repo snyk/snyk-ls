@@ -93,6 +93,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"IntroducedThroughs": getIntroducedThroughs(additionalData, renderer.c.SnykUI()),
 		"LessonUrl":          additionalData.Lesson,
 		"LessonIcon":         html.LessonIcon(),
+		"ExternalIcon":       html.ExternalIcon(),
 		"FixedIn":            additionalData.FixedIn,
 		"DetailedPaths":      detailedPaths,
 		"MoreDetailedPaths":  len(detailedPaths) - 3,

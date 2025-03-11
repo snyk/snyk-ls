@@ -19,8 +19,10 @@ package code
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
+	codeClientHTTP "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -30,7 +32,6 @@ import (
 type AiFixHandler struct {
 	aiFixDiffState    aiResultState
 	currentIssueId    string
-	deepCodeBinding   llm.DeepCodeLLMBinding
 	explainCancelFunc context.CancelFunc
 	autoTriggerAiFix  bool
 }
@@ -83,8 +84,15 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	}
 	var diffs []string
 	diffs = getDiffListFromSuggestions(suggestions, diffs)
-
-	explanations, err := fixHandler.deepCodeBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs})
+	deepCodeLLMBinding := llm.NewDeepcodeLLMBinding(
+		llm.WithLogger(c.Logger()),
+		llm.WithOutputFormat(llm.HTML),
+		llm.WithEndpoint(getExplainEndpoint(c)),
+		llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
+			return c.Engine().GetNetworkAccess().GetHttpClient()
+		}),
+	)
+	explanations, err := deepCodeLLMBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs})
 	if err != nil {
 		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.GetID())
 		return
@@ -94,6 +102,13 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 			suggestions[j].Explanation = explanations[diffs[j]]
 		}
 	}
+}
+func getExplainEndpoint(c *config.Config) *url.URL {
+	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", c.SnykApi(), c.Organization()))
+	if err != nil {
+		return &url.URL{}
+	}
+	return endpoint
 }
 
 func getDiffListFromSuggestions(suggestions []AutofixUnifiedDiffSuggestion, diffs []string) []string {

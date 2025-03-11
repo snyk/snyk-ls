@@ -19,8 +19,6 @@ package command
 import (
 	"fmt"
 
-	"github.com/snyk/code-client-go/llm"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -34,12 +32,12 @@ import (
 
 // CreateFromCommandData gets a command based on the given parameters that can be passed to the CommandService
 // nolint: gocyclo, nolintlint // this is a factory, it's ok to have high cyclomatic complexity here
-func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv types.Server, authService authentication.AuthenticationService, learnService learn.Service, notifier noti.Notifier, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner, cli cli.Executor, deepCodeLLMBinding llm.DeepCodeLLMBinding) (types.Command, error) {
+func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv types.Server, authService authentication.AuthenticationService, learnService learn.Service, notifier noti.Notifier, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner, cli cli.Executor) (types.Command, error) {
 	httpClient := c.Engine().GetNetworkAccess().GetHttpClient
 
 	switch commandData.CommandId {
 	case types.NavigateToRangeCommand:
-		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger(), deepCodeLLMBinding: deepCodeLLMBinding, c: c}, nil
+		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger(), c: c}, nil
 	case types.WorkspaceScanCommand:
 		return &workspaceScanCommand{command: commandData, srv: srv, c: c}, nil
 	case types.WorkspaceFolderScanCommand:
@@ -71,19 +69,17 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 	case types.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
 	case types.CodeFixApplyEditCommand:
-		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier,
-			deepCodeLLMBinding: deepCodeLLMBinding, apiClient: codeApiClient, c: c, logger: c.Logger()}, nil
+		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, apiClient: codeApiClient, c: c, logger: c.Logger()}, nil
 	case types.CodeSubmitFixFeedback:
 		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil
 	case types.CodeFixDiffsCommand:
 		return &codeFixDiffs{
-			command:            commandData,
-			codeScanner:        codeScanner,
-			srv:                srv,
-			issueProvider:      issueProvider,
-			notifier:           notifier,
-			deepCodeLLMBinding: deepCodeLLMBinding,
-			c:                  c,
+			command:       commandData,
+			codeScanner:   codeScanner,
+			srv:           srv,
+			issueProvider: issueProvider,
+			notifier:      notifier,
+			c:             c,
 		}, nil
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
@@ -92,7 +88,7 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 	case types.ClearCacheCommand:
 		return &clearCache{command: commandData, c: c}, nil
 	case types.GenerateIssueDescriptionCommand:
-		return &generateIssueDescription{command: commandData, issueProvider: issueProvider, deepCodeLLMBinding: deepCodeLLMBinding}, nil
+		return &generateIssueDescription{command: commandData, issueProvider: issueProvider}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)
