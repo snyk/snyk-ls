@@ -517,6 +517,9 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 }
 
 func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
 	issueByFile := f.IssuesByProduct()[p]
 
@@ -543,7 +546,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	df := delta2.NewDeltaFinderForProduct(p)
-	enrichedIssues, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
+	enrichedIssues, err := df.DiffAndEnrich(baseFindingIdentifiable, currentFindingIdentifiable)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")
@@ -553,7 +556,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	deltaSnykIssues := []types.Issue{}
 	for i := range enrichedIssues {
 		identifiable := enrichedIssues[i]
-		if identifiable == nil {
+		if identifiable == nil || !identifiable.GetIsNew() {
 			continue
 		}
 
@@ -633,7 +636,7 @@ func (f *Folder) FilterIssues(
 		}
 		for _, issue := range issueSlice {
 			// Logging here will spam the logs
-			if isVisibleSeverity(f.c, issue) && isVisibleForIssueViewOptions(f.c, issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
+			if isVisibleSeverity(f.c, issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
 				filteredIssues[path] = append(filteredIssues[path], issue)
 			}
 		}
@@ -658,19 +661,6 @@ func isVisibleSeverity(c *config.Config, issue types.Issue) bool {
 		return c.FilterSeverity().Low
 	}
 	return false
-}
-
-func isVisibleForIssueViewOptions(c *config.Config, issue types.Issue) bool {
-	logger := c.Logger().With().Str("method", "isVisibleForIssueViewOptions").Logger()
-
-	issueViewOptions := c.IssueViewOptions()
-	logger.Debug().Interface("issueViewOptions", issueViewOptions).Msg("Filtering issues by issue view options")
-
-	if issue.GetIsIgnored() {
-		return issueViewOptions.IgnoredIssues
-	} else {
-		return issueViewOptions.OpenIssues
-	}
 }
 
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {

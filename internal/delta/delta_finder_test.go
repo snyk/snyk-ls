@@ -69,6 +69,8 @@ func TestFind_DifferWithEnricher(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 2)
+
+	assert.True(t, enrichedList[1].GetIsNew())
 }
 
 func TestFind_DifferWithEnricherWithMatcher(t *testing.T) {
@@ -118,6 +120,7 @@ func TestFind_DifferWithEnricherWithMatcher(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 3)
 
+	assert.True(t, enrichedList[2].GetIsNew())
 	assert.Equal(t, enrichedList[2].GetGlobalIdentity(), currentIssueList[2].GetGlobalIdentity())
 }
 
@@ -155,6 +158,7 @@ func TestFind_DifferWithEnricherWithMatcher_NoNewIssues(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 2)
 	for _, enriched := range enrichedList {
+		assert.False(t, enriched.GetIsNew())
 		assert.NotEmpty(t, enriched.GetGlobalIdentity())
 	}
 }
@@ -207,6 +211,7 @@ func TestFind_DifferWithEnricherWithMatcher_NewIssue_ExistingId(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, enrichedList, 3)
 
+	assert.True(t, enrichedList[2].GetIsNew())
 	assert.Equal(t, enrichedList[2].GetGlobalIdentity(), currentIssueList[2].GetGlobalIdentity())
 	assert.Equal(t, existingIdentity, enrichedList[2].GetGlobalIdentity())
 }
