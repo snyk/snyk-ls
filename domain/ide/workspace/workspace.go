@@ -36,7 +36,7 @@ import (
 
 // Workspace represents the highest entity in an IDE that contains code. A workspace may contain multiple folders
 type Workspace struct {
-	mutex               sync.Mutex
+	mutex               sync.RWMutex
 	folders             map[types.FilePath]types.Folder
 	instrumentor        performance.Instrumentor
 	scanner             scanner.Scanner
@@ -184,6 +184,8 @@ func (w *Workspace) GetFolderContaining(path types.FilePath) types.Folder {
 }
 
 func (w *Workspace) Folders() (folder []types.Folder) {
+	w.mutex.RLock()
+	defer w.mutex.RUnlock()
 	folders := make([]types.Folder, 0, len(w.folders))
 	for _, folder := range w.folders {
 		folders = append(folders, folder)

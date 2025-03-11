@@ -111,6 +111,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 		return
 	}
 	updateSeverityFilter(c, settings.FilterSeverity)
+	updateIssueViewOptions(c, settings.IssueViewOptions)
 	updateProductEnablement(c, settings)
 	updateCliConfig(c, settings)
 	updateAuthenticationMethod(c, settings)
@@ -389,6 +390,15 @@ func updateProductEnablement(c *config.Config, settings types.Settings) {
 		c.Logger().Debug().Msg("couldn't parse iac setting")
 	} else {
 		c.SetSnykIacEnabled(parseBool)
+	}
+}
+
+func updateIssueViewOptions(c *config.Config, s types.IssueViewOptions) {
+	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options:")
+	modified := c.SetIssueViewOptions(s)
+
+	if modified {
+		sendWorkspaceConfigChanged(c)
 	}
 }
 
