@@ -543,7 +543,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	df := delta2.NewDeltaFinderForProduct(p)
-	enrichedIssues, err := df.DiffAndEnrich(baseFindingIdentifiable, currentFindingIdentifiable)
+	enrichedIssues, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")
@@ -553,7 +553,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	deltaSnykIssues := []types.Issue{}
 	for i := range enrichedIssues {
 		identifiable := enrichedIssues[i]
-		if identifiable == nil || !identifiable.GetIsNew() {
+		if identifiable == nil {
 			continue
 		}
 
