@@ -517,6 +517,9 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 }
 
 func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
 	issueByFile := f.IssuesByProduct()[p]
 

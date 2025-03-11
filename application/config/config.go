@@ -583,7 +583,10 @@ func (c *Config) SetSnykAdvisorEnabled(enabled bool) {
 func (c *Config) SetSeverityFilter(severityFilter types.SeverityFilter) bool {
 	c.m.Lock()
 	defer c.m.Unlock()
-
+	emptySeverityFilter := types.SeverityFilter{}
+	if severityFilter == emptySeverityFilter {
+		return false
+	}
 	filterModified := c.filterSeverity != severityFilter
 	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
 	c.filterSeverity = severityFilter
@@ -593,7 +596,10 @@ func (c *Config) SetSeverityFilter(severityFilter types.SeverityFilter) bool {
 func (c *Config) SetIssueViewOptions(issueViewOptions types.IssueViewOptions) bool {
 	c.m.Lock()
 	defer c.m.Unlock()
-
+	emptyIssueViewOptions := types.IssueViewOptions{}
+	if issueViewOptions == emptyIssueViewOptions {
+		return false
+	}
 	issueViewOptionsModified := c.issueViewOptions != issueViewOptions
 	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options:")
 	c.issueViewOptions = issueViewOptions
