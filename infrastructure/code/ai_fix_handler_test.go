@@ -33,7 +33,7 @@ func Test_getExplain_Endpoint(t *testing.T) {
 		orgUUID := random.String()
 		c.SetOrganization(orgUUID)
 		actualEndpoint := getExplainEndpoint(c).String()
-		expectedEndpoint := "https://api.snyk.io/rest/orgs/" + orgUUID + "/explain-fix"
+		expectedEndpoint := "https://api.snyk.io/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"
 		assert.Equal(t, expectedEndpoint, actualEndpoint)
 	})
 }
@@ -46,7 +46,7 @@ func Test_GetExplain_Endpoint_With_Updated_API_Endpoints(t *testing.T) {
 		c.SetOrganization(orgUUID)
 		c.UpdateApiEndpoints("https://test.snyk.io")
 		actualEndpoint := getExplainEndpoint(c).String()
-		expectedEndpoint := "https://test.snyk.io/rest/orgs/" + orgUUID + "/explain-fix"
+		expectedEndpoint := "https://test.snyk.io/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"
 		assert.Equal(t, expectedEndpoint, actualEndpoint)
 	})
 }

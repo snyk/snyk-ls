@@ -27,7 +27,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/code-client-go v1.16.1
+	github.com/snyk/code-client-go v1.16.2
 	github.com/snyk/go-application-framework v0.0.0-20250307155453-ce7aaf72fe7d
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.6

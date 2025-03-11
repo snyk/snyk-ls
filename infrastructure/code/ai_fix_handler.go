@@ -39,10 +39,14 @@ type AiFixHandler struct {
 type AiStatus string
 
 const (
-	AiFixNotStarted AiStatus = "NOT_STARTED"
-	AiFixInProgress AiStatus = "IN_PROGRESS"
-	AiFixSuccess    AiStatus = "SUCCESS"
-	AiFixError      AiStatus = "ERROR"
+	AiFixNotStarted  AiStatus = "NOT_STARTED"
+	AiFixInProgress  AiStatus = "IN_PROGRESS"
+	AiFixSuccess     AiStatus = "SUCCESS"
+	AiFixError       AiStatus = "ERROR"
+	shouldRunExplain          = false
+)
+const (
+	ExplainApiVersion string = "2024-10-15"
 )
 
 type aiResultState struct {
@@ -71,6 +75,9 @@ func (fixHandler *AiFixHandler) GetResults(fixId string) (filePath string, diff 
 }
 
 func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config.Config, issue types.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
+	if !shouldRunExplain {
+		return
+	}
 	logger := c.Logger().With().Str("method", "EnrichWithExplain").Logger()
 	if ctx.Err() != nil {
 		logger.Debug().Msgf("EnrichWithExplain context canceled")
@@ -108,6 +115,10 @@ func getExplainEndpoint(c *config.Config) *url.URL {
 	if err != nil {
 		return &url.URL{}
 	}
+	queryParams := url.Values{}
+	queryParams.Add("version", ExplainApiVersion)
+	endpoint.RawQuery = queryParams.Encode()
+
 	return endpoint
 }
 
