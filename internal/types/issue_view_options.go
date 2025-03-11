@@ -26,7 +26,7 @@ func NewIssueViewOptions(openIssues bool, ignoredIssues bool) IssueViewOptions {
 func DefaultIssueViewOptions() IssueViewOptions {
 	return IssueViewOptions{
 		OpenIssues:    true,
-		IgnoredIssues: false,
+		IgnoredIssues: true,
 	}
 }
 

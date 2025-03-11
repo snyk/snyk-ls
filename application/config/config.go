@@ -459,8 +459,16 @@ func (c *Config) IntegrationName() string {
 func (c *Config) IntegrationVersion() string {
 	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_VERSION)
 }
-func (c *Config) FilterSeverity() types.SeverityFilter     { return c.filterSeverity }
-func (c *Config) IssueViewOptions() types.IssueViewOptions { return c.issueViewOptions }
+func (c *Config) FilterSeverity() types.SeverityFilter {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.filterSeverity
+}
+func (c *Config) IssueViewOptions() types.IssueViewOptions {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.issueViewOptions
+}
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
