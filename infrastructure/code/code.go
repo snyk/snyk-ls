@@ -451,6 +451,12 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path types.F
 	if err != nil || ctx.Err() != nil {
 		return []types.Issue{}, err
 	}
+
+	if sarif == nil {
+		logger.Info().Str("requestId", requestId).Msg("Sarif is nil")
+		return []types.Issue{}, nil
+	}
+
 	sc.bundleHashesMutex.Lock()
 	sc.bundleHashes[path] = bundleHash
 	sc.bundleHashesMutex.Unlock()
