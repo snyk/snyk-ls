@@ -82,19 +82,19 @@ func HandleUntrustedFolders(ctx context.Context, c *config.Config, srv types.Ser
 	if w.IsTrustRequestOngoing() {
 		return
 	}
-	w.StartRequestTrustCommunication()
-	defer w.EndRequestTrustCommunication()
-
 	_, untrusted := w.GetFolderTrust()
 	if len(untrusted) > 0 {
-		decision, err := showTrustDialog(c, srv, untrusted, DoTrust, DontTrust)
-		if err != nil {
-			return
-		}
-
-		if decision.Title == DoTrust {
-			w.TrustFoldersAndScan(ctx, untrusted)
-		}
+		go func() {
+			w.StartRequestTrustCommunication()
+			defer w.EndRequestTrustCommunication()
+			decision, err := showTrustDialog(c, srv, untrusted, DoTrust, DontTrust)
+			if err != nil {
+				return
+			}
+			if decision.Title == DoTrust {
+				w.TrustFoldersAndScan(ctx, untrusted)
+			}
+		}()
 	}
 }
 
