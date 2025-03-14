@@ -19,7 +19,6 @@ package oss
 import (
 	"fmt"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -110,15 +109,10 @@ type Annotation struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []snyk.OssIssueData) snyk.OssIssueData {
+func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []snyk.OssIssueData, affectedFilePath types.FilePath) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
 
-	targetFilePath := filepath.Base(scanResult.DisplayTargetFile)
-	if scanResult.Path != "" {
-		targetFilePath = filepath.Join(scanResult.Path, targetFilePath)
-	}
-
-	additionalData.Key = util.GetIssueKey(i.Id, targetFilePath, i.LineNumber, i.LineNumber, 0, 0)
+	additionalData.Key = util.GetIssueKey(i.Id, string(affectedFilePath), i.LineNumber, i.LineNumber, 0, 0)
 	additionalData.Title = i.Title
 	additionalData.Name = i.Name
 	additionalData.Identifiers = snyk.Identifiers{
@@ -141,7 +135,7 @@ func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []sny
 	additionalData.Exploit = i.Exploit
 	additionalData.IsPatchable = i.IsPatchable
 	additionalData.ProjectName = scanResult.ProjectName
-	additionalData.DisplayTargetFile = types.FilePath(targetFilePath)
+	additionalData.DisplayTargetFile = affectedFilePath
 	additionalData.Language = i.Language
 	additionalData.MatchingIssues = matchingIssues
 	if i.lesson != nil || i.isLicenseIssue() {
