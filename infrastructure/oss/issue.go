@@ -67,11 +67,11 @@ func toIssue(affectedFilePath types.FilePath, issue ossIssue, scanResult *scanRe
 	for _, otherIssue := range scanResult.Vulnerabilities {
 		if otherIssue.Id == issue.Id {
 			matchingIssues = append(matchingIssues, otherIssue.toAdditionalData(scanResult,
-				[]snyk.OssIssueData{}))
+				[]snyk.OssIssueData{}, affectedFilePath))
 		}
 	}
 
-	additionalData := issue.toAdditionalData(scanResult, matchingIssues)
+	additionalData := issue.toAdditionalData(scanResult, matchingIssues, affectedFilePath)
 
 	title := issue.Title
 	if config.CurrentConfig().Format() == config.FormatHtml {

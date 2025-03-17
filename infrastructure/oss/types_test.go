@@ -18,6 +18,7 @@ package oss
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_ossIssueContainsPolicyAnnotations(t *testing.T) {
@@ -47,7 +49,8 @@ func Test_ossIssue_toAdditionalData_ConvertsPolicyAnnotations(t *testing.T) {
 		ProjectName:       "test",
 	}
 
-	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{})
+	path := types.FilePath(fmt.Sprintf("/path/to/%s", fakeScanResult.DisplayTargetFile))
+	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{}, path)
 
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.Annotation.Value)
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.Annotation.Reason)
@@ -60,8 +63,8 @@ func Test_ossIssue_toAdditionalData_HasLicenseLearnURL(t *testing.T) {
 		DisplayTargetFile: "testFile",
 		ProjectName:       "test",
 	}
-
-	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{})
+	path := types.FilePath(fmt.Sprintf("/path/to/%s", fakeScanResult.DisplayTargetFile))
+	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{}, path)
 
 	assert.Equal(t, "https://learn.snyk.io/lesson/license-policy-management/?loc=ide", convertedIssue.Lesson)
 }
@@ -73,8 +76,8 @@ func Test_ossIssue_toAdditionalData_ConvertsSeverityChange(t *testing.T) {
 		DisplayTargetFile: "testFile",
 		ProjectName:       "test",
 	}
-
-	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{})
+	path := types.FilePath(fmt.Sprintf("/path/to/%s", fakeScanResult.DisplayTargetFile))
+	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{}, path)
 
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.SeverityChange.OriginalSeverity)
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.SeverityChange.NewSeverity)
