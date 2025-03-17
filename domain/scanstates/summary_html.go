@@ -19,12 +19,12 @@ package scanstates
 import (
 	"bytes"
 	_ "embed"
-
 	"html/template"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/delta"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -131,7 +131,7 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 
 func fixableIssueCount(issues []types.Issue) (fixableIssueCount int) {
 	for _, issue := range issues {
-		if issue.GetAdditionalData().IsFixable() {
+		if issue.GetAdditionalData().IsFixable() && issue.GetProduct() == product.ProductCode {
 			fixableIssueCount++
 		}
 	}
