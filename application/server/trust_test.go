@@ -46,8 +46,9 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 	command.HandleUntrustedFolders(context.Background(), c, loc.Server)
-
-	assert.True(t, checkTrustMessageRequest(jsonRPCRecorder, c))
+	assert.Eventually(t, func() bool {
+		return checkTrustMessageRequest(jsonRPCRecorder, c) == true
+	}, 5*time.Second, time.Millisecond)
 	assert.Equal(t, sc.Calls(), 0)
 }
 
