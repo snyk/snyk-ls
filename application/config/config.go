@@ -203,6 +203,7 @@ type Config struct {
 	mcpServerEnabled                 bool
 	mcpBaseURL                       *url.URL
 	isLSPInitialized                 bool
+	deepCodeAiFixEnabled             bool
 }
 
 func CurrentConfig() *Config {
@@ -1272,4 +1273,18 @@ func (c *Config) SetLSPInitialized(initialized bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.isLSPInitialized = initialized
+}
+
+func (c *Config) SetDeepCodeAIFixEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.deepCodeAiFixEnabled = enabled
+}
+
+func (c *Config) IsDeepCodeAIFixEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.deepCodeAiFixEnabled
 }
