@@ -258,7 +258,10 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 			return nil, err
 		}
 
-		storage, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(file))
+		storage, err := storage2.NewStorageWithCallbacks(
+			storage2.WithStorageFile(file),
+			storage2.WithLogger(c.Logger()),
+		)
 		if err != nil {
 			return nil, err
 		}

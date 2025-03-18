@@ -91,9 +91,11 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 
 	if token == "" || err != nil {
 		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
-		a.sendAuthenticationAnalytics(analytics.Failure, err)
+		a.authCache.RemoveAll()
 		return token, err
 	}
+
+	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
 
 	customUrl := a.c.SnykApi()
 	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL)
@@ -320,6 +322,8 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 		case strings.Contains(errMsg, "(status: 400)"):
 			return true
 		case strings.Contains(errMsg, "unexpected end of JSON input"):
+			return true
+		case strings.Contains(errMsg, "failed to invoke whoami workflow"):
 			return true
 
 		default:

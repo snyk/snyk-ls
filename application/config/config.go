@@ -619,13 +619,13 @@ func (c *Config) SetToken(newTokenString string) {
 
 	// propagate newTokenString to gaf
 	if !isNewOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
-		c.logger.Info().Msg("Setting legacy authentication in GAF")
+		c.logger.Info().Msg("put api token into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString)
 	}
 
 	if c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
-		c.logger.Info().Err(err).Msg("setting oauth2 authentication in GAF")
+		c.logger.Info().Err(err).Msg("put oauth2 token into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
 	}
@@ -633,7 +633,7 @@ func (c *Config) SetToken(newTokenString string) {
 	// ensure scrubbing of new newTokenString
 	if w, ok := c.scrubbingWriter.(frameworkLogging.ScrubbingLogWriter); ok {
 		w.AddTerm(newTokenString, 0)
-		if newOAuthToken != nil {
+		if newOAuthToken != nil && newOAuthToken.AccessToken != "" {
 			w.AddTerm(newOAuthToken.AccessToken, 0)
 			w.AddTerm(newOAuthToken.RefreshToken, 0)
 		}
@@ -742,7 +742,7 @@ func (c *Config) getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 	w := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
 		w.Out = writer
 		w.NoColor = true
-		w.TimeFormat = time.RFC3339
+		w.TimeFormat = time.RFC3339Nano
 		w.PartsOrder = []string{
 			zerolog.TimestampFieldName,
 			zerolog.LevelFieldName,

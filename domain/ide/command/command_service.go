@@ -75,8 +75,9 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 		return nil, nil
 	}
 
-	logger.Debug().Msgf("executing command %s", commandData.CommandId)
+	// todo analyze whether to use a semaphore here for login/logout commands
 
+	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.learnService, s.notifier, s.issueProvider, s.codeApiClient, s.codeScanner, s.cli)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
