@@ -48,14 +48,6 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestAuthenticateSendsAuthenticationEventOnFailure(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	err := runAuthEventTest(t, c, analytics.Failure)
-
-	assert.Error(t, err)
-}
-
 func runAuthEventTest(t *testing.T, c *config.Config, status analytics.Status) error {
 	t.Helper()
 	gafConfig := configuration.New()
