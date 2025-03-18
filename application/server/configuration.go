@@ -37,7 +37,7 @@ import (
 
 var cachedOriginalPath = ""
 
-func workspaceDidChangeConfiguration(srv *jrpc2.Server, c *config.Config) jrpc2.Handler {
+func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.DidChangeConfigurationParams) (bool, error) {
 		// we don't log the received config, as it could contain credentials that are not yet filtered.
 		// it should be enough to log once we leave the handler

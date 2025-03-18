@@ -76,7 +76,6 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 	}
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
-
 	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.learnService, s.notifier, s.issueProvider, s.codeApiClient, s.codeScanner, s.cli)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")

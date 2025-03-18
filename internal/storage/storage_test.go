@@ -49,6 +49,41 @@ func Test_StorageCallsRegisterCallbacksForKeys(t *testing.T) {
 	}, 5*time.Second, time.Millisecond, "callback was not called")
 }
 
+func Test_StorageCallsEmptyValueShouldCleanValueFromFile(t *testing.T) {
+	called := make(chan bool, 1)
+	callbacks := map[string]StorageCallbackFunc{}
+	file := filepath.Join(t.TempDir(), t.Name())
+	myCallback := func(_ string, _ any) { called <- true }
+
+	key := "test"
+	value := "test"
+	callbacks[key] = myCallback
+	s, err := NewStorageWithCallbacks(WithCallbacks(callbacks), WithStorageFile(file))
+	require.NoError(t, err)
+
+	err = s.Set(key, value)
+
+	require.NoError(t, err)
+	require.Eventuallyf(t, func() bool {
+		return <-called
+	}, 5*time.Second, time.Millisecond, "callback was not called")
+
+	content, err := os.ReadFile(file)
+	require.NoError(t, err)
+	require.Equal(t, "{\"test\":\"test\"}", string(content))
+
+	err = s.Set(key, "")
+
+	require.NoError(t, err)
+	require.Eventuallyf(t, func() bool {
+		return <-called
+	}, 5*time.Second, time.Millisecond, "callback was not called")
+
+	content, err = os.ReadFile(file)
+	require.NoError(t, err)
+	require.Equal(t, "{\"test\":\"\"}", string(content))
+}
+
 func Test_StorageCallsRegisterCallbacks_InvalidJsonContent_ShouldClean(t *testing.T) {
 	called := make(chan bool, 1)
 	callbacks := map[string]StorageCallbackFunc{}

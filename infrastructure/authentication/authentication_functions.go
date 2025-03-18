@@ -18,6 +18,7 @@ package authentication
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/pkg/errors"
 
@@ -26,8 +27,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 )
-
-type AuthenticationFunction func() (string, error)
 
 type ActiveUser struct {
 	Id       string `json:"id"`
@@ -42,21 +41,17 @@ type ActiveUser struct {
 	} `json:"orgs,omitempty"`
 }
 
-func AuthenticationCheck() (string, error) {
-	user, err := GetActiveUser()
-	if err != nil {
-		return "", errors.Wrap(err, "failed to get active user")
-	}
-	return user.Id, err
-}
-
-func GetActiveUser() (*ActiveUser, error) {
-	c := config.CurrentConfig()
+func GetActiveUser(c *config.Config) (*ActiveUser, error) {
 	c.Logger().Debug().Str("method", "getActiveUser").Msg("checking active user")
 	if c.Token() == "" {
 		return nil, errors.New("no credentials found")
 	}
-	conf := c.Engine().GetConfiguration().Clone()
+	globalConf := c.Engine().GetConfiguration()
+	conf := globalConf.Clone()
+	c.Logger().Trace().Str("method", "getActiveUser").
+		Str("configInstance", fmt.Sprintf("%p", globalConf)).
+		Str("configClone", fmt.Sprintf("%p", conf)).
+		Msg("invoking whoami workflow")
 	conf.Set(configuration.FLAG_EXPERIMENTAL, true)
 	conf.Set("json", true)
 	result, err := c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, conf)

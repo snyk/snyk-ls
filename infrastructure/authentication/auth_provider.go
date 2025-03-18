@@ -48,8 +48,6 @@ type AuthenticationProvider interface {
 	AuthURL(ctx context.Context) string
 	// SetAuthURL sets the latest provided Authentication URL. This is a temporary URL.
 	setAuthUrl(url string)
-
-	GetCheckAuthenticationFunction() AuthenticationFunction
 }
 
 var ErrEmptyAPIToken = errors.New("auth-provider: api token is not set")
