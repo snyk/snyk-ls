@@ -26,6 +26,7 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -39,8 +40,7 @@ type StorageWithCallbacks interface {
 
 type storage struct {
 	callbacks   map[string]StorageCallbackFunc
-	jsonStorage *configuration.
-			JsonStorage
+	jsonStorage *configuration.JsonStorage
 	storageFile string
 	mutex       sync.RWMutex
 	logger      *zerolog.Logger
@@ -154,6 +154,7 @@ func WithStorageFile(file string) func(*storage) {
 
 func WithLogger(logger *zerolog.Logger) func(*storage) {
 	return func(s *storage) {
-		s.logger = logger
+		l := logger.With().Str("component", "storageWithCallbacks").Logger()
+		s.logger = &l
 	}
 }
