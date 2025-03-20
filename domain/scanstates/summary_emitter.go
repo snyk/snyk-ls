@@ -18,6 +18,7 @@ package scanstates
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -45,12 +46,17 @@ func NewSummaryEmitter(c *config.Config, n notification.Notifier) *Emitter {
 		panic(fmt.Sprintf("Couldn't initialize HtmlRenderer: %v", err))
 	}
 	emitter.renderer = renderer
+
 	return emitter
 }
 
 func (s *Emitter) Emit(state StateSnapshot) {
-	go func() {
-		generatedHtml := s.renderer.GetSummaryHtml(state)
-		s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
-	}()
+	time.AfterFunc(time.Millisecond*500, func() {
+		s.generateHtmlAndSend(state)
+	})
+}
+
+func (s *Emitter) generateHtmlAndSend(state StateSnapshot) {
+	generatedHtml := s.renderer.GetSummaryHtml(state)
+	s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
 }
