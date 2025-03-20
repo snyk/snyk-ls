@@ -131,8 +131,10 @@ func registerNotifier(c *config.Config, srv types.Server) {
 				Interface("diagnosticCount", len(params.Diagnostics)).
 				Msg("publishing diagnostics")
 		case types.ScanSummary:
-			notifier(c, srv, "$/snyk.scanSummary", params)
-			logger.Debug().Msg("sending scan summary to client")
+			time.AfterFunc(time.Millisecond*500, func() {
+				notifier(c, srv, "$/snyk.scanSummary", params)
+				logger.Debug().Msg("sending scan summary to client")
+			})
 		case types.ApplyWorkspaceEditParams:
 			handleApplyWorkspaceEdit(srv, params, &logger)
 			logger.Debug().
