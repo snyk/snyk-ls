@@ -101,6 +101,7 @@ func (w *Workspace) HandleConfigChange() {
 	for _, folder := range w.Folders() {
 		sendPublishDiagnosticsForAllProducts(folder)
 	}
+	w.scanStateAggregator.SummaryEmitter().Emit(w.scanStateAggregator.StateSnapshot())
 }
 
 func sendPublishDiagnosticsForAllProducts(folder types.Folder) {

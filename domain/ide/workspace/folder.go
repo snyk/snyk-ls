@@ -677,7 +677,6 @@ func isVisibleForIssueViewOptions(c *config.Config, issue types.Issue) bool {
 }
 
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {
-	f.scanStateAggregator.SummaryEmitter().Emit(f.scanStateAggregator.StateSnapshot())
 	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
 	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.c.IsDeltaFindingsEnabled())

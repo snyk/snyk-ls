@@ -45,12 +45,11 @@ func NewSummaryEmitter(c *config.Config, n notification.Notifier) *Emitter {
 		panic(fmt.Sprintf("Couldn't initialize HtmlRenderer: %v", err))
 	}
 	emitter.renderer = renderer
+
 	return emitter
 }
 
 func (s *Emitter) Emit(state StateSnapshot) {
-	go func() {
-		generatedHtml := s.renderer.GetSummaryHtml(state)
-		s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
-	}()
+	generatedHtml := s.renderer.GetSummaryHtml(state)
+	s.notifier.Send(types.ScanSummary{ScanSummary: generatedHtml})
 }

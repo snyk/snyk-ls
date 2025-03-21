@@ -321,9 +321,15 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) sc
 	}
 	scanStateMapWithEnabledProducts := make(scanStateMap)
 
+	issueTypes := agg.c.DisplayableIssueTypes()
+
 	for key, st := range stateMap {
-		for displayableIssueType, enabled := range agg.c.DisplayableIssueTypes() {
+		for displayableIssueType, enabled := range issueTypes {
 			p := displayableIssueType.ToProduct()
+			// edge case because displayableIssueType will return two entries for code (security and quality)
+			if p == product.ProductCode {
+				enabled = agg.c.IsSnykCodeEnabled()
+			}
 			if enabled && key.Product == p {
 				scanStateMapWithEnabledProducts[key] = st
 				break
