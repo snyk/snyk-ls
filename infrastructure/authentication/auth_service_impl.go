@@ -91,9 +91,11 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 
 	if token == "" || err != nil {
 		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
-		a.sendAuthenticationAnalytics(analytics.Failure, err)
+		a.authCache.RemoveAll()
 		return token, err
 	}
+
+	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
 
 	customUrl := a.c.SnykApi()
 	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL)
@@ -246,10 +248,8 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 
 	a.handleProviderInconsistencies()
 
-	var user string
-	var err error
-	user, err = a.authProvider.GetCheckAuthenticationFunction()()
-	if user == "" {
+	user, err := GetActiveUser(a.c)
+	if user == nil || user.UserName == "" {
 		if a.c.Offline() || (err != nil && !shouldCauseLogout(err, a.c.Logger())) {
 			userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
 				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
@@ -270,7 +270,7 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	}
 	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
-	logger.Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
+	logger.Debug().Msg("IsAuthenticated: " + user.Id + ", adding to cache.")
 	return true
 }
 
@@ -320,6 +320,8 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 		case strings.Contains(errMsg, "(status: 400)"):
 			return true
 		case strings.Contains(errMsg, "unexpected end of JSON input"):
+			return true
+		case strings.Contains(errMsg, "failed to invoke whoami workflow"):
 			return true
 
 		default:

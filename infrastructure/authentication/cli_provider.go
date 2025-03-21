@@ -38,10 +38,6 @@ type CliAuthenticationProvider struct {
 	c             *config.Config
 }
 
-func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
-	return AuthenticationCheck
-}
-
 func NewCliAuthenticationProvider(c *config.Config, errorReporter error_reporting.ErrorReporter) *CliAuthenticationProvider {
 	return &CliAuthenticationProvider{"", errorReporter, c}
 }

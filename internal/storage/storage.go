@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
-
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -39,10 +39,10 @@ type StorageWithCallbacks interface {
 
 type storage struct {
 	callbacks   map[string]StorageCallbackFunc
-	jsonStorage *configuration.
-			JsonStorage
+	jsonStorage *configuration.JsonStorage
 	storageFile string
 	mutex       sync.RWMutex
+	logger      *zerolog.Logger
 }
 
 func (s *storage) Refresh(config configuration.Configuration, key string) error {
@@ -85,13 +85,10 @@ func (s *storage) Set(key string, value any) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	callback := s.callbacks[key]
-
-	if callback != nil {
-		callback(key, value)
-	}
-
 	err := s.jsonStorage.Set(key, value)
+	if err != nil {
+		s.logger.Err(err).Msgf("error writing %s to configuration file %s", key, s.storageFile)
+	}
 
 	var syntaxError *json.SyntaxError
 	if errors.As(err, &syntaxError) {
@@ -107,7 +104,12 @@ func (s *storage) Set(key string, value any) error {
 		return err
 	}
 
-	return nil
+	callback := s.callbacks[key]
+	if callback != nil {
+		callback(key, value)
+	}
+
+	return err
 }
 
 func NewStorageWithCallbacks(opts ...storageOption) (StorageWithCallbacks, error) {
@@ -146,5 +148,12 @@ func WithStorageFile(file string) func(*storage) {
 	return func(s *storage) {
 		s.jsonStorage = configuration.NewJsonStorage(file)
 		s.storageFile = file
+	}
+}
+
+func WithLogger(logger *zerolog.Logger) func(*storage) {
+	return func(s *storage) {
+		l := logger.With().Str("component", "storageWithCallbacks").Logger()
+		s.logger = &l
 	}
 }

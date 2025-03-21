@@ -34,10 +34,6 @@ type OAuth2Provider struct {
 	m             sync.Mutex
 }
 
-func (p *OAuth2Provider) GetCheckAuthenticationFunction() AuthenticationFunction {
-	return AuthenticationCheck
-}
-
 func newOAuthProvider(config configuration.Configuration, authenticator auth.Authenticator, logger *zerolog.Logger) *OAuth2Provider {
 	logger.Debug().Msg("creating new OAuth provider")
 	return &OAuth2Provider{authenticator: authenticator, config: config, logger: logger}
@@ -59,9 +55,9 @@ func (p *OAuth2Provider) ClearAuthentication(_ context.Context) error {
 	p.m.Lock()
 	defer p.m.Unlock()
 	p.logger.Debug().Msg("clearing authentication")
-	p.config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
-	p.config.Set(configuration.AUTHENTICATION_TOKEN, "")
-	p.config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "")
+	p.config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	p.config.Unset(configuration.AUTHENTICATION_TOKEN)
+	p.config.Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
 	return nil
 }
 
