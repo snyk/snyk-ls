@@ -27,7 +27,7 @@ func (sc *Scanner) isLocalEngineEnabled(sastResponse snyk_api.SastResponse) bool
 }
 
 func (sc *Scanner) updateCodeApiLocalEngine(sastResponse snyk_api.SastResponse) {
-	config.CurrentConfig().SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
+	sc.C.SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
 	api := config.CurrentConfig().SnykCodeApi()
 	sc.C.Logger().Debug().Str("snykCodeApi", api).Msg("updated Snyk Code API Local Engine")
 }
