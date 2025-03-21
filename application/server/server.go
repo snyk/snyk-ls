@@ -112,7 +112,7 @@ const textDocumentDidOpenOperation = "textDocument/didOpen"
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
-	handlers["initialize"] = initializeHandler(srv)
+	handlers["initialize"] = initializeHandler(srv, c)
 	handlers["initialized"] = initializedHandler(c, srv)
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
 	handlers["textDocument/didClose"] = noOpHandler()
@@ -242,10 +242,9 @@ func initNetworkAccessHeaders() {
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
-func initializeHandler(srv *jrpc2.Server) handler.Func {
+func initializeHandler(srv *jrpc2.Server, c *config.Config) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializeParams) (any, error) {
 		method := "initializeHandler"
-		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", method).Logger()
 		// we can only log, after we add the token to the list of forbidden outputs
 		defer logger.Info().Any("params", params).Msg("RECEIVING")
@@ -267,7 +266,6 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 		}
 
 		c.SetStorage(storage)
-		c.Engine().GetConfiguration().SetStorage(c.Storage())
 
 		InitializeSettings(c, params.InitializationOptions)
 

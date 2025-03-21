@@ -26,7 +26,6 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
