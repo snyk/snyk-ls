@@ -269,9 +269,9 @@ func checkDirs(baseFilePath, currentFilePath, baseDir, currentDir types.FilePath
 		return 1
 	}
 
-	res := string(relative(baseRelativePath, currentRelativePath))
+	relativePathDistance := string(relative(baseRelativePath, currentRelativePath))
 
-	relativePathDistanceSeparatorCount := float64(strings.Count(res, "/"))
+	relativePathDistanceSeparatorCount := float64(strings.Count(relativePathDistance, "/"))
 	baseRelativePathSeparatorCount := float64(strings.Count(string(baseRelativePath), "/"))
 	currentRelativePathSeparatorCount := float64(strings.Count(string(currentRelativePath), "/"))
 
