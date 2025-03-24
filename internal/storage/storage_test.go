@@ -92,8 +92,8 @@ func Test_StorageCallsRegisterCallbacks_InvalidJsonContent_ShouldClean(t *testin
 	assert.NoError(t, err)
 	myCallback := func(_ string, _ any) { called <- true }
 
-	key := "test"
-	value := "test"
+	key := "testKey"
+	value := "testValue"
 	callbacks[key] = myCallback
 	s, err := NewStorageWithCallbacks(WithCallbacks(callbacks), WithStorageFile(file))
 	require.NoError(t, err)
@@ -102,7 +102,7 @@ func Test_StorageCallsRegisterCallbacks_InvalidJsonContent_ShouldClean(t *testin
 	require.NoError(t, err)
 	content, err := os.ReadFile(file)
 	assert.NoError(t, err)
-	assert.Equal(t, "{\"test\":\"test\"}", string(content))
+	assert.Equal(t, "{\"testKey\":\"testValue\"}", string(content))
 	require.Eventuallyf(t, func() bool {
 		return <-called
 	}, 5*time.Second, time.Millisecond, "callback was not called")
