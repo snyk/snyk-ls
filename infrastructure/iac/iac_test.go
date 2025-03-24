@@ -126,7 +126,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
 	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor())
-	issue, err := scanner.toIssue("test.yml", sampleIssue, "")
+	issue, err := scanner.toIssue("test.yml", "/path/to/issue", sampleIssue, "")
 
 	expectedAdditionalData := snyk.IaCIssueData{
 		Key:      "6a4df51fc4d53f1cfbdb4b46c165859b",
@@ -170,7 +170,7 @@ func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
 	c := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
 	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor())
-	issue, err := scanner.toIssue("test.yml", sampleIssue, "")
+	issue, err := scanner.toIssue("test.yml", "/path/to/issue", sampleIssue, "")
 
 	assert.NoError(t, err)
 

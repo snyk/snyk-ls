@@ -106,13 +106,14 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 	scanner := CLIScanner{
 		learnService: getLearnMock(t),
 	}
-
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
+	contentRoot := types.FilePath("/path/to/issue")
+	issue := toIssue(nil, "testPath", contentRoot, sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
 	assert.Equal(t, sampleOssIssue.Identifiers.CVE, issue.CVEs)
 	assert.Equal(t, sampleOssIssue.PackageManager, issue.Ecosystem)
+	assert.Equal(t, contentRoot, issue.ContentRoot)
 	assert.Equal(t, "url", (issue.AdditionalData).(snyk.OssIssueData).Lesson)
 }
 
@@ -147,12 +148,14 @@ func Test_toIssue_CodeActions(t *testing.T) {
 			}
 			sampleOssIssue.PackageManager = test.packageManager
 			sampleOssIssue.UpgradePath = []any{"false", test.packageName}
+			contentRoot := types.FilePath("/path/to/issue")
 
-			issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
+			issue := toIssue(nil, "testPath", contentRoot, sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
 
 			assert.Equal(t, sampleOssIssue.Id, issue.ID)
 			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].GetTitle())
 			assert.Equal(t, 1, len(issue.CodelensCommands))
+			assert.Equal(t, contentRoot, issue.ContentRoot)
 			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodelensCommands[0].Title)
 
 			if test.openBrowserEnabled {
@@ -173,11 +176,13 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 		learnService: getLearnMock(t),
 	}
 	sampleOssIssue.UpgradePath = []any{"*"}
+	contentRoot := types.FilePath("/path/to/issue")
 
-	issue := toIssue("testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
+	issue := toIssue(nil, "testPath", contentRoot, sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 2, len(issue.CodeActions))
+	assert.Equal(t, contentRoot, issue.ContentRoot)
 	assert.Equal(t, "Open description of 'THOU SHALL NOT PASS affecting package pkg' in browser (Snyk)",
 		issue.CodeActions[0].GetTitle())
 	assert.Equal(t, "Learn more about THOU SHALL NOT PASS (Snyk)", issue.CodeActions[1].GetTitle())

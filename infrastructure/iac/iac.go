@@ -302,7 +302,7 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath typ
 			issue.LineNumber = 0
 		}
 
-		i, err := iac.toIssue(types.FilePath(targetFile), issue, fileContentString)
+		i, err := iac.toIssue(types.FilePath(targetFile), workspacePath, issue, fileContentString)
 		if err != nil {
 			return nil, pkgerrors.Wrap(err, "unable to convert IaC issue to Snyk issue")
 		}
@@ -332,7 +332,7 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 	)
 }
 
-func (iac *Scanner) toIssue(affectedFilePath types.FilePath, issue iacIssue, fileContent string) (*snyk.Issue, error) {
+func (iac *Scanner) toIssue(affectedFilePath types.FilePath, workspacePath types.FilePath, issue iacIssue, fileContent string) (*snyk.Issue, error) {
 	const defaultRangeStart = 0
 	const defaultRangeEnd = 80
 	title := issue.IacDescription.Issue
@@ -378,6 +378,7 @@ func (iac *Scanner) toIssue(affectedFilePath types.FilePath, issue iacIssue, fil
 		FormattedMessage:    iac.getExtendedMessage(issue),
 		Severity:            iac.toIssueSeverity(issue.Severity),
 		AffectedFilePath:    affectedFilePath,
+		ContentRoot:         workspacePath,
 		Product:             product.ProductInfrastructureAsCode,
 		IssueDescriptionURL: issueURL,
 		IssueType:           types.InfrastructureIssue,

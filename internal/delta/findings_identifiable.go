@@ -34,6 +34,7 @@ type Locatable interface {
 type Pathable interface {
 	Identifiable
 	GetPath() types.FilePath
+	GetContentRoot() types.FilePath
 }
 
 type Identifiable interface {

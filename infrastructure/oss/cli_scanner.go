@@ -344,7 +344,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 			logger.Error().Err(reportedErr).Send()
 			continue
 		}
-		issues = append(issues, cliScanner.retrieveIssues(&scanResult, targetFilePath, fileContent)...)
+		issues = append(issues, cliScanner.retrieveIssues(&scanResult, targetFilePath, workDir, fileContent)...)
 	}
 
 	return issues
@@ -496,12 +496,13 @@ func determineTargetFile(displayTargetFile string) string {
 func (cliScanner *CLIScanner) retrieveIssues(
 	res *scanResult,
 	targetFilePath types.FilePath,
+	workDir types.FilePath,
 	fileContent []byte,
 ) []types.Issue {
 	// we are updating the cli scanner maps/attributes in parallel, so we need to lock
 	cliScanner.mutex.Lock()
 	defer cliScanner.mutex.Unlock()
-	issues := convertScanResultToIssues(cliScanner.config, res, targetFilePath, fileContent, cliScanner.learnService, cliScanner.errorReporter, cliScanner.packageIssueCache)
+	issues := convertScanResultToIssues(cliScanner.config, res, targetFilePath, workDir, fileContent, cliScanner.learnService, cliScanner.errorReporter, cliScanner.packageIssueCache)
 
 	// repopulate
 	cliScanner.addVulnerabilityCountsToCache(issues)

@@ -26,7 +26,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/delta"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var (
@@ -55,6 +54,8 @@ type Issue struct {
 	FormattedMessage string
 	// AffectedFilePath is the file path to the file where the issue was found
 	AffectedFilePath types.FilePath
+	// ContentRoot is the root directory where is the issue was found
+	ContentRoot types.FilePath
 	// Product is the Snyk product, e.g. Snyk Open Source
 	Product product.Product // todo: can we avoid it, if it's part of a scanner interface already?
 	// References deliver additional information
@@ -94,6 +95,7 @@ func (i *Issue) Clone() *Issue {
 		Message:             i.Message,
 		FormattedMessage:    i.FormattedMessage,
 		AffectedFilePath:    i.AffectedFilePath,
+		ContentRoot:         i.ContentRoot,
 		Product:             i.Product,
 		References:          i.References,
 		IssueDescriptionURL: i.IssueDescriptionURL,
@@ -188,6 +190,12 @@ func (i *Issue) GetID() string {
 	i.m.RLock()
 	defer i.m.RUnlock()
 	return i.ID
+}
+
+func (i *Issue) GetContentRoot() types.FilePath {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.ContentRoot
 }
 
 func (i *Issue) GetDescription() string {
@@ -328,7 +336,6 @@ func (i *Issue) SetFingerPrint(fingerprint string) {
 	defer i.m.Unlock()
 
 	i.Fingerprint = fingerprint
-	i.GlobalIdentity = util.HashWithoutConversion([]byte(fingerprint))
 }
 
 func (i *Issue) GetRuleID() string {
