@@ -60,7 +60,8 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	var currentIssuesFound int
 	var currentFixableIssueCount int
 	isDeltaEnabled := renderer.c.IsDeltaFindingsEnabled()
-
+	logger.Debug().Msgf("has wd scans in progress %t, has ref scans in progress %t", state.AnyScanInProgressWorkingDirectory, state.AnyScanInProgressReference)
+	logger.Debug().Msgf("scans in progress count %d, ref scans in progress count %d", state.ScansInProgressCount, state.ScansInProgressCount)
 	if state.AnyScanSucceededReference || state.AnyScanSucceededWorkingDirectory {
 		allIssues, deltaIssues = renderer.getIssuesFromFolders()
 

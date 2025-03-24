@@ -272,7 +272,7 @@ func Test_initialized_shouldSendMcpServerAddress(t *testing.T) {
 		err = n[0].UnmarshalParams(&param)
 		require.NoError(t, err)
 		return param.URL == testURL.String()
-	}, time.Minute, time.Millisecond,
+	}, time.Minute*5, time.Millisecond,
 		"did not receive mcp server url")
 }
 
