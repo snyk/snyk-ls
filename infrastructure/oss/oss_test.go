@@ -174,6 +174,8 @@ func Test_toIssue_CodeActions(t *testing.T) {
 
 func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+
 	sampleOssIssue := sampleIssue()
 	scanner := CLIScanner{
 		learnService: getLearnMock(t),
@@ -442,7 +444,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Arrange
-	config.CurrentConfig().SetSnykOssEnabled(false)
+	c.SetSnykOssEnabled(false)
 	fakeCli := cli.NewTestExecutor()
 	fakeCli.ExecuteDuration = time.Millisecond
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
