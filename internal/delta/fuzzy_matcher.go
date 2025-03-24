@@ -19,6 +19,7 @@ package delta
 import (
 	"errors"
 	"math"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -219,7 +220,7 @@ func filePositionDistance(baseIssue, currentIssue Identifiable) float64 {
 		return 0
 	}
 
-	dirSimilarity := checkDirs(basePathable.GetPath(), currentPathable.GetPath())
+	dirSimilarity := checkDirs(basePathable.GetPath(), currentPathable.GetPath(), basePathable.GetContentRoot(), currentPathable.GetContentRoot())
 	baseNameSimilarity := fileNameSimilarity(basePathable.GetPath(), currentPathable.GetPath())
 	extSimilarity := fileExtSimilarity(basePathable.GetPath(), currentPathable.GetPath())
 
@@ -251,17 +252,38 @@ func matchDistance(baseIssue Identifiable, currentIssue Identifiable) (float64, 
 	return startLineSimilarity, startColumnSimilarity, endColumnSimilarity, endLineSimilarity
 }
 
-func checkDirs(base, current types.FilePath) float64 {
-	if base == current {
+func checkDirs(baseFilePath, currentFilePath, baseDir, currentDir types.FilePath) float64 {
+	if baseFilePath == currentFilePath {
 		return 1
 	}
 
-	relativePath := relative(base, current)
-	relativePathDistance := float64(len(strings.Split(relativePath, "/")))
+	baseFilePath = normalizePath(baseFilePath)
+	currentFilePath = normalizePath(currentFilePath)
+	baseDir = normalizePath(baseDir)
+	currentDir = normalizePath(currentDir)
 
-	longestPossiblePath := math.Max(float64(len(strings.Split(string(base), "/"))), float64(len(strings.Split(string(current), "/"))))
+	baseRelativePath := relative(baseDir, baseFilePath)
+	currentRelativePath := relative(currentDir, currentFilePath)
 
-	return 1 - relativePathDistance/longestPossiblePath
+	if baseRelativePath == currentRelativePath {
+		return 1
+	}
+
+	res := string(relative(baseRelativePath, currentRelativePath))
+
+	relativePathDistanceSeparatorCount := float64(strings.Count(res, "/"))
+	baseRelativePathSeparatorCount := float64(strings.Count(string(baseRelativePath), "/"))
+	currentRelativePathSeparatorCount := float64(strings.Count(string(currentRelativePath), "/"))
+
+	longestPossiblePath := math.Max(math.Max(baseRelativePathSeparatorCount, currentRelativePathSeparatorCount), relativePathDistanceSeparatorCount)
+
+	return 1 - relativePathDistanceSeparatorCount/longestPossiblePath
+}
+
+func normalizePath(path types.FilePath) types.FilePath {
+	pathSeparator := string(os.PathSeparator)
+	normalizedPath := strings.ReplaceAll(strings.ToLower(string(path)), pathSeparator, "/")
+	return types.FilePath(normalizedPath)
 }
 
 func fileNameSimilarity(base, current types.FilePath) float64 {
@@ -287,10 +309,10 @@ func historicDistance() float64 {
 	return 1
 }
 
-func relative(parentPath, targetPath types.FilePath) string {
+func relative(parentPath, targetPath types.FilePath) types.FilePath {
 	res, err := filepath.Rel(string(parentPath), string(targetPath))
 	if err != nil {
 		return ""
 	}
-	return res
+	return normalizePath(types.FilePath(res))
 }
