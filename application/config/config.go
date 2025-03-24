@@ -257,7 +257,7 @@ func newConfig(engine workflow.Engine) *Config {
 	c.token = ""
 	c.trustedFoldersFeatureEnabled = true
 	c.automaticScanning = true
-	c.authenticationMethod = types.OAuthAuthentication
+	c.authenticationMethod = types.TokenAuthentication
 	if engine == nil {
 		initWorkFlowEngine(c)
 	} else {
@@ -289,6 +289,8 @@ func initWorkFlowEngine(c *Config) {
 		configuration.WithAutomaticEnv(),
 	)
 
+	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)

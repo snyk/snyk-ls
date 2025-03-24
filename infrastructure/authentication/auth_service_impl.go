@@ -248,8 +248,8 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 
 	a.handleProviderInconsistencies()
 
-	user, err := GetActiveUser(a.c)
-	if user == nil || user.UserName == "" {
+	user, err := a.authProvider.GetCheckAuthenticationFunction()()
+	if user == "" {
 		if a.c.Offline() || (err != nil && !shouldCauseLogout(err, a.c.Logger())) {
 			userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
 				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
@@ -270,7 +270,7 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	}
 	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
-	logger.Debug().Msg("IsAuthenticated: " + user.Id + ", adding to cache.")
+	logger.Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	return true
 }
 

@@ -119,9 +119,11 @@ func NewStorageWithCallbacks(opts ...storageOption) (StorageWithCallbacks, error
 		return nil, err
 	}
 
+	nop := zerolog.Nop()
 	s := &storage{
 		callbacks:   make(map[string]StorageCallbackFunc),
 		jsonStorage: configuration.NewJsonStorage(file),
+		logger:      &nop,
 	}
 
 	for _, opt := range opts {

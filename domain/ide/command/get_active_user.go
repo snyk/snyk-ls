@@ -48,6 +48,6 @@ func (cmd *getActiveUser) Execute(_ context.Context) (any, error) {
 		return nil, nil
 	}
 
-	user, err := authentication.GetActiveUser(c)
+	user, err := authentication.GetActiveUser()
 	return user, err
 }

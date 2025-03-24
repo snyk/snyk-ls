@@ -34,6 +34,10 @@ type OAuth2Provider struct {
 	m             sync.Mutex
 }
 
+func (p *OAuth2Provider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return AuthenticationCheck
+}
+
 func newOAuthProvider(config configuration.Configuration, authenticator auth.Authenticator, logger *zerolog.Logger) *OAuth2Provider {
 	logger.Debug().Msg("creating new OAuth provider")
 	return &OAuth2Provider{authenticator: authenticator, config: config, logger: logger}

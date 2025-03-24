@@ -18,6 +18,7 @@ package authentication
 
 import (
 	"context"
+	"errors"
 
 	"github.com/snyk/snyk-ls/application/config"
 )
@@ -27,6 +28,15 @@ type FakeAuthenticationProvider struct {
 	IsAuthenticated bool
 	authURL         string
 	C               *config.Config
+}
+
+func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	if a.IsAuthenticated {
+		a.C.Logger().Debug().Msgf("Fake Authentication - successful.")
+		return func() (string, error) { return "fake auth successful", nil }
+	}
+	a.C.Logger().Debug().Msgf("Fake Authentication - failed.")
+	return func() (string, error) { return "", errors.New("Authentication failed. Please update your token.") }
 }
 
 func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, error) {
