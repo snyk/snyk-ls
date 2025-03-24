@@ -102,12 +102,13 @@ func Test_introducingPackageAndVersion(t *testing.T) {
 }
 
 func Test_toIssue_LearnParameterConversion(t *testing.T) {
+	c := testutil.UnitTest(t)
 	sampleOssIssue := sampleIssue()
 	scanner := CLIScanner{
 		learnService: getLearnMock(t),
 	}
 	contentRoot := types.FilePath("/path/to/issue")
-	issue := toIssue(nil, "testPath", contentRoot, sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
+	issue := toIssue(c, "testPath", contentRoot, sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
@@ -122,6 +123,7 @@ func nonEmptyNode() *ast.Node {
 }
 
 func Test_toIssue_CodeActions(t *testing.T) {
+	c := testutil.UnitTest(t)
 	const flashy = "⚡️ "
 	tests := []struct {
 		name               string
@@ -139,8 +141,8 @@ func Test_toIssue_CodeActions(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			config.CurrentConfig().SetSnykOSSQuickFixCodeActionsEnabled(true)
-			config.CurrentConfig().SetSnykOpenBrowserActionsEnabled(test.openBrowserEnabled)
+			c.SetSnykOSSQuickFixCodeActionsEnabled(true)
+			c.SetSnykOpenBrowserActionsEnabled(test.openBrowserEnabled)
 
 			sampleOssIssue := sampleIssue()
 			scanner := CLIScanner{
@@ -150,7 +152,7 @@ func Test_toIssue_CodeActions(t *testing.T) {
 			sampleOssIssue.UpgradePath = []any{"false", test.packageName}
 			contentRoot := types.FilePath("/path/to/issue")
 
-			issue := toIssue(nil, "testPath", contentRoot, sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
+			issue := toIssue(c, "testPath", contentRoot, sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
 
 			assert.Equal(t, sampleOssIssue.Id, issue.ID)
 			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].GetTitle())
@@ -171,6 +173,7 @@ func Test_toIssue_CodeActions(t *testing.T) {
 }
 
 func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
+	c := testutil.UnitTest(t)
 	sampleOssIssue := sampleIssue()
 	scanner := CLIScanner{
 		learnService: getLearnMock(t),
@@ -178,7 +181,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	sampleOssIssue.UpgradePath = []any{"*"}
 	contentRoot := types.FilePath("/path/to/issue")
 
-	issue := toIssue(nil, "testPath", contentRoot, sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
+	issue := toIssue(c, "testPath", contentRoot, sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 2, len(issue.CodeActions))

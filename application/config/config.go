@@ -361,10 +361,11 @@ func (c *Config) CliSettings() *CliSettings {
 }
 
 func (c *Config) Format() string {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.format
 }
+
 func (c *Config) CLIDownloadLockFileName() (string, error) {
 	c.cliSettings.cliPathAccessMutex.Lock()
 	defer c.cliSettings.cliPathAccessMutex.Unlock()
