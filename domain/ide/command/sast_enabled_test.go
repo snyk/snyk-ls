@@ -18,6 +18,7 @@ package command
 
 import (
 	"context"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,16 +35,13 @@ func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {
 	c := testutil.UnitTest(t)
 	fakeApiClient := &snyk_api.FakeApiClient{
 		CodeEnabled: true,
-		LocalCodeEngine: snyk_api.LocalCodeEngine{
-			Enabled: false,
-		},
 	}
 
 	sastEnabledCmd := setupSastEnabledCommand(t, c, fakeApiClient)
 
 	result, _ := sastEnabledCmd.Execute(context.Background())
 
-	assert.True(t, result.(snyk_api.SastResponse).SastEnabled)
+	assert.True(t, result.(configuration.SastResponse).SastEnabled)
 }
 
 func setupSastEnabledCommand(t *testing.T, c *config.Config, fakeApiClient *snyk_api.FakeApiClient) sastEnabled {
@@ -52,7 +50,6 @@ func setupSastEnabledCommand(t *testing.T, c *config.Config, fakeApiClient *snyk
 	provider.IsAuthenticated = true
 
 	sastEnabledCmd := sastEnabled{
-		apiClient: fakeApiClient,
 		authenticationService: authentication.NewAuthenticationService(
 			c,
 			provider,
@@ -67,17 +64,14 @@ func Test_ApiClient_ReturnsTrueIfLocalCodeEngineIsEnabled(t *testing.T) {
 	c := testutil.UnitTest(t)
 	fakeApiClient := &snyk_api.FakeApiClient{
 		CodeEnabled: true,
-		LocalCodeEngine: snyk_api.LocalCodeEngine{
-			Enabled: true,
-		},
 	}
 
 	sastEnabledCmd := setupSastEnabledCommand(t, c, fakeApiClient)
 
 	result, _ := sastEnabledCmd.Execute(context.Background())
 
-	assert.True(t, result.(snyk_api.SastResponse).LocalCodeEngine.Enabled)
-	assert.True(t, result.(snyk_api.SastResponse).SastEnabled)
+	assert.True(t, result.(configuration.SastResponse).LocalCodeEngine.Enabled)
+	assert.True(t, result.(configuration.SastResponse).SastEnabled)
 }
 
 func Test_ApiClient_isCalledAndErrorReturned(t *testing.T) {
@@ -94,5 +88,5 @@ func Test_ApiClient_isCalledAndErrorReturned(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, apiError, err)
-	assert.False(t, result.(snyk_api.SastResponse).SastEnabled)
+	assert.False(t, result.(configuration.SastResponse).SastEnabled)
 }
