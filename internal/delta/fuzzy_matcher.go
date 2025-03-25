@@ -19,7 +19,9 @@ package delta
 import (
 	"errors"
 	"math"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/adrg/strutil"
@@ -29,6 +31,8 @@ import (
 )
 
 var _ Matcher = (*FuzzyMatcher)(nil)
+
+const windows = "windows"
 
 type IssueConfidence struct {
 	BaseUUID           string  // global identity
@@ -219,7 +223,7 @@ func filePositionDistance(baseIssue, currentIssue Identifiable) float64 {
 		return 0
 	}
 
-	dirSimilarity := checkDirs(basePathable.GetPath(), currentPathable.GetPath())
+	dirSimilarity := checkDirs(string(basePathable.GetPath()), string(currentPathable.GetPath()), string(basePathable.GetContentRoot()), string(currentPathable.GetContentRoot()))
 	baseNameSimilarity := fileNameSimilarity(basePathable.GetPath(), currentPathable.GetPath())
 	extSimilarity := fileExtSimilarity(basePathable.GetPath(), currentPathable.GetPath())
 
@@ -251,17 +255,57 @@ func matchDistance(baseIssue Identifiable, currentIssue Identifiable) (float64, 
 	return startLineSimilarity, startColumnSimilarity, endColumnSimilarity, endLineSimilarity
 }
 
-func checkDirs(base, current types.FilePath) float64 {
-	if base == current {
+func checkDirs(baseFilePath, currentFilePath, baseDir, currentDir string) float64 {
+	if baseFilePath == currentFilePath {
 		return 1
 	}
 
-	relativePath := relative(base, current)
-	relativePathDistance := float64(len(strings.Split(relativePath, "/")))
+	baseFilePath = normalizePath(baseFilePath)
+	currentFilePath = normalizePath(currentFilePath)
+	baseDir = normalizePath(baseDir)
+	currentDir = normalizePath(currentDir)
 
-	longestPossiblePath := math.Max(float64(len(strings.Split(string(base), "/"))), float64(len(strings.Split(string(current), "/"))))
+	// Convert paths to relative based on contentRoot directories.
+	baseRelativePath := relative(baseDir, baseFilePath)
+	currentRelativePath := relative(currentDir, currentFilePath)
 
-	return 1 - relativePathDistance/longestPossiblePath
+	if baseRelativePath == currentRelativePath {
+		return 1
+	}
+
+	baseAbsolutePath := normalizePath(filepath.Join(currentDir, baseRelativePath))
+	currentAbsolutePath := normalizePath(filepath.Join(currentDir, currentRelativePath))
+
+	// Compute the relative distance between the two absolute paths themselves.
+	relativePathBetweenFiles := relative(baseAbsolutePath, currentAbsolutePath)
+
+	// Count how many path separators appear
+	relativePathDistanceSeparatorCount := float64(strings.Count(relativePathBetweenFiles, "/"))
+	baseAbsolutePathSeparatorCount := float64(strings.Count(baseAbsolutePath, "/"))
+	currentAbsolutePathSeparatorCount := float64(strings.Count(currentAbsolutePath, "/"))
+
+	longestPossiblePathSeparatorCount := math.Max(baseAbsolutePathSeparatorCount, currentAbsolutePathSeparatorCount)
+
+	// If the difference in separators is large, relative to the longest path, the similarity is reduced.
+	// Return match probability that gets smaller as the difference gets bigger.
+	similarity := 1 - relativePathDistanceSeparatorCount/longestPossiblePathSeparatorCount
+
+	if similarity > 0 {
+		return similarity
+	} else {
+		return 0
+	}
+}
+
+func normalizePath(path string) string {
+	pathSeparator := string(os.PathSeparator)
+	cleanedPath := filepath.Clean(path)
+	if runtime.GOOS == windows {
+		cleanedPath = strings.ToLower(cleanedPath)
+	}
+	normalizedPath := strings.ReplaceAll(cleanedPath, pathSeparator, "/")
+
+	return normalizedPath
 }
 
 func fileNameSimilarity(base, current types.FilePath) float64 {
@@ -287,10 +331,10 @@ func historicDistance() float64 {
 	return 1
 }
 
-func relative(parentPath, targetPath types.FilePath) string {
-	res, err := filepath.Rel(string(parentPath), string(targetPath))
+func relative(parentPath, targetPath string) string {
+	res, err := filepath.Rel(parentPath, targetPath)
 	if err != nil {
 		return ""
 	}
-	return res
+	return normalizePath(res)
 }

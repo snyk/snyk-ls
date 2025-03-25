@@ -121,6 +121,65 @@ func getIssueList() []mockIdentifiable {
 	return issueList
 }
 
+func TestCheckDirs(t *testing.T) {
+	tests := []struct {
+		name            string
+		baseFilePath    string
+		currentFilePath string
+		baseDir         string
+		currentDir      string
+		expected        float64
+	}{
+		{
+			name:            "Identical absolute file paths",
+			baseFilePath:    "/home/user/docs/file.txt",
+			currentFilePath: "/home/user/docs/file.txt",
+			baseDir:         "/home/user/docs",
+			currentDir:      "/home/user/docs",
+			expected:        1,
+		},
+		{
+			name:            "Different files in same dir",
+			baseFilePath:    "/home/user/docs/file1.txt",
+			currentFilePath: "/home/user/docs/file2.txt",
+			baseDir:         "/home/user/docs",
+			currentDir:      "/home/user/docs",
+			expected:        0.75,
+		},
+		{
+			name:            "Same file, different dirs at same depth",
+			baseFilePath:    "/home/user/abc/file.txt",
+			currentFilePath: "/home/user/xyz/file.txt",
+			baseDir:         "/home/user",
+			currentDir:      "/home/user",
+			expected:        0.25,
+		},
+		{
+			name:            "One-level difference in subdirectories",
+			baseFilePath:    "/home/user/projects/sub/file.txt",
+			currentFilePath: "/home/user/projects/file.txt",
+			baseDir:         "/home/user",
+			currentDir:      "/home/user",
+			expected:        0.6,
+		},
+		{
+			name:            "Completely different structure",
+			baseFilePath:    "/var/folder/myprojects/subfolder/file1.txt",
+			currentFilePath: "/home/user/projects/anotherfolder/file2.txt",
+			baseDir:         "/var/folder",
+			currentDir:      "/home/user",
+			expected:        0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := checkDirs(tt.baseFilePath, tt.currentFilePath, tt.baseDir, tt.currentDir)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
 func convertToFindingsIdentifiable(baseIssueList []mockIdentifiable) []Identifiable {
 	baseFindingIdentifiable := make([]Identifiable, len(baseIssueList))
 	for i := range baseIssueList {
