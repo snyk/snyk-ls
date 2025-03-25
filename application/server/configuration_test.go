@@ -171,6 +171,8 @@ func Test_UpdateSettings(t *testing.T) {
 
 		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
+		nonDefaultSeverityFilter := types.NewSeverityFilter(false, true, false, true)
+		nonDefaultIssueViewOptions := types.NewIssueViewOptions(false, true)
 		hoverVerbosity := 1
 		outputFormat := "html"
 		settings := types.Settings{
@@ -187,8 +189,8 @@ func Test_UpdateSettings(t *testing.T) {
 			ManageBinariesAutomatically:  "false",
 			CliPath:                      filepath.Join(t.TempDir(), "cli"),
 			Token:                        "a fancy token",
-			FilterSeverity:               types.DefaultSeverityFilter(),
-			IssueViewOptions:             types.DefaultIssueViewOptions(),
+			FilterSeverity:               &nonDefaultSeverityFilter,
+			IssueViewOptions:             &nonDefaultIssueViewOptions,
 			TrustedFolders:               []string{"trustedPath1", "trustedPath2"},
 			OsPlatform:                   "windows",
 			OsArch:                       "amd64",
@@ -234,8 +236,8 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, settings.CliPath, c.CliSettings().Path())
-		assert.Equal(t, types.DefaultSeverityFilter(), c.FilterSeverity())
-		assert.Equal(t, types.DefaultIssueViewOptions(), c.IssueViewOptions())
+		assert.Equal(t, nonDefaultSeverityFilter, c.FilterSeverity())
+		assert.Equal(t, nonDefaultIssueViewOptions, c.IssueViewOptions())
 		assert.Subset(t, []types.FilePath{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
 		assert.Equal(t, settings.OsPlatform, c.OsPlatform())
 		assert.Equal(t, settings.OsArch, c.OsArch())
@@ -405,8 +407,22 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(true, false, true, false)
-			UpdateSettings(c, types.Settings{FilterSeverity: mixedSeverityFilter})
+			UpdateSettings(c, types.Settings{FilterSeverity: &mixedSeverityFilter})
 
+			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
+		})
+		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
+			emptyLikeSeverityFilter := types.NewSeverityFilter(false, false, false, false)
+			UpdateSettings(c, types.Settings{FilterSeverity: &emptyLikeSeverityFilter})
+
+			assert.Equal(t, emptyLikeSeverityFilter, c.FilterSeverity())
+		})
+		t.Run("omitting filter does not cause an update", func(t *testing.T) {
+			mixedSeverityFilter := types.NewSeverityFilter(false, false, true, false)
+			UpdateSettings(c, types.Settings{FilterSeverity: &mixedSeverityFilter})
+			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
+
+			UpdateSettings(c, types.Settings{})
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 	})
@@ -415,8 +431,22 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
-			UpdateSettings(c, types.Settings{IssueViewOptions: mixedIssueViewOptions})
+			UpdateSettings(c, types.Settings{IssueViewOptions: &mixedIssueViewOptions})
 
+			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
+		})
+		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
+			emptyLikeIssueViewOptions := types.NewIssueViewOptions(false, false)
+			UpdateSettings(c, types.Settings{IssueViewOptions: &emptyLikeIssueViewOptions})
+
+			assert.Equal(t, emptyLikeIssueViewOptions, c.IssueViewOptions())
+		})
+		t.Run("omitting filter does not cause an update", func(t *testing.T) {
+			mixedIssueViewOptions := types.NewIssueViewOptions(false, false)
+			UpdateSettings(c, types.Settings{IssueViewOptions: &mixedIssueViewOptions})
+			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
+
+			UpdateSettings(c, types.Settings{})
 			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 		})
 	})

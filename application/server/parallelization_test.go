@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -80,8 +82,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              types.DefaultSeverityFilter(),
-			IssueViewOptions:            types.DefaultIssueViewOptions(),
+			FilterSeverity:              util.PtrOf(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.PtrOf(types.DefaultIssueViewOptions()),
 			AuthenticationMethod:        types.TokenAuthentication,
 			AutomaticAuthentication:     "false",
 			ManageBinariesAutomatically: "true",

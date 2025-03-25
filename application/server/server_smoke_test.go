@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/go-git/go-git/v5"
@@ -776,8 +778,8 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              types.DefaultSeverityFilter(),
-			IssueViewOptions:            types.DefaultIssueViewOptions(),
+			FilterSeverity:              util.PtrOf(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.PtrOf(types.DefaultIssueViewOptions()),
 			AuthenticationMethod:        types.TokenAuthentication,
 			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
 			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
@@ -850,8 +852,8 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              types.DefaultSeverityFilter(),
-			IssueViewOptions:            types.DefaultIssueViewOptions(),
+			FilterSeverity:              util.PtrOf(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.PtrOf(types.DefaultIssueViewOptions()),
 		},
 	}
 
