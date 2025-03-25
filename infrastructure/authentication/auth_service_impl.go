@@ -91,9 +91,11 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 
 	if token == "" || err != nil {
 		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
-		a.sendAuthenticationAnalytics(analytics.Failure, err)
+		a.authCache.RemoveAll()
 		return token, err
 	}
+
+	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
 
 	customUrl := a.c.SnykApi()
 	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL)
@@ -246,9 +248,7 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 
 	a.handleProviderInconsistencies()
 
-	var user string
-	var err error
-	user, err = a.authProvider.GetCheckAuthenticationFunction()()
+	user, err := a.authProvider.GetCheckAuthenticationFunction()()
 	if user == "" {
 		if a.c.Offline() || (err != nil && !shouldCauseLogout(err, a.c.Logger())) {
 			userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
@@ -321,6 +321,8 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 			return true
 		case strings.Contains(errMsg, "unexpected end of JSON input"):
 			return true
+		case strings.Contains(errMsg, "failed to invoke whoami workflow"):
+			return true
 
 		default:
 			logger.Err(err).Msg("unspecified error during auth: not logging out")
@@ -372,13 +374,20 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 	a.configureProviders(c)
 }
 func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
+	logger := c.Logger().With().
+		Str("method", "configureProviders").
+		Str("authenticationMethod", string(c.AuthenticationMethod())).
+		Bool("tokenEmpty", c.Token() == "").Logger()
+
+	logger.Debug().Msg("configuring providers")
+
 	authProviderChange := false
 	var p AuthenticationProvider
 	switch c.AuthenticationMethod() {
 	default:
 		// if err != nil, previous token was legacy. So we had a provider change
 		_, err := c.TokenAsOAuthToken()
-		if err != nil && c.NonEmptyToken() {
+		if c.NonEmptyToken() && err != nil {
 			authProviderChange = true
 		}
 
@@ -387,7 +396,7 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 	case types.TokenAuthentication:
 		// if err == nil, previous token was oauth2. So we had a provider change
 		_, err := c.TokenAsOAuthToken()
-		if err == nil && c.NonEmptyToken() {
+		if c.NonEmptyToken() && err == nil {
 			authProviderChange = true
 		}
 
@@ -400,6 +409,7 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 	}
 
 	if authProviderChange {
+		logger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
 		a.logout(context.Background())
 		a.sendAuthenticationRequest("Your authentication method has changed. Please re-authenticate to continue using Snyk.", "Re-authenticate")
 	}
