@@ -36,9 +36,9 @@ func TestIsLocalEngine(t *testing.T) {
 		ApiError:    nil,
 	}
 
-	mockedSastResponse := snyk_api.SastResponse{
+	mockedSastResponse := configuration.SastResponse{
 		SastEnabled: true,
-		LocalCodeEngine: snyk_api.LocalCodeEngine{
+		LocalCodeEngine: configuration.LocalCodeEngine{
 			AllowCloudUpload: false,
 			Url:              "http://local.engine",
 			Enabled:          true,

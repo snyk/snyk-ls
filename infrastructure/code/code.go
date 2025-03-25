@@ -19,6 +19,7 @@ package code
 import (
 	"bytes"
 	"context"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"os"
 	"sync"
 	"time"
@@ -147,20 +148,20 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
-	sastResponse, err := sc.SnykApiClient.SastSettings()
+	gafConfig := sc.C.Engine().GetConfiguration()
+	sastResponse := gafConfig.Get(configuration.SAST_SETTINGS)
 
-	if err != nil {
-		logger.Error().Err(err).Msg("couldn't get sast enablement")
-		sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{})
-		return issues, errors.New("couldn't get sast enablement")
+	sastSettings, ok := sastResponse.(configuration.SastResponse)
+	if !ok {
+		return issues, errors.New("Failed to convert SAST settings to the correct type")
 	}
 
-	if !sc.isSastEnabled(sastResponse) {
+	if !sc.isSastEnabled(sastSettings) {
 		return issues, errors.New("SAST is not enabled")
 	}
 
-	if sc.isLocalEngineEnabled(sastResponse) {
-		sc.updateCodeApiLocalEngine(sastResponse)
+	if sc.isLocalEngineEnabled(sastSettings) {
+		sc.updateCodeApiLocalEngine(sastSettings)
 	}
 
 	sc.C.SetDeepCodeAIFixEnabled(sastResponse.AutofixEnabled)

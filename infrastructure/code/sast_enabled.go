@@ -17,7 +17,7 @@
 package code
 
 import (
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -29,7 +29,7 @@ const codeDisabledInOrganisationMessageText = "It looks like your organization h
 const enableSnykCodeMessageActionItemTitle types.MessageAction = "Enable Snyk Code"
 const closeMessageActionItemTitle types.MessageAction = "Close"
 
-func (sc *Scanner) isSastEnabled(sastResponse snyk_api.SastResponse) bool {
+func (sc *Scanner) isSastEnabled(sastResponse configuration.SastResponse) bool {
 	if !sastResponse.SastEnabled {
 		// this is processed in the listener registered to translate into the right client protocol
 		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
