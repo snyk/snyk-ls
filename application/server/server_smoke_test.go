@@ -977,6 +977,33 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	assert.Equal(t, 0, len(issueList), "no issues expected, as delta and no new change")
 }
 
+func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
+	c := testutil.SmokeTest(t, false)
+	loc, jsonRPCRecorder := setupServer(t, c)
+	c.SetSnykCodeEnabled(true)
+	c.SetDeltaFindingsEnabled(true)
+	cleanupChannels()
+	di.Init()
+	scanAggregator := di.ScanStateAggregator()
+
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/java-goof", "f5719ae", c.Logger())
+	assert.NoError(t, err)
+
+	cloneTargetDirString := string(cloneTargetDir)
+
+	initParams := prepareInitParams(t, cloneTargetDir, c)
+
+	ensureInitialized(t, c, loc, initParams)
+
+	waitForScan(t, cloneTargetDirString, c)
+
+	waitForDeltaScan(t, scanAggregator)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
+
+	assert.Equal(t, 0, len(issueList), "no issues expected, as delta and no new change")
+}
+
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {
 	t.Helper()
 	t.Setenv("SNYK_LOG_LEVEL", "info")
