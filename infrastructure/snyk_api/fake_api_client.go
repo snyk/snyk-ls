@@ -25,12 +25,11 @@ const (
 )
 
 type FakeApiClient struct {
-	Calls           map[string][][]any
-	CodeEnabled     bool
-	LocalCodeEngine LocalCodeEngine
-	AutofixEnabled  bool
-	ApiError        *SnykApiError
-	Responses       map[string]any
+	Calls          map[string][][]any
+	CodeEnabled    bool
+	AutofixEnabled bool
+	ApiError       *SnykApiError
+	Responses      map[string]any
 }
 
 var (
@@ -97,21 +96,6 @@ func (f *FakeApiClient) GetAllCalls(op string) [][]any {
 		return nil
 	}
 	return calls
-}
-
-func (f *FakeApiClient) SastSettings() (SastResponse, error) {
-	f.addCall([]any{}, SastEnabledOperation)
-	if f.ApiError != nil {
-		return SastResponse{}, f.ApiError
-	}
-	return SastResponse{
-		SastEnabled: f.CodeEnabled,
-		LocalCodeEngine: LocalCodeEngine{
-			Enabled: f.LocalCodeEngine.Enabled,
-			Url:     f.LocalCodeEngine.Url,
-		},
-		AutofixEnabled: f.AutofixEnabled,
-	}, nil
 }
 
 func (f *FakeApiClient) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {

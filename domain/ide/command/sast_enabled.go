@@ -18,19 +18,20 @@ package command
 
 import (
 	"context"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/snyk-ls/application/config"
 
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type sastEnabled struct {
 	command               types.CommandData
-	apiClient             snyk_api.SnykApiClient
 	logger                *zerolog.Logger
 	authenticationService authentication.AuthenticationService
+	c                     *config.Config
 }
 
 func (cmd *sastEnabled) Command() types.CommandData {
@@ -45,6 +46,8 @@ func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
 		return nil, nil
 	}
 
-	sastResponse, err := cmd.apiClient.SastSettings()
-	return sastResponse, err
+	gafConfig := cmd.c.Engine().GetConfiguration()
+	sastResponse := gafConfig.Get(configuration.SAST_SETTINGS)
+
+	return sastResponse, nil
 }
