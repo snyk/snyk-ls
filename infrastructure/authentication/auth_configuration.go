@@ -37,7 +37,6 @@ func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) Authen
 		c.Storage().UnRegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN)
 	}
 
-	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 	conf.Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
 	conf.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 	return NewCliAuthenticationProvider(c, errorReporter)
@@ -47,7 +46,6 @@ func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) Authen
 // the auth service parameter is needed, as the oauth2 provider needs a callback function
 func Default(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
 	conf := c.Engine().GetConfiguration()
-	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	conf.Unset(configuration.AUTHENTICATION_TOKEN)
 	credentialsUpdateCallback := func(_ string, value any) {
 		// an empty struct marks an empty token, so we stay with empty string if the cast fails

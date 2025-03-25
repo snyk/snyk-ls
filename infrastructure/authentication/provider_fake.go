@@ -18,8 +18,7 @@ package authentication
 
 import (
 	"context"
-
-	"github.com/pkg/errors"
+	"errors"
 
 	"github.com/snyk/snyk-ls/application/config"
 )

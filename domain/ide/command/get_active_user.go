@@ -39,7 +39,8 @@ func (cmd *getActiveUser) Command() types.CommandData {
 }
 
 func (cmd *getActiveUser) Execute(_ context.Context) (any, error) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "getActiveUser.Execute").Logger()
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "getActiveUser.Execute").Logger()
 	isAuthenticated := cmd.authenticationService.IsAuthenticated()
 
 	if !isAuthenticated {

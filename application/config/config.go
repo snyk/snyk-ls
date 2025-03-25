@@ -263,6 +263,13 @@ func newConfig(engine workflow.Engine) *Config {
 	} else {
 		c.engine = engine
 	}
+	gafConfig := c.engine.GetConfiguration()
+	gafConfig.PersistInStorage(storedConfig.ConfigMainKey)
+	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue interface{}) (interface{}, error) {
+		return true, nil
+	})
+	gafConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	gafConfig.Set("configfile", c.configFile)
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = types.DefaultSeverityFilter()
@@ -281,12 +288,9 @@ func initWorkFlowEngine(c *Config) {
 	conf := configuration.NewWithOpts(
 		configuration.WithAutomaticEnv(),
 	)
+
 	conf.PersistInStorage(storedConfig.ConfigMainKey)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
-	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
-	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, enableOAuth)
-	conf.Set("configfile", c.configFile)
-
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
@@ -620,23 +624,25 @@ func (c *Config) SetToken(newTokenString string) {
 
 	// propagate newTokenString to gaf
 	if !isNewOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
-		c.logger.Info().Msg("Setting legacy authentication in GAF")
+		c.logger.Info().Msg("put api token into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString)
 	}
 
-	if c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
-		c.logger.Info().Err(err).Msg("setting oauth2 authentication in GAF")
+	if c.shouldUpdateOAuth2Token(conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), newTokenString) {
+		c.logger.Info().Err(err).Msg("put oauth2 token into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
 	}
 
 	// ensure scrubbing of new newTokenString
 	if w, ok := c.scrubbingWriter.(frameworkLogging.ScrubbingLogWriter); ok {
-		w.AddTerm(newTokenString, 0)
-		if newOAuthToken != nil {
-			w.AddTerm(newOAuthToken.AccessToken, 0)
-			w.AddTerm(newOAuthToken.RefreshToken, 0)
+		if newTokenString != "" {
+			w.AddTerm(newTokenString, 0)
+			if newOAuthToken != nil && newOAuthToken.AccessToken != "" {
+				w.AddTerm(newOAuthToken.AccessToken, 0)
+				w.AddTerm(newOAuthToken.RefreshToken, 0)
+			}
 		}
 	}
 
@@ -743,7 +749,7 @@ func (c *Config) getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 	w := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
 		w.Out = writer
 		w.NoColor = true
-		w.TimeFormat = time.RFC3339
+		w.TimeFormat = time.RFC3339Nano
 		w.PartsOrder = []string{
 			zerolog.TimestampFieldName,
 			zerolog.LevelFieldName,
