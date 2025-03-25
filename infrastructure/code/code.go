@@ -19,7 +19,6 @@ package code
 import (
 	"bytes"
 	"context"
-	"github.com/snyk/go-application-framework/pkg/utils"
 	"os"
 	"sync"
 	"time"
@@ -34,6 +33,7 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
