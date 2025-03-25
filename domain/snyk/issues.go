@@ -52,10 +52,10 @@ type Issue struct {
 	Message string
 	// todo [jc] this contains a formatted longest message for hovers, this needs to be pushed up and rendered in presentation. [bd] shouldn't the content and formatting be decided by the product?
 	FormattedMessage string
-	// AffectedFilePath is the file path to the file where the issue was found
-	AffectedFilePath types.FilePath
 	// ContentRoot is the root directory where is the issue was found
 	ContentRoot types.FilePath
+	// AffectedFilePath is the file path to the file where the issue was found
+	AffectedFilePath types.FilePath
 	// Product is the Snyk product, e.g. Snyk Open Source
 	Product product.Product // todo: can we avoid it, if it's part of a scanner interface already?
 	// References deliver additional information

@@ -27,27 +27,27 @@ import (
 )
 
 func CalculateFingerprintFromAdditionalData(issue types.Issue) string {
-	var preHash string
-	var dependencyChainHash string
+	var fingerprint string
+	var dependencyChain string
 	switch additionalData := issue.GetAdditionalData().(type) {
 	case snyk.OssIssueData:
 		// first element is directory name. It should not be considered for the fingerprint
 		if len(additionalData.From) > 1 {
-			dependencyChainHash = normalizeArray(additionalData.From[1:])
+			dependencyChain = normalizeArray(additionalData.From[1:])
 		} else {
-			dependencyChainHash = normalizeArray(additionalData.From)
+			dependencyChain = normalizeArray(additionalData.From)
 		}
 		// Fingerprint for OSS Issues is: name@version@fromArrayHash
-		preHash = fmt.Sprintf("%s|%s|%s|%s", additionalData.PackageName, additionalData.Version, dependencyChainHash, issue.GetRuleID())
+		fingerprint = fmt.Sprintf("%s|%s|%s|%s", additionalData.PackageName, additionalData.Version, dependencyChain, issue.GetRuleID())
 	case snyk.IaCIssueData:
 		// No need to normalize and change order of the array for IaC since order matters
-		dependencyChainHash = strings.Join(additionalData.Path, "|")
-		preHash = fmt.Sprintf("%s|%s", issue.GetRuleID(), dependencyChainHash)
+		dependencyChain = strings.Join(additionalData.Path, "|")
+		fingerprint = fmt.Sprintf("%s|%s", issue.GetRuleID(), dependencyChain)
 	default:
 		return ""
 	}
 
-	hash := sha256.Sum256([]byte(preHash))
+	hash := sha256.Sum256([]byte(fingerprint))
 	return fmt.Sprintf("%x", hash)
 }
 

@@ -41,7 +41,7 @@ var issuesSeverity = map[string]types.Severity{
 	"medium":   types.Medium,
 }
 
-func toIssue(c *config.Config, affectedFilePath types.FilePath, workDir types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter) *snyk.Issue {
+func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter) *snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
 	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueDepNode)
 
@@ -96,8 +96,8 @@ func toIssue(c *config.Config, affectedFilePath types.FilePath, workDir types.Fi
 		FormattedMessage:    issue.GetExtendedMessage(issue),
 		Range:               getRangeFromNode(issueDepNode),
 		Severity:            issue.ToIssueSeverity(),
-		AffectedFilePath:    affectedFilePath,
 		ContentRoot:         workDir,
+		AffectedFilePath:    affectedFilePath,
 		Product:             product.ProductOpenSource,
 		IssueDescriptionURL: issue.CreateIssueURL(),
 		IssueType:           types.DependencyVulnerability,
@@ -126,7 +126,7 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 	return r
 }
 
-func convertScanResultToIssues(c *config.Config, res *scanResult, targetFilePath types.FilePath, workDir types.FilePath, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue) []types.Issue {
+func convertScanResultToIssues(c *config.Config, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue) []types.Issue {
 	var issues []types.Issue
 
 	duplicateCheckMap := map[string]bool{}
@@ -138,7 +138,7 @@ func convertScanResultToIssues(c *config.Config, res *scanResult, targetFilePath
 			continue
 		}
 		node := getDependencyNode(c, targetFilePath, issue, fileContent)
-		snykIssue := toIssue(c, targetFilePath, workDir, issue, res, node, ls, ep)
+		snykIssue := toIssue(c, workDir, targetFilePath, issue, res, node, ls, ep)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true
