@@ -253,6 +253,9 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 		return nil, err
 	}
 
+	defaultGlobs := []string{"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**", "**/.DS_Store/**"}
+	rules = append(defaultGlobs, rules...)
+
 	files := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules)
 
 	if t.IsCanceled() || ctx.Err() != nil {
