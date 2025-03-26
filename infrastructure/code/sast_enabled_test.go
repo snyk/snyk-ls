@@ -17,7 +17,7 @@
 package code
 
 import (
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/common"
 	"strconv"
 	"testing"
 
@@ -36,9 +36,9 @@ func TestIsSastEnabled(t *testing.T) {
 		ApiError:    nil,
 	}
 
-	mockedSastResponse := configuration.SastResponse{
+	mockedSastResponse := common.SastResponse{
 		SastEnabled: true,
-		LocalCodeEngine: configuration.LocalCodeEngine{
+		LocalCodeEngine: common.LocalCodeEngine{
 			AllowCloudUpload: false,
 			Url:              "http://local.engine",
 			Enabled:          true,
