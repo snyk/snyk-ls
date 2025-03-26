@@ -17,16 +17,16 @@
 package code
 
 import (
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/common"
 	"github.com/snyk/snyk-ls/application/config"
 )
 
-func (sc *Scanner) isLocalEngineEnabled(sastResponse configuration.SastResponse) bool {
+func (sc *Scanner) isLocalEngineEnabled(sastResponse common.SastResponse) bool {
 	sc.C.Logger().Debug().Any("sastResponse", sastResponse).Msg("sast response")
 	return sastResponse.SastEnabled && sastResponse.LocalCodeEngine.Enabled
 }
 
-func (sc *Scanner) updateCodeApiLocalEngine(sastResponse configuration.SastResponse) {
+func (sc *Scanner) updateCodeApiLocalEngine(sastResponse common.SastResponse) {
 	config.CurrentConfig().SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
 	api := config.CurrentConfig().SnykCodeApi()
 	sc.C.Logger().Debug().Str("snykCodeApi", api).Msg("updated Snyk Code API Local Engine")
