@@ -17,6 +17,7 @@
 package code
 
 import (
+	"github.com/snyk/go-application-framework/pkg/common"
 	"slices"
 	"testing"
 
@@ -36,9 +37,9 @@ func TestIsLocalEngine(t *testing.T) {
 		ApiError:    nil,
 	}
 
-	mockedSastResponse := configuration.SastResponse{
+	mockedSastResponse := common.SastResponse{
 		SastEnabled: true,
-		LocalCodeEngine: configuration.LocalCodeEngine{
+		LocalCodeEngine: common.LocalCodeEngine{
 			AllowCloudUpload: false,
 			Url:              "http://local.engine",
 			Enabled:          true,

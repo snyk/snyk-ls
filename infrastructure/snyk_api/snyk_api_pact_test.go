@@ -18,6 +18,7 @@ package snyk_api
 
 import (
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/common"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"net/http"
 	"testing"
@@ -55,9 +56,9 @@ func TestSnykApiPact(t *testing.T) {
 	}()
 
 	t.Run("Get SAST enablement", func(t *testing.T) {
-		expectedResponse := configuration.SastResponse{
+		expectedResponse := common.SastResponse{
 			SastEnabled:                 true,
-			LocalCodeEngine:             configuration.LocalCodeEngine{Enabled: false},
+			LocalCodeEngine:             common.LocalCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
 			AutofixEnabled:              false,
 		}

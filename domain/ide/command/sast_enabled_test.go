@@ -18,7 +18,7 @@ package command
 
 import (
 	"context"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/common"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,7 +41,7 @@ func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {
 
 	result, _ := sastEnabledCmd.Execute(context.Background())
 
-	assert.True(t, result.(configuration.SastResponse).SastEnabled)
+	assert.True(t, result.(common.SastResponse).SastEnabled)
 }
 
 func setupSastEnabledCommand(t *testing.T, c *config.Config, fakeApiClient *snyk_api.FakeApiClient) sastEnabled {
@@ -70,8 +70,8 @@ func Test_ApiClient_ReturnsTrueIfLocalCodeEngineIsEnabled(t *testing.T) {
 
 	result, _ := sastEnabledCmd.Execute(context.Background())
 
-	assert.True(t, result.(configuration.SastResponse).LocalCodeEngine.Enabled)
-	assert.True(t, result.(configuration.SastResponse).SastEnabled)
+	assert.True(t, result.(common.SastResponse).LocalCodeEngine.Enabled)
+	assert.True(t, result.(common.SastResponse).SastEnabled)
 }
 
 func Test_ApiClient_isCalledAndErrorReturned(t *testing.T) {
@@ -88,5 +88,5 @@ func Test_ApiClient_isCalledAndErrorReturned(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, apiError, err)
-	assert.False(t, result.(configuration.SastResponse).SastEnabled)
+	assert.False(t, result.(common.SastResponse).SastEnabled)
 }

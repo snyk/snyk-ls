@@ -19,7 +19,7 @@ package code
 import (
 	"bytes"
 	"context"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"os"
 	"sync"
 	"time"
@@ -47,6 +47,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
+
+	"github.com/snyk/go-application-framework/pkg/common"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 type ScanStatus struct {
@@ -151,7 +154,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	gafConfig := sc.C.Engine().GetConfiguration()
 	sastResponse := gafConfig.Get(configuration.SAST_SETTINGS)
 
-	sastSettings, ok := sastResponse.(configuration.SastResponse)
+	sastSettings, ok := sastResponse.(common.SastResponse)
 	if !ok {
 		return issues, errors.New("Failed to convert SAST settings to the correct type")
 	}
