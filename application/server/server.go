@@ -112,7 +112,7 @@ const textDocumentDidOpenOperation = "textDocument/didOpen"
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
-	handlers["initialize"] = initializeHandler(srv)
+	handlers["initialize"] = initializeHandler(c, srv)
 	handlers["initialized"] = initializedHandler(c, srv)
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
 	handlers["textDocument/didClose"] = noOpHandler()
@@ -127,9 +127,9 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 	handlers["codeAction/resolve"] = codeActionResolveHandler(srv)
 	handlers["shutdown"] = shutdown()
 	handlers["exit"] = exit(srv)
-	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(srv, c)
+	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(c, srv)
 	handlers["workspace/willDeleteFiles"] = workspaceWillDeleteFilesHandler(c)
-	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(srv, c)
+	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(c, srv)
 	handlers["window/workDoneProgress/cancel"] = windowWorkDoneProgressCancelHandler()
 	handlers["workspace/executeCommand"] = executeCommandHandler(srv)
 }
@@ -216,7 +216,7 @@ func codeLensHandler() jrpc2.Handler {
 	})
 }
 
-func workspaceDidChangeWorkspaceFoldersHandler(srv *jrpc2.Server, c *config.Config) jrpc2.Handler {
+func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.DidChangeWorkspaceFoldersParams) (any, error) {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
@@ -242,10 +242,9 @@ func initNetworkAccessHeaders() {
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
-func initializeHandler(srv *jrpc2.Server) handler.Func {
+func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializeParams) (any, error) {
 		method := "initializeHandler"
-		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", method).Logger()
 		// we can only log, after we add the token to the list of forbidden outputs
 		defer logger.Info().Any("params", params).Msg("RECEIVING")
@@ -258,13 +257,15 @@ func initializeHandler(srv *jrpc2.Server) handler.Func {
 			return nil, err
 		}
 
-		storage, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(file))
+		storage, err := storage2.NewStorageWithCallbacks(
+			storage2.WithStorageFile(file),
+			storage2.WithLogger(c.Logger()),
+		)
 		if err != nil {
 			return nil, err
 		}
 
 		c.SetStorage(storage)
-		c.Engine().GetConfiguration().SetStorage(c.Storage())
 
 		InitializeSettings(c, params.InitializationOptions)
 

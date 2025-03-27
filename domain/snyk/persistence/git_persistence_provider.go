@@ -36,7 +36,7 @@ import (
 
 const (
 	CacheFolder   = "snyk"
-	SchemaVersion = "v1"
+	SchemaVersion = "v1_1"
 )
 
 var (

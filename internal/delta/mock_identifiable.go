@@ -29,10 +29,15 @@ type mockIdentifiable struct {
 	isNew          bool
 	ruleId         string
 	path           types.FilePath
+	contentRoot    types.FilePath
 	startLine      int
 	endLine        int
 	startColumn    int
 	endColumn      int
+}
+
+func (m *mockIdentifiable) GetContentRoot() types.FilePath {
+	return m.contentRoot
 }
 
 func (m *mockIdentifiable) GetPath() types.FilePath {

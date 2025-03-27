@@ -18,6 +18,7 @@ package authentication
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/pkg/errors"
 
@@ -56,7 +57,12 @@ func GetActiveUser() (*ActiveUser, error) {
 	if c.Token() == "" {
 		return nil, errors.New("no credentials found")
 	}
-	conf := c.Engine().GetConfiguration().Clone()
+	globalConf := c.Engine().GetConfiguration()
+	conf := globalConf.Clone()
+	c.Logger().Trace().Str("method", "getActiveUser").
+		Str("configInstance", fmt.Sprintf("%p", globalConf)).
+		Str("configClone", fmt.Sprintf("%p", conf)).
+		Msg("invoking whoami workflow")
 	conf.Set(configuration.FLAG_EXPERIMENTAL, true)
 	conf.Set("json", true)
 	result, err := c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, conf)
