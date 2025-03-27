@@ -114,9 +114,9 @@ func TestSnykApiPact(t *testing.T) {
 		organization := orgUUID
 		c.SetOrganization(organization)
 
-		expectedResponse := configuration.SastResponse{
+		expectedResponse := common.SastResponse{
 			SastEnabled:                 true,
-			LocalCodeEngine:             configuration.LocalCodeEngine{Enabled: false},
+			LocalCodeEngine:             common.LocalCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
 			AutofixEnabled:              false,
 		}
