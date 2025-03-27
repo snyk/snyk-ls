@@ -17,17 +17,17 @@
 package code
 
 import (
-	"github.com/snyk/go-application-framework/pkg/common"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
+
+	"github.com/snyk/go-application-framework/pkg/common"
 )
 
 func TestIsLocalEngine(t *testing.T) {

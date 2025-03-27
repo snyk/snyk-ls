@@ -18,7 +18,6 @@ package command
 
 import (
 	"context"
-	"github.com/snyk/go-application-framework/pkg/common"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,6 +28,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
+
+	"github.com/snyk/go-application-framework/pkg/common"
 )
 
 func Test_ApiClient_isCalledAndResultReturned(t *testing.T) {

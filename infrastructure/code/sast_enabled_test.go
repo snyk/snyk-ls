@@ -17,7 +17,6 @@
 package code
 
 import (
-	"github.com/snyk/go-application-framework/pkg/common"
 	"strconv"
 	"testing"
 
@@ -28,6 +27,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
+
+	"github.com/snyk/go-application-framework/pkg/common"
 )
 
 func TestIsSastEnabled(t *testing.T) {
