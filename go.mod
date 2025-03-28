@@ -28,7 +28,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/code-client-go v1.17.2
-	github.com/snyk/go-application-framework v0.0.0-20250328142242-46de53bb5c7c
+	github.com/snyk/go-application-framework v0.0.0-20250328191937-77c95fc47c4b
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
@@ -131,6 +131,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/snyk/go-application-framework => ../go-application-framework
+//replace github.com/snyk/go-application-framework => ../go-application-framework
 
 //replace github.com/snyk/code-client-go => ../code-client-go
