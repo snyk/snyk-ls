@@ -17,7 +17,7 @@
 package code
 
 import (
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"slices"
 	"testing"
 
@@ -27,7 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 
-	"github.com/snyk/go-application-framework/pkg/common"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func TestIsLocalEngine(t *testing.T) {
@@ -37,9 +37,9 @@ func TestIsLocalEngine(t *testing.T) {
 		ApiError:    nil,
 	}
 
-	mockedSastResponse := common.SastResponse{
+	mockedSastResponse := sast_contract.SastResponse{
 		SastEnabled: true,
-		LocalCodeEngine: common.LocalCodeEngine{
+		LocalCodeEngine: sast_contract.LocalCodeEngine{
 			AllowCloudUpload: false,
 			Url:              "http://local.engine",
 			Enabled:          true,
