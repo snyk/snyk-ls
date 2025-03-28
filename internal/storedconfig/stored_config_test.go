@@ -27,6 +27,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -77,7 +78,35 @@ func setupConfigurationWithStorage(t *testing.T) (configuration.Configuration, s
 	storageFile := filepath.Join(t.TempDir(), "testStorage")
 	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
 	require.NoError(t, err)
-	conf.PersistInStorage(ConfigMainKey)
 	conf.SetStorage(s)
 	return conf, storageFile
+}
+
+func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T) {
+	conf, _ := setupConfigurationWithStorage(t)
+	path := types.FilePath("/testPath")
+	scanCommandConfig := types.ScanCommandConfig{
+		PreScanCommand:              "/a",
+		PreScanOnlyReferenceFolder:  false,
+		PostScanCommand:             "/b",
+		PostScanOnlyReferenceFolder: false,
+	}
+	expected := &types.FolderConfig{
+		FolderPath: path,
+		ReferenceFolderPath: types.FilePath(
+			t.TempDir(),
+		),
+		AdditionalParameters: []string{"--additional-param=asdf", "--additional-param2=add"},
+		LocalBranches:        []string{"main", "master"},
+		BaseBranch:           "main",
+		ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
+			product.ProductOpenSource: scanCommandConfig,
+		},
+	}
+
+	err := UpdateFolderConfig(conf, expected)
+	require.NoError(t, err)
+	actual, err := GetOrCreateFolderConfig(conf, path)
+	require.NoError(t, err)
+	require.Equal(t, expected, actual)
 }
