@@ -267,6 +267,9 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 
 		c.SetStorage(storage)
 
+		// send folder configs (they are queued until initialization is done)
+		go sendFolderConfigs(c)
+
 		InitializeSettings(c, params.InitializationOptions)
 
 		startClientMonitor(params, logger)
@@ -343,6 +346,22 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 		logger.Debug().Str("method", method).Any("result", result).Msg("SENDING")
 		return result, nil
 	})
+}
+
+func sendFolderConfigs(c *config.Config) {
+	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
+	storedConfig, err2 := storedconfig.GetStoredConfig(c.Engine().GetConfiguration())
+	if err2 != nil {
+		logger.Err(err2).Msg("unable to load stored config")
+		return
+	}
+	var folderConfigs []types.FolderConfig
+	for _, folderConfig := range storedConfig.FolderConfigs {
+		folderConfigs = append(folderConfigs, *folderConfig)
+	}
+
+	folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
+	di.Notifier().Send(folderConfigsParam)
 }
 
 func startClientMonitor(params types.InitializeParams, logger zerolog.Logger) {

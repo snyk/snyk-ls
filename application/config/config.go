@@ -264,7 +264,6 @@ func newConfig(engine workflow.Engine) *Config {
 		c.engine = engine
 	}
 	gafConfig := c.engine.GetConfiguration()
-	gafConfig.PersistInStorage(storedConfig.ConfigMainKey)
 	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue interface{}) (interface{}, error) {
 		return true, nil
 	})
@@ -358,7 +357,7 @@ func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
 }
 
 func (c *Config) NonEmptyToken() bool {
-	return c.Token() != ""
+	return c.token != ""
 }
 func (c *Config) CliSettings() *CliSettings {
 	return c.cliSettings
@@ -1126,12 +1125,39 @@ func (c *Config) Storage() storage.StorageWithCallbacks {
 
 func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 	c.m.Lock()
-	defer c.m.Unlock()
 	c.storage = s
+	c.m.Unlock()
 
 	conf := c.engine.GetConfiguration()
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
 	conf.SetStorage(s)
+	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
+
+	// now refresh from storage
+	err := s.Refresh(conf, storedConfig.ConfigMainKey)
+	if err != nil {
+		c.logger.Err(err).Msg("unable to load stored config")
+	}
+
+	sc, err := storedConfig.GetStoredConfig(conf)
+	c.logger.Debug().Any("storedConfig", sc).Send()
+
+	if err != nil {
+		c.logger.Err(err).Msg("unable to load stored config")
+	}
+
+	// refresh token if in storage
+	if c.EmptyToken() {
+		err = s.Refresh(conf, auth.CONFIG_KEY_OAUTH_TOKEN)
+		if err != nil {
+			c.logger.Err(err).Msg("unable to refresh storage")
+		}
+		err = s.Refresh(conf, configuration.AUTHENTICATION_TOKEN)
+		if err != nil {
+			c.logger.Err(err).Msg("unable to refresh storage")
+		}
+	}
 }
 
 func (c *Config) IdeVersion() string {
@@ -1294,4 +1320,8 @@ func (c *Config) IsDeepCodeAIFixEnabled() bool {
 	defer c.m.RUnlock()
 
 	return c.deepCodeAiFixEnabled
+}
+
+func (c *Config) EmptyToken() bool {
+	return !c.NonEmptyToken()
 }

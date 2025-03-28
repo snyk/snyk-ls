@@ -45,7 +45,10 @@ func ConfigFile(ideName string) (string, error) {
 }
 
 func folderConfigFromStorage(conf configuration.Configuration, path types.FilePath) (*types.FolderConfig, error) {
-	sc := GetStoredConfig(conf)
+	sc, err := GetStoredConfig(conf)
+	if err != nil {
+		return nil, err
+	}
 
 	if sc.FolderConfigs[path] == nil {
 		folderConfig := &types.FolderConfig{FolderPath: path}
@@ -55,19 +58,19 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 	return sc.FolderConfigs[path], nil
 }
 
-func GetStoredConfig(conf configuration.Configuration) *StoredConfig {
-	var sc *StoredConfig
+func GetStoredConfig(conf configuration.Configuration) (*StoredConfig, error) {
 	storedConfigJsonString := conf.GetString(ConfigMainKey)
 
+	var sc *StoredConfig
 	if len(storedConfigJsonString) == 0 {
-		return createNewStoredConfig(conf)
+		return createNewStoredConfig(conf), nil
 	} else {
 		err := json.Unmarshal([]byte(storedConfigJsonString), &sc)
 		if err != nil {
-			sc = createNewStoredConfig(conf)
+			return nil, err
 		}
 	}
-	return sc
+	return sc, nil
 }
 
 func Save(conf configuration.Configuration, sc *StoredConfig) error {
@@ -96,9 +99,12 @@ func UpdateFolderConfigs(conf configuration.Configuration, folderConfigs []types
 }
 
 func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig) error {
-	sc := GetStoredConfig(conf)
+	sc, err := GetStoredConfig(conf)
+	if err != nil {
+		return err
+	}
 	sc.FolderConfigs[folderConfig.FolderPath] = folderConfig
-	err := Save(conf, sc)
+	err = Save(conf, sc)
 	if err != nil {
 		return err
 	}

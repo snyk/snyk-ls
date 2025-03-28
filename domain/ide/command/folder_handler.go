@@ -34,7 +34,6 @@ const DoTrust = "Trust folders and continue"
 const DontTrust = "Don't trust folders"
 
 func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator) {
-	go sendFolderConfigsNotification(c, notifier)
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
 	HandleUntrustedFolders(ctx, c, srv)
@@ -47,22 +46,6 @@ func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
 	}
 	agg.Init(folderPaths)
 }
-
-func sendFolderConfigsNotification(c *config.Config, notifier noti.Notifier) {
-	ws := c.Workspace()
-	var folderConfigs []types.FolderConfig
-	for _, f := range ws.Folders() {
-		folderConfig := c.FolderConfig(f.Path())
-		folderConfigs = append(folderConfigs, *folderConfig)
-	}
-
-	if folderConfigs == nil {
-		return
-	}
-	folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
-	notifier.Send(folderConfigsParam)
-}
-
 func initScanPersister(c *config.Config, persister persistence.ScanSnapshotPersister) {
 	logger := c.Logger().With().Str("method", "initScanPersister").Logger()
 	w := c.Workspace()
