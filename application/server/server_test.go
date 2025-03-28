@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -406,8 +408,8 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     filepath.Join(t.TempDir(), "cli"),
-			FilterSeverity:              types.DefaultSeverityFilter(),
-			IssueViewOptions:            types.DefaultIssueViewOptions(),
+			FilterSeverity:              util.PtrOf(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.PtrOf(types.DefaultIssueViewOptions()),
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -469,8 +471,8 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     filepath.Join(t.TempDir(), "cli"),
-			FilterSeverity:              types.DefaultSeverityFilter(),
-			IssueViewOptions:            types.DefaultIssueViewOptions(),
+			FilterSeverity:              util.PtrOf(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.PtrOf(types.DefaultIssueViewOptions()),
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -525,8 +527,8 @@ func Test_initialize_updatesSettings(t *testing.T) {
 		InitializationOptions: types.Settings{
 			Organization:     expectedOrgId,
 			Token:            "xxx",
-			FilterSeverity:   types.DefaultSeverityFilter(),
-			IssueViewOptions: types.DefaultIssueViewOptions(),
+			FilterSeverity:   util.PtrOf(types.DefaultSeverityFilter()),
+			IssueViewOptions: util.PtrOf(types.DefaultIssueViewOptions()),
 		},
 	}
 
