@@ -19,6 +19,7 @@ package code
 import (
 	"bytes"
 	"context"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"os"
 	"sync"
 	"time"
@@ -46,6 +47,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 )
 
 type ScanStatus struct {
@@ -147,23 +150,23 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
-	sastResponse, err := sc.SnykApiClient.SastSettings()
+	gafConfig := sc.C.Engine().GetConfiguration()
+	sastResponse := gafConfig.Get(code_workflow.ConfigurationSastSettings)
 
-	if err != nil {
-		logger.Error().Err(err).Msg("couldn't get sast enablement")
-		sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{})
-		return issues, errors.New("couldn't get sast enablement")
+	sastSettingsPtr, ok := sastResponse.(*sast_contract.SastResponse)
+	if !ok {
+		return issues, errors.New("Failed to convert SAST settings to the correct type")
 	}
-
-	if !sc.isSastEnabled(sastResponse) {
+	sastSettings := *sastSettingsPtr
+	if !sc.isSastEnabled(sastSettings) {
 		return issues, errors.New("SAST is not enabled")
 	}
 
-	if sc.isLocalEngineEnabled(sastResponse) {
-		sc.updateCodeApiLocalEngine(sastResponse)
+	if sc.isLocalEngineEnabled(sastSettings) {
+		sc.updateCodeApiLocalEngine(sastSettings)
 	}
 
-	sc.C.SetDeepCodeAIFixEnabled(sastResponse.AutofixEnabled)
+	sc.C.SetDeepCodeAIFixEnabled(sastSettings.AutofixEnabled)
 
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[folderPath] == nil {

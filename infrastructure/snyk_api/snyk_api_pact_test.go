@@ -18,6 +18,7 @@ package snyk_api
 
 import (
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"net/http"
 	"testing"
 
@@ -54,9 +55,9 @@ func TestSnykApiPact(t *testing.T) {
 	}()
 
 	t.Run("Get SAST enablement", func(t *testing.T) {
-		expectedResponse := SastResponse{
+		expectedResponse := code_workflow.SastResponse{
 			SastEnabled:                 true,
-			LocalCodeEngine:             LocalCodeEngine{Enabled: false},
+			LocalCodeEngine:             code_workflow.LocalCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
 			AutofixEnabled:              false,
 		}
@@ -112,9 +113,9 @@ func TestSnykApiPact(t *testing.T) {
 		organization := orgUUID
 		c.SetOrganization(organization)
 
-		expectedResponse := SastResponse{
+		expectedResponse := code_workflow.SastResponse{
 			SastEnabled:                 true,
-			LocalCodeEngine:             LocalCodeEngine{Enabled: false},
+			LocalCodeEngine:             code_workflow.LocalCodeEngine{Enabled: false},
 			ReportFalsePositivesEnabled: false,
 			AutofixEnabled:              false,
 		}
