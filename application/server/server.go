@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"net/http"
 	"os"
 	"runtime"
@@ -217,9 +218,9 @@ func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Serv
 }
 
 func initNetworkAccessHeaders() {
-	engine := config.CurrentConfig().Engine()
-	ua := util.GetUserAgent(engine.GetConfiguration(), config.Version)
-	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
+	gafConfig := config.CurrentConfig().Engine().GetConfiguration()
+	ua := util.GetUserAgent(gafConfig, config.Version)
+	gafConfig.Set(configuration.USER_AGENT, ua)
 }
 
 func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
