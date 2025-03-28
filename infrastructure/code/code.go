@@ -24,6 +24,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/rs/zerolog"
 
 	"github.com/erni27/imcache"
@@ -254,7 +256,9 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 		return results, err
 	}
 
-	if sc.useIgnoresFlow() {
+	codeConsistentIgnoresEnabled := sc.C.Engine().GetConfiguration().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+
+	if codeConsistentIgnoresEnabled {
 		results, err = sc.UploadAndAnalyzeWithIgnores(ctx, folderPath, files, filesToBeScanned, t)
 	} else {
 		results, err = sc.UploadAndAnalyze(ctx, files, folderPath, filesToBeScanned, t)
@@ -589,17 +593,4 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 type UploadStatus struct {
 	UploadedFiles int
 	TotalFiles    int
-}
-
-func (sc *Scanner) useIgnoresFlow() bool {
-	logger := config.CurrentConfig().Logger().With().Str("method", "code.useIgnoresFlow").Logger()
-	response, err := sc.SnykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagSnykCodeConsistentIgnores)
-	if err != nil {
-		logger.Debug().Msg("Failed to check if the ignores experience is enabled")
-		return false
-	}
-	if !response.Ok && response.UserMessage != "" {
-		logger.Info().Msg(response.UserMessage)
-	}
-	return response.Ok
 }
