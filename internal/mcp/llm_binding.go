@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"sync"
 	"time"
 
@@ -29,6 +30,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -40,9 +43,12 @@ type McpLLMBinding struct {
 	logger                    *zerolog.Logger
 	mcpServer                 *server.MCPServer
 	sseServer                 *server.SSEServer
+	stdioServer               *server.StdioServer
 	baseURL                   *url.URL
 	forwardingResultProcessor types.ScanResultProcessor
+	cliExecutor               cli.Executor
 	mutex                     sync.Mutex
+	authService               authentication.AuthenticationService
 	started                   bool
 }
 
@@ -71,8 +77,6 @@ func defaultURL() *url.URL {
 
 // Start starts the MCP server. It blocks until the server is stopped via Shutdown.
 func (m *McpLLMBinding) Start() error {
-	// protect critical assignments with mutex
-	m.mutex.Lock()
 	m.mcpServer = server.NewMCPServer(
 		"Snyk MCP Server",
 		config.Version,
@@ -81,19 +85,37 @@ func (m *McpLLMBinding) Start() error {
 		server.WithPromptCapabilities(true),
 	)
 
-	err := m.addSnykScanTool()
+	err := m.addSnykTools()
 	if err != nil {
-		m.mutex.Unlock()
 		return err
 	}
 
+	if m.c.GetMcpTransportType() == config.StdioTransportType {
+		return m.HandleStdioServer()
+	} else {
+		return m.HandleSseServer()
+	}
+}
+
+func (m *McpLLMBinding) HandleStdioServer() error {
+	m.stdioServer = server.NewStdioServer(m.mcpServer)
+
+	err := m.stdioServer.Listen(context.Background(), os.Stdin, os.Stdout)
+
+	if err != nil {
+		m.logger.Error().Err(err).Msg("Error starting MCP Stdio server")
+		return err
+	}
+
+	return nil
+}
+
+func (m *McpLLMBinding) HandleSseServer() error {
 	// listen on default url/port if none was configured
 	if m.baseURL == nil {
 		m.baseURL = defaultURL()
 	}
-
 	m.sseServer = server.NewSSEServer(m.mcpServer, m.baseURL.String())
-	m.mutex.Unlock()
 
 	m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("starting")
 	go func() {
@@ -109,7 +131,8 @@ func (m *McpLLMBinding) Start() error {
 		m.c.SetMCPServerURL(m.baseURL)
 		m.mutex.Unlock()
 	}()
-	err = m.sseServer.Start(m.baseURL.Host)
+
+	err := m.sseServer.Start(m.baseURL.Host)
 	if err != nil {
 		// expect http.ErrServerClosed when shutting down
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -124,9 +147,11 @@ func (m *McpLLMBinding) Shutdown(ctx context.Context) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	err := m.sseServer.Shutdown(ctx)
-	if err != nil {
-		m.logger.Error().Err(err).Msg("Error shutting down MCP SSE server")
+	if m.sseServer != nil {
+		err := m.sseServer.Shutdown(ctx)
+		if err != nil {
+			m.logger.Error().Err(err).Msg("Error shutting down MCP SSE server")
+		}
 	}
 }
 

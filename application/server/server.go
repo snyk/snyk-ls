@@ -78,11 +78,13 @@ func Start(c *config.Config) {
 	di.Init()
 	initHandlers(srv, handlers, c)
 
+	// This will be kept to not break current integration
 	// start mcp server
 	logger.Info().Msg("Starting up MCP Server...")
 	var mcpServer *mcp2.McpLLMBinding
 	go func() {
 		mcpServer = mcp2.NewMcpLLMBinding(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()))
+		c.SetMcpTransportType(config.SseTransportType)
 		err := mcpServer.Start()
 		if err != nil {
 			c.Logger().Err(err).Msg("failed to start mcp server")
@@ -105,6 +107,47 @@ func Start(c *config.Config) {
 	} else {
 		logger.Debug().Msgf("server stopped gracefully stopped=%v closed=%v", status.Stopped, status.Closed)
 	}
+}
+
+func McpStart(c *config.Config) {
+	c.ConfigureLogging(nil)
+
+	di.Init()
+	logger := c.Logger().With().Str("method", "server.McpStart").Logger()
+
+	mcpServer := mcp2.NewMcpLLMBinding(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()), mcp2.WithCliExecutor(cli.NewExecutor(c, di.ErrorReporter(), di.Notifier())), mcp2.WithAuthService(di.AuthenticationService()))
+
+	file, err := storedconfig.ConfigFile("snyk-mcp")
+	if err != nil {
+		return
+	}
+
+	storage, err := storage2.NewStorageWithCallbacks(
+		storage2.WithStorageFile(file),
+		storage2.WithLogger(c.Logger()),
+	)
+
+	if err != nil {
+		return
+	}
+
+	c.SetStorage(storage)
+	c.SetAuthenticationMethod(types.OAuthAuthentication)
+	di.AuthenticationService().ConfigureProviders(c)
+
+	// start mcp server
+	logger.Info().Msg("Starting up MCP Server...")
+	err = mcpServer.Start()
+
+	if err != nil {
+		c.Logger().Err(err).Msg("failed to start mcp server")
+	}
+	defer func() {
+		if mcpServer != nil {
+			logger.Info().Msg("Shutting down MCP Server...")
+			mcpServer.Shutdown(context.Background())
+		}
+	}()
 }
 
 const textDocumentDidOpenOperation = "textDocument/didOpen"

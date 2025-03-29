@@ -21,6 +21,8 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -29,6 +31,18 @@ type McpOption func(server *McpLLMBinding)
 func WithScanner(scanner types.Scanner) McpOption {
 	return func(server *McpLLMBinding) {
 		server.scanner = scanner
+	}
+}
+
+func WithCliExecutor(cliExecutor cli.Executor) McpOption {
+	return func(server *McpLLMBinding) {
+		server.cliExecutor = cliExecutor
+	}
+}
+
+func WithAuthService(authenticationService authentication.AuthenticationService) McpOption {
+	return func(server *McpLLMBinding) {
+		server.authService = authenticationService
 	}
 }
 

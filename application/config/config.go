@@ -88,6 +88,42 @@ type CliSettings struct {
 	C                       *Config
 }
 
+type McpTransportType string
+
+const SseTransportType McpTransportType = "sse"
+const StdioTransportType McpTransportType = "stdio"
+
+type McpSettings struct {
+	transportType McpTransportType
+	C             *Config
+}
+
+func NewMcpSettings(c *Config) *McpSettings {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	settings := &McpSettings{C: c}
+	// Default Transport Type is Stdio
+	settings.transportType = StdioTransportType
+	return settings
+}
+
+func (c *Config) GetMcpTransportType() McpTransportType {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	if c.mcpSettings == nil {
+		c.mcpSettings = NewMcpSettings(c)
+	}
+	return c.mcpSettings.transportType
+}
+
+func (c *Config) SetMcpTransportType(transportType McpTransportType) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.mcpSettings.transportType = transportType
+}
+
 func NewCliSettings(c *Config) *CliSettings {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -204,6 +240,7 @@ type Config struct {
 	mcpBaseURL                       *url.URL
 	isLSPInitialized                 bool
 	deepCodeAiFixEnabled             bool
+	mcpSettings                      *McpSettings
 }
 
 func CurrentConfig() *Config {
@@ -245,6 +282,7 @@ func newConfig(engine workflow.Engine) *Config {
 	c := &Config{}
 	c.logger = getNewScrubbingLogger(c)
 	c.cliSettings = NewCliSettings(c)
+	c.mcpSettings = NewMcpSettings(c)
 	c.automaticAuthentication = true
 	c.configFile = ""
 	c.format = FormatMd
