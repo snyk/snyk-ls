@@ -123,6 +123,7 @@ func (m *McpLLMBinding) HandleSseServer(_ context.Context) error {
 	}
 	m.sseServer = server.NewSSEServer(m.mcpServer, m.baseURL.String())
 
+	//nolint:forbidigo
 	fmt.Printf("Starting with base URL %s\n", m.baseURL.String())
 
 	m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("starting")

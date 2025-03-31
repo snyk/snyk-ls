@@ -95,6 +95,7 @@ func McpStart(invocationContext workflow.InvocationContext, cliPath string) {
 	logger := invocationContext.GetEnhancedLogger()
 
 	// start mcp server
+	//nolint:forbidigo
 	fmt.Println("Starting up MCP Server...")
 	err := mcpServer.Start(context.Background(), invocationContext)
 
