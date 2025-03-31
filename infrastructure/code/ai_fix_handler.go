@@ -39,11 +39,10 @@ type AiFixHandler struct {
 type AiStatus string
 
 const (
-	AiFixNotStarted  AiStatus = "NOT_STARTED"
-	AiFixInProgress  AiStatus = "IN_PROGRESS"
-	AiFixSuccess     AiStatus = "SUCCESS"
-	AiFixError       AiStatus = "ERROR"
-	shouldRunExplain          = true
+	AiFixNotStarted AiStatus = "NOT_STARTED"
+	AiFixInProgress AiStatus = "IN_PROGRESS"
+	AiFixSuccess    AiStatus = "SUCCESS"
+	AiFixError      AiStatus = "ERROR"
 )
 const (
 	ExplainApiVersion string = "2024-10-15"
@@ -75,9 +74,6 @@ func (fixHandler *AiFixHandler) GetResults(fixId string) (filePath string, diff 
 }
 
 func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config.Config, issue types.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
-	if !shouldRunExplain {
-		return
-	}
 	logger := c.Logger().With().Str("method", "EnrichWithExplain").Logger()
 	if ctx.Err() != nil {
 		logger.Debug().Msgf("EnrichWithExplain context canceled")
