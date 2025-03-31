@@ -18,7 +18,6 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"os/exec"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -35,7 +34,6 @@ const (
 	SnykCodeTest      = "snyk_code_test"
 	SnykContainerTest = "snyk_container_test"
 	SnykIacTest       = "snyk_iac_test"
-	SnykFix           = "snyk_fix"
 	SnykIgnore        = "snyk_ignore"
 	SnykSbom          = "snyk_sbom"
 )
@@ -43,7 +41,7 @@ const (
 func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) error {
 	// Add snyk_test tool
 	testTool := mcp.NewTool(SnykTest,
-		mcp.WithDescription("Run Snyk security tests on code"),
+		mcp.WithDescription("Run Snyk security tests on code. Used for SCA scans"),
 		mcp.WithString("path",
 			mcp.Description("Path to test (default: current directory)"),
 		),
@@ -138,21 +136,6 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 	)
 	m.mcpServer.AddTool(iacTestTool, m.snykIacTestHandler(invocationCtx))
 
-	// Add snyk_fix tool
-	fixTool := mcp.NewTool(SnykFix,
-		mcp.WithDescription("Fix vulnerabilities in project"),
-		mcp.WithString("path",
-			mcp.Description("Path to fix (default: current directory)"),
-		),
-		mcp.WithBoolean("all_projects",
-			mcp.Description("Fix all projects in the directory"),
-		),
-		mcp.WithBoolean("dry_run",
-			mcp.Description("Don't make any changes, just show what would be done"),
-		),
-	)
-	m.mcpServer.AddTool(fixTool, m.snykFixHandler(invocationCtx))
-
 	// Add snyk_ignore tool
 	ignoreTool := mcp.NewTool(SnykIgnore,
 		mcp.WithDescription("Ignore a vulnerability"),
@@ -183,12 +166,6 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 		),
 	)
 	m.mcpServer.AddTool(sbomTool, m.snykSbomHandler(invocationCtx))
-
-	//// Add snyk_config resource
-	//configResource := mcp.NewResource(SnykConfig,
-	//	mcp.WithDescription("Get Snyk configuration information"),
-	//)
-	//m.mcpServer.AddResource(configResource, m.snykConfigHandler())
 
 	return nil
 }
@@ -244,13 +221,6 @@ func (m *McpLLMBinding) snykTestHandler(invocationCtx workflow.InvocationContext
 		if err != nil {
 			return nil, err
 		}
-		//
-		// Attempt to parse and summarize the JSON output
-		summary, err := summarizeSnykOutput(output)
-		if err == nil {
-			jsonSummary, _ := json.Marshal(summary)
-			return mcp.NewToolResultText(string(jsonSummary)), nil
-		}
 
 		return mcp.NewToolResultText(output), nil
 	}
@@ -297,7 +267,7 @@ func (m *McpLLMBinding) snykMonitorHandler(invocationCtx workflow.InvocationCont
 func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Extract parameters
-		params := []string{m.cliPath, "auth", "auth-type=oauth"}
+		params := []string{m.cliPath, "auth"}
 		_, err := m.runSnyk(ctx, invocationCtx, "", params)
 		if err != nil {
 			return nil, err
@@ -320,11 +290,12 @@ func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationC
 func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		params := []string{m.cliPath, "config", "unset", "INTERNAL_OAUTH_TOKEN_STORAGE"}
-		output, err := m.runSnyk(ctx, invocationCtx, "", params)
-		if err != nil {
-			return nil, err
-		}
-		return mcp.NewToolResultText(output), nil
+		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
+
+		params = []string{m.cliPath, "config", "unset", "token"}
+		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
+
+		return mcp.NewToolResultText("Successfully logged out"), nil
 	}
 }
 
@@ -386,30 +357,6 @@ func (m *McpLLMBinding) snykIacTestHandler(invocationCtx workflow.InvocationCont
 		// Build args and run command
 		args := buildArgs(m.cliPath, "iac", params)
 		args = append(args, "test")
-		if path != "" {
-			args = append(args, path)
-		}
-
-		output, err := m.runSnyk(ctx, invocationCtx, path, args)
-		if err != nil {
-			return nil, err
-		}
-		return mcp.NewToolResultText(output), nil
-	}
-}
-
-func (m *McpLLMBinding) snykFixHandler(invocationCtx workflow.InvocationContext) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Extract parameters
-		params := make(map[string]interface{})
-		path, _ := request.Params.Arguments["path"].(string)
-		dryRun, _ := request.Params.Arguments["dry_run"].(bool)
-
-		params["all-projects"] = true
-		params["dry-run"] = dryRun
-
-		// Build args and run command
-		args := buildArgs(m.cliPath, "fix", params)
 		if path != "" {
 			args = append(args, path)
 		}
