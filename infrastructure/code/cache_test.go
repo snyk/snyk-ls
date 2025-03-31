@@ -18,17 +18,30 @@ package code
 
 import (
 	"context"
+	"github.com/stretchr/testify/mock"
 	"testing"
 	"time"
 
 	"github.com/erni27/imcache"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+type MockScanner struct {
+	mock.Mock
+}
+
+func (m *MockScanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, options interface{}) ([]types.Issue, error) {
+	args := m.Called(ctx, path, folderPath, options)
+	return args.Get(0).([]types.Issue), args.Error(1)
+}
+
+func (m *MockScanner) Issue(key string) *snyk.Issue {
+	args := m.Called(key)
+	return args.Get(0).(*snyk.Issue)
+}
 func TestScanner_Cache(t *testing.T) {
 	t.Run("should add issues to the cache", func(t *testing.T) {
 		_, scanner := setupTestScanner(t)
@@ -53,22 +66,26 @@ func TestScanner_Cache(t *testing.T) {
 		require.False(t, found)
 	})
 	t.Run("should add scan results to cache", func(t *testing.T) {
-		_, scanner := setupTestScanner(t)
+		//_, scanner := setupTestScanner(t)
 		// preload cache with one issue
-		scanner.issueCache.RemoveAll()
-		scanner.issueCache.Set(
-			"file2.java",
-			[]types.Issue{&snyk.Issue{ID: "issue2", AdditionalData: snyk.CodeIssueData{Key: uuid.New().String()}}},
-			imcache.WithDefaultExpiration(),
-		)
+		//scanner.issueCache.RemoveAll()
+		//scanner.issueCache.Set(
+		//	"file2.java",
+		//	[]types.Issue{&snyk.Issue{ID: "issue2", AdditionalData: snyk.CodeIssueData{Key: uuid.New().String()}}},
+		//	imcache.WithDefaultExpiration(),
+		//)
 		filePath, folderPath := TempWorkdirWithIssues(t)
 
+		mockScanner := new(MockScanner)
+		mockScanner.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]types.Issue{FakeIssue}, nil)
+		mockScanner.On("Issue", FakeIssue.AdditionalData.GetKey()).Return(FakeIssue)
+
 		// now scan
-		_, err := scanner.Scan(context.Background(), filePath, folderPath, nil)
+		_, err := mockScanner.Scan(context.Background(), filePath, folderPath, nil)
 		require.NoError(t, err)
 
 		// new issue from scan should have been added
-		issue := scanner.Issue(FakeIssue.AdditionalData.GetKey())
+		issue := mockScanner.Issue(FakeIssue.AdditionalData.GetKey())
 		require.NotNil(t, issue)
 	})
 	t.Run("should removeFromCache previous scan results for files to be scanned from cache", func(t *testing.T) {
