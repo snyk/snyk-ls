@@ -25,7 +25,7 @@ import (
 
 // summarizeSnykOutput summarizes JSON output from Snyk
 //
-//nolint:gocyclo
+//nolint:gocyclo // this will be deleted
 func summarizeSnykOutput(jsonOutput string) (map[string]interface{}, error) {
 	var rawData map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonOutput), &rawData); err != nil {
@@ -70,7 +70,7 @@ func summarizeSnykOutput(jsonOutput string) (map[string]interface{}, error) {
 	summary["total_vulnerabilities"] = len(vulnsSlice)
 
 	// For severity counts and top packages
-	//nolint:forcetypeassert
+	//nolint:forcetypeassert // this will be deleted
 	severityCounts := summary["severity_counts"].(map[string]int)
 	packageCounter := make(map[string]int)
 
