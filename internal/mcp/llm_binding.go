@@ -28,34 +28,30 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+)
 
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/authentication"
-	"github.com/snyk/snyk-ls/infrastructure/cli"
-	"github.com/snyk/snyk-ls/internal/types"
+const (
+	SseTransportType   string = "sse"
+	StdioTransportType string = "stdio"
 )
 
 // McpLLMBinding is an implementation of a mcp server that allows interaction between
 // a given SnykLLMBinding and a CommandService.
 type McpLLMBinding struct {
-	c                         *config.Config
-	scanner                   types.Scanner
-	logger                    *zerolog.Logger
-	mcpServer                 *server.MCPServer
-	sseServer                 *server.SSEServer
-	stdioServer               *server.StdioServer
-	baseURL                   *url.URL
-	forwardingResultProcessor types.ScanResultProcessor
-	cliExecutor               cli.Executor
-	mutex                     sync.Mutex
-	authService               authentication.AuthenticationService
-	started                   bool
+	logger      *zerolog.Logger
+	mcpServer   *server.MCPServer
+	sseServer   *server.SSEServer
+	stdioServer *server.StdioServer
+	baseURL     *url.URL
+	mutex       sync.Mutex
+	started     bool
+	cliPath     string
 }
 
-func NewMcpLLMBinding(c *config.Config, opts ...McpOption) *McpLLMBinding {
+func NewMcpLLMBinding(opts ...Option) *McpLLMBinding {
 	logger := zerolog.Nop()
 	mcpServerImpl := &McpLLMBinding{
-		c:      c,
 		logger: &logger,
 	}
 
@@ -76,24 +72,26 @@ func defaultURL() *url.URL {
 }
 
 // Start starts the MCP server. It blocks until the server is stopped via Shutdown.
-func (m *McpLLMBinding) Start() error {
+func (m *McpLLMBinding) Start(ctx workflow.InvocationContext, cliPath string) error {
 	m.mcpServer = server.NewMCPServer(
 		"Snyk MCP Server",
-		config.Version,
+		ctx.GetRuntimeInfo().GetVersion(),
 		server.WithLogging(),
 		server.WithResourceCapabilities(true, true),
 		server.WithPromptCapabilities(true),
 	)
 
-	err := m.addSnykTools()
+	err := m.addSnykTools(ctx)
 	if err != nil {
 		return err
 	}
-
-	if m.c.GetMcpTransportType() == config.StdioTransportType {
+	transportType := ctx.GetConfiguration().GetString("transport")
+	if transportType == StdioTransportType {
 		return m.HandleStdioServer()
-	} else {
+	} else if transportType == SseTransportType {
 		return m.HandleSseServer()
+	} else {
+		return fmt.Errorf("invalid transport type: %s", transportType)
 	}
 }
 
@@ -128,7 +126,6 @@ func (m *McpLLMBinding) HandleSseServer() error {
 		m.mutex.Lock()
 		m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("started")
 		m.started = true
-		m.c.SetMCPServerURL(m.baseURL)
 		m.mutex.Unlock()
 	}()
 

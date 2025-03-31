@@ -20,26 +20,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestNewMcpServer(t *testing.T) {
-	c := testutil.UnitTest(t)
-	mcpServer := NewMcpLLMBinding(c)
+	mcpServer := NewMcpLLMBinding()
 	assert.NotNil(t, mcpServer)
 	assert.NotNil(t, mcpServer.logger)
 }
 
 func TestNewMcpServerWithOptions(t *testing.T) {
-	c := testutil.UnitTest(t)
 	baseURL, _ := url.Parse("http://test:8080")
 
-	s := scanner.NewTestScanner()
-	mcpServer := NewMcpLLMBinding(c, WithScanner(s), WithBaseURL(baseURL))
+	mcpServer := NewMcpLLMBinding(WithBaseURL(baseURL))
 
-	assert.Equal(t, s, mcpServer.scanner)
 	assert.Equal(t, baseURL, mcpServer.baseURL)
 }
 

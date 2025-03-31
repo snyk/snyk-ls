@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	mcp2 "github.com/snyk/snyk-ls/internal/mcp"
@@ -78,27 +80,6 @@ func Start(c *config.Config) {
 	di.Init()
 	initHandlers(srv, handlers, c)
 
-	// This will be kept to not break current integration
-	// start mcp server
-	logger.Info().Msg("Starting up MCP Server...")
-	var mcpServer *mcp2.McpLLMBinding
-	go func() {
-		mcpServer = mcp2.NewMcpLLMBinding(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()))
-		c.SetMcpTransportType(config.SseTransportType)
-		err := mcpServer.Start()
-		if err != nil {
-			c.Logger().Err(err).Msg("failed to start mcp server")
-		}
-	}()
-
-	// shutdown mcp server once the lsp returns from wait status
-	defer func() {
-		if mcpServer != nil {
-			logger.Info().Msg("Shutting down MCP Server...")
-			mcpServer.Shutdown(context.Background())
-		}
-	}()
-
 	logger.Info().Msg("Starting up Language Server...")
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
 	status := srv.WaitStatus()
@@ -109,38 +90,16 @@ func Start(c *config.Config) {
 	}
 }
 
-func McpStart(c *config.Config) {
-	c.ConfigureLogging(nil)
-
-	di.Init()
-	logger := c.Logger().With().Str("method", "server.McpStart").Logger()
-
-	mcpServer := mcp2.NewMcpLLMBinding(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()), mcp2.WithCliExecutor(cli.NewExecutor(c, di.ErrorReporter(), di.Notifier())), mcp2.WithAuthService(di.AuthenticationService()))
-
-	file, err := storedconfig.ConfigFile("snyk-mcp")
-	if err != nil {
-		return
-	}
-
-	storage, err := storage2.NewStorageWithCallbacks(
-		storage2.WithStorageFile(file),
-		storage2.WithLogger(c.Logger()),
-	)
-
-	if err != nil {
-		return
-	}
-
-	c.SetStorage(storage)
-	c.SetAuthenticationMethod(types.OAuthAuthentication)
-	di.AuthenticationService().ConfigureProviders(c)
+func McpStart(ctx workflow.InvocationContext, cliPath string) {
+	mcpServer := mcp2.NewMcpLLMBinding(mcp2.WithLogger(ctx.GetEnhancedLogger()), mcp2.WithCliPath(cliPath))
+	logger := ctx.GetEnhancedLogger()
 
 	// start mcp server
 	logger.Info().Msg("Starting up MCP Server...")
-	err = mcpServer.Start()
+	err := mcpServer.Start(ctx, cliPath)
 
 	if err != nil {
-		c.Logger().Err(err).Msg("failed to start mcp server")
+		logger.Err(err).Msg("failed to start mcp server")
 	}
 	defer func() {
 		if mcpServer != nil {
@@ -520,14 +479,7 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 			)
 			logger.Info().Msg(msg)
 		}
-		defer func() {
-			// delay sending the mcp server URL
-			for c.GetMCPServerURL() == nil {
-				// wait until the server URL is available
-				time.Sleep(500 * time.Millisecond)
-			}
-			di.Notifier().Send(types.McpServerURLParams{URL: c.GetMCPServerURL().String()})
-		}()
+
 		return nil, nil
 	})
 }

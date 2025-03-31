@@ -17,23 +17,15 @@
 package mcp_extension
 
 import (
-	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/snyk/snyk-ls/application/entrypoint"
 	"github.com/snyk/snyk-ls/application/server"
-	"github.com/snyk/snyk-ls/infrastructure/cli"
-	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
-
-	"github.com/rs/zerolog"
 
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
-
-	"github.com/snyk/snyk-ls/application/config"
 )
 
 var WORKFLOWID_MCP = workflow.NewWorkflowIdentifier("mcp")
@@ -42,23 +34,6 @@ func Init(engine workflow.Engine) error {
 	flags := pflag.NewFlagSet("mcp", pflag.ContinueOnError)
 
 	flags.StringP("transport", "t", "sse", "sets transport to <sse|stdio>")
-	flags.BoolP("v", "v", false, "prints the version")
-	flags.StringP("logLevelFlag", "l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
-	flags.StringP("logPathFlag", "f", "", "sets the log file for the mcp server")
-	flags.StringP(
-		"formatFlag",
-		"o",
-		config.FormatMd,
-		"sets format of diagnostics. Accepted values \""+config.FormatMd+"\" and \""+config.FormatHtml+"\"")
-	flags.StringP(
-		"configfile",
-		"c",
-		"",
-		"provide the full path of a cfg file to use. format VARIABLENAME=VARIABLEVALUE")
-	flags.Bool(
-		"licenses",
-		false,
-		"displays license information")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flags)
 	entry, _ := engine.Register(WORKFLOWID_MCP, cfg, mcpWorkflow)
@@ -76,50 +51,32 @@ func mcpWorkflow(
 	output = []workflow.Data{}
 
 	logger := invocation.GetEnhancedLogger()
-	extensionConfig := invocation.GetConfiguration()
 
-	logger.Info().Msgf("LS Version: %s", config.Version)
-
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	defaultConfig := invocation.GetEngine().GetConfiguration()
-	defaultConfig.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
-
-	c := config.NewFromExtension(invocation.GetEngine())
-	c.SetConfigFile(extensionConfig.GetString("configfile"))
-	c.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
-	c.SetLogPath(extensionConfig.GetString("logPathFlag"))
-	c.SetFormat(extensionConfig.GetString("formatFlag"))
-	c.SetMcpTransportType(config.McpTransportType(extensionConfig.GetString("transport")))
-	config.SetCurrentConfig(c)
-
-	SetCliPath(c)
-
-	if extensionConfig.GetBool("v") {
-		fmt.Println(config.Version) //nolint:forbidigo // we want to output the version to stdout here
+	cliPath, err := GetCliPath(invocation)
+	if err != nil {
+		logger.Err(err).Msg("Failed to set cli path")
 		return output, err
-	} else if extensionConfig.GetBool("licenses") {
-		about, err := cli.NewExtensionExecutor(c).Execute(context.Background(), []string{"snyk", "--about"}, "")
-		fmt.Println(string(about)) //nolint:forbidigo // we want to output licenses to stdout here
-		return output, err
-	} else {
-		c.Logger().Trace().Interface("environment", os.Environ()).Msg("start environment")
-		server.McpStart(c)
 	}
+	logger.Trace().Interface("environment", os.Environ()).Msg("start environment")
+	server.McpStart(invocation, cliPath)
 
 	return output, nil
 }
 
-func SetCliPath(c *config.Config) {
+func GetCliPath(ctx workflow.InvocationContext) (string, error) {
+	logger := ctx.GetEnhancedLogger()
 	exePath, err := os.Executable()
 	if err != nil {
-		fmt.Println(err.Error())
+		logger.Err(err).Msg("Failed to get executable path")
+		return "", err
 	}
 	resolvedPath, err := filepath.EvalSymlinks(exePath)
 
 	if err != nil {
-		fmt.Println(err.Error())
+		logger.Err(err).Msg("Failed to eval symlink from path")
+		return "", err
 	} else {
 		// Set Cli path to current process path
-		c.CliSettings().SetPath(resolvedPath)
+		return resolvedPath, nil
 	}
 }
