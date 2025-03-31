@@ -44,7 +44,7 @@ type McpLLMBinding struct {
 	sseServer   *server.SSEServer
 	stdioServer *server.StdioServer
 	baseURL     *url.URL
-	mutex       sync.Mutex
+	mutex       sync.RWMutex
 	started     bool
 	cliPath     string
 }
@@ -72,33 +72,41 @@ func defaultURL() *url.URL {
 }
 
 // Start starts the MCP server. It blocks until the server is stopped via Shutdown.
-func (m *McpLLMBinding) Start(ctx workflow.InvocationContext, cliPath string) error {
+func (m *McpLLMBinding) Start(ctx context.Context, invocationContext workflow.InvocationContext) error {
+	runTimeInfo := invocationContext.GetRuntimeInfo()
+	version := ""
+	if runTimeInfo != nil {
+		version = runTimeInfo.GetVersion()
+	}
 	m.mcpServer = server.NewMCPServer(
 		"Snyk MCP Server",
-		ctx.GetRuntimeInfo().GetVersion(),
+		version,
 		server.WithLogging(),
 		server.WithResourceCapabilities(true, true),
 		server.WithPromptCapabilities(true),
 	)
 
-	err := m.addSnykTools(ctx)
+	err := m.addSnykTools(invocationContext)
 	if err != nil {
 		return err
 	}
-	transportType := ctx.GetConfiguration().GetString("transport")
+	transportType := invocationContext.GetConfiguration().GetString("transport")
 	if transportType == StdioTransportType {
-		return m.HandleStdioServer()
+		return m.HandleStdioServer(ctx)
 	} else if transportType == SseTransportType {
-		return m.HandleSseServer()
+		return m.HandleSseServer(ctx)
 	} else {
 		return fmt.Errorf("invalid transport type: %s", transportType)
 	}
 }
 
-func (m *McpLLMBinding) HandleStdioServer() error {
+func (m *McpLLMBinding) HandleStdioServer(ctx context.Context) error {
 	m.stdioServer = server.NewStdioServer(m.mcpServer)
+	m.mutex.Lock()
+	m.started = true
+	m.mutex.Unlock()
 
-	err := m.stdioServer.Listen(context.Background(), os.Stdin, os.Stdout)
+	err := m.stdioServer.Listen(ctx, os.Stdin, os.Stdout)
 
 	if err != nil {
 		m.logger.Error().Err(err).Msg("Error starting MCP Stdio server")
@@ -108,12 +116,14 @@ func (m *McpLLMBinding) HandleStdioServer() error {
 	return nil
 }
 
-func (m *McpLLMBinding) HandleSseServer() error {
+func (m *McpLLMBinding) HandleSseServer(_ context.Context) error {
 	// listen on default url/port if none was configured
 	if m.baseURL == nil {
 		m.baseURL = defaultURL()
 	}
 	m.sseServer = server.NewSSEServer(m.mcpServer, m.baseURL.String())
+
+	fmt.Printf("Starting with base URL %s\n", m.baseURL.String())
 
 	m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("starting")
 	go func() {
@@ -153,7 +163,8 @@ func (m *McpLLMBinding) Shutdown(ctx context.Context) {
 }
 
 func (m *McpLLMBinding) Started() bool {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
 	return m.started
 }

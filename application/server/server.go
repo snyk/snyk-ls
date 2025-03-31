@@ -90,22 +90,20 @@ func Start(c *config.Config) {
 	}
 }
 
-func McpStart(ctx workflow.InvocationContext, cliPath string) {
-	mcpServer := mcp2.NewMcpLLMBinding(mcp2.WithLogger(ctx.GetEnhancedLogger()), mcp2.WithCliPath(cliPath))
-	logger := ctx.GetEnhancedLogger()
+func McpStart(invocationContext workflow.InvocationContext, cliPath string) {
+	mcpServer := mcp2.NewMcpLLMBinding(mcp2.WithLogger(invocationContext.GetEnhancedLogger()), mcp2.WithCliPath(cliPath))
+	logger := invocationContext.GetEnhancedLogger()
 
 	// start mcp server
-	logger.Info().Msg("Starting up MCP Server...")
-	err := mcpServer.Start(ctx, cliPath)
+	fmt.Println("Starting up MCP Server...")
+	err := mcpServer.Start(context.Background(), invocationContext)
 
 	if err != nil {
 		logger.Err(err).Msg("failed to start mcp server")
 	}
 	defer func() {
-		if mcpServer != nil {
-			logger.Info().Msg("Shutting down MCP Server...")
-			mcpServer.Shutdown(context.Background())
-		}
+		logger.Info().Msg("Shutting down MCP Server...")
+		mcpServer.Shutdown(context.Background())
 	}()
 }
 
