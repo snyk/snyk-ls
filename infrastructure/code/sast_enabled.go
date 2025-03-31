@@ -17,9 +17,10 @@
 package code
 
 import (
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/types"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 const codeDisabledInOrganisationMessageText = "It looks like your organization has disabled Snyk Code. " +

@@ -17,8 +17,9 @@
 package code
 
 import (
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/snyk-ls/application/config"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 func (sc *Scanner) isLocalEngineEnabled(sastResponse sast_contract.SastResponse) bool {

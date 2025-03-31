@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"net/http"
 	"os"
 	"runtime"
@@ -58,6 +57,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func Start(c *config.Config) {

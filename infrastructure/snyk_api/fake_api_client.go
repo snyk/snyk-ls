@@ -53,19 +53,6 @@ func (f *FakeApiClient) addCallForMethod(method string, args []any) {
 	f.Calls[method] = append(f.Calls[method], args)
 }
 
-func (f *FakeApiClient) addCall(params []any, op string) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	if f.Calls == nil {
-		f.Calls = make(map[string][][]any)
-	}
-	calls := f.Calls[op]
-	var opParams []any
-	opParams = append(opParams, params...)
-
-	f.Calls[op] = append(calls, opParams)
-}
-
 func (f *FakeApiClient) GetCallParams(callNo int, op string) []any {
 	mutex.Lock()
 	defer mutex.Unlock()

@@ -19,7 +19,6 @@ package code
 import (
 	"bytes"
 	"context"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"os"
 	"sync"
 	"time"
@@ -49,6 +48,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 type ScanStatus struct {
@@ -150,23 +150,24 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
-	gafConfig := sc.C.Engine().GetConfiguration()
-	sastResponse := gafConfig.Get(code_workflow.ConfigurationSastSettings)
 
-	sastSettingsPtr, ok := sastResponse.(*sast_contract.SastResponse)
-	if !ok {
-		return issues, errors.New("Failed to convert SAST settings to the correct type")
+	sastResponse, err := sastSettings(sc)
+
+	if err != nil {
+		logger.Error().Err(err).Msg("couldn't get sast enablement")
+		sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{})
+		return issues, errors.New("couldn't get sast enablement")
 	}
-	sastSettings := *sastSettingsPtr
-	if !sc.isSastEnabled(sastSettings) {
+
+	if !sc.isSastEnabled(sastResponse) {
 		return issues, errors.New("SAST is not enabled")
 	}
 
-	if sc.isLocalEngineEnabled(sastSettings) {
-		sc.updateCodeApiLocalEngine(sastSettings)
+	if sc.isLocalEngineEnabled(sastResponse) {
+		sc.updateCodeApiLocalEngine(sastResponse)
 	}
 
-	sc.C.SetDeepCodeAIFixEnabled(sastSettings.AutofixEnabled)
+	sc.C.SetDeepCodeAIFixEnabled(sastResponse.AutofixEnabled)
 
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[folderPath] == nil {
@@ -212,6 +213,23 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	sc.removeFromCache(filesToBeScanned)
 	sc.addToCache(results)
 	return results, err
+}
+
+func sastSettings(sc *Scanner) (sast_contract.SastResponse, error) {
+	logger := sc.C.Logger().With().Str("method", "code.Scan").Logger()
+
+	gafConfig := sc.C.Engine().GetConfiguration()
+	sastResponse := gafConfig.Get(code_workflow.ConfigurationSastSettings)
+
+	sastSettingsPtr, ok := sastResponse.(*sast_contract.SastResponse)
+	if !ok {
+		logger.Info().Msg("Failed to convert SAST settings to the correct type")
+	}
+
+	if sastSettingsPtr != nil {
+		return *sastSettingsPtr, nil
+	}
+	return sast_contract.SastResponse{}, errors.New("couldn't get sast enablement")
 }
 
 func filterCodeIssues(c *config.Config, issues []types.Issue) []types.Issue {
