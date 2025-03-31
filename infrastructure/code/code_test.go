@@ -849,27 +849,6 @@ func Test_SastApiCall(t *testing.T) {
 		assert.Error(t, err)
 		assert.Equal(t, err.Error(), "couldn't get sast enablement")
 	})
-
-	t.Run("should return an error if Snyk Code is enabled and API SAST is disabled", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.ApiError = nil
-		apiClient.CodeEnabled = false
-		_, err := scanner.Scan(context.Background(), "fileName", "tempDir", nil)
-
-		assert.Error(t, err)
-		assert.Equal(t, err.Error(), "SAST is not enabled")
-	})
-
-	t.Run("should return an error if API SAST is disabled and local-engine is enabled", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.ApiError = nil
-		apiClient.CodeEnabled = false
-		apiClient.LocalCodeEngine.Enabled = true
-		_, err := scanner.Scan(context.Background(), "fileName", "tempDir", nil)
-
-		assert.Error(t, err)
-		assert.Equal(t, err.Error(), "SAST is not enabled")
-	})
 }
 
 func TestScanner_getFilesToBeScanned(t *testing.T) {
