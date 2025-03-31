@@ -319,7 +319,7 @@ func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationC
 
 func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		params := []string{m.cliPath, "config", "unset", "token"}
+		params := []string{m.cliPath, "config", "unset", "INTERNAL_OAUTH_TOKEN_STORAGE"}
 		output, err := m.runSnyk(ctx, invocationCtx, "", params)
 		if err != nil {
 			return nil, err
