@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -38,14 +37,14 @@ const (
 	SnykLogout     = "snyk_logout"
 )
 
-type SnykToolDefinition struct {
-	Name        string              `json:"name"`
-	Description string              `json:"description"`
-	Command     string              `json:"command"`
-	Params      []SnykToolParameter `json:"params"`
+type SnykMcpToolsDefinition struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Command     string                 `json:"command"`
+	Params      []SnykMcpToolParameter `json:"params"`
 }
 
-type SnykToolParameter struct {
+type SnykMcpToolParameter struct {
 	Name        string `json:"name"`
 	Type        string `json:"type"`
 	IsRequired  bool   `json:"isRequired"`
@@ -55,12 +54,12 @@ type SnykToolParameter struct {
 //go:embed snyk_tools.json
 var snykToolsJson string
 
-type SnykToolsConfig struct {
-	Tools []SnykToolDefinition `json:"tools"`
+type SnykMcpTools struct {
+	Tools []SnykMcpToolsDefinition `json:"tools"`
 }
 
-func getSnykToolsConfig() (*SnykToolsConfig, error) {
-	var config SnykToolsConfig
+func loadMcpToolsFromJson() (*SnykMcpTools, error) {
+	var config SnykMcpTools
 	if err := json.Unmarshal([]byte(snykToolsJson), &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -68,66 +67,8 @@ func getSnykToolsConfig() (*SnykToolsConfig, error) {
 	return &config, nil
 }
 
-// createToolFromDefinition creates an MCP tool from a Snyk tool definition
-func createToolFromDefinition(toolDef *SnykToolDefinition) mcp.Tool {
-	opts := []mcp.ToolOption{mcp.WithDescription(toolDef.Description)}
-	for _, param := range toolDef.Params {
-		if param.Type == "string" {
-			if param.IsRequired {
-				opts = append(opts, mcp.WithString(param.Name, mcp.Required(), mcp.Description(param.Description)))
-			} else {
-				opts = append(opts, mcp.WithString(param.Name, mcp.Description(param.Description)))
-			}
-		} else if param.Type == "boolean" {
-			if param.IsRequired {
-				opts = append(opts, mcp.WithBoolean(param.Name, mcp.Required(), mcp.Description(param.Description)))
-			} else {
-				opts = append(opts, mcp.WithBoolean(param.Name, mcp.Description(param.Description)))
-			}
-		}
-	}
-
-	return mcp.NewTool(toolDef.Name, opts...)
-}
-
-// extractParamsFromRequestArgs extracts parameters from the arguments based on the tool definition
-func extractParamsFromRequestArgs(toolDef SnykToolDefinition, arguments map[string]interface{}) (map[string]interface{}, string) {
-	params := make(map[string]interface{})
-	var workingDir string
-
-	for _, paramDef := range toolDef.Params {
-		val, ok := arguments[paramDef.Name]
-		if !ok {
-			continue
-		}
-
-		// Store path separately to use as working directory
-		if paramDef.Name == "path" {
-			if pathStr, ok := val.(string); ok {
-				workingDir = pathStr
-			}
-		}
-
-		// Convert parameter name from snake_case to kebab-case for CLI arguments
-		cliParamName := strings.ReplaceAll(paramDef.Name, "_", "-")
-
-		// Cast the value based on parameter type
-		if paramDef.Type == "string" {
-			if strVal, ok := val.(string); ok && strVal != "" {
-				params[cliParamName] = strVal
-			}
-		} else if paramDef.Type == "boolean" {
-			if boolVal, ok := val.(bool); ok && boolVal {
-				params[cliParamName] = true
-			}
-		}
-	}
-
-	return params, workingDir
-}
-
 func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) error {
-	config, err := getSnykToolsConfig()
+	config, err := loadMcpToolsFromJson()
 	if err != nil || config == nil {
 		m.logger.Err(err).Msg("Failed to load Snyk tools configuration")
 		return err
@@ -175,7 +116,7 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 }
 
 // Handler implementations for each Snyk tool
-func (m *McpLLMBinding) snykTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Extract parameters based on tool definition
 		params, workingDir := extractParamsFromRequestArgs(toolDef, request.Params.Arguments)
@@ -198,7 +139,7 @@ func (m *McpLLMBinding) snykTestHandler(invocationCtx workflow.InvocationContext
 	}
 }
 
-func (m *McpLLMBinding) snykVersionHandler(invocationCtx workflow.InvocationContext, _ SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykVersionHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// For simple commands without parameters, we can directly execute
 		params := []string{m.cliPath, "--version"}
@@ -210,7 +151,7 @@ func (m *McpLLMBinding) snykVersionHandler(invocationCtx workflow.InvocationCont
 	}
 }
 
-func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext, _ SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Auth command doesn't need parameters from the JSON
 		params := []string{m.cliPath, "auth"}
@@ -222,7 +163,7 @@ func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext
 	}
 }
 
-func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationContext, _ SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Hardcoded whoami command
 		params := []string{m.cliPath, "whoami", "--experimental"}
@@ -234,7 +175,7 @@ func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationC
 	}
 }
 
-func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, _ SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Special handling for logout which needs multiple commands
 		params := []string{m.cliPath, "config", "unset", "INTERNAL_OAUTH_TOKEN_STORAGE"}
@@ -247,7 +188,7 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 	}
 }
 
-func (m *McpLLMBinding) snykCodeTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykCodeTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		params, workingDir := extractParamsFromRequestArgs(toolDef, request.Params.Arguments)
 
