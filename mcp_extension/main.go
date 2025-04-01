@@ -17,8 +17,11 @@
 package mcp_extension
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/entrypoint"
 	"github.com/snyk/snyk-ls/application/server"
@@ -34,6 +37,7 @@ func Init(engine workflow.Engine) error {
 	flags := pflag.NewFlagSet("mcp", pflag.ContinueOnError)
 
 	flags.StringP("transport", "t", "sse", "sets transport to <sse|stdio>")
+	flags.Bool(configuration.FLAG_EXPERIMENTAL, false, "enable experimental mcp command")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flags)
 	entry, _ := engine.Register(WORKFLOWID_MCP, cfg, mcpWorkflow)
@@ -48,8 +52,14 @@ func mcpWorkflow(
 ) (output []workflow.Data, err error) {
 	defer entrypoint.OnPanicRecover()
 
-	output = []workflow.Data{}
+	config := invocation.GetConfiguration()
 
+	// only run if experimental flag is set
+	if !config.GetBool(configuration.FLAG_EXPERIMENTAL) {
+		return nil, fmt.Errorf("set `--experimental` flag to enable mcp command")
+	}
+
+	output = []workflow.Data{}
 	logger := invocation.GetEnhancedLogger()
 
 	cliPath, err := GetCliPath(invocation)

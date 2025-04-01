@@ -97,7 +97,7 @@ func McpStart(invocationContext workflow.InvocationContext, cliPath string) {
 	// start mcp server
 	//nolint:forbidigo // stdio stream isn't started yet
 	fmt.Println("Starting up MCP Server...")
-	err := mcpServer.Start(context.Background(), invocationContext)
+	err := mcpServer.Start(invocationContext)
 
 	if err != nil {
 		logger.Err(err).Msg("failed to start mcp server")

@@ -19,13 +19,9 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/mark3labs/mcp-go/server"
@@ -75,7 +71,7 @@ func defaultURL() *url.URL {
 }
 
 // Start starts the MCP server. It blocks until the server is stopped via Shutdown.
-func (m *McpLLMBinding) Start(ctx context.Context, invocationContext workflow.InvocationContext) error {
+func (m *McpLLMBinding) Start(invocationContext workflow.InvocationContext) error {
 	runTimeInfo := invocationContext.GetRuntimeInfo()
 	version := ""
 	if runTimeInfo != nil {
@@ -93,36 +89,23 @@ func (m *McpLLMBinding) Start(ctx context.Context, invocationContext workflow.In
 	if err != nil {
 		return err
 	}
+
 	transportType := invocationContext.GetConfiguration().GetString("transport")
 	if transportType == StdioTransportType {
-		return m.HandleStdioServer(ctx)
+		return m.HandleStdioServer()
 	} else if transportType == SseTransportType {
-		return m.HandleSseServer(ctx)
+		return m.HandleSseServer()
 	} else {
 		return fmt.Errorf("invalid transport type: %s", transportType)
 	}
 }
 
-func (m *McpLLMBinding) HandleStdioServer(ctx context.Context) error {
-	m.stdioServer = server.NewStdioServer(m.mcpServer)
+func (m *McpLLMBinding) HandleStdioServer() error {
 	m.mutex.Lock()
 	m.started = true
 	m.mutex.Unlock()
-	m.stdioServer.SetErrorLogger(log.New(os.Stderr, "", log.LstdFlags))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Set up signal handling
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
-
-	go func() {
-		<-sigChan
-		cancel()
-	}()
-
-	err := m.stdioServer.Listen(ctx, os.Stdin, os.Stdout)
+	err := server.ServeStdio(m.mcpServer)
 
 	if err != nil {
 		m.logger.Error().Err(err).Msg("Error starting MCP Stdio server")
@@ -132,11 +115,12 @@ func (m *McpLLMBinding) HandleStdioServer(ctx context.Context) error {
 	return nil
 }
 
-func (m *McpLLMBinding) HandleSseServer(_ context.Context) error {
+func (m *McpLLMBinding) HandleSseServer() error {
 	// listen on default url/port if none was configured
 	if m.baseURL == nil {
 		m.baseURL = defaultURL()
 	}
+
 	m.sseServer = server.NewSSEServer(m.mcpServer, m.baseURL.String())
 
 	//nolint:forbidigo // stdio stream isn't started yet
