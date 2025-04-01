@@ -19,10 +19,13 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/mark3labs/mcp-go/server"
@@ -105,6 +108,19 @@ func (m *McpLLMBinding) HandleStdioServer(ctx context.Context) error {
 	m.mutex.Lock()
 	m.started = true
 	m.mutex.Unlock()
+	m.stdioServer.SetErrorLogger(log.New(os.Stderr, "", log.LstdFlags))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Set up signal handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+
+	go func() {
+		<-sigChan
+		cancel()
+	}()
 
 	err := m.stdioServer.Listen(ctx, os.Stdin, os.Stdout)
 
