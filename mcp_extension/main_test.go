@@ -11,8 +11,14 @@ import (
 )
 
 func Test_ExtensionEntryPoint(t *testing.T) {
-	expectedTransportType := "sse"
+	expectedTransportType := "stdio"
 	engine := app.CreateAppEngineWithOptions()
+
+	engineConfig := configuration.NewWithOpts(
+		configuration.WithAutomaticEnv(),
+	)
+	engineConfig.Set("transport", expectedTransportType)
+	engineConfig.Set(configuration.FLAG_EXPERIMENTAL, true)
 
 	//register extension under test
 	err := Init(engine)
@@ -22,16 +28,12 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 		err = engine.Init()
 		assert.Nil(t, err)
 
-		engineConfig := configuration.NewWithOpts(
-			configuration.WithAutomaticEnv(),
-		)
-		engineConfig.Set("transport", expectedTransportType)
 		data, err := engine.InvokeWithConfig(WORKFLOWID_MCP, engineConfig)
 		assert.Nil(t, err)
 		assert.Empty(t, data)
 	}()
 
 	assert.Eventuallyf(t, func() bool {
-		return expectedTransportType == engine.GetConfiguration().GetString("transport")
+		return expectedTransportType == engineConfig.GetString("transport") && engineConfig.GetBool(configuration.FLAG_EXPERIMENTAL)
 	}, time.Minute, time.Millisecond, "open browser was not called")
 }
