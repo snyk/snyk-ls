@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -36,7 +37,27 @@ const DontTrust = "Don't trust folders"
 func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
+	// send folder configs (they are queued until initialization is done)
+	go sendFolderConfigs(c, notifier)
 	HandleUntrustedFolders(ctx, c, srv)
+}
+
+func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
+	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
+	configuration := c.Engine().GetConfiguration()
+
+	var folderConfigs []types.FolderConfig
+	for _, folder := range c.Workspace().Folders() {
+		storedConfig, err2 := storedconfig.GetOrCreateFolderConfig(configuration, folder.Path())
+		if err2 != nil {
+			logger.Err(err2).Msg("unable to load stored config")
+			return
+		}
+		folderConfigs = append(folderConfigs, *storedConfig)
+	}
+
+	folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
+	notifier.Send(folderConfigsParam)
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {

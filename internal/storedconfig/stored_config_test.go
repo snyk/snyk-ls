@@ -23,9 +23,8 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/require"
-
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storage"
@@ -33,7 +32,7 @@ import (
 )
 
 func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.T) {
-	conf, storageFile := setupConfigurationWithStorage(t)
+	conf, storageFile := SetupConfigurationWithStorage(t)
 	path := types.FilePath("/testPath")
 	dir, err := os.UserHomeDir()
 	require.NoError(t, err)
@@ -64,7 +63,7 @@ func Test_GetOrCreateFolderConfig_shouldIntegrateGitBranchInformation(t *testing
 	repo, err := SetupCustomTestRepo(t, dir, "https://github.com/snyk-labs/nodejs-goof", "", &logger)
 	require.NoError(t, err)
 
-	conf, _ := setupConfigurationWithStorage(t)
+	conf, _ := SetupConfigurationWithStorage(t)
 
 	actual, err := GetOrCreateFolderConfig(conf, repo)
 
@@ -72,18 +71,8 @@ func Test_GetOrCreateFolderConfig_shouldIntegrateGitBranchInformation(t *testing
 	require.Greater(t, len(actual.LocalBranches), 0)
 }
 
-func setupConfigurationWithStorage(t *testing.T) (configuration.Configuration, string) {
-	t.Helper()
-	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	storageFile := filepath.Join(t.TempDir(), "testStorage")
-	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
-	require.NoError(t, err)
-	conf.SetStorage(s)
-	return conf, storageFile
-}
-
 func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T) {
-	conf, _ := setupConfigurationWithStorage(t)
+	conf, _ := SetupConfigurationWithStorage(t)
 	path := types.FilePath("/testPath")
 	scanCommandConfig := types.ScanCommandConfig{
 		PreScanCommand:              "/a",
@@ -109,4 +98,28 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 	actual, err := GetOrCreateFolderConfig(conf, path)
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)
+}
+
+func SetupConfigurationWithStorage(t *testing.T) (configuration.Configuration, string) {
+	t.Helper()
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	storageFile := SetupStorage(t, conf)
+	return conf, storageFile
+}
+
+func SetupStorage(t *testing.T, conf configuration.Configuration) string {
+	t.Helper()
+	conf.PersistInStorage(ConfigMainKey)
+	tempDir := t.TempDir()
+	storageFile := filepath.Join(tempDir, "testStorage")
+
+	// Ensure the parent directory exists
+	if err := os.MkdirAll(filepath.Dir(storageFile), 0755); err != nil {
+		require.NoError(t, err)
+	}
+
+	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
+	require.NoError(t, err)
+	conf.SetStorage(s)
+	return storageFile
 }

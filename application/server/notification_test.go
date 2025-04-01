@@ -267,7 +267,11 @@ func TestShowMessageRequest(t *testing.T) {
 				// verify that passed command is eventually executed
 				commandService := command.Service()
 				commandServiceMock := commandService.(*types.CommandServiceMock)
-				return commandServiceMock.ExecutedCommands()[0].CommandId == types.OpenBrowserCommand
+				executedCommands := commandServiceMock.ExecutedCommands()
+				if len(executedCommands) == 0 {
+					return false
+				}
+				return executedCommands[0].CommandId == types.OpenBrowserCommand
 			},
 			2*time.Second,
 			10*time.Millisecond,
