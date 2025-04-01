@@ -76,7 +76,7 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			mcp.Description("Specify the failure criteria (all, upgradable, patchable). (Default is all)."),
 		),
 		mcp.WithString("file",
-			mcp.Description("Specify a package file to test. (Default is empty)"),
+			mcp.Description("Specify a package file to test. Provided file in absolute path format and respect OS format (Default is empty)"),
 		),
 		mcp.WithBoolean("fail_fast",
 			mcp.Description("Use with --all-projects to interrupt scans when errors occur. (Default is false)"),
@@ -86,9 +86,6 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 		),
 		mcp.WithString("exclude",
 			mcp.Description("Use with --all-projects to exclude directory names and file names. (Default is empty)"),
-		),
-		mcp.WithBoolean("print_deps",
-			mcp.Description("Print the dependency tree before sending it for analysis. (Default is false)"),
 		),
 		mcp.WithString("remote_repo_url",
 			mcp.Description("Set or override the remote URL for the repository to monitor. (Default is empty)"),
@@ -116,6 +113,60 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 		),
 		mcp.WithString("policy_path",
 			mcp.Description("Manually pass a path to a .snyk policy file. (Default is empty)"),
+		),
+		mcp.WithBoolean("maven_aggregate_project",
+			mcp.Description("Use for Maven aggregate projects. (Default is false)"),
+		),
+		mcp.WithBoolean("scan_unmanaged",
+			mcp.Description("For Maven, test individual JAR, WAR, and AAR files. (Default is false)"),
+		),
+		mcp.WithBoolean("scan_all_unmanaged",
+			mcp.Description("Auto-detect Maven, JAR, WAR, and AAR files recursively from the current folder. (Default is false)"),
+		),
+		mcp.WithString("sub_project",
+			mcp.Description("For Gradle multi project configurations, test a specific sub-project. (Default is empty)"),
+		),
+		mcp.WithString("gradle_sub_project",
+			mcp.Description("For Gradle multi project configurations, test a specific sub-project. (Default is empty)"),
+		),
+		mcp.WithBoolean("all_sub_projects",
+			mcp.Description("For multi project configurations, test all sub-projects. (Default is false)"),
+		),
+		mcp.WithString("configuration_matching",
+			mcp.Description("Resolve dependencies using the first configuration that matches the specified Java regular expression. (Default is empty)"),
+		),
+		mcp.WithString("configuration_attributes",
+			mcp.Description("Select certain values of configuration attributes to install and resolve dependencies. (Default is empty)"),
+		),
+		mcp.WithString("init_script",
+			mcp.Description("Use for projects that contain a Gradle initialization script. (Default is empty)"),
+		),
+		mcp.WithBoolean("assets_project_name",
+			mcp.Description("When monitoring a .NET project using NuGet PackageReference uses the project name in project.assets.json if found. (Default is false)"),
+		),
+		mcp.WithString("packages_folder",
+			mcp.Description("Specify a custom path to the packages folder for .NET projects using packages.config. (Default is empty)"),
+		),
+		mcp.WithString("project_name_prefix",
+			mcp.Description("When monitoring a .NET project, add a custom prefix to the name of files inside a project. (Default is empty)"),
+		),
+		mcp.WithBoolean("dotnet_runtime_resolution",
+			mcp.Description("Required for .NET projects using Runtime Resolution Scanning. (Default is false)"),
+		),
+		mcp.WithString("dotnet_target_framework",
+			mcp.Description("Optional for .NET solutions with multiple <TargetFramework> directives. (Default is empty)"),
+		),
+		mcp.WithBoolean("strict_out_of_sync",
+			mcp.Description("Prevent testing out-of-sync lockfiles. (Default is true)"),
+		),
+		mcp.WithBoolean("yarn_workspaces",
+			mcp.Description("Detect and scan only Yarn Workspaces when a lockfile is in the root. (Default is false)"),
+		),
+		mcp.WithString("command",
+			mcp.Description("For Python projects, indicate which specific Python commands to use based on the Python version. (Default is empty)"),
+		),
+		mcp.WithString("max_depth",
+			mcp.Description("Specify the maximum level of archive extraction when using --unmanaged. (Default is empty)"),
 		),
 	)
 	m.mcpServer.AddTool(testTool, m.snykTestHandler(invocationCtx))
@@ -157,9 +208,6 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 		),
 		mcp.WithString("exclude",
 			mcp.Description("Use with --all-projects to exclude directory names and file names."),
-		),
-		mcp.WithBoolean("print_deps",
-			mcp.Description("Print the dependency tree before sending it for analysis."),
 		),
 		mcp.WithString("file",
 			mcp.Description("Specify a package file to monitor."),
@@ -261,9 +309,6 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 		),
 		mcp.WithBoolean("exclude_base_image_vulns",
 			mcp.Description("Exclude vulnerabilities introduced by the base image(default: false)."),
-		),
-		mcp.WithBoolean("print_deps",
-			mcp.Description("Print the dependency tree before sending it for analysis (default: false)."),
 		),
 		mcp.WithString("project_name",
 			mcp.Description("Specify a custom Snyk project name (default: empty)."),
@@ -551,6 +596,24 @@ func (m *McpLLMBinding) snykTestHandler(invocationCtx workflow.InvocationContext
 		projectName, _ := request.Params.Arguments["project_name"].(string)
 		targetReference, _ := request.Params.Arguments["target_reference"].(string)
 		policyPath, _ := request.Params.Arguments["policy_path"].(string)
+		mavenAggregateProject, _ := request.Params.Arguments["maven_aggregate_project"].(bool)
+		scanUnmanaged, _ := request.Params.Arguments["scan_unmanaged"].(bool)
+		scanAllUnmanaged, _ := request.Params.Arguments["scan_all_unmanaged"].(bool)
+		subProject, _ := request.Params.Arguments["sub_project"].(string)
+		gradleSubProject, _ := request.Params.Arguments["gradle_sub_project"].(string)
+		allSubProjects, _ := request.Params.Arguments["all_sub_projects"].(bool)
+		configurationMatching, _ := request.Params.Arguments["configuration_matching"].(string)
+		configurationAttributes, _ := request.Params.Arguments["configuration_attributes"].(string)
+		initScript, _ := request.Params.Arguments["init_script"].(string)
+		assetsProjectName, _ := request.Params.Arguments["assets_project_name"].(bool)
+		packagesFolder, _ := request.Params.Arguments["packages_folder"].(string)
+		projectNamePrefix, _ := request.Params.Arguments["project_name_prefix"].(string)
+		dotnetRuntimeResolution, _ := request.Params.Arguments["dotnet_runtime_resolution"].(bool)
+		dotnetTargetFramework, _ := request.Params.Arguments["dotnet_target_framework"].(string)
+		strictOutOfSync, _ := request.Params.Arguments["strict_out_of_sync"].(bool)
+		yarnWorkspaces, _ := request.Params.Arguments["yarn_workspaces"].(bool)
+		command, _ := request.Params.Arguments["command"].(string)
+		maxDepth, _ := request.Params.Arguments["max_depth"].(string)
 
 		params["all-projects"] = true
 		params["json"] = true
@@ -613,6 +676,61 @@ func (m *McpLLMBinding) snykTestHandler(invocationCtx workflow.InvocationContext
 			params["policy-path"] = policyPath
 		}
 
+		if mavenAggregateProject {
+			params["maven-aggregate-project"] = true
+		}
+		if scanUnmanaged {
+			params["scan-unmanaged"] = true
+		}
+		if scanAllUnmanaged {
+			params["scan-all-unmanaged"] = true
+		}
+		if subProject != "" {
+			params["sub-project"] = subProject
+		}
+		if gradleSubProject != "" {
+			params["gradle-sub-project"] = gradleSubProject
+		}
+		if allSubProjects {
+			params["all-sub-projects"] = true
+		}
+		if configurationMatching != "" {
+			params["configuration-matching"] = configurationMatching
+		}
+		if configurationAttributes != "" {
+			params["configuration-attributes"] = configurationAttributes
+		}
+		if initScript != "" {
+			params["init-script"] = initScript
+		}
+		if assetsProjectName {
+			params["assets-project-name"] = true
+		}
+		if packagesFolder != "" {
+			params["packages-folder"] = packagesFolder
+		}
+		if projectNamePrefix != "" {
+			params["project-name-prefix"] = projectNamePrefix
+		}
+		if dotnetRuntimeResolution {
+			params["dotnet-runtime-resolution"] = true
+		}
+		if dotnetTargetFramework != "" {
+			params["dotnet-target-framework"] = dotnetTargetFramework
+		}
+		if strictOutOfSync {
+			params["strict-out-of-sync"] = true
+		}
+		if yarnWorkspaces {
+			params["yarn-workspaces"] = true
+		}
+		if command != "" {
+			params["command"] = command
+		}
+		if maxDepth != "" {
+			params["max-depth"] = maxDepth
+		}
+
 		// Build args and run command
 		args := buildArgs(m.cliPath, "test", params)
 		if path != "" {
@@ -652,7 +770,6 @@ func (m *McpLLMBinding) snykMonitorHandler(invocationCtx workflow.InvocationCont
 		failFast, _ := request.Params.Arguments["fail_fast"].(bool)
 		detectionDepth, _ := request.Params.Arguments["detection_depth"].(string)
 		exclude, _ := request.Params.Arguments["exclude"].(string)
-		printDeps, _ := request.Params.Arguments["print_deps"].(bool)
 		file, _ := request.Params.Arguments["file"].(string)
 		packageManager, _ := request.Params.Arguments["package_manager"].(string)
 		unmanaged, _ := request.Params.Arguments["unmanaged"].(bool)
@@ -692,9 +809,6 @@ func (m *McpLLMBinding) snykMonitorHandler(invocationCtx workflow.InvocationCont
 		}
 		if exclude != "" {
 			params["exclude"] = exclude
-		}
-		if printDeps {
-			params["print-deps"] = true
 		}
 		if file != "" {
 			params["file"] = file
@@ -828,7 +942,6 @@ func (m *McpLLMBinding) snykContainerTestHandler(invocationCtx workflow.Invocati
 		severityThreshold, _ := request.Params.Arguments["severity_threshold"].(string)
 		org, _ := request.Params.Arguments["org"].(string)
 		excludeBaseImageVulns, _ := request.Params.Arguments["exclude_base_image_vulns"].(bool)
-		printDeps, _ := request.Params.Arguments["print_deps"].(bool)
 		projectName, _ := request.Params.Arguments["project_name"].(string)
 		policyPath, _ := request.Params.Arguments["policy_path"].(string)
 		failOn, _ := request.Params.Arguments["fail_on"].(string)
@@ -849,9 +962,6 @@ func (m *McpLLMBinding) snykContainerTestHandler(invocationCtx workflow.Invocati
 		}
 		if excludeBaseImageVulns {
 			params["exclude-base-image-vulns"] = true
-		}
-		if printDeps {
-			params["print-deps"] = true
 		}
 		if projectName != "" {
 			params["project-name"] = projectName
@@ -1033,12 +1143,92 @@ func (m *McpLLMBinding) snykSbomHandler(invocationCtx workflow.InvocationContext
 		path, _ := request.Params.Arguments["path"].(string)
 		format, _ := request.Params.Arguments["format"].(string)
 		file, _ := request.Params.Arguments["file"].(string)
+		org, _ := request.Params.Arguments["org"].(string)
+		unmanaged, _ := request.Params.Arguments["unmanaged"].(bool)
+		dev, _ := request.Params.Arguments["dev"].(bool)
+		allProjects, _ := request.Params.Arguments["all_projects"].(bool)
+		name, _ := request.Params.Arguments["name"].(string)
+		version, _ := request.Params.Arguments["version"].(string)
+		exclude, _ := request.Params.Arguments["exclude"].(string)
+		detectionDepth, _ := request.Params.Arguments["detection_depth"].(string)
+		pruneRepeatedSubdependencies, _ := request.Params.Arguments["prune_repeated_subdependencies"].(bool)
+		mavenAggregateProject, _ := request.Params.Arguments["maven_aggregate_project"].(bool)
+		scanUnmanaged, _ := request.Params.Arguments["scan_unmanaged"].(bool)
+		scanAllUnmanaged, _ := request.Params.Arguments["scan_all_unmanaged"].(bool)
+		subProject, _ := request.Params.Arguments["sub_project"].(string)
+		gradleSubProject, _ := request.Params.Arguments["gradle_sub_project"].(string)
+		allSubProjects, _ := request.Params.Arguments["all_sub_projects"].(bool)
+		configurationMatching, _ := request.Params.Arguments["configuration_matching"].(string)
+		configurationAttributes, _ := request.Params.Arguments["configuration_attributes"].(string)
+		initScript, _ := request.Params.Arguments["init_script"].(string)
+		assetsProjectName, _ := request.Params.Arguments["assets_project_name"].(bool)
+		skipUnresolved, _ := request.Params.Arguments["skip_unresolved"].(bool)
 
 		if format != "" {
 			params["format"] = format
 		}
 		if file != "" {
 			params["file"] = file
+		}
+		if org != "" {
+			params["org"] = org
+		}
+		if unmanaged {
+			params["unmanaged"] = true
+		}
+		if dev {
+			params["dev"] = true
+		}
+		if allProjects {
+			params["all-projects"] = true
+		}
+		if name != "" {
+			params["name"] = name
+		}
+		if version != "" {
+			params["version"] = version
+		}
+		if exclude != "" {
+			params["exclude"] = exclude
+		}
+		if detectionDepth != "" {
+			params["detection-depth"] = detectionDepth
+		}
+		if pruneRepeatedSubdependencies {
+			params["prune-repeated-subdependencies"] = true
+		}
+		if mavenAggregateProject {
+			params["maven-aggregate-project"] = true
+		}
+		if scanUnmanaged {
+			params["scan-unmanaged"] = true
+		}
+		if scanAllUnmanaged {
+			params["scan-all-unmanaged"] = true
+		}
+		if subProject != "" {
+			params["sub-project"] = subProject
+		}
+		if gradleSubProject != "" {
+			params["gradle-sub-project"] = gradleSubProject
+		}
+		if allSubProjects {
+			params["all-sub-projects"] = true
+		}
+		if configurationMatching != "" {
+			params["configuration-matching"] = configurationMatching
+		}
+		if configurationAttributes != "" {
+			params["configuration-attributes"] = configurationAttributes
+		}
+		if initScript != "" {
+			params["init-script"] = initScript
+		}
+		if assetsProjectName {
+			params["assets-project-name"] = true
+		}
+		if skipUnresolved {
+			params["skip-unresolved"] = true
 		}
 
 		// Build args and run command
