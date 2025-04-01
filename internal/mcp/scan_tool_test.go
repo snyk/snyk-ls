@@ -804,6 +804,8 @@ func TestRunSnyk(t *testing.T) {
 }
 
 func createMockSnykCli(t *testing.T, path, output string) {
+	t.Helper()
+
 	var script string
 
 	if os.Getenv("GOOS") == "windows" {
