@@ -90,13 +90,13 @@ func createToolFromDefinition(toolDef *SnykToolDefinition) mcp.Tool {
 	return mcp.NewTool(toolDef.Name, opts...)
 }
 
-// extractParamsFromRequest extracts parameters from the request based on the tool definition
-func extractParamsFromRequest(toolDef SnykToolDefinition, request mcp.CallToolRequest) (map[string]interface{}, string) {
+// extractParamsFromRequestArgs extracts parameters from the arguments based on the tool definition
+func extractParamsFromRequestArgs(toolDef SnykToolDefinition, arguments map[string]interface{}) (map[string]interface{}, string) {
 	params := make(map[string]interface{})
 	var workingDir string
 
 	for _, paramDef := range toolDef.Params {
-		val, ok := request.Params.Arguments[paramDef.Name]
+		val, ok := arguments[paramDef.Name]
 		if !ok {
 			continue
 		}
@@ -178,7 +178,7 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 func (m *McpLLMBinding) snykTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Extract parameters based on tool definition
-		params, workingDir := extractParamsFromRequest(toolDef, request)
+		params, workingDir := extractParamsFromRequestArgs(toolDef, request.Params.Arguments)
 
 		// Add default values for SCA test
 		params["all-projects"] = true
@@ -249,7 +249,7 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 
 func (m *McpLLMBinding) snykCodeTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		params, workingDir := extractParamsFromRequest(toolDef, request)
+		params, workingDir := extractParamsFromRequestArgs(toolDef, request.Params.Arguments)
 
 		params["json"] = true
 
