@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -71,7 +72,7 @@ func setupTestFixture(t *testing.T) *testFixture {
 	// Snyk CLI mock
 	tempDir := t.TempDir()
 	snykCliPath := filepath.Join(tempDir, "snyk")
-	if os.Getenv("GOOS") == "windows" {
+	if runtime.GOOS == "windows" {
 		snykCliPath += ".bat"
 	}
 
@@ -808,14 +809,14 @@ func createMockSnykCli(t *testing.T, path, output string) {
 
 	var script string
 
-	if os.Getenv("GOOS") == "windows" {
+	if runtime.GOOS == "windows" {
 		script = fmt.Sprintf(`@echo off
 echo %s
 exit /b 0
 `, output)
 	} else {
 		script = fmt.Sprintf(`#!/bin/sh
-echo "%s"
+echo '%s'
 exit 0
 `, output)
 	}
