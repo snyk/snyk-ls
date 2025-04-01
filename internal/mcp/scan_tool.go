@@ -96,7 +96,7 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			mcp.Description("Apply and use ignore rules from the Snyk policies in your dependencies. (Default is false)"),
 		),
 		mcp.WithString("show_vulnerable_paths",
-			mcp.Description("Display the dependency paths (none|some|all). Default: some."),
+			mcp.Description("Display the dependency paths (none|some|all). (Default: none)."),
 		),
 		mcp.WithString("project_name",
 			mcp.Description("Specify a custom Snyk project name. (Default is empty)"),
@@ -171,11 +171,6 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 		m.logger.Err(err).Msg("Failed to execute command")
 	}
 	return resAsString, nil
-}
-
-// Report progress to the client
-func reportProgress() {
-	// TODO: Implement progress reporting
 }
 
 // Handler implementations for each Snyk tool

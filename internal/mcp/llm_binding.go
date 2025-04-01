@@ -38,14 +38,13 @@ const (
 // McpLLMBinding is an implementation of a mcp server that allows interaction between
 // a given SnykLLMBinding and a CommandService.
 type McpLLMBinding struct {
-	logger      *zerolog.Logger
-	mcpServer   *server.MCPServer
-	sseServer   *server.SSEServer
-	stdioServer *server.StdioServer
-	baseURL     *url.URL
-	mutex       sync.RWMutex
-	started     bool
-	cliPath     string
+	logger    *zerolog.Logger
+	mcpServer *server.MCPServer
+	sseServer *server.SSEServer
+	baseURL   *url.URL
+	mutex     sync.RWMutex
+	started   bool
+	cliPath   string
 }
 
 func NewMcpLLMBinding(opts ...Option) *McpLLMBinding {
