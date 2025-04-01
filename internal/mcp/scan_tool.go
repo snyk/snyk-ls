@@ -18,12 +18,17 @@ package mcp
 
 import (
 	"context"
+	_ "embed"
+	"encoding/json"
+	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+// Tool name constants to maintain backward compatibility
 const (
 	SnykScaTest    = "snyk_sca_test"
 	SnykCodeTest   = "snyk_code_test"
@@ -33,124 +38,120 @@ const (
 	SnykLogout     = "snyk_logout"
 )
 
+type SnykToolDefinition struct {
+	Name        string              `json:"name"`
+	Description string              `json:"description"`
+	Command     string              `json:"command"`
+	Params      []SnykToolParameter `json:"params"`
+}
+
+type SnykToolParameter struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	IsRequired  bool   `json:"isRequired"`
+	Description string `json:"description"`
+}
+
+//go:embed snyk_tools.json
+var snykToolsJson string
+
+type SnykToolsConfig struct {
+	Tools []SnykToolDefinition `json:"tools"`
+}
+
+func getSnykToolsConfig() (*SnykToolsConfig, error) {
+	var config SnykToolsConfig
+	if err := json.Unmarshal([]byte(snykToolsJson), &config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	return &config, nil
+}
+
+// createToolFromDefinition creates an MCP tool from a Snyk tool definition
+func createToolFromDefinition(toolDef *SnykToolDefinition) mcp.Tool {
+	opts := []mcp.ToolOption{mcp.WithDescription(toolDef.Description)}
+	for _, param := range toolDef.Params {
+		if param.Type == "string" {
+			if param.IsRequired {
+				opts = append(opts, mcp.WithString(param.Name, mcp.Required(), mcp.Description(param.Description)))
+			} else {
+				opts = append(opts, mcp.WithString(param.Name, mcp.Description(param.Description)))
+			}
+		} else if param.Type == "boolean" {
+			if param.IsRequired {
+				opts = append(opts, mcp.WithBoolean(param.Name, mcp.Required(), mcp.Description(param.Description)))
+			} else {
+				opts = append(opts, mcp.WithBoolean(param.Name, mcp.Description(param.Description)))
+			}
+		}
+	}
+
+	return mcp.NewTool(toolDef.Name, opts...)
+}
+
+// extractParamsFromRequest extracts parameters from the request based on the tool definition
+func extractParamsFromRequest(toolDef SnykToolDefinition, request mcp.CallToolRequest) (map[string]interface{}, string) {
+	params := make(map[string]interface{})
+	var workingDir string
+
+	for _, paramDef := range toolDef.Params {
+		val, ok := request.Params.Arguments[paramDef.Name]
+		if !ok {
+			continue
+		}
+
+		// Store path separately to use as working directory
+		if paramDef.Name == "path" {
+			if pathStr, ok := val.(string); ok {
+				workingDir = pathStr
+			}
+		}
+
+		// Convert parameter name from snake_case to kebab-case for CLI arguments
+		cliParamName := strings.ReplaceAll(paramDef.Name, "_", "-")
+
+		// Cast the value based on parameter type
+		if paramDef.Type == "string" {
+			if strVal, ok := val.(string); ok && strVal != "" {
+				params[cliParamName] = strVal
+			}
+		} else if paramDef.Type == "boolean" {
+			if boolVal, ok := val.(bool); ok && boolVal {
+				params[cliParamName] = true
+			}
+		}
+	}
+
+	return params, workingDir
+}
+
 func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) error {
-	// Add snyk_test tool
-	testTool := mcp.NewTool(SnykScaTest,
-		mcp.WithDescription("Run a SCA test on project dependencies to detect known vulnerabilities. Use this to scan open-source packages in supported ecosystems like npm, Maven, etc. Supports monorepo scanning via `--all-projects`. Outputs vulnerability data in JSON if enabled."),
-		mcp.WithString("path",
-			mcp.Required(),
-			mcp.Description("Path to the project to test (default is the absolute path of the current directory, formatted according to the operating system's conventions)."),
-		),
-		mcp.WithBoolean("all_projects",
-			mcp.Description("Scan all projects in the specified directory. (Default is true)."),
-		),
-		mcp.WithBoolean("json",
-			mcp.Description("Output results in JSON format. (Default is true)."),
-		),
-		mcp.WithString("severity_threshold",
-			mcp.Description("Only report vulnerabilities of the specified level or higher (low, medium, high, critical). (Default is empty)"),
-		),
-		mcp.WithString("org",
-			mcp.Description("Specify the organization under which to run the test. (Default is empty)."),
-		),
-		mcp.WithBoolean("dev",
-			mcp.Description("Include development dependencies. (Default is false)"),
-		),
-		mcp.WithBoolean("skip_unresolved",
-			mcp.Description("Skip testing of unresolved packages. (Default is false)"),
-		),
-		mcp.WithBoolean("prune_repeated_subdependencies",
-			mcp.Description("Prune repeated sub-dependencies. (Default is false)."),
-		),
-		mcp.WithString("fail_on",
-			mcp.Description("Specify the failure criteria (all, upgradable, patchable). (Default is all)."),
-		),
-		mcp.WithString("file",
-			mcp.Description("Specify a package file to test. (Default is empty)"),
-		),
-		mcp.WithBoolean("fail_fast",
-			mcp.Description("Use with --all-projects to interrupt scans when errors occur. (Default is false)"),
-		),
-		mcp.WithString("detection_depth",
-			mcp.Description("Use with --all-projects to indicate how many subdirectories to search. (Default is empty)"),
-		),
-		mcp.WithString("exclude",
-			mcp.Description("Use with --all-projects to exclude directory names and file names. (Default is empty)"),
-		),
-		mcp.WithBoolean("print_deps",
-			mcp.Description("Print the dependency tree before sending it for analysis. (Default is false)"),
-		),
-		mcp.WithString("remote_repo_url",
-			mcp.Description("Set or override the remote URL for the repository to monitor. (Default is empty)"),
-		),
-		mcp.WithString("package_manager",
-			mcp.Description("Specify the name of the package manager when the filename is not standard. (Default is empty)"),
-		),
-		mcp.WithBoolean("unmanaged",
-			mcp.Description("For C++ only, scan all files for known open source dependencies. (Default is false)"),
-		),
-		mcp.WithBoolean("ignore_policy",
-			mcp.Description("Ignore all set policies, the current policy in the .snyk file, Org level ignores, and the project policy. (Default is false)"),
-		),
-		mcp.WithBoolean("trust_policies",
-			mcp.Description("Apply and use ignore rules from the Snyk policies in your dependencies. (Default is false)"),
-		),
-		mcp.WithString("show_vulnerable_paths",
-			mcp.Description("Display the dependency paths (none|some|all). (Default: none)."),
-		),
-		mcp.WithString("project_name",
-			mcp.Description("Specify a custom Snyk project name. (Default is empty)"),
-		),
-		mcp.WithString("target_reference",
-			mcp.Description("Specify a reference that differentiates this project, for example, a branch name. (Default is empty)"),
-		),
-		mcp.WithString("policy_path",
-			mcp.Description("Manually pass a path to a .snyk policy file. (Default is empty)"),
-		),
-	)
-	m.mcpServer.AddTool(testTool, m.snykTestHandler(invocationCtx))
+	config, err := getSnykToolsConfig()
+	if err != nil || config == nil {
+		m.logger.Err(err).Msg("Failed to load Snyk tools configuration")
+		return err
+	}
 
-	// Add snyk_code_test tool
-	codeTestTool := mcp.NewTool(SnykCodeTest,
-		mcp.WithDescription("Run a static application security test (SAST) on your source code to detect security issues like SQL injection, XSS, and hardcoded secrets. Designed to catch issues early in the development cycle."),
-		mcp.WithString("path",
-			mcp.Required(),
-			mcp.Description("Path to the project to test (default is the absolute path of the current directory, formatted according to the operating system's conventions)."),
-		),
-		mcp.WithString("file",
-			mcp.Description("Specific file to scan (default: empty)."),
-		),
-		mcp.WithBoolean("json",
-			mcp.Description("Output results in JSON format. (default: true)"),
-		),
-		mcp.WithString("severity_threshold",
-			mcp.Description("Only report vulnerabilities of the specified level or higher (low, medium, high). (default: empty)"),
-		),
-		mcp.WithString("org",
-			mcp.Description("Specify the organization under which to run the test. (default: empty)"),
-		),
-	)
-	m.mcpServer.AddTool(codeTestTool, m.snykCodeTestHandler(invocationCtx))
-
-	versionTool := mcp.NewTool(SnykVersion,
-		mcp.WithDescription("Get Snyk CLI version"),
-	)
-	m.mcpServer.AddTool(versionTool, m.snykVersionHandler(invocationCtx))
-
-	authTool := mcp.NewTool(SnykAuth,
-		mcp.WithDescription("Authenticate with Snyk using API token"),
-	)
-	m.mcpServer.AddTool(authTool, m.snykAuthHandler(invocationCtx))
-
-	authStatusTool := mcp.NewTool(SnykAuthStatus,
-		mcp.WithDescription("Check Snyk authentication status"),
-	)
-	m.mcpServer.AddTool(authStatusTool, m.snykAuthStatusHandler(invocationCtx))
-
-	logoutTool := mcp.NewTool(SnykLogout,
-		mcp.WithDescription("Log out from Snyk"),
-	)
-	m.mcpServer.AddTool(logoutTool, m.snykLogoutHandler(invocationCtx))
+	for _, toolDef := range config.Tools {
+		tool := createToolFromDefinition(&toolDef)
+		switch toolDef.Name {
+		case SnykScaTest:
+			m.mcpServer.AddTool(tool, m.snykTestHandler(invocationCtx, toolDef))
+		case SnykCodeTest:
+			m.mcpServer.AddTool(tool, m.snykCodeTestHandler(invocationCtx, toolDef))
+		case SnykVersion:
+			m.mcpServer.AddTool(tool, m.snykVersionHandler(invocationCtx, toolDef))
+		case SnykAuth:
+			m.mcpServer.AddTool(tool, m.snykAuthHandler(invocationCtx, toolDef))
+		case SnykAuthStatus:
+			m.mcpServer.AddTool(tool, m.snykAuthStatusHandler(invocationCtx, toolDef))
+		case SnykLogout:
+			m.mcpServer.AddTool(tool, m.snykLogoutHandler(invocationCtx, toolDef))
+		default:
+			m.logger.Error().Str("tool", toolDef.Name).Msg("Unknown tool name, skipping")
+		}
+	}
 
 	return nil
 }
@@ -174,99 +175,22 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 }
 
 // Handler implementations for each Snyk tool
-func (m *McpLLMBinding) snykTestHandler(invocationCtx workflow.InvocationContext) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Extract parameters
-		params := make(map[string]interface{})
-		path, _ := request.Params.Arguments["path"].(string)
-		severityThreshold, _ := request.Params.Arguments["severity_threshold"].(string)
-		org, _ := request.Params.Arguments["org"].(string)
-		dev, _ := request.Params.Arguments["dev"].(bool)
-		skipUnresolved, _ := request.Params.Arguments["skip_unresolved"].(bool)
-		pruneRepeatedSubdependencies, _ := request.Params.Arguments["prune_repeated_subdependencies"].(bool)
-		failOn, _ := request.Params.Arguments["fail_on"].(string)
-		file, _ := request.Params.Arguments["file"].(string)
-		failFast, _ := request.Params.Arguments["fail_fast"].(bool)
-		detectionDepth, _ := request.Params.Arguments["detection_depth"].(string)
-		exclude, _ := request.Params.Arguments["exclude"].(string)
-		remoteRepoUrl, _ := request.Params.Arguments["remote_repo_url"].(string)
-		packageManager, _ := request.Params.Arguments["package_manager"].(string)
-		unmanaged, _ := request.Params.Arguments["unmanaged"].(bool)
-		ignorePolicy, _ := request.Params.Arguments["ignore_policy"].(bool)
-		trustPolicies, _ := request.Params.Arguments["trust_policies"].(bool)
-		showVulnerablePaths, _ := request.Params.Arguments["show_vulnerable_paths"].(string)
-		projectName, _ := request.Params.Arguments["project_name"].(string)
-		targetReference, _ := request.Params.Arguments["target_reference"].(string)
-		policyPath, _ := request.Params.Arguments["policy_path"].(string)
+		// Extract parameters based on tool definition
+		params, workingDir := extractParamsFromRequest(toolDef, request)
 
+		// Add default values for SCA test
 		params["all-projects"] = true
 		params["json"] = true
 
-		if severityThreshold != "" {
-			params["severity-threshold"] = severityThreshold
-		}
-		if org != "" {
-			params["org"] = org
-		}
-		if dev {
-			params["dev"] = true
-		}
-		if skipUnresolved {
-			params["skip-unresolved"] = true
-		}
-		if pruneRepeatedSubdependencies {
-			params["prune-repeated-subdependencies"] = true
-		}
-		if failOn != "" {
-			params["fail-on"] = failOn
-		}
-		if file != "" {
-			params["file"] = file
-		}
-		if failFast {
-			params["fail-fast"] = true
-		}
-		if detectionDepth != "" {
-			params["detection-depth"] = detectionDepth
-		}
-		if exclude != "" {
-			params["exclude"] = exclude
-		}
-		if remoteRepoUrl != "" {
-			params["remote-repo-url"] = remoteRepoUrl
-		}
-		if packageManager != "" {
-			params["package-manager"] = packageManager
-		}
-		if unmanaged {
-			params["unmanaged"] = true
-		}
-		if ignorePolicy {
-			params["ignore-policy"] = true
-		}
-		if trustPolicies {
-			params["trust-policies"] = true
-		}
-		if showVulnerablePaths != "" {
-			params["show-vulnerable-paths"] = showVulnerablePaths
-		}
-		if projectName != "" {
-			params["project-name"] = projectName
-		}
-		if targetReference != "" {
-			params["target-reference"] = targetReference
-		}
-		if policyPath != "" {
-			params["policy-path"] = policyPath
-		}
-
 		// Build args and run command
 		args := buildArgs(m.cliPath, "test", params)
-		if path != "" {
-			args = append(args, path)
+		if workingDir != "" {
+			args = append(args, workingDir)
 		}
 
-		output, err := m.runSnyk(ctx, invocationCtx, path, args)
+		output, err := m.runSnyk(ctx, invocationCtx, workingDir, args)
 		if err != nil {
 			return nil, err
 		}
@@ -274,8 +198,9 @@ func (m *McpLLMBinding) snykTestHandler(invocationCtx workflow.InvocationContext
 	}
 }
 
-func (m *McpLLMBinding) snykVersionHandler(invocationCtx workflow.InvocationContext) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykVersionHandler(invocationCtx workflow.InvocationContext, _ SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// For simple commands without parameters, we can directly execute
 		params := []string{m.cliPath, "--version"}
 		output, err := m.runSnyk(ctx, invocationCtx, "", params)
 		if err != nil {
@@ -285,9 +210,9 @@ func (m *McpLLMBinding) snykVersionHandler(invocationCtx workflow.InvocationCont
 	}
 }
 
-func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext, _ SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Extract parameters
+		// Auth command doesn't need parameters from the JSON
 		params := []string{m.cliPath, "auth"}
 		_, err := m.runSnyk(ctx, invocationCtx, "", params)
 		if err != nil {
@@ -297,8 +222,9 @@ func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext
 	}
 }
 
-func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationContext) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationContext, _ SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Hardcoded whoami command
 		params := []string{m.cliPath, "whoami", "--experimental"}
 		output, err := m.runSnyk(ctx, invocationCtx, "", params)
 		if err != nil {
@@ -308,8 +234,9 @@ func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationC
 	}
 }
 
-func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, _ SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Special handling for logout which needs multiple commands
 		params := []string{m.cliPath, "config", "unset", "INTERNAL_OAUTH_TOKEN_STORAGE"}
 		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
 
@@ -320,35 +247,21 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 	}
 }
 
-func (m *McpLLMBinding) snykCodeTestHandler(invocationCtx workflow.InvocationContext) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykCodeTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykToolDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Extract parameters
-		params := make(map[string]interface{})
-		path, _ := request.Params.Arguments["path"].(string)
-		file, _ := request.Params.Arguments["file"].(string)
-		severityThreshold, _ := request.Params.Arguments["severity_threshold"].(string)
-		org, _ := request.Params.Arguments["org"].(string)
+		params, workingDir := extractParamsFromRequest(toolDef, request)
 
 		params["json"] = true
 
-		if severityThreshold != "" {
-			params["severity-threshold"] = severityThreshold
-		}
-		if org != "" {
-			params["org"] = org
-		}
-		if file != "" {
-			params["file"] = file
-		}
-
-		// Build args and run command
 		args := buildArgs(m.cliPath, "code", params)
 		args = append(args, "test")
-		if path != "" {
-			args = append(args, path)
+
+		// Add working directory if specified
+		if workingDir != "" {
+			args = append(args, workingDir)
 		}
 
-		output, err := m.runSnyk(ctx, invocationCtx, path, args)
+		output, err := m.runSnyk(ctx, invocationCtx, workingDir, args)
 		if err != nil {
 			return nil, err
 		}

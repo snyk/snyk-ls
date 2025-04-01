@@ -1,0 +1,210 @@
+{
+  "tools": [
+    {
+      "name": "snyk_sca_test",
+      "description": "Run a SCA test on project dependencies to detect known vulnerabilities. Use this to scan open-source packages in supported ecosystems like npm, Maven, etc. Supports monorepo scanning via `--all-projects`. Outputs vulnerability data in JSON if enabled.",
+      "command": "test",
+      "params": [
+        {
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "Path to the project to test (default is the absolute path of the current directory, formatted according to the operating system's conventions)."
+        },
+        {
+          "name": "all_projects",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Scan all projects in the specified directory. (Default is true)."
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Output results in JSON format. (Default is true)."
+        },
+        {
+          "name": "severity_threshold",
+          "type": "string",
+          "isRequired": false,
+          "description": "Only report vulnerabilities of the specified level or higher (low, medium, high, critical). (Default is empty)"
+        },
+        {
+          "name": "org",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specify the organization under which to run the test. (Default is empty)."
+        },
+        {
+          "name": "dev",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Include development dependencies. (Default is false)"
+        },
+        {
+          "name": "skip_unresolved",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Skip testing of unresolved packages. (Default is false)"
+        },
+        {
+          "name": "prune_repeated_subdependencies",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Prune repeated sub-dependencies. (Default is false)."
+        },
+        {
+          "name": "fail_on",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specify the failure criteria (all, upgradable, patchable). (Default is all)."
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specify a package file to test. (Default is empty)"
+        },
+        {
+          "name": "fail_fast",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Use with --all-projects to interrupt scans when errors occur. (Default is false)"
+        },
+        {
+          "name": "detection_depth",
+          "type": "string",
+          "isRequired": false,
+          "description": "Use with --all-projects to indicate how many subdirectories to search. (Default is empty)"
+        },
+        {
+          "name": "exclude",
+          "type": "string",
+          "isRequired": false,
+          "description": "Use with --all-projects to exclude directory names and file names. (Default is empty)"
+        },
+        {
+          "name": "print_deps",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Print the dependency tree before sending it for analysis. (Default is false)"
+        },
+        {
+          "name": "remote_repo_url",
+          "type": "string",
+          "isRequired": false,
+          "description": "Set or override the remote URL for the repository to monitor. (Default is empty)"
+        },
+        {
+          "name": "package_manager",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specify the name of the package manager when the filename is not standard. (Default is empty)"
+        },
+        {
+          "name": "unmanaged",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "For C++ only, scan all files for known open source dependencies. (Default is false)"
+        },
+        {
+          "name": "ignore_policy",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Ignore all set policies, the current policy in the .snyk file, Org level ignores, and the project policy. (Default is false)"
+        },
+        {
+          "name": "trust_policies",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Apply and use ignore rules from the Snyk policies in your dependencies. (Default is false)"
+        },
+        {
+          "name": "show_vulnerable_paths",
+          "type": "string",
+          "isRequired": false,
+          "description": "Display the dependency paths (none|some|all). (Default: none)."
+        },
+        {
+          "name": "project_name",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specify a custom Snyk project name. (Default is empty)"
+        },
+        {
+          "name": "target_reference",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specify a reference that differentiates this project, for example, a branch name. (Default is empty)"
+        },
+        {
+          "name": "policy_path",
+          "type": "string",
+          "isRequired": false,
+          "description": "Manually pass a path to a .snyk policy file. (Default is empty)"
+        }
+      ]
+    },
+    {
+      "name": "snyk_code_test",
+      "description": "Run a static application security test (SAST) on your source code to detect security issues like SQL injection, XSS, and hardcoded secrets. Designed to catch issues early in the development cycle.",
+      "command": "code test",
+      "params": [
+        {
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "Path to the project to test (default is the absolute path of the current directory, formatted according to the operating system's conventions)."
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specific file to scan (default: empty)."
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Output results in JSON format. (default: true)"
+        },
+        {
+          "name": "severity_threshold",
+          "type": "string",
+          "isRequired": false,
+          "description": "Only report vulnerabilities of the specified level or higher (low, medium, high). (default: empty)"
+        },
+        {
+          "name": "org",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specify the organization under which to run the test. (default: empty)"
+        }
+      ]
+    },
+    {
+      "name": "snyk_version",
+      "description": "Get Snyk CLI version",
+      "command": "version",
+      "params": []
+    },
+    {
+      "name": "snyk_auth",
+      "description": "Authenticate with Snyk using API token",
+      "command": "auth",
+      "params": []
+    },
+    {
+      "name": "snyk_auth_status",
+      "description": "Check Snyk authentication status",
+      "command": "whoami",
+      "params": []
+    },
+    {
+      "name": "snyk_logout",
+      "description": "Log out from Snyk",
+      "command": "logout",
+      "params": []
+    }
+  ]
+}
