@@ -320,7 +320,7 @@ func TestBasicSnykCommands(t *testing.T) {
 		{
 			name:         "Auth Status Command",
 			handlerFunc:  fixture.binding.defaultHandler,
-			command:      []string{"whoami", "--expiremental"},
+			command:      []string{"whoami", "--experimental"},
 			mockResponse: `{"authenticated":true,"username":"user@example.com"}`,
 			expectedCmd:  "auth",
 		},

@@ -78,20 +78,10 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 	for _, toolDef := range config.Tools {
 		tool := createToolFromDefinition(&toolDef)
 		switch toolDef.Name {
-		case SnykScaTest:
-			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
-		case SnykCodeTest:
-			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
-		case SnykVersion:
-			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
-		case SnykAuth:
-			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
-		case SnykAuthStatus:
-			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		case SnykLogout:
 			m.mcpServer.AddTool(tool, m.snykLogoutHandler(invocationCtx, toolDef))
 		default:
-			m.logger.Error().Str("tool", toolDef.Name).Msg("Unknown tool name, skipping")
+			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
 	}
 
