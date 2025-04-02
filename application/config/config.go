@@ -1126,10 +1126,10 @@ func (c *Config) Storage() storage.StorageWithCallbacks {
 func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 	c.m.Lock()
 	c.storage = s
-	c.m.Unlock()
 
 	conf := c.engine.GetConfiguration()
 	conf.SetStorage(s)
+	c.m.Unlock()
 	conf.PersistInStorage(storedConfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
