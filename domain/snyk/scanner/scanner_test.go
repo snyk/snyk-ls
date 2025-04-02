@@ -150,7 +150,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 		PreScanOnlyReferenceFolder: false,
 	}
 	folderConfig.ScanCommandConfig = scanCommandConfigMap
-	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig))
+	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
 
 	// trigger execute
 	err := delegatingScanner.executePreScanCommand(context.Background(), c, p, folderConfig, workDir, false)
