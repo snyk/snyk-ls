@@ -20,33 +20,25 @@ import (
 	"net/url"
 
 	"github.com/rs/zerolog"
-
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type McpOption func(server *McpLLMBinding)
+type Option func(server *McpLLMBinding)
 
-func WithScanner(scanner types.Scanner) McpOption {
-	return func(server *McpLLMBinding) {
-		server.scanner = scanner
-	}
-}
-
-func WithLogger(logger *zerolog.Logger) McpOption {
+func WithLogger(logger *zerolog.Logger) Option {
 	return func(server *McpLLMBinding) {
 		l := logger.With().Str("component", "mcp").Logger()
 		server.logger = &l
 	}
 }
 
-func WithBaseURL(baseURL *url.URL) func(server *McpLLMBinding) {
+func WithCliPath(cliPath string) Option {
 	return func(server *McpLLMBinding) {
-		server.baseURL = baseURL
+		server.cliPath = cliPath
 	}
 }
 
-func WithScanResultProcessor(proc types.ScanResultProcessor) func(server *McpLLMBinding) {
+func WithBaseURL(baseURL *url.URL) func(server *McpLLMBinding) {
 	return func(server *McpLLMBinding) {
-		server.forwardingResultProcessor = proc
+		server.baseURL = baseURL
 	}
 }
