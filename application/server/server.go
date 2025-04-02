@@ -26,11 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	mcp2 "github.com/snyk/snyk-ls/internal/mcp"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -88,24 +85,6 @@ func Start(c *config.Config) {
 	} else {
 		logger.Debug().Msgf("server stopped gracefully stopped=%v closed=%v", status.Stopped, status.Closed)
 	}
-}
-
-func McpStart(invocationContext workflow.InvocationContext, cliPath string) {
-	mcpServer := mcp2.NewMcpLLMBinding(mcp2.WithLogger(invocationContext.GetEnhancedLogger()), mcp2.WithCliPath(cliPath))
-	logger := invocationContext.GetEnhancedLogger()
-
-	// start mcp server
-	//nolint:forbidigo // stdio stream isn't started yet
-	fmt.Println("Starting up MCP Server...")
-	err := mcpServer.Start(invocationContext)
-
-	if err != nil {
-		logger.Err(err).Msg("failed to start mcp server")
-	}
-	defer func() {
-		logger.Info().Msg("Shutting down MCP Server...")
-		mcpServer.Shutdown(context.Background())
-	}()
 }
 
 const textDocumentDidOpenOperation = "textDocument/didOpen"

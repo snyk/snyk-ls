@@ -17,6 +17,7 @@
 package mcp_extension
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,7 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/entrypoint"
-	"github.com/snyk/snyk-ls/application/server"
+	"github.com/snyk/snyk-ls/internal/mcp"
 
 	"github.com/spf13/pflag"
 
@@ -62,18 +63,36 @@ func mcpWorkflow(
 	output = []workflow.Data{}
 	logger := invocation.GetEnhancedLogger()
 
-	cliPath, err := GetCliPath(invocation)
+	cliPath, err := getCliPath(invocation)
 	if err != nil {
 		logger.Err(err).Msg("Failed to set cli path")
 		return output, err
 	}
 	logger.Trace().Interface("environment", os.Environ()).Msg("start environment")
-	server.McpStart(invocation, cliPath)
+	mcpStart(invocation, cliPath)
 
 	return output, nil
 }
 
-func GetCliPath(ctx workflow.InvocationContext) (string, error) {
+func mcpStart(invocationContext workflow.InvocationContext, cliPath string) {
+	mcpServer := mcp.NewMcpLLMBinding(mcp.WithLogger(invocationContext.GetEnhancedLogger()), mcp.WithCliPath(cliPath))
+	logger := invocationContext.GetEnhancedLogger()
+
+	// start mcp server
+	//nolint:forbidigo // stdio stream isn't started yet
+	fmt.Println("Starting up MCP Server...")
+	err := mcpServer.Start(invocationContext)
+
+	if err != nil {
+		logger.Err(err).Msg("failed to start mcp server")
+	}
+	defer func() {
+		logger.Info().Msg("Shutting down MCP Server...")
+		mcpServer.Shutdown(context.Background())
+	}()
+}
+
+func getCliPath(ctx workflow.InvocationContext) (string, error) {
 	logger := ctx.GetEnhancedLogger()
 	exePath, err := os.Executable()
 	if err != nil {
