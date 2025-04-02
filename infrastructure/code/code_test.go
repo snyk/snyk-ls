@@ -26,17 +26,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/snyk-ls/internal/product"
-
-	"github.com/snyk/snyk-ls/internal/progress"
-	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/vcs"
-
 	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/mocks"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -44,9 +41,13 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
+	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
 // can we replace them with more succinct higher level integration tests?[keeping them for sanity for the time being]
@@ -522,7 +523,6 @@ func Test_Scan(t *testing.T) {
 		assert.Nil(t, params)
 	})
 
-	//nolint:dupl // test cases differ by a boolean
 	t.Run("Should run existing flow if feature flag is disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{C: c}
@@ -543,12 +543,14 @@ func Test_Scan(t *testing.T) {
 		assert.NotNil(t, params)
 	})
 
-	//nolint:dupl // test cases differ by a boolean
 	t.Run("Should run new flow if feature flag is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{C: c}
 		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
-		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
+		ctrl := gomock.NewController(t)
+		mockConfiguration := mocks.NewMockConfiguration(ctrl)
+		c.Engine().SetConfiguration(mockConfiguration)
+		mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true)
 		learnMock := mock_learn.NewMockService(gomock.NewController(t))
 		learnMock.
 			EXPECT().

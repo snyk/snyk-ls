@@ -20,7 +20,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/mocks"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -31,16 +34,18 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
+func Test_FeatureFlagIsEnabled(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Arrange
-	expectedResponse := snyk_api.FFResponse{Ok: true}
+	featureFlag := "snykCodeConsistentIgnores"
 
-	fakeApiClient := &snyk_api.FakeApiClient{}
-	fakeApiClient.SetResponse("FeatureFlagStatus", expectedResponse)
+	ctrl := gomock.NewController(t)
+	mockConfiguration := mocks.NewMockConfiguration(ctrl)
+	c.Engine().SetConfiguration(mockConfiguration)
+	mockConfiguration.EXPECT().GetBool(featureFlag).Return(true)
 
-	featureFlagStatusCmd := setupFeatureFlagCommand(t, c, fakeApiClient)
+	featureFlagStatusCmd := setupFeatureFlagCommand(t, c, featureFlag)
 
 	// Execute the command
 	result, err := featureFlagStatusCmd.Execute(context.Background())
@@ -52,15 +57,14 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	assert.True(t, ffResponse.Ok)
 }
 
-func setupFeatureFlagCommand(t *testing.T, c *config.Config, fakeApiClient *snyk_api.FakeApiClient) featureFlagStatus {
+func setupFeatureFlagCommand(t *testing.T, c *config.Config, featureFlag string) featureFlagStatus {
 	t.Helper()
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	provider.IsAuthenticated = true
 
-	// Pass the featureFlagType to the command
+	// Pass the featureFlag to the command
 	featureFlagStatusCmd := featureFlagStatus{
-		apiClient: fakeApiClient,
-		command:   types.CommandData{Arguments: []interface{}{"snykCodeConsistentIgnores"}},
+		command: types.CommandData{Arguments: []interface{}{featureFlag}},
 		authenticationService: authentication.NewAuthenticationService(
 			c,
 			provider,
