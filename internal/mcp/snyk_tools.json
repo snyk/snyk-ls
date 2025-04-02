@@ -193,7 +193,7 @@
     },
     {
       "name": "snyk_auth",
-      "description": "Authenticate with Snyk using API token",
+      "description": "Authenticate with Snyk",
       "command": ["auth"],
       "standardParams": [],
       "params": []
