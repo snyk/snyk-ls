@@ -85,7 +85,7 @@ func registerNotifier(c *config.Config, srv types.Server) {
 	logger := c.Logger().With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
 		for !c.IsLSPInitialized() {
-			logger.Trace().Msg("waiting for lsp initialization to be finished...")
+			logger.Debug().Msg("waiting for lsp initialization to be finished...")
 			time.Sleep(300 * time.Millisecond)
 		}
 		switch params := params.(type) {
