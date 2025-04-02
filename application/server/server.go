@@ -219,9 +219,12 @@ func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Serv
 }
 
 func initNetworkAccessHeaders() {
-	gafConfig := config.CurrentConfig().Engine().GetConfiguration()
+	engine := config.CurrentConfig().Engine()
+	gafConfig := engine.GetConfiguration()
 	ua := util.GetUserAgent(gafConfig, config.Version)
 	gafConfig.Set(configuration.USER_AGENT, ua)
+	engine.GetNetworkAccess().RemoveHeader("x-snyk-cli-version")
+	engine.GetNetworkAccess().AddHeaderField("x-snyk-ide", ua.AppVersion)
 }
 
 func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
