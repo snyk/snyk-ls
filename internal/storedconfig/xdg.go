@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
-
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -44,8 +44,11 @@ func ConfigFile(ideName string) (string, error) {
 	return xdg.ConfigFile(path)
 }
 
-func folderConfigFromStorage(conf configuration.Configuration, path types.FilePath) (*types.FolderConfig, error) {
-	sc := GetStoredConfig(conf)
+func folderConfigFromStorage(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
+	sc, err := GetStoredConfig(conf, logger)
+	if err != nil {
+		return nil, err
+	}
 
 	if sc.FolderConfigs[path] == nil {
 		folderConfig := &types.FolderConfig{FolderPath: path}
@@ -55,19 +58,21 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 	return sc.FolderConfigs[path], nil
 }
 
-func GetStoredConfig(conf configuration.Configuration) *StoredConfig {
-	var sc *StoredConfig
+func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (*StoredConfig, error) {
 	storedConfigJsonString := conf.GetString(ConfigMainKey)
 
+	var sc *StoredConfig
 	if len(storedConfigJsonString) == 0 {
-		return createNewStoredConfig(conf)
+		return createNewStoredConfig(conf), nil
 	} else {
 		err := json.Unmarshal([]byte(storedConfigJsonString), &sc)
 		if err != nil {
+			logger.Err(err).Msg("Failed to unmarshal stored config")
 			sc = createNewStoredConfig(conf)
+			return sc, nil
 		}
 	}
-	return sc
+	return sc, nil
 }
 
 func Save(conf configuration.Configuration, sc *StoredConfig) error {
@@ -85,9 +90,9 @@ func createNewStoredConfig(conf configuration.Configuration) *StoredConfig {
 	return &config
 }
 
-func UpdateFolderConfigs(conf configuration.Configuration, folderConfigs []types.FolderConfig) error {
+func UpdateFolderConfigs(conf configuration.Configuration, folderConfigs []types.FolderConfig, logger *zerolog.Logger) error {
 	for _, folderConfig := range folderConfigs {
-		err := UpdateFolderConfig(conf, &folderConfig)
+		err := UpdateFolderConfig(conf, &folderConfig, logger)
 		if err != nil {
 			return err
 		}
@@ -95,10 +100,13 @@ func UpdateFolderConfigs(conf configuration.Configuration, folderConfigs []types
 	return nil
 }
 
-func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig) error {
-	sc := GetStoredConfig(conf)
+func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig, logger *zerolog.Logger) error {
+	sc, err := GetStoredConfig(conf, logger)
+	if err != nil {
+		return err
+	}
 	sc.FolderConfigs[folderConfig.FolderPath] = folderConfig
-	err := Save(conf, sc)
+	err = Save(conf, sc)
 	if err != nil {
 		return err
 	}

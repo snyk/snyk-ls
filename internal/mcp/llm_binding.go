@@ -27,29 +27,29 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+)
 
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/types"
+const (
+	SseTransportType   string = "sse"
+	StdioTransportType string = "stdio"
 )
 
 // McpLLMBinding is an implementation of a mcp server that allows interaction between
 // a given SnykLLMBinding and a CommandService.
 type McpLLMBinding struct {
-	c                         *config.Config
-	scanner                   types.Scanner
-	logger                    *zerolog.Logger
-	mcpServer                 *server.MCPServer
-	sseServer                 *server.SSEServer
-	baseURL                   *url.URL
-	forwardingResultProcessor types.ScanResultProcessor
-	mutex                     sync.Mutex
-	started                   bool
+	logger    *zerolog.Logger
+	mcpServer *server.MCPServer
+	sseServer *server.SSEServer
+	baseURL   *url.URL
+	mutex     sync.RWMutex
+	started   bool
+	cliPath   string
 }
 
-func NewMcpLLMBinding(c *config.Config, opts ...McpOption) *McpLLMBinding {
+func NewMcpLLMBinding(opts ...Option) *McpLLMBinding {
 	logger := zerolog.Nop()
 	mcpServerImpl := &McpLLMBinding{
-		c:      c,
 		logger: &logger,
 	}
 
@@ -70,30 +70,60 @@ func defaultURL() *url.URL {
 }
 
 // Start starts the MCP server. It blocks until the server is stopped via Shutdown.
-func (m *McpLLMBinding) Start() error {
-	// protect critical assignments with mutex
-	m.mutex.Lock()
+func (m *McpLLMBinding) Start(invocationContext workflow.InvocationContext) error {
+	runTimeInfo := invocationContext.GetRuntimeInfo()
+	version := ""
+	if runTimeInfo != nil {
+		version = runTimeInfo.GetVersion()
+	}
 	m.mcpServer = server.NewMCPServer(
 		"Snyk MCP Server",
-		config.Version,
+		version,
 		server.WithLogging(),
 		server.WithResourceCapabilities(true, true),
 		server.WithPromptCapabilities(true),
 	)
 
-	err := m.addSnykScanTool()
+	err := m.addSnykTools(invocationContext)
 	if err != nil {
-		m.mutex.Unlock()
 		return err
 	}
 
+	transportType := invocationContext.GetConfiguration().GetString("transport")
+	if transportType == StdioTransportType {
+		return m.HandleStdioServer()
+	} else if transportType == SseTransportType {
+		return m.HandleSseServer()
+	} else {
+		return fmt.Errorf("invalid transport type: %s", transportType)
+	}
+}
+
+func (m *McpLLMBinding) HandleStdioServer() error {
+	m.mutex.Lock()
+	m.started = true
+	m.mutex.Unlock()
+
+	err := server.ServeStdio(m.mcpServer)
+
+	if err != nil {
+		m.logger.Error().Err(err).Msg("Error starting MCP Stdio server")
+		return err
+	}
+
+	return nil
+}
+
+func (m *McpLLMBinding) HandleSseServer() error {
 	// listen on default url/port if none was configured
 	if m.baseURL == nil {
 		m.baseURL = defaultURL()
 	}
 
 	m.sseServer = server.NewSSEServer(m.mcpServer, m.baseURL.String())
-	m.mutex.Unlock()
+
+	//nolint:forbidigo // stdio stream isn't started yet
+	fmt.Printf("Starting with base URL %s\n", m.baseURL.String())
 
 	m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("starting")
 	go func() {
@@ -106,10 +136,10 @@ func (m *McpLLMBinding) Start() error {
 		m.mutex.Lock()
 		m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("started")
 		m.started = true
-		m.c.SetMCPServerURL(m.baseURL)
 		m.mutex.Unlock()
 	}()
-	err = m.sseServer.Start(m.baseURL.Host)
+
+	err := m.sseServer.Start(m.baseURL.Host)
 	if err != nil {
 		// expect http.ErrServerClosed when shutting down
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -124,14 +154,17 @@ func (m *McpLLMBinding) Shutdown(ctx context.Context) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	err := m.sseServer.Shutdown(ctx)
-	if err != nil {
-		m.logger.Error().Err(err).Msg("Error shutting down MCP SSE server")
+	if m.sseServer != nil {
+		err := m.sseServer.Shutdown(ctx)
+		if err != nil {
+			m.logger.Error().Err(err).Msg("Error shutting down MCP SSE server")
+		}
 	}
 }
 
 func (m *McpLLMBinding) Started() bool {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
 	return m.started
 }
