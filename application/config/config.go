@@ -1140,7 +1140,7 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 		c.logger.Err(err).Msg("unable to load stored config")
 	}
 
-	sc, err := storedConfig.GetStoredConfig(conf)
+	sc, err := storedConfig.GetStoredConfig(conf, c.logger)
 	c.logger.Debug().Any("storedConfig", sc).Send()
 
 	if err != nil {
@@ -1227,7 +1227,7 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	var folderConfig *types.FolderConfig
 	var err error
-	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path)
+	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, nil)
 	if err != nil {
 		folderConfig = &types.FolderConfig{FolderPath: path}
 	}

@@ -37,11 +37,13 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 	dir, err := os.UserHomeDir()
 	require.NoError(t, err)
 
+	nop := zerolog.Nop()
+
 	// act
-	actual, err := GetOrCreateFolderConfig(conf, path)
+	actual, err := GetOrCreateFolderConfig(conf, path, &nop)
 	require.NoError(t, err)
 	actual.ReferenceFolderPath = types.FilePath(dir)
-	err = UpdateFolderConfig(conf, actual)
+	err = UpdateFolderConfig(conf, actual, &nop)
 	require.NoError(t, err)
 
 	// verify
@@ -65,7 +67,7 @@ func Test_GetOrCreateFolderConfig_shouldIntegrateGitBranchInformation(t *testing
 
 	conf, _ := SetupConfigurationWithStorage(t)
 
-	actual, err := GetOrCreateFolderConfig(conf, repo)
+	actual, err := GetOrCreateFolderConfig(conf, repo, nil)
 
 	require.NoError(t, err)
 	require.Greater(t, len(actual.LocalBranches), 0)
@@ -93,9 +95,10 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 		},
 	}
 
-	err := UpdateFolderConfig(conf, expected)
+	nop := zerolog.Nop()
+	err := UpdateFolderConfig(conf, expected, &nop)
 	require.NoError(t, err)
-	actual, err := GetOrCreateFolderConfig(conf, path)
+	actual, err := GetOrCreateFolderConfig(conf, path, nil)
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)
 }

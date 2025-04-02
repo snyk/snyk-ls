@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/creachadair/jrpc2"
@@ -131,7 +133,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateSnykOSSQuickFixCodeActions(c, settings)
 	updateSnykOpenBrowserCodeActions(c, settings)
 	updateDeltaFindings(c, settings)
-	updateFolderConfig(c, settings)
+	updateFolderConfig(c, settings, c.Logger())
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
 }
@@ -157,8 +159,8 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 	c.SetSnykOpenBrowserActionsEnabled(enable)
 }
 
-func updateFolderConfig(c *config.Config, settings types.Settings) {
-	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), settings.FolderConfigs)
+func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger) {
+	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), settings.FolderConfigs, logger)
 	if err != nil {
 		c.Logger().Err(err).Msg("couldn't update folder configs")
 	}
