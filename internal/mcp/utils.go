@@ -23,8 +23,9 @@ import (
 )
 
 // buildArgs builds command-line arguments for Snyk CLI based on parameters
-func buildArgs(cliPath string, command string, params map[string]interface{}) []string {
-	args := []string{cliPath, command}
+func buildArgs(cliPath string, command []string, params map[string]interface{}) []string {
+	args := []string{cliPath}
+	args = append(args, command...)
 
 	// Add params as command-line flags
 	for key, value := range params {
@@ -99,4 +100,9 @@ func extractParamsFromRequestArgs(toolDef SnykMcpToolsDefinition, arguments map[
 	}
 
 	return params, workingDir
+}
+
+// convertToCliParam Convert parameter name from snake_case to kebab-case for CLI arguments
+func convertToCliParam(cliParam string) string {
+	return strings.ReplaceAll(cliParam, "_", "-")
 }

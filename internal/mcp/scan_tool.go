@@ -38,10 +38,11 @@ const (
 )
 
 type SnykMcpToolsDefinition struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Command     string                 `json:"command"`
-	Params      []SnykMcpToolParameter `json:"params"`
+	Name           string                 `json:"name"`
+	Description    string                 `json:"description"`
+	Command        []string               `json:"command"`
+	StandardParams []string               `json:"standardParams"`
+	Params         []SnykMcpToolParameter `json:"params"`
 }
 
 type SnykMcpToolParameter struct {
@@ -78,15 +79,15 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 		tool := createToolFromDefinition(&toolDef)
 		switch toolDef.Name {
 		case SnykScaTest:
-			m.mcpServer.AddTool(tool, m.snykTestHandler(invocationCtx, toolDef))
+			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		case SnykCodeTest:
-			m.mcpServer.AddTool(tool, m.snykCodeTestHandler(invocationCtx, toolDef))
+			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		case SnykVersion:
-			m.mcpServer.AddTool(tool, m.snykVersionHandler(invocationCtx, toolDef))
+			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		case SnykAuth:
-			m.mcpServer.AddTool(tool, m.snykAuthHandler(invocationCtx, toolDef))
+			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		case SnykAuthStatus:
-			m.mcpServer.AddTool(tool, m.snykAuthStatusHandler(invocationCtx, toolDef))
+			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		case SnykLogout:
 			m.mcpServer.AddTool(tool, m.snykLogoutHandler(invocationCtx, toolDef))
 		default:
@@ -115,59 +116,32 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	return resAsString, nil
 }
 
-// Handler implementations for each Snyk tool
-func (m *McpLLMBinding) snykTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// defaultHandler creates a generic handler for Snyk commands that applies standard parameters
+func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Extract parameters based on tool definition
 		params, workingDir := extractParamsFromRequestArgs(toolDef, request.Params.Arguments)
 
-		// Add default values for SCA test
-		params["all-projects"] = true
-		params["json"] = true
+		// Apply standard parameters from tool definition
+		// e.g. all_projects and json
+		for _, paramName := range toolDef.StandardParams {
+			cliParamName := convertToCliParam(paramName)
+			params[cliParamName] = true
+		}
 
-		// Build args and run command
-		args := buildArgs(m.cliPath, "test", params)
+		// Handle regular commands
+		if len(toolDef.Command) == 0 {
+			return nil, fmt.Errorf("empty command in tool definition for %s", toolDef.Name)
+		}
+
+		args := buildArgs(m.cliPath, toolDef.Command, params)
+
+		// Add working directory if specified
 		if workingDir != "" {
 			args = append(args, workingDir)
 		}
 
+		// Run the command
 		output, err := m.runSnyk(ctx, invocationCtx, workingDir, args)
-		if err != nil {
-			return nil, err
-		}
-		return mcp.NewToolResultText(output), nil
-	}
-}
-
-func (m *McpLLMBinding) snykVersionHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// For simple commands without parameters, we can directly execute
-		params := []string{m.cliPath, "--version"}
-		output, err := m.runSnyk(ctx, invocationCtx, "", params)
-		if err != nil {
-			return nil, err
-		}
-		return mcp.NewToolResultText(output), nil
-	}
-}
-
-func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Auth command doesn't need parameters from the JSON
-		params := []string{m.cliPath, "auth"}
-		_, err := m.runSnyk(ctx, invocationCtx, "", params)
-		if err != nil {
-			return nil, err
-		}
-		return mcp.NewToolResultText("Authenticated Successfully"), nil
-	}
-}
-
-func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Hardcoded whoami command
-		params := []string{m.cliPath, "whoami", "--experimental"}
-		output, err := m.runSnyk(ctx, invocationCtx, "", params)
 		if err != nil {
 			return nil, err
 		}
@@ -185,27 +159,5 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
 
 		return mcp.NewToolResultText("Successfully logged out"), nil
-	}
-}
-
-func (m *McpLLMBinding) snykCodeTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		params, workingDir := extractParamsFromRequestArgs(toolDef, request.Params.Arguments)
-
-		params["json"] = true
-
-		args := buildArgs(m.cliPath, "code", params)
-		args = append(args, "test")
-
-		// Add working directory if specified
-		if workingDir != "" {
-			args = append(args, workingDir)
-		}
-
-		output, err := m.runSnyk(ctx, invocationCtx, workingDir, args)
-		if err != nil {
-			return nil, err
-		}
-		return mcp.NewToolResultText(output), nil
 	}
 }

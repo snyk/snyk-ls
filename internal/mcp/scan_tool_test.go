@@ -125,7 +125,7 @@ func TestSnykTestHandler(t *testing.T) {
 	tool := getToolWithName(t, fixture.tools, SnykScaTest)
 	assert.NotNil(t, tool)
 	// Create the handler
-	handler := fixture.binding.snykTestHandler(fixture.invocationContext, *tool)
+	handler := fixture.binding.defaultHandler(fixture.invocationContext, *tool)
 
 	tmpDir := t.TempDir()
 	// Define test cases
@@ -226,7 +226,7 @@ func TestSnykCodeTestHandler(t *testing.T) {
 	toolDef := getToolWithName(t, fixture.tools, SnykCodeTest)
 
 	// Create the handler
-	handler := fixture.binding.snykCodeTestHandler(fixture.invocationContext, *toolDef)
+	handler := fixture.binding.defaultHandler(fixture.invocationContext, *toolDef)
 	tmpDir := t.TempDir()
 	// Test cases with various combinations of arguments
 	testCases := []struct {
@@ -308,22 +308,26 @@ func TestBasicSnykCommands(t *testing.T) {
 		handlerFunc  func(invocationCtx workflow.InvocationContext, toolDefinition SnykMcpToolsDefinition) func(ctx context.Context, arguments mcp.CallToolRequest) (*mcp.CallToolResult, error)
 		mockResponse string
 		expectedCmd  string
+		command      []string
 	}{
 		{
 			name:         "Version Command",
-			handlerFunc:  fixture.binding.snykVersionHandler,
+			handlerFunc:  fixture.binding.defaultHandler,
+			command:      []string{"--version"},
 			mockResponse: `{"client":{"version":"1.1192.0"}}`,
 			expectedCmd:  "version",
 		},
 		{
 			name:         "Auth Status Command",
-			handlerFunc:  fixture.binding.snykAuthStatusHandler,
+			handlerFunc:  fixture.binding.defaultHandler,
+			command:      []string{"whoami", "--expiremental"},
 			mockResponse: `{"authenticated":true,"username":"user@example.com"}`,
 			expectedCmd:  "auth",
 		},
 		{
 			name:         "Logout Command",
 			handlerFunc:  fixture.binding.snykLogoutHandler,
+			command:      []string{"--version"},
 			mockResponse: `Successfully logged out`,
 			expectedCmd:  "logout",
 		},
@@ -335,7 +339,7 @@ func TestBasicSnykCommands(t *testing.T) {
 			fixture.mockCliOutput(tc.mockResponse)
 
 			// Create the handler
-			handler := tc.handlerFunc(fixture.invocationContext, SnykMcpToolsDefinition{})
+			handler := tc.handlerFunc(fixture.invocationContext, SnykMcpToolsDefinition{Command: tc.command})
 
 			// Create an empty request object as JSON string
 			requestObj := map[string]interface{}{
@@ -373,7 +377,7 @@ func TestAuthHandler(t *testing.T) {
 	fixture.mockCliOutput(mockAuthResponse)
 
 	// Create the handler
-	handler := fixture.binding.snykAuthHandler(fixture.invocationContext, SnykMcpToolsDefinition{})
+	handler := fixture.binding.defaultHandler(fixture.invocationContext, SnykMcpToolsDefinition{Command: []string{"auth"}})
 
 	requestObj := map[string]interface{}{
 		"params": map[string]interface{}{
@@ -433,7 +437,7 @@ func TestCreateToolFromDefinition(t *testing.T) {
 			toolDefinition: SnykMcpToolsDefinition{
 				Name:        "test_tool",
 				Description: "Test tool description",
-				Command:     "test",
+				Command:     []string{"test"},
 				Params:      []SnykMcpToolParameter{},
 			},
 			expectedName: "test_tool",
@@ -443,7 +447,7 @@ func TestCreateToolFromDefinition(t *testing.T) {
 			toolDefinition: SnykMcpToolsDefinition{
 				Name:        "string_param_tool",
 				Description: "Tool with string params",
-				Command:     "test",
+				Command:     []string{"test"},
 				Params: []SnykMcpToolParameter{
 					{
 						Name:        "param1",
@@ -466,7 +470,7 @@ func TestCreateToolFromDefinition(t *testing.T) {
 			toolDefinition: SnykMcpToolsDefinition{
 				Name:        "bool_param_tool",
 				Description: "Tool with boolean params",
-				Command:     "test",
+				Command:     []string{"test"},
 				Params: []SnykMcpToolParameter{
 					{
 						Name:        "flag1",
@@ -489,7 +493,7 @@ func TestCreateToolFromDefinition(t *testing.T) {
 			toolDefinition: SnykMcpToolsDefinition{
 				Name:        "mixed_param_tool",
 				Description: "Tool with mixed params",
-				Command:     "test",
+				Command:     []string{"test"},
 				Params: []SnykMcpToolParameter{
 					{
 						Name:        "str_param",
@@ -688,21 +692,21 @@ func TestBuildArgs(t *testing.T) {
 	testCases := []struct {
 		name     string
 		cliPath  string
-		command  string
+		command  []string
 		params   map[string]interface{}
 		expected []string
 	}{
 		{
 			name:     "No Parameters",
 			cliPath:  "snyk",
-			command:  "test",
+			command:  []string{"test"},
 			params:   map[string]interface{}{},
 			expected: []string{"snyk", "test"},
 		},
 		{
 			name:    "String Parameters",
 			cliPath: "snyk",
-			command: "test",
+			command: []string{"test"},
 			params: map[string]interface{}{
 				"org":  "my-org",
 				"file": "package.json",
@@ -712,7 +716,7 @@ func TestBuildArgs(t *testing.T) {
 		{
 			name:    "Boolean Parameters",
 			cliPath: "snyk",
-			command: "test",
+			command: []string{"test"},
 			params: map[string]interface{}{
 				"json":         true,
 				"all-projects": true,
@@ -722,7 +726,7 @@ func TestBuildArgs(t *testing.T) {
 		{
 			name:    "Mixed Parameters",
 			cliPath: "snyk",
-			command: "test",
+			command: []string{"test"},
 			params: map[string]interface{}{
 				"org":          "my-org",
 				"json":         true,
@@ -733,7 +737,7 @@ func TestBuildArgs(t *testing.T) {
 		{
 			name:    "Empty String Parameters",
 			cliPath: "snyk",
-			command: "test",
+			command: []string{"test"},
 			params: map[string]interface{}{
 				"org": "",
 			},
@@ -742,7 +746,7 @@ func TestBuildArgs(t *testing.T) {
 		{
 			name:    "False Boolean Parameters",
 			cliPath: "snyk",
-			command: "test",
+			command: []string{"test"},
 			params: map[string]interface{}{
 				"json": false,
 			},
