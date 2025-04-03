@@ -28,7 +28,6 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	mcp2 "github.com/snyk/snyk-ls/internal/mcp"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -77,25 +76,6 @@ func Start(c *config.Config) {
 	logger := c.Logger().With().Str("method", "server.Start").Logger()
 	di.Init()
 	initHandlers(srv, handlers, c)
-
-	// start mcp server
-	logger.Info().Msg("Starting up MCP Server...")
-	var mcpServer *mcp2.McpLLMBinding
-	go func() {
-		mcpServer = mcp2.NewMcpLLMBinding(c, mcp2.WithScanner(di.Scanner()), mcp2.WithLogger(c.Logger()))
-		err := mcpServer.Start()
-		if err != nil {
-			c.Logger().Err(err).Msg("failed to start mcp server")
-		}
-	}()
-
-	// shutdown mcp server once the lsp returns from wait status
-	defer func() {
-		if mcpServer != nil {
-			logger.Info().Msg("Shutting down MCP Server...")
-			mcpServer.Shutdown(context.Background())
-		}
-	}()
 
 	logger.Info().Msg("Starting up Language Server...")
 	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
@@ -477,14 +457,7 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 			)
 			logger.Info().Msg(msg)
 		}
-		defer func() {
-			// delay sending the mcp server URL
-			for c.GetMCPServerURL() == nil {
-				// wait until the server URL is available
-				time.Sleep(500 * time.Millisecond)
-			}
-			di.Notifier().Send(types.McpServerURLParams{URL: c.GetMCPServerURL().String()})
-		}()
+
 		return nil, nil
 	})
 }

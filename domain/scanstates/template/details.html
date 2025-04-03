@@ -33,7 +33,7 @@
 </head>
 <body class="body-padding">
 <div class="snx-header">
-  <div class="snx-switch-container {{if or .AnyScanInProgressReference .AnyScanInProgressWorkingDirectory}} is-loading{{end}}" id="switchContainer">
+  <div class="snx-switch-container{{if or .AnyScanInProgressReference .AnyScanInProgressWorkingDirectory}} is-loading{{end}}" id="switchContainer">
     <input type="radio" id="totalIssues" name="issueType" value="total" class="snx-switch-input"{{if not .IsDeltaEnabled}} checked{{end}}>
     <label for="totalIssues" class="snx-switch-label" title="All issues found in your current branch">{{.IssuesFound}} total</label>
 
@@ -43,18 +43,16 @@
 
   {{if or .AnyScanInProgressReference .AnyScanInProgressWorkingDirectory}}
   <div class="snx-content">
-    <h2 class="snx-title snx-h2">Snyk is scanning for issues...</h2>
+    <h2 class="snx-title snx-h2">Snyk is scanning...</h2>
     <p class="snx-message is-dimmed">
       <span class="snx-loader size-s"></span>
-      <strong class="snx-highlight"> {{.RunningScansCount}}/{{.TotalScansCount}} </strong> base &amp; reference scans
+      <strong class="snx-highlight"> {{.RunningScansCount}}/{{.TotalScansCount}} </strong> base&amp;reference scans
     </p>
   </div>
   {{else}}
   <div class="snx-content">
-    <h2 class="snx-title snx-h2">Snyk found the following issues:</h2>
-    <p class="snx-message is-dimmed">
-      ✅ All scans are completed.
-    </p>
+    <h2 class="snx-title snx-h2">Snyk found these issues:</h2>
+    <p class="snx-message is-dimmed">All scans are completed.</p>
   </div>
   {{end}}
 
@@ -62,10 +60,10 @@
 
 <div class="snx-summary">
   {{if or .AnyScanSucceededReference .AnyScanSucceededWorkingDirectory }}
-  <p class="snx-message">✋️ <span class="snx-highlight">{{.CurrentIssuesFound}} issues</span> found in your open projects.</p>
+  <p class="snx-message">✋️ <span class="snx-highlight">{{.CurrentIssuesFound}} issues</span> found in your code.</p>
   <p class="snx-message">⚡️ <span class="snx-highlight">{{.CurrentFixableIssueCount}} issues</span> are fixable with Snyk DeepCode AI{{if not .IsDeepCodeAIEnabled}} (disabled){{end}}.</p>
   {{else}}
-  <p class="snx-message">✋️ Scanning for issues in your open projects.</p>
+  <p class="snx-message">✋️ Scanning for issues in your code.</p>
   <p class="snx-message">⚡ Identifying fixable issues.</p>
   {{end}}
 </div>

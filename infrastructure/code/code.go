@@ -35,13 +35,13 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/filefilter"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -79,7 +79,7 @@ type Scanner struct {
 	runningScans      map[types.FilePath]*ScanStatus
 	changedPaths      map[types.FilePath]map[types.FilePath]bool // tracks files that were changed since the last scan per workspace folder
 	learnService      learn.Service
-	fileFilters       *xsync.MapOf[string, *filefilter.FileFilter]
+	fileFilters       *xsync.MapOf[string, *utils.FileFilter]
 	notifier          notification.Notifier
 
 	// global map to store last used bundle hashes for each workspace folder
@@ -116,7 +116,7 @@ func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, repor
 		errorReporter:  reporter,
 		runningScans:   map[types.FilePath]*ScanStatus{},
 		changedPaths:   map[types.FilePath]map[types.FilePath]bool{},
-		fileFilters:    xsync.NewMapOf[*filefilter.FileFilter](),
+		fileFilters:    xsync.NewMapOf[*utils.FileFilter](),
 		learnService:   learnService,
 		notifier:       notifier,
 		bundleHashes:   map[types.FilePath]string{},
@@ -246,10 +246,19 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 
 	fileFilter, _ := sc.fileFilters.Load(string(folderPath))
 	if fileFilter == nil {
-		fileFilter = filefilter.NewFileFilter(string(folderPath), &logger)
+		fileFilter = utils.NewFileFilter(string(folderPath), &logger)
 		sc.fileFilters.Store(string(folderPath), fileFilter)
 	}
-	files := fileFilter.FindNonIgnoredFiles(t)
+
+	rules, err := fileFilter.GetRules([]string{".gitignore", ".dcignore", ".snyk"})
+	if err != nil {
+		return nil, err
+	}
+
+	defaultGlobs := []string{"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**", "**/.DS_Store/**"}
+	rules = append(defaultGlobs, rules...)
+
+	files := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules)
 
 	if t.IsCanceled() || ctx.Err() != nil {
 		progress.Cancel(t.GetToken())

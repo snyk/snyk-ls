@@ -17,29 +17,25 @@ package mcp
 
 import (
 	"net/url"
+	"os"
+	"strings"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestNewMcpServer(t *testing.T) {
-	c := testutil.UnitTest(t)
-	mcpServer := NewMcpLLMBinding(c)
+	mcpServer := NewMcpLLMBinding()
 	assert.NotNil(t, mcpServer)
 	assert.NotNil(t, mcpServer.logger)
 }
 
 func TestNewMcpServerWithOptions(t *testing.T) {
-	c := testutil.UnitTest(t)
 	baseURL, _ := url.Parse("http://test:8080")
 
-	s := scanner.NewTestScanner()
-	mcpServer := NewMcpLLMBinding(c, WithScanner(s), WithBaseURL(baseURL))
+	mcpServer := NewMcpLLMBinding(WithBaseURL(baseURL))
 
-	assert.Equal(t, s, mcpServer.scanner)
 	assert.Equal(t, baseURL, mcpServer.baseURL)
 }
 
@@ -48,4 +44,25 @@ func TestDefaultURL(t *testing.T) {
 	assert.NotNil(t, u)
 	assert.Equal(t, "http", u.Scheme)
 	assert.Contains(t, u.Host, DefaultHost)
+}
+
+func TestExpandedEnv(t *testing.T) {
+	t.Setenv(configuration.INTEGRATION_NAME, "abc")
+	t.Setenv(configuration.INTEGRATION_VERSION, "abc")
+	binding := NewMcpLLMBinding()
+
+	env := binding.expandedEnv("1.x.1")
+
+	for _, s := range os.Environ() {
+		if strings.HasPrefix(s, configuration.INTEGRATION_NAME) {
+			continue
+		}
+		if strings.HasPrefix(s, configuration.INTEGRATION_VERSION) {
+			continue
+		}
+		assert.Contains(t, env, s)
+	}
+
+	assert.Contains(t, env, configuration.INTEGRATION_NAME+"=MCP")
+	assert.Contains(t, env, configuration.INTEGRATION_VERSION+"=1.x.1")
 }

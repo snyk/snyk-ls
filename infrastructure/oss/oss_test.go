@@ -374,7 +374,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		workDir := types.FilePath(t.TempDir())
 		folderConfig := c.FolderConfig(workDir)
 		folderConfig.AdditionalParameters = []string{"--dev"}
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig)
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 		require.NoError(t, err)
 
 		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, nil)

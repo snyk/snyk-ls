@@ -38,7 +38,7 @@ func TestConfigFile(t *testing.T) {
 func Test_folderConfigFromFallbackStorage_never_nil_and_added_to_config(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
-	folderConfig, err := folderConfigFromStorage(conf, "testPath")
+	folderConfig, err := folderConfigFromStorage(conf, "testPath", nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, folderConfig)
