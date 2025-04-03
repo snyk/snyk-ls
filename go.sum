@@ -337,6 +337,8 @@ github.com/snyk/go-application-framework v0.0.0-20250328142242-46de53bb5c7c h1:G
 github.com/snyk/go-application-framework v0.0.0-20250328142242-46de53bb5c7c/go.mod h1:A7oFVjMjNukzsMeiIWXEXjCrAf2ARvoK4aQOm9e3E/Y=
 github.com/snyk/go-application-framework v0.0.0-20250328191937-77c95fc47c4b h1:v3gJtpp2cxelL5H+F8NwYuwf/+QyHttAAFU5zSJpOMM=
 github.com/snyk/go-application-framework v0.0.0-20250328191937-77c95fc47c4b/go.mod h1:A7oFVjMjNukzsMeiIWXEXjCrAf2ARvoK4aQOm9e3E/Y=
+github.com/snyk/go-application-framework v0.0.0-20250402155213-aa1f4ca2cd47 h1:iKj8gicLETKtQHuoUD0OfPyVQ6L2g9jqGX1RVgn4N8k=
+github.com/snyk/go-application-framework v0.0.0-20250402155213-aa1f4ca2cd47/go.mod h1:A7oFVjMjNukzsMeiIWXEXjCrAf2ARvoK4aQOm9e3E/Y=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 h1:s9PHNkL6ueYRiAKNfd8OVxlUOqU3qY0VDbgCD1f6WQY=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530/go.mod h1:88KbbvGYlmLgee4OcQ19yr0bNpXpOr2kciOthaSzCAg=
 github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd h1:Dq5WSzWsP1TbVi10zPWBI5LKEBDg4Y1OhWEph1wr5WQ=
