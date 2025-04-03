@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -124,12 +125,19 @@ func NewStorageWithCallbacks(opts ...storageOption) (StorageWithCallbacks, error
 		callbacks:   make(map[string]StorageCallbackFunc),
 		jsonStorage: configuration.NewJsonStorage(file),
 		logger:      &nop,
+		storageFile: file,
 	}
 
 	for _, opt := range opts {
 		opt(s)
 	}
-	return s, err
+
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(s.storageFile), 0755); err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
 
 func (s *storage) RegisterCallback(key string, callback StorageCallbackFunc) {
