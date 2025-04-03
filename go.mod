@@ -41,7 +41,6 @@ require (
 	golang.org/x/oauth2 v0.27.0
 	golang.org/x/sync v0.11.0
 	gopkg.in/ini.v1 v1.67.0
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -130,6 +129,7 @@ require (
 	golang.org/x/tools v0.30.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 //replace github.com/snyk/go-application-framework => ../go-application-framework

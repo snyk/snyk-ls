@@ -528,11 +528,13 @@ func Test_Scan(t *testing.T) {
 		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
+		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
 		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
 
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 		assert.Nil(t, params)
 	})
+	//nolint:dupl // test cases differ by a boolean
 	t.Run("Should run new flow if feature flag is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{C: c}
@@ -557,6 +559,7 @@ func Test_Scan(t *testing.T) {
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 		assert.Nil(t, params)
 	})
+	//nolint:dupl // test cases differ by a boolean
 	t.Run("Should run new flow if feature flag is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{C: c}
