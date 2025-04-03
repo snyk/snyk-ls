@@ -21,12 +21,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -167,4 +170,21 @@ func (m *McpLLMBinding) Started() bool {
 	defer m.mutex.RUnlock()
 
 	return m.started
+}
+
+func (m *McpLLMBinding) expandedEnv(version string) []string {
+	environ := os.Environ()
+	var expandedEnv = []string{}
+	for _, v := range environ {
+		if strings.HasPrefix(strings.ToLower(v), strings.ToLower(configuration.INTEGRATION_NAME)) {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(v), strings.ToLower(configuration.INTEGRATION_VERSION)) {
+			continue
+		}
+		expandedEnv = append(expandedEnv, v)
+	}
+	expandedEnv = append(expandedEnv, configuration.INTEGRATION_NAME+"=MCP")
+	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", configuration.INTEGRATION_VERSION, version))
+	return expandedEnv
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,6 +69,7 @@ func setupTestFixture(t *testing.T) *testFixture {
 	invocationCtx := mocks.NewMockInvocationContext(mockctl)
 	invocationCtx.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	invocationCtx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("hurz"), runtimeinfo.WithVersion("1000.8.3"))).AnyTimes()
 
 	// Snyk CLI mock
 	tempDir := t.TempDir()
