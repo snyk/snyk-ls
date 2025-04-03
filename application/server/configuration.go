@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/creachadair/jrpc2"
@@ -37,7 +39,7 @@ import (
 
 var cachedOriginalPath = ""
 
-func workspaceDidChangeConfiguration(srv *jrpc2.Server, c *config.Config) jrpc2.Handler {
+func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.DidChangeConfigurationParams) (bool, error) {
 		// we don't log the received config, as it could contain credentials that are not yet filtered.
 		// it should be enough to log once we leave the handler
@@ -131,7 +133,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateSnykOSSQuickFixCodeActions(c, settings)
 	updateSnykOpenBrowserCodeActions(c, settings)
 	updateDeltaFindings(c, settings)
-	updateFolderConfig(c, settings)
+	updateFolderConfig(c, settings, c.Logger())
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
 }
@@ -157,8 +159,8 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 	c.SetSnykOpenBrowserActionsEnabled(enable)
 }
 
-func updateFolderConfig(c *config.Config, settings types.Settings) {
-	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), settings.FolderConfigs)
+func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger) {
+	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), settings.FolderConfigs, logger)
 	if err != nil {
 		c.Logger().Err(err).Msg("couldn't update folder configs")
 	}

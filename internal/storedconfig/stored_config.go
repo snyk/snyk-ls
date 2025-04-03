@@ -19,14 +19,15 @@ package storedconfig
 import (
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // GetOrCreateFolderConfig queries git for the folder config of the given path
-func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePath) (*types.FolderConfig, error) {
-	folderConfig, err := folderConfigFromStorage(conf, path)
+func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
+	folderConfig, err := folderConfigFromStorage(conf, path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +42,7 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePa
 		folderConfig = mergeFolderConfigs(gitFolderConfig, folderConfig)
 	}
 
-	err = UpdateFolderConfig(conf, folderConfig)
+	err = UpdateFolderConfig(conf, folderConfig, logger)
 	if err != nil {
 		return nil, err
 	}

@@ -14,31 +14,18 @@
  * limitations under the License.
  */
 
-package mcp
+package util
 
 import (
-	"net/url"
+	"runtime"
 
 	"github.com/rs/zerolog"
 )
 
-type Option func(server *McpLLMBinding)
-
-func WithLogger(logger *zerolog.Logger) Option {
-	return func(server *McpLLMBinding) {
-		l := logger.With().Str("component", "mcp").Logger()
-		server.logger = &l
-	}
-}
-
-func WithCliPath(cliPath string) Option {
-	return func(server *McpLLMBinding) {
-		server.cliPath = cliPath
-	}
-}
-
-func WithBaseURL(baseURL *url.URL) func(server *McpLLMBinding) {
-	return func(server *McpLLMBinding) {
-		server.baseURL = baseURL
-	}
+func DumpGoroutines(logger *zerolog.Logger) {
+	buf := make([]byte, 1<<20)
+	stackLen := runtime.Stack(buf, true)
+	logger.Warn().
+		Str("goroutine_dump", string(buf[:stackLen])).
+		Msg("=== Goroutine Dump ===")
 }

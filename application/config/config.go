@@ -263,6 +263,12 @@ func newConfig(engine workflow.Engine) *Config {
 	} else {
 		c.engine = engine
 	}
+	gafConfig := c.engine.GetConfiguration()
+	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue interface{}) (interface{}, error) {
+		return true, nil
+	})
+	gafConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	gafConfig.Set("configfile", c.configFile)
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = types.DefaultSeverityFilter()
@@ -281,12 +287,9 @@ func initWorkFlowEngine(c *Config) {
 	conf := configuration.NewWithOpts(
 		configuration.WithAutomaticEnv(),
 	)
+
 	conf.PersistInStorage(storedConfig.ConfigMainKey)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
-	enableOAuth := c.authenticationMethod == types.OAuthAuthentication
-	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, enableOAuth)
-	conf.Set("configfile", c.configFile)
-
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
 	err := localworkflows.InitWhoAmIWorkflow(c.engine)
@@ -354,17 +357,18 @@ func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
 }
 
 func (c *Config) NonEmptyToken() bool {
-	return c.Token() != ""
+	return c.token != ""
 }
 func (c *Config) CliSettings() *CliSettings {
 	return c.cliSettings
 }
 
 func (c *Config) Format() string {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.format
 }
+
 func (c *Config) CLIDownloadLockFileName() (string, error) {
 	c.cliSettings.cliPathAccessMutex.Lock()
 	defer c.cliSettings.cliPathAccessMutex.Unlock()
@@ -617,23 +621,25 @@ func (c *Config) SetToken(newTokenString string) {
 
 	// propagate newTokenString to gaf
 	if !isNewOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
-		c.logger.Info().Msg("Setting legacy authentication in GAF")
+		c.logger.Info().Msg("put api token into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString)
 	}
 
-	if c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
-		c.logger.Info().Err(err).Msg("setting oauth2 authentication in GAF")
+	if c.shouldUpdateOAuth2Token(conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), newTokenString) {
+		c.logger.Info().Err(err).Msg("put oauth2 token into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
 	}
 
 	// ensure scrubbing of new newTokenString
 	if w, ok := c.scrubbingWriter.(frameworkLogging.ScrubbingLogWriter); ok {
-		w.AddTerm(newTokenString, 0)
-		if newOAuthToken != nil {
-			w.AddTerm(newOAuthToken.AccessToken, 0)
-			w.AddTerm(newOAuthToken.RefreshToken, 0)
+		if newTokenString != "" {
+			w.AddTerm(newTokenString, 0)
+			if newOAuthToken != nil && newOAuthToken.AccessToken != "" {
+				w.AddTerm(newOAuthToken.AccessToken, 0)
+				w.AddTerm(newOAuthToken.RefreshToken, 0)
+			}
 		}
 	}
 
@@ -740,7 +746,7 @@ func (c *Config) getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 	w := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
 		w.Out = writer
 		w.NoColor = true
-		w.TimeFormat = time.RFC3339
+		w.TimeFormat = time.RFC3339Nano
 		w.PartsOrder = []string{
 			zerolog.TimestampFieldName,
 			zerolog.LevelFieldName,
@@ -1117,12 +1123,39 @@ func (c *Config) Storage() storage.StorageWithCallbacks {
 
 func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 	c.m.Lock()
-	defer c.m.Unlock()
 	c.storage = s
 
 	conf := c.engine.GetConfiguration()
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
 	conf.SetStorage(s)
+	c.m.Unlock()
+	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
+
+	// now refresh from storage
+	err := s.Refresh(conf, storedConfig.ConfigMainKey)
+	if err != nil {
+		c.logger.Err(err).Msg("unable to load stored config")
+	}
+
+	sc, err := storedConfig.GetStoredConfig(conf, c.logger)
+	c.logger.Debug().Any("storedConfig", sc).Send()
+
+	if err != nil {
+		c.logger.Err(err).Msg("unable to load stored config")
+	}
+
+	// refresh token if in storage
+	if c.EmptyToken() {
+		err = s.Refresh(conf, auth.CONFIG_KEY_OAUTH_TOKEN)
+		if err != nil {
+			c.logger.Err(err).Msg("unable to refresh storage")
+		}
+		err = s.Refresh(conf, configuration.AUTHENTICATION_TOKEN)
+		if err != nil {
+			c.logger.Err(err).Msg("unable to refresh storage")
+		}
+	}
 }
 
 func (c *Config) IdeVersion() string {
@@ -1192,7 +1225,7 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	var folderConfig *types.FolderConfig
 	var err error
-	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path)
+	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, nil)
 	if err != nil {
 		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
@@ -1285,4 +1318,8 @@ func (c *Config) IsDeepCodeAIFixEnabled() bool {
 	defer c.m.RUnlock()
 
 	return c.deepCodeAiFixEnabled
+}
+
+func (c *Config) EmptyToken() bool {
+	return !c.NonEmptyToken()
 }

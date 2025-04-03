@@ -48,7 +48,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
-	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -504,15 +503,29 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	waitForScan(t, cloneTargetDirString, c)
 
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
-	assert.Len(t, notifications, 1)
-	var folderConfigsParam types.FolderConfigsParam
-	err := notifications[0].UnmarshalParams(&folderConfigsParam)
-	assert.NoError(t, err)
-	assert.Len(t, folderConfigsParam.FolderConfigs, 1)
-	assert.Equal(t, cloneTargetDir, folderConfigsParam.FolderConfigs[0].FolderPath)
-	assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
-	assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
+	assert.Greater(t, len(notifications), 0)
 
+	foundFolderConfig := false
+	for _, notification := range notifications {
+		var folderConfigsParam types.FolderConfigsParam
+		err := notification.UnmarshalParams(&folderConfigsParam)
+		require.NoError(t, err)
+
+		for _, folderConfig := range folderConfigsParam.FolderConfigs {
+			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
+			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
+
+			if folderConfig.FolderPath == cloneTargetDir {
+				foundFolderConfig = true
+				break
+			}
+		}
+
+		if foundFolderConfig {
+			break
+		}
+	}
+	assert.Truef(t, foundFolderConfig, "could not find folder config for %s", cloneTargetDirString)
 	jsonRPCRecorder.ClearNotifications()
 	var testPath types.FilePath
 	if file1 != "" {
@@ -535,7 +548,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 
 	// check for autofix diff on mt-us
 	if hasVulns {
-		checkAutofixDiffs(t, c, issueList, loc, cloneTargetDir)
+		checkAutofixDiffs(t, c, issueList, loc, cloneTargetDir, jsonRPCRecorder)
 	}
 
 	checkFeatureFlagStatus(t, c, &loc)
@@ -719,7 +732,7 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 	return issueList
 }
 
-func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, folderPath types.FilePath) {
+func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, folderPath types.FilePath, recorder *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	if isNotStandardRegion(c) {
 		return
@@ -727,20 +740,25 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIss
 	assert.Greater(t, len(issueList), 0)
 	for _, issue := range issueList {
 		codeIssueData, ok := issue.AdditionalData.(map[string]interface{})
-		if !ok || codeIssueData["hasAIFix"] == false || codeIssueData["rule"] != "WebCookieSecureDisabledByDefault" {
+		if !ok || codeIssueData["hasAIFix"] == false || codeIssueData["rule"] != "UseCsurfForExpress" {
 			continue
 		}
 		waitForNetwork(c)
-		call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		_, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.CodeFixDiffsCommand,
 			Arguments: []any{uri.PathToUri(folderPath), uri.PathToUri(issue.FilePath), issue.Id},
 		})
 		assert.NoError(t, err)
-		var unifiedDiffs []code.AutofixUnifiedDiffSuggestion
-		err = call.UnmarshalResult(&unifiedDiffs)
-		assert.NoError(t, err)
-		assert.Greater(t, len(unifiedDiffs), 0)
 		// don't check for all issues, just the first
+		assert.Eventuallyf(t, func() bool {
+			notifications := recorder.FindCallbacksByMethod("window/showDocument")
+			for _, notification := range notifications {
+				if strings.Contains(notification.ParamString(), "snyk://") {
+					return true
+				}
+			}
+			return false
+		}, 30*time.Second, 10*time.Millisecond, "failed to get autofix diffs")
 		break
 	}
 }
@@ -757,7 +775,6 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 	}
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
-
 	ensureInitialized(t, c, loc, initParams)
 	return cloneTargetDir
 }
@@ -979,12 +996,40 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	assert.Equal(t, 0, len(issueList), "no issues expected, as delta and no new change")
 }
 
+func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
+	c := testutil.SmokeTest(t, false)
+	loc, jsonRPCRecorder := setupServer(t, c)
+	c.SetSnykCodeEnabled(true)
+	c.SetDeltaFindingsEnabled(true)
+	cleanupChannels()
+	di.Init()
+	scanAggregator := di.ScanStateAggregator()
+
+	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/java-goof", "f5719ae", c.Logger())
+	assert.NoError(t, err)
+
+	cloneTargetDirString := string(cloneTargetDir)
+
+	initParams := prepareInitParams(t, cloneTargetDir, c)
+
+	ensureInitialized(t, c, loc, initParams)
+
+	waitForScan(t, cloneTargetDirString, c)
+
+	waitForDeltaScan(t, scanAggregator)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
+
+	assert.Equal(t, 0, len(issueList), "no issues expected, as delta and no new change")
+}
+
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {
 	t.Helper()
 	t.Setenv("SNYK_LOG_LEVEL", "info")
 	c.SetLogLevel(zerolog.LevelInfoValue)
 	c.ConfigureLogging(nil)
-	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
+	gafConfig := c.Engine().GetConfiguration()
+	gafConfig.Set(configuration.DEBUG, false)
 
 	documentURI := initParams.WorkspaceFolders[0].Uri
 	commitHash := getCurrentCommitHash(t, uri.PathFromUri(documentURI))
