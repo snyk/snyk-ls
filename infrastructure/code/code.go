@@ -152,10 +152,10 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	}
 
 	gafConfig := sc.C.Engine().GetConfiguration()
-	sastResponse := gafConfig.Get(code_workflow.ConfigurationSastSettings).(*sast_contract.SastResponse)
+	sastResponse, ok := gafConfig.Get(code_workflow.ConfigurationSastSettings).(*sast_contract.SastResponse)
 
-	if sastResponse == nil {
-		return issues, errors.New("SastResponse is nil")
+	if sastResponse == nil || !ok {
+		return issues, errors.New("Could not get sastResponse from Go Application Framework")
 	}
 
 	if !sc.isSastEnabled(sastResponse) {
