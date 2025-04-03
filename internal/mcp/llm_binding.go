@@ -176,17 +176,13 @@ func (m *McpLLMBinding) expandedEnv(version string) []string {
 	environ := os.Environ()
 	var expandedEnv = []string{}
 	for _, v := range environ {
-		parts := strings.SplitN(v, "=", 2)
-		var toAdd string
-		switch {
-		case parts[0] == configuration.INTEGRATION_NAME:
-			fallthrough
-		case parts[0] == configuration.INTEGRATION_VERSION:
-			// do nothing
-		default:
-			toAdd = v
-			expandedEnv = append(expandedEnv, toAdd)
+		if strings.HasPrefix(strings.ToLower(v), strings.ToLower(configuration.INTEGRATION_NAME)) {
+			continue
 		}
+		if strings.HasPrefix(strings.ToLower(v), strings.ToLower(configuration.INTEGRATION_VERSION)) {
+			continue
+		}
+		expandedEnv = append(expandedEnv, v)
 	}
 	expandedEnv = append(expandedEnv, configuration.INTEGRATION_NAME+"=MCP")
 	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", configuration.INTEGRATION_VERSION, version))
