@@ -3,12 +3,13 @@ package codeaction
 import (
 	"errors"
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
