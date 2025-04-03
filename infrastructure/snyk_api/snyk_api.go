@@ -38,7 +38,11 @@ type SnykApiClientImpl struct {
 	httpClientFunc func() *http.Client
 	c              *config.Config
 }
-
+type LocalCodeEngine struct {
+	AllowCloudUpload bool   `json:"allowCloudUpload"`
+	Url              string `json:"url"`
+	Enabled          bool   `json:"enabled"`
+}
 type FFResponse struct {
 	Ok          bool   `json:"ok"`
 	UserMessage string `json:"userMessage,omitempty"`

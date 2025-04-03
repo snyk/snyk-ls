@@ -152,22 +152,21 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	}
 
 	gafConfig := sc.C.Engine().GetConfiguration()
-	sastResponse := gafConfig.Get(code_workflow.ConfigurationSastSettings)
+	sastResponse := gafConfig.Get(code_workflow.ConfigurationSastSettings).(*sast_contract.SastResponse)
 
-	sastSettingsPtr, ok := sastResponse.(*sast_contract.SastResponse)
-	if !ok {
-		return issues, errors.New("Failed to convert SAST settings to the correct type")
+	if sastResponse == nil {
+		return issues, errors.New("SastResponse is nil")
 	}
-	sastSettings := *sastSettingsPtr
-	if !sc.isSastEnabled(sastSettings) {
+
+	if !sc.isSastEnabled(sastResponse) {
 		return issues, errors.New("SAST is not enabled")
 	}
 
-	if sc.isLocalEngineEnabled(sastSettings) {
-		sc.updateCodeApiLocalEngine(sastSettings)
+	if sc.isLocalEngineEnabled(sastResponse) {
+		sc.updateCodeApiLocalEngine(sastResponse)
 	}
 
-	sc.C.SetDeepCodeAIFixEnabled(sastSettings.AutofixEnabled)
+	sc.C.SetDeepCodeAIFixEnabled(sastResponse.AutofixEnabled)
 
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[folderPath] == nil {

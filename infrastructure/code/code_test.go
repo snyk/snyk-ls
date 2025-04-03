@@ -544,6 +544,34 @@ func Test_Scan(t *testing.T) {
 			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(&learn.Lesson{}, nil).AnyTimes()
 
+		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
+			Enabled: false, /* ensures that legacycli will be called */
+		},
+		})
+
+		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+		tempDir, _, _ := setupIgnoreWorkspace(t)
+
+		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
+
+		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
+		assert.Nil(t, params)
+	})
+	t.Run("Should run new flow if feature flag is enabled", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		snykCodeMock := &FakeSnykCodeClient{C: c}
+		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
+		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
+		learnMock := mock_learn.NewMockService(gomock.NewController(t))
+		learnMock.
+			EXPECT().
+			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(&learn.Lesson{}, nil).AnyTimes()
+
+		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
+			Enabled: false, /* ensures that legacycli will be called */
+		},
+		})
 		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 

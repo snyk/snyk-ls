@@ -38,7 +38,7 @@ func TestIsLocalEngine(t *testing.T) {
 		ApiError:    nil,
 	}
 
-	mockedSastResponse := sast_contract.SastResponse{
+	mockedSastResponse := &sast_contract.SastResponse{
 		SastEnabled: true,
 		LocalCodeEngine: sast_contract.LocalCodeEngine{
 			AllowCloudUpload: false,
