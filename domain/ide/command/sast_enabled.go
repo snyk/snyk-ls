@@ -19,10 +19,9 @@ package command
 import (
 	"context"
 
-	"github.com/snyk/snyk-ls/application/config"
-
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/types"
 
