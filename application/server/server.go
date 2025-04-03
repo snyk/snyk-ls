@@ -57,8 +57,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func Start(c *config.Config) {
@@ -222,9 +220,9 @@ func initNetworkAccessHeaders() {
 	engine := config.CurrentConfig().Engine()
 	gafConfig := engine.GetConfiguration()
 	ua := util.GetUserAgent(gafConfig, config.Version)
-	gafConfig.Set(configuration.USER_AGENT, ua)
-	engine.GetNetworkAccess().RemoveHeader("x-snyk-cli-version")
+	engine.GetNetworkAccess().RemoveHeaderField("x-snyk-cli-version")
 	engine.GetNetworkAccess().AddHeaderField("x-snyk-ide", ua.AppVersion)
+	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
 func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
