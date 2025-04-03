@@ -54,6 +54,8 @@ func mcpWorkflow(
 	defer entrypoint.OnPanicRecover()
 
 	config := invocation.GetConfiguration()
+	config.Set(configuration.INTEGRATION_NAME, "MCP")
+	config.Set(configuration.INTEGRATION_VERSION, invocation.GetRuntimeInfo().GetVersion())
 
 	// only run if experimental flag is set
 	if !config.GetBool(configuration.FLAG_EXPERIMENTAL) {

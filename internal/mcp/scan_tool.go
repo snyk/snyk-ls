@@ -95,7 +95,7 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	if workingDir != "" {
 		command.Dir = workingDir
 	}
-
+	command.Env = m.expandedEnv(invocationCtx.GetRuntimeInfo().GetVersion())
 	command.Stderr = invocationCtx.GetEnhancedLogger()
 	res, err := command.Output()
 
