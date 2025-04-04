@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/require"
@@ -124,7 +126,7 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 	c.SetAuthenticationMethod(types.TokenAuthentication)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
-	c.SetIssueViewOptions(types.IssueViewOptions{OpenIssues: true, IgnoredIssues: true})
+	c.SetIssueViewOptions(util.PtrOf(types.NewIssueViewOptions(true, true)))
 	setMCPServerURL(t, c)
 	redirectConfigAndDataHome(t, c)
 
