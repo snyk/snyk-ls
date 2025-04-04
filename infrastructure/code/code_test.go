@@ -595,7 +595,7 @@ func Test_Scan(t *testing.T) {
 		_, err := scanner.Scan(context.Background(), "", "", nil)
 
 		assert.Error(t, err)
-		assert.Equal(t, err.Error(), "Failed to convert SAST settings to the correct type")
+		assert.Equal(t, err.Error(), "Failed to get the sast settings")
 	})
 }
 
