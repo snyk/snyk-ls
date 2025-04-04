@@ -123,7 +123,7 @@ func (m *McpLLMBinding) HandleSseServer() error {
 		m.baseURL = defaultURL()
 	}
 
-	m.sseServer = server.NewSSEServer(m.mcpServer, m.baseURL.String())
+	m.sseServer = server.NewSSEServer(m.mcpServer, server.WithBaseURL(m.baseURL.String()))
 
 	_, _ = fmt.Fprintf(os.Stderr, "Starting with base URL %s\n", m.baseURL.String())
 
