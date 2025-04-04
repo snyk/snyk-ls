@@ -9,6 +9,8 @@ import (
 	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -65,13 +67,33 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	logMsg := fmt.Sprint("Found ", len(issues), " issues for path ", path, " and range ", r)
 	c.logger.Debug().Msg(logMsg)
 
-	quickFixGroupables := c.getQuickFixGroupablesAndCache(issues)
+	codeConsistentIgnoresEnabled := c.c.Engine().GetConfiguration().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	var filteredIssues []types.Issue
+	if !codeConsistentIgnoresEnabled {
+		filteredIssues = issues
+	} else {
+		isViewingOpenIssues := c.c.IssueViewOptions().OpenIssues
+		isViewingIgnoredIssues := c.c.IssueViewOptions().IgnoredIssues
+		for _, issue := range issues {
+			if !isViewingOpenIssues && !issue.GetIsIgnored() {
+				continue
+			}
+			if !isViewingIgnoredIssues && issue.GetIsIgnored() {
+				continue
+			}
+			filteredIssues = append(filteredIssues, issue)
+		}
+		logMsg = fmt.Sprint("Filtered to ", len(filteredIssues), " issues for path ", path, " and range ", r)
+		c.logger.Debug().Msg(logMsg)
+	}
+
+	quickFixGroupables := c.getQuickFixGroupablesAndCache(filteredIssues)
 
 	var updatedIssues []types.Issue
 	if len(quickFixGroupables) != 0 {
-		updatedIssues = c.updateIssuesWithQuickFix(quickFixGroupables, issues)
+		updatedIssues = c.updateIssuesWithQuickFix(quickFixGroupables, filteredIssues)
 	} else {
-		updatedIssues = issues
+		updatedIssues = filteredIssues
 	}
 
 	actions := converter.ToCodeActions(updatedIssues)
