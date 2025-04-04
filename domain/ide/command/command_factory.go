@@ -60,8 +60,7 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 		apiClient := snyk_api.NewSnykApiClient(c, httpClient)
 		return &sastEnabled{command: commandData, apiClient: apiClient, logger: c.Logger(), authenticationService: authService}, nil
 	case types.GetFeatureFlagStatus:
-		apiClient := snyk_api.NewSnykApiClient(c, httpClient)
-		return &featureFlagStatus{command: commandData, apiClient: apiClient, authenticationService: authService}, nil
+		return &featureFlagStatus{command: commandData, authenticationService: authService}, nil
 	case types.GetActiveUserCommand:
 		return &getActiveUser{command: commandData, authenticationService: authService, notifier: notifier}, nil
 	case types.ReportAnalyticsCommand:
