@@ -1033,8 +1033,8 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 }
 
 func setSastEnabled(c *config.Config, b bool) {
-	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
-		Enabled: b, /* ensures that legacycli will be called */
+	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: b, LocalCodeEngine: sast_contract.LocalCodeEngine{
+		Enabled: false,
 	},
 	})
 }
