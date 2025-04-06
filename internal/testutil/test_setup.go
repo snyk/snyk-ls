@@ -63,7 +63,7 @@ func UnitTest(t *testing.T) *config.Config {
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
 	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
-		Enabled: false, /* ensures that legacycli will be called */
+		Enabled: false,
 	},
 	})
 	t.Cleanup(func() {
