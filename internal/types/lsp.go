@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/product"
@@ -1113,11 +1114,12 @@ type ScanIssue struct { // TODO - convert this to a generic type
 }
 
 type IgnoreDetails struct {
-	Category   string    `json:"category"`
-	Reason     string    `json:"reason"`
-	Expiration string    `json:"expiration"`
-	IgnoredOn  time.Time `json:"ignoredOn"`
-	IgnoredBy  string    `json:"ignoredBy"`
+	Category   string                           `json:"category"`
+	Reason     string                           `json:"reason"`
+	Expiration string                           `json:"expiration"`
+	IgnoredOn  time.Time                        `json:"ignoredOn"`
+	IgnoredBy  string                           `json:"ignoredBy"`
+	Status     codeClientSarif.SuppresionStatus `json:"status"`
 }
 
 // Snyk Open Source

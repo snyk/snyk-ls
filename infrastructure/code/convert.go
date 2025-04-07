@@ -452,6 +452,7 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 			Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
 			IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
 			IgnoredBy:  suppression.Properties.IgnoredBy.Name,
+			Status:     suppression.Status,
 		}
 	}
 	return isIgnored, ignoreDetails

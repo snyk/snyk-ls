@@ -70,6 +70,8 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.GetLearnLesson:
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
+	case types.SubmitIgnoreRequest:
+		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, c: c}, nil
 	case types.CodeFixApplyEditCommand:
 		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, apiClient: codeApiClient, c: c, logger: c.Logger()}, nil
 	case types.CodeFixCommand:
