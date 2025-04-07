@@ -19,7 +19,8 @@ package command
 import (
 	"context"
 	"errors"
-	"fmt"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -29,7 +30,6 @@ import (
 
 type featureFlagStatus struct {
 	command               types.CommandData
-	apiClient             snyk_api.SnykApiClient
 	authenticationService authentication.AuthenticationService
 }
 
@@ -57,16 +57,12 @@ func (cmd *featureFlagStatus) Execute(_ context.Context) (any, error) {
 		return nil, errors.New("invalid feature flag name argument")
 	}
 
-	ff := snyk_api.FeatureFlagType(ffStr)
-	ffResponse, err := cmd.apiClient.FeatureFlagStatus(ff)
-
-	message := fmt.Sprintf("Feature flag status for '%s': %v", ffStr, ffResponse.Ok)
-	logger.Debug().Msg(message)
-
+	// No need for language server to enforce which feature flags exist or not.
+	enabled, err := config_utils.CurrentFeatureFlagChecker().GetFeatureFlag(config.CurrentConfig().Engine(), ffStr)
 	if err != nil {
 		logger.Warn().Err(err).Msg("Failed to get feature flag: " + ffStr)
 		return snyk_api.FFResponse{Ok: false, UserMessage: err.Error()}, nil
 	}
 
-	return snyk_api.FFResponse{Ok: ffResponse.Ok}, nil
+	return snyk_api.FFResponse{Ok: enabled}, nil
 }
