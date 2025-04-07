@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -56,7 +58,11 @@ func (cmd *featureFlagStatus) Execute(_ context.Context) (any, error) {
 	}
 
 	// No need for language server to enforce which feature flags exist or not.
-	enabled := config.CurrentConfig().Engine().GetConfiguration().GetBool(ffStr)
+	enabled, err := config_utils.CurrentFeatureFlagChecker().GetFeatureFlag(config.CurrentConfig().Engine(), ffStr)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Failed to get feature flag: " + ffStr)
+		return snyk_api.FFResponse{Ok: false, UserMessage: err.Error()}, nil
+	}
 
 	return snyk_api.FFResponse{Ok: enabled}, nil
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -38,12 +39,12 @@ func Test_FeatureFlagIsEnabled(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Arrange
-	featureFlag := "snykCodeConsistentIgnores"
+	featureFlag := "aFakeTestFeatureFlag"
 
 	ctrl := gomock.NewController(t)
-	mockConfiguration := mocks.NewMockConfiguration(ctrl)
-	c.Engine().SetConfiguration(mockConfiguration)
-	mockConfiguration.EXPECT().GetBool(featureFlag).Return(true)
+	mockFFC := mocks.NewMockFeatureFlagChecker(ctrl)
+	config_utils.SetCurrentFeatureFlagChecker(mockFFC)
+	mockFFC.EXPECT().GetFeatureFlag(config.CurrentConfig().Engine(), featureFlag).Return(true, nil)
 
 	featureFlagStatusCmd := setupFeatureFlagCommand(t, c, featureFlag)
 
