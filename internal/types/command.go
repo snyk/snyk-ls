@@ -25,28 +25,27 @@ import (
 )
 
 const (
-	NavigateToRangeCommand          = "snyk.navigateToRange"
-	WorkspaceScanCommand            = "snyk.workspace.scan"
-	WorkspaceFolderScanCommand      = "snyk.workspaceFolder.scan"
-	OpenBrowserCommand              = "snyk.openBrowser"
 	LoginCommand                    = "snyk.login"
 	CopyAuthLinkCommand             = "snyk.copyAuthLink"
 	LogoutCommand                   = "snyk.logout"
+	GetActiveUserCommand            = "snyk.getActiveUser"
 	TrustWorkspaceFoldersCommand    = "snyk.trustWorkspaceFolders"
-	OpenLearnLesson                 = "snyk.openLearnLesson"
-	GetLearnLesson                  = "snyk.getLearnLesson"
 	GetSettingsSastEnabled          = "snyk.getSettingsSastEnabled"
 	GetFeatureFlagStatus            = "snyk.getFeatureFlagStatus"
-	GetActiveUserCommand            = "snyk.getActiveUser"
-	ReportAnalyticsCommand          = "snyk.reportAnalytics"
+	WorkspaceScanCommand            = "snyk.workspace.scan"
+	WorkspaceFolderScanCommand      = "snyk.workspaceFolder.scan"
 	ClearCacheCommand               = "snyk.clearCache"
+	ReportAnalyticsCommand          = "snyk.reportAnalytics"
 	GenerateIssueDescriptionCommand = "snyk.generateIssueDescription"
+	OpenBrowserCommand              = "snyk.openBrowser"
+	NavigateToRangeCommand          = "snyk.navigateToRange"
+	OpenLearnLesson                 = "snyk.openLearnLesson"
+	GetLearnLesson                  = "snyk.getLearnLesson"
 	// Snyk Code specific commands
 	CodeFixCommand          = "snyk.code.fix"
 	CodeFixDiffsCommand     = "snyk.code.fixDiffs"
 	CodeFixApplyEditCommand = "snyk.code.fixApplyEdit"
 	CodeSubmitFixFeedback   = "snyk.code.submitFixFeedback"
-
 	// bridging commands
 	ExecuteCLICommand  = "snyk.executeCLI"
 	ExecuteMCPToolCall = "snyk.executeMCPToolCall"

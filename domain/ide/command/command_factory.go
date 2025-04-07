@@ -36,59 +36,52 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 	httpClient := c.Engine().GetNetworkAccess().GetHttpClient
 
 	switch commandData.CommandId {
-	case types.NavigateToRangeCommand:
-		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger(), c: c}, nil
-	case types.WorkspaceScanCommand:
-		return &workspaceScanCommand{command: commandData, srv: srv, c: c}, nil
-	case types.WorkspaceFolderScanCommand:
-		return &workspaceFolderScanCommand{command: commandData, srv: srv, c: c}, nil
-	case types.OpenBrowserCommand:
-		return &openBrowserCommand{command: commandData, logger: c.Logger()}, nil
 	case types.LoginCommand:
 		return &loginCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
 	case types.CopyAuthLinkCommand:
 		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
 	case types.LogoutCommand:
 		return &logoutCommand{command: commandData, authService: authService, c: c}, nil
+	case types.GetActiveUserCommand:
+		return &getActiveUser{command: commandData, authenticationService: authService, notifier: notifier}, nil
 	case types.TrustWorkspaceFoldersCommand:
 		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, c: c}, nil
-	case types.GetLearnLesson:
-		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
-	case types.OpenLearnLesson:
-		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.GetSettingsSastEnabled:
 		apiClient := snyk_api.NewSnykApiClient(c, httpClient)
 		return &sastEnabled{command: commandData, apiClient: apiClient, logger: c.Logger(), authenticationService: authService}, nil
 	case types.GetFeatureFlagStatus:
 		apiClient := snyk_api.NewSnykApiClient(c, httpClient)
 		return &featureFlagStatus{command: commandData, apiClient: apiClient, authenticationService: authService}, nil
-	case types.GetActiveUserCommand:
-		return &getActiveUser{command: commandData, authenticationService: authService, notifier: notifier}, nil
+	case types.WorkspaceScanCommand:
+		return &workspaceScanCommand{command: commandData, srv: srv, c: c}, nil
+	case types.WorkspaceFolderScanCommand:
+		return &workspaceFolderScanCommand{command: commandData, srv: srv, c: c}, nil
+	case types.ClearCacheCommand:
+		return &clearCache{command: commandData, c: c}, nil
 	case types.ReportAnalyticsCommand:
 		return &reportAnalyticsCommand{command: commandData, authenticationService: authService}, nil
-	case types.CodeFixCommand:
-		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
+	case types.GenerateIssueDescriptionCommand:
+		return &generateIssueDescription{command: commandData, issueProvider: issueProvider}, nil
+	case types.OpenBrowserCommand:
+		return &openBrowserCommand{command: commandData, logger: c.Logger()}, nil
+	case types.NavigateToRangeCommand:
+		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger(), c: c}, nil
+	case types.OpenLearnLesson:
+		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
+	case types.GetLearnLesson:
+		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.CodeFixApplyEditCommand:
 		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, apiClient: codeApiClient, c: c, logger: c.Logger()}, nil
+	case types.CodeFixCommand:
+		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
+	case types.CodeFixDiffsCommand:
+		return &codeFixDiffs{command: commandData, codeScanner: codeScanner, srv: srv, issueProvider: issueProvider, notifier: notifier, c: c}, nil
 	case types.CodeSubmitFixFeedback:
 		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil
-	case types.CodeFixDiffsCommand:
-		return &codeFixDiffs{
-			command:       commandData,
-			codeScanner:   codeScanner,
-			srv:           srv,
-			issueProvider: issueProvider,
-			notifier:      notifier,
-			c:             c,
-		}, nil
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
 	case types.ExecuteMCPToolCall:
 		return &executeMcpCallCommand{command: commandData, notifier: notifier, logger: c.Logger(), baseURL: c.GetMCPServerURL().String()}, nil
-	case types.ClearCacheCommand:
-		return &clearCache{command: commandData, c: c}, nil
-	case types.GenerateIssueDescriptionCommand:
-		return &generateIssueDescription{command: commandData, issueProvider: issueProvider}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)
