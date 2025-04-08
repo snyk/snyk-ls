@@ -32,6 +32,10 @@ type submitIgnoreRequest struct {
 	c             *config.Config
 }
 
+type IgnoresResponse struct {
+	SuppressionStatus string
+}
+
 func (cmd *submitIgnoreRequest) Command() types.CommandData {
 	return cmd.command
 }
@@ -68,8 +72,8 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		}
 
 		//TODO issue enrich with data from the result (enrich Suppression status,
-		wfResponse := result[0].GetPayload().(IgnoresResponseType)
-		issue.SetSuppressionStatus(wfResponse.SuppressionStatus)
+		response := result[0].GetPayload().(IgnoresResponse)
+		issue.SetSuppressionStatus(response.SuppressionStatus)
 
 	case "update":
 		if len(cmd.command.Arguments) < 8 {
@@ -94,8 +98,8 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		}
 
 		//TODO issue enrich with data from the result (enrich Suppression status,
-		wfResponse := result[0].GetPayload().(IgnoresResponseType)
-		issue.SetSuppressionStatus(wfResponse.SuppressionStatus)
+		response := result[0].GetPayload().(IgnoresResponse)
+		issue.SetSuppressionStatus(response.SuppressionStatus)
 
 	case "delete":
 		if len(cmd.command.Arguments) < 3 {
@@ -117,8 +121,8 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		}
 
 		//TODO issue enrich with data from the result (enrich Suppression status,
-		wfResponse := result[0].GetPayload().(IgnoresResponseType)
-		issue.SetSuppressionStatus(wfResponse.SuppressionStatus)
+		response := result[0].GetPayload().(IgnoresResponse)
+		issue.SetSuppressionStatus(response.SuppressionStatus)
 
 	default:
 		return nil, fmt.Errorf(`unkown worflow`)
