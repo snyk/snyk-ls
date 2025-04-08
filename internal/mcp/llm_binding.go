@@ -123,10 +123,9 @@ func (m *McpLLMBinding) HandleSseServer() error {
 		m.baseURL = defaultURL()
 	}
 
-	m.sseServer = server.NewSSEServer(m.mcpServer, m.baseURL.String())
+	m.sseServer = server.NewSSEServer(m.mcpServer, server.WithBaseURL(m.baseURL.String()))
 
-	//nolint:forbidigo // stdio stream isn't started yet
-	fmt.Printf("Starting with base URL %s\n", m.baseURL.String())
+	_, _ = fmt.Fprintf(os.Stderr, "Starting with base URL %s\n", m.baseURL.String())
 
 	m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("starting")
 	go func() {
