@@ -107,6 +107,7 @@ type Issue interface {
 	GetFilterableIssueType() product.FilterableIssueType
 	GetRuleID() string
 	GetReferences() []Reference
+	GetFindingsId() string
 	SetCodelensCommands(lenses []CommandData)
 	SetLessonUrl(url string)
 	SetAdditionalData(data IssueAdditionalData)

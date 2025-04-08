@@ -55,8 +55,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 
 		issue := cmd.issueProvider.Issue(cmd.command.Arguments[1].(string))
 
-		// TODO Add asset findings id to issue and replace it with FindingsIds
-		findingsId := issue.GetGlobalIdentity()
+		findingsId := issue.GetFindingsId()
 
 		gafConfig := engine.GetConfiguration().Clone()
 		gafConfig.Set("id", findingsId)
@@ -71,7 +70,6 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 			return nil, fmt.Errorf("failed to invoke ignore-create workflow: %w", err)
 		}
 
-		//TODO issue enrich with data from the result (enrich Suppression status,
 		response := result[0].GetPayload().(IgnoresResponse)
 		issue.SetSuppressionStatus(response.SuppressionStatus)
 
@@ -81,8 +79,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		}
 
 		issue := cmd.issueProvider.Issue(cmd.command.Arguments[1].(string))
-		// TODO Add asset findings id to issue and replace it with FindingsIds
-		findingsId := issue.GetGlobalIdentity()
+		findingsId := issue.GetFindingsId()
 
 		gafConfig := engine.GetConfiguration().Clone()
 		gafConfig.Set("id", findingsId)
@@ -97,7 +94,6 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 			return nil, fmt.Errorf("failed to invoke ignore-create workflow: %w", err)
 		}
 
-		//TODO issue enrich with data from the result (enrich Suppression status,
 		response := result[0].GetPayload().(IgnoresResponse)
 		issue.SetSuppressionStatus(response.SuppressionStatus)
 
@@ -107,8 +103,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		}
 
 		issue := cmd.issueProvider.Issue(cmd.command.Arguments[1].(string))
-		// TODO Add asset findings id to issue and replace it with FindingsIds
-		findingsId := issue.GetGlobalIdentity()
+		findingsId := issue.GetFindingsId()
 
 		gafConfig := engine.GetConfiguration().Clone()
 		gafConfig.Set("id", findingsId)
@@ -120,7 +115,6 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 			return nil, fmt.Errorf("failed to invoke ignore-create workflow: %w", err)
 		}
 
-		//TODO issue enrich with data from the result (enrich Suppression status,
 		response := result[0].GetPayload().(IgnoresResponse)
 		issue.SetSuppressionStatus(response.SuppressionStatus)
 

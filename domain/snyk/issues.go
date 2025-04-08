@@ -79,6 +79,7 @@ type Issue struct {
 	Fingerprint       string
 	GlobalIdentity    string
 	SuppressionStatus string
+	FindingsId        string
 	m                 sync.RWMutex
 }
 
@@ -234,6 +235,12 @@ func (i *Issue) GetIsIgnored() bool {
 	i.m.RLock()
 	defer i.m.RUnlock()
 	return i.IsIgnored
+}
+
+func (i *Issue) GetFindingsId() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.FindingsId
 }
 
 func (i *Issue) GetSeverity() types.Severity {
