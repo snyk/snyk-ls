@@ -27,8 +27,8 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/code-client-go v1.16.2
-	github.com/snyk/go-application-framework v0.0.0-20250307155453-ce7aaf72fe7d
+	github.com/snyk/code-client-go v1.18.0
+	github.com/snyk/go-application-framework v0.0.0-20250325133828-3ffd1aa4f76f
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
@@ -41,7 +41,6 @@ require (
 	golang.org/x/oauth2 v0.27.0
 	golang.org/x/sync v0.11.0
 	gopkg.in/ini.v1 v1.67.0
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -129,6 +128,7 @@ require (
 	golang.org/x/tools v0.30.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 //replace github.com/snyk/go-application-framework => ../go-application-framework
