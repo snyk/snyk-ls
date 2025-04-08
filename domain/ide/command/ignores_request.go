@@ -37,6 +37,7 @@ func (cmd *submitIgnoreRequest) Command() types.CommandData {
 }
 
 func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
+	engine := cmd.c.Engine()
 	workflowType, ok := cmd.command.Arguments[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("workflow type should be a string")
@@ -53,7 +54,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		// TODO Add asset findings id to issue and replace it with FindingsIds
 		findingsId := issue.GetGlobalIdentity()
 
-		gafConfig := cmd.c.Engine().GetConfiguration().Clone()
+		gafConfig := engine.GetConfiguration().Clone()
 		gafConfig.Set("id", findingsId)
 		gafConfig.Set("ignoreType", cmd.command.Arguments[2].(string))
 		gafConfig.Set("reason", cmd.command.Arguments[3].(string))
@@ -61,14 +62,14 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		gafConfig.Set("enrichResponse", true)
 		gafConfig.Set("interactive", false)
 
-		result, err := cmd.c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_IGNORE_CREATE, gafConfig)
+		result, err := engine.InvokeWithConfig(localworkflows.WORKFLOWID_IGNORE_CREATE, gafConfig)
 		if err != nil && len(result) == 0 {
 			return nil, fmt.Errorf("failed to invoke ignore-create workflow: %w", err)
 		}
 
 		//TODO issue enrich with data from the result (enrich Suppression status,
 		wfResponse := result[0].GetPayload().(IgnoresResponseType)
-		issue.SetSuppresionStatus(wfResponse.SuppressionStatus)
+		issue.SetSuppressionStatus(wfResponse.SuppressionStatus)
 
 	case "update":
 		if len(cmd.command.Arguments) < 8 {
@@ -79,7 +80,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		// TODO Add asset findings id to issue and replace it with FindingsIds
 		findingsId := issue.GetGlobalIdentity()
 
-		gafConfig := cmd.c.Engine().GetConfiguration().Clone()
+		gafConfig := engine.GetConfiguration().Clone()
 		gafConfig.Set("id", findingsId)
 		gafConfig.Set("ignoreType", cmd.command.Arguments[2].(string))
 		gafConfig.Set("reason", cmd.command.Arguments[3].(string))
@@ -87,14 +88,14 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		gafConfig.Set("enrichResponse", true)
 		gafConfig.Set("interactive", false)
 
-		result, err := cmd.c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_IGNORE_EDIT, gafConfig)
+		result, err := engine.InvokeWithConfig(localworkflows.WORKFLOWID_IGNORE_EDIT, gafConfig)
 		if err != nil && len(result) == 0 {
 			return nil, fmt.Errorf("failed to invoke ignore-create workflow: %w", err)
 		}
 
 		//TODO issue enrich with data from the result (enrich Suppression status,
 		wfResponse := result[0].GetPayload().(IgnoresResponseType)
-		issue.SetSuppresionStatus(wfResponse.SuppressionStatus)
+		issue.SetSuppressionStatus(wfResponse.SuppressionStatus)
 
 	case "delete":
 		if len(cmd.command.Arguments) < 3 {
@@ -105,19 +106,19 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		// TODO Add asset findings id to issue and replace it with FindingsIds
 		findingsId := issue.GetGlobalIdentity()
 
-		gafConfig := cmd.c.Engine().GetConfiguration().Clone()
+		gafConfig := engine.GetConfiguration().Clone()
 		gafConfig.Set("id", findingsId)
 		gafConfig.Set("enrichResponse", true)
 		gafConfig.Set("interactive", false)
 
-		result, err := cmd.c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_IGNORE_DELETE, gafConfig)
+		result, err := engine.InvokeWithConfig(localworkflows.WORKFLOWID_IGNORE_DELETE, gafConfig)
 		if err != nil && len(result) == 0 {
 			return nil, fmt.Errorf("failed to invoke ignore-create workflow: %w", err)
 		}
 
 		//TODO issue enrich with data from the result (enrich Suppression status,
 		wfResponse := result[0].GetPayload().(IgnoresResponseType)
-		issue.SetSuppresionStatus(wfResponse.SuppressionStatus)
+		issue.SetSuppressionStatus(wfResponse.SuppressionStatus)
 
 	default:
 		return nil, fmt.Errorf(`unkown worflow`)

@@ -75,10 +75,11 @@ type Issue struct {
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData types.IssueAdditionalData `json:"additionalData"`
 	// Learn Service Lesson URL
-	LessonUrl      string `json:"url"`
-	Fingerprint    string
-	GlobalIdentity string
-	m              sync.RWMutex
+	LessonUrl         string `json:"url"`
+	Fingerprint       string
+	GlobalIdentity    string
+	SuppressionStatus string
+	m                 sync.RWMutex
 }
 
 func (i *Issue) Clone() *Issue {
@@ -108,6 +109,7 @@ func (i *Issue) Clone() *Issue {
 		LessonUrl:           i.LessonUrl,
 		Fingerprint:         i.Fingerprint,
 		GlobalIdentity:      i.GlobalIdentity,
+		SuppressionStatus:   i.SuppressionStatus,
 		m:                   sync.RWMutex{},
 	}
 }
@@ -468,4 +470,8 @@ func (i *Issue) SetID(id string) {
 	defer i.m.Unlock()
 
 	i.ID = id
+}
+
+func (i *Issue) SetSuppressionStatus(status string) {
+	i.SuppressionStatus = status
 }

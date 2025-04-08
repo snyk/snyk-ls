@@ -114,6 +114,7 @@ type Issue interface {
 	SetIsNew(isNew bool)
 	SetCodeActions(actions []CodeAction)
 	SetRange(r Range)
+	SetSuppressionStatus(status string)
 }
 
 type IssueAdditionalData interface {
