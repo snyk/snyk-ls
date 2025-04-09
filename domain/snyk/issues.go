@@ -110,7 +110,6 @@ func (i *Issue) Clone() *Issue {
 		LessonUrl:           i.LessonUrl,
 		Fingerprint:         i.Fingerprint,
 		GlobalIdentity:      i.GlobalIdentity,
-		SuppressionStatus:   i.SuppressionStatus,
 		m:                   sync.RWMutex{},
 	}
 }
@@ -479,6 +478,6 @@ func (i *Issue) SetID(id string) {
 	i.ID = id
 }
 
-func (i *Issue) SetSuppressionStatus(status string) {
-	i.SuppressionStatus = status
+func (i *Issue) SetIgnoreDetails(ignoreDetails *types.IgnoreDetails) {
+	i.IgnoreDetails = ignoreDetails
 }

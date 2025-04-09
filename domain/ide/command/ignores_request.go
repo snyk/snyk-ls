@@ -18,6 +18,7 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/snyk/code-client-go/sarif"
@@ -25,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -77,16 +79,28 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		gafConfig.Set(ignore_workflow.InteractiveKey, false)
 		gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
 
-		result, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
-		if err != nil && len(result) == 0 {
-			return nil, fmt.Errorf("failed to invoke ignore-create workflow: %w", err)
+		data, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
+		if err != nil {
+			return nil, err
 		}
 
-		suppressionResponse, ok := result[0].GetPayload().(*sarif.Suppression)
-		if !ok {
-			return nil, fmt.Errorf("unexpected payload type: expected *sarif.Suppression")
+		if data == nil || len(data) == 0 {
+			return nil, fmt.Errorf("no data returned from ignore workflow")
 		}
-		issue.SetSuppressionStatus(string(suppressionResponse.Status))
+
+		output, ok := data[0].GetPayload().([]byte)
+		if !ok {
+			return nil, fmt.Errorf("invalid response from ignore workflow") //TODO fix this
+		}
+
+		var suppression *sarif.Suppression
+		err = json.Unmarshal(output, suppression)
+		if err != nil {
+			return nil, err
+		}
+		ignoreDetails := code.SarifSuppressionToIgnoreDetails(suppression)
+
+		issue.SetIgnoreDetails(ignoreDetails)
 
 	case "update":
 		if len(cmd.command.Arguments) < 5 {
@@ -129,7 +143,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		if !ok {
 			return nil, fmt.Errorf("unexpected payload type: expected *sarif.Suppression")
 		}
-		issue.SetSuppressionStatus(string(suppressionResponse.Status))
+		issue.SetIgnoreDetails(string(suppressionResponse.Status))
 
 	case "delete":
 		if len(cmd.command.Arguments) < 3 {
@@ -157,7 +171,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		if !ok {
 			return nil, fmt.Errorf("unexpected payload type: expected *sarif.Suppression")
 		}
-		issue.SetSuppressionStatus(string(suppressionResponse.Status))
+		issue.SetIgnoreDetails(string(suppressionResponse.Status))
 
 	default:
 		return nil, fmt.Errorf(`unkown worflow`)
