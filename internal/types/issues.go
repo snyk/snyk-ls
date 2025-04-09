@@ -88,6 +88,7 @@ type Issue interface {
 	GetMessage() string
 	GetFormattedMessage() string
 	GetAffectedFilePath() FilePath
+	GetContentRoot() FilePath
 	GetIsNew() bool
 	GetIsIgnored() bool
 	GetSeverity() Severity
