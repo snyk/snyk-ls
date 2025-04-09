@@ -78,7 +78,6 @@
           "isRequired": false,
           "description": "Use with --all-projects to exclude directory names and file names. (Default is empty)"
         },
-        {
           "name": "print_deps",
           "type": "boolean",
           "isRequired": false,
