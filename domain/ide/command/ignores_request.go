@@ -22,13 +22,13 @@ import (
 	"fmt"
 
 	"github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 )
 
 type submitIgnoreRequest struct {
@@ -41,23 +41,27 @@ func (cmd *submitIgnoreRequest) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
+func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 	engine := cmd.c.Engine()
 	workflowType, ok := cmd.command.Arguments[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("workflow type should be a string")
 	}
-	issueId := cmd.command.Arguments[1].(string)
+	issueId, ok := cmd.command.Arguments[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("issueId type should be a string")
+	}
 
 	//TODO remove this loop when testing is done.
-	for _, issueList := range cmd.issueProvider.Issues() {
-		for _, issue := range issueList {
-			if issue.GetFilterableIssueType() == product.FilterableIssueTypeCodeSecurity {
-				issueId = issue.GetAdditionalData().GetKey()
-				break
-			}
-		}
-	}
+	//issueId := ""
+	//for _, issueList := range cmd.issueProvider.Issues() {
+	//	for _, issue := range issueList {
+	//		if issue.GetFilterableIssueType() == product.FilterableIssueTypeCodeSecurity {
+	//			issueId = issue.GetAdditionalData().GetKey()
+	//			break
+	//		}
+	//	}
+	//}
 
 	issue := cmd.issueProvider.Issue(issueId)
 	if issue == nil {
@@ -95,16 +99,16 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		gafConfig.Set(ignore_workflow.InteractiveKey, false)
 		gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
 
-		reponse, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
+		response, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
 		if err != nil {
 			return nil, err
 		}
 
-		if reponse == nil || len(reponse) == 0 {
+		if len(response) == 0 {
 			return nil, fmt.Errorf("no data returned from ignore workflow")
 		}
 
-		output, ok := reponse[0].GetPayload().([]byte)
+		output, ok := response[0].GetPayload().([]byte)
 		if !ok {
 			return nil, fmt.Errorf("invalid response from ignore workflow") //TODO fix this
 		}
@@ -146,16 +150,16 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
 		gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
 
-		reponse, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
+		response, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
 		if err != nil {
 			return nil, err
 		}
 
-		if reponse == nil || len(reponse) == 0 {
+		if len(response) == 0 {
 			return nil, fmt.Errorf("no data returned from ignore workflow")
 		}
 
-		output, ok := reponse[0].GetPayload().([]byte)
+		output, ok := response[0].GetPayload().([]byte)
 		if !ok {
 			return nil, fmt.Errorf("invalid response from ignore workflow") //TODO fix this
 		}
@@ -182,16 +186,16 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		gafConfig.Set(ignore_workflow.InteractiveKey, false)
 		gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
 
-		reponse, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
+		response, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
 		if err != nil {
 			return nil, err
 		}
 
-		if reponse == nil || len(reponse) == 0 {
+		if len(response) == 0 {
 			return nil, fmt.Errorf("no data returned from ignore workflow")
 		}
 
-		output, ok := reponse[0].GetPayload().([]byte)
+		output, ok := response[0].GetPayload().([]byte)
 		if !ok {
 			return nil, fmt.Errorf("invalid response from ignore workflow") //TODO fix this
 		}
@@ -202,7 +206,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		}
 
 	default:
-		return nil, fmt.Errorf(`unkown worflow`)
+		return nil, fmt.Errorf(`unknown worflow`)
 	}
 
 	return nil, nil
