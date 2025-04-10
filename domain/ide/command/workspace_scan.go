@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/snyk/snyk-ls/application/config"
+	context2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -36,7 +37,27 @@ func (cmd *workspaceScanCommand) Command() types.CommandData {
 func (cmd *workspaceScanCommand) Execute(ctx context.Context) (any, error) {
 	w := cmd.c.Workspace()
 	w.Clear()
-	w.ScanWorkspace(ctx)
-	HandleUntrustedFolders(ctx, cmd.c, cmd.srv)
+	args := cmd.command.Arguments
+	enrichedCtx := cmd.enrichContextWithScanSource(ctx, args)
+	w.ScanWorkspace(enrichedCtx)
+	HandleUntrustedFolders(enrichedCtx, cmd.c, cmd.srv)
 	return nil, nil
+}
+
+func (cmd *workspaceScanCommand) enrichContextWithScanSource(ctx context.Context, args []any) context.Context {
+	if len(args) == 0 {
+		return ctx
+	}
+
+	sc, ok := args[0].(string)
+	if !ok {
+		return ctx
+	}
+
+	if sc != context2.IDE.String() && sc != context2.LLM.String() {
+		return ctx
+	}
+
+	scanSource := context2.ScanSource(sc)
+	return context2.NewContextWithScanSource(ctx, scanSource)
 }
