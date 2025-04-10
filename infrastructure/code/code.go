@@ -46,6 +46,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/uri"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 type ScanStatus struct {
@@ -147,12 +150,12 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
-	sastResponse, err := sc.SnykApiClient.SastSettings()
 
-	if err != nil {
-		logger.Error().Err(err).Msg("couldn't get sast enablement")
-		sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{})
-		return issues, errors.New("couldn't get sast enablement")
+	gafConfig := sc.C.Engine().GetConfiguration()
+	sastResponse, ok := gafConfig.Get(code_workflow.ConfigurationSastSettings).(*sast_contract.SastResponse)
+
+	if sastResponse == nil || !ok {
+		return issues, errors.New("Failed to get the sast settings")
 	}
 
 	if !sc.isSastEnabled(sastResponse) {

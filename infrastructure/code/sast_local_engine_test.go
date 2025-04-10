@@ -22,11 +22,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 func TestIsLocalEngine(t *testing.T) {
@@ -36,9 +38,9 @@ func TestIsLocalEngine(t *testing.T) {
 		ApiError:    nil,
 	}
 
-	mockedSastResponse := snyk_api.SastResponse{
+	mockedSastResponse := &sast_contract.SastResponse{
 		SastEnabled: true,
-		LocalCodeEngine: snyk_api.LocalCodeEngine{
+		LocalCodeEngine: sast_contract.LocalCodeEngine{
 			AllowCloudUpload: false,
 			Url:              "http://local.engine",
 			Enabled:          true,

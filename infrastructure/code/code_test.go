@@ -47,6 +47,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 // can we replace them with more succinct higher level integration tests?[keeping them for sanity for the time being]
@@ -259,6 +262,15 @@ func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
 	snykCodeMock := &FakeSnykCodeClient{C: c}
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
+
+	engineConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
+		Enabled: true,
+	},
+	})
+
+	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.
 		EXPECT().
@@ -516,33 +528,12 @@ func Test_Scan(t *testing.T) {
 		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
+		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
 		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
 
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 		assert.Nil(t, params)
 	})
-
-	//nolint:dupl // test cases differ by a boolean
-	t.Run("Should run existing flow if feature flag is disabled", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		snykCodeMock := &FakeSnykCodeClient{C: c}
-		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
-		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
-		learnMock := mock_learn.NewMockService(gomock.NewController(t))
-		learnMock.
-			EXPECT().
-			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(&learn.Lesson{}, nil).AnyTimes()
-
-		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
-		tempDir, _, _ := setupIgnoreWorkspace(t)
-
-		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
-
-		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-		assert.NotNil(t, params)
-	})
-
 	//nolint:dupl // test cases differ by a boolean
 	t.Run("Should run new flow if feature flag is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
@@ -555,6 +546,8 @@ func Test_Scan(t *testing.T) {
 			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(&learn.Lesson{}, nil).AnyTimes()
 
+		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
+
 		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
@@ -562,6 +555,41 @@ func Test_Scan(t *testing.T) {
 
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 		assert.Nil(t, params)
+	})
+	//nolint:dupl // test cases differ by a boolean
+	t.Run("Should run new flow if feature flag is enabled", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		snykCodeMock := &FakeSnykCodeClient{C: c}
+		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
+		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
+		learnMock := mock_learn.NewMockService(gomock.NewController(t))
+		learnMock.
+			EXPECT().
+			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(&learn.Lesson{}, nil).AnyTimes()
+
+		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
+		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+		tempDir, _, _ := setupIgnoreWorkspace(t)
+
+		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
+
+		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
+		assert.Nil(t, params)
+	})
+	t.Run("should return an error if no sast settings are returned from the gaf api", func(t *testing.T) {
+		testutil.UnitTest(t)
+		// Arrange
+		_, scanner := setupTestScanner(t)
+
+		config.CurrentConfig().Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings,
+			nil)
+
+		// Act
+		_, err := scanner.Scan(context.Background(), "", "", nil)
+
+		assert.Error(t, err)
+		assert.Equal(t, err.Error(), "Failed to get the sast settings")
 	})
 }
 
@@ -815,60 +843,6 @@ func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
 		assert.Equal(t, types.NavigateToRangeCommand, codeAction.GetCommand().CommandId)
 		assert.Equal(t, expectedURI, codeAction.GetCommand().Arguments[0])
 		assert.Equal(t, issue.Range, codeAction.GetCommand().Arguments[1])
-	})
-}
-
-func Test_SastApiCall(t *testing.T) {
-	c := testutil.UnitTest(t)
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: false,
-		ApiError:    nil,
-	}
-
-	scanner := &Scanner{
-		SnykApiClient: apiClient,
-		errorReporter: newTestCodeErrorReporter(),
-		notifier:      notification.NewNotifier(),
-		C:             c,
-	}
-
-	t.Run("should call the API to check enablement if Snyk Code is enabled", func(t *testing.T) {
-		apiClient.ApiError = nil
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-
-		_, _ = scanner.Scan(context.Background(), "fileName", "tempDir", nil)
-
-		assert.Equal(t, 1, len(apiClient.Calls))
-	})
-
-	t.Run("should return an error if Snyk Code is enabled and the API returns an error", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.ApiError = &snyk_api.SnykApiError{}
-		_, err := scanner.Scan(context.Background(), "fileName", "tempDir", nil)
-
-		assert.Error(t, err)
-		assert.Equal(t, err.Error(), "couldn't get sast enablement")
-	})
-
-	t.Run("should return an error if Snyk Code is enabled and API SAST is disabled", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.ApiError = nil
-		apiClient.CodeEnabled = false
-		_, err := scanner.Scan(context.Background(), "fileName", "tempDir", nil)
-
-		assert.Error(t, err)
-		assert.Equal(t, err.Error(), "SAST is not enabled")
-	})
-
-	t.Run("should return an error if API SAST is disabled and local-engine is enabled", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
-		apiClient.ApiError = nil
-		apiClient.CodeEnabled = false
-		apiClient.LocalCodeEngine.Enabled = true
-		_, err := scanner.Scan(context.Background(), "fileName", "tempDir", nil)
-
-		assert.Error(t, err)
-		assert.Equal(t, err.Error(), "SAST is not enabled")
 	})
 }
 
