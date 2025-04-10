@@ -95,28 +95,24 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		gafConfig.Set(ignore_workflow.InteractiveKey, false)
 		gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
 
-		data, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
+		reponse, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
 		if err != nil {
 			return nil, err
 		}
 
-		if data == nil || len(data) == 0 {
+		if reponse == nil || len(reponse) == 0 {
 			return nil, fmt.Errorf("no data returned from ignore workflow")
 		}
 
-		output, ok := data[0].GetPayload().([]byte)
+		output, ok := reponse[0].GetPayload().([]byte)
 		if !ok {
 			return nil, fmt.Errorf("invalid response from ignore workflow") //TODO fix this
 		}
 
-		var suppression *sarif.Suppression
-		err = json.Unmarshal(output, suppression)
+		err = updateIssueWithIgnoreDetails(output, issue)
 		if err != nil {
 			return nil, err
 		}
-		ignoreDetails := code.SarifSuppressionToIgnoreDetails(suppression)
-
-		issue.SetIgnoreDetails(ignoreDetails)
 
 	case "update":
 		if len(cmd.command.Arguments) < 5 {
@@ -150,28 +146,24 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
 		gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
 
-		data, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
+		reponse, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
 		if err != nil {
 			return nil, err
 		}
 
-		if data == nil || len(data) == 0 {
+		if reponse == nil || len(reponse) == 0 {
 			return nil, fmt.Errorf("no data returned from ignore workflow")
 		}
 
-		output, ok := data[0].GetPayload().([]byte)
+		output, ok := reponse[0].GetPayload().([]byte)
 		if !ok {
 			return nil, fmt.Errorf("invalid response from ignore workflow") //TODO fix this
 		}
 
-		var suppression *sarif.Suppression
-		err = json.Unmarshal(output, suppression)
+		err = updateIssueWithIgnoreDetails(output, issue)
 		if err != nil {
 			return nil, err
 		}
-		ignoreDetails := code.SarifSuppressionToIgnoreDetails(suppression)
-
-		issue.SetIgnoreDetails(ignoreDetails)
 
 	case "delete":
 		if len(cmd.command.Arguments) < 3 {
@@ -190,32 +182,40 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		gafConfig.Set(ignore_workflow.InteractiveKey, false)
 		gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
 
-		data, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
+		reponse, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
 		if err != nil {
 			return nil, err
 		}
 
-		if data == nil || len(data) == 0 {
+		if reponse == nil || len(reponse) == 0 {
 			return nil, fmt.Errorf("no data returned from ignore workflow")
 		}
 
-		output, ok := data[0].GetPayload().([]byte)
+		output, ok := reponse[0].GetPayload().([]byte)
 		if !ok {
 			return nil, fmt.Errorf("invalid response from ignore workflow") //TODO fix this
 		}
 
-		var suppression *sarif.Suppression
-		err = json.Unmarshal(output, suppression)
+		err = updateIssueWithIgnoreDetails(output, issue)
 		if err != nil {
 			return nil, err
 		}
-		ignoreDetails := code.SarifSuppressionToIgnoreDetails(suppression)
-
-		issue.SetIgnoreDetails(ignoreDetails)
 
 	default:
 		return nil, fmt.Errorf(`unkown worflow`)
 	}
 
 	return nil, nil
+}
+
+func updateIssueWithIgnoreDetails(output []byte, issue types.Issue) error {
+	var suppression sarif.Suppression
+	err := json.Unmarshal(output, &suppression)
+	if err != nil {
+		return err
+	}
+	ignoreDetails := code.SarifSuppressionToIgnoreDetails(&suppression)
+
+	issue.SetIgnoreDetails(ignoreDetails)
+	return nil
 }
