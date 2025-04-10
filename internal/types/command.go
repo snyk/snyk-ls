@@ -41,7 +41,7 @@ const (
 	NavigateToRangeCommand          = "snyk.navigateToRange"
 	OpenLearnLesson                 = "snyk.openLearnLesson"
 	GetLearnLesson                  = "snyk.getLearnLesson"
-	SubmitIgnoreRequest             = "snyk.code.submitIgnoreRequest"
+	SubmitIgnoreRequest             = "snyk.submitIgnoreRequest"
 	// Snyk Code specific commands
 	CodeFixCommand          = "snyk.code.fix"
 	CodeFixDiffsCommand     = "snyk.code.fixDiffs"
