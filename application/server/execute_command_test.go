@@ -122,6 +122,25 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	}, 2*time.Second, time.Millisecond)
 }
 
+func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) {
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServerWithCustomDI(t, c, false)
+
+	s := &scanner.TestScanner{}
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
+	// explicitly enable folder trust which is disabled by default in tests
+	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+
+	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand, Arguments: []any{"LLM"}}
+	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Eventually(t, func() bool {
+		return s.Calls() == 0 && checkTrustMessageRequest(jsonRPCRecorder, c)
+	}, 2*time.Second, time.Millisecond)
+}
+
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
