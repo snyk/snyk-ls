@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -46,8 +47,23 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("workflow type should be a string")
 	}
+	issueId := cmd.command.Arguments[1].(string)
 
-	issue := cmd.issueProvider.Issue(cmd.command.Arguments[1].(string))
+	//TODO remove this loop when testing is done.
+	for _, issueList := range cmd.issueProvider.Issues() {
+		for _, issue := range issueList {
+			if issue.GetFilterableIssueType() == product.FilterableIssueTypeCodeSecurity {
+				issueId = issue.GetAdditionalData().GetKey()
+				break
+			}
+		}
+	}
+
+	issue := cmd.issueProvider.Issue(issueId)
+	if issue == nil {
+		return nil, fmt.Errorf("issue not found")
+	}
+
 	findingsId := issue.GetFindingsId()
 	contentRoot := issue.GetContentRoot()
 

@@ -416,6 +416,7 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 				References:          s.getReferences(testRule),
 				AdditionalData:      additionalData,
 				CWEs:                testRule.Properties.Cwe,
+				FindingsId:          result.Fingerprints.SnykAssetFindingV1,
 			}
 			d.SetFingerPrint(result.Fingerprints.Num1)
 			d.SetGlobalIdentity(result.Fingerprints.Identity)
