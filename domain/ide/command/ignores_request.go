@@ -22,9 +22,11 @@ import (
 	"fmt"
 
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -53,15 +55,15 @@ func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 	}
 
 	//TODO remove this loop when testing is done.
-	//issueId := ""
-	//for _, issueList := range cmd.issueProvider.Issues() {
-	//	for _, issue := range issueList {
-	//		if issue.GetFilterableIssueType() == product.FilterableIssueTypeCodeSecurity {
-	//			issueId = issue.GetAdditionalData().GetKey()
-	//			break
-	//		}
-	//	}
-	//}
+	issueId = ""
+	for _, issueList := range cmd.issueProvider.Issues() {
+		for _, issue := range issueList {
+			if issue.GetFilterableIssueType() == product.FilterableIssueTypeCodeSecurity {
+				issueId = issue.GetAdditionalData().GetKey()
+				break
+			}
+		}
+	}
 
 	issue := cmd.issueProvider.Issue(issueId)
 	if issue == nil {
@@ -73,31 +75,10 @@ func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 
 	switch workflowType {
 	case "create":
-		if len(cmd.command.Arguments) < 5 {
-			return nil, fmt.Errorf("insufficient arguments for ignore-create workflow")
+		gafConfig, err := cmd.createCreateConfiguration(engine, findingsId, contentRoot)
+		if err != nil {
+			return nil, err
 		}
-
-		ignoreType, ok := cmd.command.Arguments[2].(string)
-		if !ok {
-			return nil, fmt.Errorf("ignoreType should be a string")
-		}
-		reason, ok := cmd.command.Arguments[3].(string)
-		if !ok {
-			return nil, fmt.Errorf("reason should be a string")
-		}
-		expiration, ok := cmd.command.Arguments[4].(string)
-		if !ok {
-			return nil, fmt.Errorf("expiration should be a string")
-		}
-
-		gafConfig := engine.GetConfiguration().Clone()
-		gafConfig.Set(ignore_workflow.FindingsIdKey, findingsId)
-		gafConfig.Set(ignore_workflow.IgnoreTypeKey, ignoreType)
-		gafConfig.Set(ignore_workflow.ReasonKey, reason)
-		gafConfig.Set(ignore_workflow.ExpirationKey, expiration)
-		gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
-		gafConfig.Set(ignore_workflow.InteractiveKey, false)
-		gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
 
 		response, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
 		if err != nil {
@@ -119,36 +100,10 @@ func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 		}
 
 	case "update":
-		if len(cmd.command.Arguments) < 5 {
-			return nil, fmt.Errorf("insufficient arguments for ignore-edit workflow")
+		gafConfig, err := cmd.createEditConfigurations(engine, findingsId, contentRoot)
+		if err != nil {
+			return nil, err
 		}
-
-		ignoreType, ok := cmd.command.Arguments[2].(string)
-		if !ok {
-			return nil, fmt.Errorf("ignoreType should be a string")
-		}
-		reason, ok := cmd.command.Arguments[3].(string)
-		if !ok {
-			return nil, fmt.Errorf("reason should be a string")
-		}
-		expiration, ok := cmd.command.Arguments[4].(string)
-		if !ok {
-			return nil, fmt.Errorf("expiration should be a string")
-		}
-		ignoreId, ok := cmd.command.Arguments[5].(string)
-		if !ok {
-			return nil, fmt.Errorf("ignoreId should be a string")
-		}
-
-		gafConfig := engine.GetConfiguration().Clone()
-		gafConfig.Set(ignore_workflow.FindingsIdKey, findingsId)
-		gafConfig.Set(ignore_workflow.IgnoreTypeKey, ignoreType)
-		gafConfig.Set(ignore_workflow.ReasonKey, reason)
-		gafConfig.Set(ignore_workflow.ExpirationKey, expiration)
-		gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
-		gafConfig.Set(ignore_workflow.InteractiveKey, false)
-		gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
-		gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
 
 		response, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
 		if err != nil {
@@ -170,21 +125,10 @@ func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 		}
 
 	case "delete":
-		if len(cmd.command.Arguments) < 3 {
-			return nil, fmt.Errorf("insufficient arguments for ignore-delete workflow")
+		gafConfig, err := cmd.createDeleteConfiguration(engine, findingsId, contentRoot)
+		if err != nil {
+			return nil, err
 		}
-
-		ignoreId, ok := cmd.command.Arguments[5].(string)
-		if !ok {
-			return nil, fmt.Errorf("ignoreId should be a string")
-		}
-
-		gafConfig := engine.GetConfiguration().Clone()
-		gafConfig.Set(ignore_workflow.FindingsIdKey, findingsId) //TODO remove this one?
-		gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
-		gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
-		gafConfig.Set(ignore_workflow.InteractiveKey, false)
-		gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
 
 		response, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
 		if err != nil {
@@ -210,6 +154,88 @@ func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 	}
 
 	return nil, nil
+}
+
+func (cmd *submitIgnoreRequest) createCreateConfiguration(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
+	if len(cmd.command.Arguments) < 5 {
+		return nil, fmt.Errorf("insufficient arguments for ignore-create workflow")
+	}
+
+	ignoreType, ok := cmd.command.Arguments[2].(string)
+	if !ok {
+		return nil, fmt.Errorf("ignoreType should be a string")
+	}
+	reason, ok := cmd.command.Arguments[3].(string)
+	if !ok {
+		return nil, fmt.Errorf("reason should be a string")
+	}
+	expiration, ok := cmd.command.Arguments[4].(string)
+	if !ok {
+		return nil, fmt.Errorf("expiration should be a string")
+	}
+
+	gafConfig := engine.GetConfiguration().Clone()
+	gafConfig.Set(ignore_workflow.FindingsIdKey, findingsId)
+	gafConfig.Set(ignore_workflow.IgnoreTypeKey, ignoreType)
+	gafConfig.Set(ignore_workflow.ReasonKey, reason)
+	gafConfig.Set(ignore_workflow.ExpirationKey, expiration)
+	gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
+	gafConfig.Set(ignore_workflow.InteractiveKey, false)
+	gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
+	return gafConfig, nil
+}
+
+func (cmd *submitIgnoreRequest) createEditConfigurations(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
+	if len(cmd.command.Arguments) < 5 {
+		return nil, fmt.Errorf("insufficient arguments for ignore-edit workflow")
+	}
+
+	ignoreType, ok := cmd.command.Arguments[2].(string)
+	if !ok {
+		return nil, fmt.Errorf("ignoreType should be a string")
+	}
+	reason, ok := cmd.command.Arguments[3].(string)
+	if !ok {
+		return nil, fmt.Errorf("reason should be a string")
+	}
+	expiration, ok := cmd.command.Arguments[4].(string)
+	if !ok {
+		return nil, fmt.Errorf("expiration should be a string")
+	}
+	ignoreId, ok := cmd.command.Arguments[5].(string)
+	if !ok {
+		return nil, fmt.Errorf("ignoreId should be a string")
+	}
+
+	gafConfig := engine.GetConfiguration().Clone()
+	gafConfig.Set(ignore_workflow.FindingsIdKey, findingsId)
+	gafConfig.Set(ignore_workflow.IgnoreTypeKey, ignoreType)
+	gafConfig.Set(ignore_workflow.ReasonKey, reason)
+	gafConfig.Set(ignore_workflow.ExpirationKey, expiration)
+	gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
+	gafConfig.Set(ignore_workflow.InteractiveKey, false)
+	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
+	gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
+	return gafConfig, nil
+}
+
+func (cmd *submitIgnoreRequest) createDeleteConfiguration(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
+	if len(cmd.command.Arguments) < 3 {
+		return nil, fmt.Errorf("insufficient arguments for ignore-delete workflow")
+	}
+
+	ignoreId, ok := cmd.command.Arguments[5].(string)
+	if !ok {
+		return nil, fmt.Errorf("ignoreId should be a string")
+	}
+
+	gafConfig := engine.GetConfiguration().Clone()
+	gafConfig.Set(ignore_workflow.FindingsIdKey, findingsId) //TODO remove this one?
+	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
+	gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
+	gafConfig.Set(ignore_workflow.InteractiveKey, false)
+	gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
+	return gafConfig, nil
 }
 
 func updateIssueWithIgnoreDetails(output []byte, issue types.Issue) error {
