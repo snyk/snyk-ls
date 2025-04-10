@@ -304,6 +304,7 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 						types.TrustWorkspaceFoldersCommand,
 						types.OpenLearnLesson,
 						types.GetLearnLesson,
+						types.SubmitIgnoreRequest,
 						types.GetSettingsSastEnabled,
 						types.GetFeatureFlagStatus,
 						types.GetActiveUserCommand,
