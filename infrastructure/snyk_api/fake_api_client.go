@@ -44,16 +44,6 @@ func (f *FakeApiClient) SetResponse(method string, response any) {
 	f.Responses[method] = response
 }
 
-func (f *FakeApiClient) addCallForMethod(method string, args []any) {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	if f.Calls == nil {
-		f.Calls = make(map[string][][]any)
-	}
-	f.Calls[method] = append(f.Calls[method], args)
-}
-
 func (f *FakeApiClient) addCall(params []any, op string) {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -112,15 +102,4 @@ func (f *FakeApiClient) SastSettings() (SastResponse, error) {
 		},
 		AutofixEnabled: f.AutofixEnabled,
 	}, nil
-}
-
-func (f *FakeApiClient) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
-	f.addCallForMethod("FeatureFlagStatus", []any{featureFlagType})
-
-	if resp, ok := f.Responses["FeatureFlagStatus"]; ok {
-		if ffResp, ok := resp.(FFResponse); ok {
-			return ffResp, nil
-		}
-	}
-	return FFResponse{}, nil
 }
