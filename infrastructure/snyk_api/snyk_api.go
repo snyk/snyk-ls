@@ -30,10 +30,6 @@ import (
 
 type FeatureFlagType string
 
-const (
-	FeatureFlagSnykCodeConsistentIgnores FeatureFlagType = "snykCodeConsistentIgnores"
-)
-
 type SnykApiClientImpl struct {
 	httpClientFunc func() *http.Client
 	c              *config.Config

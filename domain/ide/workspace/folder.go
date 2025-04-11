@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -629,6 +631,8 @@ func (f *Folder) FilterIssues(
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
 
+	codeConsistentIgnoresEnabled := f.c.Engine().GetConfiguration().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+
 	for path, issueSlice := range issues {
 		if !f.Contains(path) {
 			logger.Error().Msg("issue found in cache that does not pertain to folder")
@@ -636,7 +640,7 @@ func (f *Folder) FilterIssues(
 		}
 		for _, issue := range issueSlice {
 			// Logging here will spam the logs
-			if isVisibleSeverity(f.c, issue) && isVisibleForIssueViewOptions(f.c, issue) && supportedIssueTypes[issue.GetFilterableIssueType()] {
+			if isVisibleSeverity(f.c, issue) && (!codeConsistentIgnoresEnabled || isVisibleForIssueViewOptions(f.c, issue)) && supportedIssueTypes[issue.GetFilterableIssueType()] {
 				filteredIssues[path] = append(filteredIssues[path], issue)
 			}
 		}
