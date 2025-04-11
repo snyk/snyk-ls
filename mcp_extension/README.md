@@ -14,8 +14,19 @@ MCP is an open protocol developed by Anthropic to provide language models with s
 ## Features
 
 - Supports multiple transport protocols (SSE, stdio)
-- Integrated with Snyk's application framework
-- Provides machine-to-machine communication capabilities
+
+## Supported Tools
+
+The MCP extension provides access to the following Snyk tools:
+
+| Tool Name | Description |
+|-----------|-------------|
+| snyk_sca_test | Run a SCA test on project dependencies to detect known vulnerabilities. Use this to scan open-source packages in supported ecosystems like npm, Maven, etc. Supports monorepo scanning via `--all-projects`. |
+| snyk_code_test | Run a static application security test (SAST) on your source code to detect security issues like SQL injection, XSS, and hardcoded secrets. |
+| snyk_version | Get Snyk CLI version. |
+| snyk_auth | Authenticate with Snyk. |
+| snyk_auth_status | Check Snyk authentication status. |
+| snyk_logout | Log out from Snyk. |
 
 ## Usage
 
