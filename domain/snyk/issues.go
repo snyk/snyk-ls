@@ -75,10 +75,12 @@ type Issue struct {
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData types.IssueAdditionalData `json:"additionalData"`
 	// Learn Service Lesson URL
-	LessonUrl      string `json:"url"`
-	Fingerprint    string
-	GlobalIdentity string
-	m              sync.RWMutex
+	LessonUrl         string `json:"url"`
+	Fingerprint       string
+	GlobalIdentity    string
+	SuppressionStatus string
+	FindingsId        string
+	m                 sync.RWMutex
 }
 
 func (i *Issue) Clone() *Issue {
@@ -232,6 +234,12 @@ func (i *Issue) GetIsIgnored() bool {
 	i.m.RLock()
 	defer i.m.RUnlock()
 	return i.IsIgnored
+}
+
+func (i *Issue) GetFindingsId() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.FindingsId
 }
 
 func (i *Issue) GetSeverity() types.Severity {
@@ -468,4 +476,8 @@ func (i *Issue) SetID(id string) {
 	defer i.m.Unlock()
 
 	i.ID = id
+}
+
+func (i *Issue) SetIgnoreDetails(ignoreDetails *types.IgnoreDetails) {
+	i.IgnoreDetails = ignoreDetails
 }
