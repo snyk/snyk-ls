@@ -37,10 +37,10 @@ The MCP extension provides access to the following Snyk tools:
 
 ### Enabling the Extension
 
-To enable the MCP extension, you must set the `--experimental` flag:
+To enable the MCP extension, you must set the `--experimental` and `-t`flag:
 
 ```bash
-snyk mcp --experimental
+snyk mcp --experimental -t stdio
 ```
 
 ### Configuration Options
@@ -48,7 +48,7 @@ snyk mcp --experimental
 | Option | Flag | Default | Description |
 |--------|------|---------|-------------|
 | Transport | `-t, --transport` | `sse` | **REQUIRED** - Sets the transport protocol (`sse` or `stdio`) |
-| Experimental | `--experimental` | `false` | Enables the experimental MCP command |
+| Experimental | `--experimental` | `false` | **REQUIRED** - Enables the experimental MCP command |
 
 ### Example Commands
 
@@ -59,28 +59,3 @@ snyk mcp --experimental --transport sse
 # Start MCP with stdio transport
 snyk mcp --experimental --transport stdio
 ```
-
-## Integration
-
-The MCP extension is initialized as part of the Snyk application framework. To integrate with it programmatically, you can use the workflow engine registration:
-
-```go
-engine := app.CreateAppEngineWithOptions()
-mcp_extension.Init(engine)
-```
-
-## Development
-
-### Testing
-
-To run tests for the MCP extension:
-
-```bash
-go test ./mcp_extension/...
-```
-
-## License
-
- 2023 Snyk Limited All rights reserved.
-
-Licensed under the Apache License, Version 2.0
