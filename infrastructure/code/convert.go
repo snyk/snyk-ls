@@ -416,6 +416,7 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 				References:          s.getReferences(testRule),
 				AdditionalData:      additionalData,
 				CWEs:                testRule.Properties.Cwe,
+				FindingsId:          result.Fingerprints.SnykAssetFindingV1,
 			}
 			d.SetFingerPrint(result.Fingerprints.Num1)
 			d.SetGlobalIdentity(result.Fingerprints.Identity)
@@ -442,19 +443,29 @@ func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, 
 		isIgnored = true
 		suppression := result.Suppressions[0]
 
-		reason := suppression.Justification
-		if reason == "" {
-			reason = "None given"
-		}
-		ignoreDetails = &types.IgnoreDetails{
-			Category:   string(suppression.Properties.Category),
-			Reason:     reason,
-			Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
-			IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
-			IgnoredBy:  suppression.Properties.IgnoredBy.Name,
-		}
+		ignoreDetails = SarifSuppressionToIgnoreDetails(&suppression)
 	}
 	return isIgnored, ignoreDetails
+}
+
+func SarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *types.IgnoreDetails {
+	if suppression == nil {
+		return nil
+	}
+
+	reason := suppression.Justification
+	if reason == "" {
+		reason = "None given"
+	}
+	ignoreDetails := &types.IgnoreDetails{
+		Category:   string(suppression.Properties.Category),
+		Reason:     reason,
+		Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
+		IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
+		IgnoredBy:  suppression.Properties.IgnoredBy.Name,
+		Status:     suppression.Status,
+	}
+	return ignoreDetails
 }
 
 func parseExpirationDateFromString(date *string) string {
