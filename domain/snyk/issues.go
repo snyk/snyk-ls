@@ -236,6 +236,12 @@ func (i *Issue) GetIsIgnored() bool {
 	return i.IsIgnored
 }
 
+func (i *Issue) SetIsIgnored(isIgnored bool) {
+	i.m.Lock()
+	defer i.m.Unlock()
+	i.IsIgnored = isIgnored
+}
+
 func (i *Issue) GetFindingsId() string {
 	i.m.RLock()
 	defer i.m.RUnlock()

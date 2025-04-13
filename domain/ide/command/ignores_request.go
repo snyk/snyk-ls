@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"math/rand"
 
+	"github.com/sourcegraph/go-lsp"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -29,7 +31,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -70,7 +71,7 @@ func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 
 			// Check if the randomly selected issue matches the filterable type
 			selectedIssue := issueList[randomIndex]
-			if selectedIssue.GetFilterableIssueType() == product.FilterableIssueTypeCodeQuality {
+			if selectedIssue.GetFilterableIssueType() == product.FilterableIssueTypeCodeSecurity && !selectedIssue.GetIsIgnored() {
 				issueId = selectedIssue.GetAdditionalData().GetKey()
 				break
 			}
@@ -133,7 +134,7 @@ func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, find
 		return fmt.Errorf("invalid response from ignore workflow") //TODO fix this
 	}
 
-	err = updateIssueWithIgnoreDetails(output, issue)
+	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
 	if err != nil {
 		return err
 	}
@@ -189,7 +190,7 @@ func (cmd *submitIgnoreRequest) editIgnoreRequest(engine workflow.Engine, findin
 		return fmt.Errorf("invalid response from ignore workflow") //TODO fix this
 	}
 
-	err = updateIssueWithIgnoreDetails(output, issue)
+	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
 	if err != nil {
 		return err
 	}
@@ -250,7 +251,7 @@ func (cmd *submitIgnoreRequest) deleteIgnoreRequest(engine workflow.Engine, find
 		return fmt.Errorf("invalid response from ignore workflow") //TODO fix this
 	}
 
-	err = updateIssueWithIgnoreDetails(output, issue)
+	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
 	if err != nil {
 		return err
 	}
@@ -276,15 +277,13 @@ func (cmd *submitIgnoreRequest) createDeleteConfiguration(engine workflow.Engine
 	return gafConfig, nil
 }
 
-func updateIssueWithIgnoreDetails(output []byte, issue types.Issue) error {
+func updateIssueWithIgnoreDetails(c *config.Config, output []byte, issue types.Issue) error {
 	var suppression sarif.Suppression
 	err := json.Unmarshal(output, &suppression)
 	if err != nil {
 		return err
 	}
-	ignoreDetails := code.SarifSuppressionToIgnoreDetails(&suppression)
-
-	issue.SetIgnoreDetails(ignoreDetails)
+	code.SetIgnoreDetailsFromSuppressions(c, []sarif.Suppression{suppression}, issue)
 	return nil
 }
 

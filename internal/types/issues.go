@@ -91,6 +91,7 @@ type Issue interface {
 	GetContentRoot() FilePath
 	GetIsNew() bool
 	GetIsIgnored() bool
+	SetIsIgnored(isIgnored bool)
 	GetSeverity() Severity
 	GetIgnoreDetails() *IgnoreDetails
 	GetProduct() product.Product
