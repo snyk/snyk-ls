@@ -68,19 +68,19 @@ func mergeFolderConfigs(first *types.FolderConfig, second *types.FolderConfig) *
 		}
 	}
 
-	if first.LocalBranches == nil && second.LocalBranches != nil {
+	if second.LocalBranches != nil {
 		first.LocalBranches = second.LocalBranches
 	}
 
-	if first.BaseBranch == "" && second.BaseBranch != "" {
+	if second.BaseBranch != "" {
 		first.BaseBranch = second.BaseBranch
 	}
 
-	if first.ScanCommandConfig == nil && second.ScanCommandConfig != nil {
+	if second.ScanCommandConfig != nil {
 		first.ScanCommandConfig = second.ScanCommandConfig
 	}
 
-	if len(first.ReferenceFolderPath) == 0 && len(second.ReferenceFolderPath) > 0 {
+	if len(second.ReferenceFolderPath) > 0 {
 		first.ReferenceFolderPath = second.ReferenceFolderPath
 	}
 
