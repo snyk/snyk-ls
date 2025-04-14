@@ -32,59 +32,12 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePa
 		return nil, err
 	}
 
-	gitFolderConfig, err := getFromGit(path)
-	if err != nil {
-		return folderConfig, nil
-	}
-
-	if folderConfig != nil && gitFolderConfig != nil {
-		// the previous git configuration takes precedence
-		folderConfig = mergeFolderConfigs(gitFolderConfig, folderConfig)
-	}
-
 	err = UpdateFolderConfig(conf, folderConfig, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	// remove git config
-	// explicitly ignore any errors when removing it
-	_ = DeleteGitConfigSnykSubsection(path, path)
 	return folderConfig, nil
-}
-
-// mergeFolderConfigs merges two folderConfigs, with the first taking precedence over the second
-func mergeFolderConfigs(first *types.FolderConfig, second *types.FolderConfig) *types.FolderConfig {
-	if second.FolderPath != first.FolderPath {
-		return first
-	}
-
-	// add all additional parameters that are not already in first
-	if len(second.AdditionalParameters) > 0 {
-		for _, parameter := range second.AdditionalParameters {
-			if !SliceContainsParam(first.AdditionalParameters, parameter) {
-				first.AdditionalParameters = append(first.AdditionalParameters, parameter)
-			}
-		}
-	}
-
-	if first.LocalBranches == nil && second.LocalBranches != nil {
-		first.LocalBranches = second.LocalBranches
-	}
-
-	if first.BaseBranch == "" && second.BaseBranch != "" {
-		first.BaseBranch = second.BaseBranch
-	}
-
-	if first.ScanCommandConfig == nil && second.ScanCommandConfig != nil {
-		first.ScanCommandConfig = second.ScanCommandConfig
-	}
-
-	if len(first.ReferenceFolderPath) == 0 && len(second.ReferenceFolderPath) > 0 {
-		first.ReferenceFolderPath = second.ReferenceFolderPath
-	}
-
-	return first
 }
 
 // SliceContainsParam checks if the parameter name is equal by splitting the given
