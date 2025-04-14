@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -101,6 +101,132 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 	actual, err := GetOrCreateFolderConfig(conf, path, nil)
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)
+}
+
+func Test_mergeFolderConfigs(t *testing.T) {
+	t.Run("different folder paths should return first", func(t *testing.T) {
+		first := &types.FolderConfig{
+			FolderPath:           "/path1",
+			AdditionalParameters: []string{"--param1=value1"},
+			LocalBranches:        []string{"branch1"},
+			BaseBranch:           "main",
+		}
+
+		second := &types.FolderConfig{
+			FolderPath:           "/path2",
+			AdditionalParameters: []string{"--param2=value2"},
+			LocalBranches:        []string{"branch2"},
+			BaseBranch:           "develop",
+		}
+
+		result := mergeFolderConfigs(first, second)
+
+		require.Equal(t, first, result)
+		require.Equal(t, 1, len(result.AdditionalParameters))
+		require.Equal(t, "--param1=value1", result.AdditionalParameters[0])
+		require.Equal(t, 1, len(result.LocalBranches))
+		require.Equal(t, "main", result.BaseBranch)
+	})
+	t.Run("same folder paths with complete merging", func(t *testing.T) {
+		scanCommandConfig1 := types.ScanCommandConfig{
+			PreScanCommand: "/cmd1",
+		}
+
+		scanCommandConfig2 := types.ScanCommandConfig{
+			PreScanCommand: "/cmd2",
+		}
+
+		first := &types.FolderConfig{
+			FolderPath:           "/path1",
+			AdditionalParameters: []string{"--param1=value1"},
+			LocalBranches:        nil,
+			BaseBranch:           "",
+			ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
+				product.ProductOpenSource: scanCommandConfig1,
+			},
+			ReferenceFolderPath: "",
+		}
+
+		second := &types.FolderConfig{
+			FolderPath:           "/path1",
+			AdditionalParameters: []string{"--param2=value2"},
+			LocalBranches:        []string{"branch2"},
+			BaseBranch:           "develop",
+			ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
+				product.ProductOpenSource: scanCommandConfig2,
+			},
+			ReferenceFolderPath: "/ref/path",
+		}
+
+		result := mergeFolderConfigs(first, second)
+
+		// Check that it's still the first object (modified)
+		require.Equal(t, first, result)
+
+		// Check additional parameters are merged
+		require.Equal(t, 2, len(result.AdditionalParameters))
+		require.Contains(t, result.AdditionalParameters, "--param1=value1")
+		require.Contains(t, result.AdditionalParameters, "--param2=value2")
+
+		// Check other fields are taken from second
+		require.Equal(t, second.LocalBranches, result.LocalBranches)
+		require.Equal(t, second.BaseBranch, result.BaseBranch)
+		require.Equal(t, second.ScanCommandConfig, result.ScanCommandConfig)
+		require.Equal(t, second.ReferenceFolderPath, result.ReferenceFolderPath)
+	})
+	t.Run("parameter deduplication", func(t *testing.T) {
+		first := &types.FolderConfig{
+			FolderPath:           "/path1",
+			AdditionalParameters: []string{"--param1=value1", "--param2=valueA"},
+		}
+
+		second := &types.FolderConfig{
+			FolderPath:           "/path1",
+			AdditionalParameters: []string{"--param2=valueB", "--param3=value3"},
+		}
+
+		result := mergeFolderConfigs(first, second)
+
+		// Should have 3 parameters (param2 from second should be ignored)
+		require.Equal(t, 3, len(result.AdditionalParameters))
+		require.Contains(t, result.AdditionalParameters, "--param1=value1")
+		require.Contains(t, result.AdditionalParameters, "--param2=valueA") // first takes precedence
+		require.Contains(t, result.AdditionalParameters, "--param3=value3")
+	})
+	t.Run("partial merging", func(t *testing.T) {
+		scanCommandConfig1 := types.ScanCommandConfig{
+			PreScanCommand: "/cmd1",
+		}
+
+		first := &types.FolderConfig{
+			FolderPath:           "/path1",
+			AdditionalParameters: []string{"--param1=value1"},
+			LocalBranches:        []string{"branch1"},
+			BaseBranch:           "main",
+			ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
+				product.ProductOpenSource: scanCommandConfig1,
+			},
+			ReferenceFolderPath: "/ref/path1",
+		}
+
+		second := &types.FolderConfig{
+			FolderPath:           "/path1",
+			AdditionalParameters: []string{"--param2=value2"},
+			LocalBranches:        nil, // nil, should not replace
+			BaseBranch:           "",  // empty, should not replace
+			ScanCommandConfig:    nil, // nil, should not replace
+			ReferenceFolderPath:  "",  // empty, should not replace
+		}
+
+		result := mergeFolderConfigs(first, second)
+
+		// Check that fields from second didn't overwrite first when they were nil/empty
+		require.Equal(t, 2, len(result.AdditionalParameters)) // Additional params still merge
+		require.Equal(t, first.LocalBranches, result.LocalBranches)
+		require.Equal(t, first.BaseBranch, result.BaseBranch)
+		require.Equal(t, first.ScanCommandConfig, result.ScanCommandConfig)
+		require.Equal(t, first.ReferenceFolderPath, result.ReferenceFolderPath)
+	})
 }
 
 func SetupConfigurationWithStorage(t *testing.T) (configuration.Configuration, string) {
