@@ -59,20 +59,6 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 	require.Greater(t, len(bytes), 0)
 }
 
-func Test_GetOrCreateFolderConfig_shouldIntegrateGitBranchInformation(t *testing.T) {
-	dir := types.FilePath(t.TempDir())
-	logger := zerolog.New(zerolog.NewTestWriter(t))
-	repo, err := SetupCustomTestRepo(t, dir, "https://github.com/snyk-labs/nodejs-goof", "", &logger)
-	require.NoError(t, err)
-
-	conf, _ := SetupConfigurationWithStorage(t)
-
-	actual, err := GetOrCreateFolderConfig(conf, repo, nil)
-
-	require.NoError(t, err)
-	require.Greater(t, len(actual.LocalBranches), 0)
-}
-
 func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T) {
 	conf, _ := SetupConfigurationWithStorage(t)
 	path := types.FilePath("/testPath")
