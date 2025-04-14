@@ -946,8 +946,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
-		isIgnored, ignoreDetails := sarifConverter.getIgnoreDetails(r)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(config.CurrentConfig(), r.Suppressions)
 		assert.False(t, isIgnored)
 		assert.Nil(t, ignoreDetails)
 	})
@@ -976,8 +975,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
-		isIgnored, ignoreDetails := sarifConverter.getIgnoreDetails(r)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(config.CurrentConfig(), r.Suppressions)
 		assert.True(t, isIgnored)
 		assert.NotNil(t, ignoreDetails)
 		assert.Equal(t, "reason", ignoreDetails.Reason)
@@ -1010,8 +1008,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
-		isIgnored, ignoreDetails := sarifConverter.getIgnoreDetails(r)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(config.CurrentConfig(), r.Suppressions)
 		assert.True(t, isIgnored)
 		assert.NotNil(t, ignoreDetails)
 		assert.Equal(t, "None given", ignoreDetails.Reason)
