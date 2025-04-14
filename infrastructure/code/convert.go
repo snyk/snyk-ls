@@ -420,7 +420,9 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 			}
 			d.SetFingerPrint(result.Fingerprints.Num1)
 			d.SetGlobalIdentity(result.Fingerprints.Identity)
-			SetIgnoreDetailsFromSuppressions(s.c, result.Suppressions, d)
+			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(s.c, result.Suppressions)
+			d.IsIgnored = isIgnored
+			d.IgnoreDetails = ignoreDetails
 			d.AdditionalData = additionalData
 
 			issues = append(issues, d)
@@ -429,11 +431,11 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 	return issues, errs
 }
 
-func SetIgnoreDetailsFromSuppressions(c *config.Config, suppressions []codeClientSarif.Suppression, issue types.Issue) {
-	logger := c.Logger().With().Str("method", "SetIgnoreDetailsFromSuppressions").Logger()
+func GetIgnoreDetailsFromSuppressions(c *config.Config, suppressions []codeClientSarif.Suppression) (bool, *types.IgnoreDetails) {
+	logger := c.Logger().With().Str("method", "GetIgnoreDetailsFromSuppressions").Logger()
 	isIgnored := false
-
-	// this can be an array of multiple suppressions in SARIF
+	var ignoreDetails *types.IgnoreDetails
+	// this can be an array of multiple suppressions in SARIF,
 	// but we only store one ignore for now
 	if len(suppressions) > 0 {
 		if len(suppressions) > 1 {
@@ -441,11 +443,9 @@ func SetIgnoreDetailsFromSuppressions(c *config.Config, suppressions []codeClien
 				"there are more suppressions than expected")
 		}
 		isIgnored = true
-		suppression := suppressions[0]
-
-		issue.SetIgnoreDetails(sarifSuppressionToIgnoreDetails(&suppression))
+		ignoreDetails = sarifSuppressionToIgnoreDetails(&suppressions[0])
 	}
-	issue.SetIsIgnored(isIgnored)
+	return isIgnored, ignoreDetails
 }
 
 func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *types.IgnoreDetails {

@@ -283,7 +283,10 @@ func updateIssueWithIgnoreDetails(c *config.Config, output []byte, issue types.I
 	if err != nil {
 		return err
 	}
-	code.SetIgnoreDetailsFromSuppressions(c, []sarif.Suppression{suppression}, issue)
+	isIgnored, ignoreDetails := code.GetIgnoreDetailsFromSuppressions(c, []sarif.Suppression{suppression})
+
+	issue.SetIsIgnored(isIgnored)
+	issue.SetIgnoreDetails(ignoreDetails)
 	return nil
 }
 
