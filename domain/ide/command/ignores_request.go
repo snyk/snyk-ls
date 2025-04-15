@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 
 	"github.com/sourcegraph/go-lsp"
 
@@ -29,7 +28,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/code-client-go/sarif"
@@ -59,23 +57,6 @@ func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 	issueId, ok := cmd.command.Arguments[1].(string)
 	if !ok {
 		return nil, fmt.Errorf("issueId type should be a string")
-	}
-
-	//TODO remove this loop when testing is done.
-	issueId = ""
-	for _, issueList := range cmd.issueProvider.Issues() {
-		// Ensure the issueList has at least one item to avoid indexing errors
-		if len(issueList) > 0 {
-			// Generate a random index between 0 and len(issueList)-1
-			randomIndex := rand.Intn(len(issueList)) // Random index between 0 and len(issueList)-1
-
-			// Check if the randomly selected issue matches the filterable type
-			selectedIssue := issueList[randomIndex]
-			if selectedIssue.GetFilterableIssueType() == product.FilterableIssueTypeCodeSecurity && !selectedIssue.GetIsIgnored() {
-				issueId = selectedIssue.GetAdditionalData().GetKey()
-				break
-			}
-		}
 	}
 
 	issue := cmd.issueProvider.Issue(issueId)
@@ -131,7 +112,7 @@ func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, find
 
 	output, ok := response[0].GetPayload().([]byte)
 	if !ok {
-		return fmt.Errorf("invalid response from ignore workflow") //TODO fix this
+		return fmt.Errorf("invalid response from ignore workflow")
 	}
 
 	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
@@ -187,7 +168,7 @@ func (cmd *submitIgnoreRequest) editIgnoreRequest(engine workflow.Engine, findin
 
 	output, ok := response[0].GetPayload().([]byte)
 	if !ok {
-		return fmt.Errorf("invalid response from ignore workflow") //TODO fix this
+		return fmt.Errorf("invalid response from ignore workflow")
 	}
 
 	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
@@ -248,7 +229,7 @@ func (cmd *submitIgnoreRequest) deleteIgnoreRequest(engine workflow.Engine, find
 
 	output, ok := response[0].GetPayload().([]byte)
 	if !ok {
-		return fmt.Errorf("invalid response from ignore workflow") //TODO fix this
+		return fmt.Errorf("invalid response from ignore workflow")
 	}
 
 	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
