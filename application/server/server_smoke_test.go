@@ -64,7 +64,6 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	if endpoint == "" {
 		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
-
 	runSmokeTest(t, c, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint)
 }
 

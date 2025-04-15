@@ -535,11 +535,11 @@ func Test_Scan(t *testing.T) {
 		assert.Nil(t, params)
 	})
 	//nolint:dupl // test cases differ by a boolean
-	t.Run("Should run new flow if feature flag is enabled", func(t *testing.T) {
+	t.Run("Should run existing flow if feature flag is disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{C: c}
 		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
-		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
+		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
 		learnMock := mock_learn.NewMockService(gomock.NewController(t))
 		learnMock.
 			EXPECT().
@@ -547,14 +547,13 @@ func Test_Scan(t *testing.T) {
 			Return(&learn.Lesson{}, nil).AnyTimes()
 
 		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
-
 		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
 
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-		assert.Nil(t, params)
+		assert.NotNil(t, params)
 	})
 	//nolint:dupl // test cases differ by a boolean
 	t.Run("Should run new flow if feature flag is enabled", func(t *testing.T) {
@@ -569,6 +568,7 @@ func Test_Scan(t *testing.T) {
 			Return(&learn.Lesson{}, nil).AnyTimes()
 
 		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
+
 		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
