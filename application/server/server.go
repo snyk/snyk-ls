@@ -457,7 +457,8 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 			)
 			logger.Info().Msg(msg)
 		}
-
+		// this change is to avoid breaking current stable VS Code. URL value is not used.
+		di.Notifier().Send(types.McpServerURLParams{URL: "http://127.0.0.1:7695"})
 		return nil, nil
 	})
 }
