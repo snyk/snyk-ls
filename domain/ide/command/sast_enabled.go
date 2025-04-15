@@ -48,7 +48,10 @@ func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
 	}
 
 	gafConfig := cmd.c.Engine().GetConfiguration()
-	sastResponse := gafConfig.Get(code_workflow.ConfigurationSastSettings)
+	sastResponse, err := gafConfig.GetWithError(code_workflow.ConfigurationSastSettings)
+	if err != nil {
+		return nil, err
+	}
 
 	return sastResponse, nil
 }
