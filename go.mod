@@ -28,7 +28,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/code-client-go v1.20.1
-	github.com/snyk/go-application-framework v0.0.0-20250325133828-3ffd1aa4f76f
+	github.com/snyk/go-application-framework v0.0.0-20250414125713-6527e99cc375
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
