@@ -141,7 +141,13 @@ func (m *McpLLMBinding) HandleSseServer() error {
 		m.mutex.Unlock()
 	}()
 
-	err := m.sseServer.Start(m.baseURL.Host)
+	srv := &http.Server{
+		Addr:    m.baseURL.Host,
+		Handler: middleware(m.sseServer),
+	}
+
+	err := srv.ListenAndServe()
+
 	if err != nil {
 		// expect http.ErrServerClosed when shutting down
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -150,6 +156,35 @@ func (m *McpLLMBinding) HandleSseServer() error {
 		return err
 	}
 	return nil
+}
+
+var allowedHostnames = map[string]bool{
+	"localhost": true,
+	"127.0.0.1": true,
+	"::1":       true,
+}
+
+func middleware(sseServer *server.SSEServer) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		originHeader := r.Header.Get("Origin")
+		isValidOrigin := originHeader == ""
+
+		if originHeader != "" {
+			parsedOrigin, err := url.Parse(originHeader)
+			if err == nil {
+				requestHost := parsedOrigin.Hostname()
+				if _, allowed := allowedHostnames[requestHost]; allowed {
+					isValidOrigin = true
+				}
+			}
+		}
+
+		if isValidOrigin {
+			sseServer.ServeHTTP(w, r)
+		} else {
+			http.Error(w, "Forbidden: Access restricted to localhost origins", http.StatusForbidden)
+		}
+	})
 }
 
 func (m *McpLLMBinding) Shutdown(ctx context.Context) {
