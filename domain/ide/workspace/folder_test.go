@@ -499,7 +499,7 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockConfiguration := mocks.NewMockConfiguration(ctrl)
 	c.Engine().SetConfiguration(mockConfiguration)
-	mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true).Return(true).Times(2) // twice, since we filter in the scan then again to check, since we're too lazy to mock.
+	mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true).Times(2) // twice, since we filter in the scan then again to check, since we're too lazy to mock.
 
 	c.SetIssueViewOptions(types.NewIssueViewOptions(true, false))
 

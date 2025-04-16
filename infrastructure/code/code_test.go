@@ -523,48 +523,45 @@ func Test_Scan(t *testing.T) {
 		assert.Nil(t, params)
 	})
 
-	t.Run("Should run existing flow if feature flag is disabled", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		snykCodeMock := &FakeSnykCodeClient{C: c}
-		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
-		snykApiMock.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
-		learnMock := mock_learn.NewMockService(gomock.NewController(t))
-		learnMock.
-			EXPECT().
-			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(&learn.Lesson{}, nil).AnyTimes()
+	testCases := []struct {
+		name               string
+		cciEnabled         bool
+		createBundleCalled bool
+	}{
+		{
+			name:               "Should run existing flow if feature flag is disabled",
+			cciEnabled:         false,
+			createBundleCalled: true,
+		},
+		{
+			name:               "Should run new flow if feature flag is enabled",
+			cciEnabled:         true,
+			createBundleCalled: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			snykCodeMock := &FakeSnykCodeClient{C: c}
+			snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
+			ctrl := gomock.NewController(t)
+			mockConfiguration := mocks.NewMockConfiguration(ctrl)
+			c.Engine().SetConfiguration(mockConfiguration)
+			mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(tc.cciEnabled)
+			learnMock := mock_learn.NewMockService(gomock.NewController(t))
+			learnMock.
+				EXPECT().
+				GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&learn.Lesson{}, nil).AnyTimes()
 
-		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
-		tempDir, _, _ := setupIgnoreWorkspace(t)
+			scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+			tempDir, _, _ := setupIgnoreWorkspace(t)
 
-		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
+			_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
 
-		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-		assert.NotNil(t, params)
-	})
-
-	t.Run("Should run new flow if feature flag is enabled", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		snykCodeMock := &FakeSnykCodeClient{C: c}
-		snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
-		ctrl := gomock.NewController(t)
-		mockConfiguration := mocks.NewMockConfiguration(ctrl)
-		c.Engine().SetConfiguration(mockConfiguration)
-		mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true)
-		learnMock := mock_learn.NewMockService(gomock.NewController(t))
-		learnMock.
-			EXPECT().
-			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(&learn.Lesson{}, nil).AnyTimes()
-
-		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
-		tempDir, _, _ := setupIgnoreWorkspace(t)
-
-		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
-
-		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-		assert.Nil(t, params)
-	})
+			assert.Equal(t, tc.createBundleCalled, snykCodeMock.WasCalled(CreateBundleOperation))
+		})
+	}
 }
 
 func Test_enhanceIssuesDetails(t *testing.T) {
