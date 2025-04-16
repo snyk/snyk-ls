@@ -360,6 +360,38 @@
     </article>
   </main>
 
+  <div class="sn-ignore-issue-container">
+    <h2 class="sn-ignore-title">Ignore this issue</h2>
+    <p class="sn-ignore-description">This ignore will reflect once it has been approved.</p>
+
+    <div class="sn-field">
+      <div class="sn-label">Ignore type</div>
+      <select class="sn-select" id="ignore-type">
+        <option value="ignore">Not vulnerable (False positive)</option>
+        <option value="false-positive">Won't fix</option>
+      </select>
+    </div>
+
+    <div class="sn-field">
+      <div class="sn-label">Expiration</div>
+      <select class="sn-select" id="expiration">
+        <option value="ignore">Do not expire</option>
+        <option value="false-positive">Custom expiration date</option>
+      </select>
+      <input class="sn-input" id="expiration-date" type="date" value="{{.ExpirationDate}}">
+    </div>
+
+    <div class="sn-field">
+      <div class="sn-label">Ignore reason</div>
+      <textarea class="sn-textarea" id="ignore-reason" rows="4" placeholder="Please provide a reason for ignoring this issue"></textarea>
+    </div>
+
+    <div class="sn-field mod-right-aligned">
+      <button class="sn-button">Create ignore</button>
+      <button class="sn-button mod-ghost">Cancel</button>
+    </div>
+  </div>
+
   <div id="suggestionDiv" class="hidden">
     {{.AiFixResult}}
   </div>
