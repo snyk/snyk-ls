@@ -94,12 +94,11 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	deepCodeLLMBinding := llm.NewDeepcodeLLMBinding(
 		llm.WithLogger(c.Logger()),
 		llm.WithOutputFormat(llm.HTML),
-		llm.WithEndpoint(getExplainEndpoint(c)),
 		llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
 			return c.Engine().GetNetworkAccess().GetHttpClient()
 		}),
 	)
-	explanations, err := deepCodeLLMBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs})
+	explanations, err := deepCodeLLMBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs, Endpoint: getExplainEndpoint(c)})
 	if err != nil {
 		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.GetID())
 		return
