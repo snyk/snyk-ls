@@ -795,8 +795,8 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.PtrOf(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.PtrOf(types.DefaultIssueViewOptions()),
+			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
 			AuthenticationMethod:        types.TokenAuthentication,
 			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
 			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
@@ -869,8 +869,8 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       os.Getenv("SNYK_TOKEN"),
 			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.PtrOf(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.PtrOf(types.DefaultIssueViewOptions()),
+			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
 		},
 	}
 

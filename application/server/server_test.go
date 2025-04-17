@@ -369,8 +369,8 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     filepath.Join(t.TempDir(), "cli"),
-			FilterSeverity:              util.PtrOf(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.PtrOf(types.DefaultIssueViewOptions()),
+			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -432,8 +432,8 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     filepath.Join(t.TempDir(), "cli"),
-			FilterSeverity:              util.PtrOf(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.PtrOf(types.DefaultIssueViewOptions()),
+			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
@@ -488,8 +488,8 @@ func Test_initialize_updatesSettings(t *testing.T) {
 		InitializationOptions: types.Settings{
 			Organization:     expectedOrgId,
 			Token:            "xxx",
-			FilterSeverity:   util.PtrOf(types.DefaultSeverityFilter()),
-			IssueViewOptions: util.PtrOf(types.DefaultIssueViewOptions()),
+			FilterSeverity:   util.Ptr(types.DefaultSeverityFilter()),
+			IssueViewOptions: util.Ptr(types.DefaultIssueViewOptions()),
 		},
 	}
 

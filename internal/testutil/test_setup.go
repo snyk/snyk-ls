@@ -126,7 +126,7 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 	c.SetAuthenticationMethod(types.TokenAuthentication)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
-	c.SetIssueViewOptions(util.PtrOf(types.NewIssueViewOptions(true, true)))
+	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, true)))
 	setMCPServerURL(t, c)
 	redirectConfigAndDataHome(t, c)
 

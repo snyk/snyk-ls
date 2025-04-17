@@ -170,7 +170,7 @@ func TestSnykCodeApi(t *testing.T) {
 func Test_SetSeverityFilter(t *testing.T) {
 	t.Run("Saves filter", func(t *testing.T) {
 		c := New()
-		c.SetSeverityFilter(util.PtrOf(types.NewSeverityFilter(true, true, false, false)))
+		c.SetSeverityFilter(util.Ptr(types.NewSeverityFilter(true, true, false, false)))
 		assert.Equal(t, types.NewSeverityFilter(true, true, false, false), c.FilterSeverity())
 	})
 
@@ -189,7 +189,7 @@ func Test_SetSeverityFilter(t *testing.T) {
 func Test_SetIssueViewOptions(t *testing.T) {
 	t.Run("Saves filter", func(t *testing.T) {
 		c := New()
-		c.SetIssueViewOptions(util.PtrOf(types.NewIssueViewOptions(false, true)))
+		c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(false, true)))
 		assert.Equal(t, types.NewIssueViewOptions(false, true), c.IssueViewOptions())
 	})
 

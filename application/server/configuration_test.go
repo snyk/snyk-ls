@@ -442,7 +442,7 @@ func Test_UpdateSettings(t *testing.T) {
 			assert.Equal(t, emptyLikeIssueViewOptions, c.IssueViewOptions())
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
-			mixedIssueViewOptions := types.NewIssueViewOptions(false, false)
+			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
 			UpdateSettings(c, types.Settings{IssueViewOptions: &mixedIssueViewOptions})
 			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 

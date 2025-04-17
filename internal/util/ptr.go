@@ -16,11 +16,9 @@
 
 package util
 
-// PtrOf creates a pointer on the heap for the value provided.
+// Ptr returns a pointer to the input value.
 // Because in Go you can't do something like `takesPtr(&(returnsStruct()))`.
-// So instead do `takesPtr(PtrOf(returnsStruct()))`.
-func PtrOf[T any](value T) *T {
-	pointerToValue := new(T) // Heap may be safer than `&value`
-	*pointerToValue = value
-	return pointerToValue
+// So instead do `takesPtr(Ptr(returnsStruct()))`.
+func Ptr[T any](v T) *T {
+	return &v // Go's escape analysis will make this a heap pointer.
 }
