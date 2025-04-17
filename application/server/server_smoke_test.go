@@ -31,6 +31,8 @@ import (
 	"github.com/creachadair/jrpc2/server"
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -210,6 +212,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
+		//TODO, first time sast settings are checked, they return no sastrepsonse.
 
 		var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 		cloneTargetDirGoofString := (string)(cloneTargetDirGoof)
@@ -286,6 +289,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
+		setSastEnabled(c, true)
 
 		var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
@@ -495,6 +499,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	c.SetSnykOssEnabled(true)
 	cleanupChannels()
 	di.Init()
+	setSastEnabled(c, true)
 
 	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc, c)
 	cloneTargetDirString := (string)(cloneTargetDir)
@@ -849,6 +854,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 	cleanupChannels()
 	di.Init()
+	setSastEnabled(c, true)
 
 	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
 	cloneTargetDirString := string(cloneTargetDir)
@@ -897,6 +903,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	c.SetSnykIacEnabled(false)
 	cleanupChannels()
 	di.Init()
+	setSastEnabled(c, true)
 
 	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
 	if err != nil {
@@ -925,6 +932,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	c.SetDeltaFindingsEnabled(true)
 	cleanupChannels()
 	di.Init()
+	setSastEnabled(c, true)
 	scanAggregator := di.ScanStateAggregator()
 	fileWithNewVulns := "vulns.js"
 	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
@@ -972,6 +980,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
+	setSastEnabled(c, true)
 
 	fileWithNewVulns := "vulns.js"
 	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
@@ -1002,6 +1011,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
+	setSastEnabled(c, true)
 
 	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/java-goof", "f5719ae", c.Logger())
 	assert.NoError(t, err)
@@ -1019,6 +1029,13 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	assert.Equal(t, 0, len(issueList), "no issues expected, as delta and no new change")
+}
+
+func setSastEnabled(c *config.Config, b bool) {
+	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: b, LocalCodeEngine: sast_contract.LocalCodeEngine{
+		Enabled: false,
+	},
+	})
 }
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {
