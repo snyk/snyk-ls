@@ -163,6 +163,13 @@ func (f *FakeSnykCodeClient) addCall(params []any, op string) {
 	f.Calls[op] = append(calls, opParams)
 }
 
+func (f *FakeSnykCodeClient) WasCalled(op string) bool {
+	FakeSnykCodeApiServiceMutex.Lock()
+	defer FakeSnykCodeApiServiceMutex.Unlock()
+	_, called := f.Calls[op]
+	return called
+}
+
 func (f *FakeSnykCodeClient) GetCallParams(callNo int, op string) []any {
 	FakeSnykCodeApiServiceMutex.Lock()
 	defer FakeSnykCodeApiServiceMutex.Unlock()
