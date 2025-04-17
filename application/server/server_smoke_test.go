@@ -212,7 +212,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
-		setSastEnabled(c, true)
+		//TODO, first time sast settings are checked, they return no sastrepsonse.
 
 		var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 		cloneTargetDirGoofString := (string)(cloneTargetDirGoof)

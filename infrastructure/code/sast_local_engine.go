@@ -17,8 +17,6 @@
 package code
 
 import (
-	"github.com/snyk/snyk-ls/application/config"
-
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
@@ -28,7 +26,6 @@ func (sc *Scanner) isLocalEngineEnabled(sastResponse *sast_contract.SastResponse
 }
 
 func (sc *Scanner) updateCodeApiLocalEngine(sastResponse *sast_contract.SastResponse) {
-	config.CurrentConfig().SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
-	api := config.CurrentConfig().SnykCodeApi()
-	sc.C.Logger().Debug().Str("snykCodeApi", api).Msg("updated Snyk Code API Local Engine")
+	sc.C.SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
+	sc.C.Logger().Debug().Str("snykCodeApi", sc.C.SnykCodeApi()).Msg("updated Snyk Code API Local Engine")
 }
