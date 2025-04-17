@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -40,4 +41,22 @@ func SetupEngineMock(t *testing.T) (*mocks.MockEngine, configuration.Configurati
 	engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	return mockEngine, engineConfig
+}
+
+func ReadMessageAssertNoWait[T any](t *testing.T, channel chan T) (msg T) {
+	t.Helper()
+
+	var ok bool
+	select {
+	case msg, ok = <-channel:
+		if !ok {
+			// Fatal failure (stop execution), as mishandled channels in Go can cause panics and infinite waits.
+			assert.FailNow(t, "Expected a message, but the channel was closed")
+		}
+		return msg
+	default:
+		// Fatal failure (stop execution), as mishandled channels in Go can cause panics and infinite waits.
+		assert.FailNow(t, "Expected a message, but no message was immediately available")
+	}
+	return msg // Unreachable
 }
