@@ -758,6 +758,98 @@ button.sn-apply-fix:hover {
   animation-delay: 16s;
 }
 
+.sn-ignore-issue-container {
+  display: flex;
+  flex-direction: column;
+  padding: var(--container-paddding);
+  background-color:rgba(0,0,0,.1);
+  border-radius: 4px;
+  color: var(--vscode-foreground);
+}
+
+
+.sn-ignore-title {
+  line-height: 1.25rem;
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.sn-ignore-description {
+  margin-top: 0;
+}
+
+.sn-field {
+  margin-bottom: 20px;
+}
+
+.sn-field.mod-right-aligned {
+  text-align: right;
+}
+
+.sn-label {
+  margin-bottom: .5rem;
+}
+
+.sn-select {
+  font: inherit;
+  height: 26px;
+  padding: 2px 6px;
+  min-width: 240px;
+  max-width: 320px;
+  cursor: pointer;
+  border: 1px solid var(--vscode-settings-dropdownBorder);
+  background-color: var(--vscode-settings-dropdownBackground);
+  color: var(--vscode-settings-dropdownForeground);
+}
+
+.sn-input {
+  border: 1px solid var(--vscode-settings-dropdownBorder);
+  background-color: var(--vscode-settings-dropdownBackground);
+  color: var(--vscode-settings-dropdownForeground);
+  padding: 4px 6px;
+  appearance: textfield;
+ 
+}
+
+.sn-button {
+  display: inline-block;
+  align-items: center;
+  border: 1px solid var(--vscode-button-border);
+  color: var(--vscode-button-foreground);
+  background-color: var(--vscode-button-background);
+  font-family: inherit;
+  border-radius: 2px;
+  box-sizing: border-box;
+  cursor: pointer;
+  line-height: 18px;
+  padding: 6px 14px;
+  text-align: center;
+}
+
+.sn-button.mod-ghost {
+  background-color: transparent;
+  color: var(--vscode-foreground);
+  border: 1px solid var(--vscode-dropdown-border);
+}
+
+
+
+.sn-textarea {
+  border: 1px solid var(--vscode-settings-dropdownBorder);
+  background-color: var(--vscode-settings-dropdownBackground);
+  color: var(--vscode-settings-dropdownForeground);
+  box-sizing: border-box;
+  display: inline-block;
+  font-family: inherit;
+  font-size: inherit;
+  height: 100%;
+  line-height: inherit;
+  resize: none;
+  width: 100%;
+}
+
 #s0 {
   animation: s0ani 3000ms linear infinite;
 }
