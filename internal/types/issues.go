@@ -91,7 +91,7 @@ type Issue interface {
 	GetContentRoot() FilePath
 	GetIsNew() bool
 	GetIsIgnored() bool
-	SetIsIgnored(isIgnored bool)
+	SetIgnored(isIgnored bool)
 	GetSeverity() Severity
 	GetIgnoreDetails() *IgnoreDetails
 	GetProduct() product.Product
@@ -109,7 +109,7 @@ type Issue interface {
 	GetFilterableIssueType() product.FilterableIssueType
 	GetRuleID() string
 	GetReferences() []Reference
-	GetFindingsId() string
+	GetFindingId() string
 	SetCodelensCommands(lenses []CommandData)
 	SetLessonUrl(url string)
 	SetAdditionalData(data IssueAdditionalData)

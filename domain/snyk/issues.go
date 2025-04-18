@@ -75,12 +75,11 @@ type Issue struct {
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData types.IssueAdditionalData `json:"additionalData"`
 	// Learn Service Lesson URL
-	LessonUrl         string `json:"url"`
-	Fingerprint       string
-	GlobalIdentity    string
-	SuppressionStatus string
-	FindingsId        string
-	m                 sync.RWMutex
+	LessonUrl      string `json:"url"`
+	Fingerprint    string
+	GlobalIdentity string
+	FindingId      string
+	m              sync.RWMutex
 }
 
 func (i *Issue) Clone() *Issue {
@@ -110,6 +109,7 @@ func (i *Issue) Clone() *Issue {
 		LessonUrl:           i.LessonUrl,
 		Fingerprint:         i.Fingerprint,
 		GlobalIdentity:      i.GlobalIdentity,
+		FindingId:           i.FindingId,
 		m:                   sync.RWMutex{},
 	}
 }
@@ -236,16 +236,22 @@ func (i *Issue) GetIsIgnored() bool {
 	return i.IsIgnored
 }
 
-func (i *Issue) SetIsIgnored(isIgnored bool) {
+func (i *Issue) SetIgnored(isIgnored bool) {
 	i.m.Lock()
 	defer i.m.Unlock()
 	i.IsIgnored = isIgnored
 }
 
-func (i *Issue) GetFindingsId() string {
+func (i *Issue) GetFindingId() string {
 	i.m.RLock()
 	defer i.m.RUnlock()
-	return i.FindingsId
+	return i.FindingId
+}
+
+func (i *Issue) SetFindingId(findingId string) {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	i.FindingId = findingId
 }
 
 func (i *Issue) GetSeverity() types.Severity {
@@ -485,5 +491,7 @@ func (i *Issue) SetID(id string) {
 }
 
 func (i *Issue) SetIgnoreDetails(ignoreDetails *types.IgnoreDetails) {
+	i.m.Lock()
+	defer i.m.Unlock()
 	i.IgnoreDetails = ignoreDetails
 }
