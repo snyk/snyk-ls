@@ -416,10 +416,13 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 				References:          s.getReferences(testRule),
 				AdditionalData:      additionalData,
 				CWEs:                testRule.Properties.Cwe,
+				FindingId:           result.Fingerprints.SnykAssetFindingV1,
 			}
 			d.SetFingerPrint(result.Fingerprints.Num1)
 			d.SetGlobalIdentity(result.Fingerprints.Identity)
-			d.IsIgnored, d.IgnoreDetails = s.getIgnoreDetails(result)
+			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(s.c, result.Suppressions)
+			d.IsIgnored = isIgnored
+			d.IgnoreDetails = ignoreDetails
 			d.AdditionalData = additionalData
 
 			issues = append(issues, d)
@@ -428,33 +431,42 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 	return issues, errs
 }
 
-func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, *types.IgnoreDetails) {
+func GetIgnoreDetailsFromSuppressions(c *config.Config, suppressions []codeClientSarif.Suppression) (bool, *types.IgnoreDetails) {
+	logger := c.Logger().With().Str("method", "GetIgnoreDetailsFromSuppressions").Logger()
 	isIgnored := false
 	var ignoreDetails *types.IgnoreDetails
-
-	// this can be an array of multiple suppressions in SARIF
+	// this can be an array of multiple suppressions in SARIF,
 	// but we only store one ignore for now
-	if len(result.Suppressions) > 0 {
-		if len(result.Suppressions) > 1 {
-			s.c.Logger().Warn().Int("number of SARIF suppressions", len(result.Suppressions)).Msg(
+	if len(suppressions) > 0 {
+		if len(suppressions) > 1 {
+			logger.Warn().Int("number of SARIF suppressions", len(suppressions)).Msg(
 				"there are more suppressions than expected")
 		}
 		isIgnored = true
-		suppression := result.Suppressions[0]
-
-		reason := suppression.Justification
-		if reason == "" {
-			reason = "None given"
-		}
-		ignoreDetails = &types.IgnoreDetails{
-			Category:   string(suppression.Properties.Category),
-			Reason:     reason,
-			Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
-			IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
-			IgnoredBy:  suppression.Properties.IgnoredBy.Name,
-		}
+		//todo Fix the ignore logic, once the API delivers the suppression including the approval status, the ignore would be dependent on that status.
+		ignoreDetails = sarifSuppressionToIgnoreDetails(&suppressions[0])
 	}
 	return isIgnored, ignoreDetails
+}
+
+func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *types.IgnoreDetails {
+	if suppression == nil {
+		return nil
+	}
+
+	reason := suppression.Justification
+	if reason == "" {
+		reason = "None given"
+	}
+	ignoreDetails := &types.IgnoreDetails{
+		Category:   string(suppression.Properties.Category),
+		Reason:     reason,
+		Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
+		IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
+		IgnoredBy:  suppression.Properties.IgnoredBy.Name,
+		Status:     suppression.Status,
+	}
+	return ignoreDetails
 }
 
 func parseExpirationDateFromString(date *string) string {

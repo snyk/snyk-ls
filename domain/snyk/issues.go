@@ -78,6 +78,7 @@ type Issue struct {
 	LessonUrl      string `json:"url"`
 	Fingerprint    string
 	GlobalIdentity string
+	FindingId      string
 	m              sync.RWMutex
 }
 
@@ -108,6 +109,7 @@ func (i *Issue) Clone() *Issue {
 		LessonUrl:           i.LessonUrl,
 		Fingerprint:         i.Fingerprint,
 		GlobalIdentity:      i.GlobalIdentity,
+		FindingId:           i.FindingId,
 		m:                   sync.RWMutex{},
 	}
 }
@@ -232,6 +234,24 @@ func (i *Issue) GetIsIgnored() bool {
 	i.m.RLock()
 	defer i.m.RUnlock()
 	return i.IsIgnored
+}
+
+func (i *Issue) SetIgnored(isIgnored bool) {
+	i.m.Lock()
+	defer i.m.Unlock()
+	i.IsIgnored = isIgnored
+}
+
+func (i *Issue) GetFindingId() string {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	return i.FindingId
+}
+
+func (i *Issue) SetFindingId(findingId string) {
+	i.m.RLock()
+	defer i.m.RUnlock()
+	i.FindingId = findingId
 }
 
 func (i *Issue) GetSeverity() types.Severity {
@@ -468,4 +488,10 @@ func (i *Issue) SetID(id string) {
 	defer i.m.Unlock()
 
 	i.ID = id
+}
+
+func (i *Issue) SetIgnoreDetails(ignoreDetails *types.IgnoreDetails) {
+	i.m.Lock()
+	defer i.m.Unlock()
+	i.IgnoreDetails = ignoreDetails
 }
