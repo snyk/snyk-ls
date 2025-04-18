@@ -127,17 +127,9 @@ func (cmd *submitIgnoreRequest) createTheCreateConfiguration(engine workflow.Eng
 		return nil, fmt.Errorf("insufficient arguments for ignore-create workflow")
 	}
 
-	ignoreType, ok := cmd.command.Arguments[2].(string)
-	if !ok {
-		return nil, fmt.Errorf("ignoreType should be a string")
-	}
-	reason, ok := cmd.command.Arguments[3].(string)
-	if !ok {
-		return nil, fmt.Errorf("reason should be a string")
-	}
-	expiration, ok := cmd.command.Arguments[4].(string)
-	if !ok {
-		return nil, fmt.Errorf("expiration should be a string")
+	ignoreType, reason, expiration, err := GetCommandArgs(cmd)
+	if err != nil {
+		return nil, err
 	}
 
 	gafConfig := createBaseConfiguration(engine, findingsId, contentRoot)
@@ -178,21 +170,14 @@ func (cmd *submitIgnoreRequest) createTheEditConfigurations(engine workflow.Engi
 		return nil, fmt.Errorf("insufficient arguments for ignore-edit workflow")
 	}
 
-	ignoreType, ok := cmd.command.Arguments[2].(string)
-	if !ok {
-		return nil, fmt.Errorf("ignoreType should be a string")
+	ignoreType, reason, expiration, err := GetCommandArgs(cmd)
+	if err != nil {
+		return nil, err
 	}
-	reason, ok := cmd.command.Arguments[3].(string)
-	if !ok {
-		return nil, fmt.Errorf("reason should be a string")
-	}
-	expiration, ok := cmd.command.Arguments[4].(string)
-	if !ok {
-		return nil, fmt.Errorf("expiration should be a string")
-	}
-	ignoreId, ok := cmd.command.Arguments[5].(string)
-	if !ok {
-		return nil, fmt.Errorf("ignoreId should be a string")
+
+	ignoreId, err2 := getIgnoreIdFromCmdArgs(cmd)
+	if err2 != nil {
+		return nil, err2
 	}
 
 	gafConfig := createBaseConfiguration(engine, findingsId, contentRoot)
@@ -201,6 +186,31 @@ func (cmd *submitIgnoreRequest) createTheEditConfigurations(engine workflow.Engi
 	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
 
 	return gafConfig, nil
+}
+
+func getIgnoreIdFromCmdArgs(cmd *submitIgnoreRequest) (string, error) {
+	ignoreId, ok := cmd.command.Arguments[5].(string)
+	if !ok {
+		return "", fmt.Errorf("ignoreId should be a string")
+	}
+	return ignoreId, nil
+}
+
+func GetCommandArgs(cmd *submitIgnoreRequest) (string, string, string, error) {
+	ignoreType, ok := cmd.command.Arguments[2].(string)
+	if !ok {
+		return "", "", "", fmt.Errorf("ignoreType should be a string")
+	}
+	reason, ok := cmd.command.Arguments[3].(string)
+	if !ok {
+		return "", "", "", fmt.Errorf("reason should be a string")
+	}
+	expiration, ok := cmd.command.Arguments[4].(string)
+	if !ok {
+		return "", "", "", fmt.Errorf("expiration should be a string")
+	}
+
+	return ignoreType, reason, expiration, nil
 }
 
 func (cmd *submitIgnoreRequest) deleteIgnoreRequest(engine workflow.Engine, findingsId string, contentRoot types.FilePath, issue types.Issue) error {
@@ -235,9 +245,9 @@ func (cmd *submitIgnoreRequest) createTheDeleteConfiguration(engine workflow.Eng
 		return nil, fmt.Errorf("insufficient arguments for ignore-delete workflow")
 	}
 
-	ignoreId, ok := cmd.command.Arguments[5].(string)
-	if !ok {
-		return nil, fmt.Errorf("ignoreId should be a string")
+	ignoreId, err := getIgnoreIdFromCmdArgs(cmd)
+	if err != nil {
+		return nil, err
 	}
 
 	gafConfig := createBaseConfiguration(engine, findingsId, contentRoot)
