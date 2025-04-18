@@ -416,7 +416,7 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 				References:          s.getReferences(testRule),
 				AdditionalData:      additionalData,
 				CWEs:                testRule.Properties.Cwe,
-				FindingsId:          result.Fingerprints.SnykAssetFindingV1,
+				FindingId:           result.Fingerprints.SnykAssetFindingV1,
 			}
 			d.SetFingerPrint(result.Fingerprints.Num1)
 			d.SetGlobalIdentity(result.Fingerprints.Identity)
@@ -443,6 +443,7 @@ func GetIgnoreDetailsFromSuppressions(c *config.Config, suppressions []codeClien
 				"there are more suppressions than expected")
 		}
 		isIgnored = true
+		//todo Fix the ignore logic, once the API delivers the suppression including the approval status, the ignore would be dependent on that status.
 		ignoreDetails = sarifSuppressionToIgnoreDetails(&suppressions[0])
 	}
 	return isIgnored, ignoreDetails

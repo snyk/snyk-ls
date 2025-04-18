@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,6 @@ func (cmd *submitIgnoreRequest) Command() types.CommandData {
 }
 
 func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
-	engine := cmd.c.Engine()
 	workflowType, ok := cmd.command.Arguments[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("workflow type should be a string")
@@ -64,8 +63,9 @@ func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 		return nil, fmt.Errorf("issue not found")
 	}
 
-	findingsId := issue.GetFindingsId()
+	findingsId := issue.GetFindingId()
 	contentRoot := issue.GetContentRoot()
+	engine := cmd.c.Engine()
 
 	switch workflowType {
 	case "create":
@@ -87,7 +87,7 @@ func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 		}
 
 	default:
-		return nil, fmt.Errorf(`unknown worflow`)
+		return nil, fmt.Errorf(`unknown workflow`)
 	}
 
 	cmd.sendShowDocumentRequest(issue)
@@ -96,7 +96,7 @@ func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 }
 
 func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, findingsId string, contentRoot types.FilePath, issue types.Issue) error {
-	gafConfig, err := cmd.createCreateConfiguration(engine, findingsId, contentRoot)
+	gafConfig, err := cmd.createTheCreateConfiguration(engine, findingsId, contentRoot)
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, find
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) createCreateConfiguration(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
+func (cmd *submitIgnoreRequest) createTheCreateConfiguration(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
 	if len(cmd.command.Arguments) < 5 {
 		return nil, fmt.Errorf("insufficient arguments for ignore-create workflow")
 	}
@@ -140,19 +140,14 @@ func (cmd *submitIgnoreRequest) createCreateConfiguration(engine workflow.Engine
 		return nil, fmt.Errorf("expiration should be a string")
 	}
 
-	gafConfig := engine.GetConfiguration().Clone()
-	gafConfig.Set(ignore_workflow.FindingsIdKey, findingsId)
-	gafConfig.Set(ignore_workflow.IgnoreTypeKey, ignoreType)
-	gafConfig.Set(ignore_workflow.ReasonKey, reason)
-	gafConfig.Set(ignore_workflow.ExpirationKey, expiration)
-	gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
-	gafConfig.Set(ignore_workflow.InteractiveKey, false)
-	gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
+	gafConfig := createBaseConfiguration(engine, findingsId, contentRoot)
+	gafConfig = addUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
+
 	return gafConfig, nil
 }
 
 func (cmd *submitIgnoreRequest) editIgnoreRequest(engine workflow.Engine, findingsId string, contentRoot types.FilePath, issue types.Issue) error {
-	gafConfig, err := cmd.createEditConfigurations(engine, findingsId, contentRoot)
+	gafConfig, err := cmd.createTheEditConfigurations(engine, findingsId, contentRoot)
 	if err != nil {
 		return err
 	}
@@ -178,7 +173,7 @@ func (cmd *submitIgnoreRequest) editIgnoreRequest(engine workflow.Engine, findin
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) createEditConfigurations(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
+func (cmd *submitIgnoreRequest) createTheEditConfigurations(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
 	if len(cmd.command.Arguments) < 5 {
 		return nil, fmt.Errorf("insufficient arguments for ignore-edit workflow")
 	}
@@ -200,20 +195,16 @@ func (cmd *submitIgnoreRequest) createEditConfigurations(engine workflow.Engine,
 		return nil, fmt.Errorf("ignoreId should be a string")
 	}
 
-	gafConfig := engine.GetConfiguration().Clone()
-	gafConfig.Set(ignore_workflow.FindingsIdKey, findingsId)
-	gafConfig.Set(ignore_workflow.IgnoreTypeKey, ignoreType)
-	gafConfig.Set(ignore_workflow.ReasonKey, reason)
-	gafConfig.Set(ignore_workflow.ExpirationKey, expiration)
-	gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
-	gafConfig.Set(ignore_workflow.InteractiveKey, false)
+	gafConfig := createBaseConfiguration(engine, findingsId, contentRoot)
+	gafConfig = addUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
+
 	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
-	gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
+
 	return gafConfig, nil
 }
 
 func (cmd *submitIgnoreRequest) deleteIgnoreRequest(engine workflow.Engine, findingsId string, contentRoot types.FilePath, issue types.Issue) error {
-	gafConfig, err := cmd.createDeleteConfiguration(engine, findingsId, contentRoot)
+	gafConfig, err := cmd.createTheDeleteConfiguration(engine, findingsId, contentRoot)
 	if err != nil {
 		return err
 	}
@@ -239,7 +230,7 @@ func (cmd *submitIgnoreRequest) deleteIgnoreRequest(engine workflow.Engine, find
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) createDeleteConfiguration(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
+func (cmd *submitIgnoreRequest) createTheDeleteConfiguration(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
 	if len(cmd.command.Arguments) < 3 {
 		return nil, fmt.Errorf("insufficient arguments for ignore-delete workflow")
 	}
@@ -249,13 +240,26 @@ func (cmd *submitIgnoreRequest) createDeleteConfiguration(engine workflow.Engine
 		return nil, fmt.Errorf("ignoreId should be a string")
 	}
 
-	gafConfig := engine.GetConfiguration().Clone()
-	gafConfig.Set(ignore_workflow.FindingsIdKey, findingsId) //TODO remove this one?
+	gafConfig := createBaseConfiguration(engine, findingsId, contentRoot)
 	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
+
+	return gafConfig, nil
+}
+
+func createBaseConfiguration(engine workflow.Engine, findingId string, contentRoot types.FilePath) configuration.Configuration {
+	gafConfig := engine.GetConfiguration().Clone()
+	gafConfig.Set(ignore_workflow.FindingsIdKey, findingId) //TODO remove this one?
 	gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
 	gafConfig.Set(ignore_workflow.InteractiveKey, false)
 	gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
-	return gafConfig, nil
+	return gafConfig
+}
+
+func addUpdateConfiguration(gafConfig configuration.Configuration, ignoreType string, reason string, expiration string) configuration.Configuration {
+	gafConfig.Set(ignore_workflow.IgnoreTypeKey, ignoreType)
+	gafConfig.Set(ignore_workflow.ReasonKey, reason)
+	gafConfig.Set(ignore_workflow.ExpirationKey, expiration)
+	return gafConfig
 }
 
 func updateIssueWithIgnoreDetails(c *config.Config, output []byte, issue types.Issue) error {
@@ -266,7 +270,7 @@ func updateIssueWithIgnoreDetails(c *config.Config, output []byte, issue types.I
 	}
 	isIgnored, ignoreDetails := code.GetIgnoreDetailsFromSuppressions(c, []sarif.Suppression{suppression})
 
-	issue.SetIsIgnored(isIgnored)
+	issue.SetIgnored(isIgnored)
 	issue.SetIgnoreDetails(ignoreDetails)
 	return nil
 }
