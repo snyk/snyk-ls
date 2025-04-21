@@ -22,11 +22,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rs/zerolog"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -101,7 +99,7 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, f
 	logger := c.Logger().With().Str("method", "codeFixDiffs.handleResponse").Logger()
 	aiFixHandler := htmlRenderer.AiFixHandler
 
-	setStateCallback := func() { cmd.sendShowDocumentRequest(logger, issue, cmd.srv) }
+	setStateCallback := func() { SendShowDocumentRequest(ctx, logger, issue, cmd.srv) }
 
 	aiFixHandler.SetAiFixDiffState(code.AiFixInProgress, nil, nil, setStateCallback)
 
@@ -118,20 +116,4 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, f
 	}
 	aiFixHandler.EnrichWithExplain(ctx, c, issue, suggestions)
 	aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, suggestions, nil, setStateCallback)
-}
-
-func (cmd *codeFixDiffs) sendShowDocumentRequest(logger zerolog.Logger, issue types.Issue, srv types.Server) {
-	snykUri, _ := code.SnykMagnetUri(issue, code.ShowInDetailPanelIdeCommand)
-	logger.Debug().
-		Str("method", "code.sendShowDocumentRequest").
-		Msg("showing Document")
-
-	params := types.ShowDocumentParams{
-		Uri:       lsp.DocumentURI(snykUri),
-		Selection: converter.ToRange(issue.GetRange()),
-	}
-	_, err := srv.Callback(context.Background(), "window/showDocument", params)
-	if err != nil {
-		logger.Err(err).Msgf("failed to send snyk window/showDocument callback for file %s", issue.GetAffectedFilePath())
-	}
 }

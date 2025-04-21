@@ -21,10 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -34,6 +31,15 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+)
+
+const (
+	workflowTypeIndex = iota
+	issueIdIndex
+	ignoreTypeIndex
+	reasonIndex
+	expirationIndex
+	ignoreIdIndex
 )
 
 type submitIgnoreRequest struct {
@@ -48,12 +54,13 @@ func (cmd *submitIgnoreRequest) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
-	workflowType, ok := cmd.command.Arguments[0].(string)
+func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
+	logger := cmd.c.Logger().With().Str("method", "submitIgnoreRequest.Execute").Logger()
+	workflowType, ok := cmd.command.Arguments[workflowTypeIndex].(string)
 	if !ok {
 		return nil, fmt.Errorf("workflow type should be a string")
 	}
-	issueId, ok := cmd.command.Arguments[1].(string)
+	issueId, ok := cmd.command.Arguments[issueIdIndex].(string)
 	if !ok {
 		return nil, fmt.Errorf("issueId type should be a string")
 	}
@@ -90,39 +97,26 @@ func (cmd *submitIgnoreRequest) Execute(_ context.Context) (any, error) {
 		return nil, fmt.Errorf(`unknown workflow`)
 	}
 
-	cmd.sendShowDocumentRequest(issue)
+	SendShowDocumentRequest(ctx, logger, issue, cmd.srv)
 
 	return nil, nil
 }
 
 func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, findingsId string, contentRoot types.FilePath, issue types.Issue) error {
-	gafConfig, err := cmd.createTheCreateConfiguration(engine, findingsId, contentRoot)
+	gafConfig, err := cmd.createTheCreateConfiguration(engine.GetConfiguration(), findingsId, contentRoot)
 	if err != nil {
 		return err
 	}
 
-	response, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
+	err = cmd.executeIgnoreWorkflow(engine, ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig, issue)
 	if err != nil {
 		return err
 	}
 
-	if len(response) == 0 {
-		return fmt.Errorf("no data returned from ignore workflow")
-	}
-
-	output, ok := response[0].GetPayload().([]byte)
-	if !ok {
-		return fmt.Errorf("invalid response from ignore workflow")
-	}
-
-	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) createTheCreateConfiguration(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
+func (cmd *submitIgnoreRequest) createTheCreateConfiguration(gafConfig configuration.Configuration, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
 	if len(cmd.command.Arguments) < 5 {
 		return nil, fmt.Errorf("insufficient arguments for ignore-create workflow")
 	}
@@ -132,40 +126,26 @@ func (cmd *submitIgnoreRequest) createTheCreateConfiguration(engine workflow.Eng
 		return nil, err
 	}
 
-	gafConfig := createBaseConfiguration(engine, findingsId, contentRoot)
+	gafConfig = createBaseConfiguration(gafConfig, findingsId, contentRoot)
 	gafConfig = addUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
 
 	return gafConfig, nil
 }
 
 func (cmd *submitIgnoreRequest) editIgnoreRequest(engine workflow.Engine, findingsId string, contentRoot types.FilePath, issue types.Issue) error {
-	gafConfig, err := cmd.createTheEditConfigurations(engine, findingsId, contentRoot)
+	gafConfig, err := cmd.createTheEditConfigurations(engine.GetConfiguration(), findingsId, contentRoot)
 	if err != nil {
 		return err
 	}
 
-	response, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
-	if err != nil {
-		return err
-	}
-
-	if len(response) == 0 {
-		return fmt.Errorf("no data returned from ignore workflow")
-	}
-
-	output, ok := response[0].GetPayload().([]byte)
-	if !ok {
-		return fmt.Errorf("invalid response from ignore workflow")
-	}
-
-	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
+	err = cmd.executeIgnoreWorkflow(engine, ignore_workflow.WORKFLOWID_IGNORE_EDIT, gafConfig, issue)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) createTheEditConfigurations(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
+func (cmd *submitIgnoreRequest) createTheEditConfigurations(gafConfig configuration.Configuration, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
 	if len(cmd.command.Arguments) < 5 {
 		return nil, fmt.Errorf("insufficient arguments for ignore-edit workflow")
 	}
@@ -180,7 +160,7 @@ func (cmd *submitIgnoreRequest) createTheEditConfigurations(engine workflow.Engi
 		return nil, err2
 	}
 
-	gafConfig := createBaseConfiguration(engine, findingsId, contentRoot)
+	gafConfig = createBaseConfiguration(gafConfig, findingsId, contentRoot)
 	gafConfig = addUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
 
 	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
@@ -188,59 +168,20 @@ func (cmd *submitIgnoreRequest) createTheEditConfigurations(engine workflow.Engi
 	return gafConfig, nil
 }
 
-func getIgnoreIdFromCmdArgs(cmd *submitIgnoreRequest) (string, error) {
-	ignoreId, ok := cmd.command.Arguments[5].(string)
-	if !ok {
-		return "", fmt.Errorf("ignoreId should be a string")
-	}
-	return ignoreId, nil
-}
-
-func GetCommandArgs(cmd *submitIgnoreRequest) (string, string, string, error) {
-	ignoreType, ok := cmd.command.Arguments[2].(string)
-	if !ok {
-		return "", "", "", fmt.Errorf("ignoreType should be a string")
-	}
-	reason, ok := cmd.command.Arguments[3].(string)
-	if !ok {
-		return "", "", "", fmt.Errorf("reason should be a string")
-	}
-	expiration, ok := cmd.command.Arguments[4].(string)
-	if !ok {
-		return "", "", "", fmt.Errorf("expiration should be a string")
-	}
-
-	return ignoreType, reason, expiration, nil
-}
-
 func (cmd *submitIgnoreRequest) deleteIgnoreRequest(engine workflow.Engine, findingsId string, contentRoot types.FilePath, issue types.Issue) error {
-	gafConfig, err := cmd.createTheDeleteConfiguration(engine, findingsId, contentRoot)
+	gafConfig, err := cmd.createTheDeleteConfiguration(engine.GetConfiguration(), findingsId, contentRoot)
 	if err != nil {
 		return err
 	}
 
-	response, err := engine.InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig)
-	if err != nil {
-		return err
-	}
-
-	if len(response) == 0 {
-		return fmt.Errorf("no data returned from ignore workflow")
-	}
-
-	output, ok := response[0].GetPayload().([]byte)
-	if !ok {
-		return fmt.Errorf("invalid response from ignore workflow")
-	}
-
-	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
+	err = cmd.executeIgnoreWorkflow(engine, ignore_workflow.WORKFLOWID_IGNORE_DELETE, gafConfig, issue)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) createTheDeleteConfiguration(engine workflow.Engine, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
+func (cmd *submitIgnoreRequest) createTheDeleteConfiguration(gafConfig configuration.Configuration, findingsId string, contentRoot types.FilePath) (configuration.Configuration, error) {
 	if len(cmd.command.Arguments) < 3 {
 		return nil, fmt.Errorf("insufficient arguments for ignore-delete workflow")
 	}
@@ -250,14 +191,52 @@ func (cmd *submitIgnoreRequest) createTheDeleteConfiguration(engine workflow.Eng
 		return nil, err
 	}
 
-	gafConfig := createBaseConfiguration(engine, findingsId, contentRoot)
+	gafConfig = createBaseConfiguration(gafConfig, findingsId, contentRoot)
 	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
 
 	return gafConfig, nil
 }
 
-func createBaseConfiguration(engine workflow.Engine, findingId string, contentRoot types.FilePath) configuration.Configuration {
-	gafConfig := engine.GetConfiguration().Clone()
+func getIgnoreIdFromCmdArgs(cmd *submitIgnoreRequest) (string, error) {
+	ignoreId, ok := cmd.command.Arguments[ignoreIdIndex].(string)
+	if !ok {
+		return "", fmt.Errorf("ignoreId should be a string")
+	}
+	return ignoreId, nil
+}
+
+func GetCommandArgs(cmd *submitIgnoreRequest) (ignoreType string, reason string, expiration string, err error) {
+	if len(cmd.command.Arguments) < 5 {
+		return "", "", "", fmt.Errorf("insufficient arguments for ignore command")
+	}
+	ignoreType, err = getStringArgument(cmd, ignoreTypeIndex, "ignoreType")
+	if err != nil {
+		return "", "", "", err
+	}
+	reason, err = getStringArgument(cmd, reasonIndex, "reason")
+	if err != nil {
+		return "", "", "", err
+	}
+	expiration, err = getStringArgument(cmd, expirationIndex, "expiration")
+	if err != nil {
+		return "", "", "", err
+	}
+
+	return ignoreType, reason, expiration, nil
+}
+
+func getStringArgument(cmd *submitIgnoreRequest, index int, argName string) (string, error) {
+	if len(cmd.command.Arguments) <= index {
+		return "", fmt.Errorf("missing argument: %s", argName)
+	}
+	arg, ok := cmd.command.Arguments[index].(string)
+	if !ok {
+		return "", fmt.Errorf("%s should be a string", argName)
+	}
+	return arg, nil
+}
+
+func createBaseConfiguration(gafConfig configuration.Configuration, findingId string, contentRoot types.FilePath) configuration.Configuration {
 	gafConfig.Set(ignore_workflow.FindingsIdKey, findingId) //TODO remove this one?
 	gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
 	gafConfig.Set(ignore_workflow.InteractiveKey, false)
@@ -285,19 +264,24 @@ func updateIssueWithIgnoreDetails(c *config.Config, output []byte, issue types.I
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) sendShowDocumentRequest(issue types.Issue) {
-	snykUri, _ := code.SnykMagnetUri(issue, code.ShowInDetailPanelIdeCommand)
-	logger := cmd.c.Logger()
-	logger.Debug().
-		Str("method", "code.sendShowDocumentRequest").
-		Msg("showing Document")
-
-	params := types.ShowDocumentParams{
-		Uri:       lsp.DocumentURI(snykUri),
-		Selection: converter.ToRange(issue.GetRange()),
-	}
-	_, err := cmd.srv.Callback(context.Background(), "window/showDocument", params)
+func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, workflowId workflow.Identifier, gafConfig configuration.Configuration, issue types.Issue) error {
+	response, err := engine.InvokeWithConfig(workflowId, gafConfig)
 	if err != nil {
-		logger.Err(err).Msgf("failed to send snyk window/showDocument callback for file %s", issue.GetAffectedFilePath())
+		return err
 	}
+
+	if len(response) == 0 {
+		return fmt.Errorf("no data returned from ignore workflow")
+	}
+
+	output, ok := response[0].GetPayload().([]byte)
+	if !ok {
+		return fmt.Errorf("invalid response from ignore workflow")
+	}
+
+	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
+	if err != nil {
+		return err
+	}
+	return nil
 }
