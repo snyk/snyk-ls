@@ -31,15 +31,17 @@ import (
 )
 
 type TestScanner struct {
-	mutex  sync.Mutex
-	calls  int
-	Issues []types.Issue
+	mutex         sync.Mutex
+	calls         int
+	Issues        []types.Issue
+	SendAnalytics bool
 }
 
 func NewTestScanner() *TestScanner {
 	return &TestScanner{
-		calls:  0,
-		Issues: []types.Issue{},
+		calls:         0,
+		Issues:        []types.Issue{},
+		SendAnalytics: true,
 	}
 }
 
@@ -64,7 +66,7 @@ func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResu
 		DurationMs:        1234,
 		TimestampFinished: time.Now().UTC(),
 		UpdateGlobalCache: true,
-		SendAnalytics:     true,
+		SendAnalytics:     s.SendAnalytics,
 		Path:              folderPath,
 	}
 	processResults(ctx, data)
