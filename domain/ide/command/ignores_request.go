@@ -198,6 +198,9 @@ func (cmd *submitIgnoreRequest) createTheDeleteConfiguration(gafConfig configura
 }
 
 func getIgnoreIdFromCmdArgs(cmd *submitIgnoreRequest) (string, error) {
+	if len(cmd.command.Arguments) <= ignoreIdIndex {
+		return "", fmt.Errorf("missing ignoreId")
+	}
 	ignoreId, ok := cmd.command.Arguments[ignoreIdIndex].(string)
 	if !ok {
 		return "", fmt.Errorf("ignoreId should be a string")
