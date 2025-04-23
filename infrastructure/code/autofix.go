@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	codeClientHTTP "github.com/snyk/code-client-go/http"
+	"github.com/snyk/code-client-go/llm"
 	"time"
 
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
@@ -42,67 +44,12 @@ func (a AutofixUnifiedDiffSuggestion) GetUnifiedDiffForFile(filePath string) str
 	return a.UnifiedDiffsPerFile[filePath]
 }
 
-func (s *SnykCodeHTTPClient) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
-	method := "GetAutofixDiffs"
-	span := s.instrumentor.StartSpan(ctx, method)
-	defer s.instrumentor.Finish(span)
-	logger := s.c.Logger().With().Str("method", method).Logger()
-	logger.Info().Msg("Started obtaining autofix diffs")
-	defer logger.Info().Msg("Finished obtaining autofix diffs")
-
-	autofixResponse, status, err := s.getAutofixResponse(ctx, options)
-	if err != nil {
-		return nil, status, err
-	}
-	return autofixResponse.toUnifiedDiffSuggestions(baseDir, options.filePath), status, err
-}
-
-func (s *SnykCodeHTTPClient) getAutofixResponse(ctx context.Context, options AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error) {
-	method := "getAutofixResponse"
-	span := s.instrumentor.StartSpan(ctx, method)
-	defer s.instrumentor.Finish(span)
-	logger := s.c.Logger().With().Str("method", method).Logger()
-
-	requestId, err := performance2.GetTraceId(ctx)
-	if err != nil {
-		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
-		return autofixResponse, failed, err
-	}
-	logger.Info().Str("requestId", requestId).Msg("Started obtaining autofix Response")
-	defer logger.Info().Str("requestId", requestId).Msg("Finished obtaining autofix Response")
-
-	response, err := s.RunAutofix(span.Context(), options)
-	if err != nil {
-		return response, failed, err
-	}
-
-	logger.Debug().Msgf("Status: %s", response.Status)
-
-	if response.Status == failed.message {
-		logger.Error().Str("responseStatus", response.Status).Msg("autofix failed")
-		return response, failed, errors.New("Autofix failed")
-	}
-
-	if response.Status == "" {
-		logger.Error().Str("responseStatus", response.Status).Msg("unknown response status (empty)")
-		return response, failed, errors.New("Unknown response status (empty)")
-	}
-
-	status = AutofixStatus{message: response.Status}
-	if response.Status != completeStatus {
-		return response, status, nil
-	}
-
-	return response, status, nil
-}
-
-func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, filePath types.FilePath, issue types.Issue) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, err error) {
+func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, filePath types.FilePath, issue types.Issue) (unifiedDiffSuggestions []llm.AutofixUnifiedDiffSuggestion, err error) {
 	method := "GetAutofixDiffs"
 	logger := sc.C.Logger().With().Str("method", method).Logger()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, method)
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
-	codeClient := sc.BundleUploader.SnykCode
 	sc.bundleHashesMutex.RLock()
 	bundleHash, found := sc.bundleHashes[baseDir]
 	sc.bundleHashesMutex.RUnlock()
@@ -113,12 +60,6 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 	encodedNormalizedPath, err := toEncodedNormalizedPath(baseDir, filePath)
 	if err != nil {
 		return unifiedDiffSuggestions, err
-	}
-	options := AutofixOptions{
-		bundleHash: bundleHash,
-		shardKey:   getShardKey(baseDir, sc.C.Token()),
-		filePath:   encodedNormalizedPath,
-		issue:      issue,
 	}
 
 	// ticker sends a trigger every second to its channel
@@ -134,11 +75,46 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 			logger.Error().Msg(msg)
 			return nil, errors.New(msg)
 		case <-ticker.C:
-			suggestions, fixStatus, autofixErr := codeClient.GetAutofixDiffs(span.Context(), baseDir, options)
+			deepCodeLLMBinding := llm.NewDeepcodeLLMBinding(
+				llm.WithLogger(sc.C.Logger()),
+				llm.WithOutputFormat(llm.HTML),
+				llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
+					return sc.C.Engine().GetNetworkAccess().GetHttpClient()
+				}),
+			)
+
+			requestId, traceErr := performance2.GetTraceId(ctx)
+			if traceErr != nil {
+				return nil, err
+			}
+
+			_, ruleId, ok := getIssueLangAndRuleId(issue)
+			if !ok {
+				return nil, SnykAutofixFailedError{Msg: "Issue's ruleID does not follow <lang>/<ruleKey> format"}
+			}
+
+			options := llm.AutofixOptions{
+				BundleHash:         bundleHash,
+				ShardKey:           getShardKey(baseDir, sc.C.Token()),
+				BaseDir:            string(baseDir),
+				FilePath:           string(encodedNormalizedPath),
+				CodeRequestContext: newCodeRequestContext().toAutofixCodeRequestContext(),
+				LineNum:            issue.GetRange().Start.Line + 1,
+				RuleID:             ruleId,
+				Endpoint:           getAutofixEndpoint(sc.C),
+				IdeExtensionDetails: llm.AutofixIdeExtensionDetails{
+					IdeName:          sc.C.IdeName(),
+					IdeVersion:       sc.C.IdeVersion(),
+					ExtensionName:    sc.C.IntegrationName(),
+					ExtensionVersion: sc.C.IntegrationVersion(),
+				},
+			}
+
+			suggestions, fixStatus, autofixErr := deepCodeLLMBinding.GetAutofixDiffs(span.Context(), requestId, options)
 			if autofixErr != nil {
 				logger.Err(autofixErr).Msg("Error getting autofix suggestions")
 				return nil, autofixErr
-			} else if fixStatus.message == completeStatus {
+			} else if fixStatus.Message == completeStatus {
 				if len(suggestions) == 0 {
 					logger.Info().Msg("AI fix returned successfully but no good fix could be computed.")
 				}

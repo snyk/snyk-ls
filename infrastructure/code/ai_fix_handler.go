@@ -52,7 +52,7 @@ const (
 type aiResultState struct {
 	status AiStatus
 	err    error
-	result []AutofixUnifiedDiffSuggestion
+	result []llm.AutofixUnifiedDiffSuggestion
 }
 
 const explainTimeout = 5 * time.Minute
@@ -74,7 +74,7 @@ func (fixHandler *AiFixHandler) GetResults(fixId string) (filePath string, diff 
 	return "", "", fmt.Errorf("no suggestion found for fixId: %s", fixId)
 }
 
-func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config.Config, issue types.Issue, suggestions []AutofixUnifiedDiffSuggestion) {
+func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config.Config, issue types.Issue, suggestions []llm.AutofixUnifiedDiffSuggestion) {
 	if !shouldRunExplain {
 		return
 	}
@@ -121,7 +121,18 @@ func getExplainEndpoint(c *config.Config) *url.URL {
 	return endpoint
 }
 
-func getDiffListFromSuggestions(suggestions []AutofixUnifiedDiffSuggestion, diffs []string) []string {
+func getAutofixEndpoint(c *config.Config) *url.URL {
+	endpoint, err := url.Parse(fmt.Sprintf("%s/autofix/suggestions", c.SnykApi()))
+	if err != nil {
+		return &url.URL{}
+	}
+	queryParams := url.Values{}
+	endpoint.RawQuery = queryParams.Encode()
+
+	return endpoint
+}
+
+func getDiffListFromSuggestions(suggestions []llm.AutofixUnifiedDiffSuggestion, diffs []string) []string {
 	// Suggestion diffs may be coming from different files
 	for i := range suggestions {
 		diff := ""
@@ -133,7 +144,7 @@ func getDiffListFromSuggestions(suggestions []AutofixUnifiedDiffSuggestion, diff
 	return diffs
 }
 
-func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, suggestions []AutofixUnifiedDiffSuggestion, err error, callback func()) {
+func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, suggestions []llm.AutofixUnifiedDiffSuggestion, err error, callback func()) {
 	fixHandler.aiFixDiffState = aiResultState{status: state, result: suggestions, err: err}
 	if callback != nil {
 		callback()
