@@ -1,4 +1,4 @@
-name: Synchronize Readme # Copied from: https://github.com/snyk/vscode-extension/blob/e34b720733956dbd1b185f0ff3b16a6003ad3bbb/.github/workflows/readme-sync.yaml
+name: Synchronize MCP Readme # Copied from: https://github.com/snyk/snyk-intellij-plugin/blob/7e8819e8b07eafa87453794a126245b2705fae86/.github/workflows/readme-sync.yml
 
 on:
   workflow_dispatch:
