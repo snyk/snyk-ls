@@ -1,0 +1,60 @@
+name: Synchronize Readme # Copied from: https://github.com/snyk/vscode-extension/blob/e34b720733956dbd1b185f0ff3b16a6003ad3bbb/.github/workflows/readme-sync.yaml
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 12 * * 1-5" # Mon-Fri at 12
+
+jobs:
+  build:
+    name: synchronize-readme
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          gh auth setup-git
+          git config --global user.email "noreply@snyk.io"
+          git config --global user.name "$GITHUB_ACTOR"
+          gh repo clone snyk/$DESTINATION_REPOSITORY $DESTINATION_REPOSITORY -- --depth=1 --quiet
+          gh repo clone snyk/user-docs docs -- --depth=1 --quiet
+          git -C ./$DESTINATION_REPOSITORY checkout -B $DESTINATION_BRANCH
+
+          cp $SOURCE_PATH ./$DESTINATION_REPOSITORY/$FILE_TO_COMMIT
+          sed -i \
+              -e "s|../../../.gitbook/assets/|https://github.com/snyk/user-docs/raw/HEAD/docs/.gitbook/assets/|g" \
+              ./$DESTINATION_REPOSITORY/$FILE_TO_COMMIT
+          sed -i \
+              -E "s|\!\\[([[:alnum:][:space:][:punct:]]*)\]\(<([[:alnum:][:punct:]\-\.\/:[:space:]\(\)]+)>\)|<img src=\"\2\" alt=\"\1\" />|g" \
+              ./$DESTINATION_REPOSITORY/$FILE_TO_COMMIT
+          sed -i \
+              -E 's|(\{%.*%\})||g' \
+              ./$DESTINATION_REPOSITORY/$FILE_TO_COMMIT
+
+          if [[ $(git -C ./$DESTINATION_REPOSITORY status --porcelain) ]]; then
+            echo "Documentation changes detected"
+            cd ./$DESTINATION_REPOSITORY
+            git push -f -u origin $DESTINATION_BRANCH
+
+            export SHA=$( git rev-parse $DESTINATION_BRANCH:$FILE_TO_COMMIT )
+            export CONTENT=$( base64 -i $FILE_TO_COMMIT )
+            gh api --method PUT /repos/:owner/:repo/contents/$FILE_TO_COMMIT \
+              --field message="$MESSAGE" \
+              --field content="$CONTENT" \
+              --field encoding="base64" \
+              --field branch="$DESTINATION_BRANCH" \
+              --field sha="$SHA"
+
+            if [[ ! $(gh pr list --search "$MESSAGE" 2>&1 | grep -e "$MESSAGE";) ]]; then
+              echo "Creating PR"
+              gh pr create --title="$MESSAGE" --body="Automatic PR controlled by GitHub Action." --head $DESTINATION_BRANCH
+            fi
+            echo "PR exists, pushed changes to it."
+          else
+            echo "No documentation changes detected, exiting."
+          fi
+        env:
+          SOURCE_PATH: ./docs/docs/snyk-cli/snyk-mcp-experimental.md
+          FILE_TO_COMMIT: ./mcp_extension/README.md
+          DESTINATION_REPOSITORY: snyk-ls
+          DESTINATION_BRANCH: docs/automatic-gitbook-update
+          MESSAGE: "docs: synchronizing MCP README from snyk/user-docs"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
