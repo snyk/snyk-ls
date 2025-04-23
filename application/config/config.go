@@ -604,29 +604,27 @@ func (c *Config) SetSnykAdvisorEnabled(enabled bool) {
 	c.isSnykAdvisorEnabled = enabled
 }
 
-func (c *Config) SetSeverityFilter(severityFilter types.SeverityFilter) bool {
+func (c *Config) SetSeverityFilter(severityFilter *types.SeverityFilter) bool {
 	c.m.Lock()
 	defer c.m.Unlock()
-	emptySeverityFilter := types.SeverityFilter{}
-	if severityFilter == emptySeverityFilter {
+	if severityFilter == nil {
 		return false
 	}
-	filterModified := c.filterSeverity != severityFilter
+	filterModified := c.filterSeverity != *severityFilter
 	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
-	c.filterSeverity = severityFilter
+	c.filterSeverity = *severityFilter
 	return filterModified
 }
 
-func (c *Config) SetIssueViewOptions(issueViewOptions types.IssueViewOptions) bool {
+func (c *Config) SetIssueViewOptions(issueViewOptions *types.IssueViewOptions) bool {
 	c.m.Lock()
 	defer c.m.Unlock()
-	emptyIssueViewOptions := types.IssueViewOptions{}
-	if issueViewOptions == emptyIssueViewOptions {
+	if issueViewOptions == nil {
 		return false
 	}
-	issueViewOptionsModified := c.issueViewOptions != issueViewOptions
+	issueViewOptionsModified := c.issueViewOptions != *issueViewOptions
 	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options:")
-	c.issueViewOptions = issueViewOptions
+	c.issueViewOptions = *issueViewOptions
 	return issueViewOptionsModified
 }
 

@@ -24,21 +24,19 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/rs/zerolog"
-
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
+	"github.com/rs/zerolog"
 
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
+
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/utils"
-
-	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -47,7 +45,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type ScanStatus struct {
@@ -274,7 +274,9 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 		return results, err
 	}
 
-	if sc.useIgnoresFlow() {
+	codeConsistentIgnoresEnabled := sc.C.Engine().GetConfiguration().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+
+	if codeConsistentIgnoresEnabled {
 		results, err = sc.UploadAndAnalyzeWithIgnores(ctx, folderPath, files, filesToBeScanned, t)
 	} else {
 		results, err = sc.UploadAndAnalyze(ctx, files, folderPath, filesToBeScanned, t)
@@ -609,17 +611,4 @@ func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath 
 type UploadStatus struct {
 	UploadedFiles int
 	TotalFiles    int
-}
-
-func (sc *Scanner) useIgnoresFlow() bool {
-	logger := config.CurrentConfig().Logger().With().Str("method", "code.useIgnoresFlow").Logger()
-	response, err := sc.SnykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagSnykCodeConsistentIgnores)
-	if err != nil {
-		logger.Debug().Msg("Failed to check if the ignores experience is enabled")
-		return false
-	}
-	if !response.Ok && response.UserMessage != "" {
-		logger.Info().Msg(response.UserMessage)
-	}
-	return response.Ok
 }

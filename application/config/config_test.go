@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -168,7 +170,7 @@ func TestSnykCodeApi(t *testing.T) {
 func Test_SetSeverityFilter(t *testing.T) {
 	t.Run("Saves filter", func(t *testing.T) {
 		c := New()
-		c.SetSeverityFilter(types.NewSeverityFilter(true, true, false, false))
+		c.SetSeverityFilter(util.Ptr(types.NewSeverityFilter(true, true, false, false)))
 		assert.Equal(t, types.NewSeverityFilter(true, true, false, false), c.FilterSeverity())
 	})
 
@@ -176,10 +178,10 @@ func Test_SetSeverityFilter(t *testing.T) {
 		c := New()
 		lowExcludedFilter := types.NewSeverityFilter(true, true, false, false)
 
-		modified := c.SetSeverityFilter(lowExcludedFilter)
+		modified := c.SetSeverityFilter(&lowExcludedFilter)
 		assert.True(t, modified)
 
-		modified = c.SetSeverityFilter(lowExcludedFilter)
+		modified = c.SetSeverityFilter(&lowExcludedFilter)
 		assert.False(t, modified)
 	})
 }
@@ -187,7 +189,7 @@ func Test_SetSeverityFilter(t *testing.T) {
 func Test_SetIssueViewOptions(t *testing.T) {
 	t.Run("Saves filter", func(t *testing.T) {
 		c := New()
-		c.SetIssueViewOptions(types.NewIssueViewOptions(false, true))
+		c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(false, true)))
 		assert.Equal(t, types.NewIssueViewOptions(false, true), c.IssueViewOptions())
 	})
 
@@ -195,10 +197,10 @@ func Test_SetIssueViewOptions(t *testing.T) {
 		c := New()
 		ignoredOnlyFilter := types.NewIssueViewOptions(false, true)
 
-		modified := c.SetIssueViewOptions(ignoredOnlyFilter)
+		modified := c.SetIssueViewOptions(&ignoredOnlyFilter)
 		assert.True(t, modified)
 
-		modified = c.SetIssueViewOptions(ignoredOnlyFilter)
+		modified = c.SetIssueViewOptions(&ignoredOnlyFilter)
 		assert.False(t, modified)
 	})
 }
