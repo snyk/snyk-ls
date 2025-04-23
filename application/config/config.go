@@ -40,6 +40,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -292,9 +293,9 @@ func initWorkFlowEngine(c *Config) {
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
-	err := localworkflows.InitWhoAmIWorkflow(c.engine)
+	err := initWorkflows(c)
 	if err != nil {
-		c.Logger().Err(err).Msg("unable to initialize WhoAmI workflow")
+		c.Logger().Err(err).Msg("unable to initialize additional workflows")
 	}
 
 	err = c.engine.Init()
@@ -309,6 +310,24 @@ func initWorkFlowEngine(c *Config) {
 		rti := runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion(Version))
 		c.engine.SetRuntimeInfo(rti)
 	}
+}
+
+func initWorkflows(c *Config) error {
+	err := localworkflows.InitWhoAmIWorkflow(c.engine)
+	if err != nil {
+		return err
+	}
+
+	err = ignoreworkflow.InitIgnoreWorkflows(c.engine)
+	if err != nil {
+		return err
+	}
+
+	err = localworkflows.InitCodeWorkflow(c.engine)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func getNewScrubbingLogger(c *Config) *zerolog.Logger {
