@@ -20,10 +20,11 @@ import (
 	"context"
 
 	"github.com/rs/zerolog"
+	"github.com/sourcegraph/go-lsp"
+
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/sourcegraph/go-lsp"
 )
 
 func SendShowDocumentRequest(ctx context.Context, logger zerolog.Logger, issue types.Issue, srv types.Server) {
