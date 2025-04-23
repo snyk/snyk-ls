@@ -31,9 +31,6 @@ import (
 	"github.com/creachadair/jrpc2/server"
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
-	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -213,8 +210,6 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
-
-		c.Engine().AddExtensionInitializer(localworkflows.InitCodeWorkflow)
 
 		var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 		cloneTargetDirGoofString := (string)(cloneTargetDirGoof)
@@ -1024,13 +1019,6 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	assert.Equal(t, 0, len(issueList), "no issues expected, as delta and no new change")
-}
-
-func setSastEnabled(c *config.Config, b bool) {
-	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: b, LocalCodeEngine: sast_contract.LocalCodeEngine{
-		Enabled: false,
-	},
-	})
 }
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {

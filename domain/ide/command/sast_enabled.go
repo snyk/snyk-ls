@@ -18,8 +18,10 @@ package command
 
 import (
 	"context"
+	"errors"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -47,9 +49,14 @@ func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
 		return nil, nil
 	}
 
-	sastResponse, err := cmd.gafConfig.GetWithError(code_workflow.ConfigurationSastSettings)
+	response, err := cmd.gafConfig.GetWithError(code_workflow.ConfigurationSastSettings)
 	if err != nil {
 		return nil, err
+	}
+
+	sastResponse, ok := response.(*sast_contract.SastResponse)
+	if !ok {
+		return nil, errors.New("Failed to parse the sast settings")
 	}
 
 	return sastResponse, nil

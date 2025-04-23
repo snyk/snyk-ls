@@ -295,7 +295,7 @@ func initWorkFlowEngine(c *Config) {
 
 	err := initWorkflows(c)
 	if err != nil {
-		c.Logger().Warn().Err(err).Msg("unable to initialize additional workflows")
+		c.Logger().Err(err).Msg("unable to initialize additional workflows")
 	}
 
 	err = c.engine.Init()

@@ -264,10 +264,7 @@ func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 	snykCodeMock := &FakeSnykCodeClient{C: c}
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 
-	engineConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
-		Enabled: true,
-	},
-	})
+	engineConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
 
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 
@@ -578,11 +575,11 @@ func Test_Scan(t *testing.T) {
 		assert.Nil(t, params)
 	})
 	t.Run("should return an error if no sast settings are returned from the gaf api", func(t *testing.T) {
-		testutil.UnitTest(t)
+		c := testutil.UnitTest(t)
 		// Arrange
 		_, scanner := setupTestScanner(t)
 
-		config.CurrentConfig().Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings,
+		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings,
 			nil)
 
 		// Act
