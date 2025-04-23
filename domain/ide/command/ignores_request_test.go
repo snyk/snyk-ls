@@ -314,7 +314,7 @@ func Test_submitIgnoreRequest_createIgnoreRequest(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name:      "createTheCreateConfiguration fails",
+			name:      "initializeCreateConfiguration fails",
 			arguments: []any{"create", "issueId", "wont_fix", "reason", "expiration"},
 			mockEngineSetup: func(engine *MockEngine) {
 				engine.config = configuration.New()
@@ -368,7 +368,7 @@ func Test_submitIgnoreRequest_createIgnoreRequest(t *testing.T) {
 	}
 }
 
-func Test_submitIgnoreRequest_createTheCreateConfiguration(t *testing.T) {
+func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 	tests := []struct {
 		name           string
 		arguments      []any
@@ -412,7 +412,7 @@ func Test_submitIgnoreRequest_createTheCreateConfiguration(t *testing.T) {
 			}
 
 			gafConfig := configuration.New()
-			config, err := cmd.createTheCreateConfiguration(gafConfig, "finding123", types.FilePath("/test/content/root"))
+			config, err := cmd.initializeCreateConfiguration(gafConfig, "finding123", types.FilePath("/test/content/root"))
 
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
@@ -627,21 +627,19 @@ func Test_getStringArgument(t *testing.T) {
 
 func Test_createBaseConfiguration(t *testing.T) {
 	// Arrange
-	findingId := "testFindingId"
 	contentRoot := types.FilePath("/test/content/root")
 	gafConfig := configuration.New()
 
 	// Act
-	result := createBaseConfiguration(gafConfig, findingId, contentRoot)
+	result := initializeBaseConfiguration(gafConfig, contentRoot)
 
 	// Assert
-	assert.Equal(t, findingId, result.Get(ignore_workflow.FindingsIdKey))
 	assert.Equal(t, true, result.Get(ignore_workflow.EnrichResponseKey))
 	assert.Equal(t, false, result.Get(ignore_workflow.InteractiveKey))
 	assert.Equal(t, contentRoot, result.Get(configuration.INPUT_DIRECTORY))
 }
 
-func Test_addUpdateConfiguration(t *testing.T) {
+func Test_addCreateAndUpdateConfiguration(t *testing.T) {
 	// Arrange
 	ignoreType := "testIgnoreType"
 	reason := "testReason"
@@ -649,7 +647,7 @@ func Test_addUpdateConfiguration(t *testing.T) {
 	gafConfig := configuration.New()
 
 	// Act
-	result := addUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
+	result := addCreateAndUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
 
 	// Assert
 	assert.Equal(t, ignoreType, result.Get(ignore_workflow.IgnoreTypeKey))
