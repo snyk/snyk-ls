@@ -1,11 +1,12 @@
 package command
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"testing"
 
+	"github.com/creachadair/jrpc2"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -157,6 +158,134 @@ func NewMockIssue(id string, path types.FilePath) *snyk.Issue {
 	}
 }
 
+// TODO except for this MockIssueProvider, there are another two IssueProvider Mocks in the snyk-ls. Refactor to make fewer copies.
+// MockIssueProvider is a mock implementation of the snyk.IssueProvider interface for testing.
+type MockIssueProvider struct {
+	mock.Mock
+}
+
+func (m *MockIssueProvider) IssuesForFile(path types.FilePath) []types.Issue {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockIssueProvider) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockIssueProvider) Issues() snyk.IssuesByFile {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockIssueProvider) Issue(id string) types.Issue {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(types.Issue)
+}
+
+// MockServer is a mock implementation of the types.Server interface for testing.
+type MockServer struct {
+	mock.Mock
+}
+
+func (m *MockServer) Notify(ctx context.Context, method string, params any) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockServer) Callback(ctx context.Context, method string, params any) (*jrpc2.Response, error) {
+	args := m.Called(ctx, method, params)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*jrpc2.Response), args.Error(1)
+}
+
+func Test_submitIgnoreRequest_Execute(t *testing.T) {
+	tests := []struct {
+		name                string
+		arguments           []any
+		mockIssueProvider   func(provider *MockIssueProvider)
+		mockEngineSetup     func(engine *MockEngine)
+		mockServerSetup     func(server *MockServer)
+		expectedError       error
+		expectedIssueCalled bool
+	}{
+		{
+			name:                "Invalid issueId type",
+			arguments:           []any{"create", 123},
+			mockIssueProvider:   func(provider *MockIssueProvider) {},
+			mockEngineSetup:     func(engine *MockEngine) {},
+			mockServerSetup:     func(server *MockServer) {},
+			expectedError:       errors.New("issueId type should be a string"),
+			expectedIssueCalled: false,
+		},
+		{
+			name:      "Issue not found",
+			arguments: []any{"create", "issueId"},
+			mockIssueProvider: func(provider *MockIssueProvider) {
+				provider.On("Issue", "issueId").Return(nil)
+			},
+			mockEngineSetup:     func(engine *MockEngine) {},
+			mockServerSetup:     func(server *MockServer) {},
+			expectedError:       errors.New("issue not found"),
+			expectedIssueCalled: true,
+		},
+		{
+			name:      "Invalid workflow type argument",
+			arguments: []any{123, "issueId"},
+			mockIssueProvider: func(provider *MockIssueProvider) {
+			},
+			mockEngineSetup:     func(engine *MockEngine) {},
+			mockServerSetup:     func(server *MockServer) {},
+			expectedError:       errors.New("workflow type should be a string"),
+			expectedIssueCalled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			mockEngine := &MockEngine{}
+			mockIssueProvider := &MockIssueProvider{}
+			if tt.mockIssueProvider != nil {
+				tt.mockIssueProvider(mockIssueProvider)
+			}
+
+			if tt.mockEngineSetup != nil {
+				tt.mockEngineSetup(mockEngine)
+			}
+
+			mockServer := &MockServer{}
+			if tt.mockServerSetup != nil {
+				tt.mockServerSetup(mockServer)
+			}
+
+			cmd := &submitIgnoreRequest{
+				command:       types.CommandData{Arguments: tt.arguments},
+				issueProvider: mockIssueProvider,
+				srv:           mockServer,
+				c:             c,
+			}
+
+			_, err := cmd.Execute(context.Background())
+
+			if tt.expectedError != nil {
+				assert.EqualError(t, err, tt.expectedError.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+			mockIssueProvider.AssertExpectations(t)
+			mockEngine.AssertExpectations(t)
+			mockServer.AssertExpectations(t)
+		})
+	}
+}
+
 func Test_submitIgnoreRequest_createIgnoreRequest(t *testing.T) {
 	tests := []struct {
 		name                  string
@@ -225,8 +354,7 @@ func Test_submitIgnoreRequest_createIgnoreRequest(t *testing.T) {
 				tt.mockCreateConfigSetup(cmd)
 			}
 
-			var path = "path/"
-			filePath := types.FilePath(filepath.Join(path, "path1"))
+			filePath := types.FilePath("/test/content/root")
 			issue := NewMockIssue("id1", filePath)
 			err := cmd.createIgnoreRequest(mockEngine, "finding123", types.FilePath("/test/content/root"), issue)
 
