@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -150,6 +150,16 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	if err == nil && string(aiFixSerialized) != "null" {
 		aiFixResult = string(aiFixSerialized)
 	}
+
+	isPending := false
+	ignoreDetailsRow := []IgnoreDetail{}
+	ignoreReason := ""
+	if ignoreDetails := issue.GetIgnoreDetails(); ignoreDetails != nil {
+		isPending = ignoreDetails.Status == codeClientSarif.UnderReview
+		ignoreDetailsRow = prepareIgnoreDetailsRow(ignoreDetails)
+		ignoreReason = ignoreDetails.Reason
+	}
+
 	data := map[string]any{
 		"IssueTitle":         additionalData.Title,
 		"IssueMessage":       additionalData.Message,
@@ -158,6 +168,9 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"CWEs":               issue.GetCWEs(),
 		"IssueOverview":      html.MarkdownToHTML(additionalData.Text),
 		"IsIgnored":          issue.GetIsIgnored(),
+		"IsPending":          isPending,
+		"IgnoreDetails":      ignoreDetailsRow,
+		"IgnoreReason":       ignoreReason,
 		"IAWEnabled":         iawEnabled,
 		"DataFlow":           additionalData.DataFlow,
 		"DataFlowKeys":       dataFlowKeys,
@@ -192,12 +205,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"AutoTriggerAiFix":   autoTriggerAiFix,
 	}
 	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
-
-	if ignoreDetails := issue.GetIgnoreDetails(); ignoreDetails != nil {
-		data["IsPending"] = ignoreDetails.Status == codeClientSarif.UnderReview
-		data["IgnoreDetails"] = prepareIgnoreDetailsRow(issue.GetIgnoreDetails())
-		data["IgnoreReason"] = issue.GetIgnoreDetails().Reason
-	}
 
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {

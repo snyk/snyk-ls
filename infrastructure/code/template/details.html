@@ -401,7 +401,7 @@
     </div>
 
     <div class="sn-field mod-right-aligned">
-      <button id="ignore-form-submit" class="sn-button">Create ignore</button>
+      <button id="ignore-form-submit" class="sn-button">Submit ignore</button>
       <button id="ignore-form-cancel" class="sn-button mod-ghost">Cancel</button>
     </div>
   </div>
@@ -411,17 +411,18 @@
     {{.AiFixResult}}
   </div>
   <!-- Ignore In Line Actions -->
-  {{if not .IsIgnored}}
+  {{if and (not .IsIgnored) (not .IsPending)}}
   <footer class="ignore-action-container">
     <div id="ignore-actions">
+      {{if .IAWEnabled}}
+      <div id="ignore-cci-actions" class="actions row">
+        <button id="ignore-create" class="ignore-button secondary">Create ignore</button>
+      </div>
+      {{else}}
       <div id="ignore-legacy-actions" class="actions row hidden">
         <button id="ignore-line-issue" class="ignore-button secondary">Ignore on line <span
             id="action-ignore-line">{{.IgnoreLineAction}}</span></button>
         <button id="ignore-file-issue" class="ignore-button secondary">Ignore in this file</button>
-      </div>
-      {{if .IAWEnabled}}
-      <div id="ignore-cci-actions" class="actions row">
-        <button id="ignore-create" class="ignore-button secondary">Ignore this issue</button>
       </div>
       {{end}}
     </div>

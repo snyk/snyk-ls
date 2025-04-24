@@ -195,9 +195,12 @@ if (ignoreFormContainer !== null && ignoreFormContainer !== void 0) {
   ignoreFormSubmitButton.addEventListener('click', () => {
     var ignoreType = document.getElementById('ignore-form-type').value;
     var ignoreExpirationType = document.getElementById('ignore-form-expiration-type').value;
-    var ignoreExpirationDate = document.getElementById('ignore-form-expiration-date').value;
+    var ignoreExpirationDate = '';
+    if (ignoreExpirationType === 'custom-expiration-date') {
+      ignoreExpirationDate = document.getElementById('ignore-form-expiration-date').value;
+    }
     var ignoreReason = document.getElementById('ignore-form-ignore-reason').value;
-    ideSubmitIgnoreRequest(ignoreType, ignoreExpirationType, ignoreExpirationDate, ignoreReason);
+    ${ideSubmitIgnoreRequest}
   });
 
   // Hide the expiration date field when "Do not expire"
