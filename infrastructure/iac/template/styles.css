@@ -6,9 +6,10 @@
   --background-color: var(--vscode-editor-background);
   --text-color: var(--vscode-foreground);
   --link-color: var(--vscode-textLink-foreground);
-  --scroll-bar-hover-background-color: var(#595a5c);
+  --scroll-bar-hover-background-color: #595a5c;
   --code-background-color: var(--vscode-editor-background);
   --horizontal-border-color: var(--vscode-textPreformat-background);
+  --tab-active-background-color: var(--vscode-tab-activeBackground);
   font-size: 10px;
 }
 
@@ -22,7 +23,7 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var();
+  background: var(--scroll-bar-hover-background-color);
 }
 
 *,
@@ -55,20 +56,20 @@ h2, h3 {
   margin-block-start: 0;
   margin-block-end: 0.4rem;
   font-weight: 600;
-}
-
-section {
-  padding: 20px;
+  text-transform: uppercase;
 }
 
 .styled-link {
+  display: inline-block;
   text-decoration: none;
+  font-weight: 400;
 }
 
 .styled-link:hover {
   cursor: pointer;
   text-decoration: underline;
 }
+
 .font-light {
   font-weight: bold;
 }
@@ -81,9 +82,6 @@ a,
 .delimiter-top {
   border-top: 1px solid var(--horizontal-border-color);
 }
-h2, h3{
-  text-transform: uppercase;
-}
 
 code {
   color: var(--text-color);
@@ -95,13 +93,6 @@ code {
 section {
   padding: 20px;
 }
-
-.styled-link {
-  display: inline-block;
-  text-decoration: none;
-  font-weight: 400;
-}
-
 
 .suggestion {
   position: relative;
@@ -179,13 +170,13 @@ div.remediation p {
 }
 
 header {
-  padding: 0px 20px 5px 20px;
+  padding: 0 20px 5px 20px;
 }
 
 .sn-issue-header {
   display: flex;
   flex-direction: column;
-  background-image: linear-gradient(0, transparent, var(--vscode-tab-activeBackground));
+  background-image: linear-gradient(0, transparent, var(--tab-active-background-color));
   margin: inherit;
   padding: 20px;
 }
@@ -224,7 +215,7 @@ header {
 }
 
 footer {
-  padding: 0px 20px 5px 20px;
+  padding: 0 20px 5px 20px;
 }
 
 #ignore-actions {

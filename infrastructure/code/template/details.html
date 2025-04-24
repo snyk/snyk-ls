@@ -44,7 +44,7 @@
       <svg class="sn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M1.25199 12.9165C0.663992 14.0677 1.13999 15 2.31599 15H13.684C14.86 15 15.336 14.0758 14.748 12.9165L9.071 1.86645C8.476 0.71524 7.524 0.707133 6.929 1.86645L1.25899 12.9165H1.25199ZM9 13H7V11H9V13ZM9 10H7V6H9V10Z" fill="currentColor"/>
       </svg>
-        
+
       <span>
         <strong>Ignored.</strong> This issue is currently ignored.
       </span>
@@ -360,50 +360,58 @@
     </article>
   </main>
 
-  <div class="sn-ignore-issue-container">
+  {{if and (.IAWEnabled) (not .IsIgnored)}}
+  <div id="ignore-form-container" class="sn-ignore-issue-container hidden">
     <h2 class="sn-ignore-title">Ignore this issue</h2>
     <p class="sn-ignore-description">This ignore will reflect once it has been approved.</p>
 
     <div class="sn-field">
       <div class="sn-label">Ignore type</div>
-      <select class="sn-select" id="ignore-type">
-        <option value="ignore">Not vulnerable (False positive)</option>
-        <option value="false-positive">Won't fix</option>
+      <select class="sn-select" id="ignore-form-type">
+        <option value="not-vulnerable">Not vulnerable</option>
+        <option value="wont-fix">Won't fix</option>
+        <option value="temporary-ignore">Temporary ignore</option>
       </select>
     </div>
 
     <div class="sn-field">
       <div class="sn-label">Expiration</div>
-      <select class="sn-select" id="expiration">
-        <option value="ignore">Do not expire</option>
-        <option value="false-positive">Custom expiration date</option>
+      <select class="sn-select" id="ignore-form-expiration-type">
+        <option value="do-not-expire">Do not expire</option>
+        <option value="custom-expiration-date">Custom expiration date</option>
       </select>
-      <input class="sn-input" id="expiration-date" type="date" value="{{.ExpirationDate}}">
+      <input class="sn-input hidden" id="ignore-form-expiration-date" type="date" value="{{.ExpirationDate}}">
     </div>
 
     <div class="sn-field">
       <div class="sn-label">Ignore reason</div>
-      <textarea class="sn-textarea" id="ignore-reason" rows="4" placeholder="Please provide a reason for ignoring this issue"></textarea>
+      <textarea class="sn-textarea" id="ignore-form-ignore-reason" rows="4" placeholder="Please provide a reason for ignoring this issue"></textarea>
     </div>
 
     <div class="sn-field mod-right-aligned">
-      <button class="sn-button">Create ignore</button>
-      <button class="sn-button mod-ghost">Cancel</button>
+      <button id="ignore-form-submit" class="sn-button">Create ignore</button>
+      <button id="ignore-form-cancel" class="sn-button mod-ghost">Cancel</button>
     </div>
   </div>
+  {{end}}
 
   <div id="suggestionDiv" class="hidden">
     {{.AiFixResult}}
   </div>
   <!-- Ignore In Line Actions -->
   {{if not .IsIgnored}}
-  <footer class="ignore-action-container hidden">
+  <footer class="ignore-action-container">
     <div id="ignore-actions">
-      <div class="actions row">
+      <div id="ignore-legacy-actions" class="actions row hidden">
         <button id="ignore-line-issue" class="ignore-button secondary">Ignore on line <span
             id="action-ignore-line">{{.IgnoreLineAction}}</span></button>
         <button id="ignore-file-issue" class="ignore-button secondary">Ignore in this file</button>
       </div>
+      {{if .IAWEnabled}}
+      <div id="ignore-cci-actions" class="actions row">
+        <button id="ignore-create" class="ignore-button secondary">Ignore this issue</button>
+      </div>
+      {{end}}
     </div>
   </footer>
   {{end}}
@@ -556,7 +564,7 @@
       generateAIFix();
     }, 500);
     {{end}}
-</script>
+  </script>
   <!-- Custom IDE specific scripts  -->
   <script nonce="{{.Nonce}}">
     ${ideScript}
