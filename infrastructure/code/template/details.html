@@ -228,7 +228,7 @@
 
               <div class="sn-fix-wrapper">
                 <button id="generate-ai-fix" folder-path="{{.FolderPath}}" file-path="{{.FilePath}}"
-                  issue-id="{{.IssueId}}" class="generate-ai-fix {{if eq .AiFixDiffStatus "NOT_STARTED"}} show {{else}} hidden {{end}}">✨ Generate AI fix</button>
+                  class="generate-ai-fix {{if eq .AiFixDiffStatus "NOT_STARTED"}} show {{else}} hidden {{end}}">✨ Generate AI fix</button>
                 <div id="fix-loading-indicator" class="sn-loading {{if eq .AiFixDiffStatus "IN_PROGRESS"}} show {{else}} hidden {{end}}">
                   <div class="sn-loading-icon">
                     {{.ScanAnimation}}
@@ -569,6 +569,7 @@
   <!-- Embedded script from LS  -->
   <script nonce="{{.Nonce}}">
     var suggestion = JSON.parse("{{.AiFixResult}}" || "[]")
+    var issueId = "{{.IssueId}}"
     {{.Scripts}}
     // some IDEs take longer to inject their handler functions
     // TODO: Should we add an event listener when the IDE functions are loaded?

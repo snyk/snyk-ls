@@ -27,7 +27,6 @@ function generateAIFix() {
   if (!suggestion) return;
   toggleElement(generateAIFixButton, 'hide');
   toggleElement(fixLoadingIndicatorElem, 'show');
-  var issueId = generateAIFixButton.getAttribute('issue-id');
   var folderPath = generateAIFixButton.getAttribute('folder-path');
   var filePath = generateAIFixButton.getAttribute('file-path');
   var generateFixQueryString = folderPath + '@|@' + filePath + '@|@' + issueId;
