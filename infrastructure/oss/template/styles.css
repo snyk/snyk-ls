@@ -4,10 +4,8 @@
   --border-color: var(--vscode-input-border);
   --text-color: var(--vscode-foreground);
   --link-color: var(--vscode-textLink-foreground);
-  --scroll-bar-hover-background-color: var(#595a5c);
+  --scroll-bar-hover-background-color: #595a5c;
   --horizontal-border-color: var(--vscode-textPreformat-background);
-  --code-background-color: var();
-  --tab-is-selected-color : var();
   --container-background-color: var(--vscode-editor-background);
   --editor-font-family: var(--vscode-editor-font-family);
   --tab-active-background-color: var(--vscode-tab-activeBackground);
@@ -24,7 +22,7 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-color);
+  background: var(--scroll-bar-hover-background-color);
 }
 
 body {
@@ -56,7 +54,7 @@ pre code {
 code {
   padding: 2px 4px;
   font-family: monospace;
-  color: var(--dimmed-text-color);
+  color: var(--dimmed-text-color); /* TODO - This is overridden by a `code` block below, pick one. */
 }
 
 table {
@@ -214,11 +212,6 @@ p + h2, p + h3 {
   height: auto;
   transition-duration: 500ms;
   transition-property: height, opacity;
-}
-
-.is-external-icon {
-  margin-bottom: 8px;
-  margin-left: 4px;
 }
 
 code{
