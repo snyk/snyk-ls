@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
@@ -192,7 +193,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	}
 	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
 
-	if issue.GetIsIgnored() {
+	if ignoreDetails := issue.GetIgnoreDetails(); ignoreDetails != nil {
+		data["IsPending"] = ignoreDetails.Status == codeClientSarif.UnderReview
 		data["IgnoreDetails"] = prepareIgnoreDetailsRow(issue.GetIgnoreDetails())
 		data["IgnoreReason"] = issue.GetIgnoreDetails().Reason
 	}
@@ -218,6 +220,7 @@ func prepareIgnoreDetailsRow(ignoreDetails *types.IgnoreDetails) []IgnoreDetail 
 		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Ignored By", ignoreDetails.IgnoredBy},
 		{"Reason", ignoreDetails.Reason},
+		{"Status", string(ignoreDetails.Status)},
 	}
 }
 
