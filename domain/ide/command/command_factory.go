@@ -88,6 +88,8 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 		return &clearCache{command: commandData, c: c}, nil
 	case types.GenerateIssueDescriptionCommand:
 		return &generateIssueDescription{command: commandData, issueProvider: issueProvider}, nil
+	case types.SubmitIgnoreRequest:
+		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, c: c}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)
