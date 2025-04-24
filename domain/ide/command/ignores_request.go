@@ -253,13 +253,13 @@ func addCreateAndUpdateConfiguration(gafConfig configuration.Configuration, igno
 	return gafConfig
 }
 
-func updateIssueWithIgnoreDetails(c *config.Config, output []byte, issue types.Issue) error {
+func updateIssueWithIgnoreDetails(output []byte, issue types.Issue) error {
 	var suppression sarif.Suppression
 	err := json.Unmarshal(output, &suppression)
 	if err != nil {
 		return err
 	}
-	isIgnored, ignoreDetails := code.GetIgnoreDetailsFromSuppressions(c, []sarif.Suppression{suppression})
+	isIgnored, ignoreDetails := code.GetIgnoreDetailsFromSuppressions([]sarif.Suppression{suppression})
 
 	issue.SetIgnored(isIgnored)
 	issue.SetIgnoreDetails(ignoreDetails)
@@ -281,7 +281,7 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 		return fmt.Errorf("invalid response from ignore workflow")
 	}
 
-	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
+	err = updateIssueWithIgnoreDetails(output, issue)
 	if err != nil {
 		return err
 	}

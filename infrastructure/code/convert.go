@@ -32,6 +32,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -420,7 +421,7 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 			}
 			d.SetFingerPrint(result.Fingerprints.Num1)
 			d.SetGlobalIdentity(result.Fingerprints.Identity)
-			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(s.c, result.Suppressions)
+			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(result.Suppressions)
 			d.IsIgnored = isIgnored
 			d.IgnoreDetails = ignoreDetails
 			d.AdditionalData = additionalData
@@ -431,21 +432,10 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 	return issues, errs
 }
 
-func GetIgnoreDetailsFromSuppressions(c *config.Config, suppressions []codeClientSarif.Suppression) (bool, *types.IgnoreDetails) {
-	logger := c.Logger().With().Str("method", "GetIgnoreDetailsFromSuppressions").Logger()
-	isIgnored := false
-	var ignoreDetails *types.IgnoreDetails
-	// this can be an array of multiple suppressions in SARIF,
-	// but we only store one ignore for now
-	if len(suppressions) > 0 {
-		if len(suppressions) > 1 {
-			logger.Warn().Int("number of SARIF suppressions", len(suppressions)).Msg(
-				"there are more suppressions than expected")
-		}
-		isIgnored = true
-		//todo Fix the ignore logic, once the API delivers the suppression including the approval status, the ignore would be dependent on that status.
-		ignoreDetails = sarifSuppressionToIgnoreDetails(&suppressions[0])
-	}
+func GetIgnoreDetailsFromSuppressions(suppressions []codeClientSarif.Suppression) (bool, *types.IgnoreDetails) {
+	suppression, suppressionStatus := sarif_utils.GetHighestSuppression(suppressions)
+	isIgnored := suppressionStatus == codeClientSarif.Accepted
+	ignoreDetails := sarifSuppressionToIgnoreDetails(suppression)
 	return isIgnored, ignoreDetails
 }
 

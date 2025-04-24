@@ -44,9 +44,20 @@
       <svg class="sn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M1.25199 12.9165C0.663992 14.0677 1.13999 15 2.31599 15H13.684C14.86 15 15.336 14.0758 14.748 12.9165L9.071 1.86645C8.476 0.71524 7.524 0.707133 6.929 1.86645L1.25899 12.9165H1.25199ZM9 13H7V11H9V13ZM9 10H7V6H9V10Z" fill="currentColor"/>
       </svg>
-        
+
       <span>
         <strong>Ignored.</strong> This issue is currently ignored.
+      </span>
+    </div>
+    {{end}}
+    {{if .IsPending}}
+    <div class="sn-status-message mod-warning">
+      <svg class="sn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M1.25199 12.9165C0.663992 14.0677 1.13999 15 2.31599 15H13.684C14.86 15 15.336 14.0758 14.748 12.9165L9.071 1.86645C8.476 0.71524 7.524 0.707133 6.929 1.86645L1.25899 12.9165H1.25199ZM9 13H7V11H9V13ZM9 10H7V6H9V10Z" fill="currentColor"/>
+      </svg>
+
+      <span>
+        This issue will be ignored once the request is approved.
       </span>
     </div>
     {{end}}
@@ -89,13 +100,14 @@
     <!-- Tabs Issue Overview Container -->
     <article class="code-issue-panel">
       <div class="main-tabs-nav">
-        {{if .IsIgnored}}
+        {{if or .IsIgnored .IsPending}}
         <span data-tab="ignore-details" id="ignore-details-tab" class="tab-item is-selected ignore-details-tab">
           Ignore Details
         </span>
-        {{else}}
+        {{end}}
+        {{if not .IsIgnored}}
         <span data-tab="fix-analysis" id="fix-analysis-tab"
-          class="tab-item is-selected sn-fix-analysis fix-analysis-tab">
+          class="tab-item {{if not .IsPending}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
           Fix Analysis
         </span>
         {{if gt (len .DataFlow) 0}}
@@ -113,7 +125,7 @@
 
       <!-- Dynamic Content Sections -->
       <div class="tab-container">
-        {{if .IsIgnored}}
+        {{if or .IsIgnored .IsPending}}
         <!-- Start Ignore Details section for tab id="ignore-details-tab" -->
         <div data-content="ignore-details" id="ignore-details-content" class="tab-content main-tab-content is-selected">
           <div class="ignore-details delimiter-top">
@@ -136,7 +148,7 @@
 
         <!-- Start Fix Analysis section for tab id="fix-analysis-tab" -->
         <div data-content="fix-analysis" id="fix-analysis-content"
-          class="tab-content main-tab-content {{if not .IsIgnored}}is-selected{{end}}">
+          class="tab-content main-tab-content {{if and (not .IsIgnored) (not .IsPending)}}is-selected{{end}}">
           <section id="suggestion-info" class="delimiter-top">
             <div id="description" class="suggestion-text">{{.IssueMessage}}</div>
             <div class="suggestion-links">

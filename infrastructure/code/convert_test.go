@@ -946,7 +946,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(config.CurrentConfig(), r.Suppressions)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(r.Suppressions)
 		assert.False(t, isIgnored)
 		assert.Nil(t, ignoreDetails)
 	})
@@ -975,7 +975,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(config.CurrentConfig(), r.Suppressions)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(r.Suppressions)
 		assert.True(t, isIgnored)
 		assert.NotNil(t, ignoreDetails)
 		assert.Equal(t, "reason", ignoreDetails.Reason)
@@ -1008,7 +1008,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(config.CurrentConfig(), r.Suppressions)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(r.Suppressions)
 		assert.True(t, isIgnored)
 		assert.NotNil(t, ignoreDetails)
 		assert.Equal(t, "None given", ignoreDetails.Reason)
