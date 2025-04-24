@@ -395,7 +395,7 @@ func updateProductEnablement(c *config.Config, settings types.Settings) {
 	}
 }
 
-func updateIssueViewOptions(c *config.Config, s types.IssueViewOptions) {
+func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions) {
 	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options:")
 	modified := c.SetIssueViewOptions(s)
 
@@ -404,7 +404,7 @@ func updateIssueViewOptions(c *config.Config, s types.IssueViewOptions) {
 	}
 }
 
-func updateSeverityFilter(c *config.Config, s types.SeverityFilter) {
+func updateSeverityFilter(c *config.Config, s *types.SeverityFilter) {
 	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter:")
 	modified := c.SetSeverityFilter(s)
 

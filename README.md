@@ -338,7 +338,7 @@ Right now the language server supports the following actions:
 - `SettingsSastEnabled` triggers the api call to check if Snyk Code is enabled
   - command: `snyk.getSettingsSastEnabled`
   - args: empty
-  - returns `true` if enabled, `false` if not, or an error and false if an error occurred
+  - returns a `*sast_contract.SastResponse` or, or an error and false if an error occurred
 - `GetActiveUser` triggers the api call to get the active logged in user or an error if not logged in
   - command: `snyk.getActiveUser`
   - args: empty
@@ -492,13 +492,13 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "integrationVersion": "1.0.0", // The version of the IDE or editor the LS is running in
   "automaticAuthentication": "true", // Whether LS will automatically authenticate on scan start (default: true)
   "deviceId": "a UUID", // A unique ID from the running the LS, used for telemetry
-  "filterSeverity": { // Filters to be applied for the determined issues
+  "filterSeverity": { // Optional filter to be applied for the determined issues (if omitted: no filtering)
     "critical": true,
     "high": true,
     "medium": true,
     "low": true,
   },
-  "issueViewOptions": { // Another filter to be applied for the determined issues
+  "issueViewOptions": { // Optional filter to be applied for the determined issues (if omitted: no filtering)
     "openIssues": true,
     "ignoredIssues": false,
   },

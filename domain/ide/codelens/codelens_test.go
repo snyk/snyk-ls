@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
@@ -46,7 +48,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	c := testutil.IntegTest(t)
 	di.TestInit(t) // IntegTest doesn't automatically inits DI
 	testutil.OnlyEnableCode()
-
+	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
 	// this is using the real progress channel, so we need to listen to it
 	dummyProgressListeners(t)
 

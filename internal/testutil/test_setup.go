@@ -22,9 +22,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/constants"
@@ -58,6 +63,10 @@ func UnitTest(t *testing.T) *config.Config {
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t)
+	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
+		Enabled: false,
+	},
+	})
 	t.Cleanup(func() {
 		cleanupFakeCliFile(c)
 		progress.CleanupChannels()
@@ -124,7 +133,7 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 	c.SetAuthenticationMethod(types.TokenAuthentication)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
-	c.SetIssueViewOptions(types.IssueViewOptions{OpenIssues: true, IgnoredIssues: true})
+	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, true)))
 	setMCPServerURL(t, c)
 	redirectConfigAndDataHome(t, c)
 

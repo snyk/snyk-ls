@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -78,8 +80,8 @@ func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenS
 		InitializationOptions: types.Settings{
 			Token:                       tokenString,
 			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              types.DefaultSeverityFilter(),
-			IssueViewOptions:            types.DefaultIssueViewOptions(),
+			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
 			AuthenticationMethod:        types.OAuthAuthentication,
 			AutomaticAuthentication:     "false",
 		},

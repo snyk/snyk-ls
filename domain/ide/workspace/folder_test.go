@@ -201,7 +201,7 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	c := testutil.UnitTest(t)
 
 	severityFilter := types.NewSeverityFilter(true, false, true, false)
-	config.CurrentConfig().SetSeverityFilter(severityFilter)
+	config.CurrentConfig().SetSeverityFilter(&severityFilter)
 
 	f := NewMockFolder(c, notification.NewNotifier())
 
@@ -251,7 +251,7 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 	c := testutil.UnitTest(t)
 
 	issueViewOptions := types.NewIssueViewOptions(false, true)
-	config.CurrentConfig().SetIssueViewOptions(issueViewOptions)
+	config.CurrentConfig().SetIssueViewOptions(&issueViewOptions)
 
 	f := NewMockFolder(c, notification.NewNotifier())
 
@@ -266,8 +266,14 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 			NewMockIssueWithIgnored("id5", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
 		},
 		UpdateGlobalCache: true,
-		SendAnalytics:     true,
+		SendAnalytics:     false,
 	}
+
+	ctrl := gomock.NewController(t)
+	mockConfiguration := mocks.NewMockConfiguration(ctrl)
+	config.CurrentConfig().Engine().SetConfiguration(mockConfiguration)
+	mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true)
+
 	f.ProcessResults(context.Background(), data)
 
 	mtx := &sync.Mutex{}
@@ -435,7 +441,7 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
 	ctx := context.Background()
 
-	c.SetSeverityFilter(types.NewSeverityFilter(true, true, false, false))
+	c.SetSeverityFilter(util.Ptr(types.NewSeverityFilter(true, true, false, false)))
 
 	// act
 	f.ScanFile(ctx, filePath)
@@ -479,6 +485,7 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 	}
 
 	scannerRecorder := scanner.NewTestScanner()
+	scannerRecorder.SendAnalytics = false
 	scannerRecorder.Issues = []types.Issue{
 		openIssue1,
 		openIssue2,
@@ -489,8 +496,12 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
 	ctx := context.Background()
 
-	c.SetSeverityFilter(types.NewSeverityFilter(true, true, false, false))
-	c.SetIssueViewOptions(types.NewIssueViewOptions(true, false))
+	ctrl := gomock.NewController(t)
+	mockConfiguration := mocks.NewMockConfiguration(ctrl)
+	c.Engine().SetConfiguration(mockConfiguration)
+	mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true).Times(2) // twice, since we filter in the scan then again to check, since we're too lazy to mock.
+
+	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, false)))
 
 	// act
 	f.ScanFile(ctx, filePath)
