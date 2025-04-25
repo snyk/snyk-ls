@@ -638,7 +638,7 @@ func Test_createBaseConfiguration(t *testing.T) {
 	// Assert
 	assert.Equal(t, true, result.Get(ignore_workflow.EnrichResponseKey))
 	assert.Equal(t, false, result.Get(ignore_workflow.InteractiveKey))
-	assert.Equal(t, contentRoot, result.Get(configuration.INPUT_DIRECTORY))
+	assert.Equal(t, string(contentRoot), result.Get(configuration.INPUT_DIRECTORY))
 }
 
 func Test_addCreateAndUpdateConfiguration(t *testing.T) {
