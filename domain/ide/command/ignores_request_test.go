@@ -384,7 +384,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 				ignore_workflow.FindingsIdKey:     "finding123",
 				ignore_workflow.EnrichResponseKey: true,
 				ignore_workflow.InteractiveKey:    false,
-				configuration.INPUT_DIRECTORY:     types.FilePath("/test/content/root"),
+				configuration.INPUT_DIRECTORY:     "/test/content/root",
 				ignore_workflow.IgnoreTypeKey:     "wont_fix",
 				ignore_workflow.ReasonKey:         "reason",
 				ignore_workflow.ExpirationKey:     "expiration",
