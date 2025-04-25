@@ -20,10 +20,12 @@ import (
 	"context"
 	"path/filepath"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/creachadair/jrpc2"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
@@ -32,10 +34,12 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func TestCreateProgressListener(t *testing.T) {
 	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
 	progressChannel := make(chan types.ProgressParams, 1)
 	progressNotification := types.ProgressParams{
 		Token: "token",
@@ -49,13 +53,30 @@ func TestCreateProgressListener(t *testing.T) {
 	}
 	progressChannel <- progressNotification
 
-	server := types.ServerImplMock{}
+	server := mock_types.NewMockServer(ctrl)
 
-	go createProgressListener(progressChannel, &server, c.Logger())
-	defer func() { types.Notified.Set(false) }()
+	var called atomic.Bool
+
+	server.EXPECT().
+		Callback(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, s string, v any) (*jrpc2.Response, error) {
+			called.Store(true)
+			return nil, nil
+		}).
+		Times(1)
+
+	server.EXPECT().
+		Notify(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, s string, v any) (*jrpc2.Response, error) {
+			called.Store(true)
+			return nil, nil
+		}).
+		Times(1)
+
+	go createProgressListener(progressChannel, server, c.Logger())
 
 	assert.Eventually(t, func() bool {
-		return types.Notified.Get()
+		return called.Load()
 	}, 2*time.Second, 10*time.Millisecond)
 
 	disposeProgressListener()
