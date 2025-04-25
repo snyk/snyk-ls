@@ -242,7 +242,7 @@ func getStringArgument(cmd *submitIgnoreRequest, index int, argName string) (str
 func initializeBaseConfiguration(gafConfig configuration.Configuration, contentRoot types.FilePath) configuration.Configuration {
 	gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
 	gafConfig.Set(ignore_workflow.InteractiveKey, false)
-	gafConfig.Set(configuration.INPUT_DIRECTORY, contentRoot)
+	gafConfig.Set(configuration.INPUT_DIRECTORY, string(contentRoot))
 	return gafConfig
 }
 
