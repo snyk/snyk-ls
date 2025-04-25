@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package server
+package types
 
 import (
 	"context"
@@ -24,15 +24,17 @@ import (
 	"github.com/snyk/snyk-ls/internal/concurrency"
 )
 
+var _ Server = (*ServerImplMock)(nil)
+
 type ServerImplMock struct{}
 
-var notified = concurrency.AtomicBool{}
+var Notified = concurrency.AtomicBool{}
 
-func (b *ServerImplMock) Callback(_ context.Context, _ string, _ any) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
-	notified.Set(true)
+func (b *ServerImplMock) Callback(_ context.Context, _ string, _ any) (*jrpc2.Response, error) {
+	Notified.Set(true)
 	return nil, nil
 }
 func (b *ServerImplMock) Notify(_ context.Context, _ string, _ any) error {
-	notified.Set(true)
+	Notified.Set(true)
 	return nil
 }

@@ -36,30 +36,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-type mockIssuesProvider struct {
-	mock.Mock
-}
-
-func (m *mockIssuesProvider) Issues() snyk.IssuesByFile {
-	args := m.Called()
-	return args.Get(0).(map[types.FilePath][]types.Issue)
-}
-
-func (m *mockIssuesProvider) IssuesForFile(path types.FilePath) []types.Issue {
-	args := m.Called(path)
-	return args.Get(0).([]types.Issue)
-}
-
-func (m *mockIssuesProvider) Issue(key string) types.Issue {
-	additionalData := snyk.CodeIssueData{Key: key}
-	return &snyk.Issue{ID: "mockIssue", AdditionalData: additionalData}
-}
-
-func (m *mockIssuesProvider) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
-	args := m.Called(path, r)
-	return args.Get(0).([]types.Issue)
-}
-
 var exampleRange = sglsp.Range{
 	Start: sglsp.Position{
 		Line:      10,
@@ -120,7 +96,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	// Arrange
 
 	var issues []types.Issue
-	providerMock := new(mockIssuesProvider)
+	providerMock := new(snyk.IssueProviderMock)
 	providerMock.On("IssuesForRange", mock.Anything, mock.Anything).Return(issues)
 	fakeClient := &code.FakeSnykCodeClient{C: c}
 	snykCodeClient := fakeClient
@@ -237,7 +213,7 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsCodeAction(t *testing.T) {
 
 func setupService(t *testing.T) *codeaction.CodeActionsService {
 	t.Helper()
-	providerMock := new(mockIssuesProvider)
+	providerMock := new(snyk.IssueProviderMock)
 	providerMock.On("IssuesForRange", mock.Anything, mock.Anything).Return([]types.Issue{})
 	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
 	snykCodeClient := fakeClient
@@ -250,7 +226,7 @@ func setupWithSingleIssue(t *testing.T, issue types.Issue) (*codeaction.CodeActi
 	r := exampleRange
 	uriPath := documentUriExample
 	path := uri.PathFromUri(uriPath)
-	providerMock := new(mockIssuesProvider)
+	providerMock := new(snyk.IssueProviderMock)
 	issues := []types.Issue{issue}
 	providerMock.On("IssuesForRange", path, converter.FromRange(r)).Return(issues)
 	fileWatcher := watcher.NewFileWatcher()

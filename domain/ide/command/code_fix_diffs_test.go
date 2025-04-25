@@ -21,7 +21,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/creachadair/jrpc2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -32,36 +31,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
-
-func Test_codeFixDiffs_Command(t *testing.T) {
-
-}
-
-type mockIssueProvider struct {
-}
-type ServerImplMock struct{}
-
-func (b *ServerImplMock) Callback(_ context.Context, _ string, _ any) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
-	return nil, nil
-}
-func (b *ServerImplMock) Notify(_ context.Context, _ string, _ any) error {
-	return nil
-}
-
-func (m mockIssueProvider) Issues() snyk.IssuesByFile {
-	panic("this should not be called")
-}
-
-func (m mockIssueProvider) IssuesForFile(path types.FilePath) []types.Issue {
-	panic("this should not be called")
-}
-
-func (m mockIssueProvider) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
-	panic("this should not be called")
-}
-func (m mockIssueProvider) Issue(key string) types.Issue {
-	return &snyk.Issue{ID: key}
-}
 
 func Test_codeFixDiffs_Execute(t *testing.T) {
 	c := testutil.UnitTest(t)
@@ -84,7 +53,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		notifier:    notification.NewMockNotifier(),
 		codeScanner: codeScanner,
 		c:           c,
-		srv:         &ServerImplMock{},
+		srv:         &types.ServerImplMock{},
 	}
 	if runtime.GOOS == "windows" {
 		codeScanner.AddBundleHash("\\folderPath", "bundleHash")
@@ -92,7 +61,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		codeScanner.AddBundleHash("/folderPath", "bundleHash")
 	}
 	t.Run("happy path", func(t *testing.T) {
-		cut.issueProvider = mockIssueProvider{}
+		cut.issueProvider = &snyk.IssueProviderMock{}
 
 		cut.command = types.CommandData{
 			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
@@ -107,7 +76,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	})
 
 	t.Run("unhappy - file not beneath folder", func(t *testing.T) {
-		cut.issueProvider = mockIssueProvider{}
+		cut.issueProvider = &snyk.IssueProviderMock{}
 		cut.command = types.CommandData{
 			Arguments: []any{"file:///folderPath", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -119,7 +88,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	})
 
 	t.Run("unhappy - folder empty", func(t *testing.T) {
-		cut.issueProvider = mockIssueProvider{}
+		cut.issueProvider = &snyk.IssueProviderMock{}
 		cut.command = types.CommandData{
 			Arguments: []any{"", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -131,7 +100,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	})
 
 	t.Run("unhappy - file empty", func(t *testing.T) {
-		cut.issueProvider = mockIssueProvider{}
+		cut.issueProvider = &snyk.IssueProviderMock{}
 		cut.command = types.CommandData{
 			Arguments: []any{"file://folder", "", "issueId"},
 		}

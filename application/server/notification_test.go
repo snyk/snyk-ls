@@ -49,13 +49,13 @@ func TestCreateProgressListener(t *testing.T) {
 	}
 	progressChannel <- progressNotification
 
-	server := ServerImplMock{}
+	server := types.ServerImplMock{}
 
 	go createProgressListener(progressChannel, &server, c.Logger())
-	defer func() { notified.Set(false) }()
+	defer func() { types.Notified.Set(false) }()
 
 	assert.Eventually(t, func() bool {
-		return notified.Get()
+		return types.Notified.Get()
 	}, 2*time.Second, 10*time.Millisecond)
 
 	disposeProgressListener()
