@@ -26,19 +26,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/mock"
+	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	mock2 "github.com/snyk/snyk-ls/internal/types/mock"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func Test_codeFixDiffs_Execute(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	server := mock2.NewMockServer(ctrl)
+	server := mock_types.NewMockServer(ctrl)
 	server.EXPECT().Callback(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	instrumentor := code.NewCodeInstrumentor()
 	snykCodeClient := &code.FakeSnykCodeClient{
@@ -67,7 +67,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		codeScanner.AddBundleHash("/folderPath", "bundleHash")
 	}
 	t.Run("happy path", func(t *testing.T) {
-		issueProvider := mock.NewMockIssueProvider(ctrl)
+		issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
 		issue := snyk.Issue{
 			ID: uuid.NewString(),
 		}
@@ -86,7 +86,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	})
 
 	t.Run("unhappy - file not beneath folder", func(t *testing.T) {
-		cut.issueProvider = mock.NewMockIssueProvider(ctrl)
+		cut.issueProvider = mock_snyk.NewMockIssueProvider(ctrl)
 		cut.command = types.CommandData{
 			Arguments: []any{"file:///folderPath", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -98,7 +98,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	})
 
 	t.Run("unhappy - folder empty", func(t *testing.T) {
-		cut.issueProvider = mock.NewMockIssueProvider(ctrl)
+		cut.issueProvider = mock_snyk.NewMockIssueProvider(ctrl)
 		cut.command = types.CommandData{
 			Arguments: []any{"", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -110,7 +110,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	})
 
 	t.Run("unhappy - file empty", func(t *testing.T) {
-		cut.issueProvider = mock.NewMockIssueProvider(ctrl)
+		cut.issueProvider = mock_snyk.NewMockIssueProvider(ctrl)
 		cut.command = types.CommandData{
 			Arguments: []any{"file://folder", "", "issueId"},
 		}

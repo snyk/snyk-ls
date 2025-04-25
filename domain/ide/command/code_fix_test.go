@@ -28,7 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/mock"
+	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -139,7 +139,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 		path: issues,
 	}
 
-	issueProviderMock := mock.NewMockCacheProvider(ctrl)
+	issueProviderMock := mock_snyk.NewMockCacheProvider(ctrl)
 	issueProviderMock.EXPECT().Issues().Return(issueMap)
 	cmd.issueProvider = issueProviderMock
 
@@ -183,7 +183,7 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 		path: issues,
 	}
 
-	issueProviderMock := mock.NewMockIssueProvider(ctrl)
+	issueProviderMock := mock_snyk.NewMockIssueProvider(ctrl)
 	issueProviderMock.EXPECT().Issues().Return(issueMap)
 	cmd.issueProvider = issueProviderMock
 
@@ -209,7 +209,7 @@ func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
 
-	issueProviderMock := mock.NewMockIssueProvider(ctrl)
+	issueProviderMock := mock_snyk.NewMockIssueProvider(ctrl)
 	issueProviderMock.EXPECT().Issues().Return(snyk.IssuesByFile{})
 
 	cmd.issueProvider = issueProviderMock

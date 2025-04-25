@@ -38,7 +38,7 @@ import (
  * limitations under the License.
  */
 
-//go:generate $GOPATH/bin/mockgen -source=server.go -destination mock/server_mock.go -package mock -self_package github.com/snyk/snyk-ls/internal/types/mock
+//go:generate $GOPATH/bin/mockgen -source=server.go -destination mock_types/server_mock.go -package mock_types -self_package github.com/snyk/snyk-ls/internal/types/mock
 
 type Server interface {
 	Notify(ctx context.Context, method string, params any) error

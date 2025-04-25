@@ -11,31 +11,31 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/snyk/mock"
+	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	mock2 "github.com/snyk/snyk-ls/internal/types/mock"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func Test_submitIgnoreRequest_Execute(t *testing.T) {
 	tests := []struct {
 		name                         string
 		arguments                    []any
-		mockIssueProviderExpectation func(issueProvider *mock.MockIssueProvider)
+		mockIssueProviderExpectation func(issueProvider *mock_snyk.MockIssueProvider)
 		expectedError                error
 		expectedIssueCalled          bool
 	}{
 		{
 			name:                         "Invalid issueId type",
 			arguments:                    []any{"create", 123},
-			mockIssueProviderExpectation: func(issueProvider *mock.MockIssueProvider) {},
+			mockIssueProviderExpectation: func(issueProvider *mock_snyk.MockIssueProvider) {},
 			expectedError:                errors.New("issueId type should be a string"),
 			expectedIssueCalled:          false,
 		},
 		{
 			name:      "Issue not found",
 			arguments: []any{"create", "issueId"},
-			mockIssueProviderExpectation: func(issueProvider *mock.MockIssueProvider) {
+			mockIssueProviderExpectation: func(issueProvider *mock_snyk.MockIssueProvider) {
 				issueProvider.EXPECT().Issue(gomock.Any()).Return(nil)
 			},
 			expectedError:       errors.New("issue not found"),
@@ -44,7 +44,7 @@ func Test_submitIgnoreRequest_Execute(t *testing.T) {
 		{
 			name:      "Invalid workflow type argument",
 			arguments: []any{123, "issueId"},
-			mockIssueProviderExpectation: func(issueProvider *mock.MockIssueProvider) {
+			mockIssueProviderExpectation: func(issueProvider *mock_snyk.MockIssueProvider) {
 			},
 			expectedError:       errors.New("workflow type should be a string"),
 			expectedIssueCalled: false,
@@ -55,8 +55,8 @@ func Test_submitIgnoreRequest_Execute(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := testutil.UnitTest(t)
 			ctrl := gomock.NewController(t)
-			server := mock2.NewMockServer(ctrl)
-			issueProvider := mock.NewMockIssueProvider(ctrl)
+			server := mock_types.NewMockServer(ctrl)
+			issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
 			if tt.mockIssueProviderExpectation != nil {
 				tt.mockIssueProviderExpectation(issueProvider)
 			}
