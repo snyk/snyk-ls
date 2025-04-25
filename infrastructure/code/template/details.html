@@ -44,9 +44,20 @@
       <svg class="sn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M1.25199 12.9165C0.663992 14.0677 1.13999 15 2.31599 15H13.684C14.86 15 15.336 14.0758 14.748 12.9165L9.071 1.86645C8.476 0.71524 7.524 0.707133 6.929 1.86645L1.25899 12.9165H1.25199ZM9 13H7V11H9V13ZM9 10H7V6H9V10Z" fill="currentColor"/>
       </svg>
-        
+
       <span>
         <strong>Ignored.</strong> This issue is currently ignored.
+      </span>
+    </div>
+    {{end}}
+    {{if .IsPending}}
+    <div class="sn-status-message mod-warning">
+      <svg class="sn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M1.25199 12.9165C0.663992 14.0677 1.13999 15 2.31599 15H13.684C14.86 15 15.336 14.0758 14.748 12.9165L9.071 1.86645C8.476 0.71524 7.524 0.707133 6.929 1.86645L1.25899 12.9165H1.25199ZM9 13H7V11H9V13ZM9 10H7V6H9V10Z" fill="currentColor"/>
+      </svg>
+
+      <span>
+        This issue will be ignored once the request is approved.
       </span>
     </div>
     {{end}}
@@ -89,13 +100,14 @@
     <!-- Tabs Issue Overview Container -->
     <article class="code-issue-panel">
       <div class="main-tabs-nav">
-        {{if .IsIgnored}}
+        {{if or .IsIgnored .IsPending}}
         <span data-tab="ignore-details" id="ignore-details-tab" class="tab-item is-selected ignore-details-tab">
           Ignore Details
         </span>
-        {{else}}
+        {{end}}
+        {{if not .IsIgnored}}
         <span data-tab="fix-analysis" id="fix-analysis-tab"
-          class="tab-item is-selected sn-fix-analysis fix-analysis-tab">
+          class="tab-item {{if not .IsPending}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
           Fix Analysis
         </span>
         {{if gt (len .DataFlow) 0}}
@@ -113,7 +125,7 @@
 
       <!-- Dynamic Content Sections -->
       <div class="tab-container">
-        {{if .IsIgnored}}
+        {{if or .IsIgnored .IsPending}}
         <!-- Start Ignore Details section for tab id="ignore-details-tab" -->
         <div data-content="ignore-details" id="ignore-details-content" class="tab-content main-tab-content is-selected">
           <div class="ignore-details delimiter-top">
@@ -136,7 +148,7 @@
 
         <!-- Start Fix Analysis section for tab id="fix-analysis-tab" -->
         <div data-content="fix-analysis" id="fix-analysis-content"
-          class="tab-content main-tab-content {{if not .IsIgnored}}is-selected{{end}}">
+          class="tab-content main-tab-content {{if and (not .IsIgnored) (not .IsPending)}}is-selected{{end}}">
           <section id="suggestion-info" class="delimiter-top">
             <div id="description" class="suggestion-text">{{.IssueMessage}}</div>
             <div class="suggestion-links">
@@ -216,7 +228,7 @@
 
               <div class="sn-fix-wrapper">
                 <button id="generate-ai-fix" folder-path="{{.FolderPath}}" file-path="{{.FilePath}}"
-                  issue-id="{{.IssueId}}" class="generate-ai-fix {{if eq .AiFixDiffStatus "NOT_STARTED"}} show {{else}} hidden {{end}}">✨ Generate AI fix</button>
+                  class="generate-ai-fix {{if eq .AiFixDiffStatus "NOT_STARTED"}} show {{else}} hidden {{end}}">✨ Generate AI fix</button>
                 <div id="fix-loading-indicator" class="sn-loading {{if eq .AiFixDiffStatus "IN_PROGRESS"}} show {{else}} hidden {{end}}">
                   <div class="sn-loading-icon">
                     {{.ScanAnimation}}
@@ -360,18 +372,59 @@
     </article>
   </main>
 
+  {{if and (.IAWEnabled) (not .IsIgnored)}}
+  <div id="ignore-form-container" class="sn-ignore-issue-container hidden">
+    <h2 class="sn-ignore-title">Ignore this issue</h2>
+    <p class="sn-ignore-description">This ignore will reflect once it has been approved.</p>
+
+    <div class="sn-field">
+      <div class="sn-label">Ignore type</div>
+      <select class="sn-select" id="ignore-form-type">
+        <option value="not-vulnerable">Not vulnerable</option>
+        <option value="wont-fix">Won't fix</option>
+        <option value="temporary-ignore">Temporary ignore</option>
+      </select>
+    </div>
+
+    <div class="sn-field">
+      <div class="sn-label">Expiration</div>
+      <select class="sn-select" id="ignore-form-expiration-type">
+        <option value="do-not-expire">Do not expire</option>
+        <option value="custom-expiration-date">Custom expiration date</option>
+      </select>
+      <input class="sn-input hidden" id="ignore-form-expiration-date" type="date" value="{{.ExpirationDate}}">
+    </div>
+
+    <div class="sn-field">
+      <div class="sn-label">Ignore reason</div>
+      <textarea class="sn-textarea" id="ignore-form-ignore-reason" rows="4" placeholder="Please provide a reason for ignoring this issue"></textarea>
+    </div>
+
+    <div class="sn-field mod-right-aligned">
+      <button id="ignore-form-submit" class="sn-button">Submit ignore</button>
+      <button id="ignore-form-cancel" class="sn-button mod-ghost">Cancel</button>
+    </div>
+  </div>
+  {{end}}
+
   <div id="suggestionDiv" class="hidden">
     {{.AiFixResult}}
   </div>
   <!-- Ignore In Line Actions -->
-  {{if not .IsIgnored}}
-  <footer class="ignore-action-container hidden">
+  {{if and (not .IsIgnored) (not .IsPending)}}
+  <footer class="ignore-action-container">
     <div id="ignore-actions">
-      <div class="actions row">
+      {{if .IAWEnabled}}
+      <div id="ignore-cci-actions" class="actions row">
+        <button id="ignore-create" class="ignore-button secondary">Create ignore</button>
+      </div>
+      {{else}}
+      <div id="ignore-legacy-actions" class="actions row hidden">
         <button id="ignore-line-issue" class="ignore-button secondary">Ignore on line <span
             id="action-ignore-line">{{.IgnoreLineAction}}</span></button>
         <button id="ignore-file-issue" class="ignore-button secondary">Ignore in this file</button>
       </div>
+      {{end}}
     </div>
   </footer>
   {{end}}
@@ -516,6 +569,7 @@
   <!-- Embedded script from LS  -->
   <script nonce="{{.Nonce}}">
     var suggestion = JSON.parse("{{.AiFixResult}}" || "[]")
+    var issueId = "{{.IssueId}}"
     {{.Scripts}}
     // some IDEs take longer to inject their handler functions
     // TODO: Should we add an event listener when the IDE functions are loaded?
@@ -524,7 +578,7 @@
       generateAIFix();
     }, 500);
     {{end}}
-</script>
+  </script>
   <!-- Custom IDE specific scripts  -->
   <script nonce="{{.Nonce}}">
     ${ideScript}

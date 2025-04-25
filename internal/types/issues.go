@@ -88,8 +88,10 @@ type Issue interface {
 	GetMessage() string
 	GetFormattedMessage() string
 	GetAffectedFilePath() FilePath
+	GetContentRoot() FilePath
 	GetIsNew() bool
 	GetIsIgnored() bool
+	SetIgnored(isIgnored bool)
 	GetSeverity() Severity
 	GetIgnoreDetails() *IgnoreDetails
 	GetProduct() product.Product
@@ -107,6 +109,7 @@ type Issue interface {
 	GetFilterableIssueType() product.FilterableIssueType
 	GetRuleID() string
 	GetReferences() []Reference
+	GetFindingId() string
 	SetCodelensCommands(lenses []CommandData)
 	SetLessonUrl(url string)
 	SetAdditionalData(data IssueAdditionalData)
@@ -114,6 +117,7 @@ type Issue interface {
 	SetIsNew(isNew bool)
 	SetCodeActions(actions []CodeAction)
 	SetRange(r Range)
+	SetIgnoreDetails(ignoreDetails *IgnoreDetails)
 }
 
 type IssueAdditionalData interface {

@@ -16,7 +16,7 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');
 :root {
-  --container-paddding: 20px;
+  --container-padding: 20px;
   --input-padding-vertical: 6px;
   --input-padding-horizontal: 4px;
   --input-margin-vertical: 4px;
@@ -24,6 +24,7 @@
   --button-padding-horizontal: 16px;
   --button-padding-vertical: 6px;
   --default-font: "SF Pro Text", "Segoe UI", "Ubuntu", Geneva, Verdana, Tahoma, sans-serif;
+  --editor-font-family: var(--vscode-editor-font-family);
   --background-color: var(--vscode-editor-background);
   --text-color: var(--vscode-foreground);
   --link-color: var(--vscode-textLink-foreground);
@@ -31,13 +32,15 @@
   --horizontal-border-color: var(--vscode-textPreformat-background);
   --code-background-color: var(--vscode-editor-background);
   --tab-active-background-color: var(--vscode-tab-activeBackground);
+  --container-background-color: var(--vscode-editor-background);
   --input-border: var(--vscode-input-border);
   --input-background: var(--vscode-input-background);
   /* This doesn't exist yet in VSCode*/
   --border-color: var(--vscode-border-color);
   --example-line-removed-color: var(--vscode-line-removed-color);
   --example-line-added-color: var(--vscode-line-added-color);
-  --generated-ai-fix-button-background-color: var(--vscode-button-background);
+  --button-background-color: var(--vscode-button-background);
+  --button-text-color: var(--vscode-button-foreground);
   --disabled-background-color: var(--vscode-foreground);
   --circle-color: var(--vscode-badge-background);
   /* New variables - March 2025 */
@@ -143,7 +146,7 @@ main {
 .sn-issue-header {
   display: flex;
   flex-direction: column;
-  background-image: linear-gradient(0, transparent, var(--vscode-tab-activeBackground));
+  background-image: linear-gradient(0, transparent, var(--tab-active-background-color));
 }
 
 
@@ -371,7 +374,7 @@ table > tbody > tr:last-child .data-flow-line {
 .data-flow-text code {
   background: transparent none;
   color: var(--text-color);
-  font-family: var(--editor-font-family);
+  font-family: var(--editor-font-family), var(--default-font);
   font-size: 1.2rem;
 }
 
@@ -425,7 +428,7 @@ table > tbody > tr:last-child .data-flow-line {
 .data-flow-text {
   background-color: transparent;
   border-color: transparent;
-  padding-bottom: 0px;
+  padding-bottom: 0;
 }
 
 
@@ -518,12 +521,6 @@ table > tbody > tr:last-child .data-flow-line {
   display: flex;
 }
 
-.row {
-  display: flex;
-  flex-direction: row;
-  width: 100%;
-}
-
 .ignore-button.secondary {
   border: 1px solid var(--link-color);
   color: var(--link-color);
@@ -560,13 +557,6 @@ table > tbody > tr:last-child .data-flow-line {
   align-items: flex-start;
 }
 
-.ignore-details-row {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  align-items: flex-start;
-}
-
 .ignore-details-label {
   width: 30%;
   text-align: left;
@@ -587,7 +577,7 @@ button {
   text-align: center;
   outline: 1px solid transparent;
   outline-offset: 2px !important;
-  background: var(--generated-ai-fix-button-background-color);
+  background: var(--button-background-color);
 }
 
 button:disabled,button.generate-ai-fix:disabled,
@@ -597,14 +587,13 @@ button.sn-apply-fix:disabled{
 button.generate-ai-fix,
 button.sn-apply-fix {
   border-radius: 4px;
-  background-color: var(--generated-ai-fix-button-background-color);
-  color: white;
+  background-color: var(--button-background-color);
+  color: var(--button-text-color);
   cursor: pointer;
 }
 button.sn-apply-fix{
   padding: 4px 12px;
-  background: var(--dark-button-default);
-  background-color: var(--generated-ai-fix-button-background-color)
+  background-color: var(--button-background-color)
 }
 button.sn-apply-fix:disabled{
   background-color: var(--disabled-background-color);
@@ -756,6 +745,97 @@ button.sn-apply-fix:hover {
 .sn-msg-5 {
   animation: inference 4s ease-in infinite;
   animation-delay: 16s;
+}
+
+.sn-ignore-issue-container {
+  display: flex;
+  flex-direction: column;
+  padding: var(--container-padding);
+  background-color:rgba(0,0,0,.1);
+  border-radius: 4px;
+  color: var(--text-color);
+}
+
+
+.sn-ignore-title {
+  line-height: 1.25rem;
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.sn-ignore-description {
+  margin-top: 0;
+}
+
+.sn-field {
+  margin-bottom: 20px;
+}
+
+.sn-field.mod-right-aligned {
+  text-align: right;
+}
+
+.sn-label {
+  margin-bottom: .5rem;
+}
+
+.sn-select {
+  font: inherit;
+  height: 26px;
+  padding: 2px 6px;
+  min-width: 240px;
+  max-width: 320px;
+  cursor: pointer;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-border);
+  color: var(--text-color);
+}
+
+.sn-input {
+  border: 1px solid var(--input-border);
+  background-color: var(--input-border);
+  color: var(--text-color);
+  padding: 4px 6px;
+  appearance: textfield;
+
+}
+
+.sn-button {
+  display: inline-block;
+  align-items: center;
+  color: var(--button-text-color);
+  background-color: var(--button-background-color);
+  font-family: inherit;
+  border-radius: 2px;
+  box-sizing: border-box;
+  cursor: pointer;
+  line-height: 18px;
+  padding: 6px 14px;
+  text-align: center;
+}
+
+.sn-button.mod-ghost {
+  background-color: transparent;
+  color: var(--text-color);
+  border: 1px solid var(--input-border);
+}
+
+
+
+.sn-textarea {
+  border: 1px solid var(--input-border);
+  background-color: var(--input-border);
+  color: var(--text-color);
+  box-sizing: border-box;
+  display: inline-block;
+  font-family: inherit;
+  font-size: inherit;
+  height: 100%;
+  line-height: inherit;
+  resize: none;
+  width: 100%;
 }
 
 #s0 {
