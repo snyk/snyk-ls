@@ -23,7 +23,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-//go:generate $GOPATH/bin/mockgen -source=issues_provider.go -destination issues_provider_mock.go -package snyk -self_package github.com/snyk/snyk-ls/domain/snyk
+//go:generate $GOPATH/bin/mockgen -source=issues_provider.go -destination mock/issues_provider_mock.go -package mock -self_package github.com/snyk/snyk-ls/domain/snyk/mock
 
 type IssuesByFile types.IssuesByFile
 

@@ -6,65 +6,37 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/domain/snyk/mock"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	mock2 "github.com/snyk/snyk-ls/internal/types/mock"
 )
-
-func newMockIssue(id string, path types.FilePath) *snyk.Issue {
-	return &snyk.Issue{
-		ID:               id,
-		AffectedFilePath: path,
-		Product:          product.ProductCode,
-		Severity:         types.Medium,
-		AdditionalData: snyk.CodeIssueData{
-			Key:                "",
-			Title:              "",
-			Message:            "",
-			Rule:               "",
-			RuleId:             "",
-			RepoDatasetSize:    0,
-			ExampleCommitFixes: nil,
-			CWE:                nil,
-			Text:               "",
-			Markers:            nil,
-			Cols:               snyk.CodePoint{},
-			Rows:               snyk.CodePoint{},
-			IsSecurityType:     false,
-			IsAutofixable:      false,
-			PriorityScore:      0,
-			HasAIFix:           false,
-			DataFlow:           nil,
-			Details:            "",
-		},
-	}
-}
 
 func Test_submitIgnoreRequest_Execute(t *testing.T) {
 	tests := []struct {
-		name                string
-		arguments           []any
-		mockIssueProvider   func(provider *snyk.IssueProviderMock)
-		expectedError       error
-		expectedIssueCalled bool
+		name                         string
+		arguments                    []any
+		mockIssueProviderExpectation func(issueProvider *mock.MockIssueProvider)
+		expectedError                error
+		expectedIssueCalled          bool
 	}{
 		{
-			name:                "Invalid issueId type",
-			arguments:           []any{"create", 123},
-			mockIssueProvider:   func(provider *snyk.IssueProviderMock) {},
-			expectedError:       errors.New("issueId type should be a string"),
-			expectedIssueCalled: false,
+			name:                         "Invalid issueId type",
+			arguments:                    []any{"create", 123},
+			mockIssueProviderExpectation: func(issueProvider *mock.MockIssueProvider) {},
+			expectedError:                errors.New("issueId type should be a string"),
+			expectedIssueCalled:          false,
 		},
 		{
 			name:      "Issue not found",
 			arguments: []any{"create", "issueId"},
-			mockIssueProvider: func(provider *snyk.IssueProviderMock) {
-				provider.On("Issue", "issueId").Return(nil)
+			mockIssueProviderExpectation: func(issueProvider *mock.MockIssueProvider) {
+				issueProvider.EXPECT().Issue(gomock.Any()).Return(nil)
 			},
 			expectedError:       errors.New("issue not found"),
 			expectedIssueCalled: true,
@@ -72,7 +44,7 @@ func Test_submitIgnoreRequest_Execute(t *testing.T) {
 		{
 			name:      "Invalid workflow type argument",
 			arguments: []any{123, "issueId"},
-			mockIssueProvider: func(provider *snyk.IssueProviderMock) {
+			mockIssueProviderExpectation: func(issueProvider *mock.MockIssueProvider) {
 			},
 			expectedError:       errors.New("workflow type should be a string"),
 			expectedIssueCalled: false,
@@ -82,9 +54,12 @@ func Test_submitIgnoreRequest_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := testutil.UnitTest(t)
-			server := &types.ServerImplMock{}
-			issueProvider := &snyk.IssueProviderMock{}
-
+			ctrl := gomock.NewController(t)
+			server := mock2.NewMockServer(ctrl)
+			issueProvider := mock.NewMockIssueProvider(ctrl)
+			if tt.mockIssueProviderExpectation != nil {
+				tt.mockIssueProviderExpectation(issueProvider)
+			}
 			cmd := &submitIgnoreRequest{
 				command:       types.CommandData{Arguments: tt.arguments},
 				issueProvider: issueProvider,
@@ -140,14 +115,15 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
 			cmd := &submitIgnoreRequest{
 				command: types.CommandData{
 					Arguments: tt.arguments,
 				},
 			}
 
-			gafConfig := configuration.New()
-			config, err := cmd.initializeCreateConfiguration(gafConfig, "finding123", types.FilePath("/test/content/root"))
+			gafConfig := c.Engine().GetConfiguration()
+			config, err := cmd.initializeCreateConfiguration(gafConfig, "finding123", "/test/content/root")
 
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
@@ -197,6 +173,7 @@ func Test_getIgnoreIdFromCmdArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testutil.UnitTest(t)
 			cmd := &submitIgnoreRequest{
 				command: types.CommandData{
 					Arguments: tt.arguments,
@@ -276,6 +253,7 @@ func Test_GetCommandArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testutil.UnitTest(t)
 			cmd := &submitIgnoreRequest{
 				command: types.CommandData{
 					Arguments: tt.arguments,
@@ -342,6 +320,8 @@ func Test_getStringArgument(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testutil.UnitTest(t)
+
 			cmd := &submitIgnoreRequest{
 				command: types.CommandData{
 					Arguments: tt.arguments,
@@ -362,8 +342,10 @@ func Test_getStringArgument(t *testing.T) {
 
 func Test_createBaseConfiguration(t *testing.T) {
 	// Arrange
+	c := testutil.UnitTest(t)
+	gafConfig := c.Engine().GetConfiguration()
+
 	contentRoot := types.FilePath("/test/content/root")
-	gafConfig := configuration.New()
 
 	// Act
 	result := initializeBaseConfiguration(gafConfig, contentRoot)
@@ -376,10 +358,11 @@ func Test_createBaseConfiguration(t *testing.T) {
 
 func Test_addCreateAndUpdateConfiguration(t *testing.T) {
 	// Arrange
+	c := testutil.UnitTest(t)
 	ignoreType := "testIgnoreType"
 	reason := "testReason"
 	expiration := "testExpiration"
-	gafConfig := configuration.New()
+	gafConfig := c.Engine().GetConfiguration()
 
 	// Act
 	result := addCreateAndUpdateConfiguration(gafConfig, ignoreType, reason, expiration)

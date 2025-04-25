@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/mock"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -118,6 +120,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 	c := testutil.UnitTest(t)
 	// arrange
 	setupClientCapability(c)
+	ctrl := gomock.NewController(t)
 
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
@@ -136,8 +139,8 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 		path: issues,
 	}
 
-	issueProviderMock := new(snyk.IssueProviderMock)
-	issueProviderMock.On("Issues").Return(issueMap)
+	issueProviderMock := mock.NewMockCacheProvider(ctrl)
+	issueProviderMock.EXPECT().Issues().Return(issueMap)
 	cmd.issueProvider = issueProviderMock
 
 	// act
@@ -156,6 +159,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 func Test_fixCodeIssue_noEdit(t *testing.T) {
 	c := testutil.UnitTest(t)
 	// arrange
+	ctrl := gomock.NewController(t)
 	setupClientCapability(c)
 
 	mockNotifier := notification.NewMockNotifier()
@@ -179,8 +183,8 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 		path: issues,
 	}
 
-	issueProviderMock := new(snyk.IssueProviderMock)
-	issueProviderMock.On("Issues").Return(issueMap)
+	issueProviderMock := mock.NewMockIssueProvider(ctrl)
+	issueProviderMock.EXPECT().Issues().Return(issueMap)
 	cmd.issueProvider = issueProviderMock
 
 	// act
@@ -199,13 +203,14 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
 	c := testutil.UnitTest(t)
 	// arrange
+	ctrl := gomock.NewController(t)
 	setupClientCapability(c)
 
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
 
-	issueProviderMock := new(snyk.IssueProviderMock)
-	issueProviderMock.On("Issues").Return(snyk.IssuesByFile{})
+	issueProviderMock := mock.NewMockIssueProvider(ctrl)
+	issueProviderMock.EXPECT().Issues().Return(snyk.IssuesByFile{})
 
 	cmd.issueProvider = issueProviderMock
 

@@ -81,7 +81,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 	}
 
 	issue := cmd.issueProvider.Issue(id)
-	if issue.GetID() == "" {
+	if issue == nil || issue.GetID() == "" {
 		return nil, errors.New("failed to find issue")
 	}
 
