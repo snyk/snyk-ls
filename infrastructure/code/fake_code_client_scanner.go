@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/snyk/code-client-go/bundle"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
 
@@ -394,4 +395,8 @@ func (f *FakeCodeScannerClient) UploadAndAnalyze(_ context.Context, _ string, _ 
 	err := json.Unmarshal([]byte(responseJson), &analysisResponse)
 	f.UploadAndAnalyzeWasCalled = true
 	return &analysisResponse, "", err
+}
+
+func (f *FakeCodeScannerClient) Upload(context.Context, string, scan.Target, <-chan string, map[string]bool) (bundle.Bundle, error) {
+	panic("implement me")
 }
