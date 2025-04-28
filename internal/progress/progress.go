@@ -26,6 +26,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var trackersMutex sync.RWMutex
@@ -37,11 +38,13 @@ type Tracker struct {
 	cancelChannel        chan bool
 	token                types.ProgressToken
 	cancellable          bool
+	unquantifiableLength bool
 	lastReport           time.Time
-	lastReportPercentage int
+	begun                bool
 	finished             bool
+	lastPercentage       int
 	lastMessage          string
-	m                    sync.Mutex
+	m                    sync.RWMutex
 }
 
 func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool) *Tracker {
@@ -49,9 +52,8 @@ func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool) 
 		channel:       channel,
 		cancelChannel: cancelChannel,
 		// deepcode ignore HardcodedPassword: false positive
-		token:                "token",
-		cancellable:          true,
-		lastReportPercentage: -1,
+		token:       "token",
+		cancellable: true,
 	}
 	trackersMutex.Lock()
 	trackers[t.token] = t
@@ -74,69 +76,115 @@ func NewTracker(cancellable bool) *Tracker {
 }
 
 func (t *Tracker) GetChannel() chan types.ProgressParams {
+	t.m.RLock()
+	defer t.m.RUnlock()
 	return t.channel
 }
 
 func (t *Tracker) GetCancelChannel() chan bool {
+	t.m.RLock()
+	defer t.m.RUnlock()
 	return t.cancelChannel
 }
 
 func (t *Tracker) BeginUnquantifiableLength(title, message string) {
+	t.m.Lock()
+	defer t.m.Unlock()
 	t.begin(title, message, true)
 }
 
 func (t *Tracker) begin(title string, message string, unquantifiableLength bool) {
 	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.begin").Logger()
+	if t.begun {
+		logger.Error().Msg("tracker tried to begin when already previously begun")
+		return
+	}
+	if t.finished {
+		logger.Error().Msg("tracker tried to begin when finished but not begun (race condition?)")
+		return
+	}
+	t.begun = true
+	t.unquantifiableLength = unquantifiableLength
 	params := newProgressParams(title, message, t.cancellable, unquantifiableLength)
 	params.Token = t.token
 	t.send(params, logger)
-	t.lastReport = time.Now()
 	t.setLastMessage(message)
 }
 
 func (t *Tracker) Begin(title string) {
+	t.m.Lock()
+	defer t.m.Unlock()
 	t.begin(title, "", false)
 }
 
 func (t *Tracker) BeginWithMessage(title, message string) {
+	t.m.Lock()
+	defer t.m.Unlock()
 	t.begin(title, message, false)
 }
 
-func (t *Tracker) ReportWithMessage(percentage int, message string) {
-	t.m.Lock()
-	defer t.m.Unlock()
+func (t *Tracker) reportWithMessage(percentage int, message string) {
 	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.ReportWithMessage").Logger()
-	if time.Now().Before(t.lastReport.Add(200 * time.Millisecond)) {
+	if !t.begun {
+		logger.Error().Msg("tried to report tracker progress when never begun")
+		return
+	}
+	if t.finished {
+		logger.Error().Msg("tried to report tracker progress when already finished")
+		return
+	}
+	if percentage != 100 && message == t.lastMessage && (t.unquantifiableLength || percentage-10 <= t.lastPercentage) && time.Now().Before(t.lastReport.Add(200*time.Millisecond)) {
 		return
 	}
 	progress := types.ProgressParams{
 		Token: t.token,
 		Value: types.WorkDoneProgressReport{
 			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressReportKind},
-			Percentage:           percentage,
+			Percentage:           util.Ternary(t.unquantifiableLength, nil, &percentage),
 			Message:              message,
 		},
 	}
 	t.send(progress, logger)
 	t.lastReport = time.Now()
-	t.lastReportPercentage = percentage
+	t.lastPercentage = percentage
 	t.setLastMessage(message)
 }
 
+func (t *Tracker) ReportWithMessage(percentage int, message string) {
+	t.m.Lock()
+	defer t.m.Unlock()
+	t.reportWithMessage(percentage, message)
+}
+
 func (t *Tracker) Report(percentage int) {
-	t.ReportWithMessage(percentage, "")
+	t.m.Lock()
+	defer t.m.Unlock()
+	t.reportWithMessage(percentage, "")
 }
 
 func (t *Tracker) End() {
-	t.EndWithMessage("")
+	t.m.Lock()
+	defer t.m.Unlock()
+	t.endWithMessage("")
 }
 
 func (t *Tracker) EndWithMessage(message string) {
+	t.m.Lock()
+	defer t.m.Unlock()
+	t.endWithMessage(message)
+}
+
+func (t *Tracker) endWithMessage(message string) {
 	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.EndWithMessage").Logger()
 	if t.finished {
 		panic("Called end progress twice. This breaks LSP in Eclipse fix me now and avoid headaches later")
 	}
 	t.finished = true
+	if !t.begun {
+		// Not an error, but could be a sign of something wrong, so just log and we'll error on re-use
+		logger.Debug().Msg("tracker ended when never begun")
+		return
+	}
 	progress := types.ProgressParams{
 		Token: t.token,
 		Value: types.WorkDoneProgressEnd{
@@ -175,21 +223,22 @@ func (t *Tracker) deleteTracker() {
 }
 
 func (t *Tracker) GetToken() types.ProgressToken {
+	t.m.RLock()
+	defer t.m.RUnlock()
 	return t.token
 }
 
 func newProgressParams(title, message string, cancellable, unquantifiableLength bool) types.ProgressParams {
-	percentage := 1
-	if unquantifiableLength {
-		percentage = 0
-	}
 	return types.ProgressParams{
 		Value: types.WorkDoneProgressBegin{
 			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressBeginKind},
 			Title:                title,
 			Message:              message,
 			Cancellable:          cancellable,
-			Percentage:           percentage,
+			// We must decide now if the tracker will report percentages or not, and omit the field now if not,
+			// otherwise VS Code won't allow changing the message.
+			// In some IDEs 0% looks like an unquantifiable progress bar, whereas in others it does not.
+			Percentage: util.Ternary(unquantifiableLength, nil, util.Ptr(0)),
 		},
 	}
 }
@@ -225,6 +274,8 @@ func CleanupChannels() {
 }
 
 func (t *Tracker) IsCanceled() bool {
+	t.m.RLock()
+	defer t.m.RUnlock()
 	return IsCanceled(t.token)
 }
 

@@ -30,9 +30,11 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/lsui"
 	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/application/watcher"
 	"github.com/snyk/snyk-ls/domain/ide/command"
@@ -125,12 +127,14 @@ func initInfrastructure(c *config.Config) {
 
 	notifier = domainNotify.NewNotifier()
 	errorReporter = sentry.NewSentryErrorReporter(c, notifier)
+	lsUI := lsui.NewLSUI()
+	engine.SetUserInterface(lsUI)
 	installer = install.NewInstaller(errorReporter, unauthorizedHttpClient)
 	learnService = learn.New(c, unauthorizedHttpClient, errorReporter)
 	instrumentor = performance2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c, authorizedClient)
-	gafConfiguration := c.Engine().GetConfiguration()
-	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
+	gafConfiguration := engine.GetConfiguration()
+	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), gafConfiguration)
 	scanStateChangeEmitter = scanstates.NewSummaryEmitter(c, notifier)
 	scanStateAggregator = scanstates.NewScanStateAggregator(c, scanStateChangeEmitter)
 	// we initialize the service without providers, as we want to wait for initialization to send the auth method
@@ -157,7 +161,7 @@ func initInfrastructure(c *config.Config) {
 	codeClientScanner := codeClient.NewCodeScanner(
 		c,
 		httpClient,
-		codeClient.WithTrackerFactory(code.NewCodeTrackerFactory()),
+		codeClient.WithTrackerFactory(code_workflow.NewTrackerFactory(lsUI, c.Logger())),
 		codeClient.WithLogger(engine.GetLogger()),
 		codeClient.WithInstrumentor(codeInstrumentor),
 		codeClient.WithErrorReporter(codeErrorReporter),

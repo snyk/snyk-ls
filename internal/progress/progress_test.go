@@ -21,7 +21,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestBeginProgress(t *testing.T) {
@@ -31,6 +33,7 @@ func TestBeginProgress(t *testing.T) {
 
 	progress.BeginWithMessage("title", "message")
 
+	actualProgressParams := testsupport.ReadMessageAssertNoWait(t, channel)
 	assert.Equal(
 		t,
 		types.ProgressParams{
@@ -40,11 +43,12 @@ func TestBeginProgress(t *testing.T) {
 				Title:                "title",
 				Cancellable:          true,
 				Message:              "message",
-				Percentage:           1,
+				Percentage:           util.Ptr(0),
 			},
 		},
-		<-channel,
+		actualProgressParams,
 	)
+	testsupport.AssertChannelIsEmpty(t, channel)
 }
 
 func TestReportProgress(t *testing.T) {
@@ -52,16 +56,21 @@ func TestReportProgress(t *testing.T) {
 		Token: "token",
 		Value: types.WorkDoneProgressReport{
 			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: "report"},
-			Percentage:           10,
+			Percentage:           util.Ptr(10),
 		},
 	}
 	channel := make(chan types.ProgressParams, 2)
 	progress := NewTestTracker(channel, nil)
+	progress.Begin("title")
+	_ = testsupport.ReadMessageAssertNoWait(t, channel)
+	testsupport.AssertChannelIsEmpty(t, channel)
 
 	workProgressReport := output.Value.(types.WorkDoneProgressReport)
-	progress.Report(workProgressReport.Percentage)
+	progress.Report(*workProgressReport.Percentage)
 
-	assert.Equal(t, output, <-channel)
+	actualProgressParams := testsupport.ReadMessageAssertNoWait(t, channel)
+	assert.Equal(t, output, actualProgressParams)
+	testsupport.AssertChannelIsEmpty(t, channel)
 }
 
 func TestEndProgress(t *testing.T) {
@@ -75,11 +84,16 @@ func TestEndProgress(t *testing.T) {
 
 	channel := make(chan types.ProgressParams, 2)
 	progress := NewTestTracker(channel, nil)
+	progress.Begin("title")
+	_ = testsupport.ReadMessageAssertNoWait(t, channel)
+	testsupport.AssertChannelIsEmpty(t, channel)
 
 	workProgressEnd := output.Value.(types.WorkDoneProgressEnd)
 	progress.EndWithMessage(workProgressEnd.Message)
 
-	assert.Equal(t, output, <-channel)
+	actualProgressParams := testsupport.ReadMessageAssertNoWait(t, channel)
+	assert.Equal(t, output, actualProgressParams)
+	testsupport.AssertChannelIsEmpty(t, channel)
 }
 
 func TestEndProgressTwice(t *testing.T) {

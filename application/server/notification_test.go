@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestCreateProgressListener(t *testing.T) {
@@ -44,7 +45,7 @@ func TestCreateProgressListener(t *testing.T) {
 			Title:                "title",
 			Message:              "message",
 			Cancellable:          true,
-			Percentage:           0,
+			Percentage:           util.Ptr(0),
 		},
 	}
 	progressChannel <- progressNotification
