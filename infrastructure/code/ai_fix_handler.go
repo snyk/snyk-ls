@@ -100,9 +100,9 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 		return
 	}
 	for i, diff := range diffs {
-		if _, ok := explanations[i]; !ok {
+		if i >= len(explanations) {
 			logger.Debug().Msgf("Failed to get explanation for issue with diff index %v diff %s", i, diff)
-			continue
+			break
 		}
 		suggestions[i].Explanation = explanations[i]
 	}
