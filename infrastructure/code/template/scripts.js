@@ -1,20 +1,22 @@
 function _createForOfIteratorHelper(r, e) { var t = "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (!t) { if (Array.isArray(r) || (t = _unsupportedIterableToArray(r)) || e && r && "number" == typeof r.length) { t && (r = t); var _n = 0, F = function F() {}; return { s: F, n: function n() { return _n >= r.length ? { done: !0 } : { done: !1, value: r[_n++] }; }, e: function e(r) { throw r; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var o, a = !0, u = !1; return { s: function s() { t = t.call(r); }, n: function n() { var r = t.next(); return a = r.done, r; }, e: function e(r) { u = !0, o = r; }, f: function f() { try { a || null == t.return || t.return(); } finally { if (u) throw o; } } }; }
 function _unsupportedIterableToArray(r, a) { if (r) { if ("string" == typeof r) return _arrayLikeToArray(r, a); var t = {}.toString.call(r).slice(8, -1); return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0; } }
 function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length); for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e]; return n; }
-function toggleElement(element, toggle) {
+function dispatchEvent(element, dispatchEventName) {
   if (!element) {
     return;
   }
-  if (toggle === 'show') {
-    element.className = element.className.replace(/(?:^|\s)hidden(?!\S)/g, '');
-  } else if (toggle === 'hide') {
-    if (element.className.indexOf('hidden') === -1) {
-      element.className += ' hidden';
-    }
+  var event;
+  if (typeof(Event) === 'function') {
+    // Modern browsers
+    event = new Event(dispatchEventName, { bubbles: true, cancelable: true });
   } else {
-    console.error('Unexpected toggle value', toggle);
+    // IE (for Visual Studio)
+    event = document.createEvent('Event');
+    event.initEvent(dispatchEventName, true, true);
   }
+  element.dispatchEvent(event);
 }
+
 // different AI fix buttons
 var applyFixButton = document.getElementById('apply-fix');
 var retryGenerateFixButton = document.getElementById('retry-generate-fix');
@@ -25,8 +27,8 @@ retryGenerateFixButton === null || retryGenerateFixButton === void 0 || retryGen
 applyFixButton === null || applyFixButton === void 0 || applyFixButton.addEventListener('click', applyFix);
 function generateAIFix() {
   if (!suggestion) return;
-  toggleElement(generateAIFixButton, 'hide');
-  toggleElement(fixLoadingIndicatorElem, 'show');
+  generateAIFixButton.classList.add('hidden');
+  fixLoadingIndicatorElem.classList.remove('hidden');
   var folderPath = generateAIFixButton.getAttribute('folder-path');
   var filePath = generateAIFixButton.getAttribute('file-path');
   var generateFixQueryString = folderPath + '@|@' + filePath + '@|@' + issueId;
@@ -71,8 +73,8 @@ function nextDiff() {
 }
 function retryGenerateAIFix() {
   console.log('retrying generate AI Fix');
-  toggleElement(fixWrapperElem, 'show');
-  toggleElement(fixErrorSectionElem, 'hide');
+  fixWrapperElem.classList.remove('hidden');
+  fixErrorSectionElem.classList.add('hidden');
   generateAIFix();
 }
 function previousDiff() {
@@ -131,17 +133,17 @@ function showCurrentDiff() {
   // Some IDEs send back the suggestion, others send the suggestion.diffs directly.
   var showSuggestion = getSuggestion();
   if (!showSuggestion.length) {
-    toggleElement(noDiffsElem, 'show');
-    toggleElement(diffTopElem, 'hide');
-    toggleElement(diffElem, 'hide');
-    toggleElement(applyFixButton, 'hide');
+    noDiffsElem.classList.remove('hidden');
+    diffTopElem.classList.add('hidden');
+    diffElem.classList.add('hidden');
+    applyFixButton.classList.add('hidden');
     return;
   }
   if (!showSuggestion.length || diffSelectedIndex < 0 || diffSelectedIndex >= showSuggestion.length) return;
-  toggleElement(noDiffsElem, 'hide');
-  toggleElement(diffTopElem, 'show');
-  toggleElement(diffElem, 'show');
-  toggleElement(applyFixButton, 'show');
+  noDiffsElem.classList.add('hidden');
+  diffTopElem.classList.remove('hidden');
+  diffElem.classList.remove('hidden');
+  applyFixButton.classList.remove('hidden');
   diffNumElem.innerText = showSuggestion.length.toString();
   diffNum2Elem.innerText = showSuggestion.length.toString();
   diffSelectedIndexElem.innerText = (diffSelectedIndex + 1).toString();
@@ -152,11 +154,10 @@ function showCurrentDiff() {
   if(diffSuggestion.explanation.length){
     var explainFixHeader = document.getElementById("ai-explain-header")
     if(explainFixHeader){
-      toggleElement(explainFixHeader, 'show')
+      explainFixHeader.classList.remove('hidden');
     }
   }
   fixExplainText.innerText = diffSuggestion.explanation;
-  console.log();
   // clear all elements
   while (diffElem.firstChild) {
     diffElem.removeChild(diffElem.firstChild);
@@ -218,7 +219,7 @@ if (ignoreFormContainer !== null && ignoreFormContainer !== void 0 && ignoreCrea
   ignoreFormTypeSelector.addEventListener('change', function(event) {
     if (event.target.value === 'temporary-ignore') {
       ignoreFormExpirationType.value = 'custom-expiration-date';
-      ignoreFormExpirationType.dispatchEvent(new Event('change'));
+      dispatchEvent(ignoreFormExpirationType, 'change');
       ignoreFormExpirationType.classList.add('hidden');
     } else {
       ignoreFormExpirationType.classList.remove('hidden');
