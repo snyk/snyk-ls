@@ -150,7 +150,7 @@ function showCurrentDiff() {
   var filePath = showSuggestion.filePath ? showSuggestion.filePath : getFilePathFromFix(diffSuggestion);
   var patch = diffSuggestion.unifiedDiffsPerFile[filePath];
   if(diffSuggestion.explanation.length){
-    const explainFixHeader = document.getElementById("ai-explain-header")
+    var explainFixHeader = document.getElementById("ai-explain-header")
     if(explainFixHeader){
       toggleElement(explainFixHeader, 'show')
     }
@@ -174,24 +174,24 @@ previousDiffElem === null || previousDiffElem === void 0 ? void 0 : previousDiff
 // --- Ignore Creation ---
 
 var ignoreFormContainer = document.getElementById('ignore-form-container');
-if (ignoreFormContainer !== null && ignoreFormContainer !== void 0) {
+var ignoreCreateButton = document.getElementById('ignore-create');
+if (ignoreFormContainer !== null && ignoreFormContainer !== void 0 && ignoreCreateButton !== null && ignoreCreateButton !== void 0) {
   // Open form button
-  var ignoreCreateButton = document.getElementById('ignore-create');
-  ignoreCreateButton.addEventListener('click', () => {
+  ignoreCreateButton.addEventListener('click', function() {
     ignoreCreateButton.classList.add('hidden');
     ignoreFormContainer.classList.remove('hidden');
   });
 
   // Cancel button
   var ignoreFormCancelButton = document.getElementById('ignore-form-cancel');
-  ignoreFormCancelButton.addEventListener('click', () => {
+  ignoreFormCancelButton.addEventListener('click', function() {
     ignoreFormContainer.classList.add('hidden');
     ignoreCreateButton.classList.remove('hidden');
   });
 
   // Submit button
   var ignoreFormSubmitButton = document.getElementById('ignore-form-submit');
-  ignoreFormSubmitButton.addEventListener('click', () => {
+  ignoreFormSubmitButton.addEventListener('click', function() {
     var ignoreType = document.getElementById('ignore-form-type').value;
     var ignoreExpirationType = document.getElementById('ignore-form-expiration-type').value;
     var ignoreExpirationDate = '';
@@ -205,7 +205,7 @@ if (ignoreFormContainer !== null && ignoreFormContainer !== void 0) {
   // Hide the expiration date field when "Do not expire"
   var ignoreFormExpirationType = document.getElementById('ignore-form-expiration-type');
   var ignoreFormExpirationDate = document.getElementById('ignore-form-expiration-date');
-  ignoreFormExpirationType.addEventListener('change', (event) => {
+  ignoreFormExpirationType.addEventListener('change', function(event) {
     if (event.target.value === 'do-not-expire') {
       ignoreFormExpirationDate.classList.add('hidden');
     } else {
@@ -215,7 +215,7 @@ if (ignoreFormContainer !== null && ignoreFormContainer !== void 0) {
 
   // Hide "Do not expire" for "Temporary ignore"
   var ignoreFormTypeSelector = document.getElementById('ignore-form-type');
-  ignoreFormTypeSelector.addEventListener('change', (event) => {
+  ignoreFormTypeSelector.addEventListener('change', function(event) {
     if (event.target.value === 'temporary-ignore') {
       ignoreFormExpirationType.value = 'custom-expiration-date';
       ignoreFormExpirationType.dispatchEvent(new Event('change'));
