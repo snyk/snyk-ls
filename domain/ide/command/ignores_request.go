@@ -23,6 +23,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -112,6 +113,8 @@ func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, find
 	if err != nil {
 		return err
 	}
+
+	cmd.sendIgnoreRequestAnalytics()
 
 	return nil
 }
@@ -286,4 +289,9 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 		return err
 	}
 	return nil
+}
+
+func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics() {
+	event := analytics.NewAnalyticsEventParam("create ignores")
+	analytics.SendAnalytics(cmd.c, event, nil)
 }
