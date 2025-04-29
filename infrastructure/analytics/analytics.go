@@ -35,10 +35,15 @@ import (
 
 var analyticsMu = sync.RWMutex{}
 
-func NewAnalyticsEventParam(interactionType string) types.AnalyticsEventParam {
+func NewAnalyticsEventParam(interactionType string, err error) types.AnalyticsEventParam {
+	status := string(analytics.Success)
+	if err != nil {
+		status = string(analytics.Failure)
+	}
 	return types.AnalyticsEventParam{
 		InteractionType: interactionType,
-		Status:          string(analytics.Success),
+		Category:        []string{},
+		Status:          status,
 		TimestampMs:     time.Now().UnixMilli(),
 	}
 }

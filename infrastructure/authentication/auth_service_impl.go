@@ -123,6 +123,7 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics
 		Category:        []string{"auth", string(a.c.AuthenticationMethod())},
 		Status:          string(status),
 		TargetId:        id,
+		TimestampMs:     time.Now().UnixMilli(),
 	}
 
 	analytics2.SendAnalytics(a.c, event, err)
