@@ -255,7 +255,7 @@ func updateDeltaFindings(c *config.Config, settings types.Settings) {
 
 	modified := c.SetDeltaFindingsEnabled(enable)
 	if modified {
-		sendWorkspaceConfigChanged(c, "enableDeltaFindings", strconv.FormatBool(oldValue), strconv.FormatBool(enable))
+		sendWorkspaceConfigChanged(c, "enableDeltaFindings", oldValue, enable)
 	}
 }
 
