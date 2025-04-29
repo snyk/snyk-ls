@@ -195,6 +195,7 @@ if (ignoreFormContainer !== null && ignoreFormContainer !== void 0 && ignoreCrea
   ignoreCreateButton.addEventListener('click', function() {
     toggleElement(ignoreCreateButton, 'hide');
     toggleElement(ignoreFormContainer, 'show');
+    ignoreFormContainer.scrollIntoView();
   });
 
   // Cancel button
