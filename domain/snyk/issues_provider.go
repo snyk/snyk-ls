@@ -23,6 +23,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+//go:generate $GOPATH/bin/mockgen -source=issues_provider.go -destination mock_snyk/issues_provider_mock.go -package mock_snyk -self_package github.com/snyk/snyk-ls/domain/snyk/mock
+
 type IssuesByFile types.IssuesByFile
 
 func (f IssuesByFile) SeverityCountsAsString(critical, high, medium, low int) string {

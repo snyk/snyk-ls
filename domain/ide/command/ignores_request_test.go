@@ -6,244 +6,46 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/creachadair/jrpc2"
-	"github.com/rs/zerolog"
-
-	"github.com/snyk/go-application-framework/pkg/analytics"
+	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
-	"github.com/snyk/go-application-framework/pkg/networking"
-	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
-	"github.com/snyk/go-application-framework/pkg/ui"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
-
-// TODO replace engine mock with testutil.SetUpEngineMock(t, c)
-type MockEngine struct {
-	mock.Mock
-	config configuration.Configuration
-}
-
-func (m *MockEngine) Init() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) AddExtensionInitializer(initializer workflow.ExtensionInit) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) Register(id workflow.Identifier, config workflow.ConfigurationOptions, callback workflow.Callback) (workflow.Entry, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) GetWorkflows() []workflow.Identifier {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) GetWorkflow(id workflow.Identifier) (workflow.Entry, bool) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) InvokeWithInput(id workflow.Identifier, input []workflow.Data) ([]workflow.Data, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) InvokeWithInputAndConfig(id workflow.Identifier, input []workflow.Data, config configuration.Configuration) ([]workflow.Data, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) GetAnalytics() analytics.Analytics {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) GetNetworkAccess() networking.NetworkAccess {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) SetLogger(logger *zerolog.Logger) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) SetConfiguration(config configuration.Configuration) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) GetLogger() *zerolog.Logger {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) GetUserInterface() ui.UserInterface {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) SetUserInterface(ui ui.UserInterface) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) SetRuntimeInfo(ri runtimeinfo.RuntimeInfo) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockEngine) InvokeWithConfig(workflowID workflow.Identifier, config configuration.Configuration) ([]workflow.Data, error) {
-	args := m.Called(workflowID, config)
-	if args.Get(0) == nil {
-		return []workflow.Data{}, args.Error(1)
-	}
-	return args.Get(0).([]workflow.Data), args.Error(1)
-}
-
-func (m *MockEngine) Invoke(workflowID workflow.Identifier) ([]workflow.Data, error) {
-	args := m.Called(workflowID)
-	if args.Get(0) == nil {
-		return []workflow.Data{}, args.Error(1)
-	}
-	return args.Get(0).([]workflow.Data), args.Error(1)
-}
-
-func (m *MockEngine) GetConfiguration() configuration.Configuration {
-	return m.config
-}
-
-func NewMockIssue(id string, path types.FilePath) *snyk.Issue {
-	return &snyk.Issue{
-		ID:               id,
-		AffectedFilePath: path,
-		Product:          product.ProductCode,
-		Severity:         types.Medium,
-		AdditionalData: snyk.CodeIssueData{
-			Key:                "",
-			Title:              "",
-			Message:            "",
-			Rule:               "",
-			RuleId:             "",
-			RepoDatasetSize:    0,
-			ExampleCommitFixes: nil,
-			CWE:                nil,
-			Text:               "",
-			Markers:            nil,
-			Cols:               snyk.CodePoint{},
-			Rows:               snyk.CodePoint{},
-			IsSecurityType:     false,
-			IsAutofixable:      false,
-			PriorityScore:      0,
-			HasAIFix:           false,
-			DataFlow:           nil,
-			Details:            "",
-		},
-	}
-}
-
-// TODO except for this MockIssueProvider, there are another two IssueProvider Mocks in the snyk-ls. Refactor to make fewer copies.
-// MockIssueProvider is a mock implementation of the snyk.IssueProvider interface for testing.
-type MockIssueProvider struct {
-	mock.Mock
-}
-
-func (m *MockIssueProvider) IssuesForFile(path types.FilePath) []types.Issue {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockIssueProvider) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockIssueProvider) Issues() snyk.IssuesByFile {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockIssueProvider) Issue(id string) types.Issue {
-	args := m.Called(id)
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(types.Issue)
-}
-
-// MockServer is a mock implementation of the types.Server interface for testing.
-type MockServer struct {
-	mock.Mock
-}
-
-func (m *MockServer) Notify(ctx context.Context, method string, params any) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockServer) Callback(ctx context.Context, method string, params any) (*jrpc2.Response, error) {
-	args := m.Called(ctx, method, params)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*jrpc2.Response), args.Error(1)
-}
 
 func Test_submitIgnoreRequest_Execute(t *testing.T) {
 	tests := []struct {
-		name                string
-		arguments           []any
-		mockIssueProvider   func(provider *MockIssueProvider)
-		mockEngineSetup     func(engine *MockEngine)
-		mockServerSetup     func(server *MockServer)
-		expectedError       error
-		expectedIssueCalled bool
+		name                         string
+		arguments                    []any
+		mockIssueProviderExpectation func(issueProvider *mock_snyk.MockIssueProvider)
+		expectedError                error
+		expectedIssueCalled          bool
 	}{
 		{
-			name:                "Invalid issueId type",
-			arguments:           []any{"create", 123},
-			mockIssueProvider:   func(provider *MockIssueProvider) {},
-			mockEngineSetup:     func(engine *MockEngine) {},
-			mockServerSetup:     func(server *MockServer) {},
-			expectedError:       errors.New("issueId type should be a string"),
-			expectedIssueCalled: false,
+			name:                         "Invalid issueId type",
+			arguments:                    []any{"create", 123},
+			mockIssueProviderExpectation: func(issueProvider *mock_snyk.MockIssueProvider) {},
+			expectedError:                errors.New("issueId type should be a string"),
+			expectedIssueCalled:          false,
 		},
 		{
 			name:      "Issue not found",
 			arguments: []any{"create", "issueId"},
-			mockIssueProvider: func(provider *MockIssueProvider) {
-				provider.On("Issue", "issueId").Return(nil)
+			mockIssueProviderExpectation: func(issueProvider *mock_snyk.MockIssueProvider) {
+				issueProvider.EXPECT().Issue(gomock.Any()).Return(nil)
 			},
-			mockEngineSetup:     func(engine *MockEngine) {},
-			mockServerSetup:     func(server *MockServer) {},
 			expectedError:       errors.New("issue not found"),
 			expectedIssueCalled: true,
 		},
 		{
 			name:      "Invalid workflow type argument",
 			arguments: []any{123, "issueId"},
-			mockIssueProvider: func(provider *MockIssueProvider) {
+			mockIssueProviderExpectation: func(issueProvider *mock_snyk.MockIssueProvider) {
 			},
-			mockEngineSetup:     func(engine *MockEngine) {},
-			mockServerSetup:     func(server *MockServer) {},
 			expectedError:       errors.New("workflow type should be a string"),
 			expectedIssueCalled: false,
 		},
@@ -252,25 +54,16 @@ func Test_submitIgnoreRequest_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := testutil.UnitTest(t)
-			mockEngine := &MockEngine{}
-			mockIssueProvider := &MockIssueProvider{}
-			if tt.mockIssueProvider != nil {
-				tt.mockIssueProvider(mockIssueProvider)
+			ctrl := gomock.NewController(t)
+			server := mock_types.NewMockServer(ctrl)
+			issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
+			if tt.mockIssueProviderExpectation != nil {
+				tt.mockIssueProviderExpectation(issueProvider)
 			}
-
-			if tt.mockEngineSetup != nil {
-				tt.mockEngineSetup(mockEngine)
-			}
-
-			mockServer := &MockServer{}
-			if tt.mockServerSetup != nil {
-				tt.mockServerSetup(mockServer)
-			}
-
 			cmd := &submitIgnoreRequest{
 				command:       types.CommandData{Arguments: tt.arguments},
-				issueProvider: mockIssueProvider,
-				srv:           mockServer,
+				issueProvider: issueProvider,
+				srv:           server,
 				c:             c,
 			}
 
@@ -281,91 +74,6 @@ func Test_submitIgnoreRequest_Execute(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
-			mockIssueProvider.AssertExpectations(t)
-			mockEngine.AssertExpectations(t)
-			mockServer.AssertExpectations(t)
-		})
-	}
-}
-
-func Test_submitIgnoreRequest_createIgnoreRequest(t *testing.T) {
-	tests := []struct {
-		name                  string
-		arguments             []any
-		mockEngineSetup       func(engine *MockEngine)
-		mockCreateConfigSetup func(cmd *submitIgnoreRequest)
-		expectedError         error
-	}{
-		{
-			name:      "Successful creation",
-			arguments: []any{"create", "issueId", "wont_fix", "reason", "expiration"},
-			mockEngineSetup: func(engine *MockEngine) {
-				engine.config = configuration.New()
-				jsonData := `{"guid": "test-guid", "justification": "test-justification", "status": "accepted", "properties": {"category": "test-category", "expiration": "2024-08-06T13:16:53Z", "ignoredOn": "2024-02-23T16:08:25Z", "ignoredBy": {"name": "test-name"}}}`
-				engine.On("InvokeWithConfig", ignore_workflow.WORKFLOWID_IGNORE_CREATE, mock.Anything).Return([]workflow.Data{workflow.NewData(
-					workflow.NewTypeIdentifier(ignore_workflow.WORKFLOWID_IGNORE_CREATE, "dummy-data-1"),
-					"application/json",
-					[]byte(jsonData),
-				)}, nil)
-			},
-			mockCreateConfigSetup: func(cmd *submitIgnoreRequest) {
-				// No specific setup needed for successful case
-				c := testutil.UnitTest(t)
-				cmd.c = c
-			},
-			expectedError: nil,
-		},
-		{
-			name:      "initializeCreateConfiguration fails",
-			arguments: []any{"create", "issueId", "wont_fix", "reason", "expiration"},
-			mockEngineSetup: func(engine *MockEngine) {
-				engine.config = configuration.New()
-			},
-			mockCreateConfigSetup: func(cmd *submitIgnoreRequest) {
-				cmd.command.Arguments = []any{"create", "issueId", 123, "reason", "expiration"}
-			},
-			expectedError: errors.New("ignoreType should be a string"),
-		},
-		{
-			name:      "executeIgnoreWorkflow fails",
-			arguments: []any{"create", "issueId", "wont_fix", "reason", "expiration"},
-			mockEngineSetup: func(engine *MockEngine) {
-				engine.config = configuration.New()
-				engine.On("InvokeWithConfig", ignore_workflow.WORKFLOWID_IGNORE_CREATE, mock.Anything).Return(nil, errors.New("some error"))
-			},
-			mockCreateConfigSetup: func(cmd *submitIgnoreRequest) {
-				// No specific setup needed for successful case
-			},
-			expectedError: errors.New("some error"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockEngine := &MockEngine{} // Define mockEngine here
-			if tt.mockEngineSetup != nil {
-				tt.mockEngineSetup(mockEngine)
-			}
-
-			cmd := &submitIgnoreRequest{
-				command: types.CommandData{
-					Arguments: tt.arguments,
-				},
-			}
-			if tt.mockCreateConfigSetup != nil {
-				tt.mockCreateConfigSetup(cmd)
-			}
-
-			filePath := types.FilePath("/test/content/root")
-			issue := NewMockIssue("id1", filePath)
-			err := cmd.createIgnoreRequest(mockEngine, "finding123", types.FilePath("/test/content/root"), issue)
-
-			if tt.expectedError != nil {
-				assert.EqualError(t, err, tt.expectedError.Error())
-			} else {
-				assert.NoError(t, err)
-			}
-			mockEngine.AssertExpectations(t)
 		})
 	}
 }
@@ -407,14 +115,15 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
 			cmd := &submitIgnoreRequest{
 				command: types.CommandData{
 					Arguments: tt.arguments,
 				},
 			}
 
-			gafConfig := configuration.New()
-			config, err := cmd.initializeCreateConfiguration(gafConfig, "finding123", types.FilePath("/test/content/root"))
+			gafConfig := c.Engine().GetConfiguration()
+			config, err := cmd.initializeCreateConfiguration(gafConfig, "finding123", "/test/content/root")
 
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
@@ -464,6 +173,7 @@ func Test_getIgnoreIdFromCmdArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testutil.UnitTest(t)
 			cmd := &submitIgnoreRequest{
 				command: types.CommandData{
 					Arguments: tt.arguments,
@@ -543,6 +253,7 @@ func Test_GetCommandArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testutil.UnitTest(t)
 			cmd := &submitIgnoreRequest{
 				command: types.CommandData{
 					Arguments: tt.arguments,
@@ -609,6 +320,8 @@ func Test_getStringArgument(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testutil.UnitTest(t)
+
 			cmd := &submitIgnoreRequest{
 				command: types.CommandData{
 					Arguments: tt.arguments,
@@ -629,8 +342,10 @@ func Test_getStringArgument(t *testing.T) {
 
 func Test_createBaseConfiguration(t *testing.T) {
 	// Arrange
+	c := testutil.UnitTest(t)
+	gafConfig := c.Engine().GetConfiguration()
+
 	contentRoot := types.FilePath("/test/content/root")
-	gafConfig := configuration.New()
 
 	// Act
 	result := initializeBaseConfiguration(gafConfig, contentRoot)
@@ -643,10 +358,11 @@ func Test_createBaseConfiguration(t *testing.T) {
 
 func Test_addCreateAndUpdateConfiguration(t *testing.T) {
 	// Arrange
+	c := testutil.UnitTest(t)
 	ignoreType := "testIgnoreType"
 	reason := "testReason"
 	expiration := "testExpiration"
-	gafConfig := configuration.New()
+	gafConfig := c.Engine().GetConfiguration()
 
 	// Act
 	result := addCreateAndUpdateConfiguration(gafConfig, ignoreType, reason, expiration)

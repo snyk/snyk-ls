@@ -397,6 +397,12 @@ func (f *FakeCodeScannerClient) UploadAndAnalyze(_ context.Context, _ string, _ 
 	return &analysisResponse, "", err
 }
 
-func (f *FakeCodeScannerClient) Upload(context.Context, string, scan.Target, <-chan string, map[string]bool) (bundle.Bundle, error) {
-	panic("implement me")
+func (f *FakeCodeScannerClient) Upload(
+	ctx context.Context,
+	requestId string,
+	target scan.Target,
+	files <-chan string,
+	changedFiles map[string]bool,
+) (bundle.Bundle, error) {
+	panic("Not implemented")
 }

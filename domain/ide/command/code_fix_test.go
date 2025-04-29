@@ -20,14 +20,15 @@ import (
 	"context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -46,29 +47,6 @@ var sampleRangeArg = map[string]interface{}{
 }
 var codeActionId = uuid.New()
 var sampleArgs = []any{codeActionId.String(), "test/path.js", sampleRangeArg}
-var _ snyk.IssueProvider = (*issueProviderMock)(nil)
-
-type issueProviderMock struct {
-	mock.Mock
-}
-
-func (m *issueProviderMock) Issues() snyk.IssuesByFile {
-	args := m.Called()
-	return args.Get(0).(snyk.IssuesByFile)
-}
-
-func (m *issueProviderMock) Issue(_ string) types.Issue {
-	panic("this should not be called")
-}
-
-func (m *issueProviderMock) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
-	args := m.Called(path, r)
-	return args.Get(0).([]types.Issue)
-}
-
-func (m *issueProviderMock) IssuesForFile(_ types.FilePath) []types.Issue {
-	panic("this should not be called")
-}
 
 func setupClientCapability(config *config.Config) {
 	clientCapabilties := config.ClientCapabilities()
@@ -142,6 +120,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 	c := testutil.UnitTest(t)
 	// arrange
 	setupClientCapability(c)
+	ctrl := gomock.NewController(t)
 
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
@@ -160,8 +139,8 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 		path: issues,
 	}
 
-	issueProviderMock := new(issueProviderMock)
-	issueProviderMock.On("Issues").Return(issueMap)
+	issueProviderMock := mock_snyk.NewMockCacheProvider(ctrl)
+	issueProviderMock.EXPECT().Issues().Return(issueMap)
 	cmd.issueProvider = issueProviderMock
 
 	// act
@@ -180,6 +159,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 func Test_fixCodeIssue_noEdit(t *testing.T) {
 	c := testutil.UnitTest(t)
 	// arrange
+	ctrl := gomock.NewController(t)
 	setupClientCapability(c)
 
 	mockNotifier := notification.NewMockNotifier()
@@ -203,8 +183,8 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 		path: issues,
 	}
 
-	issueProviderMock := new(issueProviderMock)
-	issueProviderMock.On("Issues").Return(issueMap)
+	issueProviderMock := mock_snyk.NewMockIssueProvider(ctrl)
+	issueProviderMock.EXPECT().Issues().Return(issueMap)
 	cmd.issueProvider = issueProviderMock
 
 	// act
@@ -223,13 +203,14 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
 	c := testutil.UnitTest(t)
 	// arrange
+	ctrl := gomock.NewController(t)
 	setupClientCapability(c)
 
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(mockNotifier)
 
-	issueProviderMock := new(issueProviderMock)
-	issueProviderMock.On("Issues").Return(snyk.IssuesByFile{})
+	issueProviderMock := mock_snyk.NewMockIssueProvider(ctrl)
+	issueProviderMock.EXPECT().Issues().Return(snyk.IssuesByFile{})
 
 	cmd.issueProvider = issueProviderMock
 

@@ -114,7 +114,6 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 }
 
 func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics.Status, err error) {
-	logger := a.c.Logger().With().Str("method", "sendAuthenticationAnalytics").Logger()
 	id, err2 := instrumentation.GetTargetId(os.Args[0], instrumentation.FilesystemTargetId)
 	if err2 != nil {
 		id = "pkg:filesystem/dummy/dummy"
@@ -126,28 +125,7 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics
 		TargetId:        id,
 	}
 
-	ic := analytics2.PayloadForAnalyticsEventParam(a.c, event)
-
-	if err != nil {
-		ic.AddError(err)
-	}
-
-	analyticsRequestBody, err := analytics.GetV2InstrumentationObject(ic)
-	if err != nil {
-		logger.Err(err).Msg("Failed to get analytics request body")
-		return
-	}
-
-	bytes, err := json.Marshal(analyticsRequestBody)
-	if err != nil {
-		logger.Err(err).Msg("Failed to marshal analytics request body")
-		return
-	}
-
-	err = analytics2.SendAnalyticsToAPI(a.c, bytes)
-	if err != nil {
-		logger.Err(err).Msg("Failed to send analytics")
-	}
+	analytics2.SendAnalytics(a.c, event, err)
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {

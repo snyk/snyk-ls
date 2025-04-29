@@ -21,50 +21,25 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/creachadair/jrpc2"
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
-
-func Test_codeFixDiffs_Command(t *testing.T) {
-
-}
-
-type mockIssueProvider struct {
-}
-type ServerImplMock struct{}
-
-func (b *ServerImplMock) Callback(_ context.Context, _ string, _ any) (*jrpc2.Response, error) { // todo: check if better way exists, mocking? go mock / testify
-	return nil, nil
-}
-func (b *ServerImplMock) Notify(_ context.Context, _ string, _ any) error {
-	return nil
-}
-
-func (m mockIssueProvider) Issues() snyk.IssuesByFile {
-	panic("this should not be called")
-}
-
-func (m mockIssueProvider) IssuesForFile(path types.FilePath) []types.Issue {
-	panic("this should not be called")
-}
-
-func (m mockIssueProvider) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
-	panic("this should not be called")
-}
-func (m mockIssueProvider) Issue(key string) types.Issue {
-	return &snyk.Issue{ID: key}
-}
 
 func Test_codeFixDiffs_Execute(t *testing.T) {
 	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	server := mock_types.NewMockServer(ctrl)
+	server.EXPECT().Callback(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	instrumentor := code.NewCodeInstrumentor()
 	snykCodeClient := &code.FakeSnykCodeClient{
 		UnifiedDiffSuggestions: []code.AutofixUnifiedDiffSuggestion{
@@ -84,7 +59,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		notifier:    notification.NewMockNotifier(),
 		codeScanner: codeScanner,
 		c:           c,
-		srv:         &ServerImplMock{},
+		srv:         server,
 	}
 	if runtime.GOOS == "windows" {
 		codeScanner.AddBundleHash("\\folderPath", "bundleHash")
@@ -92,10 +67,14 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		codeScanner.AddBundleHash("/folderPath", "bundleHash")
 	}
 	t.Run("happy path", func(t *testing.T) {
-		cut.issueProvider = mockIssueProvider{}
-
+		issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
+		issue := snyk.Issue{
+			ID: uuid.NewString(),
+		}
+		issueProvider.EXPECT().Issue(gomock.Any()).Return(&issue)
+		cut.issueProvider = issueProvider
 		cut.command = types.CommandData{
-			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", "issueId"},
+			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", issue.ID},
 		}
 
 		suggestions, err := cut.Execute(context.Background())
@@ -107,7 +86,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	})
 
 	t.Run("unhappy - file not beneath folder", func(t *testing.T) {
-		cut.issueProvider = mockIssueProvider{}
+		cut.issueProvider = mock_snyk.NewMockIssueProvider(ctrl)
 		cut.command = types.CommandData{
 			Arguments: []any{"file:///folderPath", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -119,7 +98,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	})
 
 	t.Run("unhappy - folder empty", func(t *testing.T) {
-		cut.issueProvider = mockIssueProvider{}
+		cut.issueProvider = mock_snyk.NewMockIssueProvider(ctrl)
 		cut.command = types.CommandData{
 			Arguments: []any{"", "file:///anotherFolder/issuePath", "issueId"},
 		}
@@ -131,7 +110,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	})
 
 	t.Run("unhappy - file empty", func(t *testing.T) {
-		cut.issueProvider = mockIssueProvider{}
+		cut.issueProvider = mock_snyk.NewMockIssueProvider(ctrl)
 		cut.command = types.CommandData{
 			Arguments: []any{"file://folder", "", "issueId"},
 		}

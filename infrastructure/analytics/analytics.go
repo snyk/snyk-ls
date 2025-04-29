@@ -35,6 +35,14 @@ import (
 
 var analyticsMu = sync.RWMutex{}
 
+func NewAnalyticsEventParam(interactionType string) types.AnalyticsEventParam {
+	return types.AnalyticsEventParam{
+		InteractionType: interactionType,
+		Status:          string(analytics.Success),
+		TimestampMs:     time.Now().UnixMilli(),
+	}
+}
+
 func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 	logger := c.Logger().With().Str("method", "analytics.sendAnalyticsToAPI").Logger()
 
@@ -112,4 +120,30 @@ func PayloadForAnalyticsEventParam(c *config.Config, param types.AnalyticsEventP
 	ic.SetCategory(param.Category)
 	ic.SetTargetId(param.TargetId)
 	return ic
+}
+
+func SendAnalytics(c *config.Config, event types.AnalyticsEventParam, err error) {
+	logger := c.Logger().With().Str("method", "analytics.SendAnalytics").Logger()
+	ic := PayloadForAnalyticsEventParam(c, event)
+
+	if err != nil {
+		ic.AddError(err)
+	}
+
+	analyticsRequestBody, err := analytics.GetV2InstrumentationObject(ic)
+	if err != nil {
+		logger.Err(err).Msg("Failed to get analytics request body")
+		return
+	}
+
+	bytes, err := json.Marshal(analyticsRequestBody)
+	if err != nil {
+		logger.Err(err).Msg("Failed to marshal analytics request body")
+		return
+	}
+
+	err = SendAnalyticsToAPI(c, bytes)
+	if err != nil {
+		logger.Err(err).Msg("Failed to send analytics")
+	}
 }
