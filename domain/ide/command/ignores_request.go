@@ -292,6 +292,6 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 }
 
 func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics() {
-	event := analytics.NewAnalyticsEventParam("create ignores")
+	event := analytics.NewAnalyticsEventParam("Create ignores")
 	analytics.SendAnalytics(cmd.c, event, nil)
 }

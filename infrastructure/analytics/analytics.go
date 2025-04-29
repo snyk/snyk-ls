@@ -38,6 +38,7 @@ var analyticsMu = sync.RWMutex{}
 func NewAnalyticsEventParam(interactionType string) types.AnalyticsEventParam {
 	return types.AnalyticsEventParam{
 		InteractionType: interactionType,
+		Category:        []string{},
 		Status:          string(analytics.Success),
 		TimestampMs:     time.Now().UnixMilli(),
 	}

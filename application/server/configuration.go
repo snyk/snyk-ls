@@ -25,6 +25,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/creachadair/jrpc2"
@@ -253,7 +254,7 @@ func updateDeltaFindings(c *config.Config, settings types.Settings) {
 
 	modified := c.SetDeltaFindingsEnabled(enable)
 	if modified {
-		sendWorkspaceConfigChanged(c)
+		sendWorkspaceConfigChanged(c, "deltaFindingsEnabled(", settings.EnableDeltaFindings, enable)
 	}
 }
 
@@ -400,7 +401,7 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions) {
 	modified := c.SetIssueViewOptions(s)
 
 	if modified {
-		sendWorkspaceConfigChanged(c)
+		sendWorkspaceConfigChanged(c, "", nil, nil)
 	}
 }
 
@@ -409,14 +410,36 @@ func updateSeverityFilter(c *config.Config, s *types.SeverityFilter) {
 	modified := c.SetSeverityFilter(s)
 
 	if modified {
-		sendWorkspaceConfigChanged(c)
+		sendWorkspaceConfigChanged(c, "", nil, nil)
 	}
 }
 
-func sendWorkspaceConfigChanged(c *config.Config) {
+func sendWorkspaceConfigChanged(c *config.Config, configName string, oldVal any, newVal any) {
 	ws := c.Workspace()
 	if ws == nil {
 		return
 	}
 	go ws.HandleConfigChange()
+
+	if len(configName) == 0 {
+		return
+	}
+	SendConfigChangedAnalyticsEvent(c, "enableDeltaFindings", oldVal, newVal)
+}
+
+func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}) {
+	if c == nil {
+		// Cannot send analytics without config
+		// Consider logging this situation if possible without causing another cycle
+		return
+	}
+	event := analytics.NewAnalyticsEventParam("Config changed")
+	// Add specific change details to the event extension
+	event.Extension = map[string]any{
+		"configuration": field,
+		"oldValue":      oldValue,
+		"newValue":      newValue,
+	}
+	// Call the existing SendAnalytics function
+	analytics.SendAnalytics(c, event, nil)
 }
