@@ -145,18 +145,12 @@ install:
 .PHONY: license-update
 license-update: $(TOOLS_BIN)/go-licenses
 	@echo "==> Updating license information..."
-	@# TODO - Find a better solution to prevent the deletion of manually added license files.
-	@mkdir -p 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill'
-	@mv 'licenses/github.com/brianblakely/nodep-date-input-polyfill/LICENSE' 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill/LICENSE'
-	@rm -rf 'licenses'
-	@$(TOOLS_BIN)/go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
-	@mkdir -p 'licenses/github.com/brianblakely/nodep-date-input-polyfill'
-	@mv 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill/LICENSE' 'licenses/github.com/brianblakely/nodep-date-input-polyfill/LICENSE'
-	@rm -rf 'licenses_temp'
+	@rm -rf licenses
+	@$(TOOLS_BIN)/go-licenses save --save_path="licenses" --ignore "github.com/snyk/snyk-ls" .
 
 .PHONY: licenses
 licenses: $(TOOLS_BIN)/go-licenses
-	@$(TOOLS_BIN)/go-licenses report . --ignore github.com/snyk/snyk-ls
+	@$(TOOLS_BIN)/go-licenses report --ignore github.com/snyk/snyk-ls .
 
 help: Makefile
 	@echo "Usage: make <command>"
