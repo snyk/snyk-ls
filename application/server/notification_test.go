@@ -94,7 +94,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 		},
 	}
 
-	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
+	rsp, err := loc.Client.Call(t.Context(), "initialize", clientParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestCancelProgress(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestCancelProgress(t *testing.T) {
 	expectedWorkdoneProgressCancelParams := types.WorkdoneProgressCancelParams{
 		Token: "token",
 	}
-	_, err = loc.Client.Call(ctx, "window/workDoneProgress/cancel", expectedWorkdoneProgressCancelParams)
+	_, err = loc.Client.Call(t.Context(), "window/workDoneProgress/cancel", expectedWorkdoneProgressCancelParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
 
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
 
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestShowMessageRequest(t *testing.T) {
 		c := testutil.UnitTest(t)
 		loc, jsonRPCRecorder := setupServer(t, c)
 
-		_, err := loc.Client.Call(ctx, "initialize", nil)
+		_, err := loc.Client.Call(t.Context(), "initialize", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -269,7 +269,7 @@ func TestShowMessageRequest(t *testing.T) {
 				Title: selectedAction,
 			}, nil
 		})
-		_, err := loc.Client.Call(ctx, "initialize", nil)
+		_, err := loc.Client.Call(t.Context(), "initialize", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
