@@ -252,9 +252,11 @@ func updateDeltaFindings(c *config.Config, settings types.Settings) {
 		enable = false
 	}
 
+	oldValue := c.IsDeltaFindingsEnabled()
+
 	modified := c.SetDeltaFindingsEnabled(enable)
 	if modified {
-		sendWorkspaceConfigChanged(c, "deltaFindingsEnabled(", settings.EnableDeltaFindings, enable)
+		sendWorkspaceConfigChanged(c, "enableDeltaFindings", oldValue, strconv.FormatBool(enable))
 	}
 }
 
@@ -424,22 +426,16 @@ func sendWorkspaceConfigChanged(c *config.Config, configName string, oldVal any,
 	if len(configName) == 0 {
 		return
 	}
-	SendConfigChangedAnalyticsEvent(c, "enableDeltaFindings", oldVal, newVal)
+	SendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal)
 }
 
 func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}) {
-	if c == nil {
-		// Cannot send analytics without config
-		// Consider logging this situation if possible without causing another cycle
-		return
-	}
-	event := analytics.NewAnalyticsEventParam("Config changed")
-	// Add specific change details to the event extension
+	event := analytics.NewAnalyticsEventParam("Config changed", nil)
+
 	event.Extension = map[string]any{
 		"configuration": field,
 		"oldValue":      oldValue,
 		"newValue":      newValue,
 	}
-	// Call the existing SendAnalytics function
 	analytics.SendAnalytics(c, event, nil)
 }

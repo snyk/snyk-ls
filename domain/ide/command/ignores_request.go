@@ -110,13 +110,9 @@ func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, find
 	}
 
 	err = cmd.executeIgnoreWorkflow(engine, ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig, issue)
-	if err != nil {
-		return err
-	}
+	cmd.sendIgnoreRequestAnalytics(err)
 
-	cmd.sendIgnoreRequestAnalytics()
-
-	return nil
+	return err
 }
 
 func (cmd *submitIgnoreRequest) initializeCreateConfiguration(gafConfig configuration.Configuration, findingId string, contentRoot types.FilePath) (configuration.Configuration, error) {
@@ -291,7 +287,7 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics() {
-	event := analytics.NewAnalyticsEventParam("Create ignores")
-	analytics.SendAnalytics(cmd.c, event, nil)
+func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error) {
+	event := analytics.NewAnalyticsEventParam("Create ignore", err)
+	analytics.SendAnalytics(cmd.c, event, err)
 }
