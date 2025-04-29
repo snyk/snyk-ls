@@ -36,7 +36,7 @@ type fakeCodeHttpClient struct {
 	mu                sync.Mutex
 }
 
-func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId string, feedback string) error {
+func (c *fakeCodeHttpClient) SubmitAutofixFeedback(_ context.Context, fixId string, feedback string) error {
 	c.mu.Lock()
 	c.feedbackSubmitted = feedback
 	c.fixId = fixId
@@ -65,7 +65,7 @@ func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 		apiClient: &apiClient,
 	}
 
-	_, err := codeFixFeedbackCmd.Execute(context.Background())
+	_, err := codeFixFeedbackCmd.Execute(t.Context())
 
 	assert.NoError(t, err)
 	assert.Eventually(t, func() bool {

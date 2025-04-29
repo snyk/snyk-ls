@@ -17,7 +17,6 @@
 package oss
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,7 +40,7 @@ func TestCLIScanner_ScanPackages_WithoutContent(t *testing.T) {
 
 	testFilePath, scanner, cliExecutor := setupCLIScannerAsPackageScanner(t, c)
 
-	scanner.ScanPackages(context.Background(), c, testFilePath, "")
+	scanner.ScanPackages(t.Context(), c, testFilePath, "")
 
 	assert.Eventuallyf(t, func() bool { return len(scanner.inlineValues[testFilePath]) == 2 }, time.Second*5, 10*time.Millisecond, "expected 2 values, got %d", len(scanner.inlineValues))
 	assert.Len(t, scanner.packageIssueCache, 2)
@@ -57,7 +56,7 @@ func TestCLIScanner_ScanPackages_WithContent(t *testing.T) {
 	fileContent := string(bytes)
 	assert.NoError(t, err)
 
-	scanner.ScanPackages(context.Background(), c, testFilePath, fileContent)
+	scanner.ScanPackages(t.Context(), c, testFilePath, fileContent)
 
 	assert.Len(t, scanner.inlineValues[testFilePath], 2)
 	assert.Len(t, scanner.packageIssueCache, 2)
@@ -72,7 +71,7 @@ func TestCLIScanner_ScanPackages_WithContentAndNotSupportedFileExtension(t *test
 	fileContent := string(bytes)
 	assert.NoError(t, err)
 
-	scanner.ScanPackages(context.Background(), c, "test.php", fileContent)
+	scanner.ScanPackages(t.Context(), c, "test.php", fileContent)
 
 	assert.Len(t, scanner.inlineValues, 0)
 	assert.Len(t, scanner.packageIssueCache, 0)
@@ -117,7 +116,7 @@ func TestCLIScanner_updateCachedDependencies_updates_range_of_issues_in_cache(t 
 	testFilePath, cliScanner, _ := setupCLIScannerAsPackageScanner(t, c)
 
 	// first (=cache deps)
-	cliScanner.ScanPackages(context.Background(), c, testFilePath, "")
+	cliScanner.ScanPackages(t.Context(), c, testFilePath, "")
 	dependencies, err := cliScanner.getDependencies(c, testFilePath, "")
 	assert.NoError(t, err)
 	assert.NotEmpty(t, dependencies)

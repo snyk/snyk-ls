@@ -17,7 +17,6 @@
 package server
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -44,7 +43,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +60,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,11 +86,11 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	c.Workspace().AddFolder(dontClear)
 
 	// prepare pre-existent diagnostics for folder
-	folder.ScanFolder(context.Background())
-	dontClear.ScanFolder(context.Background())
+	folder.ScanFolder(t.Context())
+	dontClear.ScanFolder(t.Context())
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +112,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +131,7 @@ func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) 
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
 	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand, Arguments: []any{"LLM"}}
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,18 +153,18 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// reset to use real service
 	command.SetService(command.NewService(authenticationService, di.Notifier(), di.LearnService(), nil, nil, nil, nil))
 
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	params := lsp.ExecuteCommandParams{Command: types.LoginCommand}
 
-	_, err = loc.Client.Call(ctx, "initialized", types.InitializedParams{})
+	_, err = loc.Client.Call(t.Context(), "initialized", types.InitializedParams{})
 	assert.NoError(t, err)
 
 	// Act
-	tokenResponse, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	tokenResponse, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +187,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 
 		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
-		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -205,7 +204,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c.SetTrustedFolderFeatureEnabled(true)
 
 		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
-		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -224,7 +223,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c.SetTrustedFolders([]types.FilePath{"/path/to/folder2"})
 
 		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
-		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"runtime"
 	"testing"
 
@@ -77,7 +76,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", issue.ID},
 		}
 
-		suggestions, err := cut.Execute(context.Background())
+		suggestions, err := cut.Execute(t.Context())
 
 		// Code fix diffs command doesn't return suggestions anymore
 		// TODO: handle getting the suggestions
@@ -91,7 +90,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 			Arguments: []any{"file:///folderPath", "file:///anotherFolder/issuePath", "issueId"},
 		}
 
-		suggestions, err := cut.Execute(context.Background())
+		suggestions, err := cut.Execute(t.Context())
 
 		require.Emptyf(t, suggestions, "suggestions should be empty")
 		require.Error(t, err)
@@ -103,7 +102,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 			Arguments: []any{"", "file:///anotherFolder/issuePath", "issueId"},
 		}
 
-		suggestions, err := cut.Execute(context.Background())
+		suggestions, err := cut.Execute(t.Context())
 
 		require.Emptyf(t, suggestions, "suggestions should be empty")
 		require.Error(t, err)
@@ -115,7 +114,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 			Arguments: []any{"file://folder", "", "issueId"},
 		}
 
-		suggestions, err := cut.Execute(context.Background())
+		suggestions, err := cut.Execute(t.Context())
 
 		require.Emptyf(t, suggestions, "suggestions should be empty")
 		require.Error(t, err)

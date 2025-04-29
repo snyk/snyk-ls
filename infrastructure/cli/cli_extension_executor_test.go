@@ -17,7 +17,6 @@
 package cli
 
 import (
-	"context"
 	"testing"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -64,7 +63,7 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 
 	// Run
 	executorUnderTest := NewExtensionExecutor(c)
-	actualData, err := executorUnderTest.Execute(context.Background(), cmd, expectedWorkingDir)
+	actualData, err := executorUnderTest.Execute(t.Context(), cmd, expectedWorkingDir)
 	assert.Nil(t, err)
 
 	// Compare
@@ -84,7 +83,7 @@ func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {
 
 	// Run
 	executorUnderTest := NewExtensionExecutor(c)
-	actualData, err := executorUnderTest.Execute(context.Background(), cmd, "")
+	actualData, err := executorUnderTest.Execute(t.Context(), cmd, "")
 
 	// Compare
 	assert.NotNil(t, err)

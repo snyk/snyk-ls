@@ -206,7 +206,7 @@ func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor()
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	_, _ = scanner.Scan(ctx, "", "", nil)
@@ -334,7 +334,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			_, _ = scanner.Scan(context.Background(), types.FilePath(p), types.FilePath(folderPath), nil)
+			_, _ = scanner.Scan(t.Context(), types.FilePath(p), types.FilePath(folderPath), nil)
 			wg.Done()
 		}()
 	}
@@ -426,7 +426,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	t.Cleanup(cancel)
 	targetFile, _ := filepath.Abs(workingDir + testDataPackageJson)
@@ -452,7 +452,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	p, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	// Act
@@ -474,8 +474,8 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	targetPath, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
-	ctx1, cancel1 := context.WithCancel(context.Background())
-	ctx2, cancel2 := context.WithCancel(context.Background())
+	ctx1, cancel1 := context.WithCancel(t.Context())
+	ctx2, cancel2 := context.WithCancel(t.Context())
 	t.Cleanup(cancel1)
 	t.Cleanup(cancel2)
 
@@ -500,7 +500,7 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	scanner.refreshScanWaitDuration = 2 * time.Second
 	workingDir, _ := os.Getwd()
 	targetPath, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	// Act
 	scanner.scheduleRefreshScan(ctx, types.FilePath(targetPath))
@@ -524,7 +524,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	filePath, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
-	analysis, err := scanner.Scan(context.Background(), types.FilePath(filePath), "", nil)
+	analysis, err := scanner.Scan(t.Context(), types.FilePath(filePath), "", nil)
 
 	// Assert
 	assert.NoError(t, err)

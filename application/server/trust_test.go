@@ -45,7 +45,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.
 	sc := &scanner.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
-	command.HandleUntrustedFolders(context.Background(), c, loc.Server)
+	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
 	assert.Eventually(t, func() bool {
 		return checkTrustMessageRequest(jsonRPCRecorder, c) == true
 	}, 5*time.Second, time.Millisecond)
@@ -61,7 +61,7 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 	w.StartRequestTrustCommunication()
 
-	command.HandleUntrustedFolders(context.Background(), c, loc.Server)
+	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
 
 	assert.Len(t, jsonRPCRecorder.FindCallbacksByMethod("window/showMessageRequest"), 0)
 	assert.Equal(t, sc.Calls(), 0)
@@ -82,7 +82,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 	c.SetLSPInitialized(true)
 	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 
-	command.HandleUntrustedFolders(context.Background(), c, loc.Server)
+	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
 
 	assert.Eventually(t, func() bool {
 		addTrustedSent := len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.addTrustedFolders")) == 1
@@ -103,7 +103,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 	c.SetTrustedFolderFeatureEnabled(true)
 
-	command.HandleUntrustedFolders(context.Background(), c, loc.Server)
+	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
 
 	assert.Equal(t, sc.Calls(), 0)
 }
@@ -115,14 +115,14 @@ func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	_, err := loc.Client.Call(context.Background(), "initialize", types.InitializeParams{
+	_, err := loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
 		RootURI: uri.PathToUri("/untrusted/dummy"),
 	})
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
 
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
@@ -136,7 +136,7 @@ func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetTrustedFolderFeatureEnabled(true)
 
-	_, err := loc.Client.Call(context.Background(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
 		Event: types.WorkspaceFoldersChangeEvent{
 			Added: []types.WorkspaceFolder{
 				{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"},
@@ -172,14 +172,14 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	// only trust first dir
 	c.SetTrustedFolders([]types.FilePath{repo1})
 
-	_, err = loc.Client.Call(context.Background(), "initialize", types.InitializeParams{
+	_, err = loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
 		RootURI: uri.PathToUri(exploitDir),
 	})
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
 
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}

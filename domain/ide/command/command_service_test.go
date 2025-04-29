@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,7 +37,7 @@ func Test_ExecuteCommand(t *testing.T) {
 		CommandId: types.CopyAuthLinkCommand,
 	}
 
-	url, _ := service.ExecuteCommandData(context.Background(), cmd, nil)
+	url, _ := service.ExecuteCommandData(t.Context(), cmd, nil)
 
 	assert.Equal(t, "https://auth.url", url)
 }

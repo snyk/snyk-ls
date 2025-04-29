@@ -17,7 +17,6 @@
 package code
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -123,7 +122,7 @@ func TestCreateBundle(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		bundle, err := c.createBundle(context.Background(), "testRequestId", types.FilePath(dir), sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
+		bundle, err := c.createBundle(t.Context(), "testRequestId", types.FilePath(dir), sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -148,7 +147,7 @@ func TestCreateBundle(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		bundle, err := c.createBundle(context.Background(), "testRequestId", types.FilePath(dir), sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
+		bundle, err := c.createBundle(t.Context(), "testRequestId", types.FilePath(dir), sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
 		bundleFiles := bundle.Files
 		if err != nil {
 			t.Fatal(err)
@@ -180,7 +179,7 @@ func TestCreateBundle(t *testing.T) {
 		err := os.WriteFile(file, []byte("some content so the file won't be skipped"), 0600)
 		assert.Nil(t, err)
 
-		bundle, err := scanner.createBundle(context.Background(), "testRequestId", tempDir, sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
+		bundle, err := scanner.createBundle(t.Context(), "testRequestId", tempDir, sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
 		assert.Nil(t, err)
 		relativePath, _ := ToRelativeUnixPath(tempDir, types.FilePath(file))
 		assert.Contains(t, bundle.Files, relativePath)
@@ -212,7 +211,7 @@ func TestCreateBundle(t *testing.T) {
 			assert.Nil(t, err)
 		}
 
-		bundle, err := scanner.createBundle(context.Background(), "testRequestId", tempDir, sliceToChannel(filesFullPaths), map[types.FilePath]bool{}, testTracker)
+		bundle, err := scanner.createBundle(t.Context(), "testRequestId", tempDir, sliceToChannel(filesFullPaths), map[types.FilePath]bool{}, testTracker)
 
 		// Assert
 		assert.Nil(t, err)
@@ -232,7 +231,7 @@ func retrieveBundle(t *testing.T, fileSize int) (*FakeSnykCodeClient, Bundle) {
 	data := strings.Repeat("a", fileSize)
 	err := os.WriteFile(file, []byte(data), 0600)
 	assert.NoError(t, err)
-	bundle, err := c.createBundle(context.Background(), "testRequestId", types.FilePath(dir), sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
+	bundle, err := c.createBundle(t.Context(), "testRequestId", types.FilePath(dir), sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
 	assert.NoError(t, err)
 	return snykCodeMock, bundle
 }
@@ -297,7 +296,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			fullPath := uri.PathFromUri(firstDoc.URI)
 			docs := sliceToChannel([]string{string(fullPath)})
 
-			_, _ = s.UploadAndAnalyze(context.Background(), docs, baseDir, map[types.FilePath]bool{}, testTracker)
+			_, _ = s.UploadAndAnalyze(t.Context(), docs, baseDir, map[types.FilePath]bool{}, testTracker)
 
 			// verify that create bundle has been called on backend service
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
@@ -318,7 +317,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			defer func(path string) { _ = os.RemoveAll(path) }(string(path))
 			files := []string{string(filePath)}
 
-			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), path, map[types.FilePath]bool{}, testTracker)
+			issues, _ := scanner.UploadAndAnalyze(t.Context(), sliceToChannel(files), path, map[types.FilePath]bool{}, testTracker)
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
@@ -362,7 +361,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	testTracker := progress.NewTestTracker(channel, cancelChannel)
 
 	scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), fakeCodeScanner)
-	issues, _ := scanner.UploadAndAnalyzeWithIgnores(context.Background(), workDir, sliceToChannel(files), map[types.FilePath]bool{}, testTracker)
+	issues, _ := scanner.UploadAndAnalyzeWithIgnores(t.Context(), workDir, sliceToChannel(files), map[types.FilePath]bool{}, testTracker)
 
 	assert.True(t, fakeCodeScanner.UploadAndAnalyzeWasCalled)
 	assert.False(t, issues[0].GetIsIgnored())
@@ -410,7 +409,7 @@ func Test_Scan(t *testing.T) {
 			wg.Add(1)
 			go func(fileName types.FilePath) {
 				t.Log("Running scan for file " + fileName)
-				_, _ = scanner.Scan(context.Background(), fileName, types.FilePath(tempDir), nil)
+				_, _ = scanner.Scan(t.Context(), fileName, types.FilePath(tempDir), nil)
 				t.Log("Finished scan for file " + fileName)
 				wg.Done()
 			}(fileName)
@@ -442,7 +441,7 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func(i int) {
-				_, _ = scanner.Scan(context.Background(), types.FilePath("file"+strconv.Itoa(i)+".go"), tempDir, nil)
+				_, _ = scanner.Scan(t.Context(), types.FilePath("file"+strconv.Itoa(i)+".go"), tempDir, nil)
 				wg.Done()
 			}(i)
 		}
@@ -460,7 +459,7 @@ func Test_Scan(t *testing.T) {
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		// Act
-		_, _ = scanner.Scan(context.Background(), tempDir, tempDir, nil)
+		_, _ = scanner.Scan(t.Context(), tempDir, tempDir, nil)
 
 		// Assert
 		params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
@@ -480,7 +479,7 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func() {
-				_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
+				_, _ = scanner.Scan(t.Context(), "", tempDir, nil)
 				wg.Done()
 			}()
 		}
@@ -503,14 +502,14 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func() {
-				_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
+				_, _ = scanner.Scan(t.Context(), "", tempDir, nil)
 				wg.Done()
 			}()
 		}
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func() {
-				_, _ = scanner.Scan(context.Background(), "", tempDir2, nil)
+				_, _ = scanner.Scan(t.Context(), "", tempDir2, nil)
 				wg.Done()
 			}()
 		}
@@ -527,7 +526,7 @@ func Test_Scan(t *testing.T) {
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
-		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
+		_, _ = scanner.Scan(t.Context(), "", tempDir, nil)
 
 		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
 		assert.Nil(t, params)
@@ -568,7 +567,7 @@ func Test_Scan(t *testing.T) {
 			scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
-			_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
+			_, _ = scanner.Scan(t.Context(), "", tempDir, nil)
 
 			assert.Equal(t, tc.createBundleCalled, snykCodeMock.WasCalled(CreateBundleOperation))
 		})
@@ -737,7 +736,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		files := []string{string(filePath)}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[types.FilePath]bool{}, testTracker)
+		issues, _ := scanner.UploadAndAnalyze(t.Context(), sliceToChannel(files), "", map[types.FilePath]bool{}, testTracker)
 
 		// Default is to have 1 fake action from analysis + 0 from autofix
 		assert.Len(t, issues[0].GetCodeActions(), 1)
@@ -766,7 +765,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		files := []string{string(filePath)}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[types.FilePath]bool{}, testTracker)
+		issues, _ := scanner.UploadAndAnalyze(t.Context(), sliceToChannel(files), "", map[types.FilePath]bool{}, testTracker)
 
 		// Default is to have 1 fake action from analysis + 0 from autofix
 		assert.Len(t, issues[0].GetCodeActions(), 1)
@@ -792,7 +791,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		files := []string{string(filePath)}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), path, map[types.FilePath]bool{}, testTracker)
+		issues, _ := scanner.UploadAndAnalyze(t.Context(), sliceToChannel(files), path, map[types.FilePath]bool{}, testTracker)
 
 		assert.Len(t, issues[0].GetCodeActions(), 2)
 
