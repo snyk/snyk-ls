@@ -25,9 +25,6 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/infrastructure/analytics"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
-
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 
@@ -35,6 +32,8 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -426,11 +425,13 @@ func sendWorkspaceConfigChanged(c *config.Config, configName string, oldVal any,
 	if len(configName) == 0 {
 		return
 	}
-	SendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal)
+	for _, folder := range ws.Folders() {
+		go sendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folder.Path())
+	}
 }
 
-func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}) {
-	event := analytics.NewAnalyticsEventParam("Config changed", nil)
+func sendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}, path types.FilePath) {
+	event := analytics.NewAnalyticsEventParam("Config changed", nil, path)
 
 	event.Extension = map[string]any{
 		"configuration": field,

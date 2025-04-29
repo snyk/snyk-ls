@@ -110,7 +110,7 @@ func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, find
 	}
 
 	err = cmd.executeIgnoreWorkflow(engine, ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig, issue)
-	cmd.sendIgnoreRequestAnalytics(err)
+	cmd.sendIgnoreRequestAnalytics(err, issue.GetContentRoot())
 
 	return err
 }
@@ -287,7 +287,7 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error) {
-	event := analytics.NewAnalyticsEventParam("Create ignore", err)
+func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error, path types.FilePath) {
+	event := analytics.NewAnalyticsEventParam("Create ignore", err, path)
 	analytics.SendAnalytics(cmd.c, event, err)
 }
