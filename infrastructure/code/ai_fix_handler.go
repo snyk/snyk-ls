@@ -43,7 +43,7 @@ const (
 	AiFixInProgress  AiStatus = "IN_PROGRESS"
 	AiFixSuccess     AiStatus = "SUCCESS"
 	AiFixError       AiStatus = "ERROR"
-	shouldRunExplain          = false
+	shouldRunExplain          = true
 )
 const (
 	ExplainApiVersion string = "2024-10-15"
