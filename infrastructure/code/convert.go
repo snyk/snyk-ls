@@ -29,6 +29,7 @@ import (
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
+	"github.com/sourcegraph/go-diff/diff"
 	"golang.org/x/exp/slices"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
@@ -500,9 +501,9 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir types.File
 	// 	"[This is a test argument](3)"
 	// ]
 	for i, arg := range r.Message.Arguments {
-		indecesRegex := regexp.MustCompile(`\((\d)\)`)
+		indicesRegex := regexp.MustCompile(`\((\d)\)`)
 		// extract the location indices from the brackets (e.g. indices "1", "2" in the second array element from the above example)
-		indices := indecesRegex.FindAllStringSubmatch(arg, -1)
+		indices := indicesRegex.FindAllStringSubmatch(arg, -1)
 
 		positions := make([]snyk.MarkerPosition, 0)
 		for _, match := range indices {
@@ -538,7 +539,7 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir types.File
 		}
 
 		// extract the text between the brackets
-		strRegex := regexp.MustCompile(`\[(.*?)\]`)
+		strRegex := regexp.MustCompile(`\[(.*?)]`)
 		// extract the text between the brackets (e.g. "printStackTrace" in the second array element from the above example)
 		if strFindResult := strRegex.FindStringSubmatch(arg); len(strFindResult) > 1 {
 			substituteStr := strFindResult[1]
@@ -561,76 +562,234 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir types.File
 	return markers, nil
 }
 
-// CreateWorkspaceEditFromDiff turns the returned fix (in diff format) into a series of TextEdits in a WorkspaceEdit.
-func CreateWorkspaceEditFromDiff(absoluteFilePath string, diff string) (edit types.WorkspaceEdit) {
+// CreateWorkspaceEditFromDiff creates an LSP WorkspaceEdit from a unified diff string
+// corresponding to a single file specified by absoluteFilePath.
+func CreateWorkspaceEditFromDiff(absoluteFilePath string, diffContent string) (*types.WorkspaceEdit, error) {
+	// Validate input path
+	if absoluteFilePath == "" {
+		return nil, fmt.Errorf("absoluteFilePath cannot be empty")
+	}
+
+	// Read the actual file content to validate diff line numbers
 	fileContentBytes, err := os.ReadFile(absoluteFilePath)
-	if err != nil || len(fileContentBytes) == 0 {
-		return edit
-	}
-	fileContentLineStrings := strings.Split(string(fileContentBytes), "\n")
-
-	var textEdits []types.TextEdit
-
-	var hunkLine = 0   // Location in the current hunk
-	var hunkOffset = 0 // Whether we need to offset the current hunk based on previous edits.
-
-	// Loop over the diff. Diffs will always use \n instead of \r\n, so no need to sanitize (see getUnifiedDiff).
-	for _, line := range strings.Split(diff, "\n") {
-		// If we are being asked to make changes outside the original file, abort and return an empty edit.
-		if hunkLine-hunkOffset > len(fileContentLineStrings) {
-			return edit
-		}
-
-		if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") {
-			continue // We ignore header lines
-		} else if strings.HasPrefix(line, "@@") {
-			r := regexp.MustCompile(`@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@`)
-			matches := r.FindStringSubmatch(line)
-			if matches == nil {
-				return edit // We have a badly formatted diff, so abort.
-			}
-
-			hunkLine, _ = strconv.Atoi(matches[1]) // Apply the edit from the first line of the original file in the diff
-			hunkLine -= 1                          // TextEdit range is 0-indexed, whereas LSP diff is 1-indexed
-			hunkLine += hunkOffset                 // Account for any previous additions or deletions.
-		} else if strings.HasPrefix(line, "-") {
-			textEdit := buildOneLineTextEdit(hunkLine, hunkLine+1, "")
-			textEdits = append(textEdits, textEdit)
-			hunkOffset -= 1 // We've removed a line, so future hunks will be offset with respect to the diff.
-		} else if strings.HasPrefix(line, "+") {
-			textEdit := buildOneLineTextEdit(hunkLine, hunkLine, strings.TrimPrefix(line, "+")+"\n")
-			textEdits = append(textEdits, textEdit)
-			hunkOffset += 1 // We've added a line, so future hunks will be offset with respect to the diff.
-			hunkLine += 1   // We've added a line, so increment the pointer in our current hunk.
-		} else if strings.HasPrefix(line, " ") {
-			hunkLine += 1 // We skip over unchanged lines, so increment the pointer in our current hunk.
-		}
+	if err != nil {
+		// Treat file not found slightly differently? Or just return error.
+		// If file doesn't exist, any diff is arguably invalid for it.
+		return nil, fmt.Errorf("failed to read file %s for validation: %w", absoluteFilePath, err)
 	}
 
-	edit.Changes = make(map[string][]types.TextEdit)
-	edit.Changes[absoluteFilePath] = textEdits
+	// Calculate the number of lines in the original file
+	originalLines := strings.Split(string(fileContentBytes), "\n")
+	originalLineCount := len(originalLines)
+	// Adjust count if the file ends with a newline, which adds an empty string element
+	// A file with "a\nb\n" has 2 lines, Split gives ["a", "b", ""], len 3.
+	// A file with "a\nb" has 2 lines, Split gives ["a", "b"], len 2.
+	// A file with "" (empty) has 0 lines, Split gives [""], len 1. -> Need special handling
+	// A file with "\n" has 1 line, Split gives ["", ""], len 2.
+	if len(fileContentBytes) == 0 {
+		originalLineCount = 0 // Explicitly handle empty file
+	} else if originalLineCount > 0 && originalLines[originalLineCount-1] == "" {
+		// If the last element is empty, it's likely due to a trailing newline,
+		// so the actual number of content lines is one less.
+		originalLineCount--
+	}
 
-	return edit
+	// Parse the diff content assuming it's for a single file
+	parsedDiff, err := diff.ParseFileDiff([]byte(diffContent))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse file diff: %w", err)
+	}
+
+	// Build the WorkspaceEdit
+	workspaceEdit := &types.WorkspaceEdit{
+		Changes: make(map[string][]types.TextEdit),
+	}
+
+	// If the diff is effectively empty (e.g., only headers or no changes), return empty edit
+	if parsedDiff == nil || len(parsedDiff.Hunks) == 0 {
+		// Return valid, empty edit object
+		return workspaceEdit, nil
+	}
+
+	var fileEdits []types.TextEdit
+	for _, hunk := range parsedDiff.Hunks {
+		hunkEdits, err := processHunk(hunk, int32(originalLineCount))
+		if err != nil {
+			// Add context to the error
+			return nil, fmt.Errorf("error processing hunk for %s: %w", absoluteFilePath, err)
+		}
+		fileEdits = append(fileEdits, hunkEdits...)
+	}
+
+	if len(fileEdits) > 0 {
+		workspaceEdit.Changes[absoluteFilePath] = fileEdits
+	}
+
+	return workspaceEdit, nil
 }
 
-func buildOneLineTextEdit(startLine int, endLine int, text string) types.TextEdit {
-	if startLine > endLine {
-		return types.TextEdit{} // We should never reach this. Return an empty edit if the input it invalid.
+// processHunk converts a single diff hunk into a slice of LSP TextEdits.
+// (This function remains the same as the previous robust version)
+func processHunk(hunk *diff.Hunk, originalLineCount int32) ([]types.TextEdit, error) {
+	// Diff lines are 1-based, originalLineCount is 0-based index of last line,
+	// so the count represents the number of lines (1-based).
+
+	// Check if hunk range is valid relative to the original file size.
+	if hunk.OrigLines > 0 {
+		// Hunk modifies/deletes lines. Check start and end.
+		// Start line must be within the file bounds.
+		if hunk.OrigStartLine == 0 || hunk.OrigStartLine > originalLineCount {
+			// Handle edge case of applying diff to empty file separately?
+			// If file is empty (count=0), any start line > 0 is invalid for non-insertion.
+			if originalLineCount == 0 && hunk.OrigStartLine > 0 {
+				return nil, fmt.Errorf("hunk applies changes starting at line %d, but file is empty", hunk.OrigStartLine)
+			}
+			return nil, fmt.Errorf("hunk starts at line %d but file only has %d lines", hunk.OrigStartLine, originalLineCount)
+		}
+		// End line must be within the file bounds.
+		hunkEndLine := hunk.OrigStartLine + hunk.OrigLines - 1
+		if hunkEndLine > originalLineCount {
+			return nil, fmt.Errorf("hunk applies changes up to line %d but file only has %d lines", hunkEndLine, originalLineCount)
+		}
+	} else {
+		// Pure insertion (hunk.OrigLines == 0).
+		// Insertion happens *before* OrigStartLine.
+		// Valid insertion points are line 1 to line originalLineCount + 1.
+		if hunk.OrigStartLine == 0 || hunk.OrigStartLine > originalLineCount+1 {
+			return nil, fmt.Errorf("hunk insertion point %d is outside valid range [1, %d] for file with %d lines", hunk.OrigStartLine, originalLineCount+1, originalLineCount)
+		}
 	}
 
-	return types.TextEdit{
-		Range: types.Range{
-			Start: types.Position{
-				Line:      startLine,
-				Character: 0,
-			},
-			End: types.Position{
-				Line:      endLine,
-				Character: 0,
-			},
-		},
-		NewText: text,
+	var edits []types.TextEdit
+	// Treat final newline as significant separator if present
+	lines := strings.Split(strings.TrimSuffix(string(hunk.Body), "\n"), "\n")
+
+	// Diff lines are 1-based, LSP is 0-based. Track current original line.
+	currentOrigLine := hunk.OrigStartLine - 1 // Convert to 0-based index
+	if currentOrigLine < 0 {
+		// This case might be hit if OrigStartLine was 0, which should be caught by validation above.
+		currentOrigLine = 0
+	} // Should not be negative
+
+	var deletions []string // Lines marked with '-'
+	var additions []string // Lines marked with '+'
+	// Track the original line number where the current deletion/insertion block started (0-based)
+	startChangeLine := int32(-1)
+
+	// Helper to create and append TextEdit based on collected changes
+	flushChanges := func() {
+		if len(deletions) == 0 && len(additions) == 0 {
+			return // Nothing to flush
+		}
+
+		if startChangeLine == -1 {
+			// If startChangeLine wasn't set (pure add/del at hunk start),
+			// use the initial currentOrigLine for the hunk (which is 0-based start line - 1)
+			startChangeLine = hunk.OrigStartLine - 1
+			if startChangeLine < 0 {
+				startChangeLine = 0
+			} // Safety check
+			// TODO - is `startChangeLine = currentOrigLine` better than the above?
+		}
+
+		startPos := types.Position{Line: int(startChangeLine), Character: 0}
+		// End line is the start line + number of lines being deleted (0-based)
+		endPos := types.Position{Line: int(startChangeLine) + len(deletions), Character: 0}
+		editRange := types.Range{Start: startPos, End: endPos}
+
+		newText := ""
+		if len(additions) > 0 {
+			// Ensure trailing newline consistent with diff format that expects lines
+			newText = strings.Join(additions, "\n") + "\n"
+		}
+
+		// If only additions (insertion), make range zero-length at the start position
+		if len(deletions) == 0 {
+			editRange.End = editRange.Start
+			// Ensure insertion point is correct
+			// If additions started right at the hunk start, startChangeLine is already correct.
+			// If additions started after some context, startChangeLine was set correctly.
+		}
+
+		edits = append(edits, types.TextEdit{Range: editRange, NewText: newText})
+
+		// Advance original line count *only* by the number of deleted lines
+		// currentOrigLine was already advanced by context lines before flushChanges was called.
+		// It represents the line *after* the change block in 0-based indexing.
+		// We don't need to manually advance it here based on deletions.
+
+		// Reset collectors
+		deletions = nil
+		additions = nil
+		startChangeLine = -1
 	}
+
+	for _, line := range lines {
+		// Handle potential empty line if Split produced one unnecessarily
+		// Or lines that might just be whitespace (though unlikely in valid diff body)
+		if len(line) == 0 {
+			// If the original body ended with \n, Split might give an empty string at the end.
+			// Context lines already advance the line counter. Add/Delete implicitly handle lines.
+			// We can generally ignore genuinely empty lines within the hunk body processing loop.
+			continue
+		}
+		// Handle "\ No newline at end of file" marker - treat as informational, doesn't affect edits.
+		if line == "\\ No newline at end of file" || strings.HasPrefix(line, "\\ ") { // Allow for potential space
+			continue
+		}
+
+		op := line[0]
+		// Check if line has content beyond the operator
+		content := ""
+		if len(line) > 1 {
+			content = line[1:]
+		}
+
+		switch op {
+		case ' ': // Context line
+			// Before processing context, ensure any pending changes are flushed.
+			flushChanges()
+			// Sanity check: Does this context line exist in the original?
+			// currentOrigLine is 0-based index. originalLineCount is 1-based count.
+			if currentOrigLine >= originalLineCount {
+				// This indicates an inconsistent diff - context line refers beyond file end.
+				// The initial hunk check should ideally prevent this.
+				return nil, fmt.Errorf("internal error: context line refers to line %d but file only has %d lines", currentOrigLine+1, originalLineCount)
+			}
+			currentOrigLine++    // Advance line count for context (stays 0-based)
+			startChangeLine = -1 // Reset start marker
+		case '-': // Deletion line
+			// If transitioning from adding to deleting, flush adds first
+			if len(additions) > 0 { // Change from adding to deleting implies finishing the add block
+				flushChanges()
+			}
+			// If this is the first change in a block, mark where it starts
+			if startChangeLine == -1 {
+				startChangeLine = currentOrigLine // Mark start of change block (0-based & deletion)
+			}
+			// Sanity check: Does this deleted line exist?
+			// The deletion refers to 'currentOrigLine' before it's conceptually removed.
+			if currentOrigLine >= originalLineCount {
+				return nil, fmt.Errorf("internal error: attempting to delete line %d but file only has %d lines", currentOrigLine+1, originalLineCount)
+			}
+			deletions = append(deletions, content)
+			// Deletion consumes an original line, but we advance currentOrigLine *after* the block
+			// in flushChanges (by adding len(deletions)). So don't increment here.
+		case '+': // Addition line
+			// If this is the first change in a block (or first after deletions), mark insert point.
+			if startChangeLine == -1 {
+				startChangeLine = currentOrigLine // Mark start of change block (insertion/replacement point) (0-based)
+			}
+			additions = append(additions, content)
+			// Addition does not consume an original line.
+		default:
+			return nil, fmt.Errorf("invalid line prefix %q in hunk body: %q", op, line)
+		}
+	}
+
+	flushChanges() // Flush any remaining changes at the end
+
+	return edits, nil
 }
 
 func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {

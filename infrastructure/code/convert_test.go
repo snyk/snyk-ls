@@ -36,6 +36,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func getSarifResponseJson(filePath types.FilePath) string {
@@ -1113,55 +1114,72 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 		diff         string
 		filePath     string
 		fileContents string
-		expectedEdit types.WorkspaceEdit
+		// Either set:
+		expectedEdit *types.WorkspaceEdit
+		// or set:
+		expectedErrorMsgRegex *string
 	}{
-		{"Multi line diff results in multiple TextEdits",
-			goodDiff,
-			tempFilePath,
-			originalFileContent,
-			types.WorkspaceEdit{Changes: map[string][]types.TextEdit{
-				tempFilePath: []types.TextEdit{
-					// WorkspaceEdit for the correctly formatted diff will contain 5 TextEdits: 2 deletions and 3 insertions.
-					types.TextEdit{
-						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 3, Character: 0}},
-						NewText: "",
-					},
-					types.TextEdit{
-						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 3, Character: 0}},
-						NewText: "",
-					},
-					types.TextEdit{
-						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 2, Character: 0}},
-						NewText: "three\n",
-					},
-					types.TextEdit{
-						Range:   types.Range{Start: types.Position{Line: 4, Character: 0}, End: types.Position{Line: 4, Character: 0}},
-						NewText: "six\n",
-					},
-					types.TextEdit{
-						Range:   types.Range{Start: types.Position{Line: 5, Character: 0}, End: types.Position{Line: 5, Character: 0}},
-						NewText: "seven\n",
+		{
+			name:         "Multi-hunk diff results in grouped TextEdits",
+			diff:         goodDiff,
+			filePath:     tempFilePath,
+			fileContents: originalFileContent,
+			expectedEdit: &types.WorkspaceEdit{
+				Changes: map[string][]types.TextEdit{
+					tempFilePath: []types.TextEdit{
+						// Hunk 1: The two deletions and one addition are combined into a single replacement edit.
+						// Replaces lines 2 and 3 (0-based) with "three\n".
+						types.TextEdit{
+							Range: types.Range{
+								// Start at the beginning of the first deleted line (line 2, 0-based)
+								Start: types.Position{Line: 2, Character: 0},
+								// End *after* the last deleted line (line 3, 0-based).
+								// End line = Start Line (2) + number of deleted lines (2) = 4
+								End: types.Position{Line: 4, Character: 0},
+							},
+							// The replacement text from the '+' line(s)
+							NewText: "three\n",
+						},
+						// Hunk 2: The two additions are combined into a single insertion edit.
+						// Inserts "six\nseven\n" before original line 6 (0-based index 5).
+						types.TextEdit{
+							Range: types.Range{
+								// Start and End position are the same for an insertion.
+								// It inserts before the line where "eight" was originally (line 6, 0-based index 5).
+								// The original lines corresponding to the start of Hunk 2 are:
+								// line 4 (index 3): "four"
+								// line 5 (index 4): "five"
+								// Insertion happens *before* the next original line ("eight"), which was line 6 (index 5).
+								Start: types.Position{Line: 5, Character: 0},
+								End:   types.Position{Line: 5, Character: 0},
+							},
+							// The combined text from the '+' lines
+							NewText: "six\nseven\n",
+						},
 					},
 				},
-			}},
+			},
 		},
-		{"Malformed diff produces empty WorkspaceEdit",
-			malformedDiff,
-			tempFilePath,
-			originalFileContent,
-			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
+		{
+			name:                  "Malformed diff causes parse error",
+			diff:                  malformedDiff,
+			filePath:              tempFilePath,
+			fileContents:          originalFileContent,
+			expectedErrorMsgRegex: util.Ptr("^failed to parse file diff: .+$"),
 		},
-		{"Short file produces empty WorkspaceEdit",
-			goodDiff,
-			tempFilePath,
-			"one",
-			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
+		{
+			name:                  "Short file causes processing error",
+			diff:                  goodDiff,
+			filePath:              tempFilePath,
+			fileContents:          "one",
+			expectedErrorMsgRegex: util.Ptr("^error processing hunk for .+: hunk starts at line 2 but file only has 1 lines$"),
 		},
-		{"Missing file produces empty WorkspaceEdit",
-			goodDiff,
-			"/this/file/does/not/exist",
-			originalFileContent,
-			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
+		{
+			name:                  "Missing file produces error",
+			diff:                  goodDiff,
+			filePath:              "/this/file/does/not/exist",
+			fileContents:          originalFileContent,
+			expectedErrorMsgRegex: util.Ptr("^failed to read file /this/file/does/not/exist for validation: open /this/file/does/not/exist: no such file or directory$"),
 		},
 	}
 	for _, tt := range tests {
@@ -1177,8 +1195,17 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 			}
 
 			// Create a WorkSpaceEdit for the file, and check against the reference.
-			assert.Equalf(t, tt.expectedEdit, CreateWorkspaceEditFromDiff(tt.filePath, tt.diff),
-				"CreateWorkspaceEditFromDiff(%v, %v)", tt.filePath, tt.diff)
+			actualWorkspaceEdit, err := CreateWorkspaceEditFromDiff(tt.filePath, tt.diff)
+			if tt.expectedErrorMsgRegex != nil {
+				assert.Error(t, err)
+				assert.Regexp(t, *tt.expectedErrorMsgRegex, err.Error())
+			} else if tt.expectedEdit != nil {
+				assert.NoError(t, err, "CreateWorkspaceEditFromDiff(%v, %v)", tt.filePath, tt.diff)
+				assert.Equalf(t, tt.expectedEdit, actualWorkspaceEdit,
+					"CreateWorkspaceEditFromDiff(%v, %v)", tt.filePath, tt.diff)
+			} else {
+				assert.Fail(t, "Bad test case, no expected error message or expected edit")
+			}
 		})
 	}
 }

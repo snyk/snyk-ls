@@ -29,6 +29,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/code-client-go v1.21.2
 	github.com/snyk/go-application-framework v0.0.0-20250423203408-8884fd0a504f
+	github.com/sourcegraph/go-diff v0.7.0
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
