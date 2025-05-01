@@ -101,7 +101,7 @@ func (cmd *applyAiFixEditCommand) getWorkspaceEdit(htmlRenderer *code.HtmlRender
 		cmd.logger.Debug().Str("method", "applyAiFixEditCommand.Execute").Msgf("Unable to get the fix fix for %s", fixId)
 		return nil, err
 	}
-	return code.CreateWorkspaceEditFromDiff(path, diff)
+	return code.CreateWorkspaceEditFromDiff(cmd.logger, path, diff)
 }
 
 func (cmd *applyAiFixEditCommand) autofixFeedbackActions(fixId string) (*data_structure.OrderedMap[types.MessageAction, types.CommandData], error) {

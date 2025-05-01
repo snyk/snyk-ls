@@ -1109,6 +1109,45 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 @@ -400,4 +400,6 @@
  four
 `
+	originalComplexFileContent := `
+const fs = require('fs');
+const path = require('path');
+
+// Endpoint to download an image
+app.get('/download/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, 'uploads', filename);
+
+  if (fs.existsSync(filePath)) {
+      // Fix this issue: Path Traversal
+      res.download(filePath);
+  } else {
+      res.status(404).send('File not found.');
+  }
+});
+`
+	complexDiff := `
+--- ` + tempFilePath + `
++++ ` + tempFilePath + `
+@@ -1,14 +1,15 @@
+ const fs = require('fs');
+ const path = require('path');
++const sanitize = require('sanitize-filename');
+ ` + `
+ // Endpoint to download an image
+ app.get('/download/:filename', (req, res) => {
+-  const filename = req.params.filename;
++  const filename = sanitize(req.params.filename);
+   const filePath = path.join(__dirname, 'uploads', filename);
+ ` + `
+   if (fs.existsSync(filePath)) {
+       // Fix this issue: Path Traversal
+-      res.download(filePath);
++      res.download(path.basename(filePath));
+   } else {
+       res.status(404).send('File not found.');
+   }
+`
 	tests := []struct {
 		name         string
 		diff         string
@@ -1172,14 +1211,65 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 			diff:                  goodDiff,
 			filePath:              tempFilePath,
 			fileContents:          "one",
-			expectedErrorMsgRegex: util.Ptr("^error processing hunk for .+: hunk starts at line 2 but file only has 1 lines$"),
+			expectedErrorMsgRegex: util.Ptr("^error processing hunk 0 for .+: hunk starts at line 2 but file only has 1 lines$"),
 		},
 		{
-			name:                  "Missing file produces error",
+			name:                  "Missing file causes error",
 			diff:                  goodDiff,
 			filePath:              "/this/file/does/not/exist",
 			fileContents:          originalFileContent,
 			expectedErrorMsgRegex: util.Ptr("^failed to read file /this/file/does/not/exist for validation: open /this/file/does/not/exist: no such file or directory$"),
+		},
+		{
+			name:         "Complex diff produces the correct edits",
+			diff:         complexDiff,
+			filePath:     tempFilePath,
+			fileContents: originalComplexFileContent,
+			expectedEdit: &types.WorkspaceEdit{
+				Changes: map[string][]types.TextEdit{
+					tempFilePath: []types.TextEdit{
+						{
+							Range: types.Range{
+								Start: types.Position{
+									Line:      2,
+									Character: 0,
+								},
+								End: types.Position{
+									Line:      2,
+									Character: 0,
+								},
+							},
+							NewText: "const sanitize = require('sanitize-filename');\n",
+						},
+						{
+							Range: types.Range{
+								Start: types.Position{
+									Line:      5,
+									Character: 0,
+								},
+								End: types.Position{
+									Line:      6,
+									Character: 0,
+								},
+							},
+							NewText: "  const filename = sanitize(req.params.filename);\n",
+						},
+						{
+							Range: types.Range{
+								Start: types.Position{
+									Line:      10,
+									Character: 0,
+								},
+								End: types.Position{
+									Line:      11,
+									Character: 0,
+								},
+							},
+							NewText: "      res.download(path.basename(filePath));\n",
+						},
+					},
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -1195,7 +1285,7 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 			}
 
 			// Create a WorkSpaceEdit for the file, and check against the reference.
-			actualWorkspaceEdit, err := CreateWorkspaceEditFromDiff(tt.filePath, tt.diff)
+			actualWorkspaceEdit, err := CreateWorkspaceEditFromDiff(config.CurrentConfig().Logger(), tt.filePath, tt.diff)
 			if tt.expectedErrorMsgRegex != nil {
 				assert.Error(t, err)
 				assert.Regexp(t, *tt.expectedErrorMsgRegex, err.Error())
