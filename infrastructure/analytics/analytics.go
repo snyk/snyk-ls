@@ -35,6 +35,22 @@ import (
 
 var analyticsMu = sync.RWMutex{}
 
+func NewAnalyticsEventParam(interactionType string, err error, path types.FilePath) types.AnalyticsEventParam {
+	status := string(analytics.Success)
+	if err != nil {
+		status = string(analytics.Failure)
+	}
+	targetId, _ := instrumentation.GetTargetId(string(path), instrumentation.AutoDetectedTargetId)
+
+	return types.AnalyticsEventParam{
+		InteractionType: interactionType,
+		Category:        []string{},
+		Status:          status,
+		TimestampMs:     time.Now().UnixMilli(),
+		TargetId:        targetId,
+	}
+}
+
 func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 	logger := c.Logger().With().Str("method", "analytics.sendAnalyticsToAPI").Logger()
 
@@ -112,4 +128,30 @@ func PayloadForAnalyticsEventParam(c *config.Config, param types.AnalyticsEventP
 	ic.SetCategory(param.Category)
 	ic.SetTargetId(param.TargetId)
 	return ic
+}
+
+func SendAnalytics(c *config.Config, event types.AnalyticsEventParam, err error) {
+	logger := c.Logger().With().Str("method", "analytics.SendAnalytics").Logger()
+	ic := PayloadForAnalyticsEventParam(c, event)
+
+	if err != nil {
+		ic.AddError(err)
+	}
+
+	analyticsRequestBody, err := analytics.GetV2InstrumentationObject(ic)
+	if err != nil {
+		logger.Err(err).Msg("Failed to get analytics request body")
+		return
+	}
+
+	bytes, err := json.Marshal(analyticsRequestBody)
+	if err != nil {
+		logger.Err(err).Msg("Failed to marshal analytics request body")
+		return
+	}
+
+	err = SendAnalyticsToAPI(c, bytes)
+	if err != nil {
+		logger.Err(err).Msg("Failed to send analytics")
+	}
 }

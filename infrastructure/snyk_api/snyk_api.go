@@ -34,29 +34,17 @@ type SnykApiClientImpl struct {
 	httpClientFunc func() *http.Client
 	c              *config.Config
 }
-
 type LocalCodeEngine struct {
 	AllowCloudUpload bool   `json:"allowCloudUpload"`
 	Url              string `json:"url"`
 	Enabled          bool   `json:"enabled"`
 }
-
-type SastResponse struct {
-	SastEnabled                 bool            `json:"sastEnabled"`
-	LocalCodeEngine             LocalCodeEngine `json:"localCodeEngine"`
-	Org                         string          `json:"org"`
-	SupportedLanguages          []string        `json:"supportedLanguages"`
-	ReportFalsePositivesEnabled bool            `json:"reportFalsePositivesEnabled"`
-	AutofixEnabled              bool            `json:"autofixEnabled"`
-}
-
 type FFResponse struct {
 	Ok          bool   `json:"ok"`
 	UserMessage string `json:"userMessage,omitempty"`
 }
 
 type SnykApiClient interface {
-	SastSettings() (SastResponse, error)
 	FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error)
 }
 
@@ -83,31 +71,6 @@ func NewSnykApiClient(c *config.Config, client func() *http.Client) SnykApiClien
 		c:              c,
 	}
 	return &s
-}
-
-func (s *SnykApiClientImpl) SastSettings() (SastResponse, error) {
-	if s.c.Offline() {
-		return SastResponse{}, nil
-	}
-	method := "SastSettings"
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", method).Logger()
-	var response SastResponse
-	logger.Debug().Msg("API: Getting SastEnabled")
-
-	p := s.normalizeAPIPathForV1(c, "/cli-config/settings/sast")
-	u, err := url.Parse(p)
-	if err != nil {
-		return SastResponse{}, err
-	}
-	u = s.addOrgToQuery(c, u)
-
-	err = s.getApiResponse(method, u.String(), &response)
-	if err != nil {
-		logger.Err(err).Msg("error when calling sastEnabled endpoint")
-		return SastResponse{}, err
-	}
-	return response, err
 }
 
 func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL {

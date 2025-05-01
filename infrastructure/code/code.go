@@ -31,8 +31,11 @@ import (
 
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
+
 	"github.com/snyk/code-client-go/scan"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -146,12 +149,21 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
-	sastResponse, err := sc.SnykApiClient.SastSettings()
 
+	gafConfig := sc.C.Engine().GetConfiguration()
+
+	response, err := gafConfig.GetWithError(code_workflow.ConfigurationSastSettings)
 	if err != nil {
-		logger.Error().Err(err).Msg("couldn't get sast enablement")
-		sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{})
-		return issues, errors.New("couldn't get sast enablement")
+		return nil, err
+	}
+
+	sastResponse, ok := response.(*sast_contract.SastResponse)
+	if !ok {
+		return nil, errors.New("Failed to get the sast settings")
+	}
+
+	if sastResponse == nil || !ok {
+		return issues, errors.New("Failed to get the sast settings")
 	}
 
 	if !sc.isSastEnabled(sastResponse) {

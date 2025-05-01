@@ -29,13 +29,15 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/uri"
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 type IgnoreDetail struct {
@@ -128,6 +130,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
 	}
+	iawEnabled := renderer.c.Engine().GetConfiguration().GetBool(configuration.FF_IAW_ENABLED)
 	nonce, err := html.GenerateSecurityNonce()
 	if err != nil {
 		renderer.c.Logger().Warn().Msgf("Failed to generate security nonce: %s", err)
@@ -147,6 +150,16 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	if err == nil && string(aiFixSerialized) != "null" {
 		aiFixResult = string(aiFixSerialized)
 	}
+
+	isPending := false
+	ignoreDetailsRow := []IgnoreDetail{}
+	ignoreReason := ""
+	if ignoreDetails := issue.GetIgnoreDetails(); ignoreDetails != nil {
+		isPending = ignoreDetails.Status == codeClientSarif.UnderReview
+		ignoreDetailsRow = prepareIgnoreDetailsRow(ignoreDetails)
+		ignoreReason = ignoreDetails.Reason
+	}
+
 	data := map[string]any{
 		"IssueTitle":         additionalData.Title,
 		"IssueMessage":       additionalData.Message,
@@ -155,6 +168,10 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"CWEs":               issue.GetCWEs(),
 		"IssueOverview":      html.MarkdownToHTML(additionalData.Text),
 		"IsIgnored":          issue.GetIsIgnored(),
+		"IsPending":          isPending,
+		"IgnoreDetails":      ignoreDetailsRow,
+		"IgnoreReason":       ignoreReason,
+		"IAWEnabled":         iawEnabled,
 		"DataFlow":           additionalData.DataFlow,
 		"DataFlowKeys":       dataFlowKeys,
 		"DataFlowTable":      dataFlowTable,
@@ -189,11 +206,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	}
 	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
 
-	if issue.GetIsIgnored() {
-		data["IgnoreDetails"] = prepareIgnoreDetailsRow(issue.GetIgnoreDetails())
-		data["IgnoreReason"] = issue.GetIgnoreDetails().Reason
-	}
-
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
 		renderer.c.Logger().Error().Msgf("Failed to execute main details template: %v", err)
@@ -215,6 +227,7 @@ func prepareIgnoreDetailsRow(ignoreDetails *types.IgnoreDetails) []IgnoreDetail 
 		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Ignored By", ignoreDetails.IgnoredBy},
 		{"Reason", ignoreDetails.Reason},
+		{"Status", string(ignoreDetails.Status)},
 	}
 }
 

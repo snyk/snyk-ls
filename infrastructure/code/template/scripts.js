@@ -15,6 +15,22 @@ function toggleElement(element, toggle) {
     console.error('Unexpected toggle value', toggle);
   }
 }
+function dispatchEvent(element, dispatchEventName) {
+  if (!element) {
+    return;
+  }
+  var event;
+  if (typeof(Event) === 'function') {
+    // Modern browsers
+    event = new Event(dispatchEventName, { bubbles: true, cancelable: true });
+  } else {
+    // IE (for Visual Studio)
+    event = document.createEvent('Event');
+    event.initEvent(dispatchEventName, true, true);
+  }
+  element.dispatchEvent(event);
+}
+
 // different AI fix buttons
 var applyFixButton = document.getElementById('apply-fix');
 var retryGenerateFixButton = document.getElementById('retry-generate-fix');
@@ -27,7 +43,6 @@ function generateAIFix() {
   if (!suggestion) return;
   toggleElement(generateAIFixButton, 'hide');
   toggleElement(fixLoadingIndicatorElem, 'show');
-  var issueId = generateAIFixButton.getAttribute('issue-id');
   var folderPath = generateAIFixButton.getAttribute('folder-path');
   var filePath = generateAIFixButton.getAttribute('file-path');
   var generateFixQueryString = folderPath + '@|@' + filePath + '@|@' + issueId;
@@ -151,13 +166,12 @@ function showCurrentDiff() {
   var filePath = showSuggestion.filePath ? showSuggestion.filePath : getFilePathFromFix(diffSuggestion);
   var patch = diffSuggestion.unifiedDiffsPerFile[filePath];
   if(diffSuggestion.explanation.length){
-    const explainFixHeader = document.getElementById("ai-explain-header")
+    var explainFixHeader = document.getElementById("ai-explain-header")
     if(explainFixHeader){
       toggleElement(explainFixHeader, 'show')
     }
   }
   fixExplainText.innerText = diffSuggestion.explanation;
-  console.log();
   // clear all elements
   while (diffElem.firstChild) {
     diffElem.removeChild(diffElem.firstChild);
@@ -170,3 +184,60 @@ function getSuggestion() {
 }
 nextDiffElem === null || nextDiffElem === void 0 || nextDiffElem.addEventListener('click', nextDiff);
 previousDiffElem === null || previousDiffElem === void 0 ? void 0 : previousDiffElem.addEventListener('click', previousDiff);
+
+
+// --- Ignore Creation ---
+
+var ignoreFormContainer = document.getElementById('ignore-form-container');
+var ignoreCreateButton = document.getElementById('ignore-create');
+if (ignoreFormContainer !== null && ignoreFormContainer !== void 0 && ignoreCreateButton !== null && ignoreCreateButton !== void 0) {
+  // Open form button
+  ignoreCreateButton.addEventListener('click', function() {
+    toggleElement(ignoreCreateButton, 'hide');
+    toggleElement(ignoreFormContainer, 'show');
+    ignoreFormContainer.scrollIntoView();
+  });
+
+  // Cancel button
+  var ignoreFormCancelButton = document.getElementById('ignore-form-cancel');
+  ignoreFormCancelButton.addEventListener('click', function() {
+    toggleElement(ignoreFormContainer, 'hide');
+    toggleElement(ignoreCreateButton, 'show');
+  });
+
+  // Submit button
+  var ignoreFormSubmitButton = document.getElementById('ignore-form-submit');
+  ignoreFormSubmitButton.addEventListener('click', function() {
+    var ignoreType = document.getElementById('ignore-form-type').value;
+    var ignoreExpirationType = document.getElementById('ignore-form-expiration-type').value;
+    var ignoreExpirationDate = '';
+    if (ignoreExpirationType === 'custom-expiration-date') {
+      ignoreExpirationDate = new Date(document.getElementById('ignore-form-expiration-date').value).toISOString().split('T')[0];
+    }
+    var ignoreReason = document.getElementById('ignore-form-ignore-reason').value;
+    ${ideSubmitIgnoreRequest}
+  });
+
+  // Hide the expiration date field when "Do not expire"
+  var ignoreFormExpirationType = document.getElementById('ignore-form-expiration-type');
+  var ignoreFormExpirationDate = document.getElementById('ignore-form-expiration-date');
+  ignoreFormExpirationType.addEventListener('change', function(event) {
+    if (event.target.value === 'do-not-expire') {
+      toggleElement(ignoreFormExpirationDate, 'hide');
+    } else {
+      toggleElement(ignoreFormExpirationDate, 'show');
+    }
+  });
+
+  // Hide "Do not expire" for "Temporary ignore"
+  var ignoreFormTypeSelector = document.getElementById('ignore-form-type');
+  ignoreFormTypeSelector.addEventListener('change', function(event) {
+    if (event.target.value === 'temporary-ignore') {
+      ignoreFormExpirationType.value = 'custom-expiration-date';
+      dispatchEvent(ignoreFormExpirationType, 'change');
+      toggleElement(ignoreFormExpirationType, 'hide');
+    } else {
+      toggleElement(ignoreFormExpirationType, 'show');
+    }
+  });
+}

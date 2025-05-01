@@ -19,46 +19,23 @@ package codeaction_test
 import (
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/watcher"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
-
-type mockIssuesProvider struct {
-	mock.Mock
-}
-
-func (m *mockIssuesProvider) Issues() snyk.IssuesByFile {
-	args := m.Called()
-	return args.Get(0).(map[types.FilePath][]types.Issue)
-}
-
-func (m *mockIssuesProvider) IssuesForFile(path types.FilePath) []types.Issue {
-	args := m.Called(path)
-	return args.Get(0).([]types.Issue)
-}
-
-func (m *mockIssuesProvider) Issue(key string) types.Issue {
-	additionalData := snyk.CodeIssueData{Key: key}
-	return &snyk.Issue{ID: "mockIssue", AdditionalData: additionalData}
-}
-
-func (m *mockIssuesProvider) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
-	args := m.Called(path, r)
-	return args.Get(0).([]types.Issue)
-}
 
 var exampleRange = sglsp.Range{
 	Start: sglsp.Position{
@@ -118,10 +95,10 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	// It doesn't seem like there's a difference between returning a nil and returning an empty array. If this assumption
 	// is proved to be false, this test can be changed.
 	// Arrange
-
+	ctrl := gomock.NewController(t)
 	var issues []types.Issue
-	providerMock := new(mockIssuesProvider)
-	providerMock.On("IssuesForRange", mock.Anything, mock.Anything).Return(issues)
+	providerMock := mock_snyk.NewMockIssueProvider(ctrl)
+	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return(issues)
 	fakeClient := &code.FakeSnykCodeClient{C: c}
 	snykCodeClient := fakeClient
 	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
@@ -237,8 +214,8 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsCodeAction(t *testing.T) {
 
 func setupService(t *testing.T) *codeaction.CodeActionsService {
 	t.Helper()
-	providerMock := new(mockIssuesProvider)
-	providerMock.On("IssuesForRange", mock.Anything, mock.Anything).Return([]types.Issue{})
+	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
+	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return([]types.Issue{}).AnyTimes()
 	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
 	snykCodeClient := fakeClient
 	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
@@ -250,9 +227,9 @@ func setupWithSingleIssue(t *testing.T, issue types.Issue) (*codeaction.CodeActi
 	r := exampleRange
 	uriPath := documentUriExample
 	path := uri.PathFromUri(uriPath)
-	providerMock := new(mockIssuesProvider)
+	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	issues := []types.Issue{issue}
-	providerMock.On("IssuesForRange", path, converter.FromRange(r)).Return(issues)
+	providerMock.EXPECT().IssuesForRange(path, converter.FromRange(r)).Return(issues).AnyTimes()
 	fileWatcher := watcher.NewFileWatcher()
 	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
 	snykCodeClient := fakeClient

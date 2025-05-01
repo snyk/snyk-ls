@@ -25,8 +25,6 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/internal/storedconfig"
-
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 
@@ -34,6 +32,8 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -251,9 +251,11 @@ func updateDeltaFindings(c *config.Config, settings types.Settings) {
 		enable = false
 	}
 
+	oldValue := c.IsDeltaFindingsEnabled()
+
 	modified := c.SetDeltaFindingsEnabled(enable)
 	if modified {
-		sendWorkspaceConfigChanged(c)
+		sendWorkspaceConfigChanged(c, "enableDeltaFindings", oldValue, enable)
 	}
 }
 
@@ -400,7 +402,7 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions) {
 	modified := c.SetIssueViewOptions(s)
 
 	if modified {
-		sendWorkspaceConfigChanged(c)
+		sendWorkspaceConfigChanged(c, "", nil, nil)
 	}
 }
 
@@ -409,14 +411,32 @@ func updateSeverityFilter(c *config.Config, s *types.SeverityFilter) {
 	modified := c.SetSeverityFilter(s)
 
 	if modified {
-		sendWorkspaceConfigChanged(c)
+		sendWorkspaceConfigChanged(c, "", nil, nil)
 	}
 }
 
-func sendWorkspaceConfigChanged(c *config.Config) {
+func sendWorkspaceConfigChanged(c *config.Config, configName string, oldVal any, newVal any) {
 	ws := c.Workspace()
 	if ws == nil {
 		return
 	}
 	go ws.HandleConfigChange()
+
+	if len(configName) == 0 {
+		return
+	}
+	for _, folder := range ws.Folders() {
+		go sendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folder.Path())
+	}
+}
+
+func sendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}, path types.FilePath) {
+	event := analytics.NewAnalyticsEventParam("Config changed", nil, path)
+
+	event.Extension = map[string]any{
+		"configuration": field,
+		"oldValue":      oldValue,
+		"newValue":      newValue,
+	}
+	analytics.SendAnalytics(c, event, nil)
 }

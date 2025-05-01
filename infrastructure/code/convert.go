@@ -32,6 +32,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -416,10 +417,13 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 				References:          s.getReferences(testRule),
 				AdditionalData:      additionalData,
 				CWEs:                testRule.Properties.Cwe,
+				FindingId:           result.Fingerprints.SnykAssetFindingV1,
 			}
 			d.SetFingerPrint(result.Fingerprints.Num1)
 			d.SetGlobalIdentity(result.Fingerprints.Identity)
-			d.IsIgnored, d.IgnoreDetails = s.getIgnoreDetails(result)
+			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(result.Suppressions)
+			d.IsIgnored = isIgnored
+			d.IgnoreDetails = ignoreDetails
 			d.AdditionalData = additionalData
 
 			issues = append(issues, d)
@@ -428,33 +432,31 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 	return issues, errs
 }
 
-func (s *SarifConverter) getIgnoreDetails(result codeClientSarif.Result) (bool, *types.IgnoreDetails) {
-	isIgnored := false
-	var ignoreDetails *types.IgnoreDetails
-
-	// this can be an array of multiple suppressions in SARIF
-	// but we only store one ignore for now
-	if len(result.Suppressions) > 0 {
-		if len(result.Suppressions) > 1 {
-			s.c.Logger().Warn().Int("number of SARIF suppressions", len(result.Suppressions)).Msg(
-				"there are more suppressions than expected")
-		}
-		isIgnored = true
-		suppression := result.Suppressions[0]
-
-		reason := suppression.Justification
-		if reason == "" {
-			reason = "None given"
-		}
-		ignoreDetails = &types.IgnoreDetails{
-			Category:   string(suppression.Properties.Category),
-			Reason:     reason,
-			Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
-			IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
-			IgnoredBy:  suppression.Properties.IgnoredBy.Name,
-		}
-	}
+func GetIgnoreDetailsFromSuppressions(suppressions []codeClientSarif.Suppression) (bool, *types.IgnoreDetails) {
+	suppression, suppressionStatus := sarif_utils.GetHighestSuppression(suppressions)
+	isIgnored := suppressionStatus == codeClientSarif.Accepted
+	ignoreDetails := sarifSuppressionToIgnoreDetails(suppression)
 	return isIgnored, ignoreDetails
+}
+
+func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *types.IgnoreDetails {
+	if suppression == nil {
+		return nil
+	}
+
+	reason := suppression.Justification
+	if reason == "" {
+		reason = "None given"
+	}
+	ignoreDetails := &types.IgnoreDetails{
+		Category:   string(suppression.Properties.Category),
+		Reason:     reason,
+		Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
+		IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
+		IgnoredBy:  suppression.Properties.IgnoredBy.Name,
+		Status:     suppression.Status,
+	}
+	return ignoreDetails
 }
 
 func parseExpirationDateFromString(date *string) string {

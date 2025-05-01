@@ -43,7 +43,7 @@ const (
 	AiFixInProgress  AiStatus = "IN_PROGRESS"
 	AiFixSuccess     AiStatus = "SUCCESS"
 	AiFixError       AiStatus = "ERROR"
-	shouldRunExplain          = false
+	shouldRunExplain          = true
 )
 const (
 	ExplainApiVersion string = "2024-10-15"
@@ -103,10 +103,12 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.GetID())
 		return
 	}
-	for j := range len(explanations) {
-		if j < len(diffs) {
-			suggestions[j].Explanation = explanations[diffs[j]]
+	for i, diff := range diffs {
+		if i >= len(explanations) {
+			logger.Debug().Msgf("Failed to get explanation for issue with diff index %v diff %s", i, diff)
+			break
 		}
+		suggestions[i].Explanation = explanations[i]
 	}
 }
 func getExplainEndpoint(c *config.Config) *url.URL {
