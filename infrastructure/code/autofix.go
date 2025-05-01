@@ -85,7 +85,7 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 
 			requestId, traceErr := performance2.GetTraceId(ctx)
 			if traceErr != nil {
-				return nil, err
+				return nil, traceErr
 			}
 
 			_, ruleId, ok := getIssueLangAndRuleId(issue)
