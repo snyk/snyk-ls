@@ -32,7 +32,7 @@ import (
 
 // CreateFromCommandData gets a command based on the given parameters that can be passed to the CommandService
 // nolint: gocyclo, nolintlint // this is a factory, it's ok to have high cyclomatic complexity here
-func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv types.Server, authService authentication.AuthenticationService, learnService learn.Service, notifier noti.Notifier, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner, cli cli.Executor) (types.Command, error) {
+func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv types.Server, authService authentication.AuthenticationService, learnService learn.Service, notifier noti.Notifier, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor) (types.Command, error) {
 	httpClient := c.Engine().GetNetworkAccess().GetHttpClient
 
 	switch commandData.CommandId {
@@ -69,9 +69,9 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 	case types.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
 	case types.CodeFixApplyEditCommand:
-		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, apiClient: codeApiClient, c: c, logger: c.Logger()}, nil
+		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, c: c, logger: c.Logger()}, nil
 	case types.CodeSubmitFixFeedback:
-		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil
+		return &codeFixFeedback{command: commandData}, nil
 	case types.CodeFixDiffsCommand:
 		return &codeFixDiffs{
 			command:       commandData,

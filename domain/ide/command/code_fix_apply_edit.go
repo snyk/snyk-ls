@@ -37,7 +37,6 @@ type applyAiFixEditCommand struct {
 	command       types.CommandData
 	issueProvider snyk.IssueProvider
 	notifier      notification.Notifier
-	apiClient     SnykCodeHttpClient
 	c             *config.Config
 	logger        *zerolog.Logger
 }
@@ -69,10 +68,18 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 
 	// send feedback asynchronously, so people can actually see the changes done by the fix
 	go func() {
-		err := cmd.apiClient.SubmitAutofixFeedback(ctx, fixId, code.FixAppliedUserEvent)
-		if err != nil {
-			cmd.logger.Err(err).Str("fixId", fixId).Str("feedback", code.FixAppliedUserEvent).Msg("failed to submit autofix feedback")
+
+		codeFixFeedbackCmd := codeFixFeedback{
+			command: types.CommandData{
+				Arguments: []any{fixId, code.FixPositiveFeedback},
+			},
 		}
+
+		_, err := codeFixFeedbackCmd.Execute(ctx)
+		if err != nil {
+			return
+		}
+
 		issue := cmd.issueProvider.Issue(htmlRenderer.AiFixHandler.GetCurrentIssueId())
 		actionCommandMap, err := cmd.autofixFeedbackActions(fixId)
 		successMessage := "Congratulations! 🎉 You’ve just fixed this " + issue.GetID() + " issue."

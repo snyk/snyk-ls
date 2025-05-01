@@ -126,9 +126,6 @@ func getAutofixEndpoint(c *config.Config) *url.URL {
 	if err != nil {
 		return &url.URL{}
 	}
-	queryParams := url.Values{}
-	endpoint.RawQuery = queryParams.Encode()
-
 	return endpoint
 }
 

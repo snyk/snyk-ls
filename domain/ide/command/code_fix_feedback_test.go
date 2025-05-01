@@ -18,7 +18,6 @@ package command
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -36,19 +35,6 @@ type fakeCodeHttpClient struct {
 	mu                sync.Mutex
 }
 
-func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId string, feedback string) error {
-	c.mu.Lock()
-	c.feedbackSubmitted = feedback
-	c.fixId = fixId
-	c.mu.Unlock()
-
-	if !c.shouldError {
-		return nil
-	}
-
-	return errors.New("api call failed")
-}
-
 func FeedbackSubmitted(c *fakeCodeHttpClient) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -62,7 +48,6 @@ func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 		command: types.CommandData{
 			Arguments: []any{"fixId", code.FixPositiveFeedback},
 		},
-		apiClient: &apiClient,
 	}
 
 	_, err := codeFixFeedbackCmd.Execute(context.Background())
