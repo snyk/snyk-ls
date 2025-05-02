@@ -569,15 +569,13 @@ func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath st
 
 	// Validate input path
 	if absoluteFilePath == "" {
-		logger.Error().Msg("Input absoluteFilePath is empty")
-		return nil, fmt.Errorf("absoluteFilePath cannot be empty")
+		return nil, fmt.Errorf("no file recieved to apply diff to")
 	}
 	logger.Debug().Str("diffContent", diffContent).Msg("Received diff content")
 
 	// Read the actual file content to validate diff line numbers
 	fileContentBytes, err := os.ReadFile(absoluteFilePath)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to read file for validation")
 		return nil, fmt.Errorf("failed to read file %s for validation: %w", absoluteFilePath, err)
 	}
 	logger.Debug().Int("fileBytes", len(fileContentBytes)).Msg("Read original file content")
@@ -600,7 +598,11 @@ func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath st
 		originalLineCount--
 		logger.Debug().Msg("Adjusted line count for trailing newline")
 	}
-	logger.Info().Int("originalLineCount", originalLineCount).Msg("Calculated original file line count")
+	logger.Debug().Int("originalLineCount", originalLineCount).Msg("Calculated original file line count")
+
+	if originalLineCount == 0 {
+		return nil, fmt.Errorf("cannot apply a diff to an empty file")
+	}
 
 	// Parse the diff content assuming it's for a single file
 	parsedDiff, err := diff.ParseFileDiff([]byte(diffContent))
@@ -609,16 +611,10 @@ func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath st
 		return nil, fmt.Errorf("failed to parse file diff: %w", err)
 	}
 
-	// Build the WorkspaceEdit
-	workspaceEdit := &types.WorkspaceEdit{
-		Changes: make(map[string][]types.TextEdit),
-	}
-
-	// If the diff is effectively empty (e.g., only headers or no changes), return empty edit
+	// If the diff is effectively empty (e.g., only headers or no changes), error
 	if parsedDiff == nil || len(parsedDiff.Hunks) == 0 {
 		logger.Debug().Msg("Diff contains no hunks, returning empty WorkspaceEdit")
-		// Return valid, empty edit object
-		return workspaceEdit, nil
+		return nil, fmt.Errorf("empty diff")
 	}
 
 	var fileEdits []types.TextEdit
@@ -641,12 +637,16 @@ func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath st
 		fileEdits = append(fileEdits, hunkEdits...)
 	}
 
-	if len(fileEdits) > 0 {
-		logger.Debug().Int("totalEdits", len(fileEdits)).Msg("Assigning collected edits to workspace edit")
-		workspaceEdit.Changes[absoluteFilePath] = fileEdits
-	} else {
-		logger.Debug().Msg("No text edits generated from diff hunks")
+	logger.Debug().Int("totalEdits", len(fileEdits)).Msg("Got the edits from the diff")
+	if len(fileEdits) == 0 {
+		return nil, fmt.Errorf("diff contained no edits")
 	}
+
+	// Build the WorkspaceEdit
+	workspaceEdit := &types.WorkspaceEdit{
+		Changes: make(map[string][]types.TextEdit),
+	}
+	workspaceEdit.Changes[absoluteFilePath] = fileEdits
 
 	// Log the final structure
 	logger.Debug().Interface("finalWorkspaceEdit", workspaceEdit).Msg("Returning final WorkspaceEdit")
@@ -668,7 +668,6 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 		// Hunk modifies/deletes lines. Check start and end.
 		// Start line must be within the file bounds.
 		if hunk.OrigStartLine == 0 || hunk.OrigStartLine > originalLineCount {
-			// Handle edge case of applying diff to empty file separately?
 			// If file is empty (count=0), any start line > 0 is invalid for non-insertion.
 			if originalLineCount == 0 && hunk.OrigStartLine > 0 {
 				return nil, fmt.Errorf("hunk applies changes starting at line %d, but file is empty", hunk.OrigStartLine)
@@ -692,7 +691,6 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 	logger.Debug().Msg("Hunk range validation passed")
 
 	var edits []types.TextEdit
-	// Treat final newline as significant separator if present
 	// Split hunk body into lines. Remove a single trailing newline before splitting to avoid an extra empty element.
 	hunkBodyStr := string(hunk.Body)
 	// Log raw hunk body before processing
@@ -706,6 +704,7 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 		// This case might be hit if OrigStartLine was 0, which should be caught by validation above.
 		logger.Warn().Int32("OrigStartLine", hunk.OrigStartLine).Msg("OrigStartLine was <= 0, adjusting currentOrigLine to 0")
 		currentOrigLine = 0
+		// TODO - Error here instead?
 	} // Should not be negative
 	logger.Debug().Int32("initialCurrentOrigLine", currentOrigLine).Msg("Initialized current original line (0-based)")
 
@@ -715,11 +714,11 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 	startChangeLine := int32(-1)
 
 	// Helper to create and append TextEdit based on collected changes
-	flushChanges := func() {
+	flushChanges := func() error {
 		flushLogger := logger.With().Str("helper", "flushChanges").Logger()
 		if len(deletions) == 0 && len(additions) == 0 {
 			flushLogger.Debug().Msg("No pending changes to flush.")
-			return // Nothing to flush
+			return nil // Nothing to flush
 		}
 		flushLogger.Debug().
 			Int("deletionsCount", len(deletions)).
@@ -733,9 +732,11 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 			// use the initial currentOrigLine for the hunk (which is 0-based start line - 1)
 			startChangeLine = hunk.OrigStartLine - 1
 			if startChangeLine < 0 {
-				startChangeLine = 0
-			} // Safety check
-			// TODO - is `startChangeLine = currentOrigLine` better than the above?
+				// This should be impossible if initial hunk validation is correct,
+				// as OrigStartLine should always be >= 1.
+				flushLogger.Error().Int32("invalidOrigStartLine", hunk.OrigStartLine).Msg("Calculated startChangeLine is negative, indicates invalid hunk OrigStartLine")
+				return fmt.Errorf("internal error: calculated startChangeLine %d based on OrigStartLine %d is invalid", startChangeLine, hunk.OrigStartLine)
+			}
 			flushLogger.Debug().Int32("startChangeLine", startChangeLine).Msg("startChangeLine was -1, now set to hunk start line")
 		} else {
 			flushLogger.Debug().Int32("startChangeLine", startChangeLine).Msg("Using previously set startChangeLine")
@@ -757,7 +758,7 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 		}
 
 		// If only additions (insertion), make range zero-length at the start position
-		if len(deletions) == 0 { // TODO - check for `&& len(additions) > 0` as well?
+		if len(deletions) == 0 {
 			flushLogger.Debug().Msg("End set to start")
 			editRange.End = editRange.Start
 			// Ensure insertion point is correct
@@ -766,7 +767,7 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 		}
 
 		generatedEdit := types.TextEdit{Range: editRange, NewText: newText}
-		flushLogger.Info().
+		flushLogger.Debug().
 			Interface("range", generatedEdit.Range).
 			Str("newText", generatedEdit.NewText).
 			Int("newTextLen", len(generatedEdit.NewText)).
@@ -779,6 +780,7 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 		additions = nil
 		startChangeLine = -1 // Reset for the next block
 		flushLogger.Debug().Msg("Reset deletion/addition collectors and startChangeLine")
+		return nil
 	}
 
 	for i, line := range lines {
@@ -816,26 +818,23 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 			if int(currentOrigLine) >= 0 && int(currentOrigLine) < len(originalLines) {
 				originalContent := originalLines[currentOrigLine]
 				diffContextContent := content // Content from the diff line (line[1:])
-				// Optional: Trim space for comparison robustness if needed
-				match := strings.TrimSpace(originalContent) == strings.TrimSpace(diffContextContent)
-				lineLogger.Info(). // Use Info level to easily spot these lines
-							Int32("expectedOrigLineIndex", currentOrigLine).
-							Str("diffContextContent", diffContextContent).
-							Str("actualOriginalContent", originalContent).
-							Bool("contentMatches", match).
-							Msg("Validating context line against original file content")
+				match := originalContent == diffContextContent
+				lineLogger.Debug().
+					Int32("expectedOrigLineIndex", currentOrigLine).
+					Str("diffContextContent", diffContextContent).
+					Str("actualOriginalContent", originalContent).
+					Bool("contentMatches", match).
+					Msg("Validating context line against original file content")
 				if !match {
-					// This log indicates where the code's understanding diverges from reality
-					lineLogger.Warn().Msg("CONTEXT LINE MISMATCH DETECTED! currentOrigLine may be desynchronized.")
-					// TODO - return an error?
+					return nil, fmt.Errorf("content line mismatch detected! Cannot apply diff otherwise unexpected content may be deleted")
 				}
 			} else {
 				// This would indicate a more fundamental issue if hit after initial hunk validation
 				lineLogger.Error().
 					Int32("currentOrigLine", currentOrigLine).
 					Int("originalLinesLength", len(originalLines)).
-					Msg("FATAL: currentOrigLine out of bounds for originalLines during context validation!")
-				// TODO - return an error?
+					Msg("currentOrigLine out of bounds for originalLines during context validation!")
+				return nil, fmt.Errorf("currentOrigLine out of bounds for originalLines during context validation")
 			}
 			// --- --- ---
 
@@ -845,7 +844,10 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 			} else {
 				lineLogger.Debug().Msg("Context line encountered, no pending changes to flush")
 			}
-			flushChanges()
+			err := flushChanges()
+			if err != nil {
+				return nil, err
+			}
 
 			// Sanity check: Does this context line exist in the original?
 			// currentOrigLine is 0-based index. originalLineCount is 1-based count.
@@ -863,7 +865,10 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 			// If transitioning from adding to deleting, flush adds first
 			if len(additions) > 0 { // Change from adding to deleting implies finishing the add block
 				lineLogger.Debug().Msg("Transition from add to delete, flushing additions first")
-				flushChanges()
+				err := flushChanges()
+				if err != nil {
+					return nil, err
+				}
 			}
 			// If this is the first change in a block, mark where it starts
 			if startChangeLine == -1 {
@@ -877,12 +882,8 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 			}
 			deletions = append(deletions, content)
 			lineLogger.Debug().Int("deletionsCount", len(deletions)).Msg("Appended to deletions")
-			// Deletion consumes an original line, but we advance currentOrigLine *after* the block
-			// in flushChanges (by adding len(deletions)). So don't increment here.
-			// TODO - Is the comment above correct!?!? It seems like `flushChanges` doesn't actually do it!
-			// TODO - Should we do here `currentOrigLine++` or make the change in `flushChanges`?
-			// TODO - Figure out the pros and cons of each.
-			currentOrigLine++ // TODO - Trying with this for now and will figure out of it is correct.
+			// Deletion consumes an original line, so advancing currentOrigLine.
+			currentOrigLine++
 		case '+': // Addition line
 			lineLogger.Debug().Int32("currentOrigLine", currentOrigLine).Msg("Processing addition line")
 			// If this is the first change in a block (or first after deletions), mark insert point.
@@ -900,9 +901,12 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 	}
 
 	logger.Debug().Msg("Finished processing lines in hunk body, performing final flush")
-	flushChanges() // Flush any remaining changes at the end of the hunk
+	err := flushChanges() // Flush any remaining changes at the end of the hunk
+	if err != nil {
+		return nil, err
+	}
 
-	logger.Info().Int("totalEditsInHunk", len(edits)).Msg("processHunk finished")
+	logger.Debug().Int("totalEditsInHunk", len(edits)).Msg("processHunk finished")
 	return edits, nil
 }
 
