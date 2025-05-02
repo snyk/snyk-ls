@@ -83,7 +83,7 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 				}),
 			)
 
-			requestId, traceErr := performance2.GetTraceId(ctx)
+			requestId, traceErr := performance2.GetTraceId(span.Context())
 			if traceErr != nil {
 				return nil, traceErr
 			}
