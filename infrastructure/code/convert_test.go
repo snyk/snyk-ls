@@ -628,7 +628,7 @@ func getSarifResponseJson(filePath types.FilePath) string {
 }
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
-	path, issues, resp := setupConversionTests(t, true, true)
+	filePath, issues, resp := setupConversionTests(t, true, true)
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
 	references := referencesForSampleSarifResponse()
 
@@ -640,13 +640,13 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 		issue.GetMessage())
 	assert.Equal(t, types.CodeQualityIssue, issue.GetIssueType())
 	assert.Equal(t, types.Low, issue.GetSeverity())
-	assert.Equal(t, types.FilePath(path), issue.GetAffectedFilePath())
+	assert.Equal(t, types.FilePath(filePath), issue.GetAffectedFilePath())
 	assert.Equal(t, types.Range{Start: types.Position{Line: 5, Character: 6}, End: types.Position{Line: 5, Character: 6}}, issue.GetRange())
 	assert.Equal(t, product.ProductCode, issue.GetProduct())
 	assert.Equal(t, issueDescriptionURL, issue.GetIssueDescriptionURL())
 	assert.Equal(t, references, issue.GetReferences())
 	assert.Contains(t, issue.GetFormattedMessage(), "Example Commit Fixes")
-	assert.Equal(t, markersForSampleSarifResponse(path), codeIssueData.Markers)
+	assert.Equal(t, markersForSampleSarifResponse(filePath), codeIssueData.Markers)
 	assert.Equal(t, 550, codeIssueData.PriorityScore)
 	assert.Equal(t, resp.Sarif.Runs[0].Tool.Driver.Rules[0].Properties.Cwe, issue.GetCWEs())
 	assert.Nil(t, issue.GetIgnoreDetails())
@@ -1234,6 +1234,65 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 						End:   types.Position{Line: 20, Character: 0},
 					},
 					NewText: "X  -> 18 - Added\nX  -> 19 - Added\n",
+				},
+			},
+		},
+		{
+			name:             "Complex single-hunk diff with more deletions than additions",
+			originalFilePath: path.Join(testDataDirPath, "04_another_complex/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "04_another_complex/good_diff_01.patch"),
+			expectedEdits: []types.TextEdit{
+				// Insert "X  -> 3  - Added"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 2, Character: 0},
+						End:   types.Position{Line: 2, Character: 0},
+					},
+					NewText: "X  -> 3  - Added\n",
+				},
+				// Delete "5  -> X  - Delete"
+				// Insert "X  -> 6  - Added"
+				// Insert "X  -> 7  - Added"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						End:   types.Position{Line: 5, Character: 0},
+					},
+					NewText: "X  -> 6  - Added\nX  -> 7  - Added\n",
+				},
+				// Insert "X  -> 13 - Added"
+				// Insert "X  -> 14 - Added"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 10, Character: 0},
+						End:   types.Position{Line: 10, Character: 0},
+					},
+					NewText: "X  -> 13 - Added\nX  -> 14 - Added\n",
+				},
+				// Delete "13 -> X  - Delete"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 12, Character: 0},
+						End:   types.Position{Line: 13, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "X  -> 18 - Added"
+				// Insert "X  -> 19 - Added"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 14, Character: 0},
+						End:   types.Position{Line: 14, Character: 0},
+					},
+					NewText: "X  -> 18 - Added\nX  -> 19 - Added\n",
+				},
+				// Delete "19 -> X  - Delete"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 18, Character: 0},
+						End:   types.Position{Line: 19, Character: 0},
+					},
+					NewText: "",
 				},
 			},
 		},

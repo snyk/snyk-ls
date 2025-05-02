@@ -1,0 +1,20 @@
+1  -> 1  - Leave
+2  -> 2  - Leave
+3  -> 4  - 1 Inserted Above
+4  -> 5  - Leave
+5  -> X  - Delete
+6  -> 8  - 2 Inserted Above
+7  -> 9  - Leave
+8  -> 10 - Leave
+9  -> 11 - Leave
+10 -> 12 - Leave
+11 -> 15 - 2 Inserted Above
+12 -> 16 - Leave
+13 -> X  - Delete
+14 -> 17 - Leave
+15 -> 20 - 2 Inserted Above
+16 -> 21 - Leave
+17 -> 22 - Leave
+18 -> 23 - Leave
+19 -> X  - Delete
+20 -> 24 - Leave

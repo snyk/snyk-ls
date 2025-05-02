@@ -1,5 +1,5 @@
---- complex_example.txt
-+++ complex_example.txt
+--- base_file.txt
++++ base_file.txt
 @@ -1,6 +1,5 @@
  1  -> 1  - Leave
  2  -> 2  - Leave
