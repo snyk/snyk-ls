@@ -913,7 +913,7 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions_HtmlEncodedFilePath(t *testin
 	baseDir := types.FilePath(t.TempDir())
 	err := os.WriteFile(filepath.Join(string(baseDir), filePath), []byte("var x = new Array();"), 0666)
 	require.NoError(t, err)
-	// Here we provide the HTML encoded path and it should be decoded in the function to read the correct file.
+	// Here we provide the HTML encoded path, which should be decoded in the function to read the correct file.
 	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir, "file_with%20space.js")
 
 	assert.Equal(t, len(unifiedDiffSuggestions), 1)
@@ -1084,33 +1084,25 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 			originalFilePath: path.Join(testDataDirPath, "01_simple/base_simple_file.txt"),
 			diffFilePath:     path.Join(testDataDirPath, "01_simple/good_diff_01.patch"),
 			expectedEdits: []types.TextEdit{
-				// Hunk 1: The two deletions and one addition are combined into a single replacement edit.
-				// Replaces lines 2 and 3 (0-based) with "three\n".
+				// - Hunk 1 -
+				// Delete "three_but_duplicated (first time)"
+				// Delete "three_but_duplicated (second time)"
+				// Insert "three"
 				{
 					Range: types.Range{
-						// Start at the beginning of the first deleted line (line 2, 0-based)
 						Start: types.Position{Line: 2, Character: 0},
-						// End *after* the last deleted line (line 3, 0-based).
-						// End line = Start Line (2) + number of deleted lines (2) = 4
-						End: types.Position{Line: 4, Character: 0},
+						End:   types.Position{Line: 4, Character: 0},
 					},
-					// The replacement text from the '+' line(s)
 					NewText: "three\n",
 				},
-				// Hunk 2: The two additions are combined into a single insertion edit.
-				// Inserts "six\nseven\n" before original line 6 (0-based index 5).
+				// - Hunk 2 -
+				// Insert "six"
+				// Insert "seven"
 				{
 					Range: types.Range{
-						// Start and End position are the same for an insertion.
-						// It inserts before the line where "eight" was originally (line 6, 0-based index 5).
-						// The original lines corresponding to the start of Hunk 2 are:
-						// line 4 (index 3): "four"
-						// line 5 (index 4): "five"
-						// Insertion happens *before* the next original line ("eight"), which was line 6 (index 5).
 						Start: types.Position{Line: 5, Character: 0},
 						End:   types.Position{Line: 5, Character: 0},
 					},
-					// The combined text from the '+' lines
 					NewText: "six\nseven\n",
 				},
 			},
