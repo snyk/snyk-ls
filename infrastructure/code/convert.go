@@ -570,17 +570,11 @@ func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath st
 		Str("diffContent", diffContent).
 		Msg("Attempting to create WorkspaceEdit for file from diff")
 
-	// Validate input path
-	if absoluteFilePath == "" {
-		return nil, fmt.Errorf("no file recieved to apply diff to")
-	}
-
 	// Read the actual file content to validate diff line numbers
 	fileContentBytes, err := os.ReadFile(absoluteFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %s for validation: %w", absoluteFilePath, err)
 	}
-	logger.Debug().Int("fileBytes", len(fileContentBytes)).Msg("Read original file content")
 
 	// Calculate the number of lines in the original file
 	originalLines := strings.Split(string(fileContentBytes), "\n")
@@ -592,19 +586,18 @@ func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath st
 	// A file with "" (empty) has 0 lines, Split gives [""], len 1. -> Need special handling
 	// A file with "\n" has 1 line, Split gives ["", ""], len 2.
 	if len(fileContentBytes) == 0 {
-		originalLineCount = 0 // Explicitly handle empty file
-		logger.Debug().Msg("Detected empty file, setting originalLineCount to 0")
-	} else if originalLineCount > 0 && originalLines[originalLineCount-1] == "" {
-		// If the last element is empty, it's likely due to a trailing newline,
-		// so the actual number of content lines is one less.
-		originalLineCount--
-		logger.Debug().Msg("Adjusted line count for trailing newline")
-	}
-	logger.Debug().Int("originalLineCount", originalLineCount).Msg("Calculated original file line count")
-
-	if originalLineCount == 0 {
+		// We should always will have a file with actual content that is being edited
 		return nil, fmt.Errorf("cannot apply a diff to an empty file")
+	} else if originalLineCount > 0 && originalLines[originalLineCount-1] == "" {
+		logger.Debug().Msg("File contains trailing newline")
+		// If the last line is a trailing newline, then the actual number of content lines is one less.
+		originalLineCount--
+		if originalLineCount == 0 {
+			// We should always will have a file with actual content that is being edited
+			return nil, fmt.Errorf("cannot apply a diff to a basically empty file")
+		}
 	}
+	logger.Debug().Int("fileBytes", len(fileContentBytes)).Msgf("Read original file content, got %d lines (excluding trailing newline)", originalLineCount)
 
 	// Parse the diff content assuming it's for a single file
 	parsedDiff, err := diff.ParseFileDiff([]byte(diffContent))
@@ -809,7 +802,7 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 		case ' ': // Context line
 			lineLogger.Debug().Int32("currentOrigLineBefore", currentOrigLine).Msg("Processing context line")
 
-			// --- Logging some extra validation ---
+			// Validate context line content against the original file
 			// Check bounds before accessing originalLines
 			if int(currentOrigLine) >= 0 && int(currentOrigLine) < len(originalLines) {
 				originalContent := originalLines[currentOrigLine]
@@ -826,13 +819,8 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 				}
 			} else {
 				// This would indicate a more fundamental issue if hit after initial hunk validation
-				lineLogger.Error().
-					Int32("currentOrigLine", currentOrigLine).
-					Int("originalLinesLength", len(originalLines)).
-					Msg("currentOrigLine out of bounds for originalLines during context validation!")
-				return nil, fmt.Errorf("currentOrigLine out of bounds for originalLines during context validation")
+				return nil, fmt.Errorf("currentOrigLine (%d) out of bounds for originalLines (len=%d) during context validation", currentOrigLine, len(originalLines))
 			}
-			// --- --- ---
 
 			// Before processing context, flush any pending changes.
 			if len(deletions) > 0 || len(additions) > 0 {
