@@ -1,0 +1,10 @@
+--- simple_file.txt
++++ simple_file.txt
+@ -2,400000000 +2,3 @
+ two
+-three_but_with_a_bug
+-three_but_with_a_bug
++three
+ four
+@@ -400,4 +400,6 @@
+ four

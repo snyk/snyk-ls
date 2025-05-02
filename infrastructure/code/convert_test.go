@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1067,344 +1068,196 @@ func Test_ParseDateFromString(t *testing.T) {
 }
 
 func TestCreateAutofixWorkspaceEdit(t *testing.T) {
-	tempFilePath := filepath.Join(os.TempDir(), "test.txt")
+	testDataDirPath := "testdata/convert_test/TestCreateAutofixWorkspaceEdit"
 
-	originalFileContent := `
- one
- two
- three_but_with_a_bug
- three_but_with_a_bug
- four
- five
- eight
- nine
- ten
-`
-	goodDiff := `
---- ` + tempFilePath + `
-+++ ` + tempFilePath + `
-@@ -2,4 +2,3 @@
- two
--three_but_with_a_bug
--three_but_with_a_bug
-+three
- four
-@@ -4,4 +4,6 @@
- four
- five
-+six
-+seven
- eight
- nine
-`
-	malformedDiff := `
---- ` + tempFilePath + `
-+++ ` + tempFilePath + `
-@ -2,400000000 +2,3 @
- two
--three_but_with_a_bug
--three_but_with_a_bug
-+three
- four
-@@ -400,4 +400,6 @@
- four
-`
-	originalComplexFileContent := `
-const fs = require('fs');
-const path = require('path');
-
-// Endpoint to download an image
-app.get('/download/:filename', (req, res) => {
-  const filename = req.params.filename;
-  const filePath = path.join(__dirname, 'uploads', filename);
-
-  if (fs.existsSync(filePath)) {
-      // Fix this issue: Path Traversal
-      res.download(filePath);
-  } else {
-      res.status(404).send('File not found.');
-  }
-});
-`
-	complexDiff := `
---- ` + tempFilePath + `
-+++ ` + tempFilePath + `
-@@ -1,14 +1,15 @@
- const fs = require('fs');
- const path = require('path');
-+const sanitize = require('sanitize-filename');
- ` + `
- // Endpoint to download an image
- app.get('/download/:filename', (req, res) => {
--  const filename = req.params.filename;
-+  const filename = sanitize(req.params.filename);
-   const filePath = path.join(__dirname, 'uploads', filename);
- ` + `
-   if (fs.existsSync(filePath)) {
-       // Fix this issue: Path Traversal
--      res.download(filePath);
-+      res.download(path.basename(filePath));
-   } else {
-       res.status(404).send('File not found.');
-   }
-`
-	originalComplexMultiHunkFileContent := `
-1  -> 1  - Leave
-2  -> 2  - Leave
-3  -> X  - Delete
-4  -> 3  - Leave
-5  -> 4  - Leave
-6  -> 5  - Leave
-7  -> 6  - Leave
-8  -> 7  - Leave
-9  -> 8  - Leave
-10 -> 9  - Leave
-11 -> 10 - Leave
-12 -> 11 - Leave
-13 -> 12 - Leave
-14 -> X  - Delete
-15 -> 13 - Leave
-16 -> 15 - Swap with below
-17 -> 14 - Swap with above
-18 -> 16 - Leave
-19 -> X  - Delete
-20 -> 17 - Leave
-`
-	complexMultiHunkDiff := `
---- a/example_1.txt
-+++ b/example_1.txt
-@@ -1,6 +1,5 @@
- 1  -> 1  - Leave
- 2  -> 2  - Leave
--3  -> X  - Delete
- 4  -> 3  - Leave
- 5  -> 4  - Leave
- 6  -> 5  - Leave
-@@ -11,10 +10,10 @@
- 11 -> 10 - Leave
- 12 -> 11 - Leave
- 13 -> 12 - Leave
--14 -> X  - Delete
- 15 -> 13 - Leave
--16 -> 15 - Swap with below
- 17 -> 14 - Swap with above
-+16 -> 15 - Swap with below
- 18 -> 16 - Leave
--19 -> X  - Delete
- 20 -> 17 - Leave
-+X  -> 18 - Added
-+X  -> 19 - Added
-`
 	tests := []struct {
-		name         string
-		diff         string
-		filePath     string
-		fileContents string
+		name             string
+		originalFilePath string
+		diffFilePath     string
 		// Either set:
-		expectedEdit *types.WorkspaceEdit
+		expectedEdits []types.TextEdit
 		// or set:
 		expectedErrorMsgRegex *string
 	}{
 		{
-			name:         "Multi-hunk diff results in grouped TextEdits",
-			diff:         goodDiff,
-			filePath:     tempFilePath,
-			fileContents: originalFileContent,
-			expectedEdit: &types.WorkspaceEdit{
-				Changes: map[string][]types.TextEdit{
-					tempFilePath: []types.TextEdit{
-						// Hunk 1: The two deletions and one addition are combined into a single replacement edit.
-						// Replaces lines 2 and 3 (0-based) with "three\n".
-						types.TextEdit{
-							Range: types.Range{
-								// Start at the beginning of the first deleted line (line 2, 0-based)
-								Start: types.Position{Line: 2, Character: 0},
-								// End *after* the last deleted line (line 3, 0-based).
-								// End line = Start Line (2) + number of deleted lines (2) = 4
-								End: types.Position{Line: 4, Character: 0},
-							},
-							// The replacement text from the '+' line(s)
-							NewText: "three\n",
-						},
-						// Hunk 2: The two additions are combined into a single insertion edit.
-						// Inserts "six\nseven\n" before original line 6 (0-based index 5).
-						types.TextEdit{
-							Range: types.Range{
-								// Start and End position are the same for an insertion.
-								// It inserts before the line where "eight" was originally (line 6, 0-based index 5).
-								// The original lines corresponding to the start of Hunk 2 are:
-								// line 4 (index 3): "four"
-								// line 5 (index 4): "five"
-								// Insertion happens *before* the next original line ("eight"), which was line 6 (index 5).
-								Start: types.Position{Line: 5, Character: 0},
-								End:   types.Position{Line: 5, Character: 0},
-							},
-							// The combined text from the '+' lines
-							NewText: "six\nseven\n",
-						},
+			name:             "Multi-hunk diff results in grouped TextEdits",
+			originalFilePath: path.Join(testDataDirPath, "01_simple/base_simple_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "01_simple/good_diff_01.patch"),
+			expectedEdits: []types.TextEdit{
+				// Hunk 1: The two deletions and one addition are combined into a single replacement edit.
+				// Replaces lines 2 and 3 (0-based) with "three\n".
+				{
+					Range: types.Range{
+						// Start at the beginning of the first deleted line (line 2, 0-based)
+						Start: types.Position{Line: 2, Character: 0},
+						// End *after* the last deleted line (line 3, 0-based).
+						// End line = Start Line (2) + number of deleted lines (2) = 4
+						End: types.Position{Line: 4, Character: 0},
 					},
+					// The replacement text from the '+' line(s)
+					NewText: "three\n",
+				},
+				// Hunk 2: The two additions are combined into a single insertion edit.
+				// Inserts "six\nseven\n" before original line 6 (0-based index 5).
+				{
+					Range: types.Range{
+						// Start and End position are the same for an insertion.
+						// It inserts before the line where "eight" was originally (line 6, 0-based index 5).
+						// The original lines corresponding to the start of Hunk 2 are:
+						// line 4 (index 3): "four"
+						// line 5 (index 4): "five"
+						// Insertion happens *before* the next original line ("eight"), which was line 6 (index 5).
+						Start: types.Position{Line: 5, Character: 0},
+						End:   types.Position{Line: 5, Character: 0},
+					},
+					// The combined text from the '+' lines
+					NewText: "six\nseven\n",
 				},
 			},
 		},
 		{
 			name:                  "Malformed diff causes parse error",
-			diff:                  malformedDiff,
-			filePath:              tempFilePath,
-			fileContents:          originalFileContent,
+			originalFilePath:      path.Join(testDataDirPath, "01_simple/base_simple_file.txt"),
+			diffFilePath:          path.Join(testDataDirPath, "01_simple/malformed_diff_01.patch"),
 			expectedErrorMsgRegex: util.Ptr("^failed to parse file diff: .+$"),
 		},
 		{
 			name:                  "Short file causes processing error",
-			diff:                  goodDiff,
-			filePath:              tempFilePath,
-			fileContents:          "one",
-			expectedErrorMsgRegex: util.Ptr("^error processing hunk 0 for .+: hunk starts at line 2 but file only has 1 lines$"),
+			originalFilePath:      path.Join(testDataDirPath, "01_simple/corrupt_short_file.txt"),
+			diffFilePath:          path.Join(testDataDirPath, "01_simple/good_diff_01.patch"),
+			expectedErrorMsgRegex: util.Ptr("^error processing hunk 0 for .+: hunk applies changes up to line 5 but file only has 2 lines$"),
 		},
 		{
 			name:                  "Missing file causes error",
-			diff:                  goodDiff,
-			filePath:              "/this/file/does/not/exist",
-			fileContents:          originalFileContent,
+			originalFilePath:      "/this/file/does/not/exist",
+			diffFilePath:          path.Join(testDataDirPath, "01_simple/good_diff_01.patch"), // The file content is irrelevant, but must the file must exist
 			expectedErrorMsgRegex: util.Ptr("^failed to read file /this/file/does/not/exist for validation: open /this/file/does/not/exist: no such file or directory$"),
 		},
 		{
-			name:         "Complex diff produces the correct edits",
-			diff:         complexDiff,
-			filePath:     tempFilePath,
-			fileContents: originalComplexFileContent,
-			expectedEdit: &types.WorkspaceEdit{
-				Changes: map[string][]types.TextEdit{
-					tempFilePath: []types.TextEdit{
-						{
-							Range: types.Range{
-								Start: types.Position{
-									Line:      2,
-									Character: 0,
-								},
-								End: types.Position{
-									Line:      2,
-									Character: 0,
-								},
-							},
-							NewText: "const sanitize = require('sanitize-filename');\n",
+			name:             "Complex diff produces the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "02_real_js/base_real_js.js"),
+			diffFilePath:     path.Join(testDataDirPath, "02_real_js/good_diff_01.patch"),
+			expectedEdits: []types.TextEdit{
+				{
+					Range: types.Range{
+						Start: types.Position{
+							Line:      2,
+							Character: 0,
 						},
-						{
-							Range: types.Range{
-								Start: types.Position{
-									Line:      5,
-									Character: 0,
-								},
-								End: types.Position{
-									Line:      6,
-									Character: 0,
-								},
-							},
-							NewText: "  const filename = sanitize(req.params.filename);\n",
-						},
-						{
-							Range: types.Range{
-								Start: types.Position{
-									Line:      10,
-									Character: 0,
-								},
-								End: types.Position{
-									Line:      11,
-									Character: 0,
-								},
-							},
-							NewText: "      res.download(path.basename(filePath));\n",
+						End: types.Position{
+							Line:      2,
+							Character: 0,
 						},
 					},
+					NewText: "const sanitize = require('sanitize-filename');\n",
+				},
+				{
+					Range: types.Range{
+						Start: types.Position{
+							Line:      5,
+							Character: 0,
+						},
+						End: types.Position{
+							Line:      6,
+							Character: 0,
+						},
+					},
+					NewText: "  const filename = sanitize(req.params.filename);\n",
+				},
+				{
+					Range: types.Range{
+						Start: types.Position{
+							Line:      10,
+							Character: 0,
+						},
+						End: types.Position{
+							Line:      11,
+							Character: 0,
+						},
+					},
+					NewText: "      res.download(path.basename(filePath));\n",
 				},
 			},
 		},
 		{
-			name:         "Complex multi-hunk diff with swaps and deletions",
-			diff:         complexMultiHunkDiff,
-			filePath:     tempFilePath,
-			fileContents: originalComplexMultiHunkFileContent,
-			expectedEdit: &types.WorkspaceEdit{
-				Changes: map[string][]types.TextEdit{
-					tempFilePath: []types.TextEdit{
-						// - Hunk 1 -
-						// Delete "3  -> X  - Delete"
-						types.TextEdit{
-							Range: types.Range{
-								Start: types.Position{Line: 2, Character: 0},
-								End:   types.Position{Line: 3, Character: 0},
-							},
-							NewText: "",
-						},
-						// - Hunk 2 -
-						// Delete "14 -> X  - Delete"
-						types.TextEdit{
-							Range: types.Range{
-								Start: types.Position{Line: 13, Character: 0},
-								End:   types.Position{Line: 14, Character: 0},
-							},
-							NewText: "",
-						},
-						// Delete "16 -> 15 - Swap with below"
-						types.TextEdit{
-							Range: types.Range{
-								Start: types.Position{Line: 15, Character: 0},
-								End:   types.Position{Line: 16, Character: 0},
-							},
-							NewText: "",
-						},
-						// Insert "16 -> 15 - Swap with below"
-						types.TextEdit{
-							Range: types.Range{
-								Start: types.Position{Line: 17, Character: 0},
-								End:   types.Position{Line: 17, Character: 0},
-							},
-							NewText: "16 -> 15 - Swap with below\n",
-						},
-						// Delete "19 -> X  - Delete"
-						types.TextEdit{
-							Range: types.Range{
-								Start: types.Position{Line: 18, Character: 0},
-								End:   types.Position{Line: 19, Character: 0},
-							},
-							NewText: "",
-						},
-						// Insert "X  -> 18 - Added"
-						// Insert "X  -> 19 - Added"
-						types.TextEdit{
-							Range: types.Range{
-								Start: types.Position{Line: 20, Character: 0},
-								End:   types.Position{Line: 20, Character: 0},
-							},
-							NewText: "X  -> 18 - Added\nX  -> 19 - Added\n",
-						},
+			name:             "Complex multi-hunk diff with swaps and deletions",
+			originalFilePath: path.Join(testDataDirPath, "03_complex_example/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "03_complex_example/good_diff_01.patch"),
+			expectedEdits: []types.TextEdit{
+				// - Hunk 1 -
+				// Delete "3  -> X  - Delete"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 2, Character: 0},
+						End:   types.Position{Line: 3, Character: 0},
 					},
+					NewText: "",
+				},
+				// - Hunk 2 -
+				// Delete "14 -> X  - Delete"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 13, Character: 0},
+						End:   types.Position{Line: 14, Character: 0},
+					},
+					NewText: "",
+				},
+				// Delete "16 -> 15 - Swap with below"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 15, Character: 0},
+						End:   types.Position{Line: 16, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "16 -> 15 - Swap with below"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 17, Character: 0},
+						End:   types.Position{Line: 17, Character: 0},
+					},
+					NewText: "16 -> 15 - Swap with below\n",
+				},
+				// Delete "19 -> X  - Delete"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 18, Character: 0},
+						End:   types.Position{Line: 19, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "X  -> 18 - Added"
+				// Insert "X  -> 19 - Added"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 20, Character: 0},
+						End:   types.Position{Line: 20, Character: 0},
+					},
+					NewText: "X  -> 18 - Added\nX  -> 19 - Added\n",
 				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// If we're testing with a valid file path, create it for the test to use.
-			if tt.filePath == tempFilePath {
-				err := os.WriteFile(tempFilePath, []byte(tt.fileContents), 0666)
-				assert.NoError(t, err)
-
-				testContents, err := os.ReadFile(tt.filePath)
-				assert.NoError(t, err)
-				assert.Equalf(t, tt.fileContents, string(testContents), "File contents: %v", string(testContents))
-			}
+			// Read the diff file
+			diffBytes, err := os.ReadFile(tt.diffFilePath)
+			require.NoError(t, err)
+			diff := string(diffBytes)
 
 			// Create a WorkSpaceEdit for the file, and check against the reference.
-			actualWorkspaceEdit, err := CreateWorkspaceEditFromDiff(config.CurrentConfig().Logger(), tt.filePath, tt.diff)
+			actualWorkspaceEdit, err := CreateWorkspaceEditFromDiff(config.CurrentConfig().Logger(), tt.originalFilePath, diff)
 			if tt.expectedErrorMsgRegex != nil {
-				assert.Error(t, err)
+				assert.Nil(t, actualWorkspaceEdit)
+				require.Error(t, err)
 				assert.Regexp(t, *tt.expectedErrorMsgRegex, err.Error())
-			} else if tt.expectedEdit != nil {
-				assert.NoError(t, err, "CreateWorkspaceEditFromDiff(%v, %v)", tt.filePath, tt.diff)
-				assert.Equalf(t, tt.expectedEdit, actualWorkspaceEdit,
-					"CreateWorkspaceEditFromDiff(%v, %v)", tt.filePath, tt.diff)
+			} else if tt.expectedEdits != nil {
+				assert.NoError(t, err)
+				require.NotNil(t, actualWorkspaceEdit)
+				require.Contains(t, actualWorkspaceEdit.Changes, tt.originalFilePath)
+				assert.Equal(t, tt.expectedEdits, actualWorkspaceEdit.Changes[tt.originalFilePath])
 			} else {
-				assert.Fail(t, "Bad test case, no expected error message or expected edit")
+				assert.Fail(t, "Bad test case, no expected error message or expected edits")
 			}
 		})
 	}
