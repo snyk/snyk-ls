@@ -1148,6 +1148,53 @@ app.get('/download/:filename', (req, res) => {
        res.status(404).send('File not found.');
    }
 `
+	originalComplexMultiHunkFileContent := `
+1  -> 1  - Leave
+2  -> 2  - Leave
+3  -> X  - Delete
+4  -> 3  - Leave
+5  -> 4  - Leave
+6  -> 5  - Leave
+7  -> 6  - Leave
+8  -> 7  - Leave
+9  -> 8  - Leave
+10 -> 9  - Leave
+11 -> 10 - Leave
+12 -> 11 - Leave
+13 -> 12 - Leave
+14 -> X  - Delete
+15 -> 13 - Leave
+16 -> 15 - Swap with below
+17 -> 14 - Swap with above
+18 -> 16 - Leave
+19 -> X  - Delete
+20 -> 17 - Leave
+`
+	complexMultiHunkDiff := `
+--- a/example_1.txt
++++ b/example_1.txt
+@@ -1,6 +1,5 @@
+ 1  -> 1  - Leave
+ 2  -> 2  - Leave
+-3  -> X  - Delete
+ 4  -> 3  - Leave
+ 5  -> 4  - Leave
+ 6  -> 5  - Leave
+@@ -11,10 +10,10 @@
+ 11 -> 10 - Leave
+ 12 -> 11 - Leave
+ 13 -> 12 - Leave
+-14 -> X  - Delete
+ 15 -> 13 - Leave
+-16 -> 15 - Swap with below
+ 17 -> 14 - Swap with above
++16 -> 15 - Swap with below
+ 18 -> 16 - Leave
+-19 -> X  - Delete
+ 20 -> 17 - Leave
++X  -> 18 - Added
++X  -> 19 - Added
+`
 	tests := []struct {
 		name         string
 		diff         string
@@ -1266,6 +1313,69 @@ app.get('/download/:filename', (req, res) => {
 								},
 							},
 							NewText: "      res.download(path.basename(filePath));\n",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:         "Complex multi-hunk diff with swaps and deletions",
+			diff:         complexMultiHunkDiff,
+			filePath:     tempFilePath,
+			fileContents: originalComplexMultiHunkFileContent,
+			expectedEdit: &types.WorkspaceEdit{
+				Changes: map[string][]types.TextEdit{
+					tempFilePath: []types.TextEdit{
+						// - Hunk 1 -
+						// Delete "3  -> X  - Delete"
+						types.TextEdit{
+							Range: types.Range{
+								Start: types.Position{Line: 2, Character: 0},
+								End:   types.Position{Line: 3, Character: 0},
+							},
+							NewText: "",
+						},
+						// - Hunk 2 -
+						// Delete "14 -> X  - Delete"
+						types.TextEdit{
+							Range: types.Range{
+								Start: types.Position{Line: 13, Character: 0},
+								End:   types.Position{Line: 14, Character: 0},
+							},
+							NewText: "",
+						},
+						// Delete "16 -> 15 - Swap with below"
+						types.TextEdit{
+							Range: types.Range{
+								Start: types.Position{Line: 15, Character: 0},
+								End:   types.Position{Line: 16, Character: 0},
+							},
+							NewText: "",
+						},
+						// Insert "16 -> 15 - Swap with below"
+						types.TextEdit{
+							Range: types.Range{
+								Start: types.Position{Line: 17, Character: 0},
+								End:   types.Position{Line: 17, Character: 0},
+							},
+							NewText: "16 -> 15 - Swap with below\n",
+						},
+						// Delete "19 -> X  - Delete"
+						types.TextEdit{
+							Range: types.Range{
+								Start: types.Position{Line: 18, Character: 0},
+								End:   types.Position{Line: 19, Character: 0},
+							},
+							NewText: "",
+						},
+						// Insert "X  -> 18 - Added"
+						// Insert "X  -> 19 - Added"
+						types.TextEdit{
+							Range: types.Range{
+								Start: types.Position{Line: 20, Character: 0},
+								End:   types.Position{Line: 20, Character: 0},
+							},
+							NewText: "X  -> 18 - Added\nX  -> 19 - Added\n",
 						},
 					},
 				},
