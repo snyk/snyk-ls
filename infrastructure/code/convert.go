@@ -564,14 +564,16 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir types.File
 }
 
 func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath string, diffContent string) (*types.WorkspaceEdit, error) {
-	logger := zeroLogger.With().Str("method", "CreateWorkspaceEditFromDiff").Str("file", absoluteFilePath).Logger()
-	logger.Debug().Msg("Attempting to create WorkspaceEdit from diff")
+	logger := zeroLogger.With().Str("method", "CreateWorkspaceEditFromDiff").Logger()
+	logger.Debug().
+		Str("absoluteFilePath", absoluteFilePath).
+		Str("diffContent", diffContent).
+		Msg("Attempting to create WorkspaceEdit for file from diff")
 
 	// Validate input path
 	if absoluteFilePath == "" {
 		return nil, fmt.Errorf("no file recieved to apply diff to")
 	}
-	logger.Debug().Str("diffContent", diffContent).Msg("Received diff content")
 
 	// Read the actual file content to validate diff line numbers
 	fileContentBytes, err := os.ReadFile(absoluteFilePath)
@@ -607,13 +609,11 @@ func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath st
 	// Parse the diff content assuming it's for a single file
 	parsedDiff, err := diff.ParseFileDiff([]byte(diffContent))
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to parse file diff")
 		return nil, fmt.Errorf("failed to parse file diff: %w", err)
 	}
 
-	// If the diff is effectively empty (e.g., only headers or no changes), error
+	// If the diff is effectively empty (e.g., only headers or no changes), then error
 	if parsedDiff == nil || len(parsedDiff.Hunks) == 0 {
-		logger.Debug().Msg("Diff contains no hunks, returning empty WorkspaceEdit")
 		return nil, fmt.Errorf("empty diff")
 	}
 
@@ -629,15 +629,13 @@ func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath st
 
 		hunkEdits, err := processHunk(&hunkLogger, hunk, originalLines)
 		if err != nil {
-			hunkLogger.Error().Err(err).Msg("Error processing hunk")
-			// Add context to the error
-			return nil, fmt.Errorf("error processing hunk %d for %s: %w", i, absoluteFilePath, err)
+			return nil, fmt.Errorf("error processing hunk %d: %w", i, err)
 		}
 		hunkLogger.Debug().Int("editsFromHunk", len(hunkEdits)).Msg("Successfully processed hunk")
 		fileEdits = append(fileEdits, hunkEdits...)
 	}
 
-	logger.Debug().Int("totalEdits", len(fileEdits)).Msg("Got the edits from the diff")
+	logger.Debug().Int("totalEdits", len(fileEdits)).Msg("Aggregated edits from all hunks")
 	if len(fileEdits) == 0 {
 		return nil, fmt.Errorf("diff contained no edits")
 	}
@@ -701,15 +699,13 @@ func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string
 	// Diff lines are 1-based, LSP is 0-based. Track current original line.
 	currentOrigLine := hunk.OrigStartLine - 1 // Convert to 0-based index
 	if currentOrigLine < 0 {
-		// This case might be hit if OrigStartLine was 0, which should be caught by validation above.
-		logger.Warn().Int32("OrigStartLine", hunk.OrigStartLine).Msg("OrigStartLine was <= 0, adjusting currentOrigLine to 0")
-		currentOrigLine = 0
-		// TODO - Error here instead?
-	} // Should not be negative
+		// This should be impossible if initial hunk validation (OrigStartLine >= 1) is correct.
+		return nil, fmt.Errorf("internal error: calculated currentOrigLine %d from OrigStartLine %d is invalid after initial validation", currentOrigLine, hunk.OrigStartLine)
+	}
 	logger.Debug().Int32("initialCurrentOrigLine", currentOrigLine).Msg("Initialized current original line (0-based)")
 
-	var deletions []string // Lines marked with '-'
-	var additions []string // Lines marked with '+'
+	var deletions []string // Lines beginning '-'
+	var additions []string // Lines beginning '+'
 	// Track the original line number where the current deletion/insertion block started (0-based)
 	startChangeLine := int32(-1)
 
