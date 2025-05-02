@@ -251,7 +251,7 @@ func (s *SnykCodeHTTPClient) newRequest(
 	body *bytes.Buffer,
 	requestId string,
 ) (*http.Request, error) {
-	host, err := getCodeApiUrl(c)
+	host, err := GetCodeApiUrl(c)
 	if err != nil {
 		return nil, err
 	}
@@ -456,7 +456,7 @@ type AutofixStatus struct {
 	message string
 }
 
-func getCodeApiUrl(c *config.Config) (string, error) {
+func GetCodeApiUrl(c *config.Config) (string, error) {
 	if !c.IsFedramp() {
 		return c.SnykCodeApi(), nil
 	}

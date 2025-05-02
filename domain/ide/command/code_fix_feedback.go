@@ -21,6 +21,7 @@ import (
 	"fmt"
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/llm"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"net/url"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -74,7 +75,11 @@ func (cmd *codeFixFeedback) Execute(ctx context.Context) (any, error) {
 }
 
 func getAutofixFeedbackEndpoint(c *config.Config) *url.URL {
-	endpoint, err := url.Parse(fmt.Sprintf("%s/autofix/event", c.SnykApi()))
+	host, err := code.GetCodeApiUrl(c)
+	if err != nil {
+		return &url.URL{}
+	}
+	endpoint, err := url.Parse(fmt.Sprintf("%s/autofix/event", host))
 	if err != nil {
 		return &url.URL{}
 	}

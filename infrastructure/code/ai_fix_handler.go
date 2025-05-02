@@ -111,6 +111,7 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 		suggestions[i].Explanation = explanations[i]
 	}
 }
+
 func getExplainEndpoint(c *config.Config) *url.URL {
 	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", c.SnykApi(), c.Organization()))
 	if err != nil {
@@ -124,7 +125,11 @@ func getExplainEndpoint(c *config.Config) *url.URL {
 }
 
 func getAutofixEndpoint(c *config.Config) *url.URL {
-	endpoint, err := url.Parse(fmt.Sprintf("%s/autofix/suggestions", c.SnykApi()))
+	host, err := GetCodeApiUrl(c)
+	if err != nil {
+		return &url.URL{}
+	}
+	endpoint, err := url.Parse(fmt.Sprintf("%s/autofix/suggestions", host))
 	if err != nil {
 		return &url.URL{}
 	}

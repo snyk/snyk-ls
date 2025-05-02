@@ -68,10 +68,9 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 
 	// send feedback asynchronously, so people can actually see the changes done by the fix
 	go func() {
-
 		codeFixFeedbackCmd := codeFixFeedback{
 			command: types.CommandData{
-				Arguments: []any{fixId, code.FixPositiveFeedback},
+				Arguments: []any{fixId, code.FixAppliedUserEvent},
 			},
 		}
 

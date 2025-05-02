@@ -220,7 +220,7 @@ func TestGetCodeApiUrl(t *testing.T) {
 
 				expected := "https://api." + instance + ".io/hidden/orgs/" + orgUUID + "/code"
 
-				actual, err := getCodeApiUrl(c)
+				actual, err := GetCodeApiUrl(c)
 				assert.Nil(t, err)
 				assert.Contains(t, actual, expected)
 			}
@@ -254,7 +254,7 @@ func TestGetCodeApiUrl(t *testing.T) {
 				c := config.CurrentConfig()
 				c.UpdateApiEndpoints(input)
 
-				actual, err := getCodeApiUrl(c)
+				actual, err := GetCodeApiUrl(c)
 				assert.Nil(t, err)
 				assert.Contains(t, actual, expected)
 			}
@@ -264,7 +264,7 @@ func TestGetCodeApiUrl(t *testing.T) {
 	t.Run("Default deeprox url for code api", func(t *testing.T) {
 		c := config.CurrentConfig()
 
-		url, _ := getCodeApiUrl(c)
+		url, _ := GetCodeApiUrl(c)
 		assert.Equal(t, c.SnykCodeApi(), url)
 	})
 }

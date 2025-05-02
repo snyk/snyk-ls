@@ -29,6 +29,7 @@ type AnalysisOptions struct {
 	severity     int
 }
 
+// TODO move these (delete and update tests)
 type AutofixOptions struct {
 	bundleHash string
 	shardKey   string
