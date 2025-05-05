@@ -162,14 +162,17 @@ var allowedHostnames = map[string]bool{
 	"localhost": true,
 	"127.0.0.1": true,
 	"::1":       true,
+	"":          true,
 }
 
 func middleware(sseServer *server.SSEServer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		originHeader := r.Header.Get("Origin")
 		isValidOrigin := originHeader == ""
+		hostHeader := r.Header.Get("Host")
+		isValidHost := allowedHostnames[hostHeader]
 
-		if originHeader != "" {
+		if !isValidOrigin {
 			parsedOrigin, err := url.Parse(originHeader)
 			if err == nil {
 				requestHost := parsedOrigin.Hostname()
@@ -179,7 +182,7 @@ func middleware(sseServer *server.SSEServer) http.Handler {
 			}
 		}
 
-		if isValidOrigin {
+		if isValidOrigin && isValidHost {
 			sseServer.ServeHTTP(w, r)
 		} else {
 			http.Error(w, "Forbidden: Access restricted to localhost origins", http.StatusForbidden)
