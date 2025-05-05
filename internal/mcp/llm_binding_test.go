@@ -117,6 +117,12 @@ func TestIsValidHttpRequest(t *testing.T) {
 			origin:   "",
 			expected: true,
 		},
+		{
+			name:     "valid host header with port",
+			host:     "localhost:3000",
+			origin:   "",
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {

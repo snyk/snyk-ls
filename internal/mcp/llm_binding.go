@@ -19,6 +19,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -179,7 +180,12 @@ func isValidHttpRequest(r *http.Request) bool {
 	originHeader := r.Header.Get("Origin")
 	isValidOrigin := originHeader == ""
 	hostHeader := r.Header.Get("Host")
-	isValidHost := allowedHostnames[hostHeader]
+	host, _, err := net.SplitHostPort(hostHeader)
+	if err != nil {
+		// Try to parse without port
+		host = hostHeader
+	}
+	isValidHost := allowedHostnames[host]
 
 	if !isValidOrigin {
 		parsedOrigin, err := url.Parse(originHeader)
