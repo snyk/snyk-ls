@@ -1,6 +1,6 @@
 module github.com/snyk/snyk-ls
 
-go 1.23.8
+go 1.24.2
 
 require (
 	github.com/adrg/strutil v0.3.1
