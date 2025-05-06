@@ -68,6 +68,11 @@ func NewAuthenticationService(c *config.Config, authProviders AuthenticationProv
 	}
 }
 
+func (a *AuthenticationServiceImpl) AuthURL(ctx context.Context) string {
+	// no lock should be used here, as this is usually called during authentication flow, which write-locks the mutex
+	return a.authProvider.AuthURL(ctx)
+}
+
 func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
 	a.m.RLock()
 	defer a.m.RUnlock()

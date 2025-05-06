@@ -66,8 +66,7 @@ func (p *OAuth2Provider) ClearAuthentication(_ context.Context) error {
 }
 
 func (p *OAuth2Provider) AuthURL(_ context.Context) string {
-	p.m.Lock()
-	defer p.m.Unlock()
+	// no lock required here
 	return p.authURL
 }
 

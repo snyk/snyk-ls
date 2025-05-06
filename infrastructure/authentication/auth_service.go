@@ -52,4 +52,7 @@ type AuthenticationService interface {
 
 	// ConfigureProviders updates the providers based on the stored configuration
 	ConfigureProviders(c *config.Config)
+
+	// AuthURL retrieves the authentication URL
+	AuthURL(ctx context.Context) string
 }
