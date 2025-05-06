@@ -579,7 +579,6 @@ func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath st
 	// Calculate the number of lines in the original file
 	originalLines := strings.Split(string(fileContentBytes), "\n")
 	originalLineCount := len(originalLines)
-	logger.Debug().Int("originalLineCount", originalLineCount).Msg("Initial line count from split")
 	// Adjust count if the file ends with a newline, which adds an empty string element
 	// A file with "a\nb\n" has 2 lines, Split gives ["a", "b", ""], len 3.
 	// A file with "a\nb" has 2 lines, Split gives ["a", "b"], len 2.
@@ -620,7 +619,7 @@ func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath st
 			Int32("newLines", hunk.NewLines).
 			Msg("Processing hunk")
 
-		hunkEdits, err := processHunk(&hunkLogger, hunk, originalLines)
+		hunkEdits, err := processHunk(&hunkLogger, hunk, int32(originalLineCount), originalLines)
 		if err != nil {
 			return nil, fmt.Errorf("error processing hunk %d: %w", i, err)
 		}
@@ -646,12 +645,7 @@ func CreateWorkspaceEditFromDiff(zeroLogger *zerolog.Logger, absoluteFilePath st
 }
 
 // processHunk converts a single diff hunk into a slice of LSP TextEdits.
-func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLines []string) ([]types.TextEdit, error) {
-	originalLineCount := int32(len(originalLines))
-	// originalLineCount stores the total number of lines in the original file
-	// (equivalent to 1-based line number of the last line + 1, or 0 if empty).
-	// Diff lines are 1-based.
-
+func processHunk(logger *zerolog.Logger, hunk *diff.Hunk, originalLineCount int32, originalLines []string) ([]types.TextEdit, error) {
 	logger.Debug().Int32("originalLineCount", originalLineCount).Msg("processHunk started")
 	// Check if hunk range is valid relative to the original file size.
 	if hunk.OrigLines > 0 { // Modifies/deletes lines
