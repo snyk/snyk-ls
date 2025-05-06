@@ -179,7 +179,7 @@ func middleware(sseServer *server.SSEServer) http.Handler {
 func isValidHttpRequest(r *http.Request) bool {
 	originHeader := r.Header.Get("Origin")
 	isValidOrigin := originHeader == ""
-	hostHeader := r.Header.Get("Host")
+	hostHeader := r.Host
 	host, _, err := net.SplitHostPort(hostHeader)
 	if err != nil {
 		// Try to parse without port
