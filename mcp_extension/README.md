@@ -53,13 +53,15 @@ You can set CLI environment variables for the MCP server in the following ways:
 
 For a full list of supported CLI environment variables, see [Environment variables for Snyk CLI](configure-the-snyk-cli/environment-variables-for-snyk-cli.md).
 
-## MCP setup examples using the `mcpconfig.json` file
+## MCP setup examples
 
-To add an MCP server to an AI system, check the documentation for the AI system where you plan to integrate Snyk and review the specific MCP instructions. Examples of systems where you can integrate Snyk include [Windsurf's MCP](https://docs.windsurf.com/windsurf/mcp), [Qodo's MCP support](https://docs.qodo.ai/qodo-documentation/qodo-gen/qodo-gen-chat/agentic-mode/agentic-tools-mcps), and [VS Code MCP support](https://code.visualstudio.com/docs/copilot/chat/mcp-servers).
+To add an MCP server to an Agentic IDE, consult the documentation for the AI system where you plan to integrate Snyk and review the specific MCP instructions. Examples of systems where you can integrate Snyk include [Windsurf's MCP](https://docs.windsurf.com/windsurf/mcp), [Qodo's MCP support](https://docs.qodo.ai/qodo-documentation/qodo-gen/qodo-gen-chat/agentic-mode/agentic-tools-mcps), and [VS Code MCP support](https://code.visualstudio.com/docs/copilot/chat/mcp-servers).
 
-The following examples show how to add the Snyk MCP server in the `mcpconfig.json` file for each transport type. This method requires that the Snyk CLI is in your system path and can be invoked with the command `snyk`. If the CLI is not in your system path, you can provide the full path to the CLI.
+### MCP setup examples using the `mcpconfig.json` file
 
-### Add the Snyk MCP server using `stdio` transport in your `mcpconfig.json` file
+This method can be used for to set up Windsurf's MCP, as one example. These example example show how to add the Snyk MCP server in the `mcpconfig.json` file for each transport type. This method requires that the Snyk CLI is in your system path and can be invoked with the command `snyk`. If the CLI is not in your system path, you can provide the full path to the CLI.
+
+#### Add the Snyk MCP server using `stdio` transport in your `mcpconfig.json` file
 
 ```
 {
@@ -80,7 +82,7 @@ The following examples show how to add the Snyk MCP server in the `mcpconfig.jso
 }
 ```
 
-### Add the Snyk MCP server using `sse` transport in your `mcpconfig.json` file
+#### Add the Snyk MCP server using `sse` transport in your `mcpconfig.json` file
 
 If your MCP Client expects a URL, then you will need to start the MCP server in your terminal first by running `snyk mcp -t sse --experimental`&#x20;
 
@@ -100,7 +102,7 @@ This will output the base URL for your local SSE server. The `sse` endpoint live
 SSE transport supports running the MCP server locally only. SSe does not support remote or hosted configurations.
 
 
-## Setting up Qodo integration
+### Qodo setup steps
 
 1. Select the Agentic option for interacting with Qodo.
 

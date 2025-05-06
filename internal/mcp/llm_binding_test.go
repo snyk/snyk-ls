@@ -129,6 +129,7 @@ func TestIsValidHttpRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &http.Request{
 				Header: make(http.Header),
+				Host:   tt.host,
 			}
 			r.Header.Set("Host", tt.host)
 			if tt.origin != "" {
