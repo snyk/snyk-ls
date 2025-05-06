@@ -91,7 +91,7 @@ func Test_AuthURL(t *testing.T) {
 	t.Cleanup(func() { impl.m.Unlock() })
 
 	// Call the AuthURL function
-	actualURL := service.AuthURL(context.Background())
+	actualURL := service.AuthURL(t.Context())
 
 	// Verify that the correct URL is returned from the provider
 	assert.Equal(t, expectedURL, actualURL)
