@@ -16,6 +16,7 @@
 package mcp
 
 import (
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -65,4 +66,77 @@ func TestExpandedEnv(t *testing.T) {
 
 	assert.Contains(t, env, configuration.INTEGRATION_NAME+"=MCP")
 	assert.Contains(t, env, configuration.INTEGRATION_VERSION+"=1.x.1")
+}
+
+func TestIsValidHttpRequest(t *testing.T) {
+	tests := []struct {
+		name     string
+		host     string
+		origin   string
+		expected bool
+	}{
+		{
+			name:     "valid request with localhost host",
+			host:     "localhost",
+			origin:   "",
+			expected: true,
+		},
+		{
+			name:     "valid request with localhost origin",
+			host:     "localhost",
+			origin:   "http://localhost:3000",
+			expected: true,
+		},
+		{
+			name:     "valid request with IPv4 loopback",
+			host:     "127.0.0.1",
+			origin:   "",
+			expected: true,
+		},
+		{
+			name:     "valid request with IPv6 loopback",
+			host:     "::1",
+			origin:   "",
+			expected: true,
+		},
+		{
+			name:     "invalid request with allowed host",
+			host:     "example.com",
+			origin:   "",
+			expected: false,
+		},
+		{
+			name:     "invalid request with disallowed origin",
+			host:     "localhost",
+			origin:   "http://example.com",
+			expected: false,
+		},
+		{
+			name:     "valid request with empty origin and host",
+			host:     "",
+			origin:   "",
+			expected: true,
+		},
+		{
+			name:     "valid host header with port",
+			host:     "localhost:3000",
+			origin:   "",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &http.Request{
+				Header: make(http.Header),
+			}
+			r.Header.Set("Host", tt.host)
+			if tt.origin != "" {
+				r.Header.Set("Origin", tt.origin)
+			}
+
+			result := isValidHttpRequest(r)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }

@@ -19,6 +19,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -162,29 +163,41 @@ var allowedHostnames = map[string]bool{
 	"localhost": true,
 	"127.0.0.1": true,
 	"::1":       true,
+	"":          true,
 }
 
 func middleware(sseServer *server.SSEServer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		originHeader := r.Header.Get("Origin")
-		isValidOrigin := originHeader == ""
-
-		if originHeader != "" {
-			parsedOrigin, err := url.Parse(originHeader)
-			if err == nil {
-				requestHost := parsedOrigin.Hostname()
-				if _, allowed := allowedHostnames[requestHost]; allowed {
-					isValidOrigin = true
-				}
-			}
-		}
-
-		if isValidOrigin {
+		if isValidHttpRequest(r) {
 			sseServer.ServeHTTP(w, r)
 		} else {
 			http.Error(w, "Forbidden: Access restricted to localhost origins", http.StatusForbidden)
 		}
 	})
+}
+
+func isValidHttpRequest(r *http.Request) bool {
+	originHeader := r.Header.Get("Origin")
+	isValidOrigin := originHeader == ""
+	hostHeader := r.Header.Get("Host")
+	host, _, err := net.SplitHostPort(hostHeader)
+	if err != nil {
+		// Try to parse without port
+		host = hostHeader
+	}
+	isValidHost := allowedHostnames[host]
+
+	if !isValidOrigin {
+		parsedOrigin, err := url.Parse(originHeader)
+		if err == nil {
+			requestHost := parsedOrigin.Hostname()
+			if _, allowed := allowedHostnames[requestHost]; allowed {
+				isValidOrigin = true
+			}
+		}
+	}
+
+	return isValidOrigin && isValidHost
 }
 
 func (m *McpLLMBinding) Shutdown(ctx context.Context) {
