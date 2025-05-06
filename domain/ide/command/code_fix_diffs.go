@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	uri2 "github.com/snyk/snyk-ls/internal/uri"
@@ -39,6 +40,7 @@ type codeFixDiffs struct {
 	issueProvider snyk.IssueProvider
 	codeScanner   *code.Scanner
 	c             *config.Config
+	apiClient     snyk_api.SnykApiClient
 }
 
 func (cmd *codeFixDiffs) Command() types.CommandData {
@@ -85,7 +87,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		return nil, errors.New("failed to find issue")
 	}
 
-	htmlRenderer, err := code.GetHTMLRenderer(cmd.c)
+	htmlRenderer, err := code.GetHTMLRenderer(cmd.c, cmd.apiClient)
 	if err != nil {
 		logger.Err(err).Msg("failed to get html renderer")
 		return nil, err

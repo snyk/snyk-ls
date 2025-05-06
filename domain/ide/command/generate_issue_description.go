@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -34,6 +35,7 @@ import (
 type generateIssueDescription struct {
 	command       types.CommandData
 	issueProvider snyk.IssueProvider
+	apiClient     snyk_api.SnykApiClient
 }
 
 func (cmd *generateIssueDescription) Command() types.CommandData {
@@ -58,7 +60,7 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 	if issue.GetProduct() == product.ProductInfrastructureAsCode {
 		return getIacHtml(c, logger, issue)
 	} else if issue.GetProduct() == product.ProductCode {
-		return getCodeHtml(c, logger, issue)
+		return cmd.getCodeHtml(c, logger, issue)
 	} else if issue.GetProduct() == product.ProductOpenSource {
 		return getOssHtml(c, logger, issue)
 	}
@@ -76,8 +78,8 @@ func getOssHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (str
 	return html, nil
 }
 
-func getCodeHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (string, error) {
-	htmlRender, err := code.GetHTMLRenderer(c)
+func (cmd *generateIssueDescription) getCodeHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (string, error) {
+	htmlRender, err := code.GetHTMLRenderer(c, cmd.apiClient)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Code HTML render")
 		return "", err

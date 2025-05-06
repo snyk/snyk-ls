@@ -418,8 +418,8 @@
       <div id="ignore-cci-actions" class="actions row">
         <button id="ignore-create" class="ignore-button secondary">Create ignore</button>
       </div>
-      {{else}}
-      <div id="ignore-legacy-actions" class="actions row hidden">
+      {{ else if .InlineIgnoresEnabled }}
+      <div id="ignore-legacy-actions" class="actions row">
         <button id="ignore-line-issue" class="ignore-button secondary">Ignore on line <span
             id="action-ignore-line">{{.IgnoreLineAction}}</span></button>
         <button id="ignore-file-issue" class="ignore-button secondary">Ignore in this file</button>

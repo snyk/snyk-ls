@@ -60,6 +60,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		codeScanner: codeScanner,
 		c:           c,
 		srv:         server,
+		apiClient:   snykApiClient,
 	}
 	if runtime.GOOS == "windows" {
 		codeScanner.AddBundleHash("\\folderPath", "bundleHash")

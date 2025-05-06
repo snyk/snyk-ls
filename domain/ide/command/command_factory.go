@@ -32,12 +32,23 @@ import (
 
 // CreateFromCommandData gets a command based on the given parameters that can be passed to the CommandService
 // nolint: gocyclo, nolintlint // this is a factory, it's ok to have high cyclomatic complexity here
-func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv types.Server, authService authentication.AuthenticationService, learnService learn.Service, notifier noti.Notifier, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner, cli cli.Executor) (types.Command, error) {
-	httpClient := c.Engine().GetNetworkAccess().GetHttpClient
+func CreateFromCommandData(
+	c *config.Config,
+	commandData types.CommandData,
+	srv types.Server,
+	authService authentication.AuthenticationService,
+	learnService learn.Service,
+	notifier noti.Notifier,
+	issueProvider snyk.IssueProvider,
+	codeApiClient SnykCodeHttpClient,
+	codeScanner *code.Scanner,
+	cli cli.Executor,
+) (types.Command, error) {
+	apiClient := snyk_api.NewSnykApiClient(c, c.Engine().GetNetworkAccess().GetHttpClient)
 
 	switch commandData.CommandId {
 	case types.NavigateToRangeCommand:
-		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger(), c: c}, nil
+		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger(), c: c, apiClient: apiClient}, nil
 	case types.WorkspaceScanCommand:
 		return &workspaceScanCommand{command: commandData, srv: srv, c: c}, nil
 	case types.WorkspaceFolderScanCommand:
@@ -59,7 +70,6 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 	case types.GetSettingsSastEnabled:
 		return &sastEnabled{command: commandData, logger: c.Logger(), authenticationService: authService, gafConfig: c.Engine().GetConfiguration()}, nil
 	case types.GetFeatureFlagStatus:
-		apiClient := snyk_api.NewSnykApiClient(c, httpClient)
 		return &featureFlagStatus{command: commandData, apiClient: apiClient, authenticationService: authService}, nil
 	case types.GetActiveUserCommand:
 		return &getActiveUser{command: commandData, authenticationService: authService, notifier: notifier}, nil
@@ -68,7 +78,7 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 	case types.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
 	case types.CodeFixApplyEditCommand:
-		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, apiClient: codeApiClient, c: c, logger: c.Logger()}, nil
+		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, codeHttpClient: codeApiClient, c: c, logger: c.Logger(), apiClient: apiClient}, nil
 	case types.CodeSubmitFixFeedback:
 		return &codeFixFeedback{command: commandData, apiClient: codeApiClient}, nil
 	case types.CodeFixDiffsCommand:
@@ -79,6 +89,7 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 			issueProvider: issueProvider,
 			notifier:      notifier,
 			c:             c,
+			apiClient:     apiClient,
 		}, nil
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
@@ -87,7 +98,7 @@ func CreateFromCommandData(c *config.Config, commandData types.CommandData, srv 
 	case types.ClearCacheCommand:
 		return &clearCache{command: commandData, c: c}, nil
 	case types.GenerateIssueDescriptionCommand:
-		return &generateIssueDescription{command: commandData, issueProvider: issueProvider}, nil
+		return &generateIssueDescription{command: commandData, issueProvider: issueProvider, apiClient: apiClient}, nil
 	case types.SubmitIgnoreRequest:
 		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, c: c}, nil
 	}
