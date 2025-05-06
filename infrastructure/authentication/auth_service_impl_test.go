@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,6 +77,25 @@ func runAuthEventTest(t *testing.T, c *config.Config, status analytics.Status) e
 
 	_, err := service.Authenticate(context.Background())
 	return err
+}
+
+func Test_AuthURL(t *testing.T) {
+	expectedURL := "https://app.snyk.io/login?token=test"
+
+	c := testutil.UnitTest(t)
+	provider := &FakeAuthenticationProvider{ExpectedAuthURL: expectedURL, C: c}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+
+	// this would cause a timeout of the test, if auth url tries to obtain a lock
+	impl := service.(*AuthenticationServiceImpl)
+	impl.m.Lock()
+	defer impl.m.Unlock()
+
+	// Call the AuthURL function
+	actualURL := service.AuthURL(context.Background())
+
+	// Verify that the correct URL is returned from the provider
+	assert.Equal(t, expectedURL, actualURL)
 }
 
 func Test_UpdateCredentials(t *testing.T) {
