@@ -39,7 +39,7 @@ func (cmd *copyAuthLinkCommand) Command() types.CommandData {
 }
 
 func (cmd *copyAuthLinkCommand) Execute(ctx context.Context) (any, error) {
-	url := cmd.authService.Provider().AuthURL(ctx)
+	url := cmd.authService.AuthURL(ctx)
 
 	cmd.logger.Debug().Str("method", "copyAuthLinkCommand.Execute").
 		Str("url", url).
