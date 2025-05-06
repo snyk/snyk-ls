@@ -89,7 +89,7 @@ func Test_AuthURL(t *testing.T) {
 	// this would cause a timeout of the test, if auth url tries to obtain a lock
 	impl := service.(*AuthenticationServiceImpl)
 	impl.m.Lock()
-	defer impl.m.Unlock()
+	t.Cleanup(func() { impl.m.Unlock() })
 
 	// Call the AuthURL function
 	actualURL := service.AuthURL(context.Background())
