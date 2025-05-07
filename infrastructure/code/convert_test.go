@@ -1141,7 +1141,7 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 			name:                  "Missing file causes error",
 			originalFilePath:      "/this/file/does/not/exist",
 			diffFilePath:          path.Join(testDataDirPath, "01_simple/good_diff_01.patch"), // The file content is irrelevant, but must the file must exist
-			expectedErrorMsgRegex: util.Ptr("^open /this/file/does/not/exist: no such file or directory$"),
+			expectedErrorMsgRegex: util.Ptr("^open /this/file/does/not/exist: .*$"),           // End of message varies depending on OS
 		},
 		{
 			name:             "Real-world single-hunk diff returns the correct edits",
