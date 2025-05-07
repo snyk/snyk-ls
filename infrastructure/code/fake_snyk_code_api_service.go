@@ -137,7 +137,6 @@ type FakeSnykCodeClient struct {
 	maxConcurrentScans     int
 	NoFixSuggestions       bool
 	UnifiedDiffSuggestions []AutofixUnifiedDiffSuggestion
-	AutofixStatus          AutofixStatus
 	Options                map[string]AnalysisOptions
 	C                      *config.Config
 	FeedbackSent           string

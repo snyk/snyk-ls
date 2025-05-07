@@ -452,10 +452,6 @@ func (s *SnykCodeHTTPClient) checkResponseCode(statusCode int) error {
 	return fmt.Errorf("Unexpected response code: %d", statusCode)
 }
 
-type AutofixStatus struct {
-	message string
-}
-
 func GetCodeApiUrl(c *config.Config) (string, error) {
 	if !c.IsFedramp() {
 		return c.SnykCodeApi(), nil

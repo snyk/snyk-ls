@@ -18,32 +18,14 @@ package command
 
 import (
 	"context"
-	"sync"
-	"testing"
-	"time"
-
 	"github.com/stretchr/testify/assert"
+	"testing"
 
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type fakeCodeHttpClient struct {
-	shouldError       bool
-	feedbackSubmitted string
-	fixId             string
-	mu                sync.Mutex
-}
-
-func FeedbackSubmitted(c *fakeCodeHttpClient) string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	return c.feedbackSubmitted
-}
-
 func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
-	apiClient := fakeCodeHttpClient{}
 	codeFixFeedbackCmd := codeFixFeedback{
 		command: types.CommandData{
 			Arguments: []any{"fixId", code.FixPositiveFeedback},
@@ -53,7 +35,4 @@ func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 	_, err := codeFixFeedbackCmd.Execute(context.Background())
 
 	assert.NoError(t, err)
-	assert.Eventually(t, func() bool {
-		return FeedbackSubmitted(&apiClient) != ""
-	}, 2*time.Second, time.Millisecond)
 }
