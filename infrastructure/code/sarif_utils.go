@@ -18,7 +18,6 @@ package code
 
 import (
 	"github.com/snyk/code-client-go/llm"
-	
 	"github.com/snyk/snyk-ls/application/config"
 )
 
