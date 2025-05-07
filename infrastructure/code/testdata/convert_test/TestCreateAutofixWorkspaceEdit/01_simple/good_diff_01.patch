@@ -1,0 +1,13 @@
+--- base_simple_file.txt
++++ base_simple_file.txt
+@@ -2,7 +2,8 @@
+ two
+-three_but_duplicated (first time)
+-three_but_duplicated (second time)
++three
+ four
+ five
++six
++seven
+ eight
+ nine

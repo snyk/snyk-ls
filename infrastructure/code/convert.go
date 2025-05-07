@@ -562,23 +562,45 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir types.File
 }
 
 // CreateWorkspaceEditFromDiff turns the returned fix (in diff format) into a series of TextEdits in a WorkspaceEdit.
-func CreateWorkspaceEditFromDiff(absoluteFilePath string, diff string) (edit types.WorkspaceEdit) {
+func CreateWorkspaceEditFromDiff(absoluteFilePath string, diff string) (*types.WorkspaceEdit, error) {
 	fileContentBytes, err := os.ReadFile(absoluteFilePath)
-	if err != nil || len(fileContentBytes) == 0 {
-		return edit
+	if err != nil {
+		return nil, err
+	}
+	if len(fileContentBytes) == 0 {
+		return nil, fmt.Errorf("file is empty") // We never expect the base file to be empty.
 	}
 	fileContentLineStrings := strings.Split(string(fileContentBytes), "\n")
 
+	// Diffs will always use \n instead of \r\n, so no need to sanitize (see getUnifiedDiff).
+	diffLines := strings.Split(diff, "\n")
+	// Remove new line at EOF, if it exists.
+	if n := len(diffLines); n > 0 && diffLines[n-1] == "" {
+		diffLines = diffLines[:n-1]
+	}
+	if len(diffLines) == 0 {
+		return nil, fmt.Errorf("diff is empty")
+	}
+
+	textEdits, err := processLines(diffLines, fileContentLineStrings)
+	if err != nil {
+		return nil, err
+	}
+
+	edit := types.WorkspaceEdit{
+		Changes: map[string][]types.TextEdit{
+			absoluteFilePath: textEdits,
+		},
+	}
+	return &edit, nil
+}
+
+func processLines(diffLines []string, fileContentLineStrings []string) ([]types.TextEdit, error) {
 	var textEdits []types.TextEdit
-
-	var hunkLine = 0   // Location in the current hunk
-	var hunkOffset = 0 // Whether we need to offset the current hunk based on previous edits.
-
-	// Loop over the diff. Diffs will always use \n instead of \r\n, so no need to sanitize (see getUnifiedDiff).
-	for _, line := range strings.Split(diff, "\n") {
-		// If we are being asked to make changes outside the original file, abort and return an empty edit.
-		if hunkLine-hunkOffset > len(fileContentLineStrings) {
-			return edit
+	var currentSourceFileLine = 0 // 0-indexed line number counter for our current position in the original file.
+	for _, line := range diffLines {
+		if currentSourceFileLine > len(fileContentLineStrings) {
+			return nil, fmt.Errorf("diff line trying to insert outside of the original file bounds (%d) to line %d: %s", len(fileContentLineStrings), currentSourceFileLine, line)
 		}
 
 		if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") {
@@ -587,38 +609,49 @@ func CreateWorkspaceEditFromDiff(absoluteFilePath string, diff string) (edit typ
 			r := regexp.MustCompile(`@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@`)
 			matches := r.FindStringSubmatch(line)
 			if matches == nil {
-				return edit // We have a badly formatted diff, so abort.
+				return nil, fmt.Errorf("diff hunk line badly formatted: %s", line)
 			}
-
-			hunkLine, _ = strconv.Atoi(matches[1]) // Apply the edit from the first line of the original file in the diff
-			hunkLine -= 1                          // TextEdit range is 0-indexed, whereas LSP diff is 1-indexed
-			hunkLine += hunkOffset                 // Account for any previous additions or deletions.
+			currentSourceFileLine, _ = strconv.Atoi(matches[1]) // Apply the edit from the first line of the original file in the diff
+			currentSourceFileLine -= 1                          // TextEdit range is 0-indexed, whereas a diff is 1-indexed
 		} else if strings.HasPrefix(line, "-") {
-			textEdit := buildOneLineTextEdit(hunkLine, hunkLine+1, "")
-			textEdits = append(textEdits, textEdit)
-			hunkOffset -= 1 // We've removed a line, so future hunks will be offset with respect to the diff.
+			textEdit, err := buildOneLineTextEdit(currentSourceFileLine, currentSourceFileLine+1, "")
+			if err != nil {
+				return nil, err
+			}
+			textEdits = append(textEdits, *textEdit)
+			currentSourceFileLine += 1 // We will delete a line in the original file, but we need to pretend it's still there for the rest of the edits.
 		} else if strings.HasPrefix(line, "+") {
-			textEdit := buildOneLineTextEdit(hunkLine, hunkLine, strings.TrimPrefix(line, "+")+"\n")
-			textEdits = append(textEdits, textEdit)
-			hunkOffset += 1 // We've added a line, so future hunks will be offset with respect to the diff.
-			hunkLine += 1   // We've added a line, so increment the pointer in our current hunk.
-		} else if strings.HasPrefix(line, " ") {
-			hunkLine += 1 // We skip over unchanged lines, so increment the pointer in our current hunk.
+			newLineContent := strings.TrimPrefix(line, "+") + "\n"
+			if len(textEdits) > 0 && // There is a previous edit and ...
+				textEdits[len(textEdits)-1].NewText != "" && // ... it is not a deletion (it is an addition) and ...
+				textEdits[len(textEdits)-1].Range.Start.Line == currentSourceFileLine { // ... we are still referring to the same source file line.
+				textEdits[len(textEdits)-1].NewText += newLineContent // We must group the additions, otherwise they will be applied in the wrong order.
+			} else {
+				textEdit, err := buildOneLineTextEdit(currentSourceFileLine, currentSourceFileLine, newLineContent)
+				if err != nil {
+					return nil, err
+				}
+				textEdits = append(textEdits, *textEdit)
+			}
+			// A new insertion does not exist in the original file, so don't increment the counter.
+		} else if strings.HasPrefix(line, " ") { // Context line
+			currentSourceFileLine += 1 // Still exists in the original file.
+		} else {
+			return nil, fmt.Errorf("diff line badly formatted: %s", line)
 		}
 	}
-
-	edit.Changes = make(map[string][]types.TextEdit)
-	edit.Changes[absoluteFilePath] = textEdits
-
-	return edit
+	return textEdits, nil
 }
 
-func buildOneLineTextEdit(startLine int, endLine int, text string) types.TextEdit {
+func buildOneLineTextEdit(startLine int, endLine int, text string) (*types.TextEdit, error) {
+	if startLine < 0 || endLine < 0 {
+		return nil, fmt.Errorf("cannot create a TextEdit where the start line (%d) or end line (%d) is less than zero", startLine, endLine)
+	}
 	if startLine > endLine {
-		return types.TextEdit{} // We should never reach this. Return an empty edit if the input it invalid.
+		return nil, fmt.Errorf("cannot create a TextEdit where the start line (%d) is after the end line (%d)", startLine, endLine)
 	}
 
-	return types.TextEdit{
+	return &types.TextEdit{
 		Range: types.Range{
 			Start: types.Position{
 				Line:      startLine,
@@ -630,7 +663,7 @@ func buildOneLineTextEdit(startLine int, endLine int, text string) types.TextEdi
 			},
 		},
 		NewText: text,
-	}
+	}, nil
 }
 
 func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {

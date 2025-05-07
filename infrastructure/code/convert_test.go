@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func getSarifResponseJson(filePath types.FilePath) string {
@@ -626,7 +628,7 @@ func getSarifResponseJson(filePath types.FilePath) string {
 }
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
-	path, issues, resp := setupConversionTests(t, true, true)
+	filePath, issues, resp := setupConversionTests(t, true, true)
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
 	references := referencesForSampleSarifResponse()
 
@@ -638,13 +640,13 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 		issue.GetMessage())
 	assert.Equal(t, types.CodeQualityIssue, issue.GetIssueType())
 	assert.Equal(t, types.Low, issue.GetSeverity())
-	assert.Equal(t, types.FilePath(path), issue.GetAffectedFilePath())
+	assert.Equal(t, types.FilePath(filePath), issue.GetAffectedFilePath())
 	assert.Equal(t, types.Range{Start: types.Position{Line: 5, Character: 6}, End: types.Position{Line: 5, Character: 6}}, issue.GetRange())
 	assert.Equal(t, product.ProductCode, issue.GetProduct())
 	assert.Equal(t, issueDescriptionURL, issue.GetIssueDescriptionURL())
 	assert.Equal(t, references, issue.GetReferences())
 	assert.Contains(t, issue.GetFormattedMessage(), "Example Commit Fixes")
-	assert.Equal(t, markersForSampleSarifResponse(path), codeIssueData.Markers)
+	assert.Equal(t, markersForSampleSarifResponse(filePath), codeIssueData.Markers)
 	assert.Equal(t, 550, codeIssueData.PriorityScore)
 	assert.Equal(t, resp.Sarif.Runs[0].Tool.Driver.Rules[0].Properties.Cwe, issue.GetCWEs())
 	assert.Nil(t, issue.GetIgnoreDetails())
@@ -911,7 +913,7 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions_HtmlEncodedFilePath(t *testin
 	baseDir := types.FilePath(t.TempDir())
 	err := os.WriteFile(filepath.Join(string(baseDir), filePath), []byte("var x = new Array();"), 0666)
 	require.NoError(t, err)
-	// Here we provide the HTML encoded path and it should be decoded in the function to read the correct file.
+	// Here we provide the HTML encoded path, which should be decoded in the function to read the correct file.
 	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(baseDir, "file_with%20space.js")
 
 	assert.Equal(t, len(unifiedDiffSuggestions), 1)
@@ -1066,119 +1068,304 @@ func Test_ParseDateFromString(t *testing.T) {
 }
 
 func TestCreateAutofixWorkspaceEdit(t *testing.T) {
-	tempFilePath := filepath.Join(os.TempDir(), "test.txt")
+	testDataDirPath := "testdata/convert_test/TestCreateAutofixWorkspaceEdit"
 
-	originalFileContent := `
- one
- two
- three_but_with_a_bug
- three_but_with_a_bug
- four
- five
- eight
- nine
- ten
-`
-	goodDiff := `
---- ` + tempFilePath + `
-+++ ` + tempFilePath + `
-@@ -2,4 +2,3 @@
- two
--three_but_with_a_bug
--three_but_with_a_bug
-+three
- four
-@@ -4,4 +4,6 @@
- four
- five
-+six
-+seven
- eight
- nine
-`
-	malformedDiff := `
---- ` + tempFilePath + `
-+++ ` + tempFilePath + `
-@ -2,400000000 +2,3 @
- two
--three_but_with_a_bug
--three_but_with_a_bug
-+three
- four
-@@ -400,4 +400,6 @@
- four
-`
 	tests := []struct {
-		name         string
-		diff         string
-		filePath     string
-		fileContents string
-		expectedEdit types.WorkspaceEdit
+		name             string
+		originalFilePath string
+		diffFilePath     string
+		// Either set:
+		expectedEdits []types.TextEdit
+		// or set:
+		expectedErrorMsgRegex *string
 	}{
-		{"Multi line diff results in multiple TextEdits",
-			goodDiff,
-			tempFilePath,
-			originalFileContent,
-			types.WorkspaceEdit{Changes: map[string][]types.TextEdit{
-				tempFilePath: []types.TextEdit{
-					// WorkspaceEdit for the correctly formatted diff will contain 5 TextEdits: 2 deletions and 3 insertions.
-					types.TextEdit{
-						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 3, Character: 0}},
-						NewText: "",
+		{
+			name:             "Single-hunk diff returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "01_simple/base_simple_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "01_simple/good_diff_01.patch"),
+			expectedEdits: []types.TextEdit{
+				// Delete "three_but_duplicated (first time)"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 2, Character: 0},
+						End:   types.Position{Line: 3, Character: 0},
 					},
-					types.TextEdit{
-						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 3, Character: 0}},
-						NewText: "",
-					},
-					types.TextEdit{
-						Range:   types.Range{Start: types.Position{Line: 2, Character: 0}, End: types.Position{Line: 2, Character: 0}},
-						NewText: "three\n",
-					},
-					types.TextEdit{
-						Range:   types.Range{Start: types.Position{Line: 4, Character: 0}, End: types.Position{Line: 4, Character: 0}},
-						NewText: "six\n",
-					},
-					types.TextEdit{
-						Range:   types.Range{Start: types.Position{Line: 5, Character: 0}, End: types.Position{Line: 5, Character: 0}},
-						NewText: "seven\n",
-					},
+					NewText: "",
 				},
-			}},
+				// Delete "three_but_duplicated (second time)"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 3, Character: 0},
+						End:   types.Position{Line: 4, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "three"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						End:   types.Position{Line: 4, Character: 0},
+					},
+					NewText: "three\n",
+				},
+				// Insert "six"
+				// Insert "seven"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 6, Character: 0},
+						End:   types.Position{Line: 6, Character: 0},
+					},
+					NewText: "six\nseven\n",
+				},
+			},
 		},
-		{"Malformed diff produces empty WorkspaceEdit",
-			malformedDiff,
-			tempFilePath,
-			originalFileContent,
-			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
+		{
+			name:                  "Malformed diff hunk line causes parse error",
+			originalFilePath:      path.Join(testDataDirPath, "01_simple/base_simple_file.txt"),
+			diffFilePath:          path.Join(testDataDirPath, "01_simple/malformed_diff_01.patch"),
+			expectedErrorMsgRegex: util.Ptr("^diff line badly formatted: @ -2,4 \\+2,3 @$"),
 		},
-		{"Short file produces empty WorkspaceEdit",
-			goodDiff,
-			tempFilePath,
-			"one",
-			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
+		{
+			name:                  "Out of bounds diff hunk line causes parse error",
+			originalFilePath:      path.Join(testDataDirPath, "01_simple/base_simple_file.txt"),
+			diffFilePath:          path.Join(testDataDirPath, "01_simple/malformed_diff_02.patch"),
+			expectedErrorMsgRegex: util.Ptr("^diff line trying to insert outside of the original file bounds \\(10\\) to line 9998:  four$"),
 		},
-		{"Missing file produces empty WorkspaceEdit",
-			goodDiff,
-			"/this/file/does/not/exist",
-			originalFileContent,
-			types.WorkspaceEdit{Changes: map[string][]types.TextEdit(nil)},
+		{
+			name:                  "Short file causes processing error",
+			originalFilePath:      path.Join(testDataDirPath, "01_simple/corrupt_short_file.txt"),
+			diffFilePath:          path.Join(testDataDirPath, "01_simple/good_diff_01.patch"),
+			expectedErrorMsgRegex: util.Ptr("^.+$"), // Irrelevant what the error is, the file is that corrupt
+		},
+		{
+			name:                  "Missing file causes error",
+			originalFilePath:      "/this/file/does/not/exist",
+			diffFilePath:          path.Join(testDataDirPath, "01_simple/good_diff_01.patch"), // The file content is irrelevant, but must the file must exist
+			expectedErrorMsgRegex: util.Ptr("^open /this/file/does/not/exist: no such file or directory$"),
+		},
+		{
+			name:             "Real-world single-hunk diff returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "02_real_js/base_real_js.js"),
+			diffFilePath:     path.Join(testDataDirPath, "02_real_js/good_diff_01.patch"),
+			expectedEdits: []types.TextEdit{
+				// Insert "const sanitize = require('sanitize-filename');"
+				{
+					Range: types.Range{
+						Start: types.Position{
+							Line:      2,
+							Character: 0,
+						},
+						End: types.Position{
+							Line:      2,
+							Character: 0,
+						},
+					},
+					NewText: "const sanitize = require('sanitize-filename');\n",
+				},
+				// Delete "  const filename = req.params.filename;"
+				{
+					Range: types.Range{
+						Start: types.Position{
+							Line:      5,
+							Character: 0,
+						},
+						End: types.Position{
+							Line:      6,
+							Character: 0,
+						},
+					},
+					NewText: "",
+				},
+				// Insert "  const filename = sanitize(req.params.filename);"
+				{
+					Range: types.Range{
+						Start: types.Position{
+							Line:      6,
+							Character: 0,
+						},
+						End: types.Position{
+							Line:      6,
+							Character: 0,
+						},
+					},
+					NewText: "  const filename = sanitize(req.params.filename);\n",
+				},
+				// Delete "      res.download(filePath);"
+				{
+					Range: types.Range{
+						Start: types.Position{
+							Line:      10,
+							Character: 0,
+						},
+						End: types.Position{
+							Line:      11,
+							Character: 0,
+						},
+					},
+					NewText: "",
+				},
+				// Insert "      res.download(path.basename(filePath));"
+				{
+					Range: types.Range{
+						Start: types.Position{
+							Line:      11,
+							Character: 0,
+						},
+						End: types.Position{
+							Line:      11,
+							Character: 0,
+						},
+					},
+					NewText: "      res.download(path.basename(filePath));\n",
+				},
+			},
+		},
+		{
+			name:             "Complex multi-hunk diff with swaps and deletions returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "03_complex_example/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "03_complex_example/good_diff_01.patch"),
+			expectedEdits: []types.TextEdit{
+				// - Hunk 1 -
+				// Delete "3  -> X  - Delete"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 2, Character: 0},
+						End:   types.Position{Line: 3, Character: 0},
+					},
+					NewText: "",
+				},
+				// - Hunk 2 -
+				// Delete "14 -> X  - Delete"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 13, Character: 0},
+						End:   types.Position{Line: 14, Character: 0},
+					},
+					NewText: "",
+				},
+				// Delete "16 -> 15 - Swap with below"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 15, Character: 0},
+						End:   types.Position{Line: 16, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "16 -> 15 - Swap with below"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 17, Character: 0},
+						End:   types.Position{Line: 17, Character: 0},
+					},
+					NewText: "16 -> 15 - Swap with below\n",
+				},
+				// Delete "19 -> X  - Delete"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 18, Character: 0},
+						End:   types.Position{Line: 19, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "X  -> 18 - Added"
+				// Insert "X  -> 19 - Added"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 20, Character: 0},
+						End:   types.Position{Line: 20, Character: 0},
+					},
+					NewText: "X  -> 18 - Added\nX  -> 19 - Added\n",
+				},
+			},
+		},
+		{
+			name:             "Long single-hunk diff with more deletions than additions returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "04_long_diff/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "04_long_diff/good_diff_01.patch"),
+			expectedEdits: []types.TextEdit{
+				// Insert "X  -> 3  - Added"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 2, Character: 0},
+						End:   types.Position{Line: 2, Character: 0},
+					},
+					NewText: "X  -> 3  - Added\n",
+				},
+				// Delete "5  -> X  - Delete"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						End:   types.Position{Line: 5, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "X  -> 6  - Added"
+				// Insert "X  -> 7  - Added"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 5, Character: 0},
+						End:   types.Position{Line: 5, Character: 0},
+					},
+					NewText: "X  -> 6  - Added\nX  -> 7  - Added\n",
+				},
+				// Insert "X  -> 13 - Added"
+				// Insert "X  -> 14 - Added"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 10, Character: 0},
+						End:   types.Position{Line: 10, Character: 0},
+					},
+					NewText: "X  -> 13 - Added\nX  -> 14 - Added\n",
+				},
+				// Delete "13 -> X  - Delete"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 12, Character: 0},
+						End:   types.Position{Line: 13, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "X  -> 18 - Added"
+				// Insert "X  -> 19 - Added"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 14, Character: 0},
+						End:   types.Position{Line: 14, Character: 0},
+					},
+					NewText: "X  -> 18 - Added\nX  -> 19 - Added\n",
+				},
+				// Delete "19 -> X  - Delete"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 18, Character: 0},
+						End:   types.Position{Line: 19, Character: 0},
+					},
+					NewText: "",
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// If we're testing with a valid file path, create it for the test to use.
-			if tt.filePath == tempFilePath {
-				err := os.WriteFile(tempFilePath, []byte(tt.fileContents), 0666)
-				assert.NoError(t, err)
-
-				testContents, err := os.ReadFile(tt.filePath)
-				assert.NoError(t, err)
-				assert.Equalf(t, tt.fileContents, string(testContents), "File contents: %v", string(testContents))
-			}
+			// Read the diff file
+			diffBytes, err := os.ReadFile(tt.diffFilePath)
+			require.NoError(t, err)
+			diff := string(diffBytes)
 
 			// Create a WorkSpaceEdit for the file, and check against the reference.
-			assert.Equalf(t, tt.expectedEdit, CreateWorkspaceEditFromDiff(tt.filePath, tt.diff),
-				"CreateWorkspaceEditFromDiff(%v, %v)", tt.filePath, tt.diff)
+			actualWorkspaceEdit, err := CreateWorkspaceEditFromDiff(tt.originalFilePath, diff)
+			if tt.expectedErrorMsgRegex != nil {
+				assert.Nil(t, actualWorkspaceEdit)
+				require.Error(t, err)
+				assert.Regexp(t, *tt.expectedErrorMsgRegex, err.Error())
+			} else if tt.expectedEdits != nil {
+				assert.NoError(t, err)
+				require.NotNil(t, actualWorkspaceEdit)
+				require.Contains(t, actualWorkspaceEdit.Changes, tt.originalFilePath)
+				assert.Equal(t, tt.expectedEdits, actualWorkspaceEdit.Changes[tt.originalFilePath])
+			} else {
+				assert.Fail(t, "Bad test case, no expected error message or expected edits")
+			}
 		})
 	}
 }

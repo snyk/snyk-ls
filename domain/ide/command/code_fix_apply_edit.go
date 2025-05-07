@@ -64,7 +64,7 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 	}
 	cmd.notifier.Send(types.ApplyWorkspaceEditParams{
 		Label: "Snyk Code fix",
-		Edit:  converter.ToWorkspaceEdit(&workspaceEdit),
+		Edit:  converter.ToWorkspaceEdit(workspaceEdit),
 	})
 
 	// send feedback asynchronously, so people can actually see the changes done by the fix
@@ -95,14 +95,17 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 	return nil, nil
 }
 
-func (cmd *applyAiFixEditCommand) getWorkspaceEdit(htmlRenderer *code.HtmlRenderer, fixId string) (types.WorkspaceEdit, error) {
+func (cmd *applyAiFixEditCommand) getWorkspaceEdit(htmlRenderer *code.HtmlRenderer, fixId string) (*types.WorkspaceEdit, error) {
 	path, diff, err := htmlRenderer.AiFixHandler.GetResults(fixId)
 	if err != nil {
 		cmd.logger.Debug().Str("method", "applyAiFixEditCommand.Execute").Msgf("Unable to get the fix fix for %s", fixId)
-		return types.WorkspaceEdit{}, err
+		return nil, err
 	}
 
-	workspaceEdit := code.CreateWorkspaceEditFromDiff(path, diff)
+	workspaceEdit, err := code.CreateWorkspaceEditFromDiff(path, diff)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create WorkspaceEdit for %s: %w", path, err)
+	}
 	return workspaceEdit, nil
 }
 
