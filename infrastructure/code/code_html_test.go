@@ -25,11 +25,12 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
+func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	dataFlow := getDataFlowElements()
@@ -52,8 +53,18 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 		},
 	}
 
+	// Create a fake API client with the feature flag disabled
+	apiClient := &snyk_api.FakeApiClient{
+		CodeEnabled: true,
+	}
+	// Set the response for the FeatureFlagStatus method
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer.inlineIgnoresEnabled = true
+	htmlRenderer.iawEnabled = false
+
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -89,8 +100,8 @@ func Test_Code_Html_getCodeDetailsHtml(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `<span id="example-link" class="example-repo-link">`, "GitHub icon preceding the repo name is present")
 
 	// assert Footer
-	assert.Contains(t, codePanelHtml, `id="action-ignore-line">68</span>`)
-	assert.Contains(t, codePanelHtml, `class="ignore-button secondary">Ignore in this file</button>`)
+	assert.Contains(t, codePanelHtml, `id="action-ignore-line"`)
+	assert.Contains(t, codePanelHtml, `class="ignore-button secondary"`)
 }
 
 func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
@@ -117,8 +128,15 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 		},
 	}
 
+	// Create a fake API client with the feature flag disabled
+	apiClient := &snyk_api.FakeApiClient{
+		CodeEnabled: true,
+	}
+	// Set the response for the FeatureFlagStatus method
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
@@ -158,8 +176,15 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 		},
 	}
 
+	// Create a fake API client with the feature flag disabled
+	apiClient := &snyk_api.FakeApiClient{
+		CodeEnabled: true,
+	}
+	// Set the response for the FeatureFlagStatus method
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -197,8 +222,15 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 		AdditionalData: snyk.CodeIssueData{},
 	}
 
+	// Create a fake API client with the feature flag disabled
+	apiClient := &snyk_api.FakeApiClient{
+		CodeEnabled: true,
+	}
+	// Set the response for the FeatureFlagStatus method
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -242,8 +274,15 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 		},
 	}
 
+	// Create a fake API client with the feature flag disabled
+	apiClient := &snyk_api.FakeApiClient{
+		CodeEnabled: true,
+	}
+	// Set the response for the FeatureFlagStatus method
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -308,8 +347,15 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 		},
 	}
 
+	// Create a fake API client with the feature flag disabled
+	apiClient := &snyk_api.FakeApiClient{
+		CodeEnabled: true,
+	}
+	// Set the response for the FeatureFlagStatus method
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c)
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section

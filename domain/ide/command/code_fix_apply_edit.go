@@ -28,17 +28,19 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type applyAiFixEditCommand struct {
-	command       types.CommandData
-	issueProvider snyk.IssueProvider
-	notifier      notification.Notifier
-	c             *config.Config
-	logger        *zerolog.Logger
+	command        types.CommandData
+	issueProvider  snyk.IssueProvider
+	notifier       notification.Notifier
+	c              *config.Config
+	logger         *zerolog.Logger
+	apiClient      snyk_api.SnykApiClient
 }
 
 func (cmd *applyAiFixEditCommand) Command() types.CommandData {
@@ -51,7 +53,7 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 		return nil, fmt.Errorf("invalid edit")
 	}
 
-	htmlRenderer, err := code.GetHTMLRenderer(cmd.c)
+	htmlRenderer, err := code.GetHTMLRenderer(cmd.c, cmd.apiClient)
 	if err != nil {
 		cmd.logger.Debug().Str("method", "applyAiFixEditCommand.Execute").Msgf("Unable to get the htmlRenderer")
 		return nil, err
@@ -76,9 +78,8 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 
 		_, err := codeFixFeedbackCmd.Execute(ctx)
 		if err != nil {
-			return
+			cmd.logger.Err(err).Str("fixId", fixId).Str("feedback", code.FixAppliedUserEvent).Msg("failed to submit autofix feedback")
 		}
-
 		issue := cmd.issueProvider.Issue(htmlRenderer.AiFixHandler.GetCurrentIssueId())
 		actionCommandMap, err := cmd.autofixFeedbackActions(fixId)
 		successMessage := "Congratulations! 🎉 You’ve just fixed this " + issue.GetID() + " issue."

@@ -28,12 +28,13 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -74,14 +75,21 @@ var panelStylesTemplate string
 var customScripts string
 
 type HtmlRenderer struct {
-	c              *config.Config
-	globalTemplate *template.Template
-	AiFixHandler   *AiFixHandler
+	c                    *config.Config
+	globalTemplate       *template.Template
+	AiFixHandler         *AiFixHandler
+	inlineIgnoresEnabled bool
+	iawEnabled           bool
+	snykApiClient        snyk_api.SnykApiClient
 }
 
 var codeRenderer *HtmlRenderer
 
-func GetHTMLRenderer(c *config.Config) (*HtmlRenderer, error) {
+func GetHTMLRenderer(c *config.Config, snykApiClient snyk_api.SnykApiClient) (*HtmlRenderer, error) {
+	if snykApiClient == nil {
+		return nil, fmt.Errorf("passed Snyk API client is nil")
+	}
+
 	if codeRenderer != nil && codeRenderer.c == c {
 		return codeRenderer, nil
 	}
@@ -99,9 +107,14 @@ func GetHTMLRenderer(c *config.Config) (*HtmlRenderer, error) {
 	}
 
 	codeRenderer = &HtmlRenderer{
-		c:              c,
-		globalTemplate: globalTemplate,
+		c:                    c,
+		globalTemplate:       globalTemplate,
+		snykApiClient:        snykApiClient,
+		inlineIgnoresEnabled: false,
 	}
+
+	codeRenderer.updateFeatureFlags()
+
 	codeRenderer.AiFixHandler = &AiFixHandler{
 		aiFixDiffState: aiResultState{status: AiFixNotStarted},
 	}
@@ -130,7 +143,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
 	}
-	iawEnabled := renderer.c.Engine().GetConfiguration().GetBool(configuration.FF_IAW_ENABLED)
+
 	nonce, err := html.GenerateSecurityNonce()
 	if err != nil {
 		renderer.c.Logger().Warn().Msgf("Failed to generate security nonce: %s", err)
@@ -161,48 +174,49 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	}
 
 	data := map[string]any{
-		"IssueTitle":         additionalData.Title,
-		"IssueMessage":       additionalData.Message,
-		"IssueType":          getIssueType(additionalData),
-		"SeverityIcon":       html.SeverityIcon(issue),
-		"CWEs":               issue.GetCWEs(),
-		"IssueOverview":      html.MarkdownToHTML(additionalData.Text),
-		"IsIgnored":          issue.GetIsIgnored(),
-		"IsPending":          isPending,
-		"IgnoreDetails":      ignoreDetailsRow,
-		"IgnoreReason":       ignoreReason,
-		"IAWEnabled":         iawEnabled,
-		"DataFlow":           additionalData.DataFlow,
-		"DataFlowKeys":       dataFlowKeys,
-		"DataFlowTable":      dataFlowTable,
-		"RepoCount":          additionalData.RepoDatasetSize,
-		"ExampleCount":       len(additionalData.ExampleCommitFixes),
-		"ExampleCommitFixes": exampleCommits,
-		"CommitFixes":        commitFixes,
-		"PriorityScore":      additionalData.PriorityScore,
-		"SnykWebUrl":         renderer.c.SnykUI(),
-		"LessonUrl":          issue.GetLessonUrl(),
-		"LessonIcon":         html.LessonIcon(),
-		"IgnoreLineAction":   getLineToIgnoreAction(issue),
-		"HasAIFix":           additionalData.HasAIFix,
-		"ExternalIcon":       html.ExternalIcon(),
-		"ScanAnimation":      html.ScanAnimation(),
-		"GitHubIcon":         html.GitHubIcon(),
-		"ArrowLeftDark":      html.ArrowLeftDark(),
-		"ArrowLeftLight":     html.ArrowLeftLight(),
-		"ArrowRightDark":     html.ArrowRightDark(),
-		"ArrowRightLight":    html.ArrowRightLight(),
-		"FileIcon":           html.FileIcon(),
-		"FolderPath":         string(folderPath),
-		"FilePath":           string(issue.GetAffectedFilePath()),
-		"IssueId":            issue.GetAdditionalData().GetKey(),
-		"Styles":             template.CSS(panelStylesTemplate),
-		"Scripts":            template.JS(customScripts),
-		"Nonce":              nonce,
-		"AiFixResult":        aiFixResult,
-		"AiFixDiffStatus":    renderer.AiFixHandler.aiFixDiffState.status,
-		"AiFixError":         aiFixErr,
-		"AutoTriggerAiFix":   autoTriggerAiFix,
+		"IssueTitle":           additionalData.Title,
+		"IssueMessage":         additionalData.Message,
+		"IssueType":            getIssueType(additionalData),
+		"SeverityIcon":         html.SeverityIcon(issue),
+		"CWEs":                 issue.GetCWEs(),
+		"IssueOverview":        html.MarkdownToHTML(additionalData.Text),
+		"IsIgnored":            issue.GetIsIgnored(),
+		"IsPending":            isPending,
+		"IgnoreDetails":        ignoreDetailsRow,
+		"IgnoreReason":         ignoreReason,
+		"IAWEnabled":           renderer.iawEnabled,
+		"InlineIgnoresEnabled": renderer.inlineIgnoresEnabled,
+		"DataFlow":             additionalData.DataFlow,
+		"DataFlowKeys":         dataFlowKeys,
+		"DataFlowTable":        dataFlowTable,
+		"RepoCount":            additionalData.RepoDatasetSize,
+		"ExampleCount":         len(additionalData.ExampleCommitFixes),
+		"ExampleCommitFixes":   exampleCommits,
+		"CommitFixes":          commitFixes,
+		"PriorityScore":        additionalData.PriorityScore,
+		"SnykWebUrl":           renderer.c.SnykUI(),
+		"LessonUrl":            issue.GetLessonUrl(),
+		"LessonIcon":           html.LessonIcon(),
+		"IgnoreLineAction":     getLineToIgnoreAction(issue),
+		"HasAIFix":             additionalData.HasAIFix,
+		"ExternalIcon":         html.ExternalIcon(),
+		"ScanAnimation":        html.ScanAnimation(),
+		"GitHubIcon":           html.GitHubIcon(),
+		"ArrowLeftDark":        html.ArrowLeftDark(),
+		"ArrowLeftLight":       html.ArrowLeftLight(),
+		"ArrowRightDark":       html.ArrowRightDark(),
+		"ArrowRightLight":      html.ArrowRightLight(),
+		"FileIcon":             html.FileIcon(),
+		"FolderPath":           string(folderPath),
+		"FilePath":             string(issue.GetAffectedFilePath()),
+		"IssueId":              issue.GetAdditionalData().GetKey(),
+		"Styles":               template.CSS(panelStylesTemplate),
+		"Scripts":              template.JS(customScripts),
+		"Nonce":                nonce,
+		"AiFixResult":          aiFixResult,
+		"AiFixDiffStatus":      renderer.AiFixHandler.aiFixDiffState.status,
+		"AiFixError":           aiFixErr,
+		"AutoTriggerAiFix":     autoTriggerAiFix,
 	}
 	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
 
@@ -214,6 +228,20 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	var result = buffer.String()
 	return result
+}
+
+func (renderer *HtmlRenderer) updateFeatureFlags() {
+	conf := renderer.c.Engine().GetConfiguration()
+	logger := renderer.c.Logger().With().Str("method", "updateFeatureFlags").Logger()
+	renderer.iawEnabled = conf.GetBool(configuration.FF_IAW_ENABLED)
+	ffInlineIgnores := "snykCodeInlineIgnore"
+	status, err := renderer.snykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagType(ffInlineIgnores))
+	if err != nil {
+		msg := fmt.Sprintf("Failed to retrieve feature flag status (%s), assuming deactivated", ffInlineIgnores)
+		logger.Warn().Err(err).Msg(msg)
+	}
+
+	codeRenderer.inlineIgnoresEnabled = status.Ok
 }
 
 func getLineToIgnoreAction(issue types.Issue) int {

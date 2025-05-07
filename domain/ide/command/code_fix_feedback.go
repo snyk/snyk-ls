@@ -71,6 +71,7 @@ func (cmd *codeFixFeedback) Execute(ctx context.Context) (any, error) {
 			c.Logger().Err(err).Str("fixId", fixId).Str("feedback", feedback).Msg("failed to submit autofix feedback")
 		}
 	}()
+
 	return nil, nil
 }
 
