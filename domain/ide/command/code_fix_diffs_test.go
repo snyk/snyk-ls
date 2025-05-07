@@ -56,10 +56,11 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		C:              c,
 	}
 	cut := codeFixDiffs{
-		notifier:    notification.NewMockNotifier(),
-		codeScanner: codeScanner,
-		c:           c,
-		srv:         server,
+		notifier:      notification.NewMockNotifier(),
+		codeScanner:   codeScanner,
+		c:             c,
+		srv:           server,
+		snykApiClient: snykApiClient,
 	}
 	if runtime.GOOS == "windows" {
 		codeScanner.AddBundleHash("\\folderPath", "bundleHash")

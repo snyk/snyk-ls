@@ -29,8 +29,8 @@ type SnykCodeHttpClient interface {
 }
 
 type codeFixFeedback struct {
-	command   types.CommandData
-	apiClient SnykCodeHttpClient
+	command        types.CommandData
+	codeHttpClient SnykCodeHttpClient
 }
 
 func (cmd *codeFixFeedback) Command() types.CommandData {
@@ -49,7 +49,7 @@ func (cmd *codeFixFeedback) Execute(ctx context.Context) (any, error) {
 	}
 
 	go func() {
-		err := cmd.apiClient.SubmitAutofixFeedback(ctx, fixId, feedback)
+		err := cmd.codeHttpClient.SubmitAutofixFeedback(ctx, fixId, feedback)
 		if err != nil {
 			config.CurrentConfig().Logger().Err(err).Str("fixId", fixId).Str("feedback", feedback).Msg("failed to submit autofix feedback")
 		}
