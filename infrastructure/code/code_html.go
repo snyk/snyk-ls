@@ -106,9 +106,10 @@ func GetHTMLRenderer(c *config.Config, snykApiClient snyk_api.SnykApiClient) (*H
 	}
 
 	codeRenderer = &HtmlRenderer{
-		c:              c,
-		globalTemplate: globalTemplate,
-		snykApiClient:  snykApiClient,
+		c:                    c,
+		globalTemplate:       globalTemplate,
+		snykApiClient:        snykApiClient,
+		inlineIgnoresEnabled: false,
 	}
 
 	ffInlineIgnores := "snykCodeInlineIgnore"
