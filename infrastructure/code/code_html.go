@@ -109,7 +109,9 @@ func GetHTMLRenderer(c *config.Config, apiClient snyk_api.SnykApiClient) (*HtmlR
 
 	status, err := apiClient.FeatureFlagStatus("snykCodeInlineIgnore")
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve feature flag status: %w", err)
+		msg := "Failed to retrieve feature flag status"
+		c.Logger().Err(err).Msg(msg)
+		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 	codeRenderer.inlineIgnoresEnabled = status.Ok
 
