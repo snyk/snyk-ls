@@ -44,7 +44,6 @@ func CreateFromCommandData(
 	codeScanner *code.Scanner,
 	cli cli.Executor,
 ) (types.Command, error) {
-
 	snykApiClient := snyk_api.NewSnykApiClient(c, c.Engine().GetNetworkAccess().GetHttpClient)
 
 	switch commandData.CommandId {

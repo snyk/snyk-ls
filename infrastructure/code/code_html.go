@@ -79,6 +79,7 @@ type HtmlRenderer struct {
 	globalTemplate       *template.Template
 	AiFixHandler         *AiFixHandler
 	inlineIgnoresEnabled bool
+	iawEnabled           bool
 	snykApiClient        snyk_api.SnykApiClient
 }
 
@@ -112,14 +113,7 @@ func GetHTMLRenderer(c *config.Config, snykApiClient snyk_api.SnykApiClient) (*H
 		inlineIgnoresEnabled: false,
 	}
 
-	ffInlineIgnores := "snykCodeInlineIgnore"
-	status, err := snykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagType(ffInlineIgnores))
-	if err != nil {
-		msg := fmt.Sprintf("Failed to retrieve feature flag status (%s), assuming deactivated", ffInlineIgnores)
-		c.Logger().Warn().Err(err).Msg(msg)
-	}
-
-	codeRenderer.inlineIgnoresEnabled = status.Ok
+	codeRenderer.updateFeatureFlags()
 
 	codeRenderer.AiFixHandler = &AiFixHandler{
 		aiFixDiffState: aiResultState{status: AiFixNotStarted},
@@ -149,9 +143,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
 	}
-
-	conf := renderer.c.Engine().GetConfiguration()
-	iawEnabled := conf.GetBool(configuration.FF_IAW_ENABLED)
 
 	nonce, err := html.GenerateSecurityNonce()
 	if err != nil {
@@ -193,7 +184,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"IsPending":            isPending,
 		"IgnoreDetails":        ignoreDetailsRow,
 		"IgnoreReason":         ignoreReason,
-		"IAWEnabled":           iawEnabled,
+		"IAWEnabled":           renderer.iawEnabled,
 		"InlineIgnoresEnabled": renderer.inlineIgnoresEnabled,
 		"DataFlow":             additionalData.DataFlow,
 		"DataFlowKeys":         dataFlowKeys,
@@ -237,6 +228,20 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	var result = buffer.String()
 	return result
+}
+
+func (renderer *HtmlRenderer) updateFeatureFlags() {
+	conf := renderer.c.Engine().GetConfiguration()
+	logger := renderer.c.Logger().With().Str("method", "updateFeatureFlags").Logger()
+	renderer.iawEnabled = conf.GetBool(configuration.FF_IAW_ENABLED)
+	ffInlineIgnores := "snykCodeInlineIgnore"
+	status, err := renderer.snykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagType(ffInlineIgnores))
+	if err != nil {
+		msg := fmt.Sprintf("Failed to retrieve feature flag status (%s), assuming deactivated", ffInlineIgnores)
+		logger.Warn().Err(err).Msg(msg)
+	}
+
+	codeRenderer.inlineIgnoresEnabled = status.Ok
 }
 
 func getLineToIgnoreAction(issue types.Issue) int {
