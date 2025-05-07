@@ -79,12 +79,16 @@ type HtmlRenderer struct {
 	globalTemplate       *template.Template
 	AiFixHandler         *AiFixHandler
 	inlineIgnoresEnabled bool
-	apiClient            snyk_api.SnykApiClient
+	snykApiClient        snyk_api.SnykApiClient
 }
 
 var codeRenderer *HtmlRenderer
 
-func GetHTMLRenderer(c *config.Config, apiClient snyk_api.SnykApiClient) (*HtmlRenderer, error) {
+func GetHTMLRenderer(c *config.Config, snykApiClient snyk_api.SnykApiClient) (*HtmlRenderer, error) {
+	if snykApiClient == nil {
+		return nil, fmt.Errorf("passed Snyk API client is nil")
+	}
+
 	if codeRenderer != nil && codeRenderer.c == c {
 		return codeRenderer, nil
 	}
@@ -104,15 +108,16 @@ func GetHTMLRenderer(c *config.Config, apiClient snyk_api.SnykApiClient) (*HtmlR
 	codeRenderer = &HtmlRenderer{
 		c:              c,
 		globalTemplate: globalTemplate,
-		apiClient:      apiClient,
+		snykApiClient:  snykApiClient,
 	}
 
-	status, err := apiClient.FeatureFlagStatus("snykCodeInlineIgnore")
+	ffInlineIgnores := "snykCodeInlineIgnore"
+	status, err := snykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagType(ffInlineIgnores))
 	if err != nil {
-		msg := "Failed to retrieve feature flag status"
-		c.Logger().Err(err).Msg(msg)
-		return nil, fmt.Errorf("%s: %w", msg, err)
+		msg := fmt.Sprintf("Failed to retrieve feature flag status (%s), assuming deactivated", ffInlineIgnores)
+		c.Logger().Warn().Err(err).Msg(msg)
 	}
+
 	codeRenderer.inlineIgnoresEnabled = status.Ok
 
 	codeRenderer.AiFixHandler = &AiFixHandler{

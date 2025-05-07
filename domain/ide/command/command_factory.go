@@ -40,15 +40,16 @@ func CreateFromCommandData(
 	learnService learn.Service,
 	notifier noti.Notifier,
 	issueProvider snyk.IssueProvider,
-	snykCodeHttpClient SnykCodeHttpClient,
+	codeHttpClient SnykCodeHttpClient,
 	codeScanner *code.Scanner,
 	cli cli.Executor,
 ) (types.Command, error) {
-	apiClient := snyk_api.NewSnykApiClient(c, c.Engine().GetNetworkAccess().GetHttpClient)
+
+	snykApiClient := snyk_api.NewSnykApiClient(c, c.Engine().GetNetworkAccess().GetHttpClient)
 
 	switch commandData.CommandId {
 	case types.NavigateToRangeCommand:
-		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger(), c: c, apiClient: apiClient}, nil
+		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger(), c: c, apiClient: snykApiClient}, nil
 	case types.WorkspaceScanCommand:
 		return &workspaceScanCommand{command: commandData, srv: srv, c: c}, nil
 	case types.WorkspaceFolderScanCommand:
@@ -70,7 +71,7 @@ func CreateFromCommandData(
 	case types.GetSettingsSastEnabled:
 		return &sastEnabled{command: commandData, logger: c.Logger(), authenticationService: authService, gafConfig: c.Engine().GetConfiguration()}, nil
 	case types.GetFeatureFlagStatus:
-		return &featureFlagStatus{command: commandData, apiClient: apiClient, authenticationService: authService}, nil
+		return &featureFlagStatus{command: commandData, apiClient: snykApiClient, authenticationService: authService}, nil
 	case types.GetActiveUserCommand:
 		return &getActiveUser{command: commandData, authenticationService: authService, notifier: notifier}, nil
 	case types.ReportAnalyticsCommand:
@@ -78,9 +79,9 @@ func CreateFromCommandData(
 	case types.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
 	case types.CodeFixApplyEditCommand:
-		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, snykCodeHttpClient: snykCodeHttpClient, c: c, logger: c.Logger(), apiClient: apiClient}, nil
+		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, codeHttpClient: codeHttpClient, c: c, logger: c.Logger(), apiClient: snykApiClient}, nil
 	case types.CodeSubmitFixFeedback:
-		return &codeFixFeedback{command: commandData, apiClient: snykCodeHttpClient}, nil
+		return &codeFixFeedback{command: commandData, codeHttpClient: codeHttpClient}, nil
 	case types.CodeFixDiffsCommand:
 		return &codeFixDiffs{
 			command:       commandData,
@@ -89,7 +90,7 @@ func CreateFromCommandData(
 			issueProvider: issueProvider,
 			notifier:      notifier,
 			c:             c,
-			apiClient:     apiClient,
+			snykApiClient: snykApiClient,
 		}, nil
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
@@ -98,7 +99,7 @@ func CreateFromCommandData(
 	case types.ClearCacheCommand:
 		return &clearCache{command: commandData, c: c}, nil
 	case types.GenerateIssueDescriptionCommand:
-		return &generateIssueDescription{command: commandData, issueProvider: issueProvider, apiClient: apiClient}, nil
+		return &generateIssueDescription{command: commandData, issueProvider: issueProvider, snykApiClient: snykApiClient}, nil
 	case types.SubmitIgnoreRequest:
 		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, c: c}, nil
 	}

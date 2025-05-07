@@ -62,7 +62,7 @@ func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 		command: types.CommandData{
 			Arguments: []any{"fixId", code.FixPositiveFeedback},
 		},
-		apiClient: &apiClient,
+		codeHttpClient: &apiClient,
 	}
 
 	_, err := codeFixFeedbackCmd.Execute(context.Background())
