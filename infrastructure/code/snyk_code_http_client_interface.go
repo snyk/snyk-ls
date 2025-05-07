@@ -29,14 +29,6 @@ type AnalysisOptions struct {
 	severity     int
 }
 
-// TODO move these (delete and update tests)
-type AutofixOptions struct {
-	bundleHash string
-	shardKey   string
-	filePath   types.FilePath
-	issue      types.Issue
-}
-
 type SnykCodeClient interface {
 	GetFilters(ctx context.Context) (
 		filters FiltersResponse,
