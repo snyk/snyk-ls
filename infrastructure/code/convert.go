@@ -596,13 +596,10 @@ func CreateWorkspaceEditFromDiff(absoluteFilePath string, diff string) (*types.W
 }
 
 func processLines(diffLines []string, fileContentLineStrings []string) ([]types.TextEdit, error) {
+	var lastLineOfOriginalFile = len(fileContentLineStrings)
 	var textEdits []types.TextEdit
 	var currentSourceFileLine = 0 // 0-indexed line number counter for our current position in the original file.
 	for _, line := range diffLines {
-		if currentSourceFileLine > len(fileContentLineStrings) {
-			return nil, fmt.Errorf("diff line trying to insert outside of the original file bounds (%d) to line %d: %s", len(fileContentLineStrings), currentSourceFileLine, line)
-		}
-
 		if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") {
 			continue // We ignore header lines
 		} else if strings.HasPrefix(line, "@@") {
@@ -614,7 +611,7 @@ func processLines(diffLines []string, fileContentLineStrings []string) ([]types.
 			currentSourceFileLine, _ = strconv.Atoi(matches[1]) // Apply the edit from the first line of the original file in the diff
 			currentSourceFileLine -= 1                          // TextEdit range is 0-indexed, whereas a diff is 1-indexed
 		} else if strings.HasPrefix(line, "-") {
-			textEdit, err := buildOneLineTextEdit(currentSourceFileLine, currentSourceFileLine+1, "")
+			textEdit, err := buildOneLineTextEdit(currentSourceFileLine, currentSourceFileLine+1, "", lastLineOfOriginalFile)
 			if err != nil {
 				return nil, err
 			}
@@ -627,7 +624,7 @@ func processLines(diffLines []string, fileContentLineStrings []string) ([]types.
 				textEdits[len(textEdits)-1].Range.Start.Line == currentSourceFileLine { // ... we are still referring to the same source file line.
 				textEdits[len(textEdits)-1].NewText += newLineContent // We must group the additions, otherwise they will be applied in the wrong order.
 			} else {
-				textEdit, err := buildOneLineTextEdit(currentSourceFileLine, currentSourceFileLine, newLineContent)
+				textEdit, err := buildOneLineTextEdit(currentSourceFileLine, currentSourceFileLine, newLineContent, lastLineOfOriginalFile)
 				if err != nil {
 					return nil, err
 				}
@@ -636,19 +633,41 @@ func processLines(diffLines []string, fileContentLineStrings []string) ([]types.
 			// A new insertion does not exist in the original file, so don't increment the counter.
 		} else if strings.HasPrefix(line, " ") { // Context line
 			currentSourceFileLine += 1 // Still exists in the original file.
+		} else if line == "\\ No newline at end of file" {
+			// There are only 6 expected cases for this line to appear in the diff.
+			// Case 1) is when there is no manipulation at the EOF and "\ No newline at end of file" is just printed as a context line.
+			// The 5 other cases are included in the diff segment below:
+			// ```
+			//  some context line
+			// -original eof line without lf
+			// \ No newline at end of file   <-- Case 2) The diff ends here, i.e. deleted the last line and added a LF at the EOF
+			// +original eof line without lf <-- Case 3) The diff ends here, i.e. just added a LF at the EOF
+			// +a new eof line               <-- Case 4) The diff ends here, i.e. added to the end of the file and added a LF at the EOF
+			// \ No newline at end of file   <-- Case 5) The diff ends here, i.e. added to the end of the file, but retained no LF at the EOF
+			// ```
+			// Case 6) is when the last n lines of the file are deleted with no new additions, while retaining no LF at the EOF. This looks like the last n+1 lines being deleted, with the `len(lines)-n`th line being re-added.
+			// N.b. For the 3rd, 4th, 5th, and 6th case, the last retained line in the file is *always* deleted and then re-added along with any new additions.
+			// N.b. As a compromise against complexity, we are always going to put a LF on our additions. So if the EOF is manipulated, the user will end up with a LF at the EOF regardless of the diff's choice.
+
+			// If we are in the 1st, 2nd, or 5th case, it's the last line in the diff, so it doesn't matter what calculations we do below.
+			// If we are in the 3rd, 4th, or 6th case, then the last deletion in theory should not have incremented the line counter since we did not go past a LF character, so we will just decrement it here to compensate.
+			currentSourceFileLine -= 1
 		} else {
-			return nil, fmt.Errorf("diff line badly formatted: %s", line)
+			return nil, fmt.Errorf("unexpected prefix for diff line: %s", line)
 		}
 	}
 	return textEdits, nil
 }
 
-func buildOneLineTextEdit(startLine int, endLine int, text string) (*types.TextEdit, error) {
+func buildOneLineTextEdit(startLine int, endLine int, text string, lastLineOfOriginalFile int) (*types.TextEdit, error) {
 	if startLine < 0 || endLine < 0 {
 		return nil, fmt.Errorf("cannot create a TextEdit where the start line (%d) or end line (%d) is less than zero", startLine, endLine)
 	}
 	if startLine > endLine {
 		return nil, fmt.Errorf("cannot create a TextEdit where the start line (%d) is after the end line (%d)", startLine, endLine)
+	}
+	if endLine > lastLineOfOriginalFile { // Final empty line has been trimmed, so we allow equal to last line and hope the IDE supports line beyond EOF if there was no final LF
+		return nil, fmt.Errorf("cannot create a TextEdit where the end line (%d) is after the last line of the original file (%d)", endLine, lastLineOfOriginalFile)
 	}
 
 	return &types.TextEdit{

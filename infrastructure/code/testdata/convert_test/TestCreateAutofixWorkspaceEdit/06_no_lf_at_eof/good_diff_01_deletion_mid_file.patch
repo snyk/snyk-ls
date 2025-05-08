@@ -1,0 +1,9 @@
+--- base_file.txt
++++ base_file.txt
+@@ -1,5 +1,4 @@
+ 1
+ 2
+-3
+ 4
+ 5
+\ No newline at end of file

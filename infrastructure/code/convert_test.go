@@ -1122,14 +1122,14 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 		{
 			name:                  "Malformed diff hunk line causes parse error",
 			originalFilePath:      path.Join(testDataDirPath, "01_simple/base_simple_file.txt"),
-			diffFilePath:          path.Join(testDataDirPath, "01_simple/malformed_diff_01.patch"),
-			expectedErrorMsgRegex: util.Ptr("^diff line badly formatted: @ -2,4 \\+2,3 @$"),
+			diffFilePath:          path.Join(testDataDirPath, "01_simple/malformed_diff_01_hunk_line_format.patch"),
+			expectedErrorMsgRegex: util.Ptr("^unexpected prefix for diff line: @ -2,4 \\+2,3 @$"),
 		},
 		{
 			name:                  "Out of bounds diff hunk line causes parse error",
 			originalFilePath:      path.Join(testDataDirPath, "01_simple/base_simple_file.txt"),
-			diffFilePath:          path.Join(testDataDirPath, "01_simple/malformed_diff_02.patch"),
-			expectedErrorMsgRegex: util.Ptr("^diff line trying to insert outside of the original file bounds \\(10\\) to line 9998:  four$"),
+			diffFilePath:          path.Join(testDataDirPath, "01_simple/malformed_diff_02_hunk_line_numbers.patch"),
+			expectedErrorMsgRegex: util.Ptr("^cannot create a TextEdit where the end line \\(9999\\) is after the last line of the original file \\(10\\)$"),
 		},
 		{
 			name:                  "Short file causes processing error",
@@ -1221,9 +1221,9 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 			},
 		},
 		{
-			name:             "Complex multi-hunk diff with swaps and deletions returns the correct edits",
-			originalFilePath: path.Join(testDataDirPath, "03_complex_example/base_file.txt"),
-			diffFilePath:     path.Join(testDataDirPath, "03_complex_example/good_diff_01.patch"),
+			name:             "Multi-hunk diff with swaps and deletions returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "03_multi_hunk/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "03_multi_hunk/good_diff_01.patch"),
 			expectedEdits: []types.TextEdit{
 				// - Hunk 1 -
 				// Delete "3  -> X  - Delete"
@@ -1341,6 +1341,180 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 						End:   types.Position{Line: 19, Character: 0},
 					},
 					NewText: "",
+				},
+			},
+		},
+		{
+			name:             "Addition at EOF returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "05_end_of_file/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "05_end_of_file/good_diff_01_additions.patch"),
+			expectedEdits: []types.TextEdit{
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 5, Character: 0},
+						End:   types.Position{Line: 5, Character: 0},
+					},
+					NewText: "6\n7\n8\n9\n10\n",
+				},
+			},
+		},
+		{
+			name:             "Deletion and addition at EOF returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "05_end_of_file/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "05_end_of_file/good_diff_02_deletion_and_additions.patch"),
+			expectedEdits: []types.TextEdit{
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						End:   types.Position{Line: 5, Character: 0},
+					},
+					NewText: "",
+				},
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 5, Character: 0},
+						End:   types.Position{Line: 5, Character: 0},
+					},
+					NewText: "five\nsix\nseven\neight\n",
+				},
+			},
+		},
+		{
+			name:             "Deletion at mid file without LF at EOF returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "06_no_lf_at_eof/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "06_no_lf_at_eof/good_diff_01_deletion_mid_file.patch"),
+			expectedEdits: []types.TextEdit{
+				// Delete "3"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 2, Character: 0},
+						End:   types.Position{Line: 3, Character: 0},
+					},
+					NewText: "",
+				},
+			},
+		},
+		{
+			name:             "Deletion at EOF with no LF, but diff adds the LF, returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "06_no_lf_at_eof/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "06_no_lf_at_eof/good_diff_02_deletion_adding_lf_at_eof.patch"),
+			expectedEdits: []types.TextEdit{
+				// Delete "5"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						// We hope that the client handles deleting to the start of the line beyond the last line.
+						End: types.Position{Line: 5, Character: 0},
+					},
+					NewText: "",
+				},
+			},
+		},
+		{
+			name:             "Adding LF to file with no LF at EOF returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "06_no_lf_at_eof/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "06_no_lf_at_eof/good_diff_03_just_adding_lf_at_eof.patch"),
+			expectedEdits: []types.TextEdit{
+				// Delete "5" - for additions at EOF the diff always deletes and re-adds the last line
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						// We hope that the client handles deleting to the start of the line beyond the last line.
+						End: types.Position{Line: 5, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "5" - for additions at EOF the diff always deletes and re-adds the last line
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						End:   types.Position{Line: 4, Character: 0},
+					},
+					NewText: "5\n",
+				},
+			},
+		},
+		{
+			name:             "Addition at EOF with no LF, but diff adds the LF, returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "06_no_lf_at_eof/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "06_no_lf_at_eof/good_diff_04_additions_adding_lf_at_eof.patch"),
+			expectedEdits: []types.TextEdit{
+				// Delete "5" - for additions at EOF the diff always deletes and re-adds the last line
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						// We hope that the client handles deleting to the start of the line beyond the last line.
+						End: types.Position{Line: 5, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "5" - for additions at EOF the diff always deletes and re-adds the last line
+				// Insert the new lines.
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						End:   types.Position{Line: 4, Character: 0},
+					},
+					NewText: "5\n6\n7\n8\n",
+				},
+			},
+		},
+		{
+			name:             "Addition at EOF with no LF, while diff wants to retain no LF at EOF, returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "06_no_lf_at_eof/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "06_no_lf_at_eof/good_diff_05_additions_keeping_no_lf_at_eof.patch"),
+			expectedEdits: []types.TextEdit{
+				// Delete "5" - for additions at EOF the diff always deletes and re-adds the last line
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						// We hope that the client handles deleting to the start of the line beyond the last line.
+						End: types.Position{Line: 5, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "5" - for additions at EOF the diff always deletes and re-adds the last line
+				// Insert the new lines.
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						End:   types.Position{Line: 4, Character: 0},
+					},
+					// The user gets a LF at EOF even though the diff didn't call for it. Deal with it.
+					NewText: "5\n6\n7\n8\n",
+				},
+			},
+		},
+		{
+			name:             "Deletion at EOF with no LF, while diff wants to retain no LF at EOF, returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "06_no_lf_at_eof/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "06_no_lf_at_eof/good_diff_06_deletion_keeping_no_lf_at_eof.patch"),
+			expectedEdits: []types.TextEdit{
+				// Delete "4"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 3, Character: 0},
+						End:   types.Position{Line: 4, Character: 0},
+					},
+					NewText: "",
+				},
+				// Delete "5"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						// We hope that the client handles deleting to the start of the line beyond the last line.
+						End: types.Position{Line: 5, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "4"
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						End:   types.Position{Line: 4, Character: 0},
+					},
+					// The user gets a LF at EOF even though the diff didn't call for it. Deal with it.
+					NewText: "4\n",
 				},
 			},
 		},

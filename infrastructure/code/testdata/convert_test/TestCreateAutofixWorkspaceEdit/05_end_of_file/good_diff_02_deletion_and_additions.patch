@@ -1,0 +1,10 @@
+--- base_file.txt
++++ base_file.txt
+@@ -3,3 +3,8 @@
+ 3
+ 4
+-5
++five
++six
++seven
++eight

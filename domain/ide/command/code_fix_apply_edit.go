@@ -98,7 +98,7 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 func (cmd *applyAiFixEditCommand) getWorkspaceEdit(htmlRenderer *code.HtmlRenderer, fixId string) (*types.WorkspaceEdit, error) {
 	path, diff, err := htmlRenderer.AiFixHandler.GetResults(fixId)
 	if err != nil {
-		cmd.logger.Debug().Str("method", "applyAiFixEditCommand.Execute").Msgf("Unable to get the fix fix for %s", fixId)
+		cmd.logger.Error().Str("method", "applyAiFixEditCommand.getWorkspaceEdit").Msgf("Unable to get the fix for %s", fixId)
 		return nil, err
 	}
 
