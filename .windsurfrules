@@ -1,0 +1,18 @@
+determine the absolute path of the project directory. you can do that e.g. by executing pwd on the shell within the directory.
+always use snyk for sca and code scanning. scan with both tools. you need to pass the absolute path of the directory we are scanning.
+run snyk code tests after each edit. pass the absolute path of the project directory as a parameter
+run snyk sca tests after updating the package manager / manifest file / build file. pass the absolute path of the project directory as a parameter.
+always be concise, direct and don't try to appease me.
+always write and update test cases. iterate until they pass.
+use existing mocks, don't write new ones.
+if you use mocks, use gomock to generate them.
+always run the tests after editing.
+please always lint, using `make lint`
+always consider the Makefile for build and linting
+fix issues if they are fixable. take the snyk scan results as input.
+when asked to commit, always use conventional commit messages (Conventional Commit Style (Subject + Body)). be descriptive in the body. if you find a JIRA issue (IDE-XXXX) in the branch name, use it as a postfix to the subject line in the format [IDE-XXXX]
+when asked to push, always use 'git push --set-upstream origin $(git_current_branch)' with git_current_branch being the current branch we are on
+never force push
+never push without asking
+never commit the hashicorp gomod
+regularly fetch main branch and offer to merge it into git_current_branch
