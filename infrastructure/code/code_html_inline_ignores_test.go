@@ -29,6 +29,7 @@ import (
 
 func Test_Code_Html_InlineIgnores_Enabled(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetIntegrationName("VS_CODE")
 
 	// Create a fake API client with the feature flag enabled
 	apiClient := &snyk_api.FakeApiClient{
