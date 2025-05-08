@@ -17,3 +17,6 @@ indent_style = tab
 [*.md]
 trim_trailing_whitespace = false
 max_line_length = 120
+
+[*.patch]
+trim_trailing_whitespace = false
