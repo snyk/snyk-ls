@@ -615,7 +615,15 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 
 	// Act
 	scanner.enhanceIssuesDetails(issues, "")
-	htmlRenderer, err := GetHTMLRenderer(c)
+	// Create a fake API client with the feature flag disabled
+	apiClient := &snyk_api.FakeApiClient{
+		CodeEnabled: true,
+	}
+	// Set the response for the FeatureFlagStatus method
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+
+	// invoke method under test
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
 	assert.Nil(t, err)
 	html := htmlRenderer.GetDetailsHtml(issues[0])
 	// Assert
