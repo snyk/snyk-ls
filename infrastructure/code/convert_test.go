@@ -1518,6 +1518,46 @@ func TestCreateAutofixWorkspaceEdit(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:             "Additions at EOF with diff trying to remove the LF at EOF returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "07_diff_removes_eof_lf/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "07_diff_removes_eof_lf/good_diff_01_with_additions_at_eof.patch"),
+			expectedEdits: []types.TextEdit{
+				// Insert the lines.
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 5, Character: 0},
+						End:   types.Position{Line: 5, Character: 0},
+					},
+					// Although the diff doesn't want a LF at EOF, we always give a LF at the EOF.
+					NewText: "6\n7\n8\n",
+				},
+			},
+		},
+		{
+			name:             "Diff trying to remove the LF at EOF returns the correct edits",
+			originalFilePath: path.Join(testDataDirPath, "07_diff_removes_eof_lf/base_file.txt"),
+			diffFilePath:     path.Join(testDataDirPath, "07_diff_removes_eof_lf/good_diff_02_just_removal_of_eof_lf.patch"),
+			expectedEdits: []types.TextEdit{
+				// Delete "5" - the diff says to remove the line and re-add it
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 4, Character: 0},
+						End:   types.Position{Line: 5, Character: 0},
+					},
+					NewText: "",
+				},
+				// Insert "5" - the diff says to remove the line and re-add it
+				{
+					Range: types.Range{
+						Start: types.Position{Line: 5, Character: 0},
+						End:   types.Position{Line: 5, Character: 0},
+					},
+					// Although the diff doesn't want a LF at EOF, we always give a LF at the EOF.
+					NewText: "5\n",
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
