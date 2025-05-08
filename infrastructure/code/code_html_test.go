@@ -482,3 +482,53 @@ func Test_Prepare_DataFlowTable_Empty(t *testing.T) {
 	assert.Equal(t, len(dataFlowItems), 0)
 	assert.Equal(t, dataFlowKeys, []string(nil))
 }
+
+func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Enabled(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetIntegrationName("VS_CODE")
+
+	apiClient := &snyk_api.FakeApiClient{}
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
+
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	assert.NoError(t, err)
+
+	htmlRenderer.updateFeatureFlags()
+
+	assert.True(t, htmlRenderer.inlineIgnoresEnabled)
+}
+
+func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Disabled(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetIntegrationName("VS_CODE")
+
+	apiClient := &snyk_api.FakeApiClient{}
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	assert.NoError(t, err)
+
+	htmlRenderer.updateFeatureFlags()
+
+	assert.False(t, htmlRenderer.inlineIgnoresEnabled)
+}
+
+func Test_Code_Html_updateFeatureFlags_NonVSCodeIntegration(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetIntegrationName("ECLIPSE") // Set a non-VSCode integration name
+
+	// Create a fake API client
+	apiClient := &snyk_api.FakeApiClient{}
+	// Set the feature flag to true, to ensure the integration name is the deciding factor
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
+
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	assert.NoError(t, err)
+	assert.NotNil(t, htmlRenderer)
+
+	// Call the method under test
+	htmlRenderer.updateFeatureFlags()
+
+	// Assert that inlineIgnoresEnabled is false because the integration is not VS_CODE
+	assert.False(t, htmlRenderer.inlineIgnoresEnabled, "inlineIgnoresEnabled should be false for non-VSCode integrations")
+}

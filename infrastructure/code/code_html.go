@@ -234,14 +234,16 @@ func (renderer *HtmlRenderer) updateFeatureFlags() {
 	conf := renderer.c.Engine().GetConfiguration()
 	logger := renderer.c.Logger().With().Str("method", "updateFeatureFlags").Logger()
 	renderer.iawEnabled = conf.GetBool(configuration.FF_IAW_ENABLED)
-	ffInlineIgnores := "snykCodeInlineIgnore"
-	status, err := renderer.snykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagType(ffInlineIgnores))
-	if err != nil {
-		msg := fmt.Sprintf("Failed to retrieve feature flag status (%s), assuming deactivated", ffInlineIgnores)
-		logger.Warn().Err(err).Msg(msg)
+	renderer.inlineIgnoresEnabled = false
+	if renderer.c.IntegrationName() == "VS_CODE" {
+		ffInlineIgnores := "snykCodeInlineIgnore"
+		status, err := renderer.snykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagType(ffInlineIgnores))
+		if err != nil {
+			msg := fmt.Sprintf("Failed to retrieve feature flag status (%s), assuming deactivated", ffInlineIgnores)
+			logger.Warn().Err(err).Msg(msg)
+		}
+		renderer.inlineIgnoresEnabled = status.Ok
 	}
-
-	codeRenderer.inlineIgnoresEnabled = status.Ok
 }
 
 func getLineToIgnoreAction(issue types.Issue) int {
