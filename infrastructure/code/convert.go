@@ -634,24 +634,12 @@ func processLines(diffLines []string, fileContentLineStrings []string) ([]types.
 		} else if strings.HasPrefix(line, " ") { // Context line
 			currentSourceFileLine += 1 // Still exists in the original file.
 		} else if line == "\\ No newline at end of file" {
-			// There are only 6 expected cases for this line to appear in the diff.
-			// Case 1) is when there is no manipulation at the EOF and "\ No newline at end of file" is just printed as a context line.
-			// The 5 other cases are included in the diff segment below:
-			// ```
-			//  some context line
-			// -original eof line without lf
-			// \ No newline at end of file   <-- Case 2) The diff ends here, i.e. deleted the last line and added a LF at the EOF
-			// +original eof line without lf <-- Case 3) The diff ends here, i.e. just added a LF at the EOF
-			// +a new eof line               <-- Case 4) The diff ends here, i.e. added to the end of the file and added a LF at the EOF
-			// \ No newline at end of file   <-- Case 5) The diff ends here, i.e. added to the end of the file, but retained no LF at the EOF
-			// ```
-			// Case 6) is when the last n lines of the file are deleted with no new additions, while retaining no LF at the EOF. This looks like the last n+1 lines being deleted, with the `len(lines)-n`th line being re-added.
-			// N.b. For the 3rd, 4th, 5th, and 6th case, the last retained line in the file is *always* deleted and then re-added along with any new additions.
-			// N.b. As a compromise against complexity, we are always going to put a LF on our additions. So if the EOF is manipulated, the user will end up with a LF at the EOF regardless of the diff's choice.
-
-			// If we are in the 1st, 2nd, or 5th case, it's the last line in the diff, so it doesn't matter what calculations we do below.
-			// If we are in the 3rd, 4th, or 6th case, then the last deletion in theory should not have incremented the line counter since we did not go past a LF character, so we will just decrement it here to compensate.
-			currentSourceFileLine -= 1
+			// When we encounter this line there are only two possible scenarios (for a well-formed diff):
+			// 1. We are at the very end of the diff. It therefore doesn't matter what calculations we do below from this line.
+			// 2. We have just processed a deletion of the last line of the file and below there are additions to the end of the file.
+			// See the tests for all actual possible cases that fall into these two categories.
+			// For scenario 2, in theory we should not have incremented the line counter for the deletion we just processed, since we did not go past a LF character ...
+			currentSourceFileLine -= 1 // ... so we will just decrement the line counter here to compensate.
 		} else {
 			return nil, fmt.Errorf("unexpected prefix for diff line: %s", line)
 		}
