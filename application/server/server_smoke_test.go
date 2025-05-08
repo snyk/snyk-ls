@@ -143,6 +143,15 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			useConsistentIgnores: true,
 			hasVulns:             true,
 		},
+		{
+			name:                 "OSS_unmanaged_scan",
+			repo:                 "https://github.com/snyk-fixtures/cpp-goof.git",
+			commit:               "259ea51",
+			file1:                iacFile,
+			file2:                codeFile,
+			useConsistentIgnores: false,
+			hasVulns:             true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
