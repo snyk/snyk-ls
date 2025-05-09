@@ -1,0 +1,23 @@
+--- base_file.txt
++++ base_file.txt
+@@ -1,6 +1,5 @@
+ 1  -> 1  - Leave
+ 2  -> 2  - Leave
+-3  -> X  - Delete
+ 4  -> 3  - Leave
+ 5  -> 4  - Leave
+ 6  -> 5  - Leave
+@@ -11,10 +10,10 @@
+ 11 -> 10 - Leave
+ 12 -> 11 - Leave
+ 13 -> 12 - Leave
+-14 -> X  - Delete
+ 15 -> 13 - Leave
+-16 -> 15 - Swap with below
+ 17 -> 14 - Swap with above
++16 -> 15 - Swap with below
+ 18 -> 16 - Leave
+-19 -> X  - Delete
+ 20 -> 17 - Leave
++X  -> 18 - Added
++X  -> 19 - Added
