@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,7 +45,7 @@ func Test_executeCLI_callsCli(t *testing.T) {
 		cli:    cli,
 	}
 
-	response, err := cut.Execute(context.Background())
+	response, err := cut.Execute(t.Context())
 	require.NoError(t, err)
 
 	assert.True(t, cli.WasExecuted())

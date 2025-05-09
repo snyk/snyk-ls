@@ -17,7 +17,6 @@
 package code
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,7 +46,7 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 		}
 
 		emptyBundle := &UploadBatch{}
-		_ = bundle.Upload(context.Background(), emptyBundle)
+		_ = bundle.Upload(t.Context(), emptyBundle)
 
 		assert.False(t, fakeSnykCode.HasCreatedNewBundle)
 		assert.False(t, fakeSnykCode.HasExtendedBundle)
@@ -61,7 +60,7 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 			logger:   config.CurrentConfig().Logger(),
 		}
 
-		_ = bundle.Upload(context.Background(), bundleWithFiles)
+		_ = bundle.Upload(t.Context(), bundleWithFiles)
 
 		assert.False(t, fakeSnykCode.HasExtendedBundle)
 	})
@@ -73,9 +72,9 @@ func Test_BundleGroup_AddBundle(t *testing.T) {
 			logger:   config.CurrentConfig().Logger(),
 		}
 
-		_ = bundle.Upload(context.Background(), bundleWithFiles)
+		_ = bundle.Upload(t.Context(), bundleWithFiles)
 		oldHash := bundle.BundleHash
-		_ = bundle.Upload(context.Background(), bundleWithMultipleFiles)
+		_ = bundle.Upload(t.Context(), bundleWithMultipleFiles)
 		newHash := bundle.BundleHash
 
 		assert.True(t, fakeSnykCode.HasExtendedBundle)

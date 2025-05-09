@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -48,7 +47,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS,
 		gomock.Any(), gomock.Any()).Return(nil, nil)
 
-	output, err := cmd.Execute(context.Background())
+	output, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
 	require.Emptyf(t, output, "output should be empty")
 }
@@ -94,7 +93,7 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 		gomock.Any(),
 	).Return(nil, nil)
 
-	output, err := cmd.Execute(context.Background())
+	output, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
 	require.Emptyf(t, output, "output should be empty")
 }

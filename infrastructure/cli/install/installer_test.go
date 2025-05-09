@@ -17,7 +17,6 @@
 package install
 
 import (
-	"context"
 	"encoding/hex"
 	"net/http"
 	"os"
@@ -154,7 +153,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 
 	// prepare
-	ctx := context.Background()
+	ctx := t.Context()
 	i := NewInstaller(error_reporting.NewTestErrorReporter(), func() *http.Client { return http.DefaultClient })
 	cliDir := t.TempDir()
 

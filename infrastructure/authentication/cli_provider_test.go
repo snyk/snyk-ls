@@ -17,7 +17,6 @@
 package authentication
 
 import (
-	"context"
 	"os/exec"
 	"testing"
 
@@ -37,7 +36,7 @@ func assertCmd(t *testing.T, expectedArgs []string, actualCmd *exec.Cmd) {
 
 func TestAuth_authCmd(t *testing.T) {
 	c := testutil.UnitTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	provider := &CliAuthenticationProvider{c: c}
 
 	authCmd, err := provider.authCmd(ctx)
@@ -48,7 +47,7 @@ func TestAuth_authCmd(t *testing.T) {
 
 func TestConfig_configGetAPICmd(t *testing.T) {
 	c := testutil.UnitTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	provider := &CliAuthenticationProvider{c: c}
 
 	configGetAPICmd, err := provider.configGetAPICmd(ctx)
@@ -107,7 +106,7 @@ func TestSetAuthURLCmd(t *testing.T) {
 func TestBuildCLICmd(t *testing.T) {
 	t.Run("Insecure is respected", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		provider := &CliAuthenticationProvider{c: c}
 		config.CurrentConfig().SetCliSettings(&config.CliSettings{
 			Insecure: true,
@@ -121,7 +120,7 @@ func TestBuildCLICmd(t *testing.T) {
 
 	t.Run("Api endpoint is respected", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		provider := &CliAuthenticationProvider{c: c}
 		config.CurrentConfig().UpdateApiEndpoints("https://api.eu.snyk.io")
 

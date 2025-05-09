@@ -17,7 +17,6 @@
 package code
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -71,7 +70,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	files := map[types.FilePath]string{}
 	randomAddition := fmt.Sprintf("\n public void random() { System.out.println(\"%d\") }", time.Now().UnixMicro())
 	files[path1] = util.Hash([]byte(content + randomAddition))
-	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
+	bundleHash, missingFiles, _ := s.CreateBundle(t.Context(), files)
 	assert.NotNil(t, bundleHash)
 	assert.NotEqual(t, "", bundleHash)
 	assert.Equal(t, 1, len(missingFiles))
@@ -83,10 +82,10 @@ func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	var removedFiles []types.FilePath
 	files := map[types.FilePath]string{}
 	files[path1] = util.Hash([]byte(content))
-	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
+	bundleHash, _, _ := s.CreateBundle(t.Context(), files)
 	filesExtend := createTestExtendMap()
 
-	bundleHash, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
+	bundleHash, missingFiles, _ := s.ExtendBundle(t.Context(), bundleHash, filesExtend, removedFiles)
 
 	assert.Equal(t, 0, len(missingFiles))
 	assert.NotEmpty(t, bundleHash)
@@ -130,7 +129,7 @@ func TestSnykCodeBackendService_doCall_shouldRetry(t *testing.T) {
 		}
 	}
 	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
-	_, _, err := s.doCall(context.Background(), "GET", "https://httpstat.us/500", nil)
+	_, _, err := s.doCall(t.Context(), "GET", "https://httpstat.us/500", nil)
 	assert.Error(t, err)
 	assert.Equal(t, 3, d.calls)
 }
@@ -142,7 +141,7 @@ func TestSnykCodeBackendService_doCall_rejected(t *testing.T) {
 	}
 
 	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
-	_, _, err := s.doCall(context.Background(), "GET", "https://127.0.0.1", nil)
+	_, _, err := s.doCall(t.Context(), "GET", "https://127.0.0.1", nil)
 	assert.Error(t, err)
 }
 
@@ -161,9 +160,9 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(string(workDir), path2), bytes, 0660)
 	require.NoError(t, err)
-	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
+	bundleHash, _, _ := s.CreateBundle(t.Context(), files)
 	filesExtend := createTestExtendMap()
-	bundleHash, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
+	bundleHash, missingFiles, _ := s.ExtendBundle(t.Context(), bundleHash, filesExtend, removedFiles)
 	assert.Len(t, missingFiles, 0, "all files should be uploaded now")
 
 	assert.Eventually(t, func() bool {
@@ -175,7 +174,7 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 			limitToFiles: limitToFiles,
 			severity:     0,
 		}
-		issues, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions, workDir)
+		issues, callStatus, err := s.RunAnalysis(t.Context(), analysisOptions, workDir)
 		if err != nil {
 			return false
 		}
@@ -309,7 +308,8 @@ func TestAutofixRequestBody(t *testing.T) {
 	jsonBody, _ := s.autofixRequestBody(&options)
 
 	var body AutofixRequest
-	json.Unmarshal(jsonBody, &body)
+	err := json.Unmarshal(jsonBody, &body)
+	assert.NoError(t, err)
 
 	expectedBody := AutofixRequest{
 		Key: AutofixRequestKey{

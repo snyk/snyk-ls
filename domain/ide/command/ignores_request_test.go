@@ -1,7 +1,6 @@
 package command
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -67,7 +66,7 @@ func Test_submitIgnoreRequest_Execute(t *testing.T) {
 				c:             c,
 			}
 
-			_, err := cmd.Execute(context.Background())
+			_, err := cmd.Execute(t.Context())
 
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())

@@ -17,7 +17,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -91,8 +90,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 		},
 	}
 
-	_, _ = lspClient.Call(context.Background(), "initialize", clientParams)
-	_, _ = lspClient.Call(context.Background(), "initialized", nil)
+	_, _ = lspClient.Call(t.Context(), "initialize", clientParams)
+	_, _ = lspClient.Call(t.Context(), "initialized", nil)
 
 	// check if all scan params were sent
 	assert.Eventuallyf(t, func() bool {

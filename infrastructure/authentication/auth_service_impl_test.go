@@ -17,7 +17,6 @@
 package authentication
 
 import (
-	"context"
 	"encoding/json"
 	"sync"
 	"testing"
@@ -75,7 +74,7 @@ func runAuthEventTest(t *testing.T, c *config.Config, status analytics.Status) e
 	provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
 	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
-	_, err := service.Authenticate(context.Background())
+	_, err := service.Authenticate(t.Context())
 	return err
 }
 
@@ -92,7 +91,7 @@ func Test_AuthURL(t *testing.T) {
 	t.Cleanup(func() { impl.m.Unlock() })
 
 	// Call the AuthURL function
-	actualURL := service.AuthURL(context.Background())
+	actualURL := service.AuthURL(t.Context())
 
 	// Verify that the correct URL is returned from the provider
 	assert.Equal(t, expectedURL, actualURL)
@@ -173,7 +172,7 @@ func Test_Authenticate(t *testing.T) {
 		provider := FakeAuthenticationProvider{C: c}
 		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 
-		_, err := service.Authenticate(context.Background())
+		_, err := service.Authenticate(t.Context())
 		if err != nil {
 			return
 		}
@@ -214,7 +213,7 @@ func Test_Logout(t *testing.T) {
 	service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notifier)
 
 	// act
-	service.Logout(context.Background())
+	service.Logout(t.Context())
 	mu := sync.RWMutex{}
 	tokenResetReceived := false
 	callback := func(params any) {

@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -50,7 +49,7 @@ func Test_getLearnLesson_Execute(t *testing.T) {
 		GetLesson(eco, rule, []string{"CWE-89", "CWE-ZZ"}, []string{"CVE-2020-1234"}, types.DependencyVulnerability).
 		Return(expectedLesson, nil)
 
-	lesson, err := cut.Execute(context.Background())
+	lesson, err := cut.Execute(t.Context())
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedLesson, lesson)

@@ -17,7 +17,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -248,14 +247,14 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc, c)
 
 		// scan both created folders
-		_, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   "snyk.workspaceFolder.scan",
 			Arguments: []any{folderGoof.Path()},
 		})
 
 		require.NoError(t, err)
 
-		_, err = loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   "snyk.workspaceFolder.scan",
 			Arguments: []any{folderJuice.Path()},
 		})
@@ -335,7 +334,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		require.Empty(t, folderGoofIssueProvider.Issues())
 
 		// check hovers deleted
-		response, err := loc.Client.Call(context.Background(), "textDocument/hover", hover.Params{
+		response, err := loc.Client.Call(t.Context(), "textDocument/hover", hover.Params{
 			TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(types.FilePath(filepath.Join(string(folderGoof.Path()), ossFilePath)))},
 			// at that file position, there should be a hover normally
 			Position: sglsp.Position{Line: 27, Character: 20},
@@ -366,7 +365,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	}, maxIntegTestDuration, time.Millisecond)
 
 	// execute scan cli command
-	response, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+	response, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   types.ExecuteCLICommand,
 		Arguments: []any{string(folderGoof.Path()), "test", "--json"},
 	})
@@ -391,7 +390,7 @@ func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Con
 		Event: types.WorkspaceFoldersChangeEvent{Added: []types.WorkspaceFolder{juiceLspWorkspaceFolder}},
 	}
 
-	_, err = loc.Client.Call(context.Background(), "workspace/didChangeWorkspaceFolders", didChangeWorkspaceFoldersParams)
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", didChangeWorkspaceFoldersParams)
 	require.NoError(t, err)
 
 	folderJuice := c.Workspace().GetFolderContaining(cloneTargetDirJuice)
@@ -590,7 +589,7 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 			},
 			Range: issue.Range,
 		}
-		response, err := loc.Client.Call(context.Background(), "textDocument/codeAction", params)
+		response, err := loc.Client.Call(t.Context(), "textDocument/codeAction", params)
 		assert.NoError(t, err)
 		var actions []types.LSPCodeAction
 		err = response.UnmarshalResult(&actions)
@@ -642,7 +641,7 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCReco
 				URI: uri.PathToUri(issue.FilePath),
 			},
 		}
-		response, err := loc.Client.Call(context.Background(), "textDocument/codeLens", params)
+		response, err := loc.Client.Call(t.Context(), "textDocument/codeLens", params)
 		assert.NoError(t, err)
 		var lenses []sglsp.CodeLens
 		err = response.UnmarshalResult(&lenses)
@@ -744,7 +743,7 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIss
 			continue
 		}
 		waitForNetwork(c)
-		_, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.CodeFixDiffsCommand,
 			Arguments: []any{uri.PathToUri(folderPath), uri.PathToUri(issue.FilePath), issue.Id},
 		})
@@ -823,7 +822,7 @@ func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 		return
 	}
 	waitForNetwork(c)
-	call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+	call, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   types.GetFeatureFlagStatus,
 		Arguments: []any{"bitbucketConnectApp"},
 	})
@@ -874,7 +873,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 		},
 	}
 
-	_, _ = loc.Client.Call(ctx, "initialize", clientParams)
+	_, _ = loc.Client.Call(t.Context(), "initialize", clientParams)
 
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, "app.js"))
 
@@ -1045,12 +1044,12 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 		initParams.InitializationOptions.IntegrationVersion = commitHash
 	}
 
-	_, err := loc.Client.Call(ctx, "initialize", initParams)
+	_, err := loc.Client.Call(t.Context(), "initialize", initParams)
 	assert.NoError(t, err)
 
 	waitForNetwork(c)
 
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	assert.NoError(t, err)
 }
 
@@ -1080,7 +1079,7 @@ func textDocumentDidSave(t *testing.T, loc *server.Local, testPath types.FilePat
 		},
 	}
 
-	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
+	_, err := loc.Client.Call(t.Context(), "textDocument/didSave", didSaveParams)
 	if err != nil {
 		t.Fatal(err, "Call failed")
 	}

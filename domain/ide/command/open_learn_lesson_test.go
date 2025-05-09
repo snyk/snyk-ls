@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -57,7 +56,7 @@ func Test_openLearnLesson_Execute(t *testing.T) {
 		GetLesson(eco, rule, []string{"CWE-89", "CWE-ZZ"}, []string{"CVE-2020-1234"}, types.DependencyVulnerability).
 		Return(expectedLesson, nil)
 
-	_, err := cut.Execute(context.Background())
+	_, err := cut.Execute(t.Context())
 
 	assert.NoError(t, err)
 	assert.Eventuallyf(t, func() bool {

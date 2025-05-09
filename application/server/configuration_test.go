@@ -76,7 +76,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	t.Setenv("a", "")
 	t.Setenv("c", "")
 	params := types.DidChangeConfigurationParams{Settings: sampleSettings}
-	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
 	}
@@ -103,7 +103,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupCustomServer(t, c, callBackMock)
 
-	_, err := loc.Client.Call(ctx, "initialize", types.InitializeParams{
+	_, err := loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
 		Capabilities: types.ClientCapabilities{
 			Workspace: types.WorkspaceClientCapabilities{
 				Configuration: true,
@@ -115,7 +115,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	}
 
 	params := types.DidChangeConfigurationParams{Settings: types.Settings{}}
-	_, err = loc.Client.Call(context.Background(), "workspace/didChangeConfiguration", params)
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
 	}
@@ -149,7 +149,7 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 
 	params := types.DidChangeConfigurationParams{Settings: types.Settings{}}
 	var updated = true
-	err := loc.Client.CallResult(context.Background(), "workspace/didChangeConfiguration", params, &updated)
+	err := loc.Client.CallResult(t.Context(), "workspace/didChangeConfiguration", params, &updated)
 	if err != nil {
 		t.Fatal(err, "error calling server")
 	}
