@@ -29,13 +29,6 @@ type AnalysisOptions struct {
 	severity     int
 }
 
-type AutofixOptions struct {
-	bundleHash string
-	shardKey   string
-	filePath   types.FilePath
-	issue      types.Issue
-}
-
 type SnykCodeClient interface {
 	GetFilters(ctx context.Context) (
 		filters FiltersResponse,
@@ -57,10 +50,4 @@ type SnykCodeClient interface {
 		AnalysisStatus,
 		error,
 	)
-
-	SubmitAutofixFeedback(ctx context.Context, fixId string, result string) error
-
-	getAutofixResponse(ctx context.Context, options AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error)
-
-	GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error)
 }

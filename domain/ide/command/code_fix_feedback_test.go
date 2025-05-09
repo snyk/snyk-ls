@@ -18,10 +18,7 @@ package command
 
 import (
 	"context"
-	"errors"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -29,46 +26,14 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type fakeCodeHttpClient struct {
-	shouldError       bool
-	feedbackSubmitted string
-	fixId             string
-	mu                sync.Mutex
-}
-
-func (c *fakeCodeHttpClient) SubmitAutofixFeedback(ctx context.Context, fixId string, feedback string) error {
-	c.mu.Lock()
-	c.feedbackSubmitted = feedback
-	c.fixId = fixId
-	c.mu.Unlock()
-
-	if !c.shouldError {
-		return nil
-	}
-
-	return errors.New("api call failed")
-}
-
-func FeedbackSubmitted(c *fakeCodeHttpClient) string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	return c.feedbackSubmitted
-}
-
 func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
-	apiClient := fakeCodeHttpClient{}
 	codeFixFeedbackCmd := codeFixFeedback{
 		command: types.CommandData{
 			Arguments: []any{"fixId", code.FixPositiveFeedback},
 		},
-		codeHttpClient: &apiClient,
 	}
 
 	_, err := codeFixFeedbackCmd.Execute(context.Background())
 
 	assert.NoError(t, err)
-	assert.Eventually(t, func() bool {
-		return FeedbackSubmitted(&apiClient) != ""
-	}, 2*time.Second, time.Millisecond)
 }
