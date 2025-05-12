@@ -1024,12 +1024,10 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 }
 
 func Test_SmokeScanUnmanaged(t *testing.T) {
-	c := testutil.IntegTest(t)
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
+	c := testutil.SmokeTest(t, false)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykOssEnabled(true)
 	c.SetSnykIacEnabled(false)
-	c.EnableSnykCodeQuality(false)
 	cleanupChannels()
 	di.Init()
 
