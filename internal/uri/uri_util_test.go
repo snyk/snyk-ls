@@ -264,3 +264,32 @@ func getTestRange() Range {
 		EndChar:   10,
 	}
 }
+
+func TestIsReadableFile(t *testing.T) {
+	// Create a temp file with read permission
+	tmpFile, err := os.CreateTemp(t.TempDir(), "example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+	os.Chmod(tmpFile.Name(), 0400) // Owner read only
+
+	if !IsReadableFile(types.FilePath(tmpFile.Name())) {
+		t.Errorf("Expected true for readable file")
+	}
+
+	// Test for non-existent file
+	if IsReadableFile(types.FilePath("/non/existent/file")) {
+		t.Errorf("Expected false for non-existent file")
+	}
+
+	// Create a temporary directory
+	tmpDir := t.TempDir()
+	defer os.RemoveAll(tmpDir)
+
+	// IsReadableFile should return false for a directory
+	if IsReadableFile(types.FilePath(tmpDir)) {
+		t.Errorf("Expected false for directory, got true: %s", tmpDir)
+	}
+}

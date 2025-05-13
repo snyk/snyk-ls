@@ -136,6 +136,11 @@ func IsDirectory(path types.FilePath) bool {
 	return stat.IsDir()
 }
 
+func IsReadableFile(path types.FilePath) bool {
+	stat, err := os.Stat(string(path))
+	return err == nil && stat.Mode().IsRegular()
+}
+
 func IsDotSnykFile(uri sglsp.DocumentURI) bool {
 	return strings.HasSuffix(string(uri), ".snyk")
 }
