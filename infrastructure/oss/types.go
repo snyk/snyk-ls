@@ -42,8 +42,6 @@ type reference struct {
 	Url   types.Uri `json:"url"`
 }
 
-const packageManagerUnmanaged = "Unmanaged (C/C++)"
-
 type ossIssue struct {
 	Id                   string             `json:"id"`
 	Name                 string             `json:"name"`
