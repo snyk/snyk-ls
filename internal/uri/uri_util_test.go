@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * ©2022-2025 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,9 +58,7 @@ func TestPathToUri_UNC(t *testing.T) {
 
 func TestFolderContains(t *testing.T) {
 	t.Run("Windows paths", func(t *testing.T) {
-		// we cannot use the testutil function here, as it would cause a cyclical import
-		if //goland:noinspection GoBoolExpressions
-		runtime.GOOS != "windows" {
+		if runtime.GOOS != "windows" {
 			t.Skipf("Windows Paths")
 			return
 		}
@@ -77,12 +75,13 @@ func TestFolderContains(t *testing.T) {
 		assert.True(t, FolderContains("C:\\folder\\", "C:\\folder"))
 		assert.True(t, FolderContains("C:\\folder", "C:\\folder\\"))
 		assert.True(t, FolderContains("C:\\folder\\", "C:\\folder\\"))
+		assert.True(t, FolderContains("C:\\Folder\\", "C:\\folder\\file"))
+		assert.True(t, FolderContains("C:\\folder\\", "C:\\FOLDER\\file"))
+		assert.True(t, FolderContains("C:\\FOLDER\\", "C:\\folder\\SUBFOLDER\\file"))
 	})
 
 	t.Run("POSIX paths", func(t *testing.T) {
-		// we cannot use the testutil function here, as it would cause a cyclical import
-		if //goland:noinspection GoBoolExpressions
-		runtime.GOOS == "windows" {
+		if runtime.GOOS == "windows" {
 			t.Skipf("POSIX Paths")
 		}
 		assert.True(t, FolderContains("/folder/", "/folder/file"))
@@ -96,6 +95,29 @@ func TestFolderContains(t *testing.T) {
 		assert.True(t, FolderContains("/folder/", "/folder"))
 		assert.True(t, FolderContains("/folder", "/folder/"))
 		assert.True(t, FolderContains("/folder/", "/folder/"))
+	})
+
+	t.Run("Case sensitivity based on filesystem", func(t *testing.T) {
+		tempDir := t.TempDir()
+		folderPath := filepath.Join(tempDir, "TestFolder")
+		filePath := filepath.Join(tempDir, "testfolder", "file.txt")
+		err := os.MkdirAll(filepath.Dir(filePath), 0755)
+		if err != nil {
+			t.Skip("Could not create test directories")
+			return
+		}
+		f, err := os.Create(filePath)
+		if err != nil {
+			t.Skip("Could not create test file")
+			return
+		}
+		f.Close()
+		isInsensitive := isCaseInsensitivePath(tempDir)
+		if isInsensitive {
+			assert.True(t, FolderContains(types.FilePath(folderPath), types.FilePath(filePath)), "Case-insensitive filesystem should match paths with different cases")
+		} else {
+			assert.False(t, FolderContains(types.FilePath(folderPath), types.FilePath(filePath)), "Case-sensitive filesystem should not match paths with different cases")
+		}
 	})
 }
 
@@ -194,12 +216,25 @@ func TestUri_IsDotSnykFile(t *testing.T) {
 	}
 }
 
+func TestIsCaseInsensitivePath(t *testing.T) {
+	tempDir := t.TempDir()
+	result := isCaseInsensitivePath(tempDir)
+	if runtime.GOOS == "windows" {
+		assert.True(t, result, "Windows filesystems should always be detected as case-insensitive")
+	} else if runtime.GOOS == "darwin" {
+		t.Log("macOS filesystem detected as case-", map[bool]string{true: "insensitive", false: "sensitive"}[result])
+	} else {
+		assert.False(t, result, "Linux and other Unix filesystems should typically be case-sensitive")
+	}
+	nonExistentPath := filepath.Join(tempDir, "non_existent_dir")
+	_ = isCaseInsensitivePath(nonExistentPath) // Just ensure no panic
+}
+
 func getTestRange() Range {
-	r := Range{
+	return Range{
 		StartLine: 0,
 		StartChar: 5,
 		EndLine:   1,
 		EndChar:   10,
 	}
-	return r
 }
