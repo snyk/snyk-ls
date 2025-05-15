@@ -26,7 +26,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"go.lsp.dev/uri"
@@ -185,14 +184,7 @@ func isCaseInsensitivePath(path string) bool {
 	}
 	caseSensitivityCacheMux.RUnlock()
 
-	// For macOS, try to detect if the filesystem is case-sensitive
-	var isInsensitive bool
-	if runtime.GOOS == "darwin" {
-		isInsensitive = checkMacOSCaseSensitivity(root)
-	} else {
-		// Default for Linux and other systems: case-sensitive
-		isInsensitive = false
-	}
+	isInsensitive := isCaseInsensitive(root)
 
 	// Store result in cache
 	caseSensitivityCacheMux.Lock()
@@ -200,52 +192,6 @@ func isCaseInsensitivePath(path string) bool {
 	caseSensitivityCacheMux.Unlock()
 
 	return isInsensitive
-}
-
-// checkMacOSCaseSensitivity determines if a macOS filesystem at the given path is case-insensitive
-// returns true if case-insensitive, false if case-sensitive
-func checkMacOSCaseSensitivity(dirPath string) bool {
-	// Create two temporary files with different case
-	tempFile1 := filepath.Join(dirPath, ".snyk-case-test")
-	tempFile2 := filepath.Join(dirPath, ".SNYK-CASE-TEST")
-
-	// Clean up when done
-	defer os.Remove(tempFile1)
-	defer os.Remove(tempFile2)
-
-	// Create the first file
-	f, err := osCreate(tempFile1)
-	if err != nil {
-		// If we can't create a file, default to the safe option on macOS (case-sensitive)
-		return false
-	}
-	_ = f.Close()
-
-	// Try to create the second file with different case
-	_, err = osCreate(tempFile2)
-	if err != nil {
-		// If we can't create the second file, filesystem is case-insensitive
-		return true
-	}
-
-	// Check if the files have the same inode on macOS, which means they're the same file
-	// This is a reliable way to check case sensitivity on macOS
-	info1, err1 := os.Stat(tempFile1)
-	info2, err2 := os.Stat(tempFile2)
-
-	if err1 == nil && err2 == nil {
-		stat1, ok1 := info1.Sys().(*syscall.Stat_t)
-		stat2, ok2 := info2.Sys().(*syscall.Stat_t)
-
-		// Only compare inodes if both type assertions succeeded
-		if ok1 && ok2 {
-			// If they have the same inode, filesystem is case-insensitive
-			return stat1.Ino == stat2.Ino
-		}
-	}
-
-	// Default to true for macOS (most macOS partitions are case-insensitive)
-	return true
 }
 
 // Range gives a position in a document. All attributes are 0-based
