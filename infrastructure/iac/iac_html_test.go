@@ -8,6 +8,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -90,4 +91,32 @@ func createIacIssueSample() snyk.Issue {
 			References:    []string{"https://kubernetes.io/docs/reference/access-authn-authz/rbac/", "https://kubernetes.io/docs/reference/access-authn-authz/rbac/#role-and-clusterrole"},
 		},
 	}
+}
+
+func TestHtmlRenderer_GetDetailsHtml_PathEncoded(t *testing.T) {
+	testutil.UnitTest(t)
+	c := config.New()
+
+	renderer, err := NewHtmlRenderer(c)
+	assert.NoError(t, err)
+
+	// Craft a malicious path
+	maliciousPath := []string{"<script nonce=\"${nonce${headerEnd}}\">alert(1)</script>"}
+
+	// Create a mock issue with the malicious path
+	issue := snyk.Issue{
+		AdditionalData: snyk.IaCIssueData{
+			Path: maliciousPath,
+		},
+	}
+
+	// Get the HTML details
+	htmlDetails := renderer.GetDetailsHtml(&issue)
+
+	// Assert that the malicious script is HTML encoded in the ResourcePath
+	expectedEncodedPath := "&amp;lt;script nonce=&amp;#34;${nonce${headerEnd}}&amp;#34;&amp;gt;alert(1)&amp;lt;/script&amp;gt;"
+	assert.Contains(t, htmlDetails, expectedEncodedPath, "ResourcePath should be HTML encoded")
+
+	// Additionally, you might want to assert that the script is NOT present in its raw form
+	assert.NotContains(t, htmlDetails, maliciousPath[0], "Raw script should not be present in ResourcePath")
 }
