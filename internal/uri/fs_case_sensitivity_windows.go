@@ -18,8 +18,7 @@
 
 package uri
 
-// macOSIsCaseInsensitive determines if a macOS filesystem at the given path is case-insensitive
-// for non da
+// isCaseInsensitive determines if a Windows filesystem at the given path is case-insensitive
 func isCaseInsensitive(dirPath string) bool {
 	return true
 }
