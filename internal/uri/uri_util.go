@@ -46,6 +46,9 @@ var (
 	caseSensitivityCacheMux sync.RWMutex
 )
 
+// For testing - allows us to mock os.Create
+var osCreate = os.Create
+
 func FolderContains(folderPath types.FilePath, path types.FilePath) bool {
 	filePathSeparator := string(filepath.Separator)
 	cleanPath := filepath.Clean(string(path))
@@ -64,7 +67,6 @@ func FolderContains(folderPath types.FilePath, path types.FilePath) bool {
 		strings.HasPrefix(cleanPath+filePathSeparator, cleanFolderPath)
 }
 
-// todo can we create a path domain type?
 // PathFromUri converts the given uri to a file path
 func PathFromUri(documentURI sglsp.DocumentURI) types.FilePath {
 	u := string(documentURI)
@@ -201,6 +203,7 @@ func isCaseInsensitivePath(path string) bool {
 }
 
 // checkMacOSCaseSensitivity determines if a macOS filesystem at the given path is case-insensitive
+// returns true if case-insensitive, false if case-sensitive
 func checkMacOSCaseSensitivity(dirPath string) bool {
 	// Create two temporary files with different case
 	tempFile1 := filepath.Join(dirPath, ".snyk-case-test")
@@ -211,15 +214,15 @@ func checkMacOSCaseSensitivity(dirPath string) bool {
 	defer os.Remove(tempFile2)
 
 	// Create the first file
-	f, err := os.Create(tempFile1)
+	f, err := osCreate(tempFile1)
 	if err != nil {
-		// If we can't create a file, default to the safe option (case-insensitive)
-		return true
+		// If we can't create a file, default to the safe option on macOS (case-sensitive)
+		return false
 	}
-	f.Close()
+	_ = f.Close()
 
 	// Try to create the second file with different case
-	_, err = os.Create(tempFile2)
+	_, err = osCreate(tempFile2)
 	if err != nil {
 		// If we can't create the second file, filesystem is case-insensitive
 		return true

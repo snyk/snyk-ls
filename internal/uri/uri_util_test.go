@@ -17,6 +17,7 @@
 package uri
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -228,6 +229,31 @@ func TestIsCaseInsensitivePath(t *testing.T) {
 	}
 	nonExistentPath := filepath.Join(tempDir, "non_existent_dir")
 	_ = isCaseInsensitivePath(nonExistentPath) // Just ensure no panic
+}
+
+func TestMacOSFileCreationFailure(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Test only applicable on macOS")
+		return
+	}
+
+	// Save original os.Create function to restore later
+	originalOsCreate := osCreate
+	t.Cleanup(func() {
+		// Restore the original os.Create function after the test completes
+		osCreate = originalOsCreate
+	})
+
+	// Replace os.Create with a function that always returns an error
+	osCreate = func(name string) (*os.File, error) {
+		return nil, errors.New("mocked file creation error")
+	}
+
+	// Run the test with the mocked function
+	tempDir := t.TempDir()
+	result := isCaseInsensitivePath(tempDir)
+
+	assert.False(t, result, "When file creation fails on macOS, the system should default to case-sensitive")
 }
 
 func getTestRange() Range {
