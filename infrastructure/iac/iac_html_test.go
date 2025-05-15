@@ -35,8 +35,8 @@ func Test_IaC_Html_getIacHtml(t *testing.T) {
 		assert.Contains(t, iacPanelHtml, `/Users/cata/git/playground/dex/examples/k8s/dex.yaml`, "HTML should contain file path for the ignore functionality")
 	}
 
-	// ResourcePath is correctly formatted
-	assert.Contains(t, iacPanelHtml, "[DocId: 5] > rules[0] > verbs", "HTML should contain the path to the affected file")
+	// ResourcePath is correctly HTML encoded
+	assert.Contains(t, iacPanelHtml, "[DocId: 5] &amp;gt; rules[0] &amp;gt; verbs", "HTML should contain the path to the affected file")
 
 	// Issue ID is present and linked correctly
 	assert.Contains(t, iacPanelHtml, `href="https://security.snyk.io/rules/cloud/SNYK-CC-K8S-44">SNYK-CC-K8S-44</a>`, "HTML should contain a link to the issue documentation")
