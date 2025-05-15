@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * ©2022-2025 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"go.lsp.dev/uri"
@@ -38,6 +39,15 @@ const eclipseWorkspaceFolderScheme = "file:"
 
 var rangeFragmentRegexp = regexp.MustCompile(`^(.+)://((.*)@)?(.+?)(:(\d*))?/?((.*)\?)?((.*)#)L?(\d+)(?:,(\d+))?(-L?(\d+)(?:,(\d+))?)?`)
 
+// Cache for storing case sensitivity results by path
+var (
+	caseSensitivityCache    = make(map[string]bool)
+	caseSensitivityCacheMux sync.RWMutex
+)
+
+// For testing - allows us to mock os.Create
+var osCreate = os.Create
+
 func FolderContains(folderPath types.FilePath, path types.FilePath) bool {
 	filePathSeparator := string(filepath.Separator)
 	cleanPath := filepath.Clean(string(path))
@@ -45,11 +55,17 @@ func FolderContains(folderPath types.FilePath, path types.FilePath) bool {
 	if !strings.HasSuffix(cleanFolderPath, filePathSeparator) {
 		cleanFolderPath += filePathSeparator
 	}
+
+	// Check if the path is on a case-insensitive filesystem
+	if isCaseInsensitivePath(cleanPath) {
+		cleanPath = strings.ToLower(cleanPath)
+		cleanFolderPath = strings.ToLower(cleanFolderPath)
+	}
+
 	return strings.HasPrefix(cleanPath, cleanFolderPath) ||
 		strings.HasPrefix(cleanPath+filePathSeparator, cleanFolderPath)
 }
 
-// todo can we create a path domain type?
 // PathFromUri converts the given uri to a file path
 func PathFromUri(documentURI sglsp.DocumentURI) types.FilePath {
 	u := string(documentURI)
@@ -122,6 +138,60 @@ func IsDirectory(path types.FilePath) bool {
 
 func IsDotSnykFile(uri sglsp.DocumentURI) bool {
 	return strings.HasSuffix(string(uri), ".snyk")
+}
+
+// isCaseInsensitivePath checks if a path is on a case-insensitive filesystem
+func isCaseInsensitivePath(path string) bool {
+	// Windows is always case-insensitive
+	if runtime.GOOS == "windows" {
+		return true
+	}
+
+	// Normalize the path to a directory
+	dirPath := path
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		dirPath = filepath.Dir(path)
+	}
+
+	// If the path doesn't exist, use the current directory
+	if _, err := os.Stat(dirPath); err != nil {
+		dirPath = "."
+	}
+
+	// Convert to absolute path for better caching
+	absPath, err := filepath.Abs(dirPath)
+	if err != nil {
+		absPath = dirPath
+	}
+
+	// Get the filesystem root for this path
+	// This is important because different mounts can have different case sensitivity settings
+	root := filepath.VolumeName(absPath)
+	if root == "" {
+		// For POSIX systems, use the first directory component
+		parts := strings.Split(absPath, string(filepath.Separator))
+		root = string(filepath.Separator)
+		if len(parts) > 1 && parts[1] != "" {
+			root = filepath.Join(root, parts[1])
+		}
+	}
+
+	// Check cache first
+	caseSensitivityCacheMux.RLock()
+	if result, exists := caseSensitivityCache[root]; exists {
+		caseSensitivityCacheMux.RUnlock()
+		return result
+	}
+	caseSensitivityCacheMux.RUnlock()
+
+	isInsensitive := isCaseInsensitive(root)
+
+	// Store result in cache
+	caseSensitivityCacheMux.Lock()
+	caseSensitivityCache[root] = isInsensitive
+	caseSensitivityCacheMux.Unlock()
+
+	return isInsensitive
 }
 
 // Range gives a position in a document. All attributes are 0-based
