@@ -71,26 +71,26 @@ type ossIssue struct {
 	SeverityWithCritical string             `json:"severityWithCritical,omitempty"`
 	AppliedPolicyRules   AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
 	IsIgnored            bool               `json:"isIgnored,omitempty"`
-	Ignores              []projectIgnore    `json:"ignores,omitempty"`
+	Ignores              []ProjectIgnore    `json:"ignores,omitempty"`
 }
 
-type projectIgnoredBy struct {
-	Id            string      `json:"id,omitempty"`
-	Name          string      `json:"name,omitempty"`
-	Email         interface{} `json:"email,omitempty"`
-	IsGroupPolicy bool        `json:"isGroupPolicy,omitempty"`
+type ProjectIgnoredBy struct {
+	Id            string `json:"id,omitempty"`
+	Name          string `json:"name,omitempty"`
+	Email         string `json:"email,omitempty"`
+	IsGroupPolicy bool   `json:"isGroupPolicy,omitempty"`
 }
 
-type projectIgnorePath struct {
+type ProjectIgnorePath struct {
 	Module string `json:"module,omitempty"`
 }
 
-type projectIgnore struct {
-	Path               []projectIgnorePath `json:"path,omitempty"`
+type ProjectIgnore struct {
+	Path               []ProjectIgnorePath `json:"path,omitempty"`
 	Reason             string              `json:"reason,omitempty"`
 	ReasonType         string              `json:"reasonType,omitempty"`
 	Source             string              `json:"source,omitempty"`
-	IgnoredBy          projectIgnoredBy    `json:"ignoredBy,omitempty"`
+	IgnoredBy          ProjectIgnoredBy    `json:"ignoredBy,omitempty"`
 	DisregardIfFixable bool                `json:"disregardIfFixable,omitempty"`
 	Created            string              `json:"created,omitempty"`
 }
