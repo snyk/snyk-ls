@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * 2024 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -165,4 +173,95 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			assert.Equal(t, expected, actual)
 		})
 	}
+}
+
+func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
+	// Create a mock config
+	c := testutil.UnitTest(t)
+
+	// Setup test CLI executor
+	cliExecutor := cli.NewTestExecutorWithResponse("{}")
+
+	// Setup the scanner with necessary dependencies
+	instrumentor := performance.NewInstrumentor()
+	errorReporter := error_reporting.NewTestErrorReporter()
+	learnMock := mock_learn.NewMockService(gomock.NewController(t))
+	notifier := notification.NewMockNotifier()
+
+	cliScanner := &CLIScanner{
+		config:            c,
+		cli:               cliExecutor,
+		instrumentor:      instrumentor,
+		errorReporter:     errorReporter,
+		learnService:      learnMock,
+		notifier:          notifier,
+		mutex:             &sync.RWMutex{},
+		inlineValueMutex:  &sync.RWMutex{},
+		packageScanMutex:  &sync.Mutex{},
+		runningScans:      make(map[types.FilePath]*scans.ScanProgress),
+		supportedFiles:    make(map[string]bool),
+		packageIssueCache: make(map[string][]types.Issue),
+	}
+
+	// Test case 1: Command contains --all-projects, should remove it initially
+	t.Run("removes --all-projects from command", func(t *testing.T) {
+		// Setup command with --all-projects
+		initialArgs := []string{"--all-projects"}
+		parameterBlacklist := map[string]bool{}
+		path := types.FilePath("/path/to/project")
+
+		// Call the method under test
+		result := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+
+		// Verify that --all-projects was initially removed (it may be added back later in the method)
+		// Count occurrences of --all-projects in the command
+		allProjectsCount := 0
+		for _, arg := range result {
+			if arg == "--all-projects" {
+				allProjectsCount++
+			}
+		}
+
+		// Should be added exactly once at the end (after being removed initially)
+		assert.Equal(t, 1, allProjectsCount, "--all-projects should be present exactly once in the final command")
+
+		// The last item should be --all-projects (since it's added at the end if allowed)
+		assert.Equal(t, "--all-projects", result[len(result)-1], "--all-projects should be the last parameter")
+	})
+
+	// Test case 2: Command with both --all-projects and a conflicting parameter
+	t.Run("handles conflicting parameters with --all-projects", func(t *testing.T) {
+		// Create a new config with conflicting parameters
+		configWithConflicts := testutil.UnitTest(t)
+
+		// Set conflicting parameters directly in the CLI settings
+		clisettings := configWithConflicts.CliSettings()
+		clisettings.AdditionalOssParameters = []string{"--file=package.json"}
+
+		// Update the scanner to use our new config
+		originalConfig := cliScanner.config
+		cliScanner.config = configWithConflicts
+
+		// Setup command with --all-projects
+		initialArgs := []string{"--all-projects"}
+		parameterBlacklist := map[string]bool{}
+		path := types.FilePath("/path/to/project")
+
+		// Call the method under test
+		result := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+
+		// Verify that --all-projects was removed and not added back due to conflict
+		containsAllProjects := false
+		for _, arg := range result {
+			if arg == "--all-projects" {
+				containsAllProjects = true
+				break
+			}
+		}
+		assert.False(t, containsAllProjects, "--all-projects should not be present when there are conflicting parameters")
+		assert.Contains(t, result, "--file=package.json", "The conflicting parameter should be present")
+
+		// Restore the original config to avoid affecting other tests
+		cliScanner.config = originalConfig
+	})
 }
