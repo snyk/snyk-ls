@@ -1,5 +1,5 @@
 /*
- * © 2022-2023 Snyk Limited
+ * 2022-2023 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -132,6 +132,10 @@ func convertScanResultToIssues(c *config.Config, res *scanResult, workDir types.
 	duplicateCheckMap := map[string]bool{}
 
 	for _, issue := range res.Vulnerabilities {
+		if issue.IsIgnored {
+			c.Logger().Debug().Msgf("skipping ignored issue %s", issue.Id)
+			continue
+		}
 		packageKey := issue.PackageName + "@" + issue.Version
 		duplicateKey := string(targetFilePath) + "|" + issue.Id + "|" + issue.PackageName
 		if duplicateCheckMap[duplicateKey] {
