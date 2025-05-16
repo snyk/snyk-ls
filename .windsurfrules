@@ -16,3 +16,4 @@ never force push
 never push without asking
 never commit the hashicorp gomod
 regularly fetch main branch and offer to merge it into git_current_branch
+don't touch the copyright header
