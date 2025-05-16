@@ -290,7 +290,7 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 				PackageName: "package2",
 				Version:     "2.0.0",
 				IsIgnored:   true,
-				Ignores: []projectIgnore{
+				Ignores: []ProjectIgnore{
 					{
 						Reason: "Test reason for ignoring",
 					},
