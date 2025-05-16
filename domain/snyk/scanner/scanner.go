@@ -140,9 +140,8 @@ func (sc *DelegatingConcurrentScanner) ClearIssues(path types.FilePath) {
 	}
 
 	for _, productScanner := range sc.scanners {
-		// inline values should be cleared, when issues of a file are cleared
-		// this *may* already already happen in the previous ClearIssues call, but
-		// a scanner can be an InlineValueProvider, without having its own cache (e.g. oss.Scanner)
+		// inline values should be cleared, when issues of a file are cleared this *may* already happen in the previous
+		// ClearIssues call, but a scanner can be an InlineValueProvider, without having its own cache (e.g. oss.Scanner)
 		if scanner, ok := productScanner.(snyk.InlineValueProvider); ok {
 			scanner.ClearInlineValues(path)
 		}
