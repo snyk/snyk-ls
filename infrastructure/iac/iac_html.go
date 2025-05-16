@@ -19,6 +19,7 @@ package iac
 import (
 	"bytes"
 	_ "embed"
+	gohtml "html"
 	"html/template"
 	"strings"
 
@@ -41,7 +42,7 @@ type TemplateData struct {
 	SeverityIcon template.HTML
 	Description  template.HTML
 	Remediation  template.HTML
-	ResourcePath template.HTML
+	ResourcePath string
 	FilePath     template.HTML
 	Nonce        template.HTML
 }
@@ -112,6 +113,6 @@ func (service *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	return htmlTemplate.String()
 }
 
-func formatPath(path []string) template.HTML {
-	return template.HTML(strings.Join(path, " > "))
+func formatPath(path []string) string {
+	return gohtml.EscapeString(strings.Join(path, " > ")) // Strict HTML encoding, prevents XSS attacks
 }
