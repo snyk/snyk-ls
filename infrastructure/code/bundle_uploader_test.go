@@ -18,7 +18,6 @@ package code
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -44,7 +43,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		bundleFileMap[filePath] = bundleFile
 
 		testTracker := progress.NewTestTracker(make(chan types.ProgressParams, 100000), make(chan bool, 1))
-		_, err := bundleUploader.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: []types.FilePath{filePath}, logger: c.Logger(), Files: bundleFileMap}, testTracker)
+		_, err := bundleUploader.Upload(t.Context(), Bundle{SnykCode: snykCodeService, missingFiles: []types.FilePath{filePath}, logger: c.Logger(), Files: bundleFileMap}, testTracker)
 
 		assert.Equal(t, 1, snykCodeService.TotalBundleCount)
 		assert.NoError(t, err)
@@ -73,7 +72,7 @@ func Test_Bundler_Upload(t *testing.T) {
 		missingFiles = append(missingFiles, path)
 
 		testTracker := progress.NewTestTracker(make(chan types.ProgressParams, 100000), make(chan bool, 1))
-		_, err := bundler.Upload(context.Background(), Bundle{SnykCode: snykCodeService, missingFiles: missingFiles, logger: c.Logger(), Files: bundleFileMap}, testTracker)
+		_, err := bundler.Upload(t.Context(), Bundle{SnykCode: snykCodeService, missingFiles: missingFiles, logger: c.Logger(), Files: bundleFileMap}, testTracker)
 
 		assert.True(t, snykCodeService.HasExtendedBundle)
 		assert.Equal(t, 2, snykCodeService.TotalBundleCount)
@@ -96,20 +95,20 @@ func Test_IsSupportedLanguage(t *testing.T) {
 
 	t.Run("should return true for supported languages", func(t *testing.T) {
 		path := "C:\\some\\path\\Test.java"
-		supported, _ := bundler.isSupported(context.Background(), path)
+		supported, _ := bundler.isSupported(t.Context(), path)
 		assert.True(t, supported)
 	})
 
 	t.Run("should return false for unsupported languages", func(t *testing.T) {
 		path := unsupportedFile
-		supported, _ := bundler.isSupported(context.Background(), path)
+		supported, _ := bundler.isSupported(t.Context(), path)
 		assert.False(t, supported)
 	})
 
 	t.Run("should cache supported extensions", func(t *testing.T) {
 		path := unsupportedFile
-		_, _ = bundler.isSupported(context.Background(), path)
-		_, _ = bundler.isSupported(context.Background(), path)
+		_, _ = bundler.isSupported(t.Context(), path)
+		_, _ = bundler.isSupported(t.Context(), path)
 		assert.Len(t, snykCodeMock.Calls, 1)
 	})
 }
@@ -135,27 +134,27 @@ func Test_IsSupported_ConfigFile(t *testing.T) {
 	t.Run("should return true for supported config files", func(t *testing.T) {
 		for _, file := range expectedConfigFiles {
 			path := filepath.Join(dir, file)
-			supported, _ := bundler.isSupported(context.Background(), path)
+			supported, _ := bundler.isSupported(t.Context(), path)
 			assert.True(t, supported)
 		}
 	})
 	t.Run("should exclude .gitignore and .dcignore", func(t *testing.T) {
 		for _, file := range []string{".gitignore", ".dcignore"} {
 			path := filepath.Join(dir, file)
-			supported, _ := bundler.isSupported(context.Background(), path)
+			supported, _ := bundler.isSupported(t.Context(), path)
 			assert.False(t, supported)
 		}
 	})
 	t.Run("should return false for unsupported config files", func(t *testing.T) {
 		path := "C:\\some\\path\\.unsupported"
-		supported, _ := bundler.isSupported(context.Background(), path)
+		supported, _ := bundler.isSupported(t.Context(), path)
 		assert.False(t, supported)
 	})
 
 	t.Run("should cache supported extensions", func(t *testing.T) {
 		path := "C:\\some\\path\\Test.rs"
-		_, _ = bundler.isSupported(context.Background(), path)
-		_, _ = bundler.isSupported(context.Background(), path)
+		_, _ = bundler.isSupported(t.Context(), path)
+		_, _ = bundler.isSupported(t.Context(), path)
 		assert.Len(t, snykCodeMock.Calls, 1)
 	})
 }

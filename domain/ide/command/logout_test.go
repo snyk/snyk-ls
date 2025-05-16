@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 
@@ -71,7 +70,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	c.SetWorkspace(w)
 	w.AddFolder(folder)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	path := types.FilePath(filepath.Join(string(folder.Path()), "path1"))
 	sc.AddTestIssue(&snyk.Issue{ID: "issue-1", AffectedFilePath: path})
 

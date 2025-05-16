@@ -17,7 +17,6 @@
 package performance
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -27,7 +26,7 @@ import (
 func TestGetContextWithTraceId(t *testing.T) {
 	t.Run("sets trace_id", func(t *testing.T) {
 		// prepare
-		ctx := context.Background()
+		ctx := t.Context()
 		u := uuid.New().String()
 
 		// act

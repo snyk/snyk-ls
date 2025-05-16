@@ -17,7 +17,6 @@
 package scanner
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -49,7 +48,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
 	scanner, _ := setupScanner(enabledScanner, disabledScanner)
 
-	scanner.Scan(context.Background(), "", types.NoopResultProcessor, "")
+	scanner.Scan(t.Context(), "", types.NoopResultProcessor, "")
 
 	assert.Eventually(
 		t,
@@ -87,7 +86,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	emptyToken := !config.CurrentConfig().NonEmptyToken()
 
 	// Act
-	scanner.Scan(context.Background(), "", types.NoopResultProcessor, "")
+	scanner.Scan(t.Context(), "", types.NoopResultProcessor, "")
 
 	// Assert
 	assert.True(t, emptyToken)
@@ -104,7 +103,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 
 	// Act
 	go func() {
-		scanner.Scan(context.Background(), "", types.NoopResultProcessor, "")
+		scanner.Scan(t.Context(), "", types.NoopResultProcessor, "")
 		done <- true
 	}()
 	time.Sleep(500 * time.Millisecond) // Wait for the product scanner to start running
@@ -124,7 +123,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	sc, scanNotifier := setupScanner(enabledScanner)
 	mockScanNotifier := scanNotifier.(*MockScanNotifier)
 
-	sc.Scan(context.Background(), "", types.NoopResultProcessor, "")
+	sc.Scan(t.Context(), "", types.NoopResultProcessor, "")
 
 	assert.NotEmpty(t, mockScanNotifier.InProgressCalls())
 }
@@ -153,6 +152,6 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
 
 	// trigger execute
-	err := delegatingScanner.executePreScanCommand(context.Background(), c, p, folderConfig, workDir, false)
+	err := delegatingScanner.executePreScanCommand(t.Context(), c, p, folderConfig, workDir, false)
 	require.NoError(t, err)
 }

@@ -17,7 +17,6 @@
 package oss_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,7 +45,7 @@ func Test_Scan(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 	c := config.CurrentConfig()
 	c.SetFormat(config.FormatHtml)
-	ctx := context.Background()
+	ctx := t.Context()
 	di.Init()
 	c.SetAuthenticationMethod(types.TokenAuthentication)
 	authenticationService := di.AuthenticationService()
