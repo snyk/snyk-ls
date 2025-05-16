@@ -278,17 +278,18 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		cliScanner.config.CliSettings().Path(),
 		"test",
 	})
+
 	args = cliScanner.updateArgs(path, args, folderConfig)
-	cmd = append(cmd, args...)
-	cmd = append(cmd, "--json")
+	args = append(args, cliScanner.config.CliSettings().AdditionalOssParameters...)
+	args = append(args, "--json")
 
-	additionalParams := cliScanner.config.CliSettings().AdditionalOssParameters
-
-	// delete --all-projects (we'll add it back, if it's ok to be added)
-	cmd = slices.DeleteFunc(cmd, func(s string) bool { return s == allProjectsParam })
 	// now add all additional parameters, skipping blacklisted ones
-	for _, parameter := range additionalParams {
+	for _, parameter := range args {
 		if storedConfig.SliceContainsParam(cmd, parameter) {
+			continue
+		}
+
+		if parameter == allProjectsParam {
 			continue
 		}
 
@@ -310,8 +311,8 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	// only append --all-projects, if it's not on the global blacklist
 	// and if there is no other parameter interfering (e.g. --file)
 	containsAllProjects := slices.Contains(cmd, allProjectsParam)
-	allProjectsParamAllowed = allProjectsParamAllowed && !containsAllProjects
-	if allProjectsParamAllowed && !parameterBlacklist[allProjectsParam] {
+	allProjectsParamAllowed = allProjectsParamAllowed && !containsAllProjects && !parameterBlacklist[allProjectsParam]
+	if allProjectsParamAllowed {
 		cmd = append(cmd, allProjectsParam)
 	}
 
