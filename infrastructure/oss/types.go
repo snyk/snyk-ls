@@ -92,7 +92,7 @@ type projectIgnore struct {
 	Source             string              `json:"source,omitempty"`
 	IgnoredBy          projectIgnoredBy    `json:"ignoredBy,omitempty"`
 	DisregardIfFixable bool                `json:"disregardIfFixable,omitempty"`
-	Created            time.Time           `json:"created,omitempty"`
+	Created            string              `json:"created,omitempty"`
 }
 
 type SeverityChange struct {
