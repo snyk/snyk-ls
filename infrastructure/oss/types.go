@@ -70,6 +70,29 @@ type ossIssue struct {
 	OriginalSeverity     string             `json:"originalSeverity,omitempty"`
 	SeverityWithCritical string             `json:"severityWithCritical,omitempty"`
 	AppliedPolicyRules   AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
+	IsIgnored            bool               `json:"isIgnored,omitempty"`
+	Ignores              []projectIgnore    `json:"ignores,omitempty"`
+}
+
+type projectIgnoredBy struct {
+	Id            string      `json:"id,omitempty"`
+	Name          string      `json:"name,omitempty"`
+	Email         interface{} `json:"email,omitempty"`
+	IsGroupPolicy bool        `json:"isGroupPolicy,omitempty"`
+}
+
+type projectIgnorePath struct {
+	Module string `json:"module,omitempty"`
+}
+
+type projectIgnore struct {
+	Path               []projectIgnorePath `json:"path,omitempty"`
+	Reason             string              `json:"reason,omitempty"`
+	ReasonType         string              `json:"reasonType,omitempty"`
+	Source             string              `json:"source,omitempty"`
+	IgnoredBy          projectIgnoredBy    `json:"ignoredBy,omitempty"`
+	DisregardIfFixable bool                `json:"disregardIfFixable,omitempty"`
+	Created            time.Time           `json:"created,omitempty"`
 }
 
 type SeverityChange struct {
