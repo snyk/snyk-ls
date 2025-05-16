@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -264,4 +265,74 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		// Restore the original config to avoid affecting other tests
 		cliScanner.config = originalConfig
 	})
+}
+
+func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
+	// Create a mock config
+	c := testutil.UnitTest(t)
+
+	// Create a mock scan result with both ignored and non-ignored issues
+	scanResult := &scanResult{
+		ProjectName: "test-project",
+		Vulnerabilities: []ossIssue{
+			{
+				Id:          "SNYK-1",
+				Name:        "Regular Issue",
+				Title:       "Regular Vulnerability",
+				PackageName: "package1",
+				Version:     "1.0.0",
+				IsIgnored:   false,
+			},
+			{
+				Id:          "SNYK-2",
+				Name:        "Ignored Issue",
+				Title:       "Ignored Vulnerability",
+				PackageName: "package2",
+				Version:     "2.0.0",
+				IsIgnored:   true,
+				Ignores: []projectIgnore{
+					{
+						Reason: "Test reason for ignoring",
+					},
+				},
+			},
+		},
+	}
+
+	// Mock dependencies
+	workDir := types.FilePath("/test/workdir")
+	targetFilePath := types.FilePath("/test/workdir/package.json")
+	fileContent := []byte("test file content")
+
+	// Create mock learn service and error reporter
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	learnService := mock_learn.NewMockService(ctrl)
+	errorReporter := error_reporting.NewTestErrorReporter()
+
+	// Empty package issue cache
+	packageIssueCache := make(map[string][]types.Issue)
+
+	// Convert scan results to issues
+	issues := convertScanResultToIssues(c, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache)
+
+	// Verify that only non-ignored issues are included in the result
+	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")
+
+	// Get the issue and verify it's the non-ignored one
+	issue, ok := issues[0].(*snyk.Issue)
+	require.True(t, ok, "Expected issue to be of type *snyk.Issue")
+	assert.Equal(t, "SNYK-1", issue.ID, "Expected the non-ignored issue ID")
+
+	// Also verify the package issue cache only contains the non-ignored issue
+	packageKey := "package1@1.0.0"
+	cachedIssues, exists := packageIssueCache[packageKey]
+	assert.True(t, exists, "Expected the package issue cache to contain the non-ignored issue")
+	assert.Equal(t, 1, len(cachedIssues), "Expected one issue in the package issue cache")
+
+	// Verify that the ignored issue's package key doesn't exist in the cache
+	ignoredPackageKey := "package2@2.0.0"
+	_, ignoredExists := packageIssueCache[ignoredPackageKey]
+	assert.False(t, ignoredExists, "Expected the ignored issue to not be in the package issue cache")
 }
