@@ -8,6 +8,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -35,8 +36,8 @@ func Test_IaC_Html_getIacHtml(t *testing.T) {
 		assert.Contains(t, iacPanelHtml, `/Users/cata/git/playground/dex/examples/k8s/dex.yaml`, "HTML should contain file path for the ignore functionality")
 	}
 
-	// ResourcePath is correctly formatted
-	assert.Contains(t, iacPanelHtml, "[DocId: 5] > rules[0] > verbs", "HTML should contain the path to the affected file")
+	// ResourcePath is correctly HTML encoded
+	assert.Contains(t, iacPanelHtml, "[DocId: 5] &gt; rules[0] &gt; verbs", "HTML should contain the path to the affected file")
 
 	// Issue ID is present and linked correctly
 	assert.Contains(t, iacPanelHtml, `href="https://security.snyk.io/rules/cloud/SNYK-CC-K8S-44">SNYK-CC-K8S-44</a>`, "HTML should contain a link to the issue documentation")
@@ -90,4 +91,32 @@ func createIacIssueSample() snyk.Issue {
 			References:    []string{"https://kubernetes.io/docs/reference/access-authn-authz/rbac/", "https://kubernetes.io/docs/reference/access-authn-authz/rbac/#role-and-clusterrole"},
 		},
 	}
+}
+
+func TestHtmlRenderer_GetDetailsHtml_PathEncoded(t *testing.T) {
+	testutil.UnitTest(t)
+	c := config.New()
+
+	renderer, err := NewHtmlRenderer(c)
+	assert.NoError(t, err)
+
+	// Craft a malicious path
+	maliciousPath := []string{"<script nonce=\"${nonce${headerEnd}}\">alert(1)</script>"}
+
+	// Create a mock issue with the malicious path
+	issue := snyk.Issue{
+		AdditionalData: snyk.IaCIssueData{
+			Path: maliciousPath,
+		},
+	}
+
+	// Get the HTML details
+	htmlDetails := renderer.GetDetailsHtml(&issue)
+
+	// Assert that the malicious script is HTML encoded in the ResourcePath
+	expectedEncodedPath := "&lt;script nonce=&#34;${nonce${headerEnd}}&#34;&gt;alert(1)&lt;/script&gt;"
+	assert.Contains(t, htmlDetails, expectedEncodedPath, "ResourcePath should be HTML encoded")
+
+	// Additionally, you might want to assert that the script is NOT present in its raw form
+	assert.NotContains(t, htmlDetails, maliciousPath[0], "Raw script should not be present in ResourcePath")
 }
