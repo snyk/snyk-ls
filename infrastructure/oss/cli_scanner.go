@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2023-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -278,15 +278,18 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		cliScanner.config.CliSettings().Path(),
 		"test",
 	})
-	args = cliScanner.updateArgs(path, args, folderConfig)
-	cmd = append(cmd, args...)
-	cmd = append(cmd, "--json")
 
-	additionalParams := cliScanner.config.CliSettings().AdditionalOssParameters
+	args = cliScanner.updateArgs(path, args, folderConfig)
+	args = append(args, cliScanner.config.CliSettings().AdditionalOssParameters...)
+	args = append(args, "--json")
 
 	// now add all additional parameters, skipping blacklisted ones
-	for _, parameter := range additionalParams {
+	for _, parameter := range args {
 		if storedConfig.SliceContainsParam(cmd, parameter) {
+			continue
+		}
+
+		if parameter == allProjectsParam {
 			continue
 		}
 
@@ -307,8 +310,9 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 
 	// only append --all-projects, if it's not on the global blacklist
 	// and if there is no other parameter interfering (e.g. --file)
-	allProjectsParamAllowed = allProjectsParamAllowed && !slices.Contains(cmd, allProjectsParam)
-	if allProjectsParamAllowed && !parameterBlacklist[allProjectsParam] {
+	containsAllProjects := slices.Contains(cmd, allProjectsParam)
+	allProjectsParamAllowed = allProjectsParamAllowed && !containsAllProjects && !parameterBlacklist[allProjectsParam]
+	if allProjectsParamAllowed {
 		cmd = append(cmd, allProjectsParam)
 	}
 
@@ -337,12 +341,15 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 
 	for _, scanResult := range scanResults {
 		targetFilePath := getAbsTargetFilePath(cliScanner.config, scanResult, workDir, path)
-		fileContent, err := os.ReadFile(string(targetFilePath))
-		if err != nil {
-			reportedErr := fmt.Errorf("skipping scanResult for path: %s displayTargetFile: %s in workDir: %s as we can't determine the absolute filesystem path. %w", scanResult.Path, scanResult.DisplayTargetFile, workDir, err)
-			cliScanner.errorReporter.CaptureErrorAndReportAsIssue(targetFilePath, reportedErr)
-			logger.Error().Err(reportedErr).Send()
-			continue
+		var fileContent []byte
+		if targetFilePath != "" && scanResult.PackageManager != packageManagerUnmanaged {
+			fileContent, err = os.ReadFile(string(targetFilePath))
+			if err != nil {
+				reportedErr := fmt.Errorf("skipping scanResult for path: %s displayTargetFile: %s in workDir: %s as we can't determine the absolute filesystem path. %w", scanResult.Path, scanResult.DisplayTargetFile, workDir, err)
+				cliScanner.errorReporter.CaptureErrorAndReportAsIssue(targetFilePath, reportedErr)
+				logger.Error().Err(reportedErr).Send()
+				continue
+			}
 		}
 		issues = append(issues, cliScanner.retrieveIssues(&scanResult, workDir, targetFilePath, fileContent)...)
 	}

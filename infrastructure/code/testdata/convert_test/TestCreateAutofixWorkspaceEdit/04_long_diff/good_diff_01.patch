@@ -1,0 +1,30 @@
+--- base_file.txt
++++ base_file.txt
+@@ -1,20 +1,24 @@
+ 1  -> 1  - Leave
+ 2  -> 2  - Leave
++X  -> 3  - Added
+ 3  -> 4  - 1 Inserted Above
+ 4  -> 5  - Leave
+-5  -> X  - Delete
++X  -> 6  - Added
++X  -> 7  - Added
+ 6  -> 8  - 2 Inserted Above
+ 7  -> 9  - Leave
+ 8  -> 10 - Leave
+ 9  -> 11 - Leave
+ 10 -> 12 - Leave
++X  -> 13 - Added
++X  -> 14 - Added
+ 11 -> 15 - 2 Inserted Above
+ 12 -> 16 - Leave
+-13 -> X  - Delete
+ 14 -> 17 - Leave
++X  -> 18 - Added
++X  -> 19 - Added
+ 15 -> 20 - 2 Inserted Above
+ 16 -> 21 - Leave
+ 17 -> 22 - Leave
+ 18 -> 23 - Leave
+-19 -> X  - Delete
+ 20 -> 24 - Leave

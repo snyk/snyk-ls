@@ -15,6 +15,7 @@ const (
 	SmokeTestEnvVar = "SMOKE_TESTS"
 	NodejsGoof      = "https://github.com/snyk-labs/nodejs-goof"
 	PythonGoof      = "https://github.com/JennySnyk/Python-goof"
+	CppGoof         = "https://github.com/snyk-fixtures/cpp-goof"
 )
 
 func NotOnWindows(t *testing.T, reason string) {
