@@ -343,7 +343,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 		targetFilePath := getAbsTargetFilePath(cliScanner.config, scanResult, workDir, path)
 		var fileContent []byte
 
-		if targetFilePath != "" && uri.IsReadableFile(targetFilePath) {
+		if targetFilePath != "" && uri.IsRegularFile(targetFilePath) {
 			fileContent, err = os.ReadFile(string(targetFilePath))
 			if err != nil {
 				reportedErr := fmt.Errorf("skipping scanResult for path: %s displayTargetFile: %s in workDir: %s as we can't determine the absolute filesystem path. %w", scanResult.Path, scanResult.DisplayTargetFile, workDir, err)
