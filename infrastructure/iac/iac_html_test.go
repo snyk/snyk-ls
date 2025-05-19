@@ -37,7 +37,7 @@ func Test_IaC_Html_getIacHtml(t *testing.T) {
 	}
 
 	// ResourcePath is correctly HTML encoded
-	assert.Contains(t, iacPanelHtml, "[DocId: 5] &amp;gt; rules[0] &amp;gt; verbs", "HTML should contain the path to the affected file")
+	assert.Contains(t, iacPanelHtml, "[DocId: 5] &gt; rules[0] &gt; verbs", "HTML should contain the path to the affected file")
 
 	// Issue ID is present and linked correctly
 	assert.Contains(t, iacPanelHtml, `href="https://security.snyk.io/rules/cloud/SNYK-CC-K8S-44">SNYK-CC-K8S-44</a>`, "HTML should contain a link to the issue documentation")
@@ -114,7 +114,7 @@ func TestHtmlRenderer_GetDetailsHtml_PathEncoded(t *testing.T) {
 	htmlDetails := renderer.GetDetailsHtml(&issue)
 
 	// Assert that the malicious script is HTML encoded in the ResourcePath
-	expectedEncodedPath := "&amp;lt;script nonce=&amp;#34;${nonce${headerEnd}}&amp;#34;&amp;gt;alert(1)&amp;lt;/script&amp;gt;"
+	expectedEncodedPath := "&lt;script nonce=&#34;${nonce${headerEnd}}&#34;&gt;alert(1)&lt;/script&gt;"
 	assert.Contains(t, htmlDetails, expectedEncodedPath, "ResourcePath should be HTML encoded")
 
 	// Additionally, you might want to assert that the script is NOT present in its raw form

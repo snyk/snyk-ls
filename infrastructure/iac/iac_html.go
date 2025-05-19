@@ -19,7 +19,6 @@ package iac
 import (
 	"bytes"
 	_ "embed"
-	gohtml "html"
 	"html/template"
 	"strings"
 
@@ -114,5 +113,5 @@ func (service *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 }
 
 func formatPath(path []string) string {
-	return gohtml.EscapeString(strings.Join(path, " > ")) // Strict HTML encoding, prevents XSS attacks
+	return strings.Join(path, " > ")
 }
