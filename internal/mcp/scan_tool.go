@@ -90,6 +90,8 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 
 // runSnyk runs a Snyk command and returns the result
 func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.InvocationContext, workingDir string, cmd []string) (string, error) {
+	clientInfo := ClientInfoFromContext(ctx)
+
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 
 	if workingDir != "" {
@@ -97,9 +99,9 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	}
 	runtimeInfo := invocationCtx.GetRuntimeInfo()
 	if runtimeInfo != nil {
-		command.Env = m.expandedEnv(runtimeInfo.GetVersion())
+		command.Env = m.expandedEnv(runtimeInfo.GetVersion(), clientInfo.Name, clientInfo.Version)
 	} else {
-		command.Env = m.expandedEnv("unknown")
+		command.Env = m.expandedEnv("unknown", clientInfo.Name, clientInfo.Version)
 	}
 	command.Stderr = invocationCtx.GetEnhancedLogger()
 	res, err := command.Output()

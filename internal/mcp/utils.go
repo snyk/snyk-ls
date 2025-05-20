@@ -17,9 +17,11 @@
 package mcp
 
 import (
+	"context"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	mcpServer "github.com/mark3labs/mcp-go/server"
 )
 
 // buildArgs builds command-line arguments for Snyk CLI based on parameters
@@ -67,10 +69,10 @@ func createToolFromDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
 }
 
 // extractParamsFromRequestArgs extracts parameters from the arguments based on the tool definition
-func extractParamsFromRequestArgs(toolDef SnykMcpToolsDefinition, arguments map[string]interface{}) (map[string]interface{}, string) {
+func extractParamsFromRequestArgs(toolDef SnykMcpToolsDefinition, argumentsIn any) (map[string]interface{}, string) {
 	params := make(map[string]interface{})
 	var workingDir string
-
+	arguments, _ := argumentsIn.(map[string]interface{})
 	for _, paramDef := range toolDef.Params {
 		val, ok := arguments[paramDef.Name]
 		if !ok {
@@ -105,4 +107,14 @@ func extractParamsFromRequestArgs(toolDef SnykMcpToolsDefinition, arguments map[
 // convertToCliParam Convert parameter name from snake_case to kebab-case for CLI arguments
 func convertToCliParam(cliParam string) string {
 	return strings.ReplaceAll(cliParam, "_", "-")
+}
+
+func ClientInfoFromContext(ctx context.Context) mcp.Implementation {
+	retrievedSession := mcpServer.ClientSessionFromContext(ctx)
+	sessionWithClientInfo, ok := retrievedSession.(mcpServer.SessionWithClientInfo)
+	var clientInfo mcp.Implementation
+	if ok {
+		clientInfo = sessionWithClientInfo.GetClientInfo()
+	}
+	return clientInfo
 }

@@ -219,7 +219,7 @@ func (m *McpLLMBinding) Started() bool {
 	return m.started
 }
 
-func (m *McpLLMBinding) expandedEnv(version string) []string {
+func (m *McpLLMBinding) expandedEnv(integrationVersion, environmentName, environmentVersion string) []string {
 	environ := os.Environ()
 	var expandedEnv = []string{}
 	for _, v := range environ {
@@ -232,6 +232,8 @@ func (m *McpLLMBinding) expandedEnv(version string) []string {
 		expandedEnv = append(expandedEnv, v)
 	}
 	expandedEnv = append(expandedEnv, configuration.INTEGRATION_NAME+"=MCP")
-	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", configuration.INTEGRATION_VERSION, version))
+	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", configuration.INTEGRATION_VERSION, integrationVersion))
+	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", configuration.INTEGRATION_ENVIRONMENT, environmentName))
+	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", configuration.INTEGRATION_ENVIRONMENT_VERSION, environmentVersion))
 	return expandedEnv
 }
