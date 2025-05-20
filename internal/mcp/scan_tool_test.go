@@ -200,7 +200,7 @@ func TestSnykTestHandler(t *testing.T) {
 			err = json.Unmarshal(requestJSON, &request)
 			assert.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
-			result, err := handler(context.Background(), request)
+			result, err := handler(t.Context(), request)
 
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
@@ -287,7 +287,7 @@ func TestSnykCodeTestHandler(t *testing.T) {
 			err = json.Unmarshal(requestJSON, &request)
 			assert.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
-			result, err := handler(context.Background(), request)
+			result, err := handler(t.Context(), request)
 
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
@@ -358,7 +358,7 @@ func TestBasicSnykCommands(t *testing.T) {
 			assert.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
 			// Call the handler
-			result, err := handler(context.Background(), request)
+			result, err := handler(t.Context(), request)
 
 			// Assertions
 			assert.NoError(t, err)
@@ -393,7 +393,7 @@ func TestAuthHandler(t *testing.T) {
 	err = json.Unmarshal(requestJSON, &request)
 	assert.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
-	result, err := handler(context.Background(), request)
+	result, err := handler(t.Context(), request)
 
 	// Assertions
 	assert.NoError(t, err)
@@ -769,7 +769,7 @@ func TestBuildArgs(t *testing.T) {
 func TestRunSnyk(t *testing.T) {
 	fixture := setupTestFixture(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	testCases := []struct {
 		name        string

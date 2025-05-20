@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -110,7 +109,7 @@ func Test_fixCodeIssue_ErrorsWhenNoCapability(t *testing.T) {
 		},
 	}
 
-	_, err := cmd.Execute(context.Background())
+	_, err := cmd.Execute(t.Context())
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "Client doesn't support 'workspace/applyEdit' capability.")
@@ -144,7 +143,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 	cmd.issueProvider = issueProviderMock
 
 	// act
-	res, err := cmd.Execute(context.Background())
+	res, err := cmd.Execute(t.Context())
 
 	// assert
 	assert.NoError(t, err)
@@ -188,7 +187,7 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	cmd.issueProvider = issueProviderMock
 
 	// act
-	res, err := cmd.Execute(context.Background())
+	res, err := cmd.Execute(t.Context())
 
 	// assert
 	assert.NoError(t, err)
@@ -215,7 +214,7 @@ func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
 	cmd.issueProvider = issueProviderMock
 
 	// act
-	res, err := cmd.Execute(context.Background())
+	res, err := cmd.Execute(t.Context())
 
 	// assert
 	assert.Error(t, err)

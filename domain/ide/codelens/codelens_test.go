@@ -17,7 +17,6 @@
 package codelens
 
 import (
-	"context"
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
@@ -58,7 +57,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	filePath, dir := code.TempWorkdirWithIssues(t)
 	folder := workspace.NewFolder(c, dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
 	c.Workspace().AddFolder(folder)
-	folder.ScanFile(context.Background(), filePath)
+	folder.ScanFile(t.Context(), filePath)
 
 	assert.NotNil(t, folder.IssuesForFile(filePath))
 

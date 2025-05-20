@@ -36,7 +36,7 @@ func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	rsp, err := loc.Client.Call(ctx, "textDocument/inlineValue", nil)
+	rsp, err := loc.Client.Call(t.Context(), "textDocument/inlineValue", nil)
 	assert.NoError(t, err)
 
 	var result []types.InlineValue
@@ -63,10 +63,10 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 			CliPath:                     filepath.Join(t.TempDir(), discovery.ExecutableName(false)),
 		},
 	}
-	_, err = loc.Client.Call(ctx, "initialize", clientParams)
+	_, err = loc.Client.Call(t.Context(), "initialize", clientParams)
 	assert.NoError(t, err)
 
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	assert.NoError(t, err)
 
 	testFilePath := filepath.Join(dir, "package.json")
@@ -74,7 +74,7 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		// wait for scan
-		rsp, err := loc.Client.Call(ctx, "textDocument/inlineValue", types.InlineValueParams{
+		rsp, err := loc.Client.Call(t.Context(), "textDocument/inlineValue", types.InlineValueParams{
 			TextDocument: sglsp.TextDocumentIdentifier{URI: documentURI},
 			Range:        sglsp.Range{Start: sglsp.Position{Line: 17}, End: sglsp.Position{Line: 17}},
 		})
