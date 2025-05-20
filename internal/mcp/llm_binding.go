@@ -126,9 +126,10 @@ func (m *McpLLMBinding) HandleSseServer() error {
 
 	m.sseServer = server.NewSSEServer(m.mcpServer, server.WithBaseURL(m.baseURL.String()))
 
-	_, _ = fmt.Fprintf(os.Stderr, "Starting with base URL %s\n", m.baseURL.String())
+	endpoint := m.baseURL.String() + "/sse"
+	_, _ = fmt.Fprintf(os.Stderr, "Starting with base URL %s/sse\n", endpoint)
 
-	m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("starting")
+	m.logger.Info().Str("baseURL", endpoint).Msg("starting")
 	go func() {
 		// sleep initially for a few milliseconds so we actually can start the server
 		time.Sleep(100 * time.Millisecond)
