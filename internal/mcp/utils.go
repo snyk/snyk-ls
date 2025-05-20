@@ -72,7 +72,11 @@ func createToolFromDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
 func extractParamsFromRequestArgs(toolDef SnykMcpToolsDefinition, argumentsIn any) (map[string]interface{}, string) {
 	params := make(map[string]interface{})
 	var workingDir string
-	arguments, _ := argumentsIn.(map[string]interface{})
+	arguments, ok := argumentsIn.(map[string]interface{})
+	if !ok {
+		arguments = make(map[string]interface{})
+	}
+
 	for _, paramDef := range toolDef.Params {
 		val, ok := arguments[paramDef.Name]
 		if !ok {
