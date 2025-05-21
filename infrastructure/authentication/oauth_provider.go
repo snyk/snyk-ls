@@ -43,12 +43,15 @@ func newOAuthProvider(config configuration.Configuration, authenticator auth.Aut
 	return &OAuth2Provider{authenticator: authenticator, config: config, logger: logger}
 }
 
-func (p *OAuth2Provider) Authenticate(_ context.Context) (string, error) {
+func (p *OAuth2Provider) Authenticate(ctx context.Context) (string, error) {
 	p.m.Lock()
 	defer p.m.Unlock()
-	err := p.authenticator.Authenticate()
+	err := p.authenticator.Authenticate(ctx)
+	if err != nil {
+		return "", err
+	}
 	p.logger.Debug().Msg("authenticated with OAuth")
-	return p.config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), err
+	return p.config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), nil
 }
 
 func (p *OAuth2Provider) setAuthUrl(url string) {
