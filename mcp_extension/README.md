@@ -67,7 +67,7 @@ This method can be used for to set up Windsurf's MCP, as one example. These exam
 {
   "mcpServers": {
     "Snyk Security Scanner": {
-      "command": "snyk",
+      "command": "/absolute/path/to/snyk",
       "args": [
         "mcp",
         "-t",
@@ -143,7 +143,7 @@ If you encounter issues with the Snyk MCP server or its integration, try the tro
 
 ### Verify Snyk CLI path and permissions
 
-* If you have specified a direct path to the `snyk` executable in your `mcpconfig.json` because your executable is not in your system `PATH`, double-check that this path is correct.
+* If you have specified a direct path to the `snyk` executable in your `mcpconfig.json`  double-check that this path is correct.
 * Ensure the Snyk CLI binary has execute permissions.
 
 ### Proxy configuration
@@ -162,9 +162,9 @@ If you encounter issues with the Snyk MCP server or its integration, try the tro
 * If your Snyk account is part of multiple Organizations, or if scans are not appearing in the expected place, ensure the correct Snyk Organization is configured. You can set this using:
   * The command `snyk config set org=<YOUR_ORG_ID>`
   * The environment variable `SNYK_CFG_ORG=<YOUR_ORG_ID>`
-  * SSE Transport specifics (if using `snyk mcp -t sse`):
-* Firewall restrictions: Check to see if the local firewall might be blocking incoming connections to the port used by the Snyk MCP SSE server.
-* Local only: Remember that SSE transport supports running the MCP server locally only.
+* Verify the SSE Transport specifics (if using `snyk mcp -t sse`):
+  * Firewall restrictions: Check to see if the local firewall might be blocking incoming connections to the port used by the Snyk MCP SSE server.
+  * Local only: Remember that SSE transport supports running the MCP server locally only.
 
 ### Environment variable propagation
 
@@ -180,7 +180,15 @@ If you encounter issues with the Snyk MCP server or its integration, try the tro
 
 ### Verbose logging and debugging
 
-* Snyk CLI debug output: When performing direct test scans (as mentioned above), use the `-d` or `--debug` flag for more detailed output, which can reveal underlying problems:
+Use these suggestions to improve and expand on your Snyk CLI debug output to troubleshoot MCP-related issues:
+
+* For more detailed Snyk CLI logs, which are useful whether you are starting the `snyk mcp` server or performing direct test scans (see [Basic repository scanning](snyk-mcp-experimental.md#basic-repository-scanning-crucial-diagnostic)), you can add verbosity parameters to your Snyk commands.\
+  \
+  These include using the `-d` or `--debug` flag for debug level output, for example:
+  * `snyk mcp -t sse --experimental -d`
   * `snyk test -d`
   * `snyk code test -d`
-* MCP client and host logs: Inspect logs from your AI tool, IDE, or MCP client application. These logs might contain errors related to connecting to, or communicating with, the Snyk MCP server.
+* For even more granular, trace-level logging, you can use the `--log-level=trace` option or set the `SNYK_LOG_LEVEL=trace` environment variable:
+  * `snyk mcp -t sse --experimental -d --log-level=trace`&#x20;
+  * `SNYK_LOG_LEVEL=trace snyk mcp -t sse --experimental -d`
+* Inspect the MCP client and host logs from your AI tool, IDE, or MCP client application. These logs might contain errors related to connecting to, or communicating with, the Snyk MCP server.
