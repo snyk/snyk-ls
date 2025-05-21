@@ -1023,6 +1023,34 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	assert.Equal(t, 0, len(issueList), "no issues expected, as delta and no new change")
 }
 
+func Test_SmokeScanUnmanaged(t *testing.T) {
+	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
+	c := testutil.SmokeTest(t, false)
+	loc, jsonRPCRecorder := setupServer(t, c)
+	c.SetSnykIacEnabled(false)
+	cleanupChannels()
+	di.Init()
+
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CppGoof, "259ea516a4ec", c.Logger())
+	cloneTargetDirString := string(cloneTargetDir)
+	if err != nil {
+		t.Fatal(err, "Couldn't setup test repo")
+	}
+
+	initParams := prepareInitParams(t, cloneTargetDir, c)
+	folderConfig := c.FolderConfig(cloneTargetDir)
+	folderConfig.AdditionalParameters = []string{"--unmanaged"}
+	initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{*folderConfig}
+
+	ensureInitialized(t, c, loc, initParams)
+
+	waitForScan(t, cloneTargetDirString, c)
+
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
+
+	assert.Greater(t, len(issueList), 100, "More than 100 unmanaged issues expected")
+}
+
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {
 	t.Helper()
 	t.Setenv("SNYK_LOG_LEVEL", "info")

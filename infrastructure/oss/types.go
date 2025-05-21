@@ -42,6 +42,8 @@ type reference struct {
 	Url   types.Uri `json:"url"`
 }
 
+const packageManagerUnmanaged = "Unmanaged (C/C++)"
+
 type ossIssue struct {
 	Id                   string             `json:"id"`
 	Name                 string             `json:"name"`
@@ -68,6 +70,29 @@ type ossIssue struct {
 	OriginalSeverity     string             `json:"originalSeverity,omitempty"`
 	SeverityWithCritical string             `json:"severityWithCritical,omitempty"`
 	AppliedPolicyRules   AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
+	IsIgnored            bool               `json:"isIgnored,omitempty"`
+	Ignores              []ProjectIgnore    `json:"ignores,omitempty"`
+}
+
+type ProjectIgnoredBy struct {
+	Id            string `json:"id,omitempty"`
+	Name          string `json:"name,omitempty"`
+	Email         string `json:"email,omitempty"`
+	IsGroupPolicy bool   `json:"isGroupPolicy,omitempty"`
+}
+
+type ProjectIgnorePath struct {
+	Module string `json:"module,omitempty"`
+}
+
+type ProjectIgnore struct {
+	Path               []ProjectIgnorePath `json:"path,omitempty"`
+	Reason             string              `json:"reason,omitempty"`
+	ReasonType         string              `json:"reasonType,omitempty"`
+	Source             string              `json:"source,omitempty"`
+	IgnoredBy          ProjectIgnoredBy    `json:"ignoredBy,omitempty"`
+	DisregardIfFixable bool                `json:"disregardIfFixable,omitempty"`
+	Created            string              `json:"created,omitempty"`
 }
 
 type SeverityChange struct {
