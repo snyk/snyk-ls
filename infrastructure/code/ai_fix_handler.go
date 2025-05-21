@@ -124,18 +124,6 @@ func getExplainEndpoint(c *config.Config) *url.URL {
 	return endpoint
 }
 
-func getAutofixEndpoint(c *config.Config) *url.URL {
-	host, err := GetCodeApiUrl(c)
-	if err != nil {
-		return &url.URL{}
-	}
-	endpoint, err := url.Parse(fmt.Sprintf("%s/autofix/suggestions", host))
-	if err != nil {
-		return &url.URL{}
-	}
-	return endpoint
-}
-
 func getDiffListFromSuggestions(suggestions []llm.AutofixUnifiedDiffSuggestion, diffs []string) []string {
 	// Suggestion diffs may be coming from different files
 	for i := range suggestions {

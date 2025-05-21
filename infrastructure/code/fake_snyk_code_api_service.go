@@ -283,10 +283,3 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	).Msg("fake backend call received & answered")
 	return issues, successfulResult, nil
 }
-
-func (f *FakeSnykCodeClient) SubmitAutofixFeedback(_ context.Context, _ string, feedback string) error {
-	FakeSnykCodeApiServiceMutex.Lock()
-	f.FeedbackSent = feedback
-	FakeSnykCodeApiServiceMutex.Unlock()
-	return nil
-}

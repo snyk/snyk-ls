@@ -89,26 +89,26 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 				return nil, traceErr
 			}
 
+			host, hostErr := GetCodeApiUrl(sc.C)
+			if hostErr != nil {
+				return nil, hostErr
+			}
+
 			_, ruleId, ok := getIssueLangAndRuleId(issue)
 			if !ok {
 				return nil, SnykAutofixFailedError{Msg: "Issue's ruleID does not follow <lang>/<ruleKey> format"}
 			}
 
 			options := llm.AutofixOptions{
-				BundleHash:         bundleHash,
-				ShardKey:           getShardKey(baseDir, sc.C.Token()),
-				BaseDir:            string(baseDir),
-				FilePath:           string(encodedNormalizedPath),
-				CodeRequestContext: newCodeRequestContext().toAutofixCodeRequestContext(),
-				LineNum:            issue.GetRange().Start.Line + 1,
-				RuleID:             ruleId,
-				Endpoint:           getAutofixEndpoint(sc.C),
-				IdeExtensionDetails: llm.AutofixIdeExtensionDetails{
-					IdeName:          sc.C.IdeName(),
-					IdeVersion:       sc.C.IdeVersion(),
-					ExtensionName:    sc.C.IntegrationName(),
-					ExtensionVersion: sc.C.IntegrationVersion(),
-				},
+				BundleHash:          bundleHash,
+				ShardKey:            getShardKey(baseDir, sc.C.Token()),
+				BaseDir:             string(baseDir),
+				FilePath:            string(encodedNormalizedPath),
+				CodeRequestContext:  NewAutofixCodeRequestContext(),
+				LineNum:             issue.GetRange().Start.Line + 1,
+				RuleID:              ruleId,
+				Host:                host,
+				IdeExtensionDetails: GetAutofixIdeExtensionDetails(sc.C),
 			}
 
 			suggestions, fixStatus, autofixErr := deepCodeLLMBinding.GetAutofixDiffs(span.Context(), requestId, options)

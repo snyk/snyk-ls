@@ -40,7 +40,8 @@ func newCodeRequestContext() codeRequestContext {
 	}
 }
 
-func (c codeRequestContext) toAutofixCodeRequestContext() llm.CodeRequestContext {
+func NewAutofixCodeRequestContext() llm.CodeRequestContext {
+	c := newCodeRequestContext()
 	return llm.CodeRequestContext{
 		Initiator: c.Initiator,
 		Flow:      c.Flow,
@@ -49,5 +50,14 @@ func (c codeRequestContext) toAutofixCodeRequestContext() llm.CodeRequestContext
 			DisplayName: c.Org.DisplayName,
 			PublicId:    c.Org.PublicId,
 		},
+	}
+}
+
+func GetAutofixIdeExtensionDetails(c *config.Config) llm.AutofixIdeExtensionDetails {
+	return llm.AutofixIdeExtensionDetails{
+		IdeName:          c.IdeName(),
+		IdeVersion:       c.IdeVersion(),
+		ExtensionName:    c.IntegrationName(),
+		ExtensionVersion: c.IntegrationVersion(),
 	}
 }
