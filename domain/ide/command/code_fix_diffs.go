@@ -19,10 +19,6 @@ package command
 import (
 	"context"
 	"errors"
-	"path/filepath"
-	"strings"
-
-	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -30,7 +26,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
-	uri2 "github.com/snyk/snyk-ls/internal/uri"
 )
 
 type codeFixDiffs struct {
@@ -51,33 +46,11 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 	logger := cmd.c.Logger().With().Str("method", "codeFixDiffs.Execute").Logger()
 
 	args := cmd.command.Arguments
-	if len(args) < 3 {
-		return nil, errors.New("missing required arguments")
+	if len(args) != 1 {
+		return nil, errors.New("invalid argument count")
 	}
 
-	folderURI, ok := args[0].(string)
-	if !ok {
-		return nil, errors.New("failed to parse folder path")
-	}
-	folderPath := uri2.PathFromUri(lsp.DocumentURI(folderURI))
-
-	issueURI, ok := args[1].(string)
-	if !ok {
-		return nil, errors.New("failed to parse filepath")
-	}
-
-	issuePath := uri2.PathFromUri(lsp.DocumentURI(issueURI))
-
-	relPath, err := filepath.Rel(string(folderPath), string(issuePath))
-	if err != nil {
-		return nil, err
-	}
-
-	if strings.HasPrefix(relPath, "..") {
-		return nil, errors.New("issue path is not within the folder path")
-	}
-
-	id, ok := args[2].(string)
+	id, ok := args[0].(string)
 	if !ok {
 		return nil, errors.New("failed to parse issue id")
 	}
@@ -92,12 +65,12 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		logger.Err(err).Msg("failed to get html renderer")
 		return nil, err
 	}
-	go cmd.handleResponse(ctx, cmd.c, string(folderPath), relPath, issue, htmlRenderer)
+	go cmd.handleResponse(ctx, cmd.c, issue, htmlRenderer)
 
 	return nil, err
 }
 
-func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, folderPath string, relPath string, issue types.Issue, htmlRenderer *code.HtmlRenderer) {
+func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, issue types.Issue, htmlRenderer *code.HtmlRenderer) {
 	logger := c.Logger().With().Str("method", "codeFixDiffs.handleResponse").Logger()
 	aiFixHandler := htmlRenderer.AiFixHandler
 
@@ -105,7 +78,7 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, f
 
 	aiFixHandler.SetAiFixDiffState(code.AiFixInProgress, nil, nil, setStateCallback)
 
-	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, types.FilePath(folderPath), types.FilePath(relPath), issue)
+	suggestions, err := cmd.codeScanner.GetAutofixDiffs(ctx, issue.GetContentRoot(), issue.GetAffectedFilePath(), issue)
 	if err == nil && len(suggestions) == 0 {
 		logger.Info().Msg("Autofix run successfully but there were no good fixes")
 		aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, nil, nil, setStateCallback)
