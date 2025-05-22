@@ -251,7 +251,7 @@ func (s *SnykCodeHTTPClient) newRequest(
 	body *bytes.Buffer,
 	requestId string,
 ) (*http.Request, error) {
-	host, err := getCodeApiUrl(c)
+	host, err := GetCodeApiUrl(c)
 	if err != nil {
 		return nil, err
 	}
@@ -452,121 +452,7 @@ func (s *SnykCodeHTTPClient) checkResponseCode(statusCode int) error {
 	return fmt.Errorf("Unexpected response code: %d", statusCode)
 }
 
-type AutofixStatus struct {
-	message string
-}
-
-var failed = AutofixStatus{message: "FAILED"}
-
-func (s *SnykCodeHTTPClient) RunAutofix(ctx context.Context, options AutofixOptions) (AutofixResponse, error) {
-	requestId, err := performance2.GetTraceId(ctx)
-	span := s.instrumentor.StartSpan(ctx, "code.RunAutofix")
-	defer span.Finish()
-
-	logger := s.c.Logger().With().Str("method", "code.RunAutofix").Str("requestId", requestId).Logger()
-	if err != nil {
-		logger.Err(err).Msg(failedToObtainRequestIdString + err.Error())
-		return AutofixResponse{}, err
-	}
-	logger.Debug().Msg("API: Retrieving autofix for bundle")
-	defer logger.Debug().Msg("API: Retrieving autofix done")
-
-	requestBody, err := s.autofixRequestBody(&options)
-	if err != nil {
-		logger.Err(err).Str("requestBody", string(requestBody)).Msg("error creating request body")
-		return AutofixResponse{}, err
-	}
-
-	responseBody, _, err := s.doCall(span.Context(), "POST", "/autofix/suggestions", requestBody)
-
-	if err != nil {
-		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error response from autofix")
-		return AutofixResponse{}, err
-	}
-
-	var response AutofixResponse
-	err = json.Unmarshal(responseBody, &response)
-	if err != nil {
-		logger.Err(err).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
-		return AutofixResponse{}, err
-	}
-	return response, nil
-}
-
-func (s *SnykCodeHTTPClient) autofixRequestBody(options *AutofixOptions) ([]byte, error) {
-	_, ruleID, ok := getIssueLangAndRuleId(options.issue)
-	if !ok {
-		return nil, SnykAutofixFailedError{Msg: "Issue's ruleID does not follow <lang>/<ruleKey> format"}
-	}
-
-	request := AutofixRequest{
-		Key: AutofixRequestKey{
-			Type:     "file",
-			Hash:     options.bundleHash,
-			FilePath: options.filePath,
-			RuleId:   ruleID,
-			LineNum:  options.issue.GetRange().Start.Line + 1,
-		},
-		AnalysisContext: newCodeRequestContext(),
-		IdeExtensionDetails: AutofixIdeExtensionDetails{
-			IdeName:          s.c.IdeName(),
-			IdeVersion:       s.c.IdeVersion(),
-			ExtensionName:    s.c.IntegrationName(),
-			ExtensionVersion: s.c.IntegrationVersion(),
-		},
-	}
-	if len(options.shardKey) > 0 {
-		request.Key.Shard = options.shardKey
-	}
-
-	requestBody, err := json.Marshal(request)
-	return requestBody, err
-}
-
-func (s *SnykCodeHTTPClient) SubmitAutofixFeedback(ctx context.Context, fixId string, feedback string) error {
-	method := "code.SubmitAutofixFeedback"
-	span := s.instrumentor.StartSpan(ctx, method)
-	defer s.instrumentor.Finish(span)
-
-	requestId, err := performance2.GetTraceId(span.Context())
-	if err != nil {
-		s.c.Logger().Err(err).Str("method", method).Msg(failedToObtainRequestIdString + err.Error())
-		return err
-	}
-
-	s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback")
-	defer s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Submitting Autofix feedback done")
-
-	request := AutofixUserEvent{
-		Channel:         "IDE",
-		EventType:       feedback,
-		EventDetails:    AutofixEventDetails{FixId: fixId},
-		AnalysisContext: newCodeRequestContext(),
-		IdeExtensionDetails: AutofixIdeExtensionDetails{
-			IdeName:          s.c.IdeName(),
-			IdeVersion:       s.c.IdeVersion(),
-			ExtensionName:    s.c.IntegrationName(),
-			ExtensionVersion: s.c.IntegrationVersion(),
-		},
-	}
-
-	requestBody, err := json.Marshal(request)
-	s.c.Logger().Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("request body for autofix feedback")
-	if err != nil {
-		s.c.Logger().Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body for autofix feedback")
-		return err
-	}
-
-	responseBody, _, err := s.doCall(span.Context(), "POST", "/autofix/event", requestBody)
-	if err != nil {
-		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response for autofix feedback")
-		return err
-	}
-
-	return nil
-}
-
-func getCodeApiUrl(c *config.Config) (string, error) {
+func GetCodeApiUrl(c *config.Config) (string, error) {
 	if !c.IsFedramp() {
 		return c.SnykCodeApi(), nil
 	}

@@ -40,7 +40,6 @@ func CreateFromCommandData(
 	learnService learn.Service,
 	notifier noti.Notifier,
 	issueProvider snyk.IssueProvider,
-	codeHttpClient SnykCodeHttpClient,
 	codeScanner *code.Scanner,
 	cli cli.Executor,
 ) (types.Command, error) {
@@ -78,9 +77,9 @@ func CreateFromCommandData(
 	case types.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
 	case types.CodeFixApplyEditCommand:
-		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, codeHttpClient: codeHttpClient, c: c, logger: c.Logger(), apiClient: snykApiClient}, nil
+		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, c: c, logger: c.Logger(), apiClient: snykApiClient}, nil
 	case types.CodeSubmitFixFeedback:
-		return &codeFixFeedback{command: commandData, codeHttpClient: codeHttpClient}, nil
+		return &codeFixFeedback{command: commandData}, nil
 	case types.CodeFixDiffsCommand:
 		return &codeFixDiffs{
 			command:       commandData,

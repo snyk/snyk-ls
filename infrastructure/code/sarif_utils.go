@@ -16,7 +16,11 @@
 
 package code
 
-import "github.com/snyk/snyk-ls/application/config"
+import (
+	"github.com/snyk/code-client-go/llm"
+
+	"github.com/snyk/snyk-ls/application/config"
+)
 
 func newCodeRequestContext() codeRequestContext {
 	unknown := "unknown"
@@ -33,5 +37,27 @@ func newCodeRequestContext() codeRequestContext {
 			DisplayName: unknown,
 			PublicId:    orgId,
 		},
+	}
+}
+
+func NewAutofixCodeRequestContext() llm.CodeRequestContext {
+	c := newCodeRequestContext()
+	return llm.CodeRequestContext{
+		Initiator: c.Initiator,
+		Flow:      c.Flow,
+		Org: llm.CodeRequestContextOrg{
+			Name:        c.Org.Name,
+			DisplayName: c.Org.DisplayName,
+			PublicId:    c.Org.PublicId,
+		},
+	}
+}
+
+func GetAutofixIdeExtensionDetails(c *config.Config) llm.AutofixIdeExtensionDetails {
+	return llm.AutofixIdeExtensionDetails{
+		IdeName:          c.IdeName(),
+		IdeVersion:       c.IdeVersion(),
+		ExtensionName:    c.IntegrationName(),
+		ExtensionVersion: c.IntegrationVersion(),
 	}
 }
