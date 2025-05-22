@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 	"fmt"
+
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/llm"
 
