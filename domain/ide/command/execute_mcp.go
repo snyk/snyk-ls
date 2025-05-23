@@ -62,7 +62,7 @@ func (cmd *executeMcpCallCommand) Execute(ctx context.Context) (any, error) {
 		logger.Error().Err(err).Msg("Error creating mcp client")
 		return nil, err
 	}
-	defer func(mcpClient *client.SSEMCPClient) {
+	defer func(mcpClient *client.Client) {
 		err = mcpClient.Close()
 		if err != nil {
 			logger.Error().Err(err).Msg("Error closing mcp client")
