@@ -24,10 +24,9 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	"github.com/snyk/snyk-ls/application/entrypoint"
-	"github.com/snyk/snyk-ls/internal/mcp"
-
 	"github.com/spf13/pflag"
+
+	"github.com/snyk/snyk-ls/application/entrypoint"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -83,7 +82,7 @@ func mcpWorkflow(
 }
 
 func mcpStart(invocationContext workflow.InvocationContext, cliPath string) {
-	mcpServer := mcp.NewMcpLLMBinding(mcp.WithLogger(invocationContext.GetEnhancedLogger()), mcp.WithCliPath(cliPath))
+	mcpServer := NewMcpLLMBinding(WithLogger(invocationContext.GetEnhancedLogger()), WithCliPath(cliPath))
 	logger := invocationContext.GetEnhancedLogger()
 
 	// start mcp server
