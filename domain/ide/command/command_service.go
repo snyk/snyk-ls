@@ -39,18 +39,16 @@ type serviceImpl struct {
 	notifier      noti.Notifier
 	learnService  learn.Service
 	issueProvider snyk.IssueProvider
-	codeApiClient SnykCodeHttpClient
 	codeScanner   *code.Scanner
 	cli           cli.Executor
 }
 
-func NewService(authService authentication.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeApiClient SnykCodeHttpClient, codeScanner *code.Scanner, cli cli.Executor) types.CommandService {
+func NewService(authService authentication.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor) types.CommandService {
 	return &serviceImpl{
 		authService:   authService,
 		notifier:      notifier,
 		learnService:  learnService,
 		issueProvider: issueProvider,
-		codeApiClient: codeApiClient,
 		codeScanner:   codeScanner,
 		cli:           cli,
 	}
@@ -76,7 +74,7 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 	}
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
-	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.learnService, s.notifier, s.issueProvider, s.codeApiClient, s.codeScanner, s.cli)
+	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err

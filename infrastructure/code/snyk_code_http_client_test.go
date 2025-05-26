@@ -18,7 +18,6 @@ package code
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -32,7 +31,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -220,7 +218,7 @@ func TestGetCodeApiUrl(t *testing.T) {
 
 				expected := "https://api." + instance + ".io/hidden/orgs/" + orgUUID + "/code"
 
-				actual, err := getCodeApiUrl(c)
+				actual, err := GetCodeApiUrl(c)
 				assert.Nil(t, err)
 				assert.Contains(t, actual, expected)
 			}
@@ -254,7 +252,7 @@ func TestGetCodeApiUrl(t *testing.T) {
 				c := config.CurrentConfig()
 				c.UpdateApiEndpoints(input)
 
-				actual, err := getCodeApiUrl(c)
+				actual, err := GetCodeApiUrl(c)
 				assert.Nil(t, err)
 				assert.Contains(t, actual, expected)
 			}
@@ -264,69 +262,7 @@ func TestGetCodeApiUrl(t *testing.T) {
 	t.Run("Default deeprox url for code api", func(t *testing.T) {
 		c := config.CurrentConfig()
 
-		url, _ := getCodeApiUrl(c)
+		url, _ := GetCodeApiUrl(c)
 		assert.Equal(t, c.SnykCodeApi(), url)
 	})
-}
-
-func TestAutofixRequestBody(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	const testBundleHash = "0123456789abcdef"
-	const testFilePath = "/path/to/file"
-	const testLineNumber0Based = 0
-	const testLanguage = "language"
-	const testRuleId = "rule_id"
-	const testIdeName = "my IDE"
-	const testIdeVersion = "1.0.0"
-	const testExtensionName = "my extension"
-	const testExtensionVersion = "1.2.3"
-
-	options := AutofixOptions{
-		bundleHash: testBundleHash,
-		filePath:   testFilePath,
-		issue: &snyk.Issue{
-			Range: types.Range{
-				Start: types.Position{
-					Line:      testLineNumber0Based,
-					Character: 0,
-				},
-				End: types.Position{
-					Line:      testLineNumber0Based + 5,
-					Character: 0,
-				},
-			},
-			AdditionalData: snyk.CodeIssueData{
-				RuleId: testLanguage + "/" + testRuleId,
-			},
-		},
-	}
-	c.SetIdeName(testIdeName)
-	c.SetIdeVersion(testIdeVersion)
-	c.SetIntegrationName(testExtensionName)
-	c.SetIntegrationVersion(testExtensionVersion)
-	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
-	jsonBody, _ := s.autofixRequestBody(&options)
-
-	var body AutofixRequest
-	json.Unmarshal(jsonBody, &body)
-
-	expectedBody := AutofixRequest{
-		Key: AutofixRequestKey{
-			Type:     "file",
-			Hash:     testBundleHash,
-			FilePath: testFilePath,
-			RuleId:   testRuleId,
-			LineNum:  testLineNumber0Based + 1,
-		},
-		AnalysisContext: newCodeRequestContext(),
-		IdeExtensionDetails: AutofixIdeExtensionDetails{
-			IdeName:          testIdeName,
-			IdeVersion:       testIdeVersion,
-			ExtensionName:    testExtensionName,
-			ExtensionVersion: testExtensionVersion,
-		},
-	}
-
-	assert.Equal(t, expectedBody, body)
 }

@@ -1105,6 +1105,7 @@ type ScanIssue struct { // TODO - convert this to a generic type
 	Title               string                      `json:"title"`
 	Severity            string                      `json:"severity"`
 	FilePath            FilePath                    `json:"filePath"`
+	ContentRoot         FilePath                    `json:"contentRoot"`
 	Range               sglsp.Range                 `json:"range"`
 	IsIgnored           bool                        `json:"isIgnored"`
 	IsNew               bool                        `json:"isNew"`
