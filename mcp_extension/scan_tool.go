@@ -124,7 +124,7 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "defaultHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-		params, workingDir := extractParamsFromRequestArgs(toolDef, request.Params.Arguments)
+		params, workingDir := extractParamsFromRequestArgs(toolDef, request.GetArguments())
 
 		// Apply standard parameters from tool definition
 		// e.g. all_projects and json
