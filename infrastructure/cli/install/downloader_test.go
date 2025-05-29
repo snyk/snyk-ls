@@ -66,8 +66,9 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	testutil.UnitTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
 	cancelProgressCh := make(chan bool, 1)
+	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh)
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh),
+		progressTracker: progressTracker,
 		httpClient:      func() *http.Client { return http.DefaultClient },
 	}
 
@@ -75,7 +76,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 
 	// simulate cancellation when some progress received
 	go func() {
-		cancelProgressCh <- true
+		progress.Cancel(progressTracker.GetToken())
 	}()
 
 	err := d.Download(r, false)
