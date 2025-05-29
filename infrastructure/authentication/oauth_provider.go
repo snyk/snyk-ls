@@ -46,7 +46,13 @@ func newOAuthProvider(config configuration.Configuration, authenticator auth.Aut
 func (p *OAuth2Provider) Authenticate(ctx context.Context) (string, error) {
 	p.m.Lock()
 	defer p.m.Unlock()
-	err := p.authenticator.Authenticate(ctx)
+	cancelableAuthenticator, ok := p.authenticator.(auth.CancelableAuthenticator)
+	var err error
+	if ok {
+		err = cancelableAuthenticator.CancelableAuthenticate(ctx)
+	} else {
+		err = p.authenticator.Authenticate()
+	}
 	if err != nil {
 		return "", err
 	}
