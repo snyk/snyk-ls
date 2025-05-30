@@ -20,6 +20,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/entrypoint"
 	"github.com/snyk/snyk-ls/application/server"
@@ -80,6 +83,8 @@ func lsWorkflow(
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	defaultConfig := invocation.GetEngine().GetConfiguration()
 	defaultConfig.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
+	defaultConfig.Set(configuration.CONFIG_CACHE_TTL, 30*time.Second)
+	defaultConfig.Set(configuration.CONFIG_CACHE_DISABLED, false)
 
 	c := config.NewFromExtension(invocation.GetEngine())
 	c.SetConfigFile(extensionConfig.GetString("configfile"))
