@@ -1130,11 +1130,12 @@ func Test_getDownloadURL(t *testing.T) {
 	t.Run("CLI", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		c.Engine().GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
+		config.LsProtocolVersion = "12"
 
 		downloadURL := getDownloadURL(c)
 
-		// default CLI fallback, as we're not mocking the CLI calls
-		assert.Contains(t, downloadURL, "cli")
+		prefix := "https://downloads.snyk.io/cli/v1.1292.4/snyk-"
+		assert.True(t, strings.HasPrefix(downloadURL, prefix), downloadURL+" does not start with "+prefix)
 	})
 
 	t.Run("LS standalone", func(t *testing.T) {
