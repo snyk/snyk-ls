@@ -234,9 +234,19 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Eventuallyf(t, func() bool {
 		callbacks := jsonRpcRecorder.Callbacks()
-		return len(callbacks) > 0
+		// The test expects a callback (ShowMessageRequest) due to protocol version mismatch
+		if len(callbacks) == 0 {
+			return false
+		}
+		// Check if any callback is window/showMessageRequest
+		for _, cb := range callbacks {
+			if cb.Method() == "window/showMessageRequest" {
+				return true
+			}
+		}
+		return false
 	}, time.Second*10, time.Millisecond,
-		"did not receive callback because of wrong protocol version")
+		"did not receive window/showMessageRequest callback because of wrong protocol version")
 }
 
 func Test_initialize_shouldSupportAllCommands(t *testing.T) {
@@ -1138,6 +1148,7 @@ func Test_getDownloadURL(t *testing.T) {
 				runtimeinfo.WithVersion("v1.234"),
 			),
 		)
+		config.LsProtocolVersion = "12"
 
 		downloadURL := getDownloadURL(c)
 

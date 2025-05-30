@@ -67,7 +67,9 @@ func UnitTest(t *testing.T) *config.Config {
 		Enabled: false,
 	},
 	})
+	originalLsProtocolVersion := config.LsProtocolVersion
 	t.Cleanup(func() {
+		config.LsProtocolVersion = originalLsProtocolVersion
 		cleanupFakeCliFile(c)
 		progress.CleanupChannels()
 	})
