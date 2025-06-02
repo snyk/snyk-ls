@@ -127,7 +127,8 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		logger := m.logger.With().Str("method", "defaultHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
-		params, workingDir := extractParamsFromRequestArgs(toolDef, request.GetArguments())
+		requestArgs := request.GetArguments()
+		params, workingDir := extractParamsFromRequestArgs(toolDef, requestArgs)
 		// Apply standard parameters if they were not explicitly provided in the request
 		for _, paramName := range toolDef.StandardParams {
 			cliParamName := convertToCliParam(paramName)
@@ -136,7 +137,7 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 
 		// Handle supersedence: if an explicitly provided argument supersedes others, remove the superseded ones.
 		for _, paramDef := range toolDef.Params {
-			if _, argExistsInRequest := params[paramDef.Name]; !argExistsInRequest || len(paramDef.SupersedesParams) == 0 {
+			if _, argExistsInRequest := requestArgs[paramDef.Name]; !argExistsInRequest || len(paramDef.SupersedesParams) == 0 {
 				continue
 			}
 			for _, supersededParamName := range paramDef.SupersedesParams {
