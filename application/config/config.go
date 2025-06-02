@@ -1107,6 +1107,24 @@ func (c *Config) Logger() *zerolog.Logger {
 	return c.logger
 }
 
+func (c *Config) AuthenticationMethodForCurrentToken() types.AuthenticationMethod {
+	token := c.token
+
+	if len(token) == 0 {
+		return types.EmptyAuthenticationMethod
+	}
+
+	if auth.IsAuthTypePAT(token) {
+		return types.PatAuthentication
+	}
+
+	if auth.IsAuthTypeToken(token) {
+		return types.TokenAuthentication
+	}
+
+	return types.OAuthAuthentication
+}
+
 func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
 	token := c.Token()
 

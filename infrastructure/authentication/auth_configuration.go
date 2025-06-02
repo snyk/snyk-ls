@@ -32,6 +32,22 @@ import (
 
 // Token authentication configures token only authentication
 func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) AuthenticationProvider {
+	unsetOauthTokenConfig(c)
+	return NewCliAuthenticationProvider(c, errorReporter)
+}
+
+func Pat(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
+	unsetOauthTokenConfig(c)
+
+	openBrowserFunc := func(url string) {
+		authenticationService.provider().setAuthUrl(url)
+		types.DefaultOpenBrowserFunc(url)
+	}
+
+	return NewPatProvider(c, openBrowserFunc)
+}
+
+func unsetOauthTokenConfig(c *config.Config) {
 	conf := c.Engine().GetConfiguration()
 	if c.Storage() != nil {
 		c.Storage().UnRegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN)
@@ -39,7 +55,6 @@ func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) Authen
 
 	conf.Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
 	conf.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
-	return NewCliAuthenticationProvider(c, errorReporter)
 }
 
 // Default authentication configures an OAuth2 authenticator,
@@ -101,4 +116,14 @@ func NewOAuthProvider(
 		auth.WithLogger(c.Logger()),
 	)
 	return newOAuthProvider(conf, authenticator, c.Logger())
+}
+
+func NewPatProvider(c *config.Config, openBrowserFunc func(string)) *PatAuthenticationProvider {
+	conf := c.Engine().GetConfiguration()
+
+	// Set token, should determine endpoint?
+	conf.Set(configuration.AUTHENTICATION_TOKEN, c.Token()) //TODO is this the correct setting?
+	conf.Set(configuration.API_URL, c.SnykApi())            //TODO is this the correct setting?
+
+	return newPatAuthenticationProvider(conf, openBrowserFunc, c.Logger())
 }

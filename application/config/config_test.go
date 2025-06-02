@@ -374,3 +374,37 @@ func TestConfig_shouldUpdateOAuth2Token(t *testing.T) {
 		assert.False(t, c.shouldUpdateOAuth2Token(string(newTokenBytes), uuid.NewString()))
 	})
 }
+
+func TestConfig_AuthenticationMethodForCurrentToken(t *testing.T) {
+	// Dummy tokens. Note that these were created using random characters, but follow the same format as real tokens.
+	oAuthToken := "{\"access_token\":\"eyJhbHciOiJSUzI1NiIsIqtpZCI7IjQ2ZWNjOTI1IiwiEHlwIjoiSlEUIn0.eyJhEWQiOlsiaHR0cHq" +
+		"7Ly9hcHkuZHV2LnNueWsuaW8iXSwiYXpwIjoiYjU2ZERjqqUtYjllqS00ZEI3LTH3NzqtYWQ0N2VhZqIwOTU2IiwiZXhwIjoxNzQ4NEQ4Njq5LCJ" +
+		"pYXQiOjE3NEH0NEUwqzksIqlzcyI7Iqh0EHBzOi8vYXBwcy5kZXYuc255ay5pbyIsIqp0aSI7IjI1ZHU5N2Y3LWQ0qEYtNEJiNi04Yqq5LTQzqEF" +
+		"jOHQ0Y2QyNCIsInNjb3BlIjoib3JnLnJlYWQiLCJzEWIiOiJkYTA0N2EwYy04OHE1LTQ1YqQtOHQxZi1hOEHzOEc5qzliqEHifQ.I1YANnQvkLWj" +
+		"WkqQk77LKUP41xKAcqHyoN7UTTYE2q82qtuHaes9oLpjJUHnq_qaBHHW_qviVEIRNquHuYR8A9BHnws-wL5VAqSHsrErrNStQjFHPXRnWti2qOHq" +
+		"qub1q9EqCnukEIeFsWe5aK3K-5nB3qEf44sSt9YN-1Sw7uCbaWKR7H8cHwfnJF2H0jfoo4qTQqV3oHZWhj01LE1_xzvncfl8EuvOa7IrtqcEq9O3" +
+		"4L9WqUH4HJOuxwxLEqOne7TECaqVqapSXE_f7sQ_nJH2jqqaJEAN8Hf4ZNWxR8HntStY91EcozP7InFAeZY8lOH7u3Xi7kiX4qvJ9_w0JA\"," +
+		"\"token_type\":\"bearer\",\"refresh_token\":" +
+		"\"snyk_rt_Y8EwxzIhpqCWhWScsOj-QCEHyEWbVJsYetH4E2lZi7s.kQ7cpop4tp7EJn-8e7OQRT2lqri0Fw1LqiK_boXqLB8_v1\"," +
+		"\"expiry\":\"1970-01-01T00:00:00.000000+00:00\"}"
+	apiToken := "e24850f4-c252-4813-b37e-21825873038e"
+	personalAccessToken := "snyk_uat.1fcad39e.eyJlJjoxNzQ4NDMxNjJwLCJoJjoJc244ay4payJsJmsoJOJJaWmNXcFdkcjRGamhOYjYxUWdk" +
+		"REJaJJwJcyJ6JnE2RGRfUzU2UUpXT0otWVRYVDAwcWcJfQ.-q0jjlMEo4oqT3oga7Y-4Eq0NHqDfEDnWQZSrkv_ea162aHvwHMe9Decpz3JYO21r" +
+		"7DOTfne4FF0Y3C8cjJFCw"
+	emptyToken := ""
+
+	// Config should be initialised with an empty token.
+	c := New()
+	assert.Equal(t, types.EmptyAuthenticationMethod, c.AuthenticationMethodForCurrentToken())
+
+	// Check that the config can determine the authentication method for each token type.
+	c.token = oAuthToken
+	assert.Equal(t, types.OAuthAuthentication, c.AuthenticationMethodForCurrentToken())
+	c.token = apiToken
+	assert.Equal(t, types.TokenAuthentication, c.AuthenticationMethodForCurrentToken())
+	c.token = personalAccessToken
+	assert.Equal(t, types.PatAuthentication, c.AuthenticationMethodForCurrentToken())
+	c.token = emptyToken
+	assert.Equal(t, types.EmptyAuthenticationMethod, c.AuthenticationMethodForCurrentToken())
+
+}
