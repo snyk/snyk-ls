@@ -146,6 +146,16 @@ func TestSnykTestHandler(t *testing.T) {
 			expectedParams: []string{"--all-projects", "--json"},
 		},
 		{
+			name: "SCA Test with File param",
+			args: map[string]interface{}{
+				"path":         tmpDir,
+				"all_projects": true,
+				"file":         "package.json",
+				"json":         true,
+			},
+			expectedParams: []string{"--file", "--json"},
+		},
+		{
 			name: "Test with Organization",
 			args: map[string]interface{}{
 				"path":         tmpDir,

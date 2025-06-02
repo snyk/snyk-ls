@@ -58,7 +58,8 @@
           "name": "file",
           "type": "string",
           "isRequired": false,
-          "description": "Specify a package file to test. (Default is empty)"
+          "description": "Specify a package file to test. (Default is empty)",
+          "supersedesParams": ["all_projects"]
         },
         {
           "name": "fail_fast",

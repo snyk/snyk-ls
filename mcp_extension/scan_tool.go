@@ -46,10 +46,11 @@ type SnykMcpToolsDefinition struct {
 }
 
 type SnykMcpToolParameter struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	IsRequired  bool   `json:"isRequired"`
-	Description string `json:"description"`
+	Name             string   `json:"name"`
+	Type             string   `json:"type"`
+	IsRequired       bool     `json:"isRequired"`
+	Description      string   `json:"description"`
+	SupersedesParams []string `json:"supersedesParams"`
 }
 
 //go:embed snyk_tools.json
@@ -125,16 +126,28 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "defaultHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-		params, workingDir := extractParamsFromRequestArgs(toolDef, request.GetArguments())
 
-		// Apply standard parameters from tool definition
-		// e.g. all_projects and json
+		params, workingDir := extractParamsFromRequestArgs(toolDef, request.GetArguments())
+		// Apply standard parameters if they were not explicitly provided in the request
 		for _, paramName := range toolDef.StandardParams {
 			cliParamName := convertToCliParam(paramName)
 			params[cliParamName] = true
 		}
 
-		// Handle regular commands
+		// Handle supersedence: if an explicitly provided argument supersedes others, remove the superseded ones.
+		for _, paramDef := range toolDef.Params {
+			if _, argExistsInRequest := params[paramDef.Name]; !argExistsInRequest || len(paramDef.SupersedesParams) == 0 {
+				continue
+			}
+			for _, supersededParamName := range paramDef.SupersedesParams {
+				cliSupersededName := convertToCliParam(supersededParamName)
+				if _, ok := params[cliSupersededName]; ok {
+					logger.Debug().Str("supersedingArg", paramDef.Name).Str("supersededParam", supersededParamName).Msg("Deleting superseded parameter.")
+					delete(params, cliSupersededName)
+				}
+			}
+		}
+
 		if len(toolDef.Command) == 0 {
 			return nil, fmt.Errorf("empty command in tool definition for %s", toolDef.Name)
 		}
