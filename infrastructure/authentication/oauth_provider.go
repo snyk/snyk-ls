@@ -50,7 +50,7 @@ func (p *OAuth2Provider) Authenticate(ctx context.Context) (string, error) {
 	err := p.authenticator.CancelableAuthenticate(ctx)
 	switch {
 	case errors.Is(err, auth.ErrAuthCanceled):
-		return "", nil // Consume the error, the user knows they cancelled.
+		return "", nil // Consume the error, the user knows they canceled.
 	case err != nil:
 		return "", err
 	}
