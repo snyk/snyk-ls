@@ -18,6 +18,7 @@ package authentication
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -47,7 +48,10 @@ func (p *OAuth2Provider) Authenticate(ctx context.Context) (string, error) {
 	p.m.Lock()
 	defer p.m.Unlock()
 	err := p.authenticator.CancelableAuthenticate(ctx)
-	if err != nil {
+	switch {
+	case errors.Is(err, auth.ErrAuthCanceled):
+		return "", nil // Consume the error, the user knows they cancelled.
+	case err != nil:
 		return "", err
 	}
 	p.logger.Debug().Msg("authenticated with OAuth")
