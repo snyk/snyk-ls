@@ -75,7 +75,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		issueProvider.EXPECT().Issue(gomock.Any()).Return(&issue)
 		cut.issueProvider = issueProvider
 		cut.command = types.CommandData{
-			Arguments: []any{"file:///folderPath", "file:///folderPath/issuePath", issue.ID},
+			Arguments: []any{issue.ID},
 		}
 
 		suggestions, err := cut.Execute(context.Background())
@@ -86,34 +86,10 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("unhappy - file not beneath folder", func(t *testing.T) {
+	t.Run("unhappy - no args", func(t *testing.T) {
 		cut.issueProvider = mock_snyk.NewMockIssueProvider(ctrl)
 		cut.command = types.CommandData{
-			Arguments: []any{"file:///folderPath", "file:///anotherFolder/issuePath", "issueId"},
-		}
-
-		suggestions, err := cut.Execute(context.Background())
-
-		require.Emptyf(t, suggestions, "suggestions should be empty")
-		require.Error(t, err)
-	})
-
-	t.Run("unhappy - folder empty", func(t *testing.T) {
-		cut.issueProvider = mock_snyk.NewMockIssueProvider(ctrl)
-		cut.command = types.CommandData{
-			Arguments: []any{"", "file:///anotherFolder/issuePath", "issueId"},
-		}
-
-		suggestions, err := cut.Execute(context.Background())
-
-		require.Emptyf(t, suggestions, "suggestions should be empty")
-		require.Error(t, err)
-	})
-
-	t.Run("unhappy - file empty", func(t *testing.T) {
-		cut.issueProvider = mock_snyk.NewMockIssueProvider(ctrl)
-		cut.command = types.CommandData{
-			Arguments: []any{"file://folder", "", "issueId"},
+			Arguments: []any{},
 		}
 
 		suggestions, err := cut.Execute(context.Background())

@@ -137,20 +137,9 @@ type FakeSnykCodeClient struct {
 	maxConcurrentScans     int
 	NoFixSuggestions       bool
 	UnifiedDiffSuggestions []AutofixUnifiedDiffSuggestion
-	AutofixStatus          AutofixStatus
 	Options                map[string]AnalysisOptions
 	C                      *config.Config
 	FeedbackSent           string
-}
-
-func (f *FakeSnykCodeClient) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, options AutofixOptions) (unifiedDiffSuggestions []AutofixUnifiedDiffSuggestion, status AutofixStatus, err error) {
-	f.AutofixStatus = AutofixStatus{message: completeStatus}
-	return f.UnifiedDiffSuggestions, f.AutofixStatus, nil
-}
-
-func (f *FakeSnykCodeClient) getAutofixResponse(_ context.Context, _ AutofixOptions) (autofixResponse AutofixResponse, status AutofixStatus, err error) {
-	f.AutofixStatus = AutofixStatus{message: completeStatus}
-	return autofixResponse, f.AutofixStatus, nil
 }
 
 func (f *FakeSnykCodeClient) addCall(params []any, op string) {
@@ -293,11 +282,4 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 		FakeIssue,
 	).Msg("fake backend call received & answered")
 	return issues, successfulResult, nil
-}
-
-func (f *FakeSnykCodeClient) SubmitAutofixFeedback(_ context.Context, _ string, feedback string) error {
-	FakeSnykCodeApiServiceMutex.Lock()
-	f.FeedbackSent = feedback
-	FakeSnykCodeApiServiceMutex.Unlock()
-	return nil
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package mcp
+package mcp_extension
 
 import (
 	"net/url"

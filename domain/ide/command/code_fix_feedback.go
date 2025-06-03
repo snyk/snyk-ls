@@ -20,17 +20,16 @@ import (
 	"context"
 	"fmt"
 
+	codeClientHTTP "github.com/snyk/code-client-go/http"
+	"github.com/snyk/code-client-go/llm"
+
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type SnykCodeHttpClient interface {
-	SubmitAutofixFeedback(ctx context.Context, fixId string, positive string) error
-}
-
 type codeFixFeedback struct {
-	command        types.CommandData
-	codeHttpClient SnykCodeHttpClient
+	command types.CommandData
 }
 
 func (cmd *codeFixFeedback) Command() types.CommandData {
@@ -49,9 +48,33 @@ func (cmd *codeFixFeedback) Execute(ctx context.Context) (any, error) {
 	}
 
 	go func() {
-		err := cmd.codeHttpClient.SubmitAutofixFeedback(ctx, fixId, feedback)
+		c := config.CurrentConfig()
+		c.Logger().Info().Str("fixId", fixId).Str("feedback", feedback).Msg("Submiting autofix feedback")
+
+		host, err := code.GetCodeApiUrl(c)
 		if err != nil {
-			config.CurrentConfig().Logger().Err(err).Str("fixId", fixId).Str("feedback", feedback).Msg("failed to submit autofix feedback")
+			c.Logger().Error().Str("fixId", fixId).Str("host", host).Err(err).Msg("Failed to get endpoint from host")
+		}
+
+		deepCodeLLMBinding := llm.NewDeepcodeLLMBinding(
+			llm.WithLogger(c.Logger()),
+			llm.WithOutputFormat(llm.HTML),
+			llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
+				return config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient()
+			}),
+		)
+
+		options := llm.AutofixFeedbackOptions{
+			FixID:               fixId,
+			Result:              feedback,
+			Host:                host,
+			CodeRequestContext:  code.NewAutofixCodeRequestContext(),
+			IdeExtensionDetails: code.GetAutofixIdeExtensionDetails(c),
+		}
+
+		err = deepCodeLLMBinding.SubmitAutofixFeedback(ctx, fixId, options)
+		if err != nil {
+			c.Logger().Err(err).Str("fixId", fixId).Str("feedback", feedback).Msg("failed to submit autofix feedback")
 		}
 	}()
 
