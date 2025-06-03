@@ -41,18 +41,22 @@ const (
 	path2   = "/AnnotatorTest2.java"
 	content = `public class AnnotatorTest {
   public static void delay(long millis) {
+    String query = "SELECT * FROM users WHERE name = '" + millis + "'";
     try {
-      Thread.sleep(millis);
-    } catch (InterruptedException e) {
+      Statement stmt = conn.createStatement();
+      stmt.executeQuery(query);
+    } catch (SQLException e) {
       e.printStackTrace();
     }
   }
 }`
 	content2 = `public class AnnotatorTest2 {
   public static void delay(long millis) {
+    String query = "SELECT * FROM users WHERE name = '" + millis + "' OR 1=1";
     try {
-      Thread.sleep(millis);
-    } catch (InterruptedException e) {
+      Statement stmt = conn.createStatement();
+      stmt.executeQuery(query);
+    } catch (SQLException e) {
       e.printStackTrace();
     }
   }

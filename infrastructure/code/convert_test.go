@@ -97,7 +97,7 @@ func getSarifResponseJson(filePath types.FilePath) string {
                     "error"
                   ],
                   "categories": [
-                    "Defect"
+                    "Security"
                   ],
                   "exampleCommitFixes": [
                     {
@@ -258,7 +258,7 @@ func getSarifResponseJson(filePath types.FilePath) string {
                     "overwrite"
                   ],
                   "categories": [
-                    "Defect"
+                    "Security"
                   ],
                   "exampleCommitFixes": [
                     {

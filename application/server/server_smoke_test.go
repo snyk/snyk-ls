@@ -742,7 +742,7 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIss
 		waitForNetwork(c)
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.CodeFixDiffsCommand,
-			Arguments: []any{uri.PathToUri(folderPath), uri.PathToUri(issue.FilePath), issue.Id},
+			Arguments: []any{issue.Id},
 		})
 		assert.NoError(t, err)
 		// don't check for all issues, just the first
