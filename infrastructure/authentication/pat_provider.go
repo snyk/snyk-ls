@@ -50,12 +50,12 @@ func (p *PatAuthenticationProvider) Authenticate(_ context.Context) (string, err
 	p.m.Lock()
 	defer p.m.Unlock()
 
-	url := p.authURL + "/account/personal-access-tokens" // TODO check, find
+	url := p.config.GetString(configuration.WEB_APP_URL) + "/account/personal-access-tokens" // TODO check, find
 	p.logger.Debug().Msg("PAT URL: " + url)
 
 	p.openBrowserFunc(url)
 	p.logger.Debug().Msg("Opened browser to generate PAT")
-	return p.config.GetString(auth.CONFIG_KEY_TOKEN), nil
+	return "", nil
 }
 
 func (p *PatAuthenticationProvider) setAuthUrl(url string) {

@@ -121,9 +121,5 @@ func NewOAuthProvider(
 func NewPatProvider(c *config.Config, openBrowserFunc func(string)) *PatAuthenticationProvider {
 	conf := c.Engine().GetConfiguration()
 
-	// Set token, should determine endpoint?
-	conf.Set(configuration.AUTHENTICATION_TOKEN, c.Token()) //TODO is this the correct setting?
-	conf.Set(configuration.API_URL, c.SnykApi())            //TODO is this the correct setting?
-
 	return newPatAuthenticationProvider(conf, openBrowserFunc, c.Logger())
 }
