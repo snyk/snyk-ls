@@ -27,7 +27,7 @@ import (
 )
 
 type OAuth2Provider struct {
-	authenticator auth.Authenticator
+	authenticator auth.CancelableAuthenticator
 	config        configuration.Configuration
 	authURL       string
 	logger        *zerolog.Logger
@@ -38,7 +38,7 @@ func (p *OAuth2Provider) GetCheckAuthenticationFunction() AuthenticationFunction
 	return AuthenticationCheck
 }
 
-func newOAuthProvider(config configuration.Configuration, authenticator auth.Authenticator, logger *zerolog.Logger) *OAuth2Provider {
+func newOAuthProvider(config configuration.Configuration, authenticator auth.CancelableAuthenticator, logger *zerolog.Logger) *OAuth2Provider {
 	logger.Debug().Msg("creating new OAuth provider")
 	return &OAuth2Provider{authenticator: authenticator, config: config, logger: logger}
 }
@@ -46,13 +46,7 @@ func newOAuthProvider(config configuration.Configuration, authenticator auth.Aut
 func (p *OAuth2Provider) Authenticate(ctx context.Context) (string, error) {
 	p.m.Lock()
 	defer p.m.Unlock()
-	cancelableAuthenticator, ok := p.authenticator.(auth.CancelableAuthenticator)
-	var err error
-	if ok {
-		err = cancelableAuthenticator.CancelableAuthenticate(ctx)
-	} else {
-		err = p.authenticator.Authenticate()
-	}
+	err := p.authenticator.CancelableAuthenticate(ctx)
 	if err != nil {
 		return "", err
 	}

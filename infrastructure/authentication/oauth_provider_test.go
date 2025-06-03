@@ -37,6 +37,8 @@ import (
 
 var defaultExpiry = time.Now().Add(2 * time.Second)
 
+var _ auth.CancelableAuthenticator = (*fakeOauthAuthenticator)(nil)
+
 type fakeOauthAuthenticator struct {
 	calls       map[string][][]any
 	m           sync.Mutex
@@ -46,7 +48,7 @@ type fakeOauthAuthenticator struct {
 	success     bool
 }
 
-func NewFakeOauthAuthenticator(tokenExpiry time.Time, isSupported bool, config configuration.Configuration, success bool) auth.Authenticator {
+func NewFakeOauthAuthenticator(tokenExpiry time.Time, isSupported bool, config configuration.Configuration, success bool) auth.CancelableAuthenticator {
 	return &fakeOauthAuthenticator{
 		isSupported: isSupported,
 		config:      config,
@@ -89,8 +91,7 @@ func (f *fakeOauthAuthenticator) GetAllCalls(op string) [][]any {
 	return calls
 }
 
-func (f *fakeOauthAuthenticator) Authenticate() error {
-	f.addCall(nil, "Authenticate")
+func (f *fakeOauthAuthenticator) fakeAuthenticate() error {
 	if !f.success {
 		return errors.New("fake auth error")
 	}
@@ -103,6 +104,16 @@ func (f *fakeOauthAuthenticator) Authenticate() error {
 	}
 	f.config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(tokenString))
 	return nil
+}
+
+func (f *fakeOauthAuthenticator) Authenticate() error {
+	f.addCall(nil, "Authenticate")
+	return f.fakeAuthenticate()
+}
+
+func (f *fakeOauthAuthenticator) CancelableAuthenticate(_ context.Context) error {
+	f.addCall(nil, "CancelableAuthenticate")
+	return f.fakeAuthenticate()
 }
 
 func (f *fakeOauthAuthenticator) AddAuthenticationHeader(_ *http.Request) error {
@@ -123,7 +134,7 @@ func TestAuthenticateUsesAuthenticator(t *testing.T) {
 	authToken, err := provider.Authenticate(context.Background())
 
 	assert.NoError(t, err)
-	assert.Len(t, authenticator.GetAllCalls("Authenticate"), 1)
+	assert.Len(t, authenticator.GetAllCalls("CancelableAuthenticate"), 1)
 	assert.Greater(t, len(authToken), 0, "empty token returned")
 }
 
