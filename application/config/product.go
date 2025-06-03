@@ -21,7 +21,7 @@ import "github.com/snyk/snyk-ls/internal/product"
 func (c *Config) IsProductEnabled(p product.Product) bool {
 	switch p {
 	case product.ProductCode:
-		return c.IsSnykCodeEnabled() || c.IsSnykCodeQualityEnabled() || c.IsSnykCodeSecurityEnabled()
+		return c.IsSnykCodeEnabled() || c.IsSnykCodeSecurityEnabled()
 	case product.ProductOpenSource:
 		return c.IsSnykOssEnabled()
 	case product.ProductInfrastructureAsCode:
@@ -36,11 +36,7 @@ func (c *Config) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
 	enabled[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabled()
 
 	// Handle backwards compatibility.
-	// Older configurations had a single value for both snyk code issue types (security & quality)
-	// New configurations have 1 for each, and should ignore the general IsSnykCodeEnabled value.
 	enabled[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabled() || c.IsSnykCodeSecurityEnabled()
-	enabled[product.FilterableIssueTypeCodeQuality] = c.IsSnykCodeEnabled() || c.IsSnykCodeQualityEnabled()
-
 	enabled[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabled()
 
 	return enabled

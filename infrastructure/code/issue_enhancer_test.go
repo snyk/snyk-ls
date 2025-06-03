@@ -112,7 +112,7 @@ func Test_addIssueActions(t *testing.T) {
 				Range:            fakeRange,
 				Severity:         types.High,
 				Product:          product.ProductCode,
-				IssueType:        types.CodeQualityIssue,
+				IssueType:        types.CodeSecurityVulnerability,
 				Message:          "This is a dummy error (severity error)",
 				CodelensCommands: []types.CommandData{FakeCommand},
 				CodeActions:      []types.CodeAction{&FakeCodeAction},

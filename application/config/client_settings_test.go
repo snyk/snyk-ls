@@ -28,12 +28,10 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 	t.Setenv(ActivateSnykOssKey, "set it to anything to make sure it is reset")
 	t.Setenv(ActivateSnykCodeKey, "set it to anything to make sure it is reset")
 	t.Setenv(ActivateSnykIacKey, "set it to anything to make sure it is reset")
-	t.Setenv(ActivateSnykContainerKey, "set it to anything to make sure it is reset")
 	t.Setenv(ActivateSnykAdvisorKey, "set it to anything to make sure it is reset")
 	_ = os.Unsetenv(ActivateSnykOssKey)
 	_ = os.Unsetenv(ActivateSnykCodeKey)
 	_ = os.Unsetenv(ActivateSnykIacKey)
-	_ = os.Unsetenv(ActivateSnykContainerKey)
 	_ = os.Unsetenv(ActivateSnykAdvisorKey)
 	SetCurrentConfig(New())
 
@@ -42,7 +40,6 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 	assert.Equal(t, true, CurrentConfig().IsSnykOssEnabled())
 	assert.Equal(t, false, CurrentConfig().IsSnykCodeEnabled())
 	assert.Equal(t, true, CurrentConfig().IsSnykIacEnabled())
-	assert.Equal(t, false, CurrentConfig().IsSnykContainerEnabled())
 	assert.Equal(t, false, CurrentConfig().IsSnykAdvisorEnabled())
 }
 
@@ -85,14 +82,12 @@ func TestInitializeDefaultProductEnablement(t *testing.T) {
 	t.Setenv(ActivateSnykCodeKey, "true")
 	t.Setenv(ActivateSnykIacKey, "false")
 	t.Setenv(ActivateSnykAdvisorKey, "true")
-	t.Setenv(ActivateSnykContainerKey, "true")
 
 	SetCurrentConfig(New())
 
 	assert.Equal(t, false, CurrentConfig().IsSnykOssEnabled())
 	assert.Equal(t, true, CurrentConfig().IsSnykCodeEnabled())
 	assert.Equal(t, false, CurrentConfig().IsSnykIacEnabled())
-	assert.Equal(t, true, CurrentConfig().IsSnykContainerEnabled())
 	assert.Equal(t, true, CurrentConfig().IsSnykAdvisorEnabled())
 }
 
@@ -124,16 +119,6 @@ func TestGetEnabledProducts_Iac(t *testing.T) {
 	t.Setenv(ActivateSnykIacKey, "true")
 	CurrentConfig().clientSettingsFromEnv()
 	assert.Equal(t, true, CurrentConfig().IsSnykIacEnabled())
-}
-
-func TestGetEnabledProducts_Container(t *testing.T) {
-	t.Setenv(ActivateSnykContainerKey, "false")
-	CurrentConfig().clientSettingsFromEnv()
-	assert.Equal(t, false, CurrentConfig().IsSnykContainerEnabled())
-
-	t.Setenv(ActivateSnykContainerKey, "true")
-	CurrentConfig().clientSettingsFromEnv()
-	assert.Equal(t, true, CurrentConfig().IsSnykContainerEnabled())
 }
 
 func TestGetEnabledProducts_Advisor(t *testing.T) {

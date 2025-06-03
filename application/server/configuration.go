@@ -126,7 +126,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	manageBinariesAutomatically(c, settings)
 	updateTrustedFolders(c, settings)
 	updateSnykCodeSecurity(c, settings)
-	updateSnykCodeQuality(c, settings)
+	updateRuntimeInfo(c, settings)
 	updateRuntimeInfo(c, settings)
 	updateAutoScan(c, settings)
 	updateSnykLearnCodeActions(c, settings)
@@ -315,15 +315,6 @@ func updateSnykCodeSecurity(c *config.Config, settings types.Settings) {
 	}
 }
 
-func updateSnykCodeQuality(c *config.Config, settings types.Settings) {
-	parseBool, err := strconv.ParseBool(settings.ActivateSnykCodeQuality)
-	if err != nil {
-		c.Logger().Debug().Msgf("couldn't read IsSnykCodeQualityEnabled %s", settings.ActivateSnykCodeQuality)
-	} else {
-		c.EnableSnykCodeQuality(parseBool)
-	}
-}
-
 // TODO store in config, move parsing to CLI
 func updatePathFromSettings(c *config.Config, settings types.Settings) {
 	// when changing the path from settings, we cache the original path first, to be able to restore it later
@@ -380,7 +371,6 @@ func updateProductEnablement(c *config.Config, settings types.Settings) {
 		c.Logger().Debug().Msg("couldn't parse code setting")
 	} else {
 		c.SetSnykCodeEnabled(parseBool)
-		c.EnableSnykCodeQuality(parseBool)
 		c.EnableSnykCodeSecurity(parseBool)
 	}
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)

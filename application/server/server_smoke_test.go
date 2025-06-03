@@ -158,7 +158,6 @@ func Test_SmokePreScanCommand(t *testing.T) {
 		c := testutil.SmokeTest(t, false)
 		loc, jsonRpcRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(false)
-		c.EnableSnykCodeQuality(false)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
@@ -208,7 +207,6 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c := testutil.SmokeTest(t, false)
 		loc, jsonRPCRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(true)
-		c.EnableSnykCodeQuality(false)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
@@ -284,7 +282,6 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c := testutil.SmokeTest(t, false)
 		loc, jsonRPCRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(true)
-		c.EnableSnykCodeQuality(false)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
@@ -352,7 +349,6 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 	loc, _ := setupServer(t, c)
 	c.EnableSnykCodeSecurity(false)
-	c.EnableSnykCodeQuality(false)
 	c.SetSnykIacEnabled(false)
 	c.SetSnykOssEnabled(true)
 	di.Init()
@@ -802,7 +798,6 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
 			ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
 			ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
-			ActivateSnykCodeQuality:     strconv.FormatBool(c.IsSnykCodeQualityEnabled()),
 			ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeSecurityEnabled()),
 			CliPath:                     c.CliSettings().Path(),
 		},
@@ -940,7 +935,6 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 	c.SetSnykOssEnabled(false)
 	c.SetSnykIacEnabled(false)
-	c.EnableSnykCodeQuality(false)
 	c.SetManageBinariesAutomatically(false)
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
