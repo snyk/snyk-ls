@@ -132,9 +132,8 @@ func TestSnykTestHandler(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Define test cases
 	testCases := []struct {
-		name           string
-		args           map[string]interface{}
-		expectedParams []string
+		name string
+		args map[string]interface{}
 	}{
 		{
 			name: "Basic SCA Test",
@@ -143,17 +142,6 @@ func TestSnykTestHandler(t *testing.T) {
 				"all_projects": true,
 				"json":         true,
 			},
-			expectedParams: []string{"--all-projects", "--json"},
-		},
-		{
-			name: "SCA Test with File param",
-			args: map[string]interface{}{
-				"path":         tmpDir,
-				"all_projects": true,
-				"file":         "package.json",
-				"json":         true,
-			},
-			expectedParams: []string{"--file", "--json"},
 		},
 		{
 			name: "Test with Organization",
@@ -163,7 +151,6 @@ func TestSnykTestHandler(t *testing.T) {
 				"json":         true,
 				"org":          "my-snyk-org",
 			},
-			expectedParams: []string{"--all-projects", "--json", "--org=my-snyk-org"},
 		},
 		{
 			name: "Test with Severity Threshold",
@@ -173,7 +160,6 @@ func TestSnykTestHandler(t *testing.T) {
 				"json":               true,
 				"severity_threshold": "high",
 			},
-			expectedParams: []string{"--json", "--severity-threshold=high"},
 		},
 		{
 			name: "Test with Multiple Options",
@@ -186,11 +172,6 @@ func TestSnykTestHandler(t *testing.T) {
 				"skip_unresolved":                true,
 				"prune_repeated_subdependencies": true,
 				"fail_on":                        "upgradable",
-			},
-			expectedParams: []string{
-				"--all-projects", "--json", "--severity-threshold=medium",
-				"--dev", "--skip-unresolved", "--prune-repeated-subdependencies",
-				"--fail-on=upgradable",
 			},
 		},
 	}
@@ -839,4 +820,195 @@ exit 0
 
 	err := os.WriteFile(path, []byte(script), 0755)
 	require.NoError(t, err)
+}
+
+func TestPrepareCmdArgsForTool(t *testing.T) {
+	nopLogger := zerolog.Nop()
+
+	testCases := []struct {
+		name           string
+		toolDef        SnykMcpToolsDefinition
+		requestArgs    map[string]interface{}
+		expectedParams map[string]interface{}
+		expectedWd     string
+	}{
+		{
+			name: "Basic string & bool params, path extraction",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "path", Type: "string"},
+					{Name: "all_projects", Type: "boolean"},
+					{Name: "org", Type: "string"},
+				},
+			},
+			requestArgs: map[string]interface{}{
+				"path":         "/tmp/projectA",
+				"all_projects": true,
+				"org":          "my-org-name",
+				"unused_param": "some_value", // Should be ignored
+			},
+			expectedParams: map[string]interface{}{
+				"path":         "/tmp/projectA",
+				"all-projects": true,
+				"org":          "my-org-name",
+			},
+			expectedWd: "/tmp/projectA",
+		},
+		{
+			name: "Standard params addition",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "file", Type: "string"},
+				},
+				StandardParams: []string{"json", "debug_mode"},
+			},
+			requestArgs: map[string]interface{}{
+				"file": "package.json",
+			},
+			expectedParams: map[string]interface{}{
+				"file":       "package.json",
+				"json":       true,
+				"debug-mode": true,
+			},
+			expectedWd: "",
+		},
+		{
+			name: "Supersedence: 'file' supersedes 'all_projects' (both in request)",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "file", Type: "string", SupersedesParams: []string{"all_projects"}},
+					{Name: "all_projects", Type: "boolean"},
+					{Name: "json", Type: "boolean"},
+				},
+			},
+			requestArgs: map[string]interface{}{
+				"file":         "pom.xml",
+				"all_projects": true,
+				"json":         true,
+			},
+			expectedParams: map[string]interface{}{
+				"file": "pom.xml",
+				"json": true, // all-projects should be removed
+			},
+			expectedWd: "",
+		},
+		{
+			name: "Supersedence: 'file' (in request) supersedes 'all_projects' (from standard_params)",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "file", Type: "string", SupersedesParams: []string{"all_projects"}},
+					{Name: "json", Type: "boolean"},
+				},
+				StandardParams: []string{"all_projects", "debug"}, // all_projects will be added as standard
+			},
+			requestArgs: map[string]interface{}{
+				"file": "pom.xml",
+				"json": true,
+			},
+			expectedParams: map[string]interface{}{
+				"file":  "pom.xml",
+				"json":  true,
+				"debug": true, // all-projects added by standard, then removed by 'file' superseding it
+			},
+			expectedWd: "",
+		},
+		{
+			name: "No request args, only standard params",
+			toolDef: SnykMcpToolsDefinition{
+				StandardParams: []string{"json", "all_projects"},
+			},
+			requestArgs: map[string]interface{}{},
+			expectedParams: map[string]interface{}{
+				"json":         true,
+				"all-projects": true,
+			},
+			expectedWd: "",
+		},
+		{
+			name: "Path is provided but not a string",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "path", Type: "string"},
+				},
+			},
+			requestArgs: map[string]interface{}{
+				"path": 123,
+			},
+			expectedParams: map[string]interface{}{},
+			expectedWd:     "", // Path extraction fails if not string
+		},
+		{
+			name: "Boolean param in request is false",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "all_projects", Type: "boolean"},
+				},
+			},
+			requestArgs: map[string]interface{}{
+				"all_projects": false,
+			},
+			expectedParams: map[string]interface{}{}, // False booleans are not added
+			expectedWd:     "",
+		},
+		{
+			name: "String param in request is empty string",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "org", Type: "string"},
+				},
+			},
+			requestArgs: map[string]interface{}{
+				"org": "",
+			},
+			expectedParams: map[string]interface{}{}, // Empty strings are not added
+			expectedWd:     "",
+		},
+		{
+			name: "Supersedence: multiple params superseded",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "package_manager", Type: "string", SupersedesParams: []string{"all_projects", "file"}},
+					{Name: "all_projects", Type: "boolean"},
+					{Name: "file", Type: "string"},
+					{Name: "json", Type: "boolean"},
+				},
+			},
+			requestArgs: map[string]interface{}{
+				"package_manager": "npm",
+				"all_projects":    true,
+				"file":            "package-lock.json",
+				"json":            true,
+			},
+			expectedParams: map[string]interface{}{
+				"package-manager": "npm",
+				"json":            true,
+			},
+			expectedWd: "",
+		},
+		{
+			name: "Supersedence: superseded param not in request, but in standard params",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "org", Type: "string", SupersedesParams: []string{"dev"}},
+				},
+				StandardParams: []string{"dev", "json"},
+			},
+			requestArgs: map[string]interface{}{
+				"org": "my-org",
+			},
+			expectedParams: map[string]interface{}{
+				"org":  "my-org",
+				"json": true, // dev is removed
+			},
+			expectedWd: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualParams, actualWd := prepareCmdArgsForTool(&nopLogger, tc.toolDef, tc.requestArgs)
+			assert.EqualValues(t, tc.expectedParams, actualParams, "Parameter map mismatch")
+			assert.Equal(t, tc.expectedWd, actualWd, "Working directory mismatch")
+		})
+	}
 }

@@ -22,6 +22,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpServer "github.com/mark3labs/mcp-go/server"
+	"github.com/rs/zerolog"
 )
 
 // buildArgs builds command-line arguments for Snyk CLI based on parameters
@@ -66,6 +67,30 @@ func createToolFromDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
 	}
 
 	return mcp.NewTool(toolDef.Name, opts...)
+}
+
+func prepareCmdArgsForTool(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, arguments map[string]interface{}) (map[string]interface{}, string) {
+	params, workingDir := extractParamsFromRequestArgs(toolDef, arguments)
+
+	for _, paramName := range toolDef.StandardParams {
+		cliParamName := convertToCliParam(paramName)
+		params[cliParamName] = true
+	}
+
+	// Handle supersedence: if an explicitly provided argument supersedes others, remove the superseded ones.
+	for _, paramDef := range toolDef.Params {
+		if _, argExistsInRequest := arguments[paramDef.Name]; !argExistsInRequest || len(paramDef.SupersedesParams) == 0 {
+			continue
+		}
+		for _, supersededParamName := range paramDef.SupersedesParams {
+			cliSupersededName := convertToCliParam(supersededParamName)
+			if _, ok := params[cliSupersededName]; ok {
+				logger.Debug().Str("supersedingArg", paramDef.Name).Str("supersededParam", supersededParamName).Msg("Deleting superseded parameter.")
+				delete(params, cliSupersededName)
+			}
+		}
+	}
+	return params, workingDir
 }
 
 // extractParamsFromRequestArgs extracts parameters from the arguments based on the tool definition
