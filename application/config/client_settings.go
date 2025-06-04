@@ -22,13 +22,12 @@ import (
 )
 
 const (
-	ActivateSnykOssKey       = "ACTIVATE_SNYK_OPEN_SOURCE"
-	ActivateSnykCodeKey      = "ACTIVATE_SNYK_CODE"
-	ActivateSnykIacKey       = "ACTIVATE_SNYK_IAC"
-	ActivateSnykContainerKey = "ACTIVATE_SNYK_CONTAINER"
-	ActivateSnykAdvisorKey   = "ACTIVATE_SNYK_ADVISOR"
-	SendErrorReportsKey      = "SEND_ERROR_REPORTS"
-	Organization             = "SNYK_CFG_ORG"
+	ActivateSnykOssKey     = "ACTIVATE_SNYK_OPEN_SOURCE"
+	ActivateSnykCodeKey    = "ACTIVATE_SNYK_CODE"
+	ActivateSnykIacKey     = "ACTIVATE_SNYK_IAC"
+	ActivateSnykAdvisorKey = "ACTIVATE_SNYK_ADVISOR"
+	SendErrorReportsKey    = "SEND_ERROR_REPORTS"
+	Organization           = "SNYK_CFG_ORG"
 )
 
 func (c *Config) clientSettingsFromEnv() {
@@ -58,7 +57,6 @@ func (c *Config) productEnablementFromEnv() {
 	oss := os.Getenv(ActivateSnykOssKey)
 	code := os.Getenv(ActivateSnykCodeKey)
 	iac := os.Getenv(ActivateSnykIacKey)
-	container := os.Getenv(ActivateSnykContainerKey)
 	advisor := os.Getenv(ActivateSnykAdvisorKey)
 
 	if oss != "" {
@@ -85,13 +83,6 @@ func (c *Config) productEnablementFromEnv() {
 		c.SetSnykIacEnabled(parseBool)
 	}
 
-	if container != "" {
-		parseBool, err := strconv.ParseBool(container)
-		if err != nil {
-			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse container config %s", container)
-		}
-		c.SetSnykContainerEnabled(parseBool)
-	}
 	if advisor != "" {
 		parseBool, err := strconv.ParseBool(advisor)
 		if err != nil {

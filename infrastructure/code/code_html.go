@@ -176,7 +176,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	data := map[string]any{
 		"IssueTitle":           additionalData.Title,
 		"IssueMessage":         additionalData.Message,
-		"IssueType":            getIssueType(additionalData),
+		"IssueType":            getIssueType(),
 		"SeverityIcon":         html.SeverityIcon(issue),
 		"CWEs":                 issue.GetCWEs(),
 		"IssueOverview":        html.MarkdownToHTML(additionalData.Text),
@@ -338,11 +338,8 @@ func parseExampleCommitsToTemplateJS(fixes []ExampleCommit, logger *zerolog.Logg
 	return template.JS(jsonFixes)
 }
 
-func getIssueType(additionalData snyk.CodeIssueData) string {
-	if additionalData.IsSecurityType {
-		return "Issue"
-	}
-	return "Quality Issue"
+func getIssueType() string {
+	return "Issue"
 }
 
 func getRepoName(commitURL string) string {

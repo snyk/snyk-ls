@@ -78,7 +78,7 @@ var (
 		Range:            fakeRange,
 		Severity:         types.High,
 		Product:          product.ProductCode,
-		IssueType:        types.CodeQualityIssue,
+		IssueType:        types.CodeSecurityVulnerability,
 		Message:          "This is a dummy error (severity error)",
 		CodelensCommands: []types.CommandData{FakeCommand, FakeFixCommand},
 		CodeActions:      []types.CodeAction{&FakeCodeAction},
@@ -114,8 +114,8 @@ func TempWorkdirWithIssues(t *testing.T) (types.FilePath, types.FilePath) {
 	require.NoError(t, err)
 
 	filePath := filepath.Join(folderPath, "Dummy"+FakeFileExtension)
-	classWithQualityIssue := "public class AnnotatorTest {\n  public static void delay(long millis) {\n    try {\n      Thread.sleep(millis);\n    } catch (InterruptedException e) {\n      e.printStackTrace();\n    }\n  }\n};"
-	err = os.WriteFile(filePath, []byte(classWithQualityIssue), 0600)
+	classWithSQLInjection := "import java.sql.Connection;\nimport java.sql.DriverManager;\nimport java.sql.ResultSet;\nimport java.sql.SQLException;\nimport java.sql.Statement;\n\npublic class AnnotatorTest {\n  public static void main(String[] args) {\n    try {\n      Class.forName(\"com.mysql.cj.jdbc.Driver\");\n      Connection conn = DriverManager.getConnection(\n          \"jdbc:mysql://localhost:3306/mydb\", \"root\", \"password\");\n      Statement stmt = conn.createStatement();\n      String query = \"SELECT * FROM users WHERE name = '\" + args[0] + \"'\";\n      ResultSet rs = stmt.executeQuery(query);\n      while (rs.next()) {\n        System.out.println(rs.getString(1));\n      }\n      conn.close();\n    } catch (ClassNotFoundException e) {\n      e.printStackTrace();\n    } catch (SQLException e) {\n      e.printStackTrace();\n    }\n  }\n};"
+	err = os.WriteFile(filePath, []byte(classWithSQLInjection), 0600)
 	if err != nil {
 		t.Fatal(err, "couldn't create temp file for fake diagnostic")
 	}

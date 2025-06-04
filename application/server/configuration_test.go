@@ -371,34 +371,13 @@ func Test_UpdateSettings(t *testing.T) {
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
-	t.Run("activateSnykCodeQuality is passed", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-
-		UpdateSettings(c, types.Settings{ActivateSnykCodeQuality: "true"})
-
-		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
-	})
-	t.Run("activateSnykCodeQuality is not passed", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-
-		UpdateSettings(c, types.Settings{})
-
-		assert.Equal(t, false, c.IsSnykCodeQualityEnabled())
-
-		c.EnableSnykCodeQuality(true)
-
-		UpdateSettings(c, types.Settings{})
-
-		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
-	})
-	t.Run("activateSnykCode sets SnykCodeQuality and SnykCodeSecurity", func(t *testing.T) {
+	t.Run("activateSnykCode sets SnykCodeSecurity", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		UpdateSettings(c, types.Settings{
 			ActivateSnykCode: "true",
 		})
 
-		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 		assert.Equal(t, true, c.IsSnykCodeEnabled())
 	})
@@ -510,26 +489,6 @@ func Test_InitializeSettings(t *testing.T) {
 		InitializeSettings(c, types.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
-	})
-	t.Run("activateSnykCodeQuality is passed", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-
-		InitializeSettings(c, types.Settings{ActivateSnykCodeQuality: "true"})
-
-		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
-	})
-	t.Run("activateSnykCodeQuality is not passed", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-
-		InitializeSettings(c, types.Settings{})
-
-		assert.Equal(t, false, c.IsSnykCodeQualityEnabled())
-
-		c.EnableSnykCodeQuality(true)
-
-		InitializeSettings(c, types.Settings{})
-
-		assert.Equal(t, true, c.IsSnykCodeQualityEnabled())
 	})
 
 	t.Run("custom path configuration", func(t *testing.T) {

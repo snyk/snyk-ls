@@ -131,7 +131,6 @@ func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, repor
 
 func (sc *Scanner) IsEnabled() bool {
 	return sc.C.IsSnykCodeEnabled() ||
-		sc.C.IsSnykCodeQualityEnabled() ||
 		sc.C.IsSnykCodeSecurityEnabled()
 }
 
@@ -162,7 +161,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		return nil, errors.New("Failed to get the sast settings")
 	}
 
-	if sastResponse == nil || !ok {
+	if sastResponse == nil {
 		return issues, errors.New("Failed to get the sast settings")
 	}
 
@@ -213,31 +212,13 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	if err != nil {
 		return nil, err
 	}
-	results = filterCodeIssues(sc.C, results)
+
 	// Populate HTML template
-	sc.enhanceIssuesDetails(results, folderPath)
+	sc.enhanceIssuesDetails(results)
 
 	sc.removeFromCache(filesToBeScanned)
 	sc.addToCache(results)
 	return results, err
-}
-
-func filterCodeIssues(c *config.Config, issues []types.Issue) []types.Issue {
-	if c.IsSnykCodeSecurityEnabled() && c.IsSnykCodeQualityEnabled() {
-		return issues
-	}
-	var result []types.Issue
-	for _, issue := range issues {
-		additionalData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
-		if !ok {
-			continue
-		}
-		shouldAdd := additionalData.IsSecurityType && c.IsSnykCodeSecurityEnabled() || !additionalData.IsSecurityType && c.IsSnykCodeQualityEnabled()
-		if shouldAdd {
-			result = append(result, issue)
-		}
-	}
-	return result
 }
 
 func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {
@@ -285,7 +266,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 }
 
 // Populate HTML template
-func (sc *Scanner) enhanceIssuesDetails(issues []types.Issue, folderPath types.FilePath) {
+func (sc *Scanner) enhanceIssuesDetails(issues []types.Issue) {
 	logger := sc.C.Logger().With().Str("method", "issue_enhancer.enhanceIssuesDetails").Logger()
 
 	for i := range issues {
@@ -515,7 +496,7 @@ func isNoFilesError(err error) bool {
 	return ok
 }
 
-//nolint:gocyclo // we will address cyclomatic complexity, but that's gonna be done when we move this to code-client-go
+//nolint:gocyclo // we will address cyclomatic complexity, but that's going to be done when we move this to code-client-go
 func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath types.FilePath, filePaths <-chan string, changedFiles map[types.FilePath]bool, t *progress.Tracker) (Bundle, error) {
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
 	defer sc.BundleUploader.instrumentor.Finish(span)

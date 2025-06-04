@@ -417,8 +417,6 @@ func (i *Issue) GetFilterableIssueType() product.FilterableIssueType {
 		return product.FilterableIssueTypeInfrastructureAsCode
 	case product.ProductCode:
 		switch i.IssueType {
-		case types.CodeQualityIssue:
-			return product.FilterableIssueTypeCodeQuality
 		case types.CodeSecurityVulnerability:
 			return product.FilterableIssueTypeCodeSecurity
 		default:

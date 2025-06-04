@@ -228,22 +228,6 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 		// Assert
 		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
 	})
-	t.Run("snyk code enabled via quality", func(t *testing.T) {
-		c.SetSnykIacEnabled(true)
-		c.SetSnykOssEnabled(true)
-		c.SetSnykCodeEnabled(false)
-		c.EnableSnykCodeQuality(true)
-
-		// Arrange
-		mockNotifier := notification.NewMockNotifier()
-		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
-
-		// Act
-		scanNotifier.SendInProgress("/test/folderPath")
-
-		// Assert
-		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
-	})
 }
 
 func containsMatchingMessage(t *testing.T,
