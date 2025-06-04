@@ -37,26 +37,28 @@ import (
 )
 
 const (
-	path1   = "/AnnotatorTest.java"
-	path2   = "/AnnotatorTest2.java"
-	content = `public class AnnotatorTest {
-  public static void delay(long millis) {
-    try {
-      Thread.sleep(millis);
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-    }
-  }
-}`
-	content2 = `public class AnnotatorTest2 {
-  public static void delay(long millis) {
-    try {
-      Thread.sleep(millis);
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-    }
-  }
-}`
+	path1   = "Test.js"
+	path2   = "Test2.js"
+	content = `require('./mongoose-db');
+require('./typeorm-db')
+
+var express = require('express');
+var http = require('http');
+var app = express();
+http.createServer(app).listen(app.get('port'), function () {
+  console.log('Express server listening on port ' + app.get('port'));
+});
+`
+	content2 = `require('./mongoose-db');
+require('./typeorm-db')
+
+var express2 = require('express');
+var http = require('http');
+var app = express();
+http.createServer(app).listen(app.get('port'), function () {
+  console.log('Express server listening on port ' + app.get('port'));
+});
+`
 )
 
 func clientFunc() *http.Client {
@@ -177,8 +179,9 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		if callStatus.message == "COMPLETE" && issues != nil {
-			return assert.NotEqual(t, 0, len(issues))
+		if callStatus.message == "COMPLETE" {
+			assert.Greater(t, len(issues), 0)
+			return true
 		}
 		return false
 	}, 120*time.Second, 2*time.Second)

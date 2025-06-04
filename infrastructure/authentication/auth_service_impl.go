@@ -53,8 +53,10 @@ type AuthenticationServiceImpl struct {
 	notifier      noti.Notifier
 	c             *config.Config
 	// key = token, value = isAuthenticated
-	authCache *imcache.Cache[string, bool]
-	m         sync.RWMutex
+	authCache            *imcache.Cache[string, bool]
+	m                    sync.RWMutex
+	previousCancelFunc   context.CancelFunc
+	previousCancelFuncMu sync.Mutex
 }
 
 func NewAuthenticationService(c *config.Config, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
@@ -85,9 +87,16 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 }
 
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
+	a.previousCancelFuncMu.Lock()
+	if a.previousCancelFunc != nil {
+		a.previousCancelFunc()
+	}
 	a.m.Lock()
 	defer a.m.Unlock()
 
+	ctx, a.previousCancelFunc = context.WithCancel(ctx)
+	a.previousCancelFuncMu.Unlock()
+	defer a.previousCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
 	return a.authenticate(ctx)
 }
 

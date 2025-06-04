@@ -162,7 +162,6 @@ type Config struct {
 	isSnykCodeEnabled                bool
 	isSnykOssEnabled                 bool
 	isSnykIacEnabled                 bool
-	isSnykContainerEnabled           bool
 	isSnykAdvisorEnabled             bool
 	manageBinariesAutomatically      bool
 	logPath                          string
@@ -182,7 +181,6 @@ type Config struct {
 	trustedFolders                   []types.FilePath
 	trustedFoldersFeatureEnabled     bool
 	activateSnykCodeSecurity         bool
-	activateSnykCodeQuality          bool
 	osPlatform                       string
 	osArch                           string
 	runtimeName                      string
@@ -421,7 +419,7 @@ func (c *Config) IsSnykCodeEnabled() bool {
 	c.m.RLock()
 	defer c.m.RUnlock()
 
-	return c.isSnykCodeEnabled || c.activateSnykCodeSecurity || c.activateSnykCodeQuality
+	return c.isSnykCodeEnabled || c.activateSnykCodeSecurity
 }
 
 func (c *Config) IsSnykIacEnabled() bool {
@@ -429,13 +427,6 @@ func (c *Config) IsSnykIacEnabled() bool {
 	defer c.m.RUnlock()
 
 	return c.isSnykIacEnabled
-}
-
-func (c *Config) IsSnykContainerEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isSnykContainerEnabled
 }
 
 func (c *Config) IsSnykAdvisorEnabled() bool {
@@ -580,8 +571,6 @@ func (c *Config) SetSnykCodeEnabled(enabled bool) {
 	defer c.m.Unlock()
 
 	c.isSnykCodeEnabled = enabled
-	// the general setting overrules the specific one and should be slowly discontinued
-	c.activateSnykCodeQuality = enabled
 	c.activateSnykCodeSecurity = enabled
 }
 func (c *Config) SetSnykIacEnabled(enabled bool) {
@@ -589,13 +578,6 @@ func (c *Config) SetSnykIacEnabled(enabled bool) {
 	defer c.m.Unlock()
 
 	c.isSnykIacEnabled = enabled
-}
-
-func (c *Config) SetSnykContainerEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.isSnykContainerEnabled = enabled
 }
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) {
@@ -967,18 +949,6 @@ func (c *Config) EnableSnykCodeSecurity(activate bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.activateSnykCodeSecurity = activate
-}
-
-func (c *Config) IsSnykCodeQualityEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.activateSnykCodeQuality
-}
-
-func (c *Config) EnableSnykCodeQuality(activate bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.activateSnykCodeQuality = activate
 }
 
 func (c *Config) OsPlatform() string {

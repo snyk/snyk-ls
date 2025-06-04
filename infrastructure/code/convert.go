@@ -90,16 +90,12 @@ func (s *SarifConverter) getReferences(r codeClientSarif.Rule) (references []typ
 	return references
 }
 
-func (s *SarifConverter) getCodeIssueType(r codeClientSarif.Rule) types.IssueType {
+func (s *SarifConverter) isSecurityIssue(r codeClientSarif.Rule) bool {
 	isSecurity := slices.ContainsFunc(r.Properties.Categories, func(category string) bool {
 		return strings.ToLower(category) == "security"
 	})
 
-	if isSecurity {
-		return types.CodeSecurityVulnerability
-	}
-
-	return types.CodeQualityIssue
+	return isSecurity
 }
 
 func (s *SarifConverter) cwe(r codeClientSarif.Rule) string {
@@ -348,6 +344,13 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 			}
 
 			testRule := s.getRule(r, result.RuleID)
+
+			// only process security issues
+			isSecurityType := s.isSecurityIssue(testRule)
+			if !isSecurityType {
+				continue
+			}
+
 			message := s.getMessage(result, testRule)
 			formattedMessage := s.formattedMessageMarkdown(result, testRule, baseDir)
 
@@ -367,12 +370,6 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 					CommitURL: commitURL,
 					Lines:     commitFixLines,
 				})
-			}
-
-			issueType := s.getCodeIssueType(testRule)
-			isSecurityType := true
-			if issueType == types.CodeQualityIssue {
-				isSecurityType = false
 			}
 
 			markers, err := s.getMarkers(result, baseDir)
@@ -409,7 +406,7 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 				Severity:            issueSeverity(result.Level),
 				Message:             message,
 				FormattedMessage:    formattedMessage,
-				IssueType:           issueType,
+				IssueType:           types.CodeSecurityVulnerability,
 				ContentRoot:         baseDir,
 				AffectedFilePath:    types.FilePath(absPath),
 				Product:             product.ProductCode,

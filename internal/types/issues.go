@@ -55,12 +55,10 @@ type IssueType int8
 
 const (
 	PackageHealth IssueType = iota
-	CodeQualityIssue
 	CodeSecurityVulnerability
 	LicenseIssue
 	DependencyVulnerability
 	InfrastructureIssue
-	ContainerVulnerability
 )
 
 type CodeAction interface {
