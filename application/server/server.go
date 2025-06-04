@@ -223,7 +223,7 @@ func initNetworkAccessHeaders() {
 	gafConfig := engine.GetConfiguration()
 	ua := util.GetUserAgent(gafConfig, config.Version)
 	engine.GetNetworkAccess().RemoveHeaderField("x-snyk-cli-version")
-	engine.GetNetworkAccess().AddHeaderField("x-snyk-ide", ua.AppVersion)
+	engine.GetNetworkAccess().AddHeaderField("x-snyk-ide", "snyk-ls-"+ua.AppVersion)
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
