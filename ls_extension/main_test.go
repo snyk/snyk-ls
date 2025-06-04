@@ -26,6 +26,7 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 
 	engineConfig := configuration.NewWithOpts(
 		configuration.WithAutomaticEnv(),
+		configuration.WithCachingEnabled(configuration.NoCacheExpiration),
 	)
 	engineConfig.Set(configuration.DEBUG, true)
 	engineConfig.Set("logLevelFlag", expectedLoglevel)
@@ -38,4 +39,6 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 	c := config.CurrentConfig()
 	assert.Equal(t, expectedLoglevel, c.LogLevel())
 	assert.Equal(t, expectedLogPath, c.LogPath())
+	assert.Equal(t, configCacheTTL, c.Engine().GetConfiguration().GetDuration(configuration.CONFIG_CACHE_TTL))
+	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.CONFIG_CACHE_DISABLED))
 }

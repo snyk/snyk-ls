@@ -136,7 +136,6 @@ func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
 		product.ProductOpenSource:           snyk.IssuesByFile{},
 		product.ProductCode:                 snyk.IssuesByFile{},
 		product.ProductInfrastructureAsCode: snyk.IssuesByFile{},
-		product.ProductContainer:            snyk.IssuesByFile{},
 	}
 	for path, issues := range f.Issues() {
 		if !f.Contains(path) {
@@ -607,7 +606,7 @@ func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.Filterab
 	var deltaList []types.Issue
 	for filterableIssueType, enabled := range supportedIssueTypes {
 		// analyze deltas for code only for code security
-		if !enabled || filterableIssueType == product.FilterableIssueTypeCodeQuality {
+		if !enabled {
 			continue
 		}
 		p := filterableIssueType.ToProduct()

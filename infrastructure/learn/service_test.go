@@ -95,15 +95,6 @@ func Test_GetLesson(t *testing.T) {
 
 		checkLesson(t, cut, params)
 	})
-
-	t.Run("Code quality - no lessons returned", func(t *testing.T) {
-		params := getRealCodeLookupParams()
-
-		lesson, err := cut.GetLesson(params.Ecosystem, params.Rule, params.CWEs, params.CVEs, types.CodeQualityIssue)
-
-		assert.NoError(t, err)
-		assert.Empty(t, lesson)
-	})
 }
 
 func checkLesson(t *testing.T, cut Service, params LessonLookupParams) {

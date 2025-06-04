@@ -59,10 +59,7 @@ func (c CodeIssueData) IsFixable() bool {
 }
 
 func (c CodeIssueData) GetFilterableIssueType() product.FilterableIssueType {
-	if c.IsSecurityType {
-		return product.FilterableIssueTypeCodeSecurity
-	}
-	return product.FilterableIssueTypeCodeQuality
+	return product.FilterableIssueTypeCodeSecurity
 }
 
 func (c CodeIssueData) MarshalJSON() ([]byte, error) {

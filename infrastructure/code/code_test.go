@@ -327,7 +327,8 @@ func TestUploadAndAnalyze(t *testing.T) {
 			assert.Equal(t, FakeIssue.Range, issues[0].GetRange())
 			assert.Equal(t, FakeIssue.Message, issues[0].GetMessage())
 			assert.Equal(t, len(FakeIssue.CodelensCommands), len(issues[0].GetCodelensCommands()))
-			assert.GreaterOrEqual(t, len(issues[0].GetCodeActions()), len(FakeIssue.CodeActions)) // Some codeactions are added by the scanner (e.g. Autofix, Snyk Learn)
+			// Some code actions are added by the scanner (e.g. Autofix, Snyk Learn)
+			assert.GreaterOrEqual(t, len(issues[0].GetCodeActions()), len(FakeIssue.CodeActions))
 
 			// verify that extend bundle has been called on backend service with additional file
 			params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
@@ -614,7 +615,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 	}
 
 	// Act
-	scanner.enhanceIssuesDetails(issues, "")
+	scanner.enhanceIssuesDetails(issues)
 	// Create a fake API client with the feature flag disabled
 	apiClient := &snyk_api.FakeApiClient{
 		CodeEnabled: true,
@@ -682,28 +683,17 @@ func Test_IsEnabled(t *testing.T) {
 		},
 	)
 	t.Run(
-		"should return true if Snyk Code Quality is enabled", func(t *testing.T) {
-			c.SetSnykCodeEnabled(false)
-			c.EnableSnykCodeQuality(true)
-			c.EnableSnykCodeSecurity(false)
-			enabled := scanner.IsEnabled()
-			assert.True(t, enabled)
-		},
-	)
-	t.Run(
 		"should return true if Snyk Code Security is enabled", func(t *testing.T) {
 			c.SetSnykCodeEnabled(false)
-			c.EnableSnykCodeQuality(false)
 			c.EnableSnykCodeSecurity(true)
 			enabled := scanner.IsEnabled()
 			assert.True(t, enabled)
 		},
 	)
 	t.Run(
-		"should return false if Snyk Code is disabled and Snyk Code Quality and Security are not enabled",
+		"should return false if Snyk Code is disabled and Security is not enabled",
 		func(t *testing.T) {
 			c.SetSnykCodeEnabled(false)
-			c.EnableSnykCodeQuality(false)
 			c.EnableSnykCodeSecurity(false)
 			enabled := scanner.IsEnabled()
 			assert.False(t, enabled)
@@ -884,65 +874,6 @@ func TestNormalizeBranchName(t *testing.T) {
 	normaliedBranchName := vcs.NormalizeBranchName(branchName)
 
 	assert.Equal(t, expectedBranchName, normaliedBranchName)
-}
-
-func TestFilterCodeIssues(t *testing.T) {
-	c := testutil.UnitTest(t)
-	securityIssue := &snyk.Issue{
-		AdditionalData: snyk.CodeIssueData{IsSecurityType: true},
-		ID:             "security-1",
-	}
-	qualityIssue := &snyk.Issue{
-		AdditionalData: snyk.CodeIssueData{IsSecurityType: false},
-		ID:             "quality-1",
-	}
-
-	testCases := []struct {
-		name                   string
-		isSnykCodeEnabled      bool
-		isCodeSecurityEnabled  bool
-		isCodeQualityEnabled   bool
-		inputIssues            []types.Issue
-		expectedFilteredIssues []types.Issue
-	}{
-		{
-			name:                   "only security enabled",
-			isCodeSecurityEnabled:  true,
-			isCodeQualityEnabled:   false,
-			inputIssues:            []types.Issue{securityIssue, qualityIssue},
-			expectedFilteredIssues: []types.Issue{securityIssue},
-		},
-		{
-			name:                   "only quality enabled",
-			isCodeSecurityEnabled:  false,
-			isCodeQualityEnabled:   true,
-			inputIssues:            []types.Issue{securityIssue, qualityIssue},
-			expectedFilteredIssues: []types.Issue{qualityIssue},
-		},
-		{
-			name:                   "both quality and security enabled",
-			isCodeSecurityEnabled:  true,
-			isCodeQualityEnabled:   true,
-			inputIssues:            []types.Issue{securityIssue, qualityIssue},
-			expectedFilteredIssues: []types.Issue{securityIssue, qualityIssue},
-		},
-		{
-			name:                   "both disabled",
-			isCodeSecurityEnabled:  false,
-			isCodeQualityEnabled:   false,
-			inputIssues:            []types.Issue{securityIssue, qualityIssue},
-			expectedFilteredIssues: []types.Issue{},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			c.EnableSnykCodeQuality(tc.isCodeQualityEnabled)
-			c.EnableSnykCodeSecurity(tc.isCodeSecurityEnabled)
-			result := filterCodeIssues(c, tc.inputIssues)
-			assert.ElementsMatch(t, tc.expectedFilteredIssues, result)
-		})
-	}
 }
 
 func getInterfileTestCodeIssueData() snyk.CodeIssueData {

@@ -92,7 +92,7 @@ func getSarifResponseJson2(filePath string) string {
                     "error"
                   ],
                   "categories": [
-                    "Defect"
+                    "Security"
                   ],
                   "exampleCommitFixes": [
                     {
@@ -148,7 +148,7 @@ func getSarifResponseJson2(filePath string) string {
                     "overwrite"
                   ],
                   "categories": [
-                    "Defect"
+                    "Security"
                   ],
                   "exampleCommitFixes": [
                     {

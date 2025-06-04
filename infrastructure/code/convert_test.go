@@ -97,7 +97,7 @@ func getSarifResponseJson(filePath types.FilePath) string {
                     "error"
                   ],
                   "categories": [
-                    "Defect"
+                    "Security"
                   ],
                   "exampleCommitFixes": [
                     {
@@ -258,7 +258,7 @@ func getSarifResponseJson(filePath types.FilePath) string {
                     "overwrite"
                   ],
                   "categories": [
-                    "Defect"
+                    "Security"
                   ],
                   "exampleCommitFixes": [
                     {
@@ -628,7 +628,7 @@ func getSarifResponseJson(filePath types.FilePath) string {
 }
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
-	filePath, issues, resp := setupConversionTests(t, true, true)
+	filePath, issues, resp := setupConversionTests(t, true)
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
 	references := referencesForSampleSarifResponse()
 
@@ -638,7 +638,7 @@ func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	assert.Equal(t,
 		"DontUsePrintStackTrace: Printing the stack trace of java.lang.InterruptedException. Production code ...",
 		issue.GetMessage())
-	assert.Equal(t, types.CodeQualityIssue, issue.GetIssueType())
+	assert.Equal(t, types.CodeSecurityVulnerability, issue.GetIssueType())
 	assert.Equal(t, types.Low, issue.GetSeverity())
 	assert.Equal(t, types.FilePath(filePath), issue.GetAffectedFilePath())
 	assert.Equal(t, types.Range{Start: types.Position{Line: 5, Character: 6}, End: types.Position{Line: 5, Character: 6}}, issue.GetRange())
@@ -715,7 +715,7 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 
 func Test_getFormattedMessage(t *testing.T) {
 	c := testutil.UnitTest(t)
-	p, _, sarifResponse := setupConversionTests(t, true, true)
+	p, _, sarifResponse := setupConversionTests(t, true)
 	run := sarifResponse.Sarif.Runs[0]
 	testResult := run.Results[0]
 
@@ -726,15 +726,11 @@ func Test_getFormattedMessage(t *testing.T) {
 	assert.Contains(t, msg, "Data Flow")
 }
 
-func setupConversionTests(t *testing.T,
-	activateSnykCodeSecurity bool,
-	activateSnykCodeQuality bool,
-) (path string, issues []types.Issue, response codeClientSarif.SarifResponse) {
+func setupConversionTests(t *testing.T, activateSnykCodeSecurity bool) (path string, issues []types.Issue, response codeClientSarif.SarifResponse) {
 	t.Helper()
 	testutil.UnitTest(t)
 	c := config.CurrentConfig()
 	c.EnableSnykCodeSecurity(activateSnykCodeSecurity)
-	c.EnableSnykCodeQuality(activateSnykCodeQuality)
 	temp := types.FilePath(t.TempDir())
 	path = filepath.Join(string(temp), "File With Spaces.java")
 	err := os.WriteFile(path, []byte(strings.Repeat("aa\n", 1000)), 0660)
@@ -830,7 +826,7 @@ func Test_rule_cwe(t *testing.T) {
 	})
 }
 
-func Test_getCodeIssueType(t *testing.T) {
+func Test_isSecurityIssue(t *testing.T) {
 	t.Run("Security issue - single category", func(t *testing.T) {
 		testRule := codeClientSarif.Rule{
 			Properties: codeClientSarif.RuleProperties{
@@ -839,8 +835,8 @@ func Test_getCodeIssueType(t *testing.T) {
 		}
 
 		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
-		sarifConverter.getCodeIssueType(testRule)
-		assert.Equal(t, types.CodeSecurityVulnerability, sarifConverter.getCodeIssueType(testRule))
+		sarifConverter.isSecurityIssue(testRule)
+		assert.True(t, sarifConverter.isSecurityIssue(testRule))
 	})
 
 	t.Run("Security issue - multiple categories", func(t *testing.T) {
@@ -851,8 +847,8 @@ func Test_getCodeIssueType(t *testing.T) {
 		}
 
 		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
-		sarifConverter.getCodeIssueType(testRule)
-		assert.Equal(t, types.CodeSecurityVulnerability, sarifConverter.getCodeIssueType(testRule))
+		sarifConverter.isSecurityIssue(testRule)
+		assert.True(t, sarifConverter.isSecurityIssue(testRule))
 	})
 
 	t.Run("Quality - single category", func(t *testing.T) {
@@ -863,8 +859,8 @@ func Test_getCodeIssueType(t *testing.T) {
 		}
 
 		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
-		sarifConverter.getCodeIssueType(testRule)
-		assert.Equal(t, types.CodeQualityIssue, sarifConverter.getCodeIssueType(testRule))
+		sarifConverter.isSecurityIssue(testRule)
+		assert.False(t, sarifConverter.isSecurityIssue(testRule))
 	})
 
 	t.Run("Quality - multiple categories", func(t *testing.T) {
@@ -875,8 +871,8 @@ func Test_getCodeIssueType(t *testing.T) {
 		}
 
 		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
-		sarifConverter.getCodeIssueType(testRule)
-		assert.Equal(t, types.CodeQualityIssue, sarifConverter.getCodeIssueType(testRule))
+		sarifConverter.isSecurityIssue(testRule)
+		assert.False(t, sarifConverter.isSecurityIssue(testRule))
 	})
 }
 

@@ -18,6 +18,7 @@ package authentication
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -27,7 +28,7 @@ import (
 )
 
 type OAuth2Provider struct {
-	authenticator auth.Authenticator
+	authenticator auth.CancelableAuthenticator
 	config        configuration.Configuration
 	authURL       string
 	logger        *zerolog.Logger
@@ -38,17 +39,24 @@ func (p *OAuth2Provider) GetCheckAuthenticationFunction() AuthenticationFunction
 	return AuthenticationCheck
 }
 
-func newOAuthProvider(config configuration.Configuration, authenticator auth.Authenticator, logger *zerolog.Logger) *OAuth2Provider {
+func newOAuthProvider(config configuration.Configuration, authenticator auth.CancelableAuthenticator, logger *zerolog.Logger) *OAuth2Provider {
 	logger.Debug().Msg("creating new OAuth provider")
 	return &OAuth2Provider{authenticator: authenticator, config: config, logger: logger}
 }
 
-func (p *OAuth2Provider) Authenticate(_ context.Context) (string, error) {
+func (p *OAuth2Provider) Authenticate(ctx context.Context) (string, error) {
 	p.m.Lock()
 	defer p.m.Unlock()
-	err := p.authenticator.Authenticate()
+	err := p.authenticator.CancelableAuthenticate(ctx)
+	switch {
+	case errors.Is(err, auth.ErrAuthCanceled):
+		p.logger.Info().Msg("authentication canceled")
+		return "", nil // Consume the error, the user knows they canceled.
+	case err != nil:
+		return "", err
+	}
 	p.logger.Debug().Msg("authenticated with OAuth")
-	return p.config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), err
+	return p.config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), nil
 }
 
 func (p *OAuth2Provider) setAuthUrl(url string) {

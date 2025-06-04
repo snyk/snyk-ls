@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -420,6 +422,13 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 		initialLogger.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
 		if token, err := c.TokenAsOAuthToken(); err == nil && len(token.RefreshToken) > 10 && c.AuthenticationMethod() == types.OAuthAuthentication {
 			initialLogger.Info().Msgf("Truncated token: %s", token.RefreshToken[len(token.RefreshToken)-8:])
+		}
+
+		engineConfig := c.Engine().GetConfiguration()
+		if engineConfig.GetBool(configuration.CONFIG_CACHE_DISABLED) {
+			initialLogger.Info().Msg("config cache: disabled")
+		} else {
+			initialLogger.Info().Msgf("config cache: %v", engineConfig.GetDuration(configuration.CONFIG_CACHE_TTL))
 		}
 
 		logger := c.Logger().With().Str("method", "initializedHandler").Logger()
