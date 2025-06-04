@@ -126,9 +126,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	manageBinariesAutomatically(c, settings)
 	updateTrustedFolders(c, settings)
 	updateSnykCodeSecurity(c, settings)
-	updateSnykCodeSecurity(c, settings)
 	updateRuntimeInfo(c, settings)
-
 	updateAutoScan(c, settings)
 	updateSnykLearnCodeActions(c, settings)
 	updateSnykOSSQuickFixCodeActions(c, settings)
