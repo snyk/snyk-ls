@@ -2,7 +2,7 @@
   "tools": [
     {
       "name": "snyk_auth",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if needed. Links the Snyk MCP instance with a valid Snyk account, enabling communication with the Snyk platform for accessing vulnerability databases, reporting scan results, and managing projects. Authentication is a fundamental prerequisite for using the Snyk MCP server; most Snyk MCP scanning and monitoring commands will not function without successful authentication. \nWhen to use: This is the very first step when setting up the Snyk MCP on a local development machine",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Links the Snyk MCP instance with a valid Snyk account, enabling communication with the Snyk platform for accessing vulnerability databases, reporting scan results, and managing projects. Authentication is a fundamental prerequisite for using the Snyk MCP server; most Snyk MCP scanning and monitoring commands will not function without successful authentication. \nWhen to use: This is the very first step when setting up the Snyk MCP on a local development machine",
       "command": [
         "auth"
       ],
@@ -41,7 +41,7 @@
     },
     {
       "name": "snyk_sca_test",
-      "description": "Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. It's a cornerstone of 'shifting security left'. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. Test a public GitHub repo: run with repo name as path argument, e.g., `https://github.com/snyk-labs/nodejs-goof`. Test specific npm package: `$ snyk test lodash@4.17.20`. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed and build tools accessible in PATH for accurate dependency resolution. Review 'Code execution warning for Snyk MCP' documentation. \nSecure SDLC Integration: Integral to Coding and Continuous Integration phases. Provides immediate feedback locally and repports whenvulnerabilities exceed defined thresholds (via `--fail-on`, `--severity-threshold`). \nHow to understand the parameter descriptions: the tool is `snyk test`, path is the first positional argument, all other tool parameter map 1:1 to `--<parameter name~`",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. It's a cornerstone of 'shifting security left'. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. Test a public GitHub repo: run with repo name as path argument, e.g., `https://github.com/snyk-labs/nodejs-goof`. Test specific npm package: `$ snyk test lodash@4.17.20`. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed and build tools accessible in PATH for accurate dependency resolution. Review 'Code execution warning for Snyk MCP' documentation. \nSecure SDLC Integration: Integral to Coding and Continuous Integration phases. Provides immediate feedback locally and repports whenvulnerabilities exceed defined thresholds (via `--fail-on`, `--severity-threshold`). \nHow to understand the parameter descriptions: the tool is `snyk test`, path is the first positional argument, all other tool parameter map 1:1 to `--<parameter name>`",
       "command": [
         "test"
       ],
@@ -110,10 +110,19 @@
           "description": "Specifies the Snyk Organization ID (or slug name) under which the test results should be reported and associated. Essential if belonging to multiple Snyk Orgs. Default is the org from `snyk config` or Snyk account."
         },
         {
+          "name": "command",
+          "type": "string",
+          "isRequired": false,
+          "description": "specifies the path to the python interpreter that should be used for the scan. this is mandatory for python projects."
+        },
+        {
           "name": "file",
           "type": "string",
           "isRequired": false,
-          "description": "Specifies the path to a particular package manifest file (e.g., `package.json`, `pom.xml`, `requirements.txt`) that Snyk should inspect. If not provided, Snyk attempts auto-detection. Mutually exclusive with `all-projects`"
+          "description": "Specifies the path to a particular package manifest file (e.g., `package.json`, `pom.xml`, `requirements.txt`) that Snyk should inspect. If not provided, Snyk attempts auto-detection. Mutually exclusive with `all-projects`",
+          "supersedesParams": [
+            "all-projects"
+          ]
         },
         {
           "name": "package_manager",
@@ -287,7 +296,7 @@
     },
     {
       "name": "snyk_monitor",
-      "description": "Takes a snapshot of a project's open-source dependencies and sends this to the Snyk platform (snyk.io). This creates a project in the Snyk UI for continuous monitoring against newly disclosed vulnerabilities and license issues. It does not monitor Snyk Code (SAST) issues; those are typically monitored via SCM integration. \nWhen to use: Typically used before a project is integrated into a production environment or as a baseline for a significant release. If dependencies change significantly, `snyk monitor` must be re-run to update the snapshot. \nDifference from `snyk test`: `snyk test` provides immediate, one-time feedback for active development and CI. `snyk monitor` establishes long-term, ongoing surveillance of a specific project snapshot, alerting to new vulnerabilities discovered in existing dependencies *after* the snapshot. \nSecure SDLC Integration: Used in Pre-production or Release stages to establish a baseline. The Snyk platform then continuously tracks this 'bill of materials' for new issues. Re-run to update the snapshot as the project evolves. The rich metadata options (`--project-tags`, etc.) enhance manageability in the Snyk UI, especially for large enterprises. Exit codes: `0` for success, `2` for failure, `3` for no supported projects.",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Takes a snapshot of a project's open-source dependencies and sends this to the Snyk platform (snyk.io). This creates a project in the Snyk UI for continuous monitoring against newly disclosed vulnerabilities and license issues. It does not monitor Snyk Code (SAST) issues; those are typically monitored via SCM integration. \nWhen to use: Typically used before a project is integrated into a production environment or as a baseline for a significant release. If dependencies change significantly, `snyk monitor` must be re-run to update the snapshot. \nDifference from `snyk test`: `snyk test` provides immediate, one-time feedback for active development and CI. `snyk monitor` establishes long-term, ongoing surveillance of a specific project snapshot, alerting to new vulnerabilities discovered in existing dependencies *after* the snapshot. \nSecure SDLC Integration: Used in Pre-production or Release stages to establish a baseline. The Snyk platform then continuously tracks this 'bill of materials' for new issues. Re-run to update the snapshot as the project evolves. The rich metadata options (`--project-tags`, etc.) enhance manageability in the Snyk UI, especially for large enterprises. Exit codes: `0` for success, `2` for failure, `3` for no supported projects.",
       "command": [
         "monitor"
       ],
@@ -443,7 +452,7 @@
     },
     {
       "name": "snyk_code_test",
-      "description": "Performs Static Application Security Testing (SAST) directly from the Snyk MCP. It analyzes an application's source code to identify security vulnerabilities and weaknesses without executing the code. \nWhen to use: During local development, developers can run it on their feature branches for immediate feedback. In CI/CD pipelines, it can be incorporated to automatically scan code changes on every build, pull request, or merge, providing a security gate for code quality. \nHow to use: Test current directory: `$ snyk code test`. Test specific path: `$ snyk code test ./my-app-code --org=your-org`. Save JSON results for medium+ severity: `$ snyk code test --json-file-output=sast.json --severity-threshold=medium`. Output SARIF to console: `$ snyk code test /path/to/module --sarif`. \nNote: If `--json-file-output` is used and no issues are found, the output file is not created. \nExit Codes: `0` for success/no issues matching criteria, `1` for issues found, `2` for scan error. \nSecure SDLC Integration: Enables embedding Snyk Code's analytical capabilities directly into automated build and test sequences. In the Coding phase, developers get local feedback. In CI/CD, it automates code scanning, acting as a security gate.",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Performs Static Application Security Testing (SAST) directly from the Snyk MCP. It analyzes an application's source code to identify security vulnerabilities and weaknesses without executing the code. \nWhen to use: During local development, developers can run it on their feature branches for immediate feedback. In CI/CD pipelines, it can be incorporated to automatically scan code changes on every build, pull request, or merge, providing a security gate for code quality. \nHow to use: Test current directory: `$ snyk code test`. Test specific path: `$ snyk code test ./my-app-code --org=your-org`. Save JSON results for medium+ severity: `$ snyk code test --json-file-output=sast.json --severity-threshold=medium`. Output SARIF to console: `$ snyk code test /path/to/module --sarif`. \nNote: If `--json-file-output` is used and no issues are found, the output file is not created. \nExit Codes: `0` for success/no issues matching criteria, `1` for issues found, `2` for scan error. \nSecure SDLC Integration: Enables embedding Snyk Code's analytical capabilities directly into automated build and test sequences. In the Coding phase, developers get local feedback. In CI/CD, it automates code scanning, acting as a security gate.",
       "command": [
         "code",
         "test"
@@ -502,7 +511,7 @@
     },
     {
       "name": "snyk_container_test",
-      "description": "Scans container images for known vulnerabilities in OS packages and application dependencies. \nWhen to use: Locally by developers after building images. In CI/CD pipelines to scan images before pushing to a registry or deploying, acting as a security gate. \nHow to use: Test image: `$ snyk container test my-app:latest`. Test with Dockerfile for context: `$ snyk container test my-image:v1 --file=./Dockerfile`. Test and exclude base image vulns: `$ snyk container test myapp:prod --exclude-base-image-vulns`. Test OCI archive: `$ snyk container test oci-archive:image.tar --platform=linux/arm64`. \nSecure SDLC Integration: Crucial for securing containerized applications. Local Development: Immediate feedback. CI/CD Pipelines: Automates scanning, acting as a security gate for container images. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Scans container images for known vulnerabilities in OS packages and application dependencies. \nWhen to use: Locally by developers after building images. In CI/CD pipelines to scan images before pushing to a registry or deploying, acting as a security gate. \nHow to use: Test image: `$ snyk container test my-app:latest`. Test with Dockerfile for context: `$ snyk container test my-image:v1 --file=./Dockerfile`. Test and exclude base image vulns: `$ snyk container test myapp:prod --exclude-base-image-vulns`. Test OCI archive: `$ snyk container test oci-archive:image.tar --platform=linux/arm64`. \nSecure SDLC Integration: Crucial for securing containerized applications. Local Development: Immediate feedback. CI/CD Pipelines: Automates scanning, acting as a security gate for container images. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
       "command": [
         "container",
         "test"
@@ -633,7 +642,7 @@
     },
     {
       "name": "snyk_container_monitor",
-      "description": "Captures a snapshot of a container image's layers and dependencies and sends this to the Snyk platform (snyk.io) for continuous monitoring of newly disclosed vulnerabilities. \nWhen to use: Typically before deploying an image to production or as a baseline for a release candidate. Re-run if the image is rebuilt or its dependencies change to update the Snyk snapshot. \nDifference from `snyk container test`: `test` is for immediate, one-time scans. `monitor` establishes long-term surveillance. The `--exclude-base-image-vulns` option has no effect with `snyk container monitor`. \nHow to use: Monitor image: `$ snyk container monitor my-prod-image:v1.0.5 --file=./Dockerfile --org=my-org`. Monitor with tags and reference: `$ snyk container monitor my-app/service:blue --target-reference=blue-deploy --project-tags=app:cart,env:prod`. \nSecure SDLC Integration: Used in Pre-Deployment/Release Phase to set a baseline. In Operations/Maintenance, Snyk platform uses this snapshot for ongoing monitoring. Metadata options (`--project-tags`, etc.) are key for organizing monitored images. Exit codes: `0` (success), `2` (failure).",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Captures a snapshot of a container image's layers and dependencies and sends this to the Snyk platform (snyk.io) for continuous monitoring of newly disclosed vulnerabilities. \nWhen to use: Typically before deploying an image to production or as a baseline for a release candidate. Re-run if the image is rebuilt or its dependencies change to update the Snyk snapshot. \nDifference from `snyk container test`: `test` is for immediate, one-time scans. `monitor` establishes long-term surveillance. The `--exclude-base-image-vulns` option has no effect with `snyk container monitor`. \nHow to use: Monitor image: `$ snyk container monitor my-prod-image:v1.0.5 --file=./Dockerfile --org=my-org`. Monitor with tags and reference: `$ snyk container monitor my-app/service:blue --target-reference=blue-deploy --project-tags=app:cart,env:prod`. \nSecure SDLC Integration: Used in Pre-Deployment/Release Phase to set a baseline. In Operations/Maintenance, Snyk platform uses this snapshot for ongoing monitoring. Metadata options (`--project-tags`, etc.) are key for organizing monitored images. Exit codes: `0` (success), `2` (failure).",
       "command": [
         "container",
         "monitor"
@@ -758,7 +767,7 @@
     },
     {
       "name": "snyk_iac_test",
-      "description": "Analyzes Infrastructure as Code (IaC) files for security misconfigurations. Supports Terraform (.tf, .tf.json, plan files), Kubernetes (YAML, JSON), AWS CloudFormation (YAML, JSON), Azure Resource Manager (ARM JSON), and Serverless Framework. \nWhen to use: Locally by developers while writing IaC. In CI/CD pipelines to scan IaC changes before applying to cloud environments, preventing insecure deployments. The `--report` option sends results to Snyk UI for ongoing visibility. \nHow to use: Test current dir: `$ snyk iac test`. Test specific TF file: `$ snyk iac test ./modules/main.tf --org=my-org`. Test K8s configs, report to UI, high severity: `$ snyk iac test ./k8s/ --report --target-name=prod-k8s --severity-threshold=high`. Test TF plan (changes only): `$ terraform plan -out=tfplan.bin && terraform show -json tfplan.bin > tfplan.json && snyk iac test tfplan.json --scan=resource-changes`. Test with custom rules: `$ snyk iac test ./infra/ --rules=rules.tar.gz`. \nSecure SDLC Integration: Infrastructure Definition/Coding Phase: Local scans provide early feedback. CI/CD Phase: Automates IaC scanning as a preventative control. Terraform plan scanning offers pre-deployment checks. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Analyzes Infrastructure as Code (IaC) files for security misconfigurations. Supports Terraform (.tf, .tf.json, plan files), Kubernetes (YAML, JSON), AWS CloudFormation (YAML, JSON), Azure Resource Manager (ARM JSON), and Serverless Framework. \nWhen to use: Locally by developers while writing IaC. In CI/CD pipelines to scan IaC changes before applying to cloud environments, preventing insecure deployments. The `--report` option sends results to Snyk UI for ongoing visibility. \nHow to use: Test current dir: `$ snyk iac test`. Test specific TF file: `$ snyk iac test ./modules/main.tf --org=my-org`. Test K8s configs, report to UI, high severity: `$ snyk iac test ./k8s/ --report --target-name=prod-k8s --severity-threshold=high`. Test TF plan (changes only): `$ terraform plan -out=tfplan.bin && terraform show -json tfplan.bin > tfplan.json && snyk iac test tfplan.json --scan=resource-changes`. Test with custom rules: `$ snyk iac test ./infra/ --rules=rules.tar.gz`. \nSecure SDLC Integration: Infrastructure Definition/Coding Phase: Local scans provide early feedback. CI/CD Phase: Automates IaC scanning as a preventative control. Terraform plan scanning offers pre-deployment checks. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
       "command": [
         "iac",
         "test"
@@ -1144,7 +1153,7 @@
     },
     {
       "name": "snyk_ignore",
-      "description": "Modifies the project's `.snyk` policy file to ignore specific issues (vulnerabilities, license issues via `--id`) or to exclude files/directories from analysis (primarily for Snyk Code and Open Source --unmanaged scans via `--file-path`). \nWhen to use: For risk acceptance (documenting why a vulnerability is acceptable). For Snyk Code scope management (excluding test/generated code). \nHow it modifies `.snyk`: Adds/updates entries in `ignore:` block (for ID-based ignores) or `exclude:` block (for file exclusions). \nHow to use: Ignore npm vuln with expiry/reason: `$ snyk ignore --id='npm:tough-cookie:20160722' --expiry='2024-12-31' --reason='Not exploitable'`. Ignore by path: `$ snyk ignore --id='SNYK-JS-LIB-XXX' --path='app>pkg>lib'`. Exclude test files from Snyk Code: `$ snyk ignore --file-path='./**/test/**' --file-path-group='code'`. Ignore IaC misconfig: `$ snyk ignore --id=SNYK-CC-TF-118 --path=\"resource > type > name\"`. \nSecure SDLC Integration: Vulnerability Management/Triage: Allows teams to formally document and manage accepted risks or refine scan scope as 'policy as code' within the `.snyk` file, which is version controlled with the project.",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Modifies the project's `.snyk` policy file to ignore specific issues (vulnerabilities, license issues via `--id`) or to exclude files/directories from analysis (primarily for Snyk Code and Open Source --unmanaged scans via `--file-path`). \nWhen to use: For risk acceptance (documenting why a vulnerability is acceptable). For Snyk Code scope management (excluding test/generated code). \nHow it modifies `.snyk`: Adds/updates entries in `ignore:` block (for ID-based ignores) or `exclude:` block (for file exclusions). \nHow to use: Ignore npm vuln with expiry/reason: `$ snyk ignore --id='npm:tough-cookie:20160722' --expiry='2024-12-31' --reason='Not exploitable'`. Ignore by path: `$ snyk ignore --id='SNYK-JS-LIB-XXX' --path='app>pkg>lib'`. Exclude test files from Snyk Code: `$ snyk ignore --file-path='./**/test/**' --file-path-group='code'`. Ignore IaC misconfig: `$ snyk ignore --id=SNYK-CC-TF-118 --path=\"resource > type > name\"`. \nSecure SDLC Integration: Vulnerability Management/Triage: Allows teams to formally document and manage accepted risks or refine scan scope as 'policy as code' within the `.snyk` file, which is version controlled with the project.",
       "command": [
         "ignore"
       ],
@@ -1202,7 +1211,7 @@
     },
     {
       "name": "snyk_iac_describe",
-      "description": "Detects configuration drift and unmanaged resources in cloud environments by comparing Terraform state files with actual resources in the connected cloud provider (AWS, Azure, GCP, GitHub). Categorizes resources as managed or unmanaged. \nWhen to use: For cloud auditing, drift detection, resource governance (finding manually created resources), and security posture management (unmanaged resources can be blind spots). \nHow to use: AWS with local state: `$ snyk iac describe --from=\"tfstate://./prod.tfstate\" --to=aws+tf`. Specific AWS services, S3 state, JSON output: `$ snyk iac describe --from=\"tfstate+s3://bucket/state.tfstate\" --to=aws+tf --service=aws_s3,aws_ec2 --json > drift.json`. GCP with filter, HTML output: `$ snyk iac describe --from=\"tfstate+gcs://bucket/state.tfstate\" --to=gcp+tf --filter=\"[?Attributes.labels.environment=='prod']\" --html-file-output=gcp_drift.html`. \nSecure SDLC Integration: Operations/Monitoring Phase: Regularly run to audit cloud environments for compliance and detect drift. Helps maintain security posture and operational consistency by identifying deviations from IaC-defined state.",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Detects configuration drift and unmanaged resources in cloud environments by comparing Terraform state files with actual resources in the connected cloud provider (AWS, Azure, GCP, GitHub). Categorizes resources as managed or unmanaged. \nWhen to use: For cloud auditing, drift detection, resource governance (finding manually created resources), and security posture management (unmanaged resources can be blind spots). \nHow to use: AWS with local state: `$ snyk iac describe --from=\"tfstate://./prod.tfstate\" --to=aws+tf`. Specific AWS services, S3 state, JSON output: `$ snyk iac describe --from=\"tfstate+s3://bucket/state.tfstate\" --to=aws+tf --service=aws_s3,aws_ec2 --json > drift.json`. GCP with filter, HTML output: `$ snyk iac describe --from=\"tfstate+gcs://bucket/state.tfstate\" --to=gcp+tf --filter=\"[?Attributes.labels.environment=='prod']\" --html-file-output=gcp_drift.html`. \nSecure SDLC Integration: Operations/Monitoring Phase: Regularly run to audit cloud environments for compliance and detect drift. Helps maintain security posture and operational consistency by identifying deviations from IaC-defined state.",
       "command": [
         "iac",
         "describe"
@@ -1326,29 +1335,6 @@
       ]
     },
     {
-      "name": "snyk_iac_update_exclude_policy",
-      "description": "Generates exclude rules for the `.snyk` policy file based on the JSON output of a `snyk iac describe` scan. These rules instruct subsequent `snyk iac describe` runs to ignore certain resources, refining drift detection by filtering known/accepted discrepancies. \nWhen to use: As part of an iterative drift management workflow to filter out intentionally unmanaged or accepted drifted resources from future `snyk iac describe` reports. \nHow to use: Typically by piping JSON from `snyk iac describe`: `$ snyk iac describe --json | snyk iac update-exclude-policy --exclude-unmanaged >> .snyk`. \nSecure SDLC Integration: Policy Management/Operations: Helps maintain accurate 'policy as code' for drift detection by allowing teams to codify accepted deviations, making ongoing drift monitoring more focused on new, unexpected changes.",
-      "command": [
-        "iac",
-        "update-exclude-policy"
-      ],
-      "standardParams": [],
-      "params": [
-        {
-          "name": "exclude-missing",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Generates exclude rules for resources present in cloud but not defined in IaC (missing from state but exist in cloud). Typically used via piped input: `snyk iac describe --json | snyk iac update-exclude-policy --exclude-missing >> .snyk`."
-        },
-        {
-          "name": "exclude-unmanaged",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Generates exclude rules for resources in cloud but not managed by IaC (not in any state file). Typically used via piped input: `snyk iac describe --json | snyk iac update-exclude-policy --exclude-unmanaged >> .snyk`."
-        }
-      ]
-    },
-    {
       "name": "snyk_version",
       "description": "Displays the installed Snyk MCP version. \nWhen to use: To verify current CLI version for compatibility checks or when reporting issues. \nHow to use: `$ snyk --version`. \nSecure SDLC Integration: Setup/Maintenance: Helps ensure the correct and up-to-date version of the CLI is being used in development and CI/CD environments.",
       "command": [
@@ -1378,12 +1364,12 @@
     },
     {
       "name": "snyk_aibom",
-      "description": "Generates an AI Bill of Materials (AIBOM) for Python software projects in CycloneDX v1.6 JSON format. This experimental feature analyzes local Python projects to identify AI models, datasets, tools, and other AI-related components. Requires an active internet connection and access to the experimental feature (available to customers on request). The command must be run from within a Python project directory and requires the CLI from the preview release channel. \nWhen to use: When you need to create an inventory of AI components in a Python project for compliance, security analysis, or documentation purposes.",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Generates an AI Bill of Materials (AIBOM) for Python software projects in CycloneDX v1.6 JSON format. This experimental feature analyzes local Python projects to identify AI models, datasets, tools, and other AI-related components. Requires an active internet connection and access to the experimental feature (available to customers on request). The command must be run from within a Python project directory and requires the CLI from the preview release channel. \nWhen to use: When you need to create an inventory of AI components in a Python project for compliance, security analysis, or documentation purposes.",
       "command": [
         "aibom"
       ],
       "standardParams": [
-        "experimental",
+        "experimental"
       ],
       "params": [
         {
