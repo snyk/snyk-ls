@@ -110,12 +110,6 @@
           "description": "Specifies the Snyk Organization ID (or slug name) under which the test results should be reported and associated. Essential if belonging to multiple Snyk Orgs. Default is the org from `snyk config` or Snyk account."
         },
         {
-          "name": "command",
-          "type": "string",
-          "isRequired": false,
-          "description": "specifies the path to the python interpreter that should be used for the scan. this is mandatory for python projects."
-        },
-        {
           "name": "file",
           "type": "string",
           "isRequired": false,
@@ -288,9 +282,9 @@
         },
         {
           "name": "skip_unresolved",
-          "type": "string",
+          "type": "boolean",
           "isRequired": false,
-          "description": "For Python, skips packages not found in the environment. Accepted values: `true`, `false`."
+          "description": "For Python, skips packages not found in the environment"
         }
       ]
     },
