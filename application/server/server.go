@@ -220,8 +220,8 @@ func initNetworkAccessHeaders() {
 	engine := config.CurrentConfig().Engine()
 	gafConfig := engine.GetConfiguration()
 	ua := util.GetUserAgent(gafConfig, config.Version)
-	engine.GetNetworkAccess().RemoveHeaderField("x-snyk-cli-version")
-	engine.GetNetworkAccess().AddHeaderField("x-snyk-ide", ua.AppVersion)
+	// X-Snyk-Cli-Version is added by the CLI and is needed for LCE verification in registry.
+	engine.GetNetworkAccess().AddHeaderField("x-snyk-ide", "snyk-ls-"+ua.AppVersion)
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
