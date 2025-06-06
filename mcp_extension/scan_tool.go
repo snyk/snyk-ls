@@ -144,7 +144,7 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 
 		requestArgs := request.GetArguments()
 		params, workingDir := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
-		if strings.Contains(toolDef.Name, "test") && m.folderTrust != nil && !m.folderTrust.IsFolderTrusted(workingDir) {
+		if !invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) && strings.Contains(toolDef.Name, "test") && !m.folderTrust.IsFolderTrusted(workingDir) {
 			return nil, fmt.Errorf("folder '%s' is not trusted. Please run 'snyk_trust' first", workingDir)
 		}
 
@@ -186,8 +186,8 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 		logger := m.logger.With().Str("method", toolDef.Name).Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
-		if m.folderTrust == nil {
-			return nil, fmt.Errorf("folder trust is not initialized")
+		if invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) {
+			return nil, fmt.Errorf("folder trust is diasbled. trust mechanism is ignored")
 		}
 
 		pathArg := request.GetArguments()["path"]
@@ -205,9 +205,12 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 		resultChan := make(chan *mcp.CallToolResult)
 		errorChan := make(chan error)
 
-		tmpl, tmplErr := template.New("trustPage").Parse(trust.SnykTrustPage)
-		if tmplErr != nil {
-			return nil, fmt.Errorf("failed to parse HTML template: %w", tmplErr)
+		loggerForTemplates := m.logger.With().Str("method", "snykTrustHandler_template_parsing").Logger()
+
+		tmpl, err := template.New("trustPage").Parse(trust.SnykTrustPage)
+		if err != nil {
+			loggerForTemplates.Error().Err(err).Msg("Failed to parse HTML template from trust.SnykTrustPage")
+			return nil, fmt.Errorf("failed to parse HTML template from trust.SnykTrustPage: %w", err)
 		}
 
 		mux := http.NewServeMux()
@@ -256,7 +259,7 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 		defer func() {
 			if server != nil {
 				logger.Info().Msg("Trust handler exiting, ensuring server shutdown via defer")
-				if err := server.Shutdown(context.Background()); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				if err = server.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 					logger.Error().Err(err).Msg("Error during deferred server shutdown")
 				}
 			}
@@ -264,7 +267,7 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 
 		go func() {
 			logger.Info().Str("url", serverUrl).Msg("Starting trust confirmation server")
-			if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err = server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.Error().Err(err).Msg("HTTP server error")
 				select {
 				case errorChan <- fmt.Errorf("HTTP server failed: %w", err):
@@ -283,16 +286,11 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 		case res := <-resultChan:
 			logger.Debug().Any("result", res).Msg("Received trust result from server")
 			return res, nil
-		case err := <-errorChan:
+		case err = <-errorChan:
 			logger.Warn().Err(err).Msg("Received cancel/error result from server")
 			return nil, err
 		case <-ctx.Done():
-			logger.Info().Msg("Context cancelled, shutting down trust server")
-			go func() {
-				if srvErr := server.Shutdown(context.Background()); srvErr != nil {
-					logger.Error().Err(srvErr).Msg("HTTP server shutdown error on context cancellation")
-				}
-			}()
+			logger.Info().Msg("Context cancelled")
 			return nil, ctx.Err()
 		}
 	}

@@ -39,6 +39,7 @@ func Init(engine workflow.Engine) error {
 
 	flags.StringP("transport", "t", "sse", "sets transport to <sse|stdio>")
 	flags.Bool(configuration.FLAG_EXPERIMENTAL, false, "enable experimental mcp command")
+	flags.Bool(trust.DisableTrustFlag, false, "disable folder trust")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flags)
 	entry, _ := engine.Register(WORKFLOWID_MCP, cfg, mcpWorkflow)

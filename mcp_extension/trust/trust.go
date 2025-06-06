@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,10 @@ package trust
 import (
 	_ "embed"
 	"path"
+	"path/filepath"
+	"runtime"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -28,6 +31,7 @@ import (
 
 const (
 	TrustedFoldersConfigKey = "trustedFolders"
+	DisableTrustFlag        = "disable-trust"
 )
 
 type FolderTrust struct {
@@ -50,11 +54,34 @@ func normalizePath(folder string) string {
 	return path.Clean(folder)
 }
 
+func folderContains(folderPath string, path string) bool {
+	filePathSeparator := string(filepath.Separator)
+	cleanPath := normalizePath(path)
+	cleanFolderPath := normalizePath(folderPath)
+	if !strings.HasSuffix(cleanFolderPath, filePathSeparator) {
+		cleanFolderPath += filePathSeparator
+	}
+
+	// Check if the path is on a case-insensitive filesystem
+	if runtime.GOOS == "windows" {
+		cleanPath = strings.ToLower(cleanPath)
+		cleanFolderPath = strings.ToLower(cleanFolderPath)
+	}
+
+	return strings.HasPrefix(cleanPath, cleanFolderPath) ||
+		strings.HasPrefix(cleanPath+filePathSeparator, cleanFolderPath)
+}
+
 func (t *FolderTrust) IsFolderTrusted(folder string) bool {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
 
-	return slices.Contains(t.trustedFolders(), normalizePath(folder))
+	for _, trustedFolder := range t.trustedFolders() {
+		if folderContains(trustedFolder, folder) {
+			return true
+		}
+	}
+	return false
 }
 
 func (t *FolderTrust) TrustedFolders() []string {

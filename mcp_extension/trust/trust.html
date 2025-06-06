@@ -43,30 +43,43 @@
     <button id="trustBtn" onclick="sendAction('/trust')">Trust</button>
     <button id="cancelBtn" onclick="sendAction('/cancel')">Cancel</button>
   </div>
-  <p id="message"></p>
+</div>
+<div id="message">
 </div>
 <script>
   function sendAction(action) {
-    document.getElementById('trustBtn').disabled = true;
-    document.getElementById('cancelBtn').disabled = true;
+    var trustButton = document.getElementById('trustBtn');
+    var cancelButton = document.getElementById('cancelBtn');
     var messageElem = document.getElementById('message');
+    var containerElem = document.getElementById('container');
+
+    trustButton.disabled = true;
+    cancelButton.disabled = true;
+    messageElem.style.color = "#333";
+    messageElem.innerText = "Processing your request...";
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', action, true);
 
     xhr.onload = function() {
+      containerElem.style.display = 'none';
+      trustButton.style.display = 'none'; // Hide buttons
+      cancelButton.style.display = 'none';
+
       if (xhr.status >= 200 && xhr.status < 300) {
         messageElem.style.color = "green";
         messageElem.innerText = xhr.responseText + " You can now close this page.";
       } else {
         messageElem.style.color = "red";
-        messageElem.innerText = "Error: " + xhr.responseText + " Please close this page.";
+        messageElem.innerText = "Error: " + (xhr.responseText || "Request failed with status " + xhr.status) + ". Please close this page.";
       }
     };
 
     xhr.onerror = function() {
+      trustButton.style.display = 'none'; // Hide buttons
+      cancelButton.style.display = 'none';
       messageElem.style.color = "red";
-      messageElem.innerText = "Request failed. Please check your network connection and close this page.";
+      messageElem.innerText = "Request failed. Please close this page.";
     };
 
     xhr.send();
