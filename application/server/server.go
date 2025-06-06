@@ -218,8 +218,8 @@ func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Serv
 	})
 }
 
-func initNetworkAccessHeaders() {
-	engine := config.CurrentConfig().Engine()
+func initNetworkAccessHeaders(c *config.Config) {
+	engine := c.Engine()
 	gafConfig := engine.GetConfiguration()
 	ua := util.GetUserAgent(gafConfig, config.Version)
 	engine.GetNetworkAccess().RemoveHeaderField("x-snyk-cli-version")
@@ -235,7 +235,7 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 		defer logger.Info().Any("params", params).Msg("RECEIVING")
 
 		c.SetClientCapabilities(params.Capabilities)
-		setClientInformation(params)
+		setClientInformation(c, params)
 		// update storage
 		file, err := storedconfig.ConfigFile(c.IdeName())
 		if err != nil {
@@ -586,7 +586,7 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 // The integration version refers to the plugin version, not the IDE version.
 // The function attempts to pull the values from the initialization options, then the client info, and finally
 // from the environment variables.
-func setClientInformation(initParams types.InitializeParams) {
+func setClientInformation(c *config.Config, initParams types.InitializeParams) {
 	var integrationName, integrationVersion string
 	clientInfoName := initParams.ClientInfo.Name
 	clientInfoVersion := initParams.ClientInfo.Version
@@ -611,13 +611,12 @@ func setClientInformation(initParams types.InitializeParams) {
 		integrationVersion = strings.Split(integrationVersion, "@@")[1]
 	}
 
-	c := config.CurrentConfig()
 	c.SetIntegrationName(integrationName)
 	c.SetIntegrationVersion(integrationVersion)
 	c.SetIdeName(clientInfoName)
 	c.SetIdeVersion(clientInfoVersion)
 
-	initNetworkAccessHeaders()
+	initNetworkAccessHeaders(c)
 }
 
 func monitorClientProcess(pid int) time.Duration {
