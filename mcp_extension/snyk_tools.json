@@ -191,9 +191,24 @@
     {
       "name": "snyk_logout",
       "description": "Log out from Snyk",
-      "command": ["logout"],
+      "command": [],
       "standardParams": [],
       "params": []
+    },
+    {
+      "name": "snyk_trust",
+      "description": "Trust current folder to allow Snyk to scan it",
+      "command": [],
+      "standardParams": [],
+      "params":
+      [
+        {
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "Path to the project folder to trust (default is the absolute path of the current directory, formatted according to the operating system's conventions)."
+        }
+      ]
     }
   ]
 }

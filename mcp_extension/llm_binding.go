@@ -32,6 +32,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
 
 const (
@@ -42,13 +44,14 @@ const (
 // McpLLMBinding is an implementation of a mcp server that allows interaction between
 // a given SnykLLMBinding and a CommandService.
 type McpLLMBinding struct {
-	logger    *zerolog.Logger
-	mcpServer *server.MCPServer
-	sseServer *server.SSEServer
-	baseURL   *url.URL
-	mutex     sync.RWMutex
-	started   bool
-	cliPath   string
+	logger      *zerolog.Logger
+	mcpServer   *server.MCPServer
+	sseServer   *server.SSEServer
+	folderTrust *trust.FolderTrust
+	baseURL     *url.URL
+	mutex       sync.RWMutex
+	started     bool
+	cliPath     string
 }
 
 func NewMcpLLMBinding(opts ...Option) *McpLLMBinding {
