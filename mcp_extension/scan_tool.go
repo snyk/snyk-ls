@@ -46,10 +46,11 @@ type SnykMcpToolsDefinition struct {
 }
 
 type SnykMcpToolParameter struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	IsRequired  bool   `json:"isRequired"`
-	Description string `json:"description"`
+	Name             string   `json:"name"`
+	Type             string   `json:"type"`
+	IsRequired       bool     `json:"isRequired"`
+	Description      string   `json:"description"`
+	SupersedesParams []string `json:"supersedesParams"`
 }
 
 //go:embed snyk_tools.json
@@ -125,19 +126,12 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "defaultHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-		params, workingDir := extractParamsFromRequestArgs(toolDef, request.GetArguments())
-
-		// Apply standard parameters from tool definition
-		// e.g. all_projects and json
-		for _, paramName := range toolDef.StandardParams {
-			cliParamName := convertToCliParam(paramName)
-			params[cliParamName] = true
-		}
-
-		// Handle regular commands
 		if len(toolDef.Command) == 0 {
 			return nil, fmt.Errorf("empty command in tool definition for %s", toolDef.Name)
 		}
+
+		requestArgs := request.GetArguments()
+		params, workingDir := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
 
 		args := buildArgs(m.cliPath, toolDef.Command, params)
 
