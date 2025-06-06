@@ -234,9 +234,19 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Eventuallyf(t, func() bool {
 		callbacks := jsonRpcRecorder.Callbacks()
-		return len(callbacks) > 0
+		// The test expects a callback (ShowMessageRequest) due to protocol version mismatch
+		if len(callbacks) == 0 {
+			return false
+		}
+		// Check if any callback is window/showMessageRequest
+		for _, cb := range callbacks {
+			if cb.Method() == "window/showMessageRequest" {
+				return true
+			}
+		}
+		return false
 	}, time.Second*10, time.Millisecond,
-		"did not receive callback because of wrong protocol version")
+		"did not receive window/showMessageRequest callback because of wrong protocol version")
 }
 
 func Test_initialize_shouldSupportAllCommands(t *testing.T) {
@@ -1120,11 +1130,12 @@ func Test_getDownloadURL(t *testing.T) {
 	t.Run("CLI", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		c.Engine().GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
+		config.LsProtocolVersion = "12"
 
 		downloadURL := getDownloadURL(c)
 
-		// default CLI fallback, as we're not mocking the CLI calls
-		assert.Contains(t, downloadURL, "cli")
+		prefix := "https://downloads.snyk.io/cli/v1.1292.4/snyk-"
+		assert.True(t, strings.HasPrefix(downloadURL, prefix), downloadURL+" does not start with "+prefix)
 	})
 
 	t.Run("LS standalone", func(t *testing.T) {
@@ -1138,6 +1149,7 @@ func Test_getDownloadURL(t *testing.T) {
 				runtimeinfo.WithVersion("v1.234"),
 			),
 		)
+		config.LsProtocolVersion = "12"
 
 		downloadURL := getDownloadURL(c)
 
