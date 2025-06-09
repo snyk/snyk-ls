@@ -165,7 +165,7 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	}
 
 	// Otherwise, return the custom URL set by the user.
-	// Fedramp and single tenenat environments.
+	// FedRAMP and single tenant environments.
 	return customUrl
 }
 
@@ -261,7 +261,8 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
 		return false
 	}
-	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
+	// We cache the API auth ok for up to 1 minute after last access. If more than a minute has passed, a new check is
+	// performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
 	logger.Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	return true

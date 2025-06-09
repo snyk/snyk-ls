@@ -617,20 +617,18 @@ func (c *Config) SetToken(newTokenString string) {
 	conf := c.engine.GetConfiguration()
 	oldTokenString := c.token
 
-	newOAuthToken, err := getAsOauthToken(newTokenString, c.logger)
-	isNewOauthToken := err == nil
+	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, c.logger)
 
-	// propagate newTokenString to gaf
-	if !isNewOauthToken && conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
-		c.logger.Info().Msg("put api token into GAF")
-		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
-		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString)
-	}
-
-	if c.shouldUpdateOAuth2Token(conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), newTokenString) {
-		c.logger.Info().Err(err).Msg("put oauth2 token into GAF")
+	if c.authenticationMethod == types.OAuthAuthentication && oAuthErr != nil &&
+		c.shouldUpdateOAuth2Token(conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), newTokenString) {
+		c.logger.Info().Err(oAuthErr).Msg("put oauth2 token into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
+
+	} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
+		c.logger.Info().Msg("put api token or pat into GAF")
+		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString)
 	}
 
 	// ensure scrubbing of new newTokenString
