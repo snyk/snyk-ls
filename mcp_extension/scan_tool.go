@@ -18,19 +18,13 @@ package mcp_extension
 
 import (
 	"context"
-	_ "embed" // Required for go:embed
+	_ "embed"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"html/template"
-	"net"
-	"net/http"
-	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/pkg/browser"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/mcp_extension/trust"
@@ -187,7 +181,8 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
 		if invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) {
-			return nil, fmt.Errorf("folder trust is diasbled. trust mechanism is ignored")
+			logger.Info().Msg("Folder trust is disabled. Trust mechanism is ignored")
+			return mcp.NewToolResultText("Trust mechanism is disabled. Considering Folder to be trusted."), nil
 		}
 
 		pathArg := request.GetArguments()["path"]
@@ -202,96 +197,6 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 			return nil, fmt.Errorf("empty path given to tool %s", toolDef.Name)
 		}
 
-		resultChan := make(chan *mcp.CallToolResult)
-		errorChan := make(chan error)
-
-		loggerForTemplates := m.logger.With().Str("method", "snykTrustHandler_template_parsing").Logger()
-
-		tmpl, err := template.New("trustPage").Parse(trust.SnykTrustPage)
-		if err != nil {
-			loggerForTemplates.Error().Err(err).Msg("Failed to parse HTML template from trust.SnykTrustPage")
-			return nil, fmt.Errorf("failed to parse HTML template from trust.SnykTrustPage: %w", err)
-		}
-
-		mux := http.NewServeMux()
-		var server *http.Server
-
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			pageData := struct{ Path string }{Path: folderPath}
-			tmpErr := tmpl.Execute(w, pageData)
-			if tmpErr != nil {
-				http.Error(w, "Failed to render page", http.StatusInternalServerError)
-				logger.Error().Err(tmpErr).Msg("Failed to render HTML template")
-			}
-		})
-
-		mux.HandleFunc("/trust", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			logger.Info().Str("path", folderPath).Msg("User chose to trust folder")
-			m.folderTrust.AddTrustedFolder(folderPath)
-
-			logger.Info().Msg("Folder trusted successfully.")
-			resultChan <- mcp.NewToolResultText("Folder '" + folderPath + "' is now trusted.")
-		})
-
-		mux.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			logger.Info().Str("path", folderPath).Msg("User chose not to trust folder")
-			logger.Info().Msg("Operation cancelled by user.")
-			errorChan <- fmt.Errorf("user cancelled trust operation for path: %s", folderPath)
-		})
-
-		listener, tmplErr := net.Listen("tcp", "127.0.0.1:0") // Listen on loopback interface
-		if tmplErr != nil {
-			return nil, fmt.Errorf("failed to listen on a port: %w", tmplErr)
-		}
-		port := listener.Addr().(*net.TCPAddr).Port
-		serverUrl := fmt.Sprintf("http://127.0.0.1:%d", port)
-
-		server = &http.Server{Handler: mux}
-		defer func() {
-			if server != nil {
-				logger.Info().Msg("Trust handler exiting, ensuring server shutdown via defer")
-				if err = server.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-					logger.Error().Err(err).Msg("Error during deferred server shutdown")
-				}
-			}
-		}()
-
-		go func() {
-			logger.Info().Str("url", serverUrl).Msg("Starting trust confirmation server")
-			if err = server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logger.Error().Err(err).Msg("HTTP server error")
-				select {
-				case errorChan <- fmt.Errorf("HTTP server failed: %w", err):
-				default:
-				}
-			}
-			logger.Info().Msg("Trust confirmation server stopped")
-		}()
-
-		browser.Stdout = os.Stderr
-		_ = browser.OpenURL(serverUrl)
-
-		logger.Info().Str("message", "Waiting for user action on "+serverUrl).Msg("Trust Handler")
-
-		select {
-		case res := <-resultChan:
-			logger.Debug().Any("result", res).Msg("Received trust result from server")
-			return res, nil
-		case err = <-errorChan:
-			logger.Warn().Err(err).Msg("Received cancel/error result from server")
-			return nil, err
-		case <-ctx.Done():
-			logger.Info().Msg("Context cancelled")
-			return nil, ctx.Err()
-		}
+		return m.folderTrust.HandleTrust(ctx, folderPath, logger)
 	}
 }
