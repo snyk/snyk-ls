@@ -52,8 +52,8 @@
         {
           "name": "path",
           "type": "string",
-          "isRequired": false,
-          "description": "Positional argument for path to a file, directory, package or URL to a remote repository to scan. If omitted, scans the current directory. Example: `./my-project` or `https://github.com/user/repo`."
+          "isRequired": true,
+          "description": "Positional argument for the *absolute path* to a file, directory, package or URL to a remote repository to scan. Example: `/a/my-project` or `https://github.com/user/repo`."
         },
         {
           "name": "all_projects",
@@ -165,12 +165,6 @@
           "type": "string",
           "isRequired": false,
           "description": "Manually provides the path to a `.snyk` policy file if it's not located in the project root. Default is `.snyk` in project root."
-        },
-        {
-          "name": "json",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Prints the test results to the console in JSON format. Useful for programmatic consumption of scan results."
         },
         {
           "name": "json-file-output",
@@ -301,8 +295,8 @@
         {
           "name": "path",
           "type": "string",
-          "isRequired": false,
-          "description": "Positional argument for path to a file or directory to monitor. If omitted, monitors the current directory."
+          "isRequired": true,
+          "description": "Positional argument for the *absolute path* to a file or directoryExample: `/a/my-project`"
         },
         {
           "name": "all_projects",
@@ -407,12 +401,6 @@
           "description": "Manually provides a path to a `.snyk` policy file. Default is `.snyk` in root."
         },
         {
-          "name": "json",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Prints results (confirmation, Snyk project URL) to console as JSON."
-        },
-        {
           "name": "project-environment",
           "type": "string",
           "isRequired": false,
@@ -456,20 +444,14 @@
         {
           "name": "path",
           "type": "string",
-          "isRequired": false,
-          "description": "Positional argument specifying the path to the directory containing the source code to be tested. If not provided, the current working directory is scanned. Example: `snyk code test ./src`."
+          "isRequired": true,
+          "description": "Positional argument for the *absolute path* to a file or directory to scan.Example: `/a/my-project` or `https://github.com/user/repo`."
         },
         {
           "name": "org",
           "type": "string",
           "isRequired": false,
           "description": "Specifies the Snyk Organization ID (or slug name) under which the test results should be associated. This can influence private test limits and ensures results are reported to the correct Snyk Organization. Default is from `snyk config` or Snyk account."
-        },
-        {
-          "name": "json",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Prints the test results to the console in JSON format. Useful for programmatic processing of SAST findings."
         },
         {
           "name": "json-file-output",
@@ -547,12 +529,6 @@
           "type": "string",
           "isRequired": false,
           "description": "Manually provides the path to a `.snyk` policy file containing ignore rules. Default is `.snyk` in project root (if applicable)."
-        },
-        {
-          "name": "json",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Prints test results to the console in JSON format."
         },
         {
           "name": "json-file-output",
@@ -674,12 +650,6 @@
           "description": "Path to a `.snyk` policy file."
         },
         {
-          "name": "json",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Prints confirmation/results to console as JSON."
-        },
-        {
           "name": "target-reference",
           "type": "string",
           "isRequired": false,
@@ -771,8 +741,8 @@
         {
           "name": "path",
           "type": "string",
-          "isRequired": false,
-          "description": "Positional argument for path to the IaC file or directory to test. Defaults to current directory. Can be a Terraform plan JSON file."
+          "isRequired": true,
+          "description": "Positional argument for the *absolute path* to a file, directory to scan. Example: `/a/my-project/main.tf`"
         },
         {
           "name": "detection-depth",
@@ -797,12 +767,6 @@
           "type": "string",
           "isRequired": false,
           "description": "Manually specifies the path to a `.snyk` policy file. Default is `.snyk` in root."
-        },
-        {
-          "name": "json",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Prints test results to the console in JSON format."
         },
         {
           "name": "json-file-output",
@@ -904,6 +868,12 @@
       ],
       "standardParams": [],
       "params": [
+        {
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "Positional argument for the *absolute path* to a file, directory to scan. Example: `/a./my-project`"
+        },
         {
           "name": "format",
           "type": "string",
@@ -1087,12 +1057,6 @@
           "type": "string",
           "isRequired": true,
           "description": "Required. Specifies the path to the SBOM document to be tested (CycloneDX JSON 1.4-1.6, SPDX JSON 2.3)."
-        },
-        {
-          "name": "json",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Prints the test results (vulnerabilities found) to the console in JSON format."
         },
         {
           "name": "org",
@@ -1294,12 +1258,6 @@
           "description": "Suppresses detailed output, showing only summary of success/failure."
         },
         {
-          "name": "json",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Outputs the drift report in JSON format to standard output."
-        },
-        {
           "name": "html",
           "type": "boolean",
           "isRequired": false,
@@ -1357,6 +1315,9 @@
         "experimental"
       ],
       "params": [
+        {
+
+        },
         {
           "name": "json-file-output",
           "type": "string",
