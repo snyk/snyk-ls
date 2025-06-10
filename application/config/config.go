@@ -1076,7 +1076,7 @@ func (c *Config) Logger() *zerolog.Logger {
 }
 
 func (c *Config) AuthenticationMethodForCurrentToken() types.AuthenticationMethod {
-	token := c.token
+	token := c.Token()
 
 	if len(token) == 0 {
 		return types.EmptyAuthenticationMethod

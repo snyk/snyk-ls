@@ -50,7 +50,7 @@ func (p *PatAuthenticationProvider) Authenticate(_ context.Context) (string, err
 	p.m.Lock()
 	defer p.m.Unlock()
 
-	url := p.config.GetString(configuration.WEB_APP_URL) + "/account/personal-access-tokens" // TODO check, find
+	url := p.config.GetString(configuration.WEB_APP_URL) + "/account/personal-access-tokens"
 	p.logger.Debug().Msg("PAT URL: " + url)
 
 	p.openBrowserFunc(url)
