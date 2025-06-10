@@ -1367,12 +1367,6 @@
       ],
       "params": [
         {
-          "name": "experimental",
-          "type": "boolean",
-          "isRequired": true,
-          "description": "Mandatory flag to enable experimental command features. This parameter must always be included."
-        },
-        {
           "name": "json-file-output",
           "type": "string",
           "isRequired": false,
