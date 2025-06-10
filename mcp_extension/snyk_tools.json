@@ -1115,15 +1115,6 @@
       ]
     },
     {
-      "name": "snyk_policy_file_conceptual_overview",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. The `.snyk` policy file is a YAML-formatted file allowing teams to define specific analysis behaviors and manage vulnerability exceptions (ignores, patches) directly within their project's codebase. This 'policy as code' approach promotes version-controlled, auditable, and consistent policy application. It is not a directly executable command but is used by commands like `snyk test` and `snyk monitor`. \nStructure: Includes `version` (e.g., v1.25.0 - mandatory), `ignore` (rules for Snyk vulnerability IDs or license issues, with paths, reasons, expiry), `patch` (Snyk-provided patches, mainly for npm/Yarn), `language-settings` (e.g., Python version), and `exclude` (for Snyk Code/Open Source --unmanaged file/directory exclusions). \nHow Snyk MCP Uses It: `snyk test`/`monitor` auto-detect and apply rules from `.snyk` in project root. Custom path via `--policy-path`. Local `.snyk` rules can override Snyk UI ignores. Respected in CI/CD and SCM integrations. \nLimitations for Snyk Code: `exclude:` block used for file exclusions; ignoring Snyk Code vulnerability IDs in `ignore:` is not standard (usually managed in UI or by excluding code paths). \nSecure SDLC Integration: Policy Management/Governance: Codifies security policies, enabling version control, review, and auditability within the development team throughout the SDLC.",
-      "command": [
-        "conceptual"
-      ],
-      "standardParams": [],
-      "params": []
-    },
-    {
       "name": "snyk_policy",
       "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Displays the contents of the `.snyk` policy file associated with a package or project, providing visibility into active ignore rules, patches, and other configurations. \nWhen to use: For developers to check current policies, understand ignores, or verify `.snyk` file structure. For security teams to audit project policies. For troubleshooting Snyk MCP's policy file interpretation. \nHow to use: Display `.snyk` in current dir: `$ snyk policy`. Display specific policy file: `$ snyk policy ./config/custom.snyk`. \nSecure SDLC Integration: Policy Review/Auditing: Allows developers and security teams to inspect the 'policy as code' applied to a project at any SDLC stage.",
       "command": [
