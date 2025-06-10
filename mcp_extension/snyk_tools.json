@@ -173,12 +173,6 @@
           "description": "Saves the test output in JSON format to the specified file path. Human-readable output is still shown in the console. Not compatible with `--show-vulnerable-paths`."
         },
         {
-          "name": "sarif",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Returns test results in SARIF (Static Analysis Results Interchange Format) to the console. SARIF is a standard format for static analysis tools."
-        },
-        {
           "name": "sarif-file-output",
           "type": "string",
           "isRequired": false,
@@ -460,12 +454,6 @@
           "description": "Saves the test output as a JSON data structure to the specified file path. This occurs regardless of whether `--json` is also used. Note: For Snyk Code, if no security issues are found, Snyk does not create this JSON file."
         },
         {
-          "name": "sarif",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Returns the test results in SARIF (Static Analysis Results Interchange Format) to the console."
-        },
-        {
           "name": "sarif-file-output",
           "type": "string",
           "isRequired": false,
@@ -535,12 +523,6 @@
           "type": "string",
           "isRequired": false,
           "description": "Saves test output in JSON format to the specified file."
-        },
-        {
-          "name": "sarif",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Returns test results in SARIF format to the console."
         },
         {
           "name": "sarif-file-output",
@@ -773,12 +755,6 @@
           "type": "string",
           "isRequired": false,
           "description": "Saves test output in JSON format to the specified file."
-        },
-        {
-          "name": "sarif",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Returns test results in SARIF format to the console."
         },
         {
           "name": "sarif-file-output",
