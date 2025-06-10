@@ -29,8 +29,8 @@ import (
 
 // Tool name constants to maintain backward compatibility
 const (
-	SnykScaTest    = "snyk_sca_test"
-	SnykCodeTest   = "snyk_code_test"
+	SnykScaTest    = "snyk_sca_scan"
+	SnykCodeTest   = "snyk_code_scan"
 	SnykVersion    = "snyk_version"
 	SnykAuth       = "snyk_auth"
 	SnykAuthStatus = "snyk_auth_status"
