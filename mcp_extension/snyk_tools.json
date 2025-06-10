@@ -41,7 +41,7 @@
     },
     {
       "name": "snyk_sca_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. It's a cornerstone of 'shifting security left'. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. Test a public GitHub repo: run with repo name as path argument, e.g., `https://github.com/snyk-labs/nodejs-goof`. Test specific npm package: `$ snyk test lodash@4.17.20`. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed and build tools accessible in PATH for accurate dependency resolution. Review 'Code execution warning for Snyk MCP' documentation. \nSecure SDLC Integration: Integral to Coding and Continuous Integration phases. Provides immediate feedback locally and repports whenvulnerabilities exceed defined thresholds (via `--fail-on`, `--severity-threshold`). \nHow to understand the parameter descriptions: the tool is `snyk test`, path is the first positional argument, all other tool parameter map 1:1 to `--<parameter name>`",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. It's a cornerstone of 'shifting security left'. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. Test a public GitHub repo: run with repo name as path argument, e.g., `https://github.com/snyk-labs/nodejs-goof`. Test specific npm package: `$ snyk test lodash@4.17.20`. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed and build tools accessible in PATH for accurate dependency resolution. Review 'Code execution warning for Snyk MCP' documentation. \nSecure SDLC Integration: Integral to Coding and Continuous Integration phases. Provides immediate feedback locally and repports whenvulnerabilities exceed defined thresholds (via `--fail-on`, `--severity-threshold`). \nHow to understand the parameter descriptions: the tool is `snyk test`, path is the first positional argument, all other tool parameter map 1:1 to `--<parameter name>`",
       "command": [
         "test"
       ],
@@ -53,7 +53,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *absolute path* to a file, directory, package or URL to a remote repository to scan. Example: `/a/my-project` or `https://github.com/user/repo`."
+          "description": "Positional argument for the *ABSOLUTE PATH* to a file, directory, or a package to scan. The path MUST be absolute and have the correct path separator. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`."
         },
         {
           "name": "all_projects",
@@ -290,7 +290,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *absolute path* to a file or directoryExample: `/a/my-project`"
+          "description": "Positional argument for the *absolute path* to a file or directory.The path MUST be absolute and have the correct path separator. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`"
         },
         {
           "name": "all_projects",
@@ -439,7 +439,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *absolute path* to a file or directory to scan.Example: `/a/my-project` or `https://github.com/user/repo`."
+          "description": "Positional argument for the *absolute path* to a file or directory to scan. The path MUST be absolute and have the correct path separator. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`"
         },
         {
           "name": "org",
@@ -724,7 +724,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *absolute path* to a file, directory to scan. Example: `/a/my-project/main.tf`"
+          "description": "Positional argument for the *absolute path* to a file, directory to scan. The path MUST be absolute and have the correct path separator. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`"
         },
         {
           "name": "detection-depth",
@@ -848,7 +848,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *absolute path* to a file, directory to scan. Example: `/a./my-project`"
+          "description": "Positional argument for the *absolute path* to a file, directory to scan. The path MUST be absolute and have the correct path separator. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`"
         },
         {
           "name": "format",
