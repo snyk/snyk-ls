@@ -40,7 +40,7 @@
       ]
     },
     {
-      "name": "snyk_sca_test",
+      "name": "snyk_sca_scan",
       "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. It's a cornerstone of 'shifting security left'. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. Test a public GitHub repo: run with repo name as path argument, e.g., `https://github.com/snyk-labs/nodejs-goof`. Test specific npm package: `$ snyk test lodash@4.17.20`. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed and build tools accessible in PATH for accurate dependency resolution. Review 'Code execution warning for Snyk MCP' documentation. \nSecure SDLC Integration: Integral to Coding and Continuous Integration phases. Provides immediate feedback locally and repports whenvulnerabilities exceed defined thresholds (via `--fail-on`, `--severity-threshold`). \nHow to understand the parameter descriptions: the tool is `snyk test`, path is the first positional argument, all other tool parameter map 1:1 to `--<parameter name>`",
       "command": [
         "test"
@@ -427,7 +427,7 @@
       ]
     },
     {
-      "name": "snyk_code_test",
+      "name": "snyk_code_scan",
       "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Performs Static Application Security Testing (SAST) directly from the Snyk MCP. It analyzes an application's source code to identify security vulnerabilities and weaknesses without executing the code. \nWhen to use: During local development, developers can run it on their feature branches for immediate feedback. In CI/CD pipelines, it can be incorporated to automatically scan code changes on every build, pull request, or merge, providing a security gate for code quality. \nHow to use: Test  directory: `$ snyk code test <path>`. Test specific path: `$ snyk code test ./my-app-code --org=your-org`. Save JSON results for medium+ severity: `$ snyk code test --json-file-output=sast.json --severity-threshold=medium`. Output SARIF to console: `$ snyk code test /path/to/module --sarif`. \nNote: If `--json-file-output` is used and no issues are found, the output file is not created. \nExit Codes: `0` for success/no issues matching criteria, `1` for issues found, `2` for scan error. \nSecure SDLC Integration: Enables embedding Snyk Code's analytical capabilities directly into automated build and test sequences. In the Coding phase, developers get local feedback. In CI/CD, it automates code scanning, acting as a security gate.",
       "command": [
         "code",
@@ -474,7 +474,7 @@
       ]
     },
     {
-      "name": "snyk_container_test",
+      "name": "snyk_container_scan",
       "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Scans container images for known vulnerabilities in OS packages and application dependencies. \nWhen to use: Locally by developers after building images. In CI/CD pipelines to scan images before pushing to a registry or deploying, acting as a security gate. \nHow to use: Test image: `$ snyk container test my-app:latest`. Test with Dockerfile for context: `$ snyk container test my-image:v1 --file=./Dockerfile`. Test and exclude base image vulns: `$ snyk container test myapp:prod --exclude-base-image-vulns`. Test OCI archive: `$ snyk container test oci-archive:image.tar --platform=linux/arm64`. \nSecure SDLC Integration: Crucial for securing containerized applications. Local Development: Immediate feedback. CI/CD Pipelines: Automates scanning, acting as a security gate for container images. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
       "command": [
         "container",
@@ -712,7 +712,7 @@
       ]
     },
     {
-      "name": "snyk_iac_test",
+      "name": "snyk_iac_scan",
       "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Analyzes Infrastructure as Code (IaC) files for security misconfigurations. Supports Terraform (.tf, .tf.json, plan files), Kubernetes (YAML, JSON), AWS CloudFormation (YAML, JSON), Azure Resource Manager (ARM JSON), and Serverless Framework. \nWhen to use: Locally by developers while writing IaC. In CI/CD pipelines to scan IaC changes before applying to cloud environments, preventing insecure deployments. The `--report` option sends results to Snyk UI for ongoing visibility. \nHow to use: Test dir: `$ snyk iac test <dir>`. Test specific TF file: `$ snyk iac test ./modules/main.tf --org=my-org`. Test K8s configs, report to UI, high severity: `$ snyk iac test ./k8s/ --report --target-name=prod-k8s --severity-threshold=high`. Test TF plan (changes only): `$ terraform plan -out=tfplan.bin && terraform show -json tfplan.bin > tfplan.json && snyk iac test tfplan.json --scan=resource-changes`. Test with custom rules: `$ snyk iac test ./infra/ --rules=rules.tar.gz`. \nSecure SDLC Integration: Infrastructure Definition/Coding Phase: Local scans provide early feedback. CI/CD Phase: Automates IaC scanning as a preventative control. Terraform plan scanning offers pre-deployment checks. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
       "command": [
         "iac",
@@ -1014,7 +1014,7 @@
       ]
     },
     {
-      "name": "snyk_sbom_test",
+      "name": "snyk_sbom_scan",
       "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Experimental command. Analyzes an existing SBOM file for known vulnerabilities in its open-source components. Requires components in SBOM to be identified using PackageURLs (purls). \nWhen to use: After SBOM generation (by Snyk or other tools) to assess components. In CI/CD to test generated/received SBOMs. For vulnerability scanning of third-party software when only an SBOM is available. \nHow to use: `$ snyk sbom test --experimental --file=./my_app.cdx.json`. Output JSON: `$ snyk sbom test --experimental --file=./comp.spdx.json --json > vulns.json`. \nInput Requirements: SBOMs in CycloneDX (JSON 1.4-1.6) or SPDX (JSON 2.3). Packages must have purls (types: apk, cargo, cocoapods, composer, deb, gem, generic, golang, hex, maven, npm, nuget, pub, pypi, rpm, swift). \nSecure SDLC Integration: Testing/Validation Phase: Scans inventoried components post-SBOM generation. Third-Party Risk Management: Assesses vulnerabilities from SBOMs of external software. Exit codes: `0` (success/no vulns), `1` (vulns found), `2` (error).",
       "command": [
         "sbom",
