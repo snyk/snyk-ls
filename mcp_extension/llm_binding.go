@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/mcp_extension/networking"
 	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
 
@@ -65,15 +66,6 @@ func NewMcpLLMBinding(opts ...Option) *McpLLMBinding {
 	}
 
 	return mcpServerImpl
-}
-
-func defaultURL() *url.URL {
-	rawURL := fmt.Sprintf("http://%s:%d", DefaultHost, determineFreePort())
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		panic(err)
-	}
-	return u
 }
 
 // Start starts the MCP server. It blocks until the server is stopped via Shutdown.
@@ -124,7 +116,11 @@ func (m *McpLLMBinding) HandleStdioServer() error {
 func (m *McpLLMBinding) HandleSseServer() error {
 	// listen on default url/port if none was configured
 	if m.baseURL == nil {
-		m.baseURL = defaultURL()
+		defaultUrl, err := networking.LoopbackURL()
+		if err != nil {
+			return err
+		}
+		m.baseURL = defaultUrl
 	}
 
 	m.sseServer = server.NewSSEServer(m.mcpServer, server.WithBaseURL(m.baseURL.String()))
@@ -136,7 +132,7 @@ func (m *McpLLMBinding) HandleSseServer() error {
 	go func() {
 		// sleep initially for a few milliseconds so we actually can start the server
 		time.Sleep(100 * time.Millisecond)
-		for !isPortInUse(m.baseURL) {
+		for !networking.IsPortInUse(m.baseURL) {
 			time.Sleep(10 * time.Millisecond)
 		}
 

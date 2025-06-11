@@ -32,6 +32,7 @@
 
     .snx-heading.h1 { margin:1.6rem 0 0; font-size: 2.4rem; line-height: 1; font-weight: 400; }
     .snx-text { font-size: 1.4rem; margin: .8rem 0; }
+    .snx-message { font-size: 1.8rem; }
     .snx-buttons { display: flex; gap: 10px; justify-content: center; }
     .snx-button { padding: 0 1.2rem; border: 1px solid #b3b2bd; border-radius: .4rem; line-height: 28px; color:#555463; font-size:1.4rem; cursor: pointer; background-color:#fff; font-weight: 500; font-family: Roboto, system-ui, ui-sans-serif, -apple-system, Helvetica, Arial, sans-serif; }
     .snx-button.is-primary { background-color: #145deb; color: #fff; border-color: #145deb; }
@@ -73,46 +74,51 @@
       <div class="snx-square snx-mcp"><span>MCP</span></div>
     </div>
 
-    <h1 class="snx-heading h1">Do you trust this path?</h1>
-    <p class="snx-text snx-warning">
+    <h1 class="snx-heading h1" id="header">Do you trust this path?</h1>
+    <div id="message" class="snx-text snx-message"></div>
+    <p class="snx-text snx-warning" id="disclaimer">
       The Snyk MCP Server is requesting to add the following path to your list of trusted folders. This allows Snyk to perform scans and analysis on this folder and its contents.
     </p>
-    <p class="snx-text snx-path">
-      <code>{{.Path}}</code>
+    <p class="snx-text snx-path" id="path">
+      <code>{{.Path | html }}</code>
     </p>
-    <div class="snx-buttons">
+    <div class="snx-buttons" id="buttons">
       <button id="cancelBtn" class="snx-button" onclick="sendAction('/cancel')">Cancel</button>
       <button id="trustBtn" class="snx-button is-primary" onclick="sendAction('/trust')">Trust path</button>
     </div>
   </div>
 </div>
-
-<div id="message" class="snx-message"></div>
 <script>
   function sendAction(action) {
     var messageElem = document.getElementById('message');
-    var containerElem = document.getElementById('container');
+    var headerElem = document.getElementById('header');
+    var buttonsElem = document.getElementById('buttons');
+    var pathElem = document.getElementById('path');
+    var disclaimerElem = document.getElementById('disclaimer');
 
-    messageElem.style.color = "#333";
     messageElem.innerText = "Processing your request...";
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', action, true);
 
     xhr.onload = function() {
-      containerElem.style.display = 'none';
+      headerElem.style.display = 'none';
+      buttonsElem.style.display = 'none';
+      pathElem.style.display = 'none';
+      disclaimerElem.style.display = 'none';
+
       if (xhr.status >= 200 && xhr.status < 300) {
-        messageElem.style.color = "green";
-        messageElem.innerText = xhr.responseText + " You can now close this page.";
+        messageElem.innerText = "Success! You can now close this page.";
       } else {
-        messageElem.style.color = "red";
-        messageElem.innerText = "Error: " + (xhr.responseText || "Request failed with status " + xhr.status) + ". Please close this page.";
+        messageElem.innerText = "Error: Request failed with status " + xhr.status + ". Please close this page.";
       }
     };
 
     xhr.onerror = function() {
-      containerElem.style.display = 'none';
-      messageElem.style.color = "red";
+      headerElem.style.display = 'none';
+      buttonsElem.style.display = 'none';
+      pathElem.style.display = 'none';
+      disclaimerElem.style.display = 'none';
       messageElem.innerText = "Request failed. Please close this page.";
     };
 

@@ -31,11 +31,14 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/pkg/browser"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/mcp_extension/networking"
 )
 
 const (
@@ -131,7 +134,7 @@ func (t *FolderTrust) HandleTrust(ctx context.Context, folderPath string, logger
 	resultChan := make(chan *mcp.CallToolResult)
 	errorChan := make(chan error)
 
-	loggerForTemplates := logger.With().Str("method", "snykTrustHandler_template_parsing").Logger()
+	loggerForTemplates := logger.With().Str("method", "HandleTrust").Logger()
 
 	tmpl, err := template.New("trustPage").Parse(SnykTrustPage)
 	if err != nil {
@@ -140,8 +143,64 @@ func (t *FolderTrust) HandleTrust(ctx context.Context, folderPath string, logger
 	}
 
 	mux := http.NewServeMux()
-	var server *http.Server
+	server := &http.Server{Handler: mux}
 
+	t.addHttpHandlers(logger, mux, folderPath, tmpl, resultChan, errorChan)
+
+	serverUrl, err := networking.LoopbackURL()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default url: %w", err)
+	}
+
+	retries := 0
+	for networking.IsPortInUse(serverUrl) && retries < 10 {
+		time.Sleep(10 * time.Millisecond)
+		retries++
+	}
+	rawUrl := serverUrl.String()
+	listener, err := net.Listen("tcp", serverUrl.Host)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create listener: %w", err)
+	}
+
+	defer func() {
+		if server != nil {
+			logger.Info().Msg("Trust handler exiting, ensuring server shutdown via defer")
+			if err = server.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Error().Err(err).Msg("Error during deferred server shutdown")
+			}
+		}
+	}()
+
+	go func() {
+		logger.Info().Str("url", rawUrl).Msg("Starting trust confirmation server")
+		if err = server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error().Err(err).Msg("HTTP server error")
+			errorChan <- fmt.Errorf("HTTP server failed: %w", err)
+		}
+		logger.Info().Msg("Trust confirmation server stopped")
+	}()
+
+	browser.Stdout = os.Stderr
+	_ = browser.OpenURL(rawUrl)
+
+	logger.Info().Str("message", "Waiting for user action on "+rawUrl).Msg("Trust Handler")
+
+	select {
+	case res := <-resultChan:
+		logger.Debug().Any("result", res).Msg("Received trust result from server")
+		return res, nil
+	case err = <-errorChan:
+		logger.Warn().Err(err).Msg("Received cancel/error result from server")
+		return nil, err
+	case <-ctx.Done():
+		logger.Info().Msg("Context canceled")
+		return nil, ctx.Err()
+	}
+}
+
+func (t *FolderTrust) addHttpHandlers(logger zerolog.Logger, mux *http.ServeMux, folderPath string, tmpl *template.Template, resultChan chan *mcp.CallToolResult, errorChan chan error) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		pageData := struct{ Path string }{Path: folderPath}
@@ -173,50 +232,4 @@ func (t *FolderTrust) HandleTrust(ctx context.Context, folderPath string, logger
 		logger.Info().Msg("Operation cancelled by user.")
 		errorChan <- fmt.Errorf("user cancelled trust operation for path: %s", folderPath)
 	})
-
-	listener, tmplErr := net.Listen("tcp", "127.0.0.1:0") // Listen on loopback interface
-	if tmplErr != nil {
-		return nil, fmt.Errorf("failed to listen on a port: %w", tmplErr)
-	}
-	port := listener.Addr().(*net.TCPAddr).Port
-	serverUrl := fmt.Sprintf("http://127.0.0.1:%d", port)
-
-	server = &http.Server{Handler: mux}
-	defer func() {
-		if server != nil {
-			logger.Info().Msg("Trust handler exiting, ensuring server shutdown via defer")
-			if err = server.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logger.Error().Err(err).Msg("Error during deferred server shutdown")
-			}
-		}
-	}()
-
-	go func() {
-		logger.Info().Str("url", serverUrl).Msg("Starting trust confirmation server")
-		if err = server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error().Err(err).Msg("HTTP server error")
-			select {
-			case errorChan <- fmt.Errorf("HTTP server failed: %w", err):
-			default:
-			}
-		}
-		logger.Info().Msg("Trust confirmation server stopped")
-	}()
-
-	browser.Stdout = os.Stderr
-	_ = browser.OpenURL(serverUrl)
-
-	logger.Info().Str("message", "Waiting for user action on "+serverUrl).Msg("Trust Handler")
-
-	select {
-	case res := <-resultChan:
-		logger.Debug().Any("result", res).Msg("Received trust result from server")
-		return res, nil
-	case err = <-errorChan:
-		logger.Warn().Err(err).Msg("Received cancel/error result from server")
-		return nil, err
-	case <-ctx.Done():
-		logger.Info().Msg("Context cancelled")
-		return nil, ctx.Err()
-	}
 }
