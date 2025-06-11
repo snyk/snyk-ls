@@ -229,7 +229,7 @@ func (t *FolderTrust) addHttpHandlers(logger zerolog.Logger, mux *http.ServeMux,
 			return
 		}
 		logger.Info().Str("path", folderPath).Msg("User chose not to trust folder")
-		logger.Info().Msg("Operation cancelled by user.")
-		errorChan <- fmt.Errorf("user cancelled trust operation for path: %s", folderPath)
+		logger.Info().Msg("Operation canceled by user.")
+		errorChan <- fmt.Errorf("user canceled trust operation for path: %s", folderPath)
 	})
 }

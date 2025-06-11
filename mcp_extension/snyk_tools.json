@@ -197,7 +197,7 @@
     },
     {
       "name": "snyk_trust",
-      "description": "Trust current folder to allow Snyk to scan it",
+      "description": "Trust a given folder to allow Snyk to scan it",
       "command": [],
       "standardParams": [],
       "params":
