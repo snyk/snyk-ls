@@ -829,6 +829,9 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		_ = tempFile.Close()
+	})
 
 	nopLogger := zerolog.Nop()
 
