@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -227,8 +227,9 @@ func TestSnykCodeTestHandler(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Test cases with various combinations of arguments
 	testCases := []struct {
-		name string
-		args map[string]interface{}
+		name         string
+		args         map[string]interface{}
+		requireTrust bool
 	}{
 		{
 			name: "Basic Test",
@@ -266,6 +267,14 @@ func TestSnykCodeTestHandler(t *testing.T) {
 				"org":                "my-snyk-org",
 			},
 		},
+		{
+			name: "Test fail trust",
+			args: map[string]interface{}{
+				"path": tmpDir,
+				"org":  "my-snyk-org",
+			},
+			requireTrust: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -275,6 +284,7 @@ func TestSnykCodeTestHandler(t *testing.T) {
 					"arguments": tc.args,
 				},
 			}
+			fixture.invocationContext.GetConfiguration().Set(trust.DisableTrustFlag, !tc.requireTrust)
 			requestJSON, err := json.Marshal(requestObj)
 			assert.NoError(t, err, "Failed to marshal request to JSON")
 
@@ -283,7 +293,10 @@ func TestSnykCodeTestHandler(t *testing.T) {
 			assert.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
 			result, err := handler(context.Background(), request)
-
+			if tc.requireTrust {
+				assert.Error(t, err)
+				return
+			}
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
 			textContent, ok := result.Content[0].(mcp.TextContent)
@@ -1015,4 +1028,41 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 			assert.Equal(t, tc.expectedWd, actualWd, "Working directory mismatch")
 		})
 	}
+}
+
+func TestSnykTrustHandler(t *testing.T) {
+	fixture := setupTestFixture(t)
+	toolDef := getToolWithName(t, fixture.tools, SnykTrust)
+	require.NotNil(t, toolDef, "snyk_trust tool definition not found")
+	fixture.invocationContext.GetConfiguration().Set(trust.DisableTrustFlag, false)
+
+	handler := fixture.binding.snykTrustHandler(fixture.invocationContext, *toolDef)
+
+	t.Run("PathMissing", func(t *testing.T) {
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Arguments: map[string]interface{}{},
+			},
+		}
+
+		result, err := handler(context.Background(), request)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "argument 'path' is missing for tool snyk_trust")
+	})
+
+	t.Run("PathEmpty", func(t *testing.T) {
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Arguments: map[string]interface{}{"path": ""},
+			},
+		}
+
+		result, err := handler(context.Background(), request)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "empty path given to tool snyk_trust")
+	})
 }

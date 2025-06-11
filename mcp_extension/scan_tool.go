@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -46,6 +45,7 @@ type SnykMcpToolsDefinition struct {
 	Description    string                 `json:"description"`
 	Command        []string               `json:"command"`
 	StandardParams []string               `json:"standardParams"`
+	RequiresTrust  bool                   `json:"requiresTrust"`
 	Params         []SnykMcpToolParameter `json:"params"`
 }
 
@@ -138,7 +138,7 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 
 		requestArgs := request.GetArguments()
 		params, workingDir := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
-		if !invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) && strings.Contains(toolDef.Name, "test") && !m.folderTrust.IsFolderTrusted(workingDir) {
+		if !invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) && toolDef.RequiresTrust && !m.folderTrust.IsFolderTrusted(workingDir) {
 			return nil, fmt.Errorf("folder '%s' is not trusted. Please run 'snyk_trust' first", workingDir)
 		}
 

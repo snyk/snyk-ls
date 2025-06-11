@@ -5,6 +5,7 @@
       "description": "Run a SCA test on project dependencies to detect known vulnerabilities. Use this to scan open-source packages in supported ecosystems like npm, Maven, etc. Supports monorepo scanning via `--all-projects`. Outputs vulnerability data in JSON if enabled.",
       "command": ["test"],
       "standardParams": ["all_projects"],
+      "requiresTrust": true,
       "params": [
         {
           "name": "path",
@@ -140,6 +141,7 @@
       "description": "Run a static application security test (SAST) on your source code to detect security issues like SQL injection, XSS, and hardcoded secrets. Designed to catch issues early in the development cycle.",
       "command": ["code", "test"],
       "standardParams": [],
+      "requiresTrust": true,
       "params": [
         {
           "name": "path",
@@ -172,6 +174,7 @@
       "description": "Get Snyk CLI version",
       "command": ["--version"],
       "standardParams": [],
+      "requiresTrust": false,
       "params": []
     },
     {
@@ -179,6 +182,7 @@
       "description": "Authenticate with Snyk",
       "command": ["auth"],
       "standardParams": [],
+      "requiresTrust": false,
       "params": []
     },
     {
@@ -186,6 +190,7 @@
       "description": "Check Snyk authentication status",
       "command": ["whoami", "--experimental"],
       "standardParams": [],
+      "requiresTrust": false,
       "params": []
     },
     {
@@ -193,6 +198,7 @@
       "description": "Log out from Snyk",
       "command": [],
       "standardParams": [],
+      "requiresTrust": false,
       "params": []
     },
     {
@@ -200,6 +206,7 @@
       "description": "Trust a given folder to allow Snyk to scan it",
       "command": [],
       "standardParams": [],
+      "requiresTrust": false,
       "params":
       [
         {
