@@ -40,7 +40,7 @@ func (cmd *executeMcpCallCommand) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *executeMcpCallCommand) Execute(ctx context.Context) (any, error) {
+func (cmd *executeMcpCallCommand) Execute(_ context.Context) (any, error) {
 	logger := cmd.logger.With().Str("method", "executeMcpCallCommand").Logger()
 	if cmd.baseURL == "" {
 		logger.Warn().Msg("No base URL set, cannot execute mcp command")
@@ -70,8 +70,9 @@ func (cmd *executeMcpCallCommand) Execute(ctx context.Context) (any, error) {
 	}(mcpClient)
 
 	go func() {
+		bgCtx := context.Background()
 		// start
-		err = mcpClient.Start(context.Background())
+		err = mcpClient.Start(bgCtx)
 		if err != nil {
 			logger.Error().Err(err).Msg("Error starting mcp client")
 			return
@@ -85,7 +86,7 @@ func (cmd *executeMcpCallCommand) Execute(ctx context.Context) (any, error) {
 			Version: config.Version,
 		}
 
-		_, err = mcpClient.Initialize(ctx, initRequest)
+		_, err = mcpClient.Initialize(bgCtx, initRequest)
 		if err != nil {
 			logger.Error().Err(err).Msg("Error initializing mcp client")
 			return
@@ -100,7 +101,7 @@ func (cmd *executeMcpCallCommand) Execute(ctx context.Context) (any, error) {
 		}
 
 		logger.Debug().Msgf("Executing mcp command: %s", mcpCommand)
-		_, err = mcpClient.CallTool(ctx, callToolRequest)
+		_, err = mcpClient.CallTool(bgCtx, callToolRequest)
 		if err != nil {
 			logger.Error().Err(err).Msg("error executing tool request")
 		}

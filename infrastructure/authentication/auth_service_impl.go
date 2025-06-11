@@ -199,6 +199,13 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 }
 
 func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
+	a.previousCancelFuncMu.Lock()
+	if a.previousCancelFunc != nil {
+		a.previousCancelFunc()
+		// We don't set it back to nil as then we'd need to handle race conditions and double calling an old cancel function is already safe by the impl.
+	}
+	a.previousCancelFuncMu.Unlock()
+
 	a.m.Lock()
 	defer a.m.Unlock()
 

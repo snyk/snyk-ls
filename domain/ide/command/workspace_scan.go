@@ -34,11 +34,12 @@ func (cmd *workspaceScanCommand) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *workspaceScanCommand) Execute(ctx context.Context) (any, error) {
+func (cmd *workspaceScanCommand) Execute(_ context.Context) (any, error) {
 	w := cmd.c.Workspace()
 	w.Clear()
 	args := cmd.command.Arguments
-	enrichedCtx := cmd.enrichContextWithScanSource(ctx, args)
+	// Use a new background context so spawned threads aren't killed.
+	enrichedCtx := cmd.enrichContextWithScanSource(context.Background(), args)
 	w.ScanWorkspace(enrichedCtx)
 	HandleUntrustedFolders(enrichedCtx, cmd.c, cmd.srv)
 	return nil, nil

@@ -42,8 +42,9 @@ func (cmd *codeFixDiffs) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
+func (cmd *codeFixDiffs) Execute(_ context.Context) (any, error) {
 	logger := cmd.c.Logger().With().Str("method", "codeFixDiffs.Execute").Logger()
+	bgCtx := context.Background()
 
 	args := cmd.command.Arguments
 	if len(args) != 1 {
@@ -65,7 +66,7 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		logger.Err(err).Msg("failed to get html renderer")
 		return nil, err
 	}
-	go cmd.handleResponse(ctx, cmd.c, issue, htmlRenderer)
+	go cmd.handleResponse(bgCtx, cmd.c, issue, htmlRenderer)
 
 	return nil, err
 }

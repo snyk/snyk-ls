@@ -36,8 +36,9 @@ func (cmd *workspaceFolderScanCommand) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error) {
+func (cmd *workspaceFolderScanCommand) Execute(_ context.Context) (any, error) {
 	method := "workspaceFolderScanCommand.Execute"
+	bgCtx := context.Background()
 	args := cmd.Command().Arguments
 	w := cmd.c.Workspace()
 	if len(args) != 1 {
@@ -58,7 +59,7 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error)
 		return nil, err
 	}
 	f.Clear()
-	f.ScanFolder(ctx)
-	HandleUntrustedFolders(ctx, cmd.c, cmd.srv)
+	f.ScanFolder(bgCtx)
+	HandleUntrustedFolders(bgCtx, cmd.c, cmd.srv)
 	return nil, nil
 }
