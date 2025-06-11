@@ -517,6 +517,7 @@ func TestCreateToolFromDefinition(t *testing.T) {
 }
 
 func TestExtractParamsFromRequest(t *testing.T) {
+	dir := t.TempDir()
 	testCases := []struct {
 		name               string
 		toolDef            SnykMcpToolsDefinition
@@ -553,13 +554,13 @@ func TestExtractParamsFromRequest(t *testing.T) {
 			},
 			arguments: map[string]interface{}{
 				"org":  "my-org",
-				"path": "/test/path",
+				"path": dir,
 			},
 			expectedParamCount: 2,
-			expectedWorkingDir: "/test/path",
+			expectedWorkingDir: dir,
 			expectedParams: map[string]interface{}{
 				"org":  "my-org",
-				"path": "/test/path",
+				"path": dir,
 			},
 		},
 		{
@@ -608,14 +609,14 @@ func TestExtractParamsFromRequest(t *testing.T) {
 				},
 			},
 			arguments: map[string]interface{}{
-				"path":               "/test/path",
+				"path":               filepath.Join(dir),
 				"json":               true,
 				"severity_threshold": "high",
 			},
 			expectedParamCount: 3,
-			expectedWorkingDir: "/test/path",
+			expectedWorkingDir: dir,
 			expectedParams: map[string]interface{}{
-				"path":               "/test/path",
+				"path":               filepath.Join(dir, "test"),
 				"json":               true,
 				"severity-threshold": "high",
 			},
@@ -660,7 +661,7 @@ func TestExtractParamsFromRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			params, workingDir := extractParamsFromRequestArgs(tc.toolDef, tc.arguments)
+			params, workingDir, _ := extractParamsFromRequestArgs(tc.toolDef, tc.arguments)
 
 			assert.Equal(t, tc.expectedWorkingDir, workingDir)
 
@@ -823,6 +824,12 @@ exit 0
 }
 
 func TestPrepareCmdArgsForTool(t *testing.T) {
+	dir := t.TempDir()
+	tempFile, err := os.CreateTemp(dir, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	nopLogger := zerolog.Nop()
 
 	testCases := []struct {
@@ -842,17 +849,56 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 				},
 			},
 			requestArgs: map[string]interface{}{
-				"path":         "/tmp/projectA",
+				"path":         dir,
 				"all_projects": true,
 				"org":          "my-org-name",
 				"unused_param": "some_value", // Should be ignored
 			},
 			expectedParams: map[string]interface{}{
-				"path":         "/tmp/projectA",
+				"path":         dir,
 				"all-projects": true,
 				"org":          "my-org-name",
 			},
-			expectedWd: "/tmp/projectA",
+			expectedWd: dir,
+		},
+		{
+			name: "path with file given",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "all_projects", Type: "boolean"},
+					{Name: "org", Type: "string"},
+					{Name: "path", Type: "string"},
+				},
+			},
+			requestArgs: map[string]interface{}{
+				"all_projects": true,
+				"org":          "my-org-name",
+				"path":         tempFile.Name(),
+			},
+			expectedParams: map[string]interface{}{
+				"all-projects": true,
+				"org":          "my-org-name",
+				"path":         tempFile.Name(),
+			},
+			expectedWd: dir,
+		},
+		{
+			name: "no path given",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "all_projects", Type: "boolean"},
+					{Name: "org", Type: "string"},
+				},
+			},
+			requestArgs: map[string]interface{}{
+				"all_projects": true,
+				"org":          "my-org-name",
+			},
+			expectedParams: map[string]interface{}{
+				"all-projects": true,
+				"org":          "my-org-name",
+			},
+			expectedWd: "",
 		},
 		{
 			name: "Standard params addition",

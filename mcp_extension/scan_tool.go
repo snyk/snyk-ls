@@ -136,9 +136,7 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		args := buildArgs(m.cliPath, toolDef.Command, params)
 
 		// Add working directory if specified
-		if workingDir != "" {
-			args = append(args, workingDir)
-		} else {
+		if workingDir == "" {
 			logger.Debug().Msg("Received empty workingDir")
 		}
 

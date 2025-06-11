@@ -18,12 +18,20 @@ package mcp_extension
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpServer "github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
 )
+
+var positionalParam = map[string]bool{
+	"path":  true,
+	"image": true,
+}
 
 // buildArgs builds command-line arguments for Snyk CLI based on parameters
 func buildArgs(cliPath string, command []string, params map[string]interface{}) []string {
@@ -32,14 +40,18 @@ func buildArgs(cliPath string, command []string, params map[string]interface{}) 
 
 	// Add params as command-line flags
 	for key, value := range params {
-		switch v := value.(type) {
-		case bool:
-			if v {
-				args = append(args, "--"+key)
-			}
-		case string:
-			if v != "" {
-				args = append(args, "--"+key+"="+v)
+		if positionalParam[strings.ToLower(key)] {
+			args = append(args, value.(string))
+		} else {
+			switch v := value.(type) {
+			case bool:
+				if v {
+					args = append(args, "--"+key)
+				}
+			case string:
+				if v != "" {
+					args = append(args, "--"+key+"="+v)
+				}
 			}
 		}
 	}
@@ -70,7 +82,7 @@ func createToolFromDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
 }
 
 func prepareCmdArgsForTool(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, arguments map[string]interface{}) (map[string]interface{}, string) {
-	params, workingDir := extractParamsFromRequestArgs(toolDef, arguments)
+	params, workingDir, _ := extractParamsFromRequestArgs(toolDef, arguments)
 
 	for _, paramName := range toolDef.StandardParams {
 		cliParamName := convertToCliParam(paramName)
@@ -94,7 +106,7 @@ func prepareCmdArgsForTool(logger *zerolog.Logger, toolDef SnykMcpToolsDefinitio
 }
 
 // extractParamsFromRequestArgs extracts parameters from the arguments based on the tool definition
-func extractParamsFromRequestArgs(toolDef SnykMcpToolsDefinition, arguments map[string]interface{}) (map[string]interface{}, string) {
+func extractParamsFromRequestArgs(toolDef SnykMcpToolsDefinition, arguments map[string]interface{}) (map[string]interface{}, string, error) {
 	params := make(map[string]interface{})
 	var workingDir string
 
@@ -107,7 +119,15 @@ func extractParamsFromRequestArgs(toolDef SnykMcpToolsDefinition, arguments map[
 		// Store path separately to use as working directory
 		if paramDef.Name == "path" {
 			if pathStr, ok := val.(string); ok {
-				workingDir = pathStr
+				fileInfo, err := os.Stat(pathStr)
+				if err != nil {
+					return nil, "", fmt.Errorf("file does not exist, path: %s, err: %w", paramDef.Name, err)
+				}
+				if fileInfo.IsDir() {
+					workingDir = pathStr
+				} else {
+					workingDir = filepath.Dir(pathStr)
+				}
 			}
 		}
 
@@ -126,7 +146,7 @@ func extractParamsFromRequestArgs(toolDef SnykMcpToolsDefinition, arguments map[
 		}
 	}
 
-	return params, workingDir
+	return params, workingDir, nil
 }
 
 // convertToCliParam Convert parameter name from snake_case to kebab-case for CLI arguments
