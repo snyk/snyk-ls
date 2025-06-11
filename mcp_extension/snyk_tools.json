@@ -1292,7 +1292,10 @@
       ],
       "params": [
         {
-
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "Positional argument for the *ABSOLUTE PATH* to the directory to be scanned. The path MUST be absolute and have the correct path separator. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`."
         },
         {
           "name": "json-file-output",
