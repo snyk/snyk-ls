@@ -41,7 +41,11 @@ func buildArgs(cliPath string, command []string, params map[string]interface{}) 
 	// Add params as command-line flags
 	for key, value := range params {
 		if positionalParam[strings.ToLower(key)] {
-			args = append(args, value.(string))
+			valueString, ok := value.(string)
+			if !ok {
+				continue
+			}
+			args = append(args, valueString)
 		} else {
 			switch v := value.(type) {
 			case bool:
