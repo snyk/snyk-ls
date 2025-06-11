@@ -170,7 +170,10 @@
           "name": "json-file-output",
           "type": "string",
           "isRequired": false,
-          "description": "Saves the test output in JSON format to the specified file path. Human-readable output is still shown in the console. Not compatible with `--show-vulnerable-paths`."
+          "description": "Saves the test output in JSON format to the specified file path. Human-readable output is still shown in the console. Not compatible with `--show-vulnerable-paths`.",
+          "supersedesParams": [
+            "show_vulnerable_paths"
+          ]
         },
         {
           "name": "sarif-file-output",
