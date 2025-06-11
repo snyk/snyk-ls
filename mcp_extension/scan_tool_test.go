@@ -37,6 +37,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
 
 type testFixture struct {
@@ -82,8 +84,10 @@ func setupTestFixture(t *testing.T) *testFixture {
 	defaultMockResponse := "{\"ok\": true}"
 	createMockSnykCli(t, snykCliPath, defaultMockResponse)
 
+	engineConfig.Set(trust.DisableTrustFlag, true)
+
 	// Create the binding
-	binding := NewMcpLLMBinding(WithCliPath(snykCliPath), WithLogger(invocationCtx.GetEnhancedLogger()))
+	binding := NewMcpLLMBinding(WithCliPath(snykCliPath), WithLogger(invocationCtx.GetEnhancedLogger()), WithFolderTrust(trust.NewFolderTrust(invocationCtx.GetEnhancedLogger(), engineConfig)))
 	binding.mcpServer = server.NewMCPServer("Snyk", "1.1.1")
 	tools, err := loadMcpToolsFromJson()
 	assert.NoError(t, err)
