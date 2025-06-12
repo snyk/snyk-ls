@@ -30,7 +30,7 @@ import (
 
 type convertedToolParameter struct {
 	SnykMcpToolParameter
-	value any
+	value any // value is the requested parameter value that is provided from the LLM
 }
 
 // buildCommand builds command-line convertedToolParams for Snyk CLI based on parameters
@@ -98,7 +98,7 @@ func createToolFromDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
 func prepareCmdArgsForTool(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, requestArgs map[string]any) (map[string]convertedToolParameter, string, error) {
 	params, workingDir, err := normalizeParamsAndDetermineWorkingDir(toolDef, requestArgs)
 	if err != nil {
-		return nil, "", fmt.Errorf("Failed to extract parameters from request: %w", err)
+		return nil, "", fmt.Errorf("failed to extract parameters from request: %w", err)
 	}
 
 	// Add standard parameters
