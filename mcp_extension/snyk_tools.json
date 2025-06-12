@@ -53,7 +53,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *ABSOLUTE PATH* to a file, directory, or a package to scan. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`.",
+          "description": "Positional argument for the *ABSOLUTE PATH* to a directory, or a package to scan. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`.",
           "isPositional": true
         },
         {
@@ -297,7 +297,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *absolute path* to a file or directory.The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`",
+          "description": "Positional argument for the *absolute path* to directory. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`",
           "isPositional": true
         },
         {
@@ -851,7 +851,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *absolute path* to a file, directory to scan. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`",
+          "description": "Positional argument for the *absolute path* to a directory to scan. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`",
           "isPositional": true
         },
         {
