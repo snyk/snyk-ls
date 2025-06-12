@@ -204,7 +204,10 @@
           "name": "maven_aggregate_project",
           "type": "boolean",
           "isRequired": false,
-          "description": "For multi-module Maven projects. Scans all modules defined in the root `pom.xml`. Cannot be used with `all_projects`."
+          "description": "For multi-module Maven projects. Scans all modules defined in the root `pom.xml`. Cannot be used with `all_projects`.",
+          "supersedesParams": [
+            "all_projects"
+          ]
         },
         {
           "name": "scan_all_unmanaged",
@@ -427,7 +430,10 @@
           "name": "maven_aggregate_project",
           "type": "boolean",
           "isRequired": false,
-          "description": "For multi-module Maven projects. Monitors all modules. Cannot be used with `all_projects`."
+          "description": "For multi-module Maven projects. Monitors all modules. Cannot be used with `all_projects`.",
+          "supersedesParams": [
+            "all_projects"
+          ]
         }
       ]
     },
@@ -937,7 +943,10 @@
           "name": "maven_aggregate_project",
           "type": "boolean",
           "isRequired": false,
-          "description": "For multi-module Maven projects. Use instead of `all_projects`."
+          "description": "For multi-module Maven projects. Use instead of `all_projects`.",
+          "supersedesParams": [
+            "all_projects"
+          ]
         },
         {
           "name": "scan_unmanaged",
