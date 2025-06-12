@@ -42,7 +42,7 @@ type SnykMcpToolsDefinition struct {
 	Description    string                 `json:"description"`
 	Command        []string               `json:"command"`
 	StandardParams []string               `json:"standardParams"`
-	Params         []SnykMcpToolParameter `json:"convertedToolParams"`
+	Params         []SnykMcpToolParameter `json:"params"`
 }
 
 type SnykMcpToolParameter struct {
