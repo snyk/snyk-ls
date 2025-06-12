@@ -1,5 +1,5 @@
 /*
- * 2025 Snyk Limited
+ * © 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,11 +24,8 @@ import (
 	"html/template"
 	"net"
 	"net/http"
-	"os"
-	"path"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -63,7 +60,7 @@ func NewFolderTrust(logger *zerolog.Logger, config configuration.Configuration) 
 }
 
 func normalizePath(folder string) string {
-	return path.Clean(folder)
+	return filepath.Clean(folder)
 }
 
 func folderContains(folderPath string, path string) bool {
@@ -88,6 +85,10 @@ func (t *FolderTrust) IsFolderTrusted(folder string) bool {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
 
+	return t.isFolderTrusted(folder)
+}
+
+func (t *FolderTrust) isFolderTrusted(folder string) bool {
 	for _, trustedFolder := range t.trustedFolders() {
 		if folderContains(trustedFolder, folder) {
 			return true
@@ -121,11 +122,11 @@ func (t *FolderTrust) AddTrustedFolder(folder string) {
 }
 
 func (t *FolderTrust) addTrustedFolder(folder string) {
-	trustedFolders := t.trustedFolders()
 	folder = normalizePath(folder)
-	if slices.Contains(trustedFolders, folder) {
+	if t.isFolderTrusted(folder) {
 		return
 	}
+	trustedFolders := t.trustedFolders()
 	trustedFolders = append(trustedFolders, folder)
 	t.config.Set(TrustedFoldersConfigKey, trustedFolders)
 }
@@ -134,16 +135,24 @@ func (t *FolderTrust) HandleTrust(ctx context.Context, folderPath string, logger
 	resultChan := make(chan *mcp.CallToolResult)
 	errorChan := make(chan error)
 
-	loggerForTemplates := logger.With().Str("method", "HandleTrust").Logger()
+	loggerForTemplate := logger.With().Str("method", "HandleTrust").Logger()
 
 	tmpl, err := template.New("trustPage").Parse(SnykTrustPage)
 	if err != nil {
-		loggerForTemplates.Error().Err(err).Msg("Failed to parse HTML template from trust.SnykTrustPage")
+		loggerForTemplate.Error().Err(err).Msg("Failed to parse HTML template from trust.SnykTrustPage")
 		return nil, fmt.Errorf("failed to parse HTML template from trust.SnykTrustPage: %w", err)
 	}
 
 	mux := http.NewServeMux()
 	server := &http.Server{Handler: mux}
+	defer func() {
+		if server != nil {
+			logger.Info().Msg("Trust handler exiting, ensuring server shutdown via defer")
+			if err = server.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Error().Err(err).Msg("Error during deferred server shutdown")
+			}
+		}
+	}()
 
 	t.addHttpHandlers(logger, mux, folderPath, tmpl, resultChan, errorChan)
 
@@ -164,15 +173,6 @@ func (t *FolderTrust) HandleTrust(ctx context.Context, folderPath string, logger
 		return nil, fmt.Errorf("failed to create listener: %w", err)
 	}
 
-	defer func() {
-		if server != nil {
-			logger.Info().Msg("Trust handler exiting, ensuring server shutdown via defer")
-			if err = server.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logger.Error().Err(err).Msg("Error during deferred server shutdown")
-			}
-		}
-	}()
-
 	go func() {
 		logger.Info().Str("url", rawUrl).Msg("Starting trust confirmation server")
 		if err = server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -182,8 +182,11 @@ func (t *FolderTrust) HandleTrust(ctx context.Context, folderPath string, logger
 		logger.Info().Msg("Trust confirmation server stopped")
 	}()
 
-	browser.Stdout = os.Stderr
-	_ = browser.OpenURL(rawUrl)
+	browser.Stdout = logger
+	err = browser.OpenURL(rawUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open browser: %w", err)
+	}
 
 	logger.Info().Str("message", "Waiting for user action on "+rawUrl).Msg("Trust Handler")
 
@@ -208,6 +211,7 @@ func (t *FolderTrust) addHttpHandlers(logger zerolog.Logger, mux *http.ServeMux,
 		if tmpErr != nil {
 			http.Error(w, "Failed to render page", http.StatusInternalServerError)
 			logger.Error().Err(tmpErr).Msg("Failed to render HTML template")
+			errorChan <- fmt.Errorf("failed to render HTML template")
 		}
 	})
 
@@ -218,7 +222,6 @@ func (t *FolderTrust) addHttpHandlers(logger zerolog.Logger, mux *http.ServeMux,
 		}
 		logger.Info().Str("path", folderPath).Msg("User chose to trust folder")
 		t.AddTrustedFolder(folderPath)
-
 		logger.Info().Msg("Folder trusted successfully.")
 		resultChan <- mcp.NewToolResultText("Folder '" + folderPath + "' is now trusted.")
 	})
