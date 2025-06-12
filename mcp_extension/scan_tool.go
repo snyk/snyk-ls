@@ -42,7 +42,7 @@ type SnykMcpToolsDefinition struct {
 	Description    string                 `json:"description"`
 	Command        []string               `json:"command"`
 	StandardParams []string               `json:"standardParams"`
-	Params         []SnykMcpToolParameter `json:"params"`
+	Params         []SnykMcpToolParameter `json:"convertedToolParams"`
 }
 
 type SnykMcpToolParameter struct {
@@ -51,6 +51,8 @@ type SnykMcpToolParameter struct {
 	IsRequired       bool     `json:"isRequired"`
 	Description      string   `json:"description"`
 	SupersedesParams []string `json:"supersedesParams"`
+	IsPositional     bool     `json:"isPositional"`
+	Position         int      `json:"position"`
 }
 
 //go:embed snyk_tools.json
@@ -131,9 +133,12 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		}
 
 		requestArgs := request.GetArguments()
-		params, workingDir := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
+		params, workingDir, err := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
+		if err != nil {
+			return nil, err
+		}
 
-		args := buildArgs(m.cliPath, toolDef.Command, params)
+		args := buildCommand(m.cliPath, toolDef.Command, params)
 
 		// Add working directory if specified
 		if workingDir == "" {

@@ -28,39 +28,49 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var positionalParam = map[string]bool{
-	"path":  true,
-	"image": true,
+type convertedToolParameter struct {
+	SnykMcpToolParameter
+	value any
 }
 
-// buildArgs builds command-line arguments for Snyk CLI based on parameters
-func buildArgs(cliPath string, command []string, params map[string]interface{}) []string {
-	args := []string{cliPath}
-	args = append(args, command...)
+// buildCommand builds command-line convertedToolParams for Snyk CLI based on parameters
+func buildCommand(cliPath string, command []string, params map[string]convertedToolParameter) []string {
+	cmd := []string{cliPath}
+	cmd = append(cmd, command...)
 
-	// Add params as command-line flags
-	for key, value := range params {
-		if positionalParam[strings.ToLower(key)] {
-			valueString, ok := value.(string)
-			if !ok {
-				continue
-			}
-			args = append(args, valueString)
-		} else {
-			switch v := value.(type) {
-			case bool:
-				if v {
-					args = append(args, "--"+key)
-				}
-			case string:
-				if v != "" {
-					args = append(args, "--"+key+"="+v)
-				}
-			}
+	cmd = append(cmd, buildArgs(params)...)
+	return cmd
+}
+
+func buildArgs(params map[string]convertedToolParameter) []string {
+	args := []string{}
+	// Add convertedToolParams as command-line flags
+	for key, param := range params {
+		arg := buildArg(key, param)
+		if arg != "" {
+			args = append(args, arg)
 		}
 	}
-
 	return args
+}
+
+func buildArg(key string, param convertedToolParameter) string {
+	valueString, _ := param.value.(string)
+	if param.Type != "boolean" && valueString == "" {
+		return ""
+	}
+
+	if param.IsPositional {
+		return valueString
+	}
+	switch strings.ToLower(param.Type) {
+	case "boolean":
+		return "--" + key
+	case "string":
+		return "--" + key + "=" + valueString
+	default:
+		return ""
+	}
 }
 
 // createToolFromDefinition creates an MCP tool from a Snyk tool definition
@@ -85,17 +95,27 @@ func createToolFromDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
 	return mcp.NewTool(toolDef.Name, opts...)
 }
 
-func prepareCmdArgsForTool(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, arguments map[string]interface{}) (map[string]interface{}, string) {
-	params, workingDir, _ := extractParamsFromRequestArgs(toolDef, arguments)
+func prepareCmdArgsForTool(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, requestArgs map[string]any) (map[string]convertedToolParameter, string, error) {
+	params, workingDir, err := normalizeParamsAndDetermineWorkingDir(toolDef, requestArgs)
+	if err != nil {
+		return nil, "", fmt.Errorf("Failed to extract parameters from request: %w", err)
+	}
 
+	// Add standard parameters
 	for _, paramName := range toolDef.StandardParams {
 		cliParamName := convertToCliParam(paramName)
-		params[cliParamName] = true
+		params[cliParamName] = convertedToolParameter{
+			SnykMcpToolParameter: SnykMcpToolParameter{
+				Name: cliParamName,
+				Type: "boolean",
+			},
+			value: true,
+		}
 	}
 
 	// Handle supersedence: if an explicitly provided argument supersedes others, remove the superseded ones.
 	for _, paramDef := range toolDef.Params {
-		if _, argExistsInRequest := arguments[paramDef.Name]; !argExistsInRequest || len(paramDef.SupersedesParams) == 0 {
+		if _, argExistsInRequest := requestArgs[paramDef.Name]; !argExistsInRequest || len(paramDef.SupersedesParams) == 0 {
 			continue
 		}
 		for _, supersededParamName := range paramDef.SupersedesParams {
@@ -106,16 +126,16 @@ func prepareCmdArgsForTool(logger *zerolog.Logger, toolDef SnykMcpToolsDefinitio
 			}
 		}
 	}
-	return params, workingDir
+	return params, workingDir, nil
 }
 
-// extractParamsFromRequestArgs extracts parameters from the arguments based on the tool definition
-func extractParamsFromRequestArgs(toolDef SnykMcpToolsDefinition, arguments map[string]interface{}) (map[string]interface{}, string, error) {
-	params := make(map[string]interface{})
+// normalizeParamsAndDetermineWorkingDir extracts parameters from the convertedToolParams based on the tool definition
+func normalizeParamsAndDetermineWorkingDir(toolDef SnykMcpToolsDefinition, requestArgs map[string]any) (map[string]convertedToolParameter, string, error) {
+	params := make(map[string]convertedToolParameter)
 	var workingDir string
 
 	for _, paramDef := range toolDef.Params {
-		val, ok := arguments[paramDef.Name]
+		val, ok := requestArgs[paramDef.Name]
 		if !ok {
 			continue
 		}
@@ -135,25 +155,25 @@ func extractParamsFromRequestArgs(toolDef SnykMcpToolsDefinition, arguments map[
 			}
 		}
 
-		// Convert parameter name from snake_case to kebab-case for CLI arguments
+		// Convert parameter name from snake_case to kebab-case for CLI convertedToolParams
 		cliParamName := strings.ReplaceAll(paramDef.Name, "_", "-")
-
-		// Cast the value based on parameter type
-		if paramDef.Type == "string" {
-			if strVal, ok := val.(string); ok && strVal != "" {
-				params[cliParamName] = strVal
-			}
-		} else if paramDef.Type == "boolean" {
-			if boolVal, ok := val.(bool); ok && boolVal {
-				params[cliParamName] = true
-			}
+		params[cliParamName] = convertedToolParameter{
+			SnykMcpToolParameter: SnykMcpToolParameter{
+				Name:         cliParamName,
+				Type:         paramDef.Type,
+				IsRequired:   paramDef.IsRequired,
+				Description:  paramDef.Description,
+				IsPositional: paramDef.IsPositional,
+				Position:     paramDef.Position,
+			},
+			value: val,
 		}
 	}
 
 	return params, workingDir, nil
 }
 
-// convertToCliParam Convert parameter name from snake_case to kebab-case for CLI arguments
+// convertToCliParam Convert parameter name from snake_case to kebab-case for CLI convertedToolParams
 func convertToCliParam(cliParam string) string {
 	return strings.ReplaceAll(cliParam, "_", "-")
 }
