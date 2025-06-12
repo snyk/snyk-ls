@@ -157,16 +157,10 @@ func normalizeParamsAndDetermineWorkingDir(toolDef SnykMcpToolsDefinition, reque
 
 		// Convert parameter name from snake_case to kebab-case for CLI convertedToolParams
 		cliParamName := strings.ReplaceAll(paramDef.Name, "_", "-")
+		paramDef.Name = cliParamName
 		params[cliParamName] = convertedToolParameter{
-			SnykMcpToolParameter: SnykMcpToolParameter{
-				Name:         cliParamName,
-				Type:         paramDef.Type,
-				IsRequired:   paramDef.IsRequired,
-				Description:  paramDef.Description,
-				IsPositional: paramDef.IsPositional,
-				Position:     paramDef.Position,
-			},
-			value: val,
+			SnykMcpToolParameter: paramDef,
+			value:                val,
 		}
 	}
 
