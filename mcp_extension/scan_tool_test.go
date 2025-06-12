@@ -35,7 +35,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -86,7 +85,7 @@ func setupTestFixture(t *testing.T) *testFixture {
 	binding := NewMcpLLMBinding(WithCliPath(snykCliPath), WithLogger(invocationCtx.GetEnhancedLogger()))
 	binding.mcpServer = server.NewMCPServer("Snyk", "1.1.1")
 	tools, err := loadMcpToolsFromJson()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	return &testFixture{
 		t:                 t,
 		mockEngine:        engine,
@@ -114,7 +113,7 @@ func getToolWithName(t *testing.T, tools *SnykMcpTools, toolName string) *SnykMc
 func TestMcpSnykToolRegistration(t *testing.T) {
 	fixture := setupTestFixture(t)
 	err := fixture.binding.addSnykTools(fixture.invocationContext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestSnykTestHandler(t *testing.T) {
@@ -125,7 +124,7 @@ func TestSnykTestHandler(t *testing.T) {
 	mockOutput := `{ok": false,"vulnerabilities": [{"id": "SNYK-JS-ACORN-559469","title": "Regular Expression Denial of Service (ReDoS)","severity":"high","packageName": "acorn"},{"id": "SNYK-JS-TUNNELAGENT-1572284","title": "Uninitialized Memory Exposure","severity": "medium","packageName": "tunnel-agent"}],"dependencyCount": 42,"packageManager": "npm"}`
 	fixture.mockCliOutput(mockOutput)
 	tool := getToolWithName(t, fixture.tools, SnykScaTest)
-	assert.NotNil(t, tool)
+	require.NotNil(t, tool)
 	// Create the handler
 	handler := fixture.binding.defaultHandler(fixture.invocationContext, *tool)
 
@@ -133,11 +132,11 @@ func TestSnykTestHandler(t *testing.T) {
 	// Define test cases
 	testCases := []struct {
 		name string
-		args map[string]interface{}
+		args map[string]any
 	}{
 		{
 			name: "Basic SCA Test",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"path":         tmpDir,
 				"all_projects": true,
 				"json":         true,
@@ -145,7 +144,7 @@ func TestSnykTestHandler(t *testing.T) {
 		},
 		{
 			name: "Test with Organization",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"path":         tmpDir,
 				"all_projects": true,
 				"json":         true,
@@ -154,7 +153,7 @@ func TestSnykTestHandler(t *testing.T) {
 		},
 		{
 			name: "Test with Severity Threshold",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"path":               tmpDir,
 				"all_projects":       false,
 				"json":               true,
@@ -163,7 +162,7 @@ func TestSnykTestHandler(t *testing.T) {
 		},
 		{
 			name: "Test with Multiple Options",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"path":                           tmpDir,
 				"all_projects":                   true,
 				"json":                           true,
@@ -178,31 +177,31 @@ func TestSnykTestHandler(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			requestObj := map[string]interface{}{
-				"params": map[string]interface{}{
+			requestObj := map[string]any{
+				"params": map[string]any{
 					"arguments": tc.args,
 				},
 			}
 			requestJSON, err := json.Marshal(requestObj)
-			assert.NoError(t, err, "Failed to marshal request to JSON")
+			require.NoError(t, err, "Failed to marshal request to JSON")
 
 			// Parse the JSON string to CallToolRequest
 			var request mcp.CallToolRequest
 			err = json.Unmarshal(requestJSON, &request)
-			assert.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
+			require.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
 			result, err := handler(context.Background(), request)
 
-			assert.NoError(t, err)
-			assert.NotNil(t, result)
+			require.NoError(t, err)
+			require.NotNil(t, result)
 
 			textContent, ok := result.Content[0].(mcp.TextContent)
-			assert.True(t, ok)
+			require.True(t, ok)
 			content := strings.TrimSpace(textContent.Text)
-			assert.Contains(t, content, "ok")
-			assert.Contains(t, content, "vulnerabilities")
-			assert.Contains(t, content, "dependencyCount")
-			assert.Contains(t, content, "packageManager")
+			require.Contains(t, content, "ok")
+			require.Contains(t, content, "vulnerabilities")
+			require.Contains(t, content, "dependencyCount")
+			require.Contains(t, content, "packageManager")
 		})
 	}
 }
@@ -221,41 +220,41 @@ func TestSnykCodeTestHandler(t *testing.T) {
 	// Create the handler
 	handler := fixture.binding.defaultHandler(fixture.invocationContext, *toolDef)
 	tmpDir := t.TempDir()
-	// Test cases with various combinations of arguments
+	// Test cases with various combinations of convertedToolParams
 	testCases := []struct {
 		name string
-		args map[string]interface{}
+		args map[string]any
 	}{
 		{
 			name: "Basic Test",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"path": tmpDir,
 			},
 		},
 		{
 			name: "Test with Custom File",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"path": tmpDir,
 				"file": "specific_file.js",
 			},
 		},
 		{
 			name: "Test with Severity Threshold",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"path":               tmpDir,
 				"severity_threshold": "high",
 			},
 		},
 		{
 			name: "Test with Organization",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"path": tmpDir,
 				"org":  "my-snyk-org",
 			},
 		},
 		{
 			name: "Test with All Options",
-			args: map[string]interface{}{
+			args: map[string]any{
 				"path":               tmpDir,
 				"file":               "specific_file.js",
 				"severity_threshold": "high",
@@ -266,28 +265,28 @@ func TestSnykCodeTestHandler(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			requestObj := map[string]interface{}{
-				"params": map[string]interface{}{
+			requestObj := map[string]any{
+				"params": map[string]any{
 					"arguments": tc.args,
 				},
 			}
 			requestJSON, err := json.Marshal(requestObj)
-			assert.NoError(t, err, "Failed to marshal request to JSON")
+			require.NoError(t, err, "Failed to marshal request to JSON")
 
 			var request mcp.CallToolRequest
 			err = json.Unmarshal(requestJSON, &request)
-			assert.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
+			require.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
 			result, err := handler(context.Background(), request)
 
-			assert.NoError(t, err)
-			assert.NotNil(t, result)
+			require.NoError(t, err)
+			require.NotNil(t, result)
 			textContent, ok := result.Content[0].(mcp.TextContent)
-			assert.True(t, ok)
+			require.True(t, ok)
 			content := strings.TrimSpace(textContent.Text)
-			assert.Contains(t, content, "ok")
-			assert.Contains(t, content, "issues")
-			assert.Contains(t, content, "filesAnalyzed")
+			require.Contains(t, content, "ok")
+			require.Contains(t, content, "issues")
+			require.Contains(t, content, "filesAnalyzed")
 		})
 	}
 }
@@ -335,28 +334,28 @@ func TestBasicSnykCommands(t *testing.T) {
 			handler := tc.handlerFunc(fixture.invocationContext, SnykMcpToolsDefinition{Command: tc.command})
 
 			// Create an empty request object as JSON string
-			requestObj := map[string]interface{}{
-				"params": map[string]interface{}{
-					"arguments": map[string]interface{}{},
+			requestObj := map[string]any{
+				"params": map[string]any{
+					"arguments": map[string]any{},
 				},
 			}
 			requestJSON, err := json.Marshal(requestObj)
-			assert.NoError(t, err, "Failed to marshal request to JSON")
+			require.NoError(t, err, "Failed to marshal request to JSON")
 
 			// Parse the JSON string to CallToolRequest
 			var request mcp.CallToolRequest
 			err = json.Unmarshal(requestJSON, &request)
-			assert.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
+			require.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
 			// Call the handler
 			result, err := handler(context.Background(), request)
 
 			// Assertions
-			assert.NoError(t, err)
-			assert.NotNil(t, result)
+			require.NoError(t, err)
+			require.NotNil(t, result)
 			textContent, ok := result.Content[0].(mcp.TextContent)
-			assert.True(t, ok)
-			assert.Equal(t, tc.mockResponse, strings.TrimSpace(textContent.Text))
+			require.True(t, ok)
+			require.Equal(t, tc.mockResponse, strings.TrimSpace(textContent.Text))
 		})
 	}
 }
@@ -372,34 +371,34 @@ func TestAuthHandler(t *testing.T) {
 	// Create the handler
 	handler := fixture.binding.defaultHandler(fixture.invocationContext, SnykMcpToolsDefinition{Command: []string{"auth"}})
 
-	requestObj := map[string]interface{}{
-		"params": map[string]interface{}{
-			"arguments": map[string]interface{}{},
+	requestObj := map[string]any{
+		"params": map[string]any{
+			"arguments": map[string]any{},
 		},
 	}
 	requestJSON, err := json.Marshal(requestObj)
-	assert.NoError(t, err, "Failed to marshal request to JSON")
+	require.NoError(t, err, "Failed to marshal request to JSON")
 
 	var request mcp.CallToolRequest
 	err = json.Unmarshal(requestJSON, &request)
-	assert.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
+	require.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
 	result, err := handler(context.Background(), request)
 
 	// Assertions
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
+	require.NoError(t, err)
+	require.NotNil(t, result)
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	assert.True(t, ok)
-	assert.Equal(t, mockAuthResponse, strings.TrimSpace(textContent.Text))
+	require.True(t, ok)
+	require.Equal(t, mockAuthResponse, strings.TrimSpace(textContent.Text))
 }
 
 func TestGetSnykToolsConfig(t *testing.T) {
 	config, err := loadMcpToolsFromJson()
 
-	assert.NoError(t, err)
-	assert.NotNil(t, config)
-	assert.NotEmpty(t, config.Tools)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+	require.NotEmpty(t, config.Tools)
 
 	toolNames := map[string]bool{
 		SnykScaTest:    false,
@@ -415,7 +414,7 @@ func TestGetSnykToolsConfig(t *testing.T) {
 	}
 
 	for name, found := range toolNames {
-		assert.True(t, found, "Tool %s not found in configuration", name)
+		require.True(t, found, "Tool %s not found in configuration", name)
 	}
 }
 
@@ -439,7 +438,7 @@ func TestCreateToolFromDefinition(t *testing.T) {
 			name: "Tool with String Params",
 			toolDefinition: SnykMcpToolsDefinition{
 				Name:        "string_param_tool",
-				Description: "Tool with string params",
+				Description: "Tool with string convertedToolParams",
 				Command:     []string{"test"},
 				Params: []SnykMcpToolParameter{
 					{
@@ -462,7 +461,7 @@ func TestCreateToolFromDefinition(t *testing.T) {
 			name: "Tool with Boolean Params",
 			toolDefinition: SnykMcpToolsDefinition{
 				Name:        "bool_param_tool",
-				Description: "Tool with boolean params",
+				Description: "Tool with boolean convertedToolParams",
 				Command:     []string{"test"},
 				Params: []SnykMcpToolParameter{
 					{
@@ -485,7 +484,7 @@ func TestCreateToolFromDefinition(t *testing.T) {
 			name: "Tool with Mixed Params",
 			toolDefinition: SnykMcpToolsDefinition{
 				Name:        "mixed_param_tool",
-				Description: "Tool with mixed params",
+				Description: "Tool with mixed convertedToolParams",
 				Command:     []string{"test"},
 				Params: []SnykMcpToolParameter{
 					{
@@ -510,20 +509,21 @@ func TestCreateToolFromDefinition(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tool := createToolFromDefinition(&tc.toolDefinition)
 
-			assert.NotNil(t, tool)
-			assert.Equal(t, tc.expectedName, tool.Name)
+			require.NotNil(t, tool)
+			require.Equal(t, tc.expectedName, tool.Name)
 		})
 	}
 }
 
 func TestExtractParamsFromRequest(t *testing.T) {
+	dir := t.TempDir()
 	testCases := []struct {
 		name               string
 		toolDef            SnykMcpToolsDefinition
-		arguments          map[string]interface{}
+		requestArgs        map[string]any
 		expectedParamCount int
 		expectedWorkingDir string
-		expectedParams     map[string]interface{}
+		expectedParams     map[string]any
 	}{
 		{
 			name: "Empty Request",
@@ -531,10 +531,10 @@ func TestExtractParamsFromRequest(t *testing.T) {
 				Name:   "test_tool",
 				Params: []SnykMcpToolParameter{},
 			},
-			arguments:          map[string]interface{}{},
+			requestArgs:        map[string]any{},
 			expectedParamCount: 0,
 			expectedWorkingDir: "",
-			expectedParams:     map[string]interface{}{},
+			expectedParams:     map[string]any{},
 		},
 		{
 			name: "String Parameters",
@@ -551,15 +551,15 @@ func TestExtractParamsFromRequest(t *testing.T) {
 					},
 				},
 			},
-			arguments: map[string]interface{}{
+			requestArgs: map[string]any{
 				"org":  "my-org",
-				"path": "/test/path",
+				"path": dir,
 			},
 			expectedParamCount: 2,
-			expectedWorkingDir: "/test/path",
-			expectedParams: map[string]interface{}{
+			expectedWorkingDir: dir,
+			expectedParams: map[string]any{
 				"org":  "my-org",
-				"path": "/test/path",
+				"path": dir,
 			},
 		},
 		{
@@ -577,13 +577,13 @@ func TestExtractParamsFromRequest(t *testing.T) {
 					},
 				},
 			},
-			arguments: map[string]interface{}{
+			requestArgs: map[string]any{
 				"json":         true,
 				"all_projects": true,
 			},
 			expectedParamCount: 2,
 			expectedWorkingDir: "",
-			expectedParams: map[string]interface{}{
+			expectedParams: map[string]any{
 				"json":         true,
 				"all-projects": true,
 			},
@@ -607,15 +607,15 @@ func TestExtractParamsFromRequest(t *testing.T) {
 					},
 				},
 			},
-			arguments: map[string]interface{}{
-				"path":               "/test/path",
+			requestArgs: map[string]any{
+				"path":               dir,
 				"json":               true,
 				"severity_threshold": "high",
 			},
 			expectedParamCount: 3,
-			expectedWorkingDir: "/test/path",
-			expectedParams: map[string]interface{}{
-				"path":               "/test/path",
+			expectedWorkingDir: dir,
+			expectedParams: map[string]any{
+				"path":               dir,
 				"json":               true,
 				"severity-threshold": "high",
 			},
@@ -631,12 +631,12 @@ func TestExtractParamsFromRequest(t *testing.T) {
 					},
 				},
 			},
-			arguments: map[string]interface{}{
+			requestArgs: map[string]any{
 				"org": "",
 			},
 			expectedParamCount: 0,
 			expectedWorkingDir: "",
-			expectedParams:     map[string]interface{}{},
+			expectedParams:     map[string]any{},
 		},
 		{
 			name: "False Boolean Parameters",
@@ -644,65 +644,94 @@ func TestExtractParamsFromRequest(t *testing.T) {
 				Name: "false_bool_tool",
 				Params: []SnykMcpToolParameter{
 					{
-						Name: "json",
+						Name: "all_projects",
 						Type: "boolean",
 					},
 				},
 			},
-			arguments: map[string]interface{}{
-				"json": false,
+			requestArgs: map[string]any{
+				"all-projects": false,
 			},
 			expectedParamCount: 0,
 			expectedWorkingDir: "",
-			expectedParams:     map[string]interface{}{},
+			expectedParams:     map[string]any{},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			params, workingDir := extractParamsFromRequestArgs(tc.toolDef, tc.arguments)
+			params, workingDir, err := normalizeParamsAndDetermineWorkingDir(tc.toolDef, tc.requestArgs)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedWorkingDir, workingDir)
 
-			assert.Equal(t, tc.expectedWorkingDir, workingDir)
-
-			assert.Equal(t, len(tc.expectedParams), len(params))
-
-			for key, expectedValue := range tc.expectedParams {
-				switch key {
-				case "path":
-					continue
-				default:
-					expectedKey := strings.ReplaceAll(key, "_", "-")
-					actualValue, ok := params[expectedKey]
-					assert.True(t, ok, "Parameter %s not found", expectedKey)
-					assert.Equal(t, expectedValue, actualValue)
+			// assert only empty string parameters are there if we don't expect any - they'll be filtered in buildArgs
+			if tc.expectedParamCount == 0 {
+				for _, parameter := range params {
+					if strings.ToLower(parameter.Type) == "string" {
+						require.Equalf(t, "", parameter.value, "Parameter %s should not be set", parameter.Name)
+					} else {
+						require.Failf(t, "Parameter %s should not be set", parameter.Name)
+					}
 				}
+			}
+
+			// assert each of the expected parameters is set
+			for key, value := range tc.expectedParams {
+				positional := false
+				for _, param := range tc.toolDef.Params {
+					if param.Name == key && param.IsPositional {
+						positional = true
+						break
+					}
+				}
+
+				if positional {
+					continue
+				}
+
+				expectedKey := strings.ReplaceAll(key, "_", "-")
+				actualValue, ok := params[expectedKey]
+				require.True(t, ok, "Parameter %s not found", expectedKey)
+				require.Equal(t, value, actualValue.value)
 			}
 		})
 	}
 }
 
-func TestBuildArgs(t *testing.T) {
+func TestBuildCommand(t *testing.T) {
 	testCases := []struct {
-		name     string
-		cliPath  string
-		command  []string
-		params   map[string]interface{}
-		expected []string
+		name                string
+		cliPath             string
+		command             []string
+		convertedToolParams map[string]convertedToolParameter
+		expected            []string
 	}{
 		{
-			name:     "No Parameters",
-			cliPath:  "snyk",
-			command:  []string{"test"},
-			params:   map[string]interface{}{},
-			expected: []string{"snyk", "test"},
+			name:                "No Parameters",
+			cliPath:             "snyk",
+			command:             []string{"test"},
+			convertedToolParams: map[string]convertedToolParameter{},
+			expected:            []string{"snyk", "test"},
 		},
 		{
 			name:    "String Parameters",
 			cliPath: "snyk",
 			command: []string{"test"},
-			params: map[string]interface{}{
-				"org":  "my-org",
-				"file": "package.json",
+			convertedToolParams: map[string]convertedToolParameter{
+				"org": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "org",
+						Type: "string",
+					},
+					value: "my-org",
+				},
+				"file": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "file",
+						Type: "string",
+					},
+					value: "package.json",
+				},
 			},
 			expected: []string{"snyk", "test", "--org=my-org", "--file=package.json"},
 		},
@@ -710,29 +739,51 @@ func TestBuildArgs(t *testing.T) {
 			name:    "Boolean Parameters",
 			cliPath: "snyk",
 			command: []string{"test"},
-			params: map[string]interface{}{
-				"json":         true,
-				"all-projects": true,
+			convertedToolParams: map[string]convertedToolParameter{
+				"all-projects": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "all-projects",
+						Type: "boolean",
+					},
+					value: true,
+				},
 			},
-			expected: []string{"snyk", "test", "--json", "--all-projects"},
+			expected: []string{"snyk", "test", "--all-projects"},
 		},
 		{
 			name:    "Mixed Parameters",
 			cliPath: "snyk",
 			command: []string{"test"},
-			params: map[string]interface{}{
-				"org":          "my-org",
-				"json":         true,
-				"all-projects": true,
+			convertedToolParams: map[string]convertedToolParameter{
+				"org": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "org",
+						Type: "string",
+					},
+					value: "my-org",
+				},
+				"all-projects": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "all-projects",
+						Type: "boolean",
+					},
+					value: true,
+				},
 			},
-			expected: []string{"snyk", "test", "--org=my-org", "--all-projects", "--json"},
+			expected: []string{"snyk", "test", "--org=my-org", "--all-projects"},
 		},
 		{
 			name:    "Empty String Parameters",
 			cliPath: "snyk",
 			command: []string{"test"},
-			params: map[string]interface{}{
-				"org": "",
+			convertedToolParams: map[string]convertedToolParameter{
+				"org": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "org",
+						Type: "string",
+					},
+					value: "",
+				},
 			},
 			expected: []string{"snyk", "test"},
 		},
@@ -740,8 +791,14 @@ func TestBuildArgs(t *testing.T) {
 			name:    "False Boolean Parameters",
 			cliPath: "snyk",
 			command: []string{"test"},
-			params: map[string]interface{}{
-				"json": false,
+			convertedToolParams: map[string]convertedToolParameter{
+				"all-projects": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "all-projects",
+						Type: "boolean",
+					},
+					value: false,
+				},
 			},
 			expected: []string{"snyk", "test"},
 		},
@@ -749,10 +806,11 @@ func TestBuildArgs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			args := buildArgs(tc.cliPath, tc.command, tc.params)
-			for _, arg := range args {
-				assert.Contains(t, tc.expected, arg)
+			args := buildCommand(tc.cliPath, tc.command, tc.convertedToolParams)
+			for _, arg := range tc.expected {
+				require.Contains(t, args, arg)
 			}
+			require.Len(t, tc.expected, len(args))
 		})
 	}
 }
@@ -792,10 +850,10 @@ func TestRunSnyk(t *testing.T) {
 			output, err := fixture.binding.runSnyk(ctx, fixture.invocationContext, tc.workingDir, tc.command)
 
 			if tc.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tc.mockOutput, strings.TrimSpace(output))
+				require.NoError(t, err)
+				require.Equal(t, tc.mockOutput, strings.TrimSpace(output))
 			}
 		})
 	}
@@ -823,52 +881,168 @@ exit 0
 }
 
 func TestPrepareCmdArgsForTool(t *testing.T) {
+	dir := t.TempDir()
+	tempFile, err := os.CreateTemp(dir, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = tempFile.Close()
+	})
+
 	nopLogger := zerolog.Nop()
 
 	testCases := []struct {
 		name           string
 		toolDef        SnykMcpToolsDefinition
-		requestArgs    map[string]interface{}
-		expectedParams map[string]interface{}
+		requestArgs    map[string]any
+		expectedParams map[string]convertedToolParameter
 		expectedWd     string
 	}{
 		{
-			name: "Basic string & bool params, path extraction",
+			name: "Basic string & bool convertedToolParams, path extraction",
 			toolDef: SnykMcpToolsDefinition{
 				Params: []SnykMcpToolParameter{
-					{Name: "path", Type: "string"},
+					{Name: "path", Type: "string", IsPositional: true},
 					{Name: "all_projects", Type: "boolean"},
 					{Name: "org", Type: "string"},
 				},
 			},
-			requestArgs: map[string]interface{}{
-				"path":         "/tmp/projectA",
+			requestArgs: map[string]any{
+				"path":         dir,
 				"all_projects": true,
 				"org":          "my-org-name",
-				"unused_param": "some_value", // Should be ignored
+				"unused_param": "",
 			},
-			expectedParams: map[string]interface{}{
-				"path":         "/tmp/projectA",
-				"all-projects": true,
-				"org":          "my-org-name",
+			expectedParams: map[string]convertedToolParameter{
+				"path": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name:         "path",
+						Type:         "string",
+						IsPositional: true,
+					},
+					value: dir,
+				},
+				"all-projects": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "all-projects",
+						Type: "boolean",
+					},
+					value: true,
+				},
+				"org": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "org",
+						Type: "string",
+					},
+					value: "my-org-name",
+				},
 			},
-			expectedWd: "/tmp/projectA",
+			expectedWd: dir,
 		},
 		{
-			name: "Standard params addition",
+			name: "path with file given",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "all-projects", Type: "boolean"},
+					{Name: "org", Type: "string"},
+					{Name: "path", Type: "string", IsPositional: true},
+				},
+			},
+			requestArgs: map[string]any{
+				"all-projects": true,
+				"org":          "my-org-name",
+				"path":         tempFile.Name(),
+			},
+			expectedParams: map[string]convertedToolParameter{
+				"all-projects": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "all-projects",
+						Type: "boolean",
+					},
+					value: true,
+				},
+				"org": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "org",
+						Type: "string",
+					},
+					value: "my-org-name",
+				},
+				"path": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name:         "path",
+						Type:         "string",
+						IsPositional: true,
+					},
+					value: tempFile.Name(),
+				},
+			},
+			expectedWd: dir,
+		},
+		{
+			name: "no path given",
+			toolDef: SnykMcpToolsDefinition{
+				Params: []SnykMcpToolParameter{
+					{Name: "all_projects", Type: "boolean"},
+					{Name: "org", Type: "string"},
+				},
+			},
+			requestArgs: map[string]any{
+				"all_projects": true,
+				"org":          "my-org-name",
+			},
+			expectedParams: map[string]convertedToolParameter{
+				"all-projects": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "all-projects",
+						Type: "boolean",
+					},
+					value: true,
+				},
+				"org": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "org",
+						Type: "string",
+					},
+					value: "my-org-name",
+				},
+			},
+			expectedWd: "",
+		},
+		{
+			name: "Standard convertedToolParams addition",
 			toolDef: SnykMcpToolsDefinition{
 				Params: []SnykMcpToolParameter{
 					{Name: "file", Type: "string"},
 				},
 				StandardParams: []string{"json", "debug_mode"},
 			},
-			requestArgs: map[string]interface{}{
+			requestArgs: map[string]any{
 				"file": "package.json",
 			},
-			expectedParams: map[string]interface{}{
-				"file":       "package.json",
-				"json":       true,
-				"debug-mode": true,
+			expectedParams: map[string]convertedToolParameter{
+				"file": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "file",
+						Type: "string",
+					},
+					value: "package.json",
+				},
+				"json": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "json",
+						Type: "boolean",
+					},
+					value: true,
+				},
+				"debug-mode": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "debug-mode",
+						Type: "boolean",
+					},
+					value: true,
+				},
 			},
 			expectedWd: "",
 		},
@@ -881,14 +1055,27 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 					{Name: "json", Type: "boolean"},
 				},
 			},
-			requestArgs: map[string]interface{}{
-				"file":         "pom.xml",
-				"all_projects": true,
-				"json":         true,
+			requestArgs: map[string]any{
+				"file":        "pom.xml",
+				"allprojects": true,
+				"json":        true,
 			},
-			expectedParams: map[string]interface{}{
-				"file": "pom.xml",
-				"json": true, // all-projects should be removed
+			expectedParams: map[string]convertedToolParameter{
+				"file": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name:             "file",
+						Type:             "string",
+						SupersedesParams: []string{"all_projects"},
+					},
+					value: "pom.xml",
+				},
+				"json": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "json",
+						Type: "boolean",
+					},
+					value: true,
+				},
 			},
 			expectedWd: "",
 		},
@@ -901,26 +1088,57 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 				},
 				StandardParams: []string{"all_projects", "debug"}, // all_projects will be added as standard
 			},
-			requestArgs: map[string]interface{}{
+			requestArgs: map[string]any{
 				"file": "pom.xml",
 				"json": true,
 			},
-			expectedParams: map[string]interface{}{
-				"file":  "pom.xml",
-				"json":  true,
-				"debug": true, // all-projects added by standard, then removed by 'file' superseding it
+			expectedParams: map[string]convertedToolParameter{
+				"file": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name:             "file",
+						Type:             "string",
+						SupersedesParams: []string{"all_projects"},
+					},
+					value: "pom.xml",
+				},
+				"json": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "json",
+						Type: "boolean",
+					},
+					value: true,
+				},
+				"debug": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "debug",
+						Type: "boolean",
+					},
+					value: true,
+				},
 			},
 			expectedWd: "",
 		},
 		{
-			name: "No request args, only standard params",
+			name: "No request args, only standard convertedToolParams",
 			toolDef: SnykMcpToolsDefinition{
 				StandardParams: []string{"json", "all_projects"},
 			},
-			requestArgs: map[string]interface{}{},
-			expectedParams: map[string]interface{}{
-				"json":         true,
-				"all-projects": true,
+			requestArgs: map[string]any{},
+			expectedParams: map[string]convertedToolParameter{
+				"all-projects": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "all-projects",
+						Type: "boolean",
+					},
+					value: true,
+				},
+				"json": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "json",
+						Type: "boolean",
+					},
+					value: true,
+				},
 			},
 			expectedWd: "",
 		},
@@ -928,14 +1146,22 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 			name: "Path is provided but not a string",
 			toolDef: SnykMcpToolsDefinition{
 				Params: []SnykMcpToolParameter{
-					{Name: "path", Type: "string"},
+					{Name: "path", Type: "string", IsPositional: true},
 				},
 			},
-			requestArgs: map[string]interface{}{
+			requestArgs: map[string]any{
 				"path": 123,
 			},
-			expectedParams: map[string]interface{}{},
-			expectedWd:     "", // Path extraction fails if not string
+			expectedParams: map[string]convertedToolParameter{
+				"path": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name:         "path",
+						Type:         "string",
+						IsPositional: true,
+					},
+					value: 123,
+				}},
+			expectedWd: "", // Path extraction fails if not string
 		},
 		{
 			name: "Boolean param in request is false",
@@ -944,10 +1170,10 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 					{Name: "all_projects", Type: "boolean"},
 				},
 			},
-			requestArgs: map[string]interface{}{
-				"all_projects": false,
+			requestArgs: map[string]any{
+				"all-projects": false,
 			},
-			expectedParams: map[string]interface{}{}, // False booleans are not added
+			expectedParams: map[string]convertedToolParameter{}, // False booleans are not added
 			expectedWd:     "",
 		},
 		{
@@ -957,14 +1183,21 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 					{Name: "org", Type: "string"},
 				},
 			},
-			requestArgs: map[string]interface{}{
+			requestArgs: map[string]any{
 				"org": "",
 			},
-			expectedParams: map[string]interface{}{}, // Empty strings are not added
-			expectedWd:     "",
+			expectedParams: map[string]convertedToolParameter{
+				"org": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "org",
+						Type: "string",
+					},
+					value: "",
+				}},
+			expectedWd: "",
 		},
 		{
-			name: "Supersedence: multiple params superseded",
+			name: "Supersedence: multiple convertedToolParams superseded",
 			toolDef: SnykMcpToolsDefinition{
 				Params: []SnykMcpToolParameter{
 					{Name: "package_manager", Type: "string", SupersedesParams: []string{"all_projects", "file"}},
@@ -973,32 +1206,60 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 					{Name: "json", Type: "boolean"},
 				},
 			},
-			requestArgs: map[string]interface{}{
+			requestArgs: map[string]any{
 				"package_manager": "npm",
 				"all_projects":    true,
 				"file":            "package-lock.json",
 				"json":            true,
 			},
-			expectedParams: map[string]interface{}{
-				"package-manager": "npm",
-				"json":            true,
+			expectedParams: map[string]convertedToolParameter{
+				"package-manager": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name:             "package-manager",
+						Type:             "string",
+						SupersedesParams: []string{"all_projects", "file"},
+					},
+					value: "npm",
+				},
+				"json": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "json",
+						Type: "boolean",
+					},
+					value: true,
+				},
 			},
 			expectedWd: "",
 		},
 		{
-			name: "Supersedence: superseded param not in request, but in standard params",
+			name: "Supersedence: superseded param not in request, but in standard convertedToolParams",
 			toolDef: SnykMcpToolsDefinition{
 				Params: []SnykMcpToolParameter{
 					{Name: "org", Type: "string", SupersedesParams: []string{"dev"}},
 				},
 				StandardParams: []string{"dev", "json"},
 			},
-			requestArgs: map[string]interface{}{
+			requestArgs: map[string]any{
 				"org": "my-org",
 			},
-			expectedParams: map[string]interface{}{
-				"org":  "my-org",
-				"json": true, // dev is removed
+			expectedParams: map[string]convertedToolParameter{
+				//"org":  "my-org",
+				//"json": true, // dev is removed
+				"org": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name:             "org",
+						Type:             "string",
+						SupersedesParams: []string{"dev"},
+					},
+					value: "my-org",
+				},
+				"json": {
+					SnykMcpToolParameter: SnykMcpToolParameter{
+						Name: "json",
+						Type: "boolean",
+					},
+					value: true,
+				},
 			},
 			expectedWd: "",
 		},
@@ -1006,9 +1267,10 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualParams, actualWd := prepareCmdArgsForTool(&nopLogger, tc.toolDef, tc.requestArgs)
-			assert.EqualValues(t, tc.expectedParams, actualParams, "Parameter map mismatch")
-			assert.Equal(t, tc.expectedWd, actualWd, "Working directory mismatch")
+			actualParams, actualWd, err := prepareCmdArgsForTool(&nopLogger, tc.toolDef, tc.requestArgs)
+			require.NoError(t, err)
+			require.EqualValues(t, tc.expectedParams, actualParams, "Parameter map mismatch")
+			require.Equal(t, tc.expectedWd, actualWd, "Working directory mismatch")
 		})
 	}
 }

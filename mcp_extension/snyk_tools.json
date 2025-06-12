@@ -1,199 +1,1205 @@
 {
   "tools": [
     {
-      "name": "snyk_sca_test",
-      "description": "Run a SCA test on project dependencies to detect known vulnerabilities. Use this to scan open-source packages in supported ecosystems like npm, Maven, etc. Supports monorepo scanning via `--all-projects`. Outputs vulnerability data in JSON if enabled.",
-      "command": ["test"],
-      "standardParams": ["all_projects"],
+      "name": "snyk_auth",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Links the Snyk MCP instance with a valid Snyk account, enabling communication with the Snyk platform for accessing vulnerability databases, reporting scan results, and managing projects. Authentication is a fundamental prerequisite for using the Snyk MCP server; most Snyk MCP scanning and monitoring commands will not function without successful authentication. \nWhen to use: This is the second step after defining the config environment (which is optional, when using the default Snyk instance) to set up the Snyk MCP scanner for issue, configuration and security vulnerability scanning.",
+      "command": [
+        "auth"
+      ],
+      "standardParams": [],
+      "params": [
+        {
+          "name": "d",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Enables debug logging for the authentication process. Useful for troubleshooting connection or authentication issues."
+        }
+      ]
+    },
+    {
+      "name": "snyk_config_environment",
+      "description": "Changes the API endpoint the Snyk MCP targets, crucial for users of Snyk's regional data centers (e.g., EU, AU) or specialized environments like Snyk GovCloud. This ensures communication with the correct Snyk backend. \nWhen to use: Execute *before* `snyk auth`, as tokens and Org settings are often environment-specific. Vital for data residency, performance, and accessing correct organizational data. Automatically clears existing `api` token and `org` settings from local CLI config due to environment specificity. \nSecure SDLC Integration: A foundational setup step for any user or automated system needing to interact with a non-default Snyk instance. Ensures correct routing and data alignment from the start of development.",
+      "command": [
+        "config",
+        "environment"
+      ],
+      "standardParams": [],
+      "params": [
+        {
+          "name": "environment",
+          "type": "string",
+          "isRequired": true,
+          "description": "Positional argument specifying the target Snyk environment. Accepted values: predefined aliases (`default`, `SNYK-US-01`, `SNYK-US-02`, `SNYK-AU-01`, `SNYK-EU-01`, `SNYK-GOV-01`) or the full API endpoint URL (e.g., `https://api.snykgov.io`)."
+        },
+        {
+          "name": "d",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Enables debug logging for the environment configuration process. Use as `d`."
+        }
+      ]
+    },
+    {
+      "name": "snyk_sca_scan",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. It's a cornerstone of 'shifting security left'. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. Test specific npm package: `$ snyk test lodash@4.17.20`. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed and build tools accessible in PATH for accurate dependency resolution. Review 'Code execution warning for Snyk MCP' documentation. \nSecure SDLC Integration: Integral to Coding and Continuous Integration phases. Provides immediate feedback locally and repports whenvulnerabilities exceed defined thresholds (via `fail_on`, `severity_threshold`).",
+      "command": [
+        "test"
+      ],
+      "standardParams": [
+        "all_projects"
+      ],
       "params": [
         {
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Path to the project to test (default is the absolute path of the current directory, formatted according to the operating system's conventions)."
+          "description": "Positional argument for the *ABSOLUTE PATH* to a directory, or a package to scan. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`.",
+          "isPositional": true
         },
         {
           "name": "all_projects",
           "type": "boolean",
           "isRequired": false,
-          "description": "Scan all projects in the specified directory. (Default is true)."
-        },
-        {
-          "name": "severity_threshold",
-          "type": "string",
-          "isRequired": false,
-          "description": "Only report vulnerabilities of the specified level or higher (low, medium, high, critical). (Default is empty)"
-        },
-        {
-          "name": "org",
-          "type": "string",
-          "isRequired": false,
-          "description": "Specify the organization under which to run the test. (Default is empty)."
-        },
-        {
-          "name": "dev",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Include development dependencies. (Default is false)"
-        },
-        {
-          "name": "skip_unresolved",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Skip testing of unresolved packages. (Default is false)"
-        },
-        {
-          "name": "prune_repeated_subdependencies",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Prune repeated sub-dependencies. (Default is false)."
-        },
-        {
-          "name": "fail_on",
-          "type": "string",
-          "isRequired": false,
-          "description": "Specify the failure criteria (all, upgradable, patchable). (Default is all)."
-        },
-        {
-          "name": "file",
-          "type": "string",
-          "isRequired": false,
-          "description": "Specify a package file to test. (Default is empty)",
-          "supersedesParams": ["all_projects"]
+          "description": "Auto-detects and tests all supported package manager manifest files found within the current directory and its subdirectories. Ideal for monorepos or solutions containing multiple projects. Mutually exclusive with `maven_aggregate_project` for Maven. Default is true."
         },
         {
           "name": "fail_fast",
           "type": "boolean",
           "isRequired": false,
-          "description": "Use with --all-projects to interrupt scans when errors occur. (Default is false)"
+          "description": "When used with `all_projects`, the scan process will stop immediately upon encountering the first error in any of the sub-projects, reporting the error and exiting. Without this, Snyk attempts to scan all projects and reports errors at the end."
         },
         {
           "name": "detection_depth",
-          "type": "string",
+          "type": "integer",
           "isRequired": false,
-          "description": "Use with --all-projects to indicate how many subdirectories to search. (Default is empty)"
+          "description": "Specifies the depth of subdirectories (integer >= 0) to search for projects when using `all_projects` or `yarn_workspaces`. 0 means the current directory only. Default is no limit."
         },
         {
           "name": "exclude",
           "type": "string",
           "isRequired": false,
-          "description": "Use with --all-projects to exclude directory names and file names. (Default is empty)"
+          "description": "Comma-separated list of directory or file names to exclude from scanning when using `all_projects` or `yarn_workspaces`. Cannot include paths. Example: `exclude=node_modules,tests,build`."
+        },
+        {
+          "name": "prune_repeated_subdependencies",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Simplifies the displayed dependency tree by removing duplicate sub-dependencies. This can make the output cleaner for large projects but may not show all vulnerable paths. Default is false."
+        },
+        {
+          "name": "print_deps",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Prints the full dependency tree of the project to the console before the analysis begins. Useful for understanding the project structure."
         },
         {
           "name": "remote_repo_url",
           "type": "string",
           "isRequired": false,
-          "description": "Set or override the remote URL for the repository to monitor. (Default is empty)"
+          "description": "Sets or overrides the remote repository URL associated with the project. Useful if the local project is not a git repository or to associate the scan with a different remote."
+        },
+        {
+          "name": "dev",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Includes development-only dependencies in the scan (e.g., `devDependencies` in npm, `:development` group in RubyGems). Supported for Maven, npm, and Yarn projects. Default is false (only production dependencies scanned)."
+        },
+        {
+          "name": "org",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies the Snyk Organization ID (or slug name) under which the test results should be reported and associated. Essential if belonging to multiple Snyk Orgs. Default is the org from `snyk config` or Snyk account."
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies the path to a particular package manifest file (e.g., `package.json`, `pom.xml`, `requirements.txt`) that Snyk should inspect. If not provided, Snyk attempts auto-detection. Mutually exclusive with `all_projects`",
+          "supersedesParams": [
+            "all_projects"
+          ]
         },
         {
           "name": "package_manager",
           "type": "string",
           "isRequired": false,
-          "description": "Specify the name of the package manager when the filename is not standard. (Default is empty)"
+          "description": "Specifies the package manager type when the `file` option points to a manifest file with a non-standard name (e.g., `req.txt` instead of `requirements.txt` for Python). Accepted values: `npm`, `maven`, `pip`, `yarn`, `gradle`, `composer`, `rubygems`, `nuget`, `golangdep`, `govendor`, `gomodules`. Default is auto-detected."
         },
         {
           "name": "unmanaged",
           "type": "boolean",
           "isRequired": false,
-          "description": "For C++ only, scan all files for known open source dependencies. (Default is false)"
+          "description": "Enables scanning for C++ projects or other scenarios where dependencies are not managed by a standard package manager. Snyk attempts to identify dependencies based on file signatures."
         },
         {
           "name": "ignore_policy",
           "type": "boolean",
           "isRequired": false,
-          "description": "Ignore all set policies, the current policy in the .snyk file, Org level ignores, and the project policy. (Default is false)"
+          "description": "Instructs Snyk to ignore all policies defined in the `.snyk` file, organization-level ignores, and project policies on snyk.io for this specific scan."
         },
         {
           "name": "trust_policies",
           "type": "boolean",
           "isRequired": false,
-          "description": "Apply and use ignore rules from the Snyk policies in your dependencies. (Default is false)"
+          "description": "Applies and uses ignore rules found within Snyk policy files present in the project's dependencies. By default, such rules are only shown as suggestions."
         },
         {
           "name": "show_vulnerable_paths",
           "type": "string",
           "isRequired": false,
-          "description": "Display the dependency paths (none|some|all). (Default: none)."
+          "description": "Controls how many vulnerable dependency paths are displayed in the output. Accepted values: `none` (shows no paths), `some` (shows a few examples), `all` (shows all identified paths). Not supported with `json_file_output`."
         },
         {
           "name": "project_name",
           "type": "string",
           "isRequired": false,
-          "description": "Specify a custom Snyk project name. (Default is empty)"
+          "description": "Specifies a custom name for the project as it will appear in the Snyk UI if results are monitored or reported. Default is auto-generated (e.g., from manifest or directory name)."
         },
         {
           "name": "target_reference",
           "type": "string",
           "isRequired": false,
-          "description": "Specify a reference that differentiates this project, for example, a branch name. (Default is empty)"
+          "description": "Specifies a reference (e.g., branch name, version tag) to differentiate this specific scan or project version, especially when results are monitored. Useful for grouping projects in Snyk UI. Supported for Snyk Open Source (except with `unmanaged`)."
         },
         {
           "name": "policy_path",
           "type": "string",
           "isRequired": false,
-          "description": "Manually pass a path to a .snyk policy file. (Default is empty)"
+          "description": "Manually provides the path to a `.snyk` policy file if it's not located in the project root. Default is `.snyk` in project root."
+        },
+        {
+          "name": "json_file_output",
+          "type": "string",
+          "isRequired": false,
+          "description": "Saves the test output in JSON format to the specified file path. Human-readable output is still shown in the console. Not compatible with `show-vulnerable_paths`.",
+          "supersedesParams": [
+            "show_vulnerable_paths"
+          ]
+        },
+        {
+          "name": "sarif_file_output",
+          "type": "string",
+          "isRequired": false,
+          "description": "Saves the test output in SARIF format to the specified file path."
+        },
+        {
+          "name": "severity_threshold",
+          "type": "string",
+          "isRequired": false,
+          "description": "Reports only vulnerabilities that meet or exceed the specified severity level. Useful for filtering noise or focusing on critical issues. Accepted values: `low`, `medium`, `high`, `critical`."
+        },
+        {
+          "name": "fail_on",
+          "type": "string",
+          "isRequired": false,
+          "description": "Determines the conditions under which the `snyk test` command will exit with a non-zero code (indicating failure), specifically for CI/CD integration. `all`: fails if any Snyk-fixable vulnerability (upgrade or patch) exists. `upgradable`: fails if a vulnerability has a direct upgrade path. `patchable`: fails if a Snyk patch is available. Default is `all` (fails on any discoverable vulnerability meeting severity criteria)."
+        },
+        {
+          "name": "additional_arguments",
+          "type": "string",
+          "isRequired": false,
+          "description": "A double dash `` allows passing additional options directly to the underlying build tool (e.g., Maven, Gradle) if Snyk invokes it as part of the scan. Provide these as a single string after ``."
+        },
+        {
+          "name": "maven_aggregate_project",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "For multi-module Maven projects. Scans all modules defined in the root `pom.xml`. Cannot be used with `all_projects`.",
+          "supersedesParams": [
+            "all_projects"
+          ]
+        },
+        {
+          "name": "scan_all_unmanaged",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "For Maven ecosystem. Auto-detects and tests all Maven, JAR, WAR, AAR files recursively. Often used with `file` to target specific unmanaged archives."
+        },
+        {
+          "name": "gradle_sub_project",
+          "type": "string",
+          "isRequired": false,
+          "description": "Tests a specific Gradle sub-project. Alias: `sub-project`."
+        },
+        {
+          "name": "all_sub_projects",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Tests all Gradle sub-projects in a multi-project build."
+        },
+        {
+          "name": "configuration_matching",
+          "type": "string",
+          "isRequired": false,
+          "description": "For Gradle, filters Gradle configurations to scan using a REGEX."
+        },
+        {
+          "name": "init_script",
+          "type": "string",
+          "isRequired": false,
+          "description": "For Gradle, uses a Gradle initialization script from the specified file path."
+        },
+        {
+          "name": "assets_project_name",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "For NuGet (.NET), uses project name from `project.assets.json` for PackageReference projects when testing solution (`.sln`) files."
+        },
+        {
+          "name": "dotnet_runtime_resolution",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "For .NET projects using Runtime Resolution Scanning (Early Access)."
+        },
+        {
+          "name": "dotnet_target_framework",
+          "type": "string",
+          "isRequired": false,
+          "description": "For .NET, specifies a target framework for multi-targeted .NET solutions (Early Access)."
+        },
+        {
+          "name": "strict_out_of_sync",
+          "type": "string",
+          "isRequired": false,
+          "description": "Controls behavior for out-of-sync lockfiles for npm, pnpm, Yarn. Accepted values: `true`, `false`. Default `true` for npm/yarn, `false` for pnpm."
+        },
+        {
+          "name": "yarn_workspaces",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Detects and scans Yarn Workspaces. Use with `all_projects` for broader monorepo scanning."
+        },
+        {
+          "name": "command",
+          "type": "string",
+          "isRequired": false,
+          "description": "For Python, specifies the Python executable (e.g., `python3`)."
+        },
+        {
+          "name": "skip_unresolved",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "For Python, skips packages not found in the environment"
         }
       ]
     },
     {
-      "name": "snyk_code_test",
-      "description": "Run a static application security test (SAST) on your source code to detect security issues like SQL injection, XSS, and hardcoded secrets. Designed to catch issues early in the development cycle.",
-      "command": ["code", "test"],
+      "name": "snyk_monitor",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Takes a snapshot of a project's open-source dependencies and sends this to the Snyk platform (snyk.io). This creates a project in the Snyk UI for continuous monitoring against newly disclosed vulnerabilities and license issues. It does not monitor Snyk Code (SAST) issues; those are typically monitored via SCM integration. \nWhen to use: Typically used before a project is integrated into a production environment or as a baseline for a significant release. If dependencies change significantly, `snyk monitor` must be re-run to update the snapshot. \nDifference from `snyk test`: `snyk test` provides immediate, one-time feedback for active development and CI. `snyk monitor` establishes long-term, ongoing surveillance of a specific project snapshot, alerting to new vulnerabilities discovered in existing dependencies *after* the snapshot. \nSecure SDLC Integration: Used in Pre-production or Release stages to establish a baseline. The Snyk platform then continuously tracks this 'bill of materials' for new issues. Re-run to update the snapshot as the project evolves. The rich metadata options (`project_tags`, etc.) enhance manageability in the Snyk UI, especially for large enterprises. Exit codes: `0` for success, `2` for failure, `3` for no supported projects.",
+      "command": [
+        "monitor"
+      ],
+      "standardParams": [
+        "all_projects"
+      ],
+      "params": [
+        {
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "Positional argument for the *absolute path* to directory. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`",
+          "isPositional": true
+        },
+        {
+          "name": "all_projects",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Auto-detects and monitors all supported projects in the working directory. Mutually exclusive with `maven_aggregate_project` for Maven."
+        },
+        {
+          "name": "fail-fast",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "With `all_projects`, interrupts scans on errors and reports them."
+        },
+        {
+          "name": "detection_depth",
+          "type": "integer",
+          "isRequired": false,
+          "description": "Specifies subdirectory search depth (integer >= 0) for `all_projects` or `yarn_workspaces`. Default is no limit."
+        },
+        {
+          "name": "exclude",
+          "type": "string",
+          "isRequired": false,
+          "description": "Comma-separated list of directory or file names to exclude with `all_projects` or `yarn_workspaces`."
+        },
+        {
+          "name": "prune_repeated_subdependencies",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Prunes dependency trees in the snapshot, removing duplicate sub-dependencies (alias `-p`). Default false."
+        },
+        {
+          "name": "print_deps",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Prints the dependency tree before analysis."
+        },
+        {
+          "name": "remote_repo_url",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets or overrides the remote repository URL for the project in Snyk UI."
+        },
+        {
+          "name": "dev",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Includes development-only dependencies in the monitored snapshot. Applicable for Maven, npm, Yarn. Default false."
+        },
+        {
+          "name": "org",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies the Snyk Organization ID (or slug name) for the monitored project. Default is the Snyk configured org."
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies a particular package manifest file to monitor. Default is auto-detected."
+        },
+        {
+          "name": "package_manager",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies package manager (e.g., `pip`, `maven`) if `file` is non-standard. Default is auto-detected."
+        },
+        {
+          "name": "unmanaged",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "For C++ only (in this context), monitors projects with unmanaged dependencies."
+        },
+        {
+          "name": "ignore_policy",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Ignores all set policies for this snapshot."
+        },
+        {
+          "name": "trust_policies",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Applies ignore rules from Snyk policies in dependencies for the snapshot."
+        },
+        {
+          "name": "project_name",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies a custom Snyk project name in the UI. Default is auto-generated."
+        },
+        {
+          "name": "target_reference",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies a reference (e.g., branch name, version) to differentiate this project snapshot. Projects with the same reference can be grouped in Snyk UI. Supported for Snyk Open Source and with `unmanaged`."
+        },
+        {
+          "name": "policy_path",
+          "type": "string",
+          "isRequired": false,
+          "description": "Manually provides a path to a `.snyk` policy file. Default is `.snyk` in root."
+        },
+        {
+          "name": "project_environment",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets the project environment attribute(s) in Snyk UI (e.g., `production,frontend`). Comma-separated from an allowed list."
+        },
+        {
+          "name": "project_lifecycle",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets the project lifecycle attribute(s) in Snyk UI (e.g., `production,sandbox`). Comma-separated from an allowed list."
+        },
+        {
+          "name": "project_business_criticality",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets the project business criticality attribute(s) in Snyk UI (e.g., `critical,high`). Comma-separated from an allowed list."
+        },
+        {
+          "name": "project_tags",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets project tags in Snyk UI as comma-separated key-value pairs (e.g., `department=finance,team=alpha`). Alias `tags`."
+        },
+        {
+          "name": "maven_aggregate_project",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "For multi-module Maven projects. Monitors all modules. Cannot be used with `all_projects`.",
+          "supersedesParams": [
+            "all_projects"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "snyk_code_scan",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Performs Static Application Security Testing (SAST) directly from the Snyk MCP. It analyzes an application's source code to identify security vulnerabilities and weaknesses without executing the code. \nWhen to use: During local development, developers can run it on their feature branches for immediate feedback. In CI/CD pipelines, it can be incorporated to automatically scan code changes on every build, pull request, or merge, providing a security gate for code quality. \nHow to use: Test  directory: run snyk_code_scan with parameter <path>, add parameters as needed. Save JSON results for medium+ severity: run snyk_code_scan with parameters `path` `json_file_output`=`sast.json` `severity_threshold`=`medium`. \nNote: If `json_file_output` is used and no issues are found, the output file is not created. \nExit Codes: `0` for success/no issues matching criteria, `1` for issues found, `2` for scan error. \nSecure SDLC Integration: Enables embedding Snyk Code's analytical capabilities directly into automated build and test sequences. In the Coding phase, developers get local feedback. In CI/CD, it automates code scanning, acting as a security gate.",
+      "command": [
+        "code",
+        "test"
+      ],
       "standardParams": [],
       "params": [
         {
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Path to the project to test (default is the absolute path of the current directory, formatted according to the operating system's conventions)."
-        },
-        {
-          "name": "file",
-          "type": "string",
-          "isRequired": false,
-          "description": "Specific file to scan (default: empty)."
-        },
-        {
-          "name": "severity_threshold",
-          "type": "string",
-          "isRequired": false,
-          "description": "Only report vulnerabilities of the specified level or higher (low, medium, high). (default: empty)"
+          "description": "Positional argument for the *absolute path* to a file or directory to scan. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`",
+          "isPositional": true
         },
         {
           "name": "org",
           "type": "string",
           "isRequired": false,
-          "description": "Specify the organization under which to run the test. (default: empty)"
+          "description": "Specifies the Snyk Organization ID (or slug name) under which the test results should be associated. This can influence private test limits and ensures results are reported to the correct Snyk Organization. Default is from `snyk config` or Snyk account."
+        },
+        {
+          "name": "json_file_output",
+          "type": "string",
+          "isRequired": false,
+          "description": "Saves the test output as a JSON data structure to the specified file path. This occurs regardless of whether `json` is also used. Note: For Snyk Code, if no security issues are found, Snyk does not create this JSON file."
+        },
+        {
+          "name": "sarif_file_output",
+          "type": "string",
+          "isRequired": false,
+          "description": "Saves the test output in SARIF format to the specified file path, irrespective of whether `sarif` is used for console output."
+        },
+        {
+          "name": "severity_threshold",
+          "type": "string",
+          "isRequired": false,
+          "description": "Reports only vulnerabilities that meet or exceed the specified severity level. Accepted values: `low`, `medium`, `high`. Snyk Code configuration issues do not use the `critical` severity level."
+        },
+        {
+          "name": "d",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Enables debug logging for the SAST scan, providing more detailed output for troubleshooting. Use as `-d`."
+        }
+      ]
+    },
+    {
+      "name": "snyk_container_scan",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Scans container images for known vulnerabilities in OS packages and application dependencies. \nWhen to use: Locally by developers after building images. In CI/CD pipelines to scan images before pushing to a registry or deploying, acting as a security gate. \nHow to use: Test image: <snyk_container_scan> `IMAGE`=`my-image:v1`. Test with Dockerfile for context: <snyk_container_scan> `IMAGE`=`my-image:v1` `file`=`absolute/path/to/Dockerfile`. Test and exclude base image vulns: <snyk_container_scan> `IMAGE`=`my-image:v1` `exclude_base_image_vulns`. Test OCI archive: <snyk_container_scan> `IMAGE`=`oci-archive:image.tar` `platform`=`linux/arm64`. \nSecure SDLC Integration: Crucial for securing containerized applications. Local Development: Immediate feedback. CI/CD Pipelines: Automates scanning, acting as a security gate for container images. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
+      "command": [
+        "container",
+        "test"
+      ],
+      "standardParams": [],
+      "params": [
+        {
+          "name": "image",
+          "type": "string",
+          "isRequired": true,
+          "description": "Positional argument for the container image to test. Can be an image name from a registry (e.g., `node:14-alpine`), a local image ID, or a path to a tarball (e.g., `docker-archive:image.tar`, `oci-archive:image.tar`).",
+          "isPositional": true
+        },
+        {
+          "name": "print_deps",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Prints the dependency tree (OS packages and application dependencies if scanned) to the console before analysis."
+        },
+        {
+          "name": "org",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies the Snyk Organization ID (or slug name) for reporting and association of results. Default is the configured Snyk Org."
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "isRequired": false,
+          "description": "Path to the Dockerfile used to build the image. Snyk uses this to offer more accurate remediation advice, potentially identifying the base image or specific instructions that introduced vulnerabilities."
+        },
+        {
+          "name": "project_name",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies a custom name for the project in the Snyk UI if results are monitored or reported. Default is auto-generated."
+        },
+        {
+          "name": "policy_path",
+          "type": "string",
+          "isRequired": false,
+          "description": "Manually provides the path to a `.snyk` policy file containing ignore rules. Default is `.snyk` in project root (if applicable)."
+        },
+        {
+          "name": "json_file_output",
+          "type": "string",
+          "isRequired": false,
+          "description": "Saves test output in JSON format to the specified file."
+        },
+        {
+          "name": "sarif_file_output",
+          "type": "string",
+          "isRequired": false,
+          "description": "Saves test output in SARIF format to the specified file."
+        },
+        {
+          "name": "severity_threshold",
+          "type": "string",
+          "isRequired": false,
+          "description": "Reports only vulnerabilities at or above the specified severity level. Accepted values: `low`, `medium`, `high`, `critical`."
+        },
+        {
+          "name": "fail_on",
+          "type": "string",
+          "isRequired": false,
+          "description": "Controls conditions for a non-zero exit code. `all`: fails if any fixable (upgrade or Snyk-provided patch) vulnerability is found. `upgradable`: fails only if a vulnerability has a direct upgrade path available from Snyk. Default is to fail on any Snyk-discoverable vulnerability."
+        },
+        {
+          "name": "app_vulns",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Enables scanning for vulnerabilities in application dependencies packaged within the container image (e.g., npm packages, Maven JARs). Enabled by default in Snyk MCP versions 1.1090.0 and higher. Mutually exclusive with `exclude_app_vulns`."
+        },
+        {
+          "name": "exclude_app_vulns",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Disables scanning for application vulnerabilities within the container image, focusing only on OS package vulnerabilities. Default is disabled (meaning app vulns are scanned by default in CLI v1.1090.0+). Mutually exclusive with `app_vulns`."
+        },
+        {
+          "name": "exclude_node_modules",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "If scanning a Node.js container image, this option controls scanning of `node_modules` directories. By default (CLI v1.1292.0+), `node_modules` are scanned; this flag would disable that specific scan if explicitly set to true, or confirm default behavior."
+        },
+        {
+          "name": "nested_jars_depth",
+          "type": "integer",
+          "isRequired": false,
+          "description": "When `app_vulns` is active for Java applications, this sets how many levels of nested JAR files (e.g., JARs within WARs or EARs) Snyk should unpack and analyze. E.g., `0`, `1`, `2`. Default is Snyk's standard behavior."
+        },
+        {
+          "name": "exclude_base_image_vulns",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Instructs Snyk not to report vulnerabilities that are introduced *only* by the base image layers. This helps focus on vulnerabilities added by application layers. Works for OS packages only. Default false."
+        },
+        {
+          "name": "platform",
+          "type": "string",
+          "isRequired": false,
+          "description": "For multi-architecture container images, specifies the platform (architecture/OS) to test (e.g., `linux/amd64`, `linux/arm64`). Default is auto-detected or image default."
+        }
+      ]
+    },
+    {
+      "name": "snyk_container_monitor",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Captures a snapshot of a container image's layers and dependencies and sends this to the Snyk platform (snyk.io) for continuous monitoring of newly disclosed vulnerabilities. \nWhen to use: Typically before deploying an image to production or as a baseline for a release candidate. Re-run if the image is rebuilt or its dependencies change to update the Snyk snapshot. \nDifference from `<snyk_container_scan>`: `<snyk_container_scan>` is for immediate, one-time scans. `<snyk_container_monitor>` establishes long-term surveillance. The `exclude_base_image_vulns` parameter has no effect with `<snyk_container_monitor>`. \nHow to use: Monitor image: <snyk_container_monitor> `image`=`my-prod-image:v1.0.5` `org`=`my-org`. Monitor image from archive: `<snyk_container_monitor> `image`=`my-prod-image:v1.0.5` `file`=`absolute/path/to/Dockerfile` `org`=`my-org`.\nSecure SDLC Integration: Used in Pre-Deployment/Release Phase to set a baseline. In Operations/Maintenance, Snyk platform uses this snapshot for ongoing monitoring. Metadata options (`project_tags`, etc.) are key for organizing monitored images. Exit codes: `0` (success), `2` (failure).",
+      "command": [
+        "container",
+        "monitor"
+      ],
+      "standardParams": [],
+      "params": [
+        {
+          "name": "image",
+          "type": "string",
+          "isRequired": true,
+          "description": "Positional argument for the container image to monitor (name:tag, ID, or archive path).",
+          "isPositional": true
+        },
+        {
+          "name": "org",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies the Snyk Organization ID (or slug name). Default is the configured Snyk Org."
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "isRequired": false,
+          "description": "Path to the Dockerfile for more detailed advice and context in Snyk UI."
+        },
+        {
+          "name": "project_name",
+          "type": "string",
+          "isRequired": false,
+          "description": "Custom Snyk project name in the UI. Default is auto-generated."
+        },
+        {
+          "name": "policy_path",
+          "type": "string",
+          "isRequired": false,
+          "description": "Path to a `.snyk` policy file."
+        },
+        {
+          "name": "target_reference",
+          "type": "string",
+          "isRequired": false,
+          "description": "A reference (e.g., image tag, branch name) to differentiate this project snapshot. Useful for grouping in Snyk UI."
+        },
+        {
+          "name": "project_environment",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets project environment attribute(s) in Snyk UI (comma-separated)."
+        },
+        {
+          "name": "project_lifecycle",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets project lifecycle attribute(s) in Snyk UI (comma-separated)."
+        },
+        {
+          "name": "project_business_criticality",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets project business criticality attribute(s) in Snyk UI (comma-separated)."
+        },
+        {
+          "name": "project_tags",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets project tags in Snyk UI (e.g., `app=backend,region=eu`). Alias `tags`."
+        },
+        {
+          "name": "app_vulns",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Enables detection of application dependencies within the image for monitoring. Default in CLI v1.1090.0+. Mutually exclusive with `exclude_app_vulns` in older CLI versions."
+        },
+        {
+          "name": "exclude_app_vulns",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Disables monitoring of application dependencies. Default disabled in CLI v1.1090.0+. Mutually exclusive with `app_vulns` in older CLI versions."
+        },
+        {
+          "name": "exclude_node_modules",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Controls scanning of `node_modules` in Node.js images. Default in CLI v1.1292.0+ is to scan them."
+        },
+        {
+          "name": "nested_jars_depth",
+          "type": "integer",
+          "isRequired": false,
+          "description": "When app_vulns is active, sets levels of nested JARs to unpack for analysis. Default is Snyk behavior."
+        },
+        {
+          "name": "platform",
+          "type": "string",
+          "isRequired": false,
+          "description": "For multi-architecture images, specifies the platform to monitor (e.g., `linux/arm64`). Default auto-detected."
+        },
+        {
+          "name": "username",
+          "type": "string",
+          "isRequired": false,
+          "description": "Username for private container registries."
+        },
+        {
+          "name": "password",
+          "type": "string",
+          "isRequired": false,
+          "description": "Password for private container registries."
+        },
+        {
+          "name": "d",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Outputs debug logs. Use as `-d`."
+        }
+      ]
+    },
+    {
+      "name": "snyk_iac_scan",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Analyzes Infrastructure as Code (IaC) files for security misconfigurations. Supports Terraform (.tf, .tf.json, plan files), Kubernetes (YAML, JSON), AWS CloudFormation (YAML, JSON), Azure Resource Manager (ARM JSON), and Serverless Framework. \nWhen to use: Locally by developers while writing IaC. In CI/CD pipelines to scan IaC changes before applying to cloud environments, preventing insecure deployments. The `report` option sends results to Snyk UI for ongoing visibility. \nHow to use: Test directory: <snyk_iac_scan> `path`=`absolute/path/to/dir`. Test specific TF file: <snyk_iac_scan> `path`=`absolute/path/to/file.tf`. Test dir, report to UI: <snyk_iac_scan> `path`=`absolute/path/to/dir` `report` `org`=`my-org`. Test K8s configs, report to UI, high severity: <snyk_iac_scan> `path`=`./k8s/` `report` `target_name`=`prod-k8s` `severity_threshold`=`high`. Test with custom rules: `<snyk_iac_scan> `path`=`/absolute/path/to/infra/` `rules`=`rules.tar.gz`. \nSecure SDLC Integration: Infrastructure Definition/Coding Phase: Local scans provide early feedback. CI/CD Phase: Automates IaC scanning as a preventative control. Terraform plan scanning offers pre-deployment checks. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
+      "command": [
+        "iac",
+        "test"
+      ],
+      "standardParams": [],
+      "params": [
+        {
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "Positional argument for the *absolute path* to a file or directory to scan. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`",
+          "isPositional": true
+        },
+        {
+          "name": "detection_depth",
+          "type": "integer",
+          "isRequired": false,
+          "description": "Specifies how many subdirectories (integer >= 0) to search for IaC files when a directory path is provided. 0 is current directory only. Default is no limit."
+        },
+        {
+          "name": "org",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies the Snyk Organization ID (or slug name) for associating results. Default is configured org."
+        },
+        {
+          "name": "ignore_policy",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Ignores all policies defined in the `.snyk` file and on snyk.io for this scan."
+        },
+        {
+          "name": "policy_path",
+          "type": "string",
+          "isRequired": false,
+          "description": "Manually specifies the path to a `.snyk` policy file. Default is `.snyk` in root."
+        },
+        {
+          "name": "json_file_output",
+          "type": "string",
+          "isRequired": false,
+          "description": "Saves test output in JSON format to the specified file."
+        },
+        {
+          "name": "sarif_file_output",
+          "type": "string",
+          "isRequired": false,
+          "description": "Saves test output in SARIF format to the specified file."
+        },
+        {
+          "name": "project_business_criticality",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets project business criticality attribute(s) in Snyk UI (e.g. `critical,high`). Used with `report`."
+        },
+        {
+          "name": "project_environment",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets project environment attribute(s) in Snyk UI (e.g. `frontend,backend`). Used with `report`."
+        },
+        {
+          "name": "project_lifecycle",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets project lifecycle attribute(s) in Snyk UI (e.g. `production,sandbox`). Used with `report`."
+        },
+        {
+          "name": "project_tags",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets project tags in Snyk UI (e.g., `dept=finance`). Used with `report`."
+        },
+        {
+          "name": "remote_repo_url",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets or overrides the remote repository URL for the project in Snyk UI. Used with `report`."
+        },
+        {
+          "name": "report",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Shares test results with the Snyk Web UI, creating/updating a project for tracking IaC issues. Mutually exclusive with `rules`."
+        },
+        {
+          "name": "rules",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies path to a custom rules bundle (`.tar.gz`) from snyk-iac-rules SDK for scans against custom policies. Mutually exclusive with `report`. Default is Snyk default rules."
+        },
+        {
+          "name": "severity_threshold",
+          "type": "string",
+          "isRequired": false,
+          "description": "Reports only misconfigurations at or above the specified severity level (`low`, `medium`, `high`, `critical`)."
+        },
+        {
+          "name": "scan",
+          "type": "string",
+          "isRequired": false,
+          "description": "For Terraform plan scanning only. Specifies analysis mode: `planned-values` (full planned state) or `resource-changes` (proposed changes/deltas). Default `resource-changes`."
+        },
+        {
+          "name": "target_name",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets or overrides project name in Snyk Web UI when used with `report`. Precedence over `remote_repo_url` for naming if both used."
+        },
+        {
+          "name": "target_reference",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies a reference (e.g., branch name, commit hash) to differentiate IaC project version in Snyk UI when used with `report`."
+        },
+        {
+          "name": "var_file",
+          "type": "string",
+          "isRequired": false,
+          "description": "For Terraform, loads a variable definitions file (`.tfvars`) from a path different from the scanned directory."
+        }
+      ]
+    },
+    {
+      "name": "snyk_sbom",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Generates a Software Bill of Materials (SBOM) for a local software project. Processes projects using supported open-source package managers or unmanaged projects (e.g., C/C++ via file fingerprinting). \nWhen to use: Integrate into build pipelines to automatically create an inventory of software components. Use for compliance, auditing, license checks, vulnerability analysis (`snyk sbom test`), and software asset management. \nHow to use: Generate CycloneDX 1.6 JSON: <snyk_sbom> `format`=`cyclonedx1.6+json`. For monorepo: <snyk_sbom> `format`=`cyclonedx1.6+json` `all_projects` `name`=`MyWebApp` `version`=`2.1`. SPDX for Maven with dev deps: <snyk_sbom> `file`=`pom.xml` `format`=`spdx2.3+json` `dev`. Unmanaged C++: <snyk_sbom> `unmanaged` `format`=`cyclonedx1.5+xml` `max_depth`=`2`. \nSecure SDLC Integration: Build Phase: Generates SBOM as a build artifact. Testing/Compliance Phase: SBOM used for license checks and input to `snyk sbom test` for vulnerability analysis, supporting software supply chain security.",
+      "command": [
+        "sbom"
+      ],
+      "standardParams": [],
+      "params": [
+        {
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "Positional argument for the *absolute path* to a directory to scan. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`",
+          "isPositional": true
+        },
+        {
+          "name": "format",
+          "type": "string",
+          "isRequired": true,
+          "description": "Required. Specifies the output format for the SBOM. Accepted values: `cyclonedx1.4+json`, `cyclonedx1.4+xml`, `cyclonedx1.5+json`, `cyclonedx1.5+xml`, `cyclonedx1.6+json`, `cyclonedx1.6+xml`, `spdx2.3+json`."
+        },
+        {
+          "name": "target_directory",
+          "type": "string",
+          "isRequired": false,
+          "description": "Positional argument. Specifies a directory to scan for a package manager manifest file. Ignored if `file` is used. Default is current directory. Mutually exclusive with `file` for target selection.",
+          "isPositional": true
+        },
+        {
+          "name": "org",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies the Snyk Organization ID. May be required if SBOM generation relies on Snyk platform features or entitlements. Default is configured org."
+        },
+        {
+          "name": "file",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies path to a package manifest file (e.g., `package.json`, `pom.xml`) to base SBOM on. Overrides directory auto-detection. Alias `-f`. Mutually exclusive with `TARGET_DIRECTORY` for target selection. For Python with non-default filename, `package-manager=pip` is mandatory."
+        },
+        {
+          "name": "unmanaged",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Generates SBOM for unmanaged software projects (e.g., C/C++ by fingerprinting files). Mutually exclusive with most package-manager-specific options."
+        },
+        {
+          "name": "dev",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Includes development-only dependencies in the SBOM. Supported for Maven, npm, and Yarn. Default false."
+        },
+        {
+          "name": "all_projects",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Auto-detects all supported projects in working directory (incl. Yarn workspaces) for a single, aggregated SBOM. Ideal for monorepos. Mutually exclusive with `maven_aggregate_project`."
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "isRequired": false,
+          "description": "When used with `all_projects`, provides a name for the overall software component in the aggregated SBOM. Default is current working directory name."
+        },
+        {
+          "name": "version",
+          "type": "string",
+          "isRequired": false,
+          "description": "When used with `all_projects`, provides a version for the overall software component in the aggregated SBOM."
+        },
+        {
+          "name": "exclude",
+          "type": "string",
+          "isRequired": false,
+          "description": "Used with `all_projects` to exclude specified directory/file names (comma-separated, no paths)."
+        },
+        {
+          "name": "detection_depth",
+          "type": "integer",
+          "isRequired": false,
+          "description": "With `all_projects`, specifies subdirectory search depth (integer >= 0). 0 is current directory. Default Snyk behavior (often 3-4 levels)."
+        },
+        {
+          "name": "prune_repeated_subdependencies",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Simplifies dependency tree in SBOM by removing duplicate sub-dependencies (alias `-p`). Default false."
+        },
+        {
+          "name": "json_file_output",
+          "type": "string",
+          "isRequired": false,
+          "description": "Saves SBOM output to specified file path, *only* if chosen `format` includes `+json` (e.g., `cyclonedx1.6+json`). Standard output still occurs. Mutually exclusive with formats not ending in `+json`."
+        },
+        {
+          "name": "additional_arguments",
+          "type": "string",
+          "isRequired": false,
+          "description": "A double dash `` passes additional options directly to the underlying build tool (e.g., Gradle, Maven)."
+        },
+        {
+          "name": "maven_aggregate_project",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "For multi-module Maven projects. Use instead of `all_projects`.",
+          "supersedesParams": [
+            "all_projects"
+          ]
+        },
+        {
+          "name": "scan_unmanaged",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "For Maven ecosystem with `file=<JAR_FILE_NAME>`: generates SBOM for individual JAR, WAR, AAR files. For general use: `scan_all_unmanaged` auto-detects and generates SBOMs for all Maven, JAR, WAR, AAR files recursively."
+        },
+        {
+          "name": "gradle_sub_project",
+          "type": "string",
+          "isRequired": false,
+          "description": "Targets a specific Gradle sub-project. Alias `sub-project`."
+        },
+        {
+          "name": "all_sub_projects",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Includes all Gradle sub-projects."
+        },
+        {
+          "name": "max_depth",
+          "type": "integer",
+          "isRequired": false,
+          "description": "Specifies max archive extraction level when scanning with `unmanaged`."
+        },
+        {
+          "name": "package_manager",
+          "type": "string",
+          "isRequired": false,
+          "description": "For Python, mandatory (`package-manager=pip`) if using `file` with a non-default filename like `requirements-dev.txt`."
+        }
+      ]
+    },
+    {
+      "name": "snyk_container_sbom",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Generates an SBOM for a container image, analyzing layers for OS packages and, by default, application dependencies. Does not support unmanaged dependencies within container like `<snyk_sbom> `unmanaged`. Output formats: CycloneDX, SPDX. (Early Access feature for Snyk Enterprise plans). \nWhen to use: In CI/CD pipelines immediately after image build. SBOM can be stored with image or used for pre-deployment vulnerability checks (`<snyk_sbom_test>`). \nHow to use: Requires `format` parameter. <snyk_container_sbom> `image`=`redis:latest` `format`=`cyclonedx1.6+json`.\nSecure SDLC Integration: Post-Build Phase: Generates SBOM in CI/CD. Artifact Management/Pre-Deployment: SBOM stored or used for vulnerability analysis, enhancing container supply chain transparency. Exit codes: `0` (success), `2` (failure).",
+      "command": [
+        "container",
+        "sbom"
+      ],
+      "standardParams": [],
+      "params": [
+        {
+          "name": "image",
+          "type": "string",
+          "isRequired": true,
+          "description": "Required. Positional argument for the container image to analyze (name:tag or digest, e.g., `redis:latest` or `alpine@sha256:...`).",
+          "isPositional": true
+        },
+        {
+          "name": "format",
+          "type": "string",
+          "isRequired": true,
+          "description": "Required. Specifies the output format for the SBOM. Accepted values: `cyclonedx1.4+json`, `cyclonedx1.4+xml`, `cyclonedx1.5+json`, `cyclonedx1.5+xml`, `cyclonedx1.6+json`, `cyclonedx1.6+xml`, `spdx2.3+json`."
+        },
+        {
+          "name": "org",
+          "type": "string",
+          "isRequired": false,
+          "description": "Optional. Specifies the Snyk Organization ID (name or UUID). Useful if default Org lacks API entitlement for this Early Access feature."
+        },
+        {
+          "name": "exclude_app_vulns",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Optional. Interpreted as 'exclude application dependencies for SBOM'. If added, generated SBOM contains only OS dependencies, excluding app dependencies within image. Default is to include app dependencies."
+        },
+        {
+          "name": "d",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Outputs debug logs for troubleshooting. Alias `debug`. Use as `-d`."
+        }
+      ]
+    },
+    {
+      "name": "snyk_sbom_scan",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Experimental command. Analyzes an existing SBOM file for known vulnerabilities in its open-source components. Requires components in SBOM to be identified using PackageURLs (purls). \nWhen to use: After SBOM generation (by Snyk or other tools) to assess components. In CI/CD to test generated/received SBOMs. For vulnerability scanning of third-party software when only an SBOM is available. \nHow to use: <snyk_sbom_scan> `file`=`/absolute/path/to/my_app.cdx.json`. \nInput Requirements: SBOMs in CycloneDX (JSON 1.4-1.6) or SPDX (JSON 2.3). Packages must have purls (types: apk, cargo, cocoapods, composer, deb, gem, generic, golang, hex, maven, npm, nuget, pub, pypi, rpm, swift). \nSecure SDLC Integration: Testing/Validation Phase: Scans inventoried components post-SBOM generation. Third-Party Risk Management: Assesses vulnerabilities from SBOMs of external software. Exit codes: `0` (success/no vulns), `1` (vulns found), `2` (error).",
+      "command": [
+        "sbom"
+      ],
+      "standardParams": [
+        "test",
+        "experimental"
+      ],
+      "params": [
+
+        {
+          "name": "file",
+          "type": "string",
+          "isRequired": true,
+          "description": "Required. Specifies the path to the SBOM document to be tested (CycloneDX JSON 1.4-1.6, SPDX JSON 2.3)."
+        },
+        {
+          "name": "org",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies the Snyk Organization ID. Verify applicability with `snyk sbom test help`."
+        },
+        {
+          "name": "severity_threshold",
+          "type": "string",
+          "isRequired": false,
+          "description": "Filters results to report only vulnerabilities at or above specified severity (`low`, `medium`, `high`, `critical`). Verify applicability with `snyk sbom test help`. Default reports all."
+        },
+        {
+          "name": "d",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Outputs debug logs for troubleshooting. Alias `debug`. Use as `-d`."
+        }
+      ]
+    },
+    {
+      "name": "snyk_policy",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Displays the contents of the `.snyk` policy file associated with a package or project, providing visibility into active ignore rules, patches, and other configurations. \nWhen to use: For developers to check current policies, understand ignores, or verify `.snyk` file structure. For security teams to audit project policies. For troubleshooting Snyk MCP's policy file interpretation. \nHow to use: Display `.snyk` in dir: <snyk_policy> `path`=`/a/my-project`. Display specific policy file: `<snyk_policy> `path`=`/a/my-project/a/b/c/.custom-snyk`. \nSecure SDLC Integration: Policy Review/Auditing: Allows developers and security teams to inspect the 'policy as code' applied to a project at any SDLC stage.",
+      "command": [
+        "policy"
+      ],
+      "standardParams": [],
+      "params": [
+        {
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "Positional argument for the *ABSOLUTE PATH* to a directory. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`.",
+          "isPositional": true
+        },
+        {
+          "name": "d",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Enables debug logging, providing info on policy file location and processing. Use as `-d`."
+        }
+      ]
+    },
+    {
+      "name": "snyk_ignore",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Modifies the project's `.snyk` policy file to ignore specific issues (vulnerabilities, license issues via `id`) or to exclude files/directories from analysis (primarily for Snyk Code and Open Source `unmanaged` scans via `file_path`). \nWhen to use: For risk acceptance (documenting why a vulnerability is acceptable). For Snyk Code scope management (excluding test/generated code). \nHow it modifies `.snyk`: Adds/updates entries in `ignore:` block (for ID-based ignores) or `exclude:` block (for file exclusions). \nHow to use: Ignore npm vuln with expiry/reason: `<snyk_ignore> `id`=`'npm:tough-cookie:20160722'` `expiry`=`'2024-12-31'` `reason`=`'Not exploitable'`. Ignore by path: <snyk_ignore> `id`=`'SNYK-JS-LIB-XXX'` `vulnerable_path`=`'app>pkg>lib'`. Exclude test files from Snyk Code: <snyk_ignore> `file_path`=`'./**/test/**'` `file_path-group`=`'code'`. Ignore IaC misconfig: <snyk_ignore> `id`=`SNYK-CC-TF-118` `path`=`\"resource > type > name\"`. \nSecure SDLC Integration: Vulnerability Management/Triage: Allows teams to formally document and manage accepted risks or refine scan scope as 'policy as code' within the `.snyk` file, which is version controlled with the project.",
+      "command": [
+        "ignore"
+      ],
+      "standardParams": [],
+      "params": [
+        {
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "Positional argument for the *ABSOLUTE PATH* to a directory. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`.",
+          "isPositional": true
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "isRequired": false,
+          "description": "The Snyk ID of the vulnerability or license issue to ignore (e.g., `SNYK-JS-LODASH-123456`, `snyk:lic:npm:package:MIT`). Required unless `file_path` is used. Mutually exclusive with `file_path` for primary mode."
+        },
+        {
+          "name": "expiry",
+          "type": "string",
+          "isRequired": false,
+          "description": "Sets an expiration date for the ignore rule (YYYY-MM-DD, ISO 8601, RFC 2822). After this, Snyk reports the issue again. Default for ID-based ignore is 30 days; no default expiry if used with `file_path`."
+        },
+        {
+          "name": "reason",
+          "type": "string",
+          "isRequired": false,
+          "description": "Human-readable justification for ignoring the issue, recorded in `.snyk` file. Not supported for Snyk Code ignores (which use `file_path`). Default 'None given' or empty."
+        },
+        {
+          "name": "policy_path",
+          "type": "string",
+          "isRequired": false,
+          "description": "Specifies path to the `.snyk` policy file to modify. Default is `.snyk` in current directory."
+        },
+        {
+          "name": "vulnerable_path",
+          "type": "string",
+          "isRequired": false,
+          "description": "For vulnerability ignores (`id`), specifies the particular vulnerable path in dependency tree (e.g., `A>B>C`). For IaC issues, this is the resource path from `snyk iac test` output. If omitted, ignore applies to all paths (`*`)."
+        },
+        {
+          "name": "file_path",
+          "type": "string",
+          "isRequired": false,
+          "description": "File system path (can include globs like `**/*.test.js`) to exclude from scanning. Primarily for Snyk Code (SAST) and Snyk Open Source `unmanaged` tests. Mutually exclusive with `id` for primary mode."
+        },
+        {
+          "name": "file_path_group",
+          "type": "string",
+          "isRequired": false,
+          "description": "With `file_path`, groups exclusion rule under a category in `.snyk` exclude block. Accepted values: `global`, `code`, `iac-drift`."
+        },
+        {
+          "name": "d",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Enables debug logging for the ignore operation. Use as `-d`."
         }
       ]
     },
     {
       "name": "snyk_version",
-      "description": "Get Snyk CLI version",
-      "command": ["--version"],
-      "standardParams": [],
-      "params": []
-    },
-    {
-      "name": "snyk_auth",
-      "description": "Authenticate with Snyk",
-      "command": ["auth"],
+      "description": "Displays the installed Snyk MCP version. \nWhen to use: To verify current CLI version for compatibility checks or when reporting issues. \nHow to use: `$ snyk version`. \nSecure SDLC Integration: Setup/Maintenance: Helps ensure the correct and up-to-date version of the CLI is being used in development and CI/CD environments.",
+      "command": [
+        "version"
+      ],
       "standardParams": [],
       "params": []
     },
     {
       "name": "snyk_auth_status",
-      "description": "Check Snyk authentication status",
-      "command": ["whoami", "--experimental"],
+      "description": "Checks and displays the current Snyk authentication status, including the API token endpoint and the user you are authenticated as. Uses the experimental `whoami` command. \nWhen to use: To verify if the CLI is properly authenticated and to which user/organization context it is linked, especially helpful in troubleshooting or multi-account scenarios. \nHow to use: <snyk_auth_status>. \nSecure SDLC Integration: Setup/Troubleshooting: Useful during initial setup or when debugging CLI interactions to ensure commands are executed with the correct identity and permissions.",
+      "command": [
+        "whoami",
+        "experimental"
+      ],
       "standardParams": [],
       "params": []
     },
     {
       "name": "snyk_logout",
-      "description": "Log out from Snyk",
-      "command": ["logout"],
+      "description": "Logs the Snyk MCP out of the current Snyk account by clearing the locally stored authentication token. \nWhen to use: When needing to switch Snyk accounts, or to ensure a clean state by removing existing authentication from the local machine or CI environment. \nHow to use: `<snyk_logout>`. \nSecure SDLC Integration: Teardown/Security: Used to securely remove CLI authentication, for instance, when decommissioning a build agent or a developer's machine access, or when needing to re-authenticate with different credentials.",
+      "command": [
+        "logout"
+      ],
       "standardParams": [],
       "params": []
+    },
+    {
+      "name": "snyk_aibom",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Generates an AI Bill of Materials (AIBOM) for Python software projects in CycloneDX v1.6 JSON format. This experimental feature analyzes local Python projects to identify AI models, datasets, tools, and other AI-related components. Requires an active internet connection and access to the experimental feature (available to customers on request). The command must be run from within a Python project directory and requires the CLI from the preview release channel. \nWhen to use: When you need to create an inventory of AI components in a Python project for compliance, security analysis, or documentation purposes.",
+      "command": [
+        "aibom"
+      ],
+      "standardParams": [
+        "experimental"
+      ],
+      "params": [
+        {
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "Positional argument for the *ABSOLUTE PATH* to the directory to be scanned. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`."
+        },
+        {
+          "name": "json_file_output",
+          "type": "string",
+          "isRequired": false,
+          "description": "Saves the AIBOM output as a JSON data structure to the specified file path. The target directory must exist and be writable."
+        }
+      ]
     }
   ]
 }
+
