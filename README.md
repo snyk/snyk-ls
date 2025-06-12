@@ -56,6 +56,7 @@ Right now the language server supports the following actions:
 #### Notifications
 
 - $/progress
+- $/cancelRequest
 - textDocument/publishDiagnostics
   - params: `types.PublishDiagnosticsParams`
   - example: Snyk Open Source
