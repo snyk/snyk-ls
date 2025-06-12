@@ -182,30 +182,57 @@ func TestFolderTrust_AddTrustedFolder_Direct(t *testing.T) {
 		initialTrustedPaths []string
 		pathToAdd           string
 		expectedFinalPaths  []string
-		goos                string // For OS-specific path normalization
+		goos                string
 	}{
 		{
 			name:                "add to empty list",
 			initialTrustedPaths: []string{},
 			pathToAdd:           "/my/folder",
 			expectedFinalPaths:  []string{"/my/folder"},
+			goos:                "linux",
 		},
 		{
 			name:                "add to existing list",
 			initialTrustedPaths: []string{"/other/folder"},
 			pathToAdd:           "/my/folder",
 			expectedFinalPaths:  []string{"/other/folder", "/my/folder"},
+			goos:                "linux",
 		},
 		{
 			name:                "add duplicate path",
 			initialTrustedPaths: []string{"/my/folder"},
 			pathToAdd:           "/my/folder",
 			expectedFinalPaths:  []string{"/my/folder"},
+			goos:                "linux",
+		},
+		{
+			name:                "add to empty list",
+			initialTrustedPaths: []string{},
+			pathToAdd:           "C:\\my\\folder",
+			expectedFinalPaths:  []string{"C:\\my\\folder"},
+			goos:                "windows",
+		},
+		{
+			name:                "add to existing list",
+			initialTrustedPaths: []string{"C:\\other\\folder"},
+			pathToAdd:           "C:\\my\\folder",
+			expectedFinalPaths:  []string{"C:\\other\\folder", "C:\\my\\folder"},
+			goos:                "windows",
+		},
+		{
+			name:                "add duplicate path",
+			initialTrustedPaths: []string{"C:\\my\\folder"},
+			pathToAdd:           "C:\\my\\folder",
+			expectedFinalPaths:  []string{"C:\\my\\folder"},
+			goos:                "windows",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.goos != "" && tt.goos != runtime.GOOS {
+				t.Skipf("Skipping OS-specific test %s on %s (meant for %s)", tt.name, runtime.GOOS, tt.goos)
+			}
 			if tt.initialTrustedPaths != nil {
 				config.Set(TrustedFoldersConfigKey, tt.initialTrustedPaths)
 			}
