@@ -193,9 +193,9 @@ func TestFolderTrust_AddTrustedFolder_Direct(t *testing.T) {
 		},
 		{
 			name:                "add to existing list",
-			initialTrustedPaths: []string{"/other/folder"},
+			initialTrustedPaths: []string{"/another/folder"},
 			pathToAdd:           "/my/folder",
-			expectedFinalPaths:  []string{"/other/folder", "/my/folder"},
+			expectedFinalPaths:  []string{"/another/folder", "/my/folder"},
 			goos:                "linux",
 		},
 		{
@@ -214,9 +214,9 @@ func TestFolderTrust_AddTrustedFolder_Direct(t *testing.T) {
 		},
 		{
 			name:                "add to existing list",
-			initialTrustedPaths: []string{"C:\\other\\folder"},
+			initialTrustedPaths: []string{"C:\\another\\folder"},
 			pathToAdd:           "C:\\my\\folder",
-			expectedFinalPaths:  []string{"C:\\other\\folder", "C:\\my\\folder"},
+			expectedFinalPaths:  []string{"C:\\another\\folder", "C:\\my\\folder"},
 			goos:                "windows",
 		},
 		{
