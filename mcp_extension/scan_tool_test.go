@@ -1056,15 +1056,16 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 				},
 			},
 			requestArgs: map[string]any{
-				"file":         "pom.xml",
-				"all-projects": true,
-				"json":         true,
+				"file":        "pom.xml",
+				"allprojects": true,
+				"json":        true,
 			},
 			expectedParams: map[string]convertedToolParameter{
 				"file": {
 					SnykMcpToolParameter: SnykMcpToolParameter{
-						Name: "file",
-						Type: "string",
+						Name:             "file",
+						Type:             "string",
+						SupersedesParams: []string{"all_projects"},
 					},
 					value: "pom.xml",
 				},
@@ -1094,8 +1095,9 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 			expectedParams: map[string]convertedToolParameter{
 				"file": {
 					SnykMcpToolParameter: SnykMcpToolParameter{
-						Name: "file",
-						Type: "string",
+						Name:             "file",
+						Type:             "string",
+						SupersedesParams: []string{"all_projects"},
 					},
 					value: "pom.xml",
 				},
@@ -1206,15 +1208,16 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 			},
 			requestArgs: map[string]any{
 				"package_manager": "npm",
-				"all-projects":    true,
+				"all_projects":    true,
 				"file":            "package-lock.json",
 				"json":            true,
 			},
 			expectedParams: map[string]convertedToolParameter{
 				"package-manager": {
 					SnykMcpToolParameter: SnykMcpToolParameter{
-						Name: "package-manager",
-						Type: "string",
+						Name:             "package-manager",
+						Type:             "string",
+						SupersedesParams: []string{"all_projects", "file"},
 					},
 					value: "npm",
 				},
@@ -1244,8 +1247,9 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 				//"json": true, // dev is removed
 				"org": {
 					SnykMcpToolParameter: SnykMcpToolParameter{
-						Name: "org",
-						Type: "string",
+						Name:             "org",
+						Type:             "string",
+						SupersedesParams: []string{"dev"},
 					},
 					value: "my-org",
 				},
