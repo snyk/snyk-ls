@@ -293,11 +293,11 @@ func TestSnykCodeTestHandler(t *testing.T) {
 
 			result, err := handler(context.Background(), request)
 			if tc.requireTrust {
-				assert.Error(t, err)
+				require.Error(t, err)
 				return
 			}
-			assert.NoError(t, err)
-			assert.NotNil(t, result)
+			require.NoError(t, err)
+			require.NotNil(t, result)
 			textContent, ok := result.Content[0].(mcp.TextContent)
 			require.True(t, ok)
 			content := strings.TrimSpace(textContent.Text)
@@ -1309,9 +1309,9 @@ func TestSnykTrustHandler(t *testing.T) {
 
 		result, err := handler(context.Background(), request)
 
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "argument 'path' is missing for tool snyk_trust")
+		require.Error(t, err)
+		require.Nil(t, result)
+		require.Contains(t, err.Error(), "argument 'path' is missing for tool snyk_trust")
 	})
 
 	t.Run("PathEmpty", func(t *testing.T) {
@@ -1323,8 +1323,8 @@ func TestSnykTrustHandler(t *testing.T) {
 
 		result, err := handler(context.Background(), request)
 
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "empty path given to tool snyk_trust")
+		require.Error(t, err)
+		require.Nil(t, result)
+		require.Contains(t, err.Error(), "empty path given to tool snyk_trust")
 	})
 }

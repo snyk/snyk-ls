@@ -45,7 +45,7 @@ type SnykMcpToolsDefinition struct {
 	Description    string                 `json:"description"`
 	Command        []string               `json:"command"`
 	StandardParams []string               `json:"standardParams"`
-	RequiresTrust  bool                   `json:"requiresTrust"`
+	IgnoreTrust    bool                   `json:"ignoreTrust"`
 	Params         []SnykMcpToolParameter `json:"params"`
 }
 
@@ -144,8 +144,10 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return nil, err
 		}
 
-		if !invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) && toolDef.RequiresTrust && !m.folderTrust.IsFolderTrusted(workingDir) {
+		trustDisabled := invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) || toolDef.IgnoreTrust
+		if !trustDisabled && !m.folderTrust.IsFolderTrusted(workingDir) {
 			return nil, fmt.Errorf("folder '%s' is not trusted. Please run 'snyk_trust' first", workingDir)
+		}
 
 		args := buildCommand(m.cliPath, toolDef.Command, params)
 
