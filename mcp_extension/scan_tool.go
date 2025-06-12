@@ -31,8 +31,8 @@ import (
 
 // Tool name constants to maintain backward compatibility
 const (
-	SnykScaTest    = "snyk_sca_test"
-	SnykCodeTest   = "snyk_code_test"
+	SnykScaTest    = "snyk_sca_scan"
+	SnykCodeTest   = "snyk_code_scan"
 	SnykVersion    = "snyk_version"
 	SnykAuth       = "snyk_auth"
 	SnykAuthStatus = "snyk_auth_status"
@@ -55,6 +55,8 @@ type SnykMcpToolParameter struct {
 	IsRequired       bool     `json:"isRequired"`
 	Description      string   `json:"description"`
 	SupersedesParams []string `json:"supersedesParams"`
+	IsPositional     bool     `json:"isPositional"`
+	Position         int      `json:"position"`
 }
 
 //go:embed snyk_tools.json
@@ -137,17 +139,18 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		}
 
 		requestArgs := request.GetArguments()
-		params, workingDir := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
-		if !invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) && toolDef.RequiresTrust && !m.folderTrust.IsFolderTrusted(workingDir) {
-			return nil, fmt.Errorf("folder '%s' is not trusted. Please run 'snyk_trust' first", workingDir)
+		params, workingDir, err := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
+		if err != nil {
+			return nil, err
 		}
 
-		args := buildArgs(m.cliPath, toolDef.Command, params)
+		if !invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) && toolDef.RequiresTrust && !m.folderTrust.IsFolderTrusted(workingDir) {
+			return nil, fmt.Errorf("folder '%s' is not trusted. Please run 'snyk_trust' first", workingDir)
+
+		args := buildCommand(m.cliPath, toolDef.Command, params)
 
 		// Add working directory if specified
-		if workingDir != "" {
-			args = append(args, workingDir)
-		} else {
+		if workingDir == "" {
 			logger.Debug().Msg("Received empty workingDir")
 		}
 
