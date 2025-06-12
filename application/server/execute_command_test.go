@@ -19,7 +19,6 @@ package server
 import (
 	"context"
 	"errors"
-	"github.com/snyk/snyk-ls/internal/testsupport"
 	"testing"
 	"time"
 
@@ -35,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
