@@ -178,7 +178,7 @@ func TestSnykTestHandler(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			requestObj := map[string]any{
-				"convertedToolParams": map[string]any{
+				"params": map[string]any{
 					"arguments": tc.args,
 				},
 			}
@@ -266,7 +266,7 @@ func TestSnykCodeTestHandler(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			requestObj := map[string]any{
-				"convertedToolParams": map[string]any{
+				"params": map[string]any{
 					"arguments": tc.args,
 				},
 			}
@@ -335,7 +335,7 @@ func TestBasicSnykCommands(t *testing.T) {
 
 			// Create an empty request object as JSON string
 			requestObj := map[string]any{
-				"convertedToolParams": map[string]any{
+				"params": map[string]any{
 					"arguments": map[string]any{},
 				},
 			}
@@ -372,7 +372,7 @@ func TestAuthHandler(t *testing.T) {
 	handler := fixture.binding.defaultHandler(fixture.invocationContext, SnykMcpToolsDefinition{Command: []string{"auth"}})
 
 	requestObj := map[string]any{
-		"convertedToolParams": map[string]any{
+		"params": map[string]any{
 			"arguments": map[string]any{},
 		},
 	}
@@ -810,11 +810,7 @@ func TestBuildCommand(t *testing.T) {
 			for _, arg := range tc.expected {
 				require.Contains(t, args, arg)
 			}
-			if len(tc.expected) != len(args) {
-				for _, arg := range tc.convertedToolParams {
-					require.Truef(t, arg.value == false || arg.value == "", "parameter must be empty or false")
-				}
-			}
+			require.Len(t, tc.expected, len(args))
 		})
 	}
 }

@@ -55,10 +55,19 @@ func buildArgs(params map[string]convertedToolParameter) []string {
 }
 
 func buildArg(key string, param convertedToolParameter) string {
-	valueString, _ := param.value.(string)
-	if param.Type != "boolean" && valueString == "" {
+	switch param.value.(type) {
+	case string:
+		if param.value == "" {
+			return ""
+		}
+	case bool:
+		if param.value == false {
+			return ""
+		}
+	default:
 		return ""
 	}
+	valueString, _ := param.value.(string)
 
 	if param.IsPositional {
 		return valueString
