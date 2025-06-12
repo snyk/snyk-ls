@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/application/entrypoint"
+	"github.com/snyk/snyk-ls/mcp_extension/trust"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -38,6 +39,7 @@ func Init(engine workflow.Engine) error {
 
 	flags.StringP("transport", "t", "sse", "sets transport to <sse|stdio>")
 	flags.Bool(configuration.FLAG_EXPERIMENTAL, false, "enable experimental mcp command")
+	flags.Bool(trust.DisableTrustFlag, false, "disable folder trust")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flags)
 	entry, _ := engine.Register(WORKFLOWID_MCP, cfg, mcpWorkflow)
@@ -76,14 +78,15 @@ func mcpWorkflow(
 		return output, err
 	}
 	logger.Trace().Interface("environment", os.Environ()).Msg("start environment")
+	config.PersistInStorage(trust.TrustedFoldersConfigKey)
 	mcpStart(invocation, cliPath)
 
 	return output, nil
 }
 
 func mcpStart(invocationContext workflow.InvocationContext, cliPath string) {
-	mcpServer := NewMcpLLMBinding(WithLogger(invocationContext.GetEnhancedLogger()), WithCliPath(cliPath))
 	logger := invocationContext.GetEnhancedLogger()
+	mcpServer := NewMcpLLMBinding(WithLogger(logger), WithCliPath(cliPath), WithFolderTrust(trust.NewFolderTrust(logger, invocationContext.GetConfiguration())))
 
 	// start mcp server
 	err := mcpServer.Start(invocationContext)

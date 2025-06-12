@@ -24,6 +24,8 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/mcp_extension/networking"
 )
 
 func TestNewMcpServer(t *testing.T) {
@@ -41,10 +43,11 @@ func TestNewMcpServerWithOptions(t *testing.T) {
 }
 
 func TestDefaultURL(t *testing.T) {
-	u := defaultURL()
+	u, err := networking.LoopbackURL()
+	assert.NoError(t, err)
 	assert.NotNil(t, u)
 	assert.Equal(t, "http", u.Scheme)
-	assert.Contains(t, u.Host, DefaultHost)
+	assert.Contains(t, u.Host, networking.DefaultHost)
 }
 
 func TestExpandedEnv(t *testing.T) {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package mcp_extension
+package networking
 
 import (
 	"fmt"
@@ -27,7 +27,7 @@ const (
 	DefaultHost = "127.0.0.1"
 )
 
-func isPortInUse(u *url.URL) bool {
+func IsPortInUse(u *url.URL) bool {
 	address := u.Host
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -37,7 +37,7 @@ func isPortInUse(u *url.URL) bool {
 	return false
 }
 
-func determineFreePort() int {
+func DetermineFreePort() int {
 	port := DefaultPort
 	for range 1000 {
 		u, err := url.Parse(fmt.Sprintf("http://%s:%d", DefaultHost, port))
@@ -45,11 +45,20 @@ func determineFreePort() int {
 			// this should not ever happen. so if it does, we panic
 			panic(err)
 		}
-		inUse := isPortInUse(u)
+		inUse := IsPortInUse(u)
 		if !inUse {
 			break
 		}
 		port++
 	}
 	return port
+}
+
+func LoopbackURL() (*url.URL, error) {
+	rawURL := fmt.Sprintf("http://%s:%d", DefaultHost, DetermineFreePort())
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
 }
