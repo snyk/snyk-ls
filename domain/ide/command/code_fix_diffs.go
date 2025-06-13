@@ -42,7 +42,7 @@ func (cmd *codeFixDiffs) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
+func (cmd *codeFixDiffs) Execute(_ context.Context) (any, error) {
 	logger := cmd.c.Logger().With().Str("method", "codeFixDiffs.Execute").Logger()
 
 	args := cmd.command.Arguments
@@ -65,7 +65,10 @@ func (cmd *codeFixDiffs) Execute(ctx context.Context) (any, error) {
 		logger.Err(err).Msg("failed to get html renderer")
 		return nil, err
 	}
-	go cmd.handleResponse(ctx, cmd.c, issue, htmlRenderer)
+
+	// This un-awaited goroutine outlives the command's execution.
+	// It cannot reuse the command's context, as the command executor will cancel it when the command finishes.
+	go cmd.handleResponse(context.Background(), cmd.c, issue, htmlRenderer)
 
 	return nil, err
 }

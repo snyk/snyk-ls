@@ -47,7 +47,7 @@ func (cmd *applyAiFixEditCommand) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
+func (cmd *applyAiFixEditCommand) Execute(_ context.Context) (any, error) {
 	fixId, ok := cmd.command.Arguments[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("invalid edit")
@@ -70,13 +70,16 @@ func (cmd *applyAiFixEditCommand) Execute(ctx context.Context) (any, error) {
 
 	// send feedback asynchronously, so people can actually see the changes done by the fix
 	go func() {
+		// This un-awaited goroutine potentially outlives the command's execution.
+		// It cannot reuse the command's context, as the command executor will cancel it when the command finishes.
+		bgCtx := context.Background()
 		codeFixFeedbackCmd := codeFixFeedback{
 			command: types.CommandData{
 				Arguments: []any{fixId, code.FixAppliedUserEvent},
 			},
 		}
 
-		_, err := codeFixFeedbackCmd.Execute(ctx)
+		_, err := codeFixFeedbackCmd.Execute(bgCtx)
 		if err != nil {
 			cmd.logger.Err(err).Str("fixId", fixId).Str("feedback", code.FixAppliedUserEvent).Msg("failed to submit autofix feedback")
 		}
