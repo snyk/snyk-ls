@@ -53,10 +53,10 @@ type AuthenticationServiceImpl struct {
 	notifier      noti.Notifier
 	c             *config.Config
 	// key = token, value = isAuthenticated
-	authCache            *imcache.Cache[string, bool]
-	m                    sync.RWMutex
-	previousCancelFunc   context.CancelFunc
-	previousCancelFuncMu sync.Mutex
+	authCache                   *imcache.Cache[string, bool]
+	m                           sync.RWMutex
+	previousAuthCtxCancelFunc   context.CancelFunc
+	previousAuthCtxCancelFuncMu sync.Mutex
 }
 
 func NewAuthenticationService(c *config.Config, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
@@ -87,16 +87,16 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 }
 
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
-	a.previousCancelFuncMu.Lock()
-	if a.previousCancelFunc != nil {
-		a.previousCancelFunc()
+	a.previousAuthCtxCancelFuncMu.Lock()
+	if a.previousAuthCtxCancelFunc != nil {
+		a.previousAuthCtxCancelFunc()
 	}
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	ctx, a.previousCancelFunc = context.WithCancel(ctx)
-	a.previousCancelFuncMu.Unlock()
-	defer a.previousCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
+	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
+	a.previousAuthCtxCancelFuncMu.Unlock()
+	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
 	return a.authenticate(ctx)
 }
 
@@ -199,6 +199,13 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 }
 
 func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
+	a.previousAuthCtxCancelFuncMu.Lock()
+	if a.previousAuthCtxCancelFunc != nil {
+		// We don't set it back to nil as then we'd need to handle race conditions and double calling an old cancel function is already safe by the impl.
+		a.previousAuthCtxCancelFunc()
+	}
+	a.previousAuthCtxCancelFuncMu.Unlock()
+
 	a.m.Lock()
 	defer a.m.Unlock()
 

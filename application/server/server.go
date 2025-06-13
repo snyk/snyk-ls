@@ -114,6 +114,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(c, srv)
 	handlers["window/workDoneProgress/cancel"] = windowWorkDoneProgressCancelHandler()
 	handlers["workspace/executeCommand"] = executeCommandHandler(srv)
+	handlers["$/cancelRequest"] = cancelRequestHandler(srv)
 }
 
 func textDocumentDidChangeHandler() jrpc2.Handler {
@@ -774,6 +775,13 @@ func codeActionResolveHandler(server types.Server) handler.Func {
 func textDocumentCodeActionHandler() handler.Func {
 	c := config.CurrentConfig()
 	return handler.New(GetCodeActionHandler(c))
+}
+
+func cancelRequestHandler(srv *jrpc2.Server) jrpc2.Handler {
+	return handler.New(func(_ context.Context, params sglsp.CancelParams) (any, error) {
+		srv.CancelRequest(params.ID.String())
+		return nil, nil
+	})
 }
 
 func noOpHandler() jrpc2.Handler {

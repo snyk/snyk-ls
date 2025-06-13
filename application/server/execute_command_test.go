@@ -18,22 +18,25 @@ package server
 
 import (
 	"context"
+	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-	"github.com/snyk/snyk-ls/internal/testutil"
-
-	"github.com/sourcegraph/go-lsp"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
@@ -43,7 +46,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 	s := &scanner.TestScanner{}
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 
-	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
+	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +63,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 	s := &scanner.TestScanner{}
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 
-	params := lsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
+	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +93,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	folder.ScanFolder(context.Background())
 	dontClear.ScanFolder(context.Background())
 
-	params := lsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
+	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
@@ -112,7 +115,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	// explicitly enable folder trust which is disabled by default in tests
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
-	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
+	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
@@ -131,7 +134,7 @@ func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) 
 	// explicitly enable folder trust which is disabled by default in tests
 	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
 
-	params := lsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand, Arguments: []any{"LLM"}}
+	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand, Arguments: []any{"LLM"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +162,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	params := lsp.ExecuteCommandParams{Command: types.LoginCommand}
+	params := sglsp.ExecuteCommandParams{Command: types.LoginCommand}
 
 	_, err = loc.Client.Call(ctx, "initialized", types.InitializedParams{})
 	assert.NoError(t, err)
@@ -187,7 +190,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 
-		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
+		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)
@@ -204,7 +207,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 		c.SetTrustedFolderFeatureEnabled(true)
 
-		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
+		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)
@@ -223,7 +226,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c.SetTrustedFolderFeatureEnabled(true)
 		c.SetTrustedFolders([]types.FilePath{"/path/to/folder2"})
 
-		params := lsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
+		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)
@@ -233,4 +236,92 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder1"))
 		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder2"))
 	})
+}
+
+// waitForCancelTestCommand is a test command that waits until its context is canceled.
+type waitForCancelTestCommand struct {
+	command    types.CommandData
+	t          *testing.T
+	cmdStarted atomic.Bool
+	ctxErr     atomic.Pointer[error]
+}
+
+func newWaitForCancelTestCommand(t *testing.T) *waitForCancelTestCommand {
+	t.Helper()
+	return &waitForCancelTestCommand{
+		command: types.CommandData{
+			CommandId: "internal.waitForCancelTestCommand",
+			Title:     "Wait For Cancel Test Command",
+		},
+		t: t,
+	}
+}
+
+func (w *waitForCancelTestCommand) Command() types.CommandData {
+	return w.command
+}
+
+func (w *waitForCancelTestCommand) Execute(ctx context.Context) (any, error) {
+	w.t.Log("waitForCancelTestCommand: Entering wait on ctx.Done().")
+	w.cmdStarted.Store(true)
+	<-ctx.Done()
+	w.t.Logf("waitForCancelTestCommand: ctx.Done() returned. ctx.Err() is: %v\n", ctx.Err())
+	w.ctxErr.Store(util.Ptr(ctx.Err()))
+	return nil, nil
+}
+
+type testCommandService struct {
+	testCmd types.Command
+}
+
+func (tcs *testCommandService) ExecuteCommandData(ctx context.Context, cmdData types.CommandData, _ types.Server) (any, error) {
+	if tcs.testCmd == nil || cmdData.CommandId != tcs.testCmd.Command().CommandId {
+		return nil, errors.New("we only expect our special command to be run")
+	}
+	return tcs.testCmd.Execute(ctx)
+}
+
+func Test_ExecuteCommand_CancelRequest(t *testing.T) {
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
+
+	testCmd := newWaitForCancelTestCommand(t)
+
+	originalCmdService := command.Service()
+	fakeCommandService := &testCommandService{
+		testCmd: testCmd,
+	}
+	command.SetService(fakeCommandService)
+	t.Cleanup(func() {
+		command.SetService(originalCmdService)
+	})
+
+	var cmdDone atomic.Bool
+	go func() {
+		cmdResponse, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+			Command: testCmd.Command().CommandId,
+		})
+		assert.NoError(t, err)
+		if assert.NotNil(t, cmdResponse) {
+			assert.Nil(t, cmdResponse.Error())
+		}
+		cmdDone.Store(true)
+	}()
+
+	require.Eventually(t, func() bool {
+		return testCmd.cmdStarted.Load()
+	}, 5*time.Second, 100*time.Millisecond)
+
+	// Command ID should always be 1 (as a number!), as it is the first command we run on the fake test server.
+	cancelParams := sglsp.CancelParams{ID: sglsp.ID{Num: 1, IsString: false}}
+	err := loc.Client.Notify(context.Background(), "$/cancelRequest", cancelParams)
+	require.NoError(t, err, "Failed to send $/cancelRequest notification")
+
+	assert.Eventually(t, func() bool {
+		return cmdDone.Load()
+	}, 5*time.Second, 100*time.Millisecond)
+	ctxErrPtr := testCmd.ctxErr.Load()
+	if assert.NotNil(t, ctxErrPtr) {
+		assert.ErrorIs(t, *ctxErrPtr, context.Canceled)
+	}
 }
