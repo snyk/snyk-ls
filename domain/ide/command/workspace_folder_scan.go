@@ -36,9 +36,8 @@ func (cmd *workspaceFolderScanCommand) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *workspaceFolderScanCommand) Execute(_ context.Context) (any, error) {
+func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error) {
 	method := "workspaceFolderScanCommand.Execute"
-	bgCtx := context.Background()
 	args := cmd.Command().Arguments
 	w := cmd.c.Workspace()
 	if len(args) != 1 {
@@ -59,7 +58,9 @@ func (cmd *workspaceFolderScanCommand) Execute(_ context.Context) (any, error) {
 		return nil, err
 	}
 	f.Clear()
-	f.ScanFolder(bgCtx)
-	HandleUntrustedFolders(bgCtx, cmd.c, cmd.srv)
+	f.ScanFolder(ctx)
+	// HandleUntrustedFolders spawns un-awaited goroutines that outlive this command's execution.
+	// They cannot reuse the command's context, as the command executor will cancel it when the command finishes.
+	HandleUntrustedFolders(context.Background(), cmd.c, cmd.srv)
 	return nil, nil
 }

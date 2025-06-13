@@ -38,7 +38,10 @@ func (cmd *workspaceScanCommand) Execute(_ context.Context) (any, error) {
 	w := cmd.c.Workspace()
 	w.Clear()
 	args := cmd.command.Arguments
-	// Use a new background context so spawned threads aren't killed.
+	// HandleUntrustedFolders spawns un-awaited goroutines that outlive this command's execution.
+	// They cannot reuse the command's context, as the command executor will cancel it when the command finishes.
+	// w.ScanWorkspace also needs the same enriched context, I don't want to copy the enriched values across contexts,
+	// so I gave it the same (background) context.
 	enrichedCtx := cmd.enrichContextWithScanSource(context.Background(), args)
 	w.ScanWorkspace(enrichedCtx)
 	HandleUntrustedFolders(enrichedCtx, cmd.c, cmd.srv)

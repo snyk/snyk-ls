@@ -48,9 +48,11 @@ func (cmd *codeFixFeedback) Execute(_ context.Context) (any, error) {
 	}
 
 	go func() {
+		// This un-awaited goroutine outlives the command's execution.
+		// It cannot reuse the command's context, as the command executor will cancel it when the command finishes.
 		bgCtx := context.Background()
 		c := config.CurrentConfig()
-		c.Logger().Info().Str("fixId", fixId).Str("feedback", feedback).Msg("Submiting autofix feedback")
+		c.Logger().Info().Str("fixId", fixId).Str("feedback", feedback).Msg("Submitting autofix feedback")
 
 		host, err := code.GetCodeApiUrl(c)
 		if err != nil {

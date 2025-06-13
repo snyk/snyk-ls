@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/creachadair/jrpc2/server"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,7 +33,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
-	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -240,22 +238,22 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 // waitForCancelTestCommand is a test command that waits until its context is canceled.
 type waitForCancelTestCommand struct {
-	command     types.CommandData
-	t           *testing.T
-	loc         server.Local
-	cmdCanceled chan bool
+	command    types.CommandData
+	t          *testing.T
+	cmdStarted bool
+	ctxErr     error
 }
 
-func newWaitForCancelTestCommand(t *testing.T, loc server.Local, cmdCanceled chan bool) *waitForCancelTestCommand {
+func newWaitForCancelTestCommand(t *testing.T) *waitForCancelTestCommand {
 	t.Helper()
 	return &waitForCancelTestCommand{
 		command: types.CommandData{
 			CommandId: "internal.waitForCancelTestCommand",
 			Title:     "Wait For Cancel Test Command",
 		},
-		t:           t,
-		loc:         loc,
-		cmdCanceled: cmdCanceled,
+		t:          t,
+		cmdStarted: false,
+		ctxErr:     nil,
 	}
 }
 
@@ -264,18 +262,11 @@ func (w *waitForCancelTestCommand) Command() types.CommandData {
 }
 
 func (w *waitForCancelTestCommand) Execute(ctx context.Context) (any, error) {
-	w.t.Log("waitForCancelTestCommand: Execute started.")
-
-	// Command ID should always be 1 (as a number!), as it is the first command we run on the fake test server.
-	cancelParams := sglsp.CancelParams{ID: sglsp.ID{Num: 1, IsString: false}}
-	err := w.loc.Client.Notify(context.Background(), "$/cancelRequest", cancelParams)
-	assert.NoError(w.t, err, "Failed to send $/cancelRequest notification")
-
 	w.t.Log("waitForCancelTestCommand: Entering wait on ctx.Done().")
+	w.cmdStarted = true
 	<-ctx.Done()
 	w.t.Logf("waitForCancelTestCommand: ctx.Done() returned. ctx.Err() is: %v\n", ctx.Err())
-	w.cmdCanceled <- errors.Is(ctx.Err(), context.Canceled)
-
+	w.ctxErr = ctx.Err()
 	return nil, nil
 }
 
@@ -294,37 +285,40 @@ func Test_ExecuteCommand_CancelRequest(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	cmdCanceledChannel := make(chan bool, 1)
-	testCmd := newWaitForCancelTestCommand(t, loc, cmdCanceledChannel)
+	testCmd := newWaitForCancelTestCommand(t)
 
 	originalCmdService := command.Service()
-	command.SetService(&testCommandService{
+	fakeCommandService := &testCommandService{
 		testCmd: testCmd,
-	})
+	}
+	command.SetService(fakeCommandService)
 	t.Cleanup(func() {
 		command.SetService(originalCmdService)
 	})
 
-	var cmdErr error
-	cmdDoneChannel := make(chan bool, 1)
+	cmdDone := false
 	go func() {
 		cmdResponse, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command: testCmd.Command().CommandId,
 		})
-		if err != nil {
-			cmdErr = err
-		} else if cmdResponse == nil {
-			cmdErr = errors.New("no err or cmdResponse from cmd")
-		} else if cmdResponse.Error() != nil {
-			cmdErr = cmdResponse.Error()
+		assert.NoError(t, err)
+		if assert.NotNil(t, cmdResponse) {
+			assert.Nil(t, cmdResponse.Error())
 		}
-		cmdDoneChannel <- true
+		cmdDone = true
 	}()
 
-	cmdDone := testsupport.ReadMessageWithFatalTimeout(t, cmdDoneChannel, 10*time.Second)
-	require.True(t, cmdDone)
-	require.NoError(t, cmdErr)
+	require.Eventually(t, func() bool {
+		return testCmd.cmdStarted
+	}, 5*time.Second, 100*time.Millisecond)
 
-	cmdCanceled := testsupport.ReadMessageAssertNoWait(t, cmdCanceledChannel)
-	require.True(t, cmdCanceled)
+	// Command ID should always be 1 (as a number!), as it is the first command we run on the fake test server.
+	cancelParams := sglsp.CancelParams{ID: sglsp.ID{Num: 1, IsString: false}}
+	err := loc.Client.Notify(context.Background(), "$/cancelRequest", cancelParams)
+	require.NoError(t, err, "Failed to send $/cancelRequest notification")
+
+	assert.Eventually(t, func() bool {
+		return cmdDone
+	}, 5*time.Second, 100*time.Millisecond)
+	assert.ErrorIs(t, testCmd.ctxErr, context.Canceled)
 }

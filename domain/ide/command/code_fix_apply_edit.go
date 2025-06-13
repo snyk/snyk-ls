@@ -70,6 +70,8 @@ func (cmd *applyAiFixEditCommand) Execute(_ context.Context) (any, error) {
 
 	// send feedback asynchronously, so people can actually see the changes done by the fix
 	go func() {
+		// This un-awaited goroutine potentially outlives the command's execution.
+		// It cannot reuse the command's context, as the command executor will cancel it when the command finishes.
 		bgCtx := context.Background()
 		codeFixFeedbackCmd := codeFixFeedback{
 			command: types.CommandData{

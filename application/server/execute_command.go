@@ -38,6 +38,8 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 
 		commandData := types.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
 
+		// The context is passed from JRPC to the commands, if the server shuts down or receives a $/cancelRequest, the context will be canceled.
+		// It is on the individual commands to decide if they want to use this context or create their own to not be canceled.
 		result, err := command.Service().ExecuteCommandData(ctx, commandData, srv)
 		logError(c.Logger(), err, fmt.Sprintf("Error executing command %v", commandData))
 		return result, err

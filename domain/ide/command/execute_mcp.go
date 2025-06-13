@@ -70,6 +70,8 @@ func (cmd *executeMcpCallCommand) Execute(_ context.Context) (any, error) {
 	}(mcpClient)
 
 	go func() {
+		// This un-awaited goroutine outlives the command's execution.
+		// It cannot reuse the command's context, as the command executor will cancel it when the command finishes.
 		bgCtx := context.Background()
 		// start
 		err = mcpClient.Start(bgCtx)
