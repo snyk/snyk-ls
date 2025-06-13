@@ -29,8 +29,8 @@ import (
 
 // Tool name constants to maintain backward compatibility
 const (
-	SnykScaTest    = "snyk_sca_test"
-	SnykCodeTest   = "snyk_code_test"
+	SnykScaTest    = "snyk_sca_scan"
+	SnykCodeTest   = "snyk_code_scan"
 	SnykVersion    = "snyk_version"
 	SnykAuth       = "snyk_auth"
 	SnykAuthStatus = "snyk_auth_status"
@@ -46,10 +46,13 @@ type SnykMcpToolsDefinition struct {
 }
 
 type SnykMcpToolParameter struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	IsRequired  bool   `json:"isRequired"`
-	Description string `json:"description"`
+	Name             string   `json:"name"`
+	Type             string   `json:"type"`
+	IsRequired       bool     `json:"isRequired"`
+	Description      string   `json:"description"`
+	SupersedesParams []string `json:"supersedesParams"`
+	IsPositional     bool     `json:"isPositional"`
+	Position         int      `json:"position"`
 }
 
 //go:embed snyk_tools.json
@@ -125,26 +128,20 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "defaultHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-		params, workingDir := extractParamsFromRequestArgs(toolDef, request.GetArguments())
-
-		// Apply standard parameters from tool definition
-		// e.g. all_projects and json
-		for _, paramName := range toolDef.StandardParams {
-			cliParamName := convertToCliParam(paramName)
-			params[cliParamName] = true
-		}
-
-		// Handle regular commands
 		if len(toolDef.Command) == 0 {
 			return nil, fmt.Errorf("empty command in tool definition for %s", toolDef.Name)
 		}
 
-		args := buildArgs(m.cliPath, toolDef.Command, params)
+		requestArgs := request.GetArguments()
+		params, workingDir, err := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
+		if err != nil {
+			return nil, err
+		}
+
+		args := buildCommand(m.cliPath, toolDef.Command, params)
 
 		// Add working directory if specified
-		if workingDir != "" {
-			args = append(args, workingDir)
-		} else {
+		if workingDir == "" {
 			logger.Debug().Msg("Received empty workingDir")
 		}
 

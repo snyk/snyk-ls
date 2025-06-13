@@ -114,6 +114,7 @@ func NewOAuthProvider(
 		auth.WithOpenBrowserFunc(openBrowserFunc),
 		auth.WithTokenRefresherFunc(customTokenRefresherFunc),
 		auth.WithLogger(c.Logger()),
+		auth.WithHttpClient(engine.GetNetworkAccess().GetUnauthorizedHttpClient()),
 	)
 	return newOAuthProvider(conf, authenticator, c.Logger())
 }
