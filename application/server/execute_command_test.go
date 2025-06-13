@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
@@ -240,8 +242,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 type waitForCancelTestCommand struct {
 	command    types.CommandData
 	t          *testing.T
-	cmdStarted bool
-	ctxErr     error
+	cmdStarted atomic.Bool
+	ctxErr     atomic.Pointer[error]
 }
 
 func newWaitForCancelTestCommand(t *testing.T) *waitForCancelTestCommand {
@@ -251,9 +253,7 @@ func newWaitForCancelTestCommand(t *testing.T) *waitForCancelTestCommand {
 			CommandId: "internal.waitForCancelTestCommand",
 			Title:     "Wait For Cancel Test Command",
 		},
-		t:          t,
-		cmdStarted: false,
-		ctxErr:     nil,
+		t: t,
 	}
 }
 
@@ -263,10 +263,10 @@ func (w *waitForCancelTestCommand) Command() types.CommandData {
 
 func (w *waitForCancelTestCommand) Execute(ctx context.Context) (any, error) {
 	w.t.Log("waitForCancelTestCommand: Entering wait on ctx.Done().")
-	w.cmdStarted = true
+	w.cmdStarted.Store(true)
 	<-ctx.Done()
 	w.t.Logf("waitForCancelTestCommand: ctx.Done() returned. ctx.Err() is: %v\n", ctx.Err())
-	w.ctxErr = ctx.Err()
+	w.ctxErr.Store(util.Ptr(ctx.Err()))
 	return nil, nil
 }
 
@@ -296,7 +296,7 @@ func Test_ExecuteCommand_CancelRequest(t *testing.T) {
 		command.SetService(originalCmdService)
 	})
 
-	cmdDone := false
+	var cmdDone atomic.Bool
 	go func() {
 		cmdResponse, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command: testCmd.Command().CommandId,
@@ -305,11 +305,11 @@ func Test_ExecuteCommand_CancelRequest(t *testing.T) {
 		if assert.NotNil(t, cmdResponse) {
 			assert.Nil(t, cmdResponse.Error())
 		}
-		cmdDone = true
+		cmdDone.Store(true)
 	}()
 
 	require.Eventually(t, func() bool {
-		return testCmd.cmdStarted
+		return testCmd.cmdStarted.Load()
 	}, 5*time.Second, 100*time.Millisecond)
 
 	// Command ID should always be 1 (as a number!), as it is the first command we run on the fake test server.
@@ -318,7 +318,10 @@ func Test_ExecuteCommand_CancelRequest(t *testing.T) {
 	require.NoError(t, err, "Failed to send $/cancelRequest notification")
 
 	assert.Eventually(t, func() bool {
-		return cmdDone
+		return cmdDone.Load()
 	}, 5*time.Second, 100*time.Millisecond)
-	assert.ErrorIs(t, testCmd.ctxErr, context.Canceled)
+	ctxErrPtr := testCmd.ctxErr.Load()
+	if assert.NotNil(t, ctxErrPtr) {
+		assert.ErrorIs(t, *ctxErrPtr, context.Canceled)
+	}
 }
