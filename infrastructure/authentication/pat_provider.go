@@ -66,7 +66,7 @@ func (p *PatAuthenticationProvider) ClearAuthentication(_ context.Context) error
 	p.m.Lock()
 	defer p.m.Unlock()
 	p.logger.Debug().Msg("clearing authentication")
-	p.config.Unset(auth.CONFIG_KEY_TOKEN)
+	p.config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 	p.config.Unset(configuration.AUTHENTICATION_TOKEN)
 	p.config.Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
 	return nil

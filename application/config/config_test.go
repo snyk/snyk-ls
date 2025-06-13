@@ -392,7 +392,7 @@ func TestConfig_AuthenticationMethodForCurrentToken(t *testing.T) {
 		"7DOTfne4FF0Y3C8cjJFCw"
 	emptyToken := ""
 
-	// Config should be initialised with an empty token.
+	// Config should be initialized with an empty token.
 	c := New()
 	assert.Equal(t, types.EmptyAuthenticationMethod, c.AuthenticationMethodForCurrentToken())
 
@@ -405,5 +405,4 @@ func TestConfig_AuthenticationMethodForCurrentToken(t *testing.T) {
 	assert.Equal(t, types.PatAuthentication, c.AuthenticationMethodForCurrentToken())
 	c.token = emptyToken
 	assert.Equal(t, types.EmptyAuthenticationMethod, c.AuthenticationMethodForCurrentToken())
-
 }

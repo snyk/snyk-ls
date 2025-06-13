@@ -17,13 +17,15 @@
 package authentication
 
 import (
+	"context"
+	"testing"
+
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestPatAuthenticationProvider_AuthURL(t *testing.T) {
@@ -47,7 +49,7 @@ func TestPatAuthenticationProvider_AuthURL(t *testing.T) {
 				authURL: tt.expectedUrl,
 				logger:  &zerolog.Logger{},
 			}
-			assert.Equalf(t, tt.expectedUrl, p.AuthURL(nil), "AuthURL(nil)")
+			assert.Equalf(t, tt.expectedUrl, p.AuthURL(context.Background()), "AuthURL(nil)")
 		})
 	}
 }
@@ -71,18 +73,17 @@ func TestPatAuthenticationProvider_Authenticate(t *testing.T) {
 		logger:          &zerolog.Logger{},
 	}
 
-	got, err := p.Authenticate(nil)
+	got, err := p.Authenticate(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, "", got, "Authenticate() returns blank token string")
 	assert.Equal(t, expectedUrl, urlPassedToBrowserFunction, "Authenticate() calls browser function")
-
 }
 
 func TestPatAuthenticationProvider_ClearAuthentication(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockConfiguration := mocks.NewMockConfiguration(ctrl)
 
-	mockConfiguration.EXPECT().Unset(auth.CONFIG_KEY_TOKEN)
+	mockConfiguration.EXPECT().Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 	mockConfiguration.EXPECT().Unset(configuration.AUTHENTICATION_TOKEN)
 	mockConfiguration.EXPECT().Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
 
@@ -91,7 +92,7 @@ func TestPatAuthenticationProvider_ClearAuthentication(t *testing.T) {
 		logger: &zerolog.Logger{},
 	}
 
-	err := p.ClearAuthentication(nil)
+	err := p.ClearAuthentication(context.Background())
 	assert.NoError(t, err)
 }
 
@@ -108,11 +109,10 @@ func TestPatAuthenticationProvider_setAuthUrl(t *testing.T) {
 	p := &PatAuthenticationProvider{
 		logger: &zerolog.Logger{},
 	}
-	assert.Empty(t, p.AuthURL(nil))
+	assert.Empty(t, p.AuthURL(context.Background()))
 
 	p.setAuthUrl("https://test.snyk.test")
-	assert.Equal(t, "https://test.snyk.test", p.AuthURL(nil))
-
+	assert.Equal(t, "https://test.snyk.test", p.AuthURL(context.Background()))
 }
 
 func Test_newPatAuthenticationProvider(t *testing.T) {
@@ -131,6 +131,5 @@ func Test_newPatAuthenticationProvider(t *testing.T) {
 
 	assert.Equal(t, p.config, mockConfiguration)
 	assert.Equal(t, testUrl, urlPassedToBrowserFunction)
-	assert.Empty(t, p.AuthURL(nil))
-
+	assert.Empty(t, p.AuthURL(context.Background()))
 }
