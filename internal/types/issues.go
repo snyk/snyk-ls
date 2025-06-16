@@ -56,8 +56,8 @@ type IssueType int8
 // To maintain backwards compatibility, avoid changing enum numbers
 const (
 	PackageHealth IssueType = iota
+	_                       // Deprecated was CodeQualityIssue
 	CodeSecurityVulnerability
-	_ // Deprecated was CodeQualityIssue
 	LicenseIssue
 	DependencyVulnerability
 	InfrastructureIssue
