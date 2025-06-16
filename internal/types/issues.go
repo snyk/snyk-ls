@@ -50,15 +50,18 @@ func (s Severity) String() string {
 	}
 }
 
-// Type of issue, these will typically match 1o1 to Snyk product lines but are not necessarily coupled to those.
+// IssueType will typically match 1o1 to Snyk product lines but are not necessarily coupled to those.
 type IssueType int8
 
+// To maintain backwards compatibility, avoid changing enum numbers
 const (
 	PackageHealth IssueType = iota
 	CodeSecurityVulnerability
+	_ // Deprecated was CodeQualityIssue
 	LicenseIssue
 	DependencyVulnerability
 	InfrastructureIssue
+	_ // Deprecated was ContainerVulnerability
 )
 
 type CodeAction interface {

@@ -290,12 +290,10 @@ Right now the language server supports the following actions:
     - `issueType int`
     ```
     PackageHealth Type = 0
-    CodeQualityIssue = 1
     CodeSecurityVulnerability = 2
     LicenceIssue = 3
     DependencyVulnerability = 4
     InfrastructureIssue = 5
-    ContainerVulnerability = 6
     ```
 - `GetLearnSession` returns the given lesson on the Snyk Learn website
   - command: `snyk.getLearnLesson`
@@ -307,12 +305,10 @@ Right now the language server supports the following actions:
     - `issueType int`
     ```
     PackageHealth Type = 0
-    CodeQualityIssue = 1
     CodeSecurityVulnerability = 2
     LicenceIssue = 3
     DependencyVulnerability = 4
     InfrastructureIssue = 5
-    ContainerVulnerability = 6
     ```
   - result: lesson json
   ```json5
