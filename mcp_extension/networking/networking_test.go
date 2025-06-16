@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package mcp_extension
+package networking
 
 import (
 	"fmt"
@@ -34,23 +34,23 @@ func Test_isPortInUse(t *testing.T) {
 
 	u, err := url.Parse(fmt.Sprintf("http://%s", listener.Addr()))
 	require.NoError(t, err)
-	inUse := isPortInUse(u)
+	inUse := IsPortInUse(u)
 	assert.True(t, inUse, "should be in listening on: %s", listener.Addr())
 
-	// close listener, to have isPortInUse() return false
+	// close listener, to have IsPortInUse() return false
 	listener.Close()
-	inUse = isPortInUse(u)
+	inUse = IsPortInUse(u)
 	assert.False(t, inUse, "should be in listening on: %s", listener.Addr())
 
 	// Test with an invalid address format. This should return true, indicating the port is effectively unavailable.
 	u, err = url.Parse("http://invalid-address")
 	require.NoError(t, err)
-	inUse = isPortInUse(u)
+	inUse = IsPortInUse(u)
 	require.True(t, inUse)
 }
 
 func Test_determineFreePort(t *testing.T) {
-	port := determineFreePort()
+	port := DetermineFreePort()
 	if port < DefaultPort {
 		t.Errorf("Expected port to be greater than %d, but got %d", DefaultPort, port)
 	}
@@ -79,9 +79,9 @@ func Test_determineFreePort(t *testing.T) {
 		}
 	}()
 
-	// This test now relies on the limited range defined in determineFreePort
+	// This test now relies on the limited range defined in DetermineFreePort
 	// If it manages to find a free port it is considered a success otherwise a failure is expected
-	port = determineFreePort()
+	port = DetermineFreePort()
 	if port > DefaultPort && port < DefaultPort+1000 {
 		t.Errorf("Expected to fail to find a free port. Port %d found instead ", port)
 	}

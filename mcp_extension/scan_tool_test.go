@@ -36,6 +36,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
 
 type testFixture struct {
@@ -81,8 +83,10 @@ func setupTestFixture(t *testing.T) *testFixture {
 	defaultMockResponse := "{\"ok\": true}"
 	createMockSnykCli(t, snykCliPath, defaultMockResponse)
 
+	engineConfig.Set(trust.DisableTrustFlag, true)
+
 	// Create the binding
-	binding := NewMcpLLMBinding(WithCliPath(snykCliPath), WithLogger(invocationCtx.GetEnhancedLogger()))
+	binding := NewMcpLLMBinding(WithCliPath(snykCliPath), WithLogger(invocationCtx.GetEnhancedLogger()), WithFolderTrust(trust.NewFolderTrust(invocationCtx.GetEnhancedLogger(), engineConfig)))
 	binding.mcpServer = server.NewMCPServer("Snyk", "1.1.1")
 	tools, err := loadMcpToolsFromJson()
 	require.NoError(t, err)
@@ -222,8 +226,9 @@ func TestSnykCodeTestHandler(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Test cases with various combinations of convertedToolParams
 	testCases := []struct {
-		name string
-		args map[string]any
+		name         string
+		args         map[string]any
+		requireTrust bool
 	}{
 		{
 			name: "Basic Test",
@@ -261,6 +266,14 @@ func TestSnykCodeTestHandler(t *testing.T) {
 				"org":                "my-snyk-org",
 			},
 		},
+		{
+			name: "Test fail trust",
+			args: map[string]interface{}{
+				"path": tmpDir,
+				"org":  "my-snyk-org",
+			},
+			requireTrust: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -270,6 +283,7 @@ func TestSnykCodeTestHandler(t *testing.T) {
 					"arguments": tc.args,
 				},
 			}
+			fixture.invocationContext.GetConfiguration().Set(trust.DisableTrustFlag, !tc.requireTrust)
 			requestJSON, err := json.Marshal(requestObj)
 			require.NoError(t, err, "Failed to marshal request to JSON")
 
@@ -278,7 +292,10 @@ func TestSnykCodeTestHandler(t *testing.T) {
 			require.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
 			result, err := handler(context.Background(), request)
-
+			if tc.requireTrust {
+				require.Error(t, err)
+				return
+			}
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			textContent, ok := result.Content[0].(mcp.TextContent)
@@ -1273,4 +1290,41 @@ func TestPrepareCmdArgsForTool(t *testing.T) {
 			require.Equal(t, tc.expectedWd, actualWd, "Working directory mismatch")
 		})
 	}
+}
+
+func TestSnykTrustHandler(t *testing.T) {
+	fixture := setupTestFixture(t)
+	toolDef := getToolWithName(t, fixture.tools, SnykTrust)
+	require.NotNil(t, toolDef, "snyk_trust tool definition not found")
+	fixture.invocationContext.GetConfiguration().Set(trust.DisableTrustFlag, false)
+
+	handler := fixture.binding.snykTrustHandler(fixture.invocationContext, *toolDef)
+
+	t.Run("PathMissing", func(t *testing.T) {
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Arguments: map[string]interface{}{},
+			},
+		}
+
+		result, err := handler(context.Background(), request)
+
+		require.Error(t, err)
+		require.Nil(t, result)
+		require.Contains(t, err.Error(), "argument 'path' is missing for tool snyk_trust")
+	})
+
+	t.Run("PathEmpty", func(t *testing.T) {
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Arguments: map[string]interface{}{"path": ""},
+			},
+		}
+
+		result, err := handler(context.Background(), request)
+
+		require.Error(t, err)
+		require.Nil(t, result)
+		require.Contains(t, err.Error(), "empty path given to tool snyk_trust")
+	})
 }
