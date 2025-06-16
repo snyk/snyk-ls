@@ -18,6 +18,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -374,7 +375,7 @@ func TestConfig_shouldUpdateOAuth2Token(t *testing.T) {
 	})
 }
 
-func TestConfig_AuthenticationMethodForCurrentToken(t *testing.T) {
+func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 	// Dummy tokens. Note that these were created using random characters, but follow the same format as real tokens.
 	oAuthToken := "{\"access_token\":\"eyJhbHciOiJSUzI1NiIsIqtpZCI7IjQ2ZWNjOTI1IiwiEHlwIjoiSlEUIn0.eyJhEWQiOlsiaHR0cHq" +
 		"7Ly9hcHkuZHV2LnNueWsuaW8iXSwiYXpwIjoiYjU2ZERjqqUtYjllqS00ZEI3LTH3NzqtYWQ0N2VhZqIwOTU2IiwiZXhwIjoxNzQ4NEQ4Njq5LCJ" +
@@ -392,17 +393,38 @@ func TestConfig_AuthenticationMethodForCurrentToken(t *testing.T) {
 		"7DOTfne4FF0Y3C8cjJFCw"
 	emptyToken := ""
 
-	// Config should be initialized with an empty token.
-	c := New()
-	assert.Equal(t, types.EmptyAuthenticationMethod, c.AuthenticationMethodForCurrentToken())
+	tokenMap := map[types.AuthenticationMethod]string{
+		types.OAuthAuthentication:       oAuthToken,
+		types.TokenAuthentication:       apiToken,
+		types.PatAuthentication:         personalAccessToken,
+		types.EmptyAuthenticationMethod: emptyToken,
+	}
 
-	// Check that the config can determine the authentication method for each token type.
-	c.token = oAuthToken
-	assert.Equal(t, types.OAuthAuthentication, c.AuthenticationMethodForCurrentToken())
-	c.token = apiToken
-	assert.Equal(t, types.TokenAuthentication, c.AuthenticationMethodForCurrentToken())
-	c.token = personalAccessToken
-	assert.Equal(t, types.PatAuthentication, c.AuthenticationMethodForCurrentToken())
-	c.token = emptyToken
-	assert.Equal(t, types.EmptyAuthenticationMethod, c.AuthenticationMethodForCurrentToken())
+	// Config should be initialized with an empty token, but using the Token authentication type.
+	c := New()
+	assert.False(t, c.AuthenticationMethodMatchesToken())
+
+	for method, _ := range tokenMap {
+		c.SetAuthenticationMethod(method)
+		for tokenType, token := range tokenMap {
+			c.token = token
+			shouldMatch := method == tokenType
+			t.Run(fmt.Sprintf("method: %s, token type: %s -> %t", method, tokenType, shouldMatch), func(t *testing.T) {
+				if shouldMatch {
+					assert.True(t, c.AuthenticationMethodMatchesToken())
+				} else {
+					assert.False(t, c.AuthenticationMethodMatchesToken())
+				}
+			})
+		}
+	}
+
+	// Fake AuthenticationMethod should work with any token
+	c.SetAuthenticationMethod(types.FakeAuthentication)
+	for tokenType, token := range tokenMap {
+		c.token = token
+		t.Run(fmt.Sprintf("method: %s, token type: %s -> true", types.FakeAuthentication, tokenType), func(t *testing.T) {
+			assert.True(t, c.AuthenticationMethodMatchesToken())
+		})
+	}
 }

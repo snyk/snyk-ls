@@ -401,8 +401,8 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 		// don't do anything
 	}
 
-	// Check whether the authentication method has changed
-	if c.NonEmptyToken() && c.AuthenticationMethodForCurrentToken() != c.AuthenticationMethod() {
+	// Check whether the authentication method has changed.
+	if !c.AuthenticationMethodMatchesToken() {
 		logger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
 		a.logout(context.Background())
 		a.sendAuthenticationRequest("Your authentication method has changed. Please re-authenticate to continue using Snyk.", "Re-authenticate")

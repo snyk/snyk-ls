@@ -1074,22 +1074,26 @@ func (c *Config) Logger() *zerolog.Logger {
 	return c.logger
 }
 
-func (c *Config) AuthenticationMethodForCurrentToken() types.AuthenticationMethod {
+func (c *Config) AuthenticationMethodMatchesToken() bool {
 	token := c.Token()
+	method := c.authenticationMethod
 
+	if method == types.FakeAuthentication {
+		return true // We allow any value for the token in unit tests which use FakeAuthentication.
+	}
+
+	var derivedMethod types.AuthenticationMethod
 	if len(token) == 0 {
-		return types.EmptyAuthenticationMethod
+		derivedMethod = types.EmptyAuthenticationMethod
+	} else if auth.IsAuthTypePAT(token) {
+		derivedMethod = types.PatAuthentication
+	} else if auth.IsAuthTypeToken(token) {
+		derivedMethod = types.TokenAuthentication
+	} else {
+		derivedMethod = types.OAuthAuthentication
 	}
 
-	if auth.IsAuthTypePAT(token) {
-		return types.PatAuthentication
-	}
-
-	if auth.IsAuthTypeToken(token) {
-		return types.TokenAuthentication
-	}
-
-	return types.OAuthAuthentication
+	return method == derivedMethod
 }
 
 func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
