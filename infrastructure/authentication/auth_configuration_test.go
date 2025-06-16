@@ -31,6 +31,7 @@ import (
 
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_NewOAuthProvider_registersStorageCallback(t *testing.T) {
@@ -78,6 +79,7 @@ func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *
 	tokenBytes, err := json.Marshal(token)
 	assert.NoError(t, err)
 
+	c.SetAuthenticationMethod(types.OAuthAuthentication)
 	c.SetToken(string(tokenBytes))
 
 	// refresh func is replaced with func that sends true into a channel when called
