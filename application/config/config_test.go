@@ -404,7 +404,7 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 	c := New()
 	assert.False(t, c.AuthenticationMethodMatchesToken())
 
-	for method, _ := range tokenMap {
+	for method := range tokenMap {
 		c.SetAuthenticationMethod(method)
 		for tokenType, token := range tokenMap {
 			c.token = token
