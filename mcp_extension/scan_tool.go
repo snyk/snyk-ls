@@ -25,6 +25,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
 
 // Tool name constants to maintain backward compatibility
@@ -35,6 +37,7 @@ const (
 	SnykAuth       = "snyk_auth"
 	SnykAuthStatus = "snyk_auth_status"
 	SnykLogout     = "snyk_logout"
+	SnykTrust      = "snyk_trust"
 )
 
 type SnykMcpToolsDefinition struct {
@@ -42,6 +45,7 @@ type SnykMcpToolsDefinition struct {
 	Description    string                 `json:"description"`
 	Command        []string               `json:"command"`
 	StandardParams []string               `json:"standardParams"`
+	IgnoreTrust    bool                   `json:"ignoreTrust"`
 	Params         []SnykMcpToolParameter `json:"params"`
 }
 
@@ -83,6 +87,8 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 		switch toolDef.Name {
 		case SnykLogout:
 			m.mcpServer.AddTool(tool, m.snykLogoutHandler(invocationCtx, toolDef))
+		case SnykTrust:
+			m.mcpServer.AddTool(tool, m.snykTrustHandler(invocationCtx, toolDef))
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -138,6 +144,11 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return nil, err
 		}
 
+		trustDisabled := invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) || toolDef.IgnoreTrust
+		if !trustDisabled && !m.folderTrust.IsFolderTrusted(workingDir) {
+			return nil, fmt.Errorf("folder '%s' is not trusted. Please run 'snyk_trust' first", workingDir)
+		}
+
 		args := buildCommand(m.cliPath, toolDef.Command, params)
 
 		// Add working directory if specified
@@ -166,5 +177,31 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
 
 		return mcp.NewToolResultText("Successfully logged out"), nil
+	}
+}
+
+func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := m.logger.With().Str("method", toolDef.Name).Logger()
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+
+		if invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) {
+			logger.Info().Msg("Folder trust is disabled. Trust mechanism is ignored")
+			return mcp.NewToolResultText("Trust mechanism is disabled. Considering Folder to be trusted."), nil
+		}
+
+		pathArg := request.GetArguments()["path"]
+		if pathArg == nil {
+			return nil, fmt.Errorf("argument 'path' is missing for tool %s", toolDef.Name)
+		}
+		folderPath, ok := pathArg.(string)
+		if !ok {
+			return nil, fmt.Errorf("argument 'path' is not a string for tool %s", toolDef.Name)
+		}
+		if folderPath == "" {
+			return nil, fmt.Errorf("empty path given to tool %s", toolDef.Name)
+		}
+
+		return m.folderTrust.HandleTrust(ctx, folderPath, logger)
 	}
 }
