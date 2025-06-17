@@ -19,6 +19,8 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"testing"
 	"time"
 
@@ -393,6 +395,7 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 		"7DOTfne4FF0Y3C8cjJFCw"
 	emptyToken := ""
 
+	// Note we're deliberately omitting types.FakeAuthentication; we append it below
 	tokenMap := map[types.AuthenticationMethod]string{
 		types.OAuthAuthentication:       oAuthToken,
 		types.TokenAuthentication:       apiToken,
@@ -404,11 +407,12 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 	c := New()
 	assert.False(t, c.AuthenticationMethodMatchesToken())
 
-	for method := range tokenMap {
+	for _, method := range append(slices.Collect(maps.Keys(tokenMap)), types.FakeAuthentication) {
 		c.SetAuthenticationMethod(method)
 		for tokenType, token := range tokenMap {
 			c.token = token
-			shouldMatch := method == tokenType
+			// Fake authentication should allow any token type, otherwise the authentication method must match.
+			shouldMatch := method == tokenType || method == types.FakeAuthentication
 			t.Run(fmt.Sprintf("method: %s, token type: %s -> %t", method, tokenType, shouldMatch), func(t *testing.T) {
 				if shouldMatch {
 					assert.True(t, c.AuthenticationMethodMatchesToken())
@@ -417,14 +421,5 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 				}
 			})
 		}
-	}
-
-	// Fake AuthenticationMethod should work with any token
-	c.SetAuthenticationMethod(types.FakeAuthentication)
-	for tokenType, token := range tokenMap {
-		c.token = token
-		t.Run(fmt.Sprintf("method: %s, token type: %s -> true", types.FakeAuthentication, tokenType), func(t *testing.T) {
-			assert.True(t, c.AuthenticationMethodMatchesToken())
-		})
 	}
 }
