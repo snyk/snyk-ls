@@ -110,6 +110,7 @@ func (t *FolderTrust) trustedFolders() []string {
 	case []string:
 		return v
 	case []interface{}:
+		// TODO: Viper isn't giving back a string slice but []interface{}. Analyze this and if applicable fix in GAF.
 		var trustedFolders []string
 		for _, item := range v {
 			if folderPath, ok := item.(string); ok {
