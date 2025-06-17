@@ -206,12 +206,6 @@
           "description": "For Gradle, filters Gradle configurations to scan using a REGEX."
         },
         {
-          "name": "init_script",
-          "type": "string",
-          "isRequired": false,
-          "description": "For Gradle, uses a Gradle initialization script from the specified file path."
-        },
-        {
           "name": "assets_project_name",
           "type": "boolean",
           "isRequired": false,
