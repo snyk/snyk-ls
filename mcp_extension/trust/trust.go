@@ -117,8 +117,9 @@ func (t *FolderTrust) trustedFolders() []string {
 			}
 		}
 		return trustedFolders
+	default:
+		return []string{}
 	}
-	return []string{}
 }
 
 func (t *FolderTrust) AddTrustedFolder(folder string) {
