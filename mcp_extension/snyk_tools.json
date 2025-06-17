@@ -1014,7 +1014,7 @@
     },
     {
       "name": "snyk_policy",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Displays the contents of the `.snyk` policy file associated with a package or project, providing visibility into active ignore rules, patches, and other configurations. \nWhen to use: For developers to check current policies, understand ignores, or verify `.snyk` file structure. For security teams to audit project policies. For troubleshooting Snyk MCP's policy file interpretation. \nHow to use: Display `.snyk` in dir: <snyk_policy> `path`=`/a/my-project`. Display specific policy file: `<snyk_policy> `path`=`/a/my-project/a/b/c/.custom-snyk`. \nSecure SDLC Integration: Policy Review/Auditing: Allows developers and security teams to inspect the 'policy as code' applied to a project at any SDLC stage.",
+      "description": "Displays the contents of the `.snyk` policy file associated with a package or project, providing visibility into active ignore rules, patches, and other configurations. \nWhen to use: For developers to check current policies, understand ignores, or verify `.snyk` file structure. For security teams to audit project policies. For troubleshooting Snyk MCP's policy file interpretation. \nHow to use: Display `.snyk` in dir: <snyk_policy> `path`=`/a/my-project`. Display specific policy file: `<snyk_policy> `path`=`/a/my-project/a/b/c/.custom-snyk`. \nSecure SDLC Integration: Policy Review/Auditing: Allows developers and security teams to inspect the 'policy as code' applied to a project at any SDLC stage.",
       "command": [
         "policy"
       ],
@@ -1025,7 +1025,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *ABSOLUTE PATH* to a directory. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`.",
+          "description": "Positional argument for the *ABSOLUTE PATH* to the policy .snyk file. The path MUST be absolute and have the correct path separator.",
           "isPositional": true
         },
         {
@@ -1038,7 +1038,7 @@
     },
     {
       "name": "snyk_ignore",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Modifies the project's `.snyk` policy file to ignore specific issues (vulnerabilities, license issues via `id`) or to exclude files/directories from analysis (primarily for Snyk Code and Open Source `unmanaged` scans via `file_path`). \nWhen to use: For risk acceptance (documenting why a vulnerability is acceptable). For Snyk Code scope management (excluding test/generated code). \nHow it modifies `.snyk`: Adds/updates entries in `ignore:` block (for ID-based ignores) or `exclude:` block (for file exclusions). \nHow to use: Ignore npm vuln with expiry/reason: `<snyk_ignore> `id`=`'npm:tough-cookie:20160722'` `expiry`=`'2024-12-31'` `reason`=`'Not exploitable'`. Ignore by path: <snyk_ignore> `id`=`'SNYK-JS-LIB-XXX'` `vulnerable_path`=`'app>pkg>lib'`. Exclude test files from Snyk Code: <snyk_ignore> `file_path`=`'./**/test/**'` `file_path-group`=`'code'`. Ignore IaC misconfig: <snyk_ignore> `id`=`SNYK-CC-TF-118` `path`=`\"resource > type > name\"`. \nSecure SDLC Integration: Vulnerability Management/Triage: Allows teams to formally document and manage accepted risks or refine scan scope as 'policy as code' within the `.snyk` file, which is version controlled with the project.",
+      "description": "Modifies the project's `.snyk` policy file to ignore specific issues (vulnerabilities, license issues via `id`) or to exclude files/directories from analysis (primarily for Snyk Code and Open Source `unmanaged` scans via `file_path`). \nWhen to use: For risk acceptance (documenting why a vulnerability is acceptable). For Snyk Code scope management (excluding test/generated code). \nHow it modifies `.snyk`: Adds/updates entries in `ignore:` block (for ID-based ignores) or `exclude:` block (for file exclusions). \nHow to use: Ignore npm vuln with expiry/reason: `<snyk_ignore> `id`=`'npm:tough-cookie:20160722'` `expiry`=`'2024-12-31'` `reason`=`'Not exploitable'`. Ignore by path: <snyk_ignore> `id`=`'SNYK-JS-LIB-XXX'` `vulnerable_path`=`'app>pkg>lib'`. Exclude test files from Snyk Code: <snyk_ignore> `file_path`=`'./**/test/**'` `file_path-group`=`'code'`. Ignore IaC misconfig: <snyk_ignore> `id`=`SNYK-CC-TF-118` `path`=`\"resource > type > name\"`. \nSecure SDLC Integration: Vulnerability Management/Triage: Allows teams to formally document and manage accepted risks or refine scan scope as 'policy as code' within the `.snyk` file, which is version controlled with the project.",
       "command": [
         "ignore"
       ],
@@ -1049,7 +1049,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *ABSOLUTE PATH* to a directory. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`.",
+          "description": "Positional argument for the *ABSOLUTE PATH* to the policy .snyk file. The path MUST be absolute and have the correct path separator.",
           "isPositional": true
         },
         {
