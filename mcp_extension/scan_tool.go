@@ -89,6 +89,8 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykLogoutHandler(invocationCtx, toolDef))
 		case SnykTrust:
 			m.mcpServer.AddTool(tool, m.snykTrustHandler(invocationCtx, toolDef))
+		case "snyk_code_scan_remote":
+			m.mcpServer.AddTool(tool, m.snykRemoteScanHandler(invocationCtx, toolDef))
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -203,5 +205,19 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 		}
 
 		return m.folderTrust.HandleTrust(ctx, folderPath, logger)
+	}
+}
+
+func (m *McpLLMBinding) snykRemoteScanHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := m.logger.With().Str("method", toolDef.Name).Logger()
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+
+		pathArg := request.GetArguments()
+		if pathArg == nil {
+			return nil, fmt.Errorf("argument 'path' is missing for tool %s", toolDef.Name)
+		}
+
+		return mcp.NewToolResultText("Failed! no content or filenames were provided!!!!!!"), nil
 	}
 }

@@ -98,6 +98,24 @@ func createToolFromDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
 			} else {
 				opts = append(opts, mcp.WithBoolean(param.Name, mcp.Description(param.Description)))
 			}
+		} else if param.Type == "array" {
+			if param.IsRequired {
+				arrayItems := map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"fileName": map[string]any{
+							"type":        "string",
+							"description": "relative path to the file to scan e.g. src/app.js",
+						},
+						"content": map[string]any{
+							"type":        "string",
+							"description": "full content of the file to scan",
+						},
+					},
+					"required": []string{"fileName", "content"},
+				}
+				opts = append(opts, mcp.WithArray(param.Name, mcp.Required(), mcp.Description(param.Description), mcp.Items(arrayItems)))
+			}
 		}
 	}
 
