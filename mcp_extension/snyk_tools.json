@@ -19,7 +19,7 @@
     },
     {
       "name": "snyk_sca_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. It's a cornerstone of 'shifting security left'. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. Test specific npm package: `$ snyk test lodash@4.17.20`. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed and build tools accessible in PATH for accurate dependency resolution. Review 'Code execution warning for Snyk MCP' documentation. \nSecure SDLC Integration: Integral to Coding and Continuous Integration phases. Provides immediate feedback locally and repports whenvulnerabilities exceed defined thresholds (via `fail_on`, `severity_threshold`).",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. It's a cornerstone of 'shifting security left'. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed and build tools accessible in PATH for accurate dependency resolution.",
       "command": [
         "test"
       ],
@@ -399,7 +399,7 @@
     },
     {
       "name": "snyk_code_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Performs Static Application Security Testing (SAST) directly from the Snyk MCP. It analyzes an application's source code to identify security vulnerabilities and weaknesses without executing the code. \nWhen to use: During local development, developers can run it on their feature branches for immediate feedback. In CI/CD pipelines, it can be incorporated to automatically scan code changes on every build, pull request, or merge, providing a security gate for code quality. \nHow to use: Test  directory: run snyk_code_scan with parameter <path>, add parameters as needed. Save JSON results for medium+ severity: run snyk_code_scan with parameters `path` `json_file_output`=`sast.json` `severity_threshold`=`medium`. \nNote: If `json_file_output` is used and no issues are found, the output file is not created. \nExit Codes: `0` for success/no issues matching criteria, `1` for issues found, `2` for scan error. \nSecure SDLC Integration: Enables embedding Snyk Code's analytical capabilities directly into automated build and test sequences. In the Coding phase, developers get local feedback. In CI/CD, it automates code scanning, acting as a security gate.",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Performs Static Application Security Testing (SAST) directly from the Snyk MCP. It analyzes an application's source code with a SAST scan to identify security vulnerabilities and weaknesses without executing the code. \nWhen to use: During local development, developers can run it on their feature branches for immediate feedback, or after you generate new code files. \nHow to use: Test  directory: run snyk_code_scan with parameter <path>, add parameters as needed.",
       "command": [
         "code",
         "test"
@@ -1152,7 +1152,7 @@
     },
     {
       "name": "snyk_trust",
-      "description": "Trust a given folder to allow Snyk to scan it",
+      "description": "Trust a given folder to allow Snyk to scan it.",
       "command": [],
       "standardParams": [],
       "ignoreTrust": true,
