@@ -77,6 +77,7 @@ func loadMcpToolsFromJson() (*SnykMcpTools, error) {
 
 func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) error {
 	config, err := loadMcpToolsFromJson()
+
 	if err != nil || config == nil {
 		m.logger.Err(err).Msg("Failed to load Snyk tools configuration")
 		return err

@@ -75,6 +75,7 @@ func (m *McpLLMBinding) Start(invocationContext workflow.InvocationContext) erro
 	if runTimeInfo != nil {
 		version = runTimeInfo.GetVersion()
 	}
+
 	m.mcpServer = server.NewMCPServer(
 		"Snyk MCP Server",
 		version,
