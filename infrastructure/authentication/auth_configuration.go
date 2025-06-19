@@ -121,6 +121,5 @@ func NewOAuthProvider(
 
 func NewPatProvider(c *config.Config, openBrowserFunc func(string)) *PatAuthenticationProvider {
 	conf := c.Engine().GetConfiguration()
-
 	return newPatAuthenticationProvider(conf, openBrowserFunc, c.Logger())
 }
