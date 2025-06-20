@@ -19,6 +19,7 @@ package authentication
 import (
 	"context"
 	"encoding/json"
+	"github.com/snyk/snyk-ls/internal/types"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -66,6 +67,7 @@ func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *
 	storageWithCallbacks, err2 := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(t.TempDir() + "testStorage"))
 	assert.NoError(t, err2)
 	c.SetStorage(storageWithCallbacks)
+	c.SetAuthenticationMethod(types.OAuthAuthentication)
 
 	// an expired token that's set into the configuration
 	token := oauth2.Token{
