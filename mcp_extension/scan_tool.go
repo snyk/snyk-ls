@@ -77,6 +77,7 @@ func loadMcpToolsFromJson() (*SnykMcpTools, error) {
 
 func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) error {
 	config, err := loadMcpToolsFromJson()
+
 	if err != nil || config == nil {
 		m.logger.Err(err).Msg("Failed to load Snyk tools configuration")
 		return err
@@ -117,14 +118,14 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	logger.Debug().Strs("args", command.Args).Str("workingDir", command.Dir).Msg("Running Command with")
 	logger.Trace().Strs("env", command.Env).Msg("Environment")
 
-	command.Stderr = invocationCtx.GetEnhancedLogger()
+	command.Stderr = logger
 	res, err := command.Output()
 	resAsString := string(res)
 
 	logger.Debug().Str("result", resAsString).Msg("Command run result")
 
 	if err != nil {
-		m.logger.Err(err).Msg("Received error running command")
+		logger.Err(err).Msg("Received error running command")
 	}
 	return resAsString, nil
 }
@@ -133,7 +134,7 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "defaultHandler").Logger()
-		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+		logger.Info().Str("toolName", toolDef.Name).Msg("Received call for tool")
 		if len(toolDef.Command) == 0 {
 			return nil, fmt.Errorf("empty command in tool definition for %s", toolDef.Name)
 		}
@@ -168,7 +169,7 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "snykLogoutHandler").Logger()
-		logger.Debug().Str("toolName", "snyk_logout").Msg("Received call for tool")
+		logger.Info().Str("toolName", "snyk_logout").Msg("Received call for tool")
 		// Special handling for logout which needs multiple commands
 		params := []string{m.cliPath, "config", "unset", "INTERNAL_OAUTH_TOKEN_STORAGE"}
 		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
@@ -183,7 +184,7 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", toolDef.Name).Logger()
-		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+		logger.Info().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
 		if invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) {
 			logger.Info().Msg("Folder trust is disabled. Trust mechanism is ignored")
