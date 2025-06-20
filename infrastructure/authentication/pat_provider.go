@@ -31,7 +31,7 @@ type PatAuthenticationProvider struct {
 	openBrowserFunc func(string)
 	authURL         string
 	logger          *zerolog.Logger
-	m               sync.Mutex
+	m               sync.RWMutex
 }
 
 func (p *PatAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
@@ -47,7 +47,7 @@ func newPatAuthenticationProvider(config configuration.Configuration, openBrowse
 // clicks the "Connect IDE to Snyk" button. It does NOT authenticate the PAT; that is done by GAF when the PAT is first
 // used.
 func (p *PatAuthenticationProvider) Authenticate(_ context.Context) (string, error) {
-	p.m.Lock()
+	p.m.RLock()
 	defer p.m.Unlock()
 
 	url := p.config.GetString(configuration.WEB_APP_URL) + "/account/personal-access-tokens"

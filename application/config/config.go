@@ -627,7 +627,7 @@ func (c *Config) SetToken(newTokenString string) {
 	} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
 		c.logger.Info().Msg("put api token or pat into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
-		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString)
+		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString) // We use the same config key for PATs and API Tokens.
 	}
 
 	// ensure scrubbing of new newTokenString
@@ -1090,7 +1090,10 @@ func (c *Config) AuthenticationMethodMatchesToken() bool {
 	} else if auth.IsAuthTypeToken(token) {
 		derivedMethod = types.TokenAuthentication
 	} else {
-		derivedMethod = types.OAuthAuthentication
+		_, err := getAsOauthToken(token, c.logger)
+		if err != nil {
+			derivedMethod = types.OAuthAuthentication
+		}
 	}
 
 	return method == derivedMethod

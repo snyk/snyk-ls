@@ -80,20 +80,25 @@ func TestPatAuthenticationProvider_Authenticate(t *testing.T) {
 }
 
 func TestPatAuthenticationProvider_ClearAuthentication(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockConfiguration := mocks.NewMockConfiguration(ctrl)
-
-	mockConfiguration.EXPECT().Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
-	mockConfiguration.EXPECT().Unset(configuration.AUTHENTICATION_TOKEN)
-	mockConfiguration.EXPECT().Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
+	config := configuration.New()
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "oauth_token")
+	config.Set(configuration.AUTHENTICATION_TOKEN, "auth_token")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "auth_bearer_token")
 
 	p := &PatAuthenticationProvider{
-		config: mockConfiguration,
+		config: config,
 		logger: &zerolog.Logger{},
 	}
 
+	assert.NotEmpty(t, p.config.Get(auth.CONFIG_KEY_OAUTH_TOKEN))
+	assert.NotEmpty(t, p.config.Get(configuration.AUTHENTICATION_TOKEN))
+	assert.NotEmpty(t, p.config.Get(configuration.AUTHENTICATION_BEARER_TOKEN))
+
 	err := p.ClearAuthentication(context.Background())
 	assert.NoError(t, err)
+	assert.Empty(t, p.config.Get(auth.CONFIG_KEY_OAUTH_TOKEN))
+	assert.Empty(t, p.config.Get(configuration.AUTHENTICATION_TOKEN))
+	assert.Empty(t, p.config.Get(configuration.AUTHENTICATION_BEARER_TOKEN))
 }
 
 func TestPatAuthenticationProvider_GetCheckAuthenticationFunction(t *testing.T) {

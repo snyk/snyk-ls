@@ -615,7 +615,7 @@ type Settings struct {
 type AuthenticationMethod string
 
 const TokenAuthentication AuthenticationMethod = "token"
-const OAuthAuthentication AuthenticationMethod = "oauth2"
+const OAuthAuthentication AuthenticationMethod = "oauth"
 const PatAuthentication AuthenticationMethod = "pat"
 const FakeAuthentication AuthenticationMethod = "fake"
 const EmptyAuthenticationMethod AuthenticationMethod = ""
