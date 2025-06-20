@@ -24,10 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
-
-	"github.com/snyk/go-application-framework/pkg/auth"
 
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -77,7 +76,7 @@ func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *
 
 	tokenBytes, err := json.Marshal(token)
 	assert.NoError(t, err)
-	
+
 	c.SetToken(string(tokenBytes))
 
 	// refresh func is replaced with func that sends true into a channel when called

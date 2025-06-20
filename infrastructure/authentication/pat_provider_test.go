@@ -49,7 +49,7 @@ func TestPatAuthenticationProvider_AuthURL(t *testing.T) {
 				authURL: tt.expectedUrl,
 				logger:  &zerolog.Logger{},
 			}
-			assert.Equalf(t, tt.expectedUrl, p.AuthURL(context.Background()), "AuthURL(nil)")
+			assert.Equalf(t, tt.expectedUrl, p.AuthURL(context.Background()), "AuthURL(context.Background())")
 		})
 	}
 }
@@ -108,7 +108,7 @@ func TestPatAuthenticationProvider_GetCheckAuthenticationFunction(t *testing.T) 
 	user, err := p.GetCheckAuthenticationFunction()()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get active user:")
-	assert.Equal(t, "", user, "GetCheckAuthenticationFunction()")
+	assert.Equal(t, "", user, "GetCheckAuthenticationFunction()()")
 }
 
 func TestPatAuthenticationProvider_setAuthUrl(t *testing.T) {
