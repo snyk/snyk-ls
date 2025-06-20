@@ -1091,7 +1091,7 @@ func (c *Config) AuthenticationMethodMatchesToken() bool {
 		derivedMethod = types.TokenAuthentication
 	} else {
 		_, err := getAsOauthToken(token, c.logger)
-		if err != nil {
+		if err == nil {
 			derivedMethod = types.OAuthAuthentication
 		}
 	}
