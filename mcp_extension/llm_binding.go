@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/mcp_extension/logging"
 	"github.com/snyk/snyk-ls/mcp_extension/networking"
 	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
@@ -84,6 +85,11 @@ func (m *McpLLMBinding) Start(invocationContext workflow.InvocationContext) erro
 		server.WithPromptCapabilities(true),
 	)
 
+	m.logger = logging.ConfigureLogging(m.mcpServer)
+	invocationContext.GetEngine().SetLogger(m.logger)
+
+	m.folderTrust = trust.NewFolderTrust(m.logger, invocationContext.GetConfiguration())
+
 	err := m.addSnykTools(invocationContext)
 	if err != nil {
 		return err
@@ -103,7 +109,7 @@ func (m *McpLLMBinding) HandleStdioServer() error {
 	m.mutex.Lock()
 	m.started = true
 	m.mutex.Unlock()
-
+	m.logger.Info().Msg("Starting MCP Stdio server")
 	err := server.ServeStdio(m.mcpServer)
 
 	if err != nil {
@@ -127,7 +133,6 @@ func (m *McpLLMBinding) HandleSseServer() error {
 	m.sseServer = server.NewSSEServer(m.mcpServer, server.WithBaseURL(m.baseURL.String()))
 
 	endpoint := m.baseURL.String() + "/sse"
-	_, _ = fmt.Fprintf(os.Stderr, "Starting with base URL %s/sse\n", endpoint)
 
 	m.logger.Info().Str("baseURL", endpoint).Msg("starting")
 	go func() {

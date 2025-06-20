@@ -20,8 +20,6 @@ import (
 	"net/url"
 
 	"github.com/rs/zerolog"
-
-	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
 
 type Option func(server *McpLLMBinding)
@@ -30,12 +28,6 @@ func WithLogger(logger *zerolog.Logger) Option {
 	return func(server *McpLLMBinding) {
 		l := logger.With().Str("component", "mcp").Logger()
 		server.logger = &l
-	}
-}
-
-func WithFolderTrust(folderTrust *trust.FolderTrust) Option {
-	return func(server *McpLLMBinding) {
-		server.folderTrust = folderTrust
 	}
 }
 

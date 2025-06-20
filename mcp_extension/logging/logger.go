@@ -17,11 +17,16 @@
 package logging
 
 import (
+	"fmt"
+	"io"
 	"os"
+	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
+	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 )
 
 type mcpWriter struct {
@@ -30,12 +35,13 @@ type mcpWriter struct {
 	server    *server.MCPServer
 }
 
-func New() zerolog.LevelWriter {
+func New(server *server.MCPServer) zerolog.LevelWriter {
 	readyChan := make(chan bool)
 	writeChan := make(chan mcp.LoggingMessageNotification, 1000000)
 	w := &mcpWriter{
 		writeChan: writeChan,
 		readyChan: readyChan,
+		server:    server,
 	}
 	go w.startServerSenderRoutine()
 	<-w.readyChan
@@ -47,18 +53,12 @@ func (w *mcpWriter) Write(p []byte) (n int, err error) {
 }
 
 func (w *mcpWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
-	levelEnabled := level > zerolog.TraceLevel && level < zerolog.NoLevel
-	if w.server != nil && levelEnabled {
-
+	if w.server != nil {
 		w.writeChan <- mcp.NewLoggingMessageNotification(
 			mapLogLevel(level),
 			"Snyk MCP Server",
 			string(p))
 		return len(p), nil
-	}
-
-	if levelEnabled {
-		return os.Stderr.Write(p)
 	}
 
 	return 0, nil
@@ -94,4 +94,54 @@ func mapLogLevel(level zerolog.Level) (mt mcp.LoggingLevel) {
 		mt = mcp.LoggingLevelInfo
 	}
 	return mt
+}
+
+func getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
+	w := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.Out = writer
+		w.NoColor = true
+		w.TimeFormat = time.RFC3339Nano
+		w.PartsOrder = []string{
+			zerolog.TimestampFieldName,
+			zerolog.LevelFieldName,
+			"method",
+			"ext",
+			"separator",
+			zerolog.CallerFieldName,
+			zerolog.MessageFieldName,
+		}
+		w.FieldsExclude = []string{"method", "separator", "ext"}
+	})
+	return w
+}
+
+func ConfigureLogging(server *server.MCPServer) *zerolog.Logger {
+	logLevel := zerolog.InfoLevel
+
+	envLogLevel := os.Getenv("SNYK_LOG_LEVEL")
+	if envLogLevel != "" {
+		msg := fmt.Sprint("Setting log level from environment variable (SNYK_LOG_LEVEL) \"", envLogLevel, "\"")
+		_, _ = fmt.Fprintln(os.Stderr, msg)
+		if envLevel, levelErr := zerolog.ParseLevel(envLogLevel); levelErr == nil {
+			logLevel = envLevel
+		}
+	}
+
+	mcpLevelWriter := New(server) // implements zerolog.LevelWriter
+
+	var writers []io.Writer
+	writers = append(writers, mcpLevelWriter)
+
+	logPath, err := xdg.ConfigFile("Snyk/snyk-mcp.log")
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "couldn't get log path")
+	} else if logFile, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600); err == nil {
+		writers = append(writers, logFile)
+	}
+
+	scrubbingWriter := frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), make(frameworkLogging.ScrubbingDict))
+	writer := getConsoleWriter(scrubbingWriter)
+	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "snyk-mcp").Logger().Level(logLevel)
+
+	return &logger
 }
