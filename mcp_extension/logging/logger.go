@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -27,6 +28,8 @@ import (
 	"github.com/rs/zerolog"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 )
+
+const SNYK_MCP = "snyk-mcp"
 
 type mcpWriter struct {
 	writeChan chan mcp.LoggingMessageNotification
@@ -55,7 +58,7 @@ func (w *mcpWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error)
 	if w.server != nil {
 		w.writeChan <- mcp.NewLoggingMessageNotification(
 			mapLogLevel(level),
-			"snyk-mcp",
+			SNYK_MCP,
 			string(p))
 		return len(p), nil
 	}
@@ -69,7 +72,7 @@ func (w *mcpWriter) startServerSenderRoutine() {
 		// Send the notification to all clients - need to create a map to pass the params correctly
 		w.server.SendNotificationToAllClients(msg.Method, map[string]any{
 			"level":  string(msg.Params.Level),
-			"logger": "snyk-mcp",
+			"logger": SNYK_MCP,
 			"data":   msg.Params.Data,
 		})
 	}
@@ -123,21 +126,17 @@ func ConfigureLogging(server *server.MCPServer) *zerolog.Logger {
 		}
 	}
 
-	// MCP writer
-	mcpLevelWriter := New(server)
-
-	var fileWriter io.Writer
-	if logPath, err := xdg.ConfigFile("snyk/snyk-mcp.log"); err == nil {
-		if logFile, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600); err == nil {
-			fileWriter = logFile
-		}
-	}
-
-	// Combine all raw writers
 	var rawWriters []io.Writer
+
+	mcpLevelWriter := New(server)
 	rawWriters = append(rawWriters, mcpLevelWriter)
-	if fileWriter != nil {
-		rawWriters = append(rawWriters, fileWriter)
+
+	if logPath, err := xdg.ConfigFile("snyk/snyk-mcp.log"); err == nil {
+		if logFile, fileOpenErr := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600); fileOpenErr == nil {
+			rawWriters = append(rawWriters, logFile)
+		} else {
+			_, _ = fmt.Fprintf(os.Stderr, "failed to open log file %s: %s\n", logPath, fileOpenErr)
+		}
 	}
 	rawWriters = append(rawWriters, os.Stderr) // enhanced GAF logger writes to stderr
 
@@ -152,7 +151,7 @@ func ConfigureLogging(server *server.MCPServer) *zerolog.Logger {
 		Timestamp().
 		Str("separator", "-").
 		Str("method", "").
-		Str("ext", "snyk-mcp").
+		Str("ext", SNYK_MCP).
 		Logger().
 		Level(logLevel)
 
