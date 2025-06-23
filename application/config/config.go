@@ -621,11 +621,11 @@ func (c *Config) SetToken(newTokenString string) {
 
 	if c.authenticationMethod == types.OAuthAuthentication && oAuthErr == nil &&
 		c.shouldUpdateOAuth2Token(conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), newTokenString) {
-		c.logger.Info().Err(oAuthErr).Msg("put oauth2 token into GAF")
+		c.logger.Debug().Msg("put oauth2 token into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
 	} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
-		c.logger.Info().Msg("put api token or pat into GAF")
+		c.logger.Debug().Msg("put api token or pat into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString) // We use the same config key for PATs and API Tokens.
 	}

@@ -106,8 +106,9 @@ func TestPatAuthenticationProvider_GetCheckAuthenticationFunction(t *testing.T) 
 
 	// GetCheckAuthenticationFunction should return AuthenticationCheck()
 	user, err := p.GetCheckAuthenticationFunction()()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get active user:")
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "failed to get active user:")
+	}
 	assert.Equal(t, "", user, "GetCheckAuthenticationFunction()()")
 }
 
