@@ -48,7 +48,7 @@ func newPatAuthenticationProvider(config configuration.Configuration, openBrowse
 // used.
 func (p *PatAuthenticationProvider) Authenticate(_ context.Context) (string, error) {
 	p.m.RLock()
-	defer p.m.Unlock()
+	defer p.m.RUnlock()
 
 	url := p.config.GetString(configuration.WEB_APP_URL) + "/account/personal-access-tokens"
 	p.logger.Debug().Msg("PAT URL: " + url)
