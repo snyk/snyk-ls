@@ -116,9 +116,9 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateIssueViewOptions(c, settings.IssueViewOptions)
 	updateProductEnablement(c, settings)
 	updateCliConfig(c, settings)
+	updateApiEndpoints(c, settings, initialize) // Must be called before token is set, as it may trigger a logout which clears the token.
+	updateToken(settings.Token)                 // Must be called before the Authentication method is set, as the latter checks the token.
 	updateAuthenticationMethod(c, settings)
-	updateApiEndpoints(c, settings, initialize)
-	updateToken(settings.Token)
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings)
 	updateErrorReporting(c, settings)

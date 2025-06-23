@@ -86,7 +86,8 @@ func setupTestFixture(t *testing.T) *testFixture {
 	engineConfig.Set(trust.DisableTrustFlag, true)
 
 	// Create the binding
-	binding := NewMcpLLMBinding(WithCliPath(snykCliPath), WithLogger(invocationCtx.GetEnhancedLogger()), WithFolderTrust(trust.NewFolderTrust(invocationCtx.GetEnhancedLogger(), engineConfig)))
+	binding := NewMcpLLMBinding(WithCliPath(snykCliPath), WithLogger(invocationCtx.GetEnhancedLogger()))
+	binding.folderTrust = trust.NewFolderTrust(&logger, invocationCtx.GetConfiguration())
 	binding.mcpServer = server.NewMCPServer("Snyk", "1.1.1")
 	tools, err := loadMcpToolsFromJson()
 	require.NoError(t, err)

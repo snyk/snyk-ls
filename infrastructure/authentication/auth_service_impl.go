@@ -165,7 +165,7 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	}
 
 	// Otherwise, return the custom URL set by the user.
-	// Fedramp and single tenenat environments.
+	// FedRAMP and single tenant environments.
 	return customUrl
 }
 
@@ -268,7 +268,8 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
 		return false
 	}
-	// we cache the API auth ok for up to 1 minutes after last access. Afterwards, a new check is performed.
+	// We cache the API auth ok for up to 1 minute after last access. If more than a minute has passed, a new check is
+	// performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
 	logger.Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	return true
@@ -286,6 +287,8 @@ func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 		_, ok = a.authProvider.(*OAuth2Provider)
 	case a.c.AuthenticationMethod() == types.TokenAuthentication:
 		_, ok = a.authProvider.(*CliAuthenticationProvider)
+	case a.c.AuthenticationMethod() == types.PatAuthentication:
+		_, ok = a.authProvider.(*PatAuthenticationProvider)
 	case a.c.AuthenticationMethod() == types.FakeAuthentication:
 		_, fake := a.authProvider.(*FakeAuthenticationProvider)
 		_, cli := a.authProvider.(*CliAuthenticationProvider)
@@ -381,26 +384,16 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 
 	logger.Debug().Msg("configuring providers")
 
-	authProviderChange := false
 	var p AuthenticationProvider
 	switch c.AuthenticationMethod() {
 	default:
-		// if err != nil, previous token was legacy. So we had a provider change
-		_, err := c.TokenAsOAuthToken()
-		if c.NonEmptyToken() && err != nil {
-			authProviderChange = true
-		}
-
 		p = Default(c, a)
 		a.setProvider(p)
 	case types.TokenAuthentication:
-		// if err == nil, previous token was oauth2. So we had a provider change
-		_, err := c.TokenAsOAuthToken()
-		if c.NonEmptyToken() && err == nil {
-			authProviderChange = true
-		}
-
 		p = Token(c, a.errorReporter)
+		a.setProvider(p)
+	case types.PatAuthentication:
+		p = Pat(c, a)
 		a.setProvider(p)
 	case types.FakeAuthentication:
 		a.setProvider(NewFakeCliAuthenticationProvider(c))
@@ -408,7 +401,8 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 		// don't do anything
 	}
 
-	if authProviderChange {
+	// Check whether the authentication method has changed.
+	if c.NonEmptyToken() && !c.AuthenticationMethodMatchesToken() {
 		logger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
 		a.logout(context.Background())
 		a.sendAuthenticationRequest("Your authentication method has changed. Please re-authenticate to continue using Snyk.", "Re-authenticate")

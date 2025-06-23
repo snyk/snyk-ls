@@ -86,7 +86,7 @@ func mcpWorkflow(
 
 func mcpStart(invocationContext workflow.InvocationContext, cliPath string) {
 	logger := invocationContext.GetEnhancedLogger()
-	mcpServer := NewMcpLLMBinding(WithLogger(logger), WithCliPath(cliPath), WithFolderTrust(trust.NewFolderTrust(logger, invocationContext.GetConfiguration())))
+	mcpServer := NewMcpLLMBinding(WithLogger(invocationContext.GetEnhancedLogger()), WithCliPath(cliPath))
 
 	// start mcp server
 	err := mcpServer.Start(invocationContext)
