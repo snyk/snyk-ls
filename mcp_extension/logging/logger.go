@@ -17,7 +17,6 @@
 package logging
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"time"
@@ -56,7 +55,7 @@ func (w *mcpWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error)
 	if w.server != nil {
 		w.writeChan <- mcp.NewLoggingMessageNotification(
 			mapLogLevel(level),
-			"Snyk MCP Server",
+			"snyk-mcp",
 			string(p))
 		return len(p), nil
 	}
@@ -118,30 +117,44 @@ func getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 func ConfigureLogging(server *server.MCPServer) *zerolog.Logger {
 	logLevel := zerolog.InfoLevel
 
-	envLogLevel := os.Getenv("SNYK_LOG_LEVEL")
-	if envLogLevel != "" {
-		msg := fmt.Sprint("Setting log level from environment variable (SNYK_LOG_LEVEL) \"", envLogLevel, "\"")
-		_, _ = fmt.Fprintln(os.Stderr, msg)
-		if envLevel, levelErr := zerolog.ParseLevel(envLogLevel); levelErr == nil {
+	if envLogLevel := os.Getenv("SNYK_LOG_LEVEL"); envLogLevel != "" {
+		if envLevel, err := zerolog.ParseLevel(envLogLevel); err == nil {
 			logLevel = envLevel
 		}
 	}
 
-	mcpLevelWriter := New(server) // implements zerolog.LevelWriter
+	// MCP writer
+	mcpLevelWriter := New(server)
 
-	var writers []io.Writer
-	writers = append(writers, mcpLevelWriter)
-
-	logPath, err := xdg.ConfigFile("Snyk/snyk-mcp.log")
-	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "couldn't get log path")
-	} else if logFile, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600); err == nil {
-		writers = append(writers, logFile)
+	var fileWriter io.Writer
+	if logPath, err := xdg.ConfigFile("snyk/snyk-mcp.log"); err == nil {
+		if logFile, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600); err == nil {
+			fileWriter = logFile
+		}
 	}
 
-	scrubbingWriter := frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), make(frameworkLogging.ScrubbingDict))
-	writer := getConsoleWriter(scrubbingWriter)
-	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "snyk-mcp").Logger().Level(logLevel)
+	// Combine all raw writers
+	var rawWriters []io.Writer
+	rawWriters = append(rawWriters, mcpLevelWriter)
+	if fileWriter != nil {
+		rawWriters = append(rawWriters, fileWriter)
+	}
+	rawWriters = append(rawWriters, os.Stderr) // enhanced GAF logger writes to stderr
+
+	scrubbingWriter := frameworkLogging.NewScrubbingWriter(
+		zerolog.MultiLevelWriter(rawWriters...),
+		make(frameworkLogging.ScrubbingDict),
+	)
+
+	consoleWriter := getConsoleWriter(scrubbingWriter)
+
+	logger := zerolog.New(consoleWriter).With().
+		Timestamp().
+		Str("separator", "-").
+		Str("method", "").
+		Str("ext", "snyk-mcp").
+		Logger().
+		Level(logLevel)
 
 	return &logger
 }
