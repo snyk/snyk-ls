@@ -10,34 +10,10 @@
       "standardParams": [],
       "params": [
         {
-          "name": "d",
+          "name": "debug",
           "type": "boolean",
           "isRequired": false,
           "description": "Enables debug logging for the authentication process. Useful for troubleshooting connection or authentication issues."
-        }
-      ]
-    },
-    {
-      "name": "snyk_config_environment",
-      "description": "Changes the API endpoint the Snyk MCP targets, crucial for users of Snyk's regional data centers (e.g., EU, AU) or specialized environments like Snyk GovCloud. This ensures communication with the correct Snyk backend. \nWhen to use: Execute *before* `snyk auth`, as tokens and Org settings are often environment-specific. Vital for data residency, performance, and accessing correct organizational data. Automatically clears existing `api` token and `org` settings from local CLI config due to environment specificity. \nSecure SDLC Integration: A foundational setup step for any user or automated system needing to interact with a non-default Snyk instance. Ensures correct routing and data alignment from the start of development.",
-      "command": [
-        "config",
-        "environment"
-      ],
-      "ignoreTrust": true,
-      "standardParams": [],
-      "params": [
-        {
-          "name": "environment",
-          "type": "string",
-          "isRequired": true,
-          "description": "Positional argument specifying the target Snyk environment. Accepted values: predefined aliases (`default`, `SNYK-US-01`, `SNYK-US-02`, `SNYK-AU-01`, `SNYK-EU-01`, `SNYK-GOV-01`) or the full API endpoint URL (e.g., `https://api.snykgov.io`)."
-        },
-        {
-          "name": "d",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Enables debug logging for the environment configuration process. Use as `d`."
         }
       ]
     },
@@ -197,12 +173,6 @@
           "description": "Determines the conditions under which the `snyk test` command will exit with a non-zero code (indicating failure), specifically for CI/CD integration. `all`: fails if any Snyk-fixable vulnerability (upgrade or patch) exists. `upgradable`: fails if a vulnerability has a direct upgrade path. `patchable`: fails if a Snyk patch is available. Default is `all` (fails on any discoverable vulnerability meeting severity criteria)."
         },
         {
-          "name": "additional_arguments",
-          "type": "string",
-          "isRequired": false,
-          "description": "A double dash `` allows passing additional options directly to the underlying build tool (e.g., Maven, Gradle) if Snyk invokes it as part of the scan. Provide these as a single string after ``."
-        },
-        {
           "name": "maven_aggregate_project",
           "type": "boolean",
           "isRequired": false,
@@ -236,12 +206,6 @@
           "description": "For Gradle, filters Gradle configurations to scan using a REGEX."
         },
         {
-          "name": "init_script",
-          "type": "string",
-          "isRequired": false,
-          "description": "For Gradle, uses a Gradle initialization script from the specified file path."
-        },
-        {
           "name": "assets_project_name",
           "type": "boolean",
           "isRequired": false,
@@ -270,12 +234,6 @@
           "type": "boolean",
           "isRequired": false,
           "description": "Detects and scans Yarn Workspaces. Use with `all_projects` for broader monorepo scanning."
-        },
-        {
-          "name": "command",
-          "type": "string",
-          "isRequired": false,
-          "description": "For Python, specifies the Python executable (e.g., `python3`)."
         },
         {
           "name": "skip_unresolved",
@@ -480,7 +438,7 @@
           "description": "Reports only vulnerabilities that meet or exceed the specified severity level. Accepted values: `low`, `medium`, `high`. Snyk Code configuration issues do not use the `critical` severity level."
         },
         {
-          "name": "d",
+          "name": "debug",
           "type": "boolean",
           "isRequired": false,
           "description": "Enables debug logging for the SAST scan, providing more detailed output for troubleshooting. Use as `-d`."
@@ -698,19 +656,7 @@
           "description": "For multi-architecture images, specifies the platform to monitor (e.g., `linux/arm64`). Default auto-detected."
         },
         {
-          "name": "username",
-          "type": "string",
-          "isRequired": false,
-          "description": "Username for private container registries."
-        },
-        {
-          "name": "password",
-          "type": "string",
-          "isRequired": false,
-          "description": "Password for private container registries."
-        },
-        {
-          "name": "d",
+          "name": "debug",
           "type": "boolean",
           "isRequired": false,
           "description": "Outputs debug logs. Use as `-d`."
@@ -938,12 +884,6 @@
           "description": "Saves SBOM output to specified file path, *only* if chosen `format` includes `+json` (e.g., `cyclonedx1.6+json`). Standard output still occurs. Mutually exclusive with formats not ending in `+json`."
         },
         {
-          "name": "additional_arguments",
-          "type": "string",
-          "isRequired": false,
-          "description": "A double dash `` passes additional options directly to the underlying build tool (e.g., Gradle, Maven)."
-        },
-        {
           "name": "maven_aggregate_project",
           "type": "boolean",
           "isRequired": false,
@@ -1020,7 +960,7 @@
           "description": "Optional. Interpreted as 'exclude application dependencies for SBOM'. If added, generated SBOM contains only OS dependencies, excluding app dependencies within image. Default is to include app dependencies."
         },
         {
-          "name": "d",
+          "name": "debug",
           "type": "boolean",
           "isRequired": false,
           "description": "Outputs debug logs for troubleshooting. Alias `debug`. Use as `-d`."
@@ -1059,7 +999,7 @@
           "description": "Filters results to report only vulnerabilities at or above specified severity (`low`, `medium`, `high`, `critical`). Verify applicability with `snyk sbom test help`. Default reports all."
         },
         {
-          "name": "d",
+          "name": "debug",
           "type": "boolean",
           "isRequired": false,
           "description": "Outputs debug logs for troubleshooting. Alias `debug`. Use as `-d`."
@@ -1068,7 +1008,7 @@
     },
     {
       "name": "snyk_policy",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Displays the contents of the `.snyk` policy file associated with a package or project, providing visibility into active ignore rules, patches, and other configurations. \nWhen to use: For developers to check current policies, understand ignores, or verify `.snyk` file structure. For security teams to audit project policies. For troubleshooting Snyk MCP's policy file interpretation. \nHow to use: Display `.snyk` in dir: <snyk_policy> `path`=`/a/my-project`. Display specific policy file: `<snyk_policy> `path`=`/a/my-project/a/b/c/.custom-snyk`. \nSecure SDLC Integration: Policy Review/Auditing: Allows developers and security teams to inspect the 'policy as code' applied to a project at any SDLC stage.",
+      "description": "Displays the contents of the `.snyk` policy file associated with a package or project, providing visibility into active ignore rules, patches, and other configurations. \nWhen to use: For developers to check current policies, understand ignores, or verify `.snyk` file structure. For security teams to audit project policies. For troubleshooting Snyk MCP's policy file interpretation. \nHow to use: Display `.snyk` in dir: <snyk_policy> `path`=`/a/my-project`. Display specific policy file: `<snyk_policy> `path`=`/a/my-project/a/b/c/.custom-snyk`. \nSecure SDLC Integration: Policy Review/Auditing: Allows developers and security teams to inspect the 'policy as code' applied to a project at any SDLC stage.",
       "command": [
         "policy"
       ],
@@ -1079,11 +1019,11 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *ABSOLUTE PATH* to a directory. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`.",
+          "description": "Positional argument for the *ABSOLUTE PATH* to the policy .snyk file. The path MUST be absolute and have the correct path separator.",
           "isPositional": true
         },
         {
-          "name": "d",
+          "name": "debug",
           "type": "boolean",
           "isRequired": false,
           "description": "Enables debug logging, providing info on policy file location and processing. Use as `-d`."
@@ -1092,7 +1032,7 @@
     },
     {
       "name": "snyk_ignore",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Modifies the project's `.snyk` policy file to ignore specific issues (vulnerabilities, license issues via `id`) or to exclude files/directories from analysis (primarily for Snyk Code and Open Source `unmanaged` scans via `file_path`). \nWhen to use: For risk acceptance (documenting why a vulnerability is acceptable). For Snyk Code scope management (excluding test/generated code). \nHow it modifies `.snyk`: Adds/updates entries in `ignore:` block (for ID-based ignores) or `exclude:` block (for file exclusions). \nHow to use: Ignore npm vuln with expiry/reason: `<snyk_ignore> `id`=`'npm:tough-cookie:20160722'` `expiry`=`'2024-12-31'` `reason`=`'Not exploitable'`. Ignore by path: <snyk_ignore> `id`=`'SNYK-JS-LIB-XXX'` `vulnerable_path`=`'app>pkg>lib'`. Exclude test files from Snyk Code: <snyk_ignore> `file_path`=`'./**/test/**'` `file_path-group`=`'code'`. Ignore IaC misconfig: <snyk_ignore> `id`=`SNYK-CC-TF-118` `path`=`\"resource > type > name\"`. \nSecure SDLC Integration: Vulnerability Management/Triage: Allows teams to formally document and manage accepted risks or refine scan scope as 'policy as code' within the `.snyk` file, which is version controlled with the project.",
+      "description": "Modifies the project's `.snyk` policy file to ignore specific issues (vulnerabilities, license issues via `id`) or to exclude files/directories from analysis (primarily for Snyk Code and Open Source `unmanaged` scans via `file_path`). \nWhen to use: For risk acceptance (documenting why a vulnerability is acceptable). For Snyk Code scope management (excluding test/generated code). \nHow it modifies `.snyk`: Adds/updates entries in `ignore:` block (for ID-based ignores) or `exclude:` block (for file exclusions). \nHow to use: Ignore npm vuln with expiry/reason: `<snyk_ignore> `id`=`'npm:tough-cookie:20160722'` `expiry`=`'2024-12-31'` `reason`=`'Not exploitable'`. Ignore by path: <snyk_ignore> `id`=`'SNYK-JS-LIB-XXX'` `vulnerable_path`=`'app>pkg>lib'`. Exclude test files from Snyk Code: <snyk_ignore> `file_path`=`'./**/test/**'` `file_path-group`=`'code'`. Ignore IaC misconfig: <snyk_ignore> `id`=`SNYK-CC-TF-118` `path`=`\"resource > type > name\"`. \nSecure SDLC Integration: Vulnerability Management/Triage: Allows teams to formally document and manage accepted risks or refine scan scope as 'policy as code' within the `.snyk` file, which is version controlled with the project.",
       "command": [
         "ignore"
       ],
@@ -1103,7 +1043,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
-          "description": "Positional argument for the *ABSOLUTE PATH* to a directory. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`.",
+          "description": "Positional argument for the *ABSOLUTE PATH* to the policy .snyk file. The path MUST be absolute and have the correct path separator.",
           "isPositional": true
         },
         {
@@ -1149,7 +1089,7 @@
           "description": "With `file_path`, groups exclusion rule under a category in `.snyk` exclude block. Accepted values: `global`, `code`, `iac-drift`."
         },
         {
-          "name": "d",
+          "name": "debug",
           "type": "boolean",
           "isRequired": false,
           "description": "Enables debug logging for the ignore operation. Use as `-d`."
@@ -1170,11 +1110,10 @@
       "name": "snyk_auth_status",
       "description": "Checks and displays the current Snyk authentication status, including the API token endpoint and the user you are authenticated as. Uses the experimental `whoami` command. \nWhen to use: To verify if the CLI is properly authenticated and to which user/organization context it is linked, especially helpful in troubleshooting or multi-account scenarios. \nHow to use: <snyk_auth_status>. \nSecure SDLC Integration: Setup/Troubleshooting: Useful during initial setup or when debugging CLI interactions to ensure commands are executed with the correct identity and permissions.",
       "command": [
-        "whoami",
-        "experimental"
+        "whoami"
       ],
       "ignoreTrust": true,
-      "standardParams": [],
+      "standardParams": ["experimental"],
       "params": []
     },
     {
@@ -1201,12 +1140,12 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
+          "isPositional": true,
           "description": "Positional argument for the *ABSOLUTE PATH* to the directory to be scanned. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`."
         },
         {
           "name": "json_file_output",
           "type": "string",
-          "isRequired": false,
           "description": "Saves the AIBOM output as a JSON data structure to the specified file path. The target directory must exist and be writable."
         }
       ]
