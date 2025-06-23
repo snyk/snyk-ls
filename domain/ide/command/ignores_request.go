@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -222,6 +223,9 @@ func GetCommandArgs(cmd *submitIgnoreRequest) (ignoreType string, reason string,
 	expiration, err = getStringArgument(cmd, expirationIndex, "expiration")
 	if err != nil {
 		return "", "", "", err
+	}
+	if expiration == "" {
+		expiration = local_models.DefaultSuppressionExpiration
 	}
 
 	return ignoreType, reason, expiration, nil
