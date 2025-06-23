@@ -19,7 +19,6 @@ package authentication
 import (
 	"context"
 	"encoding/json"
-	"github.com/snyk/snyk-ls/internal/types"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -31,6 +30,7 @@ import (
 
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_NewOAuthProvider_registersStorageCallback(t *testing.T) {
