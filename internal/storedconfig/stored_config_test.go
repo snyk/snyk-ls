@@ -23,8 +23,10 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storage"
@@ -136,10 +138,11 @@ func Test_mergeFolderConfigs(t *testing.T) {
 			PreScanCommand: "/cmd2",
 		}
 
+		freshLocalBranchesFromGit := []string{"new-branch"}
 		first := &types.FolderConfig{
 			FolderPath:           "/path1",
 			AdditionalParameters: []string{"--param1=value1"},
-			LocalBranches:        nil,
+			LocalBranches:        freshLocalBranchesFromGit,
 			BaseBranch:           "",
 			ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
 				product.ProductOpenSource: scanCommandConfig1,
@@ -150,7 +153,7 @@ func Test_mergeFolderConfigs(t *testing.T) {
 		second := &types.FolderConfig{
 			FolderPath:           "/path1",
 			AdditionalParameters: []string{"--param2=value2"},
-			LocalBranches:        []string{"branch2"},
+			LocalBranches:        []string{"old-branch"},
 			BaseBranch:           "develop",
 			ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
 				product.ProductOpenSource: scanCommandConfig2,
@@ -161,18 +164,19 @@ func Test_mergeFolderConfigs(t *testing.T) {
 		result := mergeFolderConfigs(first, second)
 
 		// Check that it's still the first object (modified)
-		require.Equal(t, first, result)
+		assert.Equal(t, first, result)
 
 		// Check additional parameters are merged
-		require.Equal(t, 2, len(result.AdditionalParameters))
-		require.Contains(t, result.AdditionalParameters, "--param1=value1")
-		require.Contains(t, result.AdditionalParameters, "--param2=value2")
+		assert.Equal(t, 2, len(result.AdditionalParameters))
+		assert.Contains(t, result.AdditionalParameters, "--param1=value1")
+		assert.Contains(t, result.AdditionalParameters, "--param2=value2")
 
+		// Check that local branches are kept from the Git folder config.
+		assert.Equal(t, freshLocalBranchesFromGit, result.LocalBranches)
 		// Check other fields are taken from second
-		require.Equal(t, second.LocalBranches, result.LocalBranches)
-		require.Equal(t, second.BaseBranch, result.BaseBranch)
-		require.Equal(t, second.ScanCommandConfig, result.ScanCommandConfig)
-		require.Equal(t, second.ReferenceFolderPath, result.ReferenceFolderPath)
+		assert.Equal(t, second.BaseBranch, result.BaseBranch)
+		assert.Equal(t, second.ScanCommandConfig, result.ScanCommandConfig)
+		assert.Equal(t, second.ReferenceFolderPath, result.ReferenceFolderPath)
 	})
 	t.Run("parameter deduplication", func(t *testing.T) {
 		first := &types.FolderConfig{
