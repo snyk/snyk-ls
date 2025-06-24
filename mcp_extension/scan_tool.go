@@ -20,6 +20,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 
@@ -77,6 +78,7 @@ func loadMcpToolsFromJson() (*SnykMcpTools, error) {
 
 func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) error {
 	config, err := loadMcpToolsFromJson()
+
 	if err != nil || config == nil {
 		m.logger.Err(err).Msg("Failed to load Snyk tools configuration")
 		return err
@@ -117,14 +119,22 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	logger.Debug().Strs("args", command.Args).Str("workingDir", command.Dir).Msg("Running Command with")
 	logger.Trace().Strs("env", command.Env).Msg("Environment")
 
-	command.Stderr = invocationCtx.GetEnhancedLogger()
+	command.Stderr = logger
 	res, err := command.Output()
 	resAsString := string(res)
 
 	logger.Debug().Str("result", resAsString).Msg("Command run result")
 
 	if err != nil {
-		m.logger.Err(err).Msg("Received error running command")
+		var errorType *exec.ExitError
+		if errors.As(err, &errorType) {
+			if errorType.ExitCode() > 1 {
+				// Exit code > 1 means CLI run didn't work
+				logger.Err(err).Msg("Received error running command")
+			}
+		} else {
+			logger.Err(err).Msg("Received error running command")
+		}
 	}
 	return resAsString, nil
 }

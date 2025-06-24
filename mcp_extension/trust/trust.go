@@ -105,13 +105,22 @@ func (t *FolderTrust) TrustedFolders() []string {
 }
 
 func (t *FolderTrust) trustedFolders() []string {
-	rawRes := t.config.Get(TrustedFoldersConfigKey)
-	trustedFolders, ok := rawRes.([]string)
-	if !ok {
-		t.logger.Error().Msg("incorrect type stored for trusted folders")
+	result := t.config.Get(TrustedFoldersConfigKey)
+	switch v := result.(type) {
+	case []string:
+		return v
+	case []interface{}:
+		// TODO: Viper isn't giving back a string slice but []interface{}. Analyze this and if applicable fix in GAF.
+		var trustedFolders []string
+		for _, item := range v {
+			if folderPath, ok := item.(string); ok {
+				trustedFolders = append(trustedFolders, folderPath)
+			}
+		}
+		return trustedFolders
+	default:
 		return []string{}
 	}
-	return trustedFolders
 }
 
 func (t *FolderTrust) AddTrustedFolder(folder string) {
@@ -233,6 +242,7 @@ func (t *FolderTrust) addHttpHandlers(logger zerolog.Logger, mux *http.ServeMux,
 		}
 		logger.Info().Str("path", folderPath).Msg("User chose not to trust folder")
 		logger.Info().Msg("Operation canceled by user.")
+		http.Error(w, "user canceled trust operation", http.StatusBadRequest)
 		errorChan <- fmt.Errorf("user canceled trust operation for path: %s", folderPath)
 	})
 }
