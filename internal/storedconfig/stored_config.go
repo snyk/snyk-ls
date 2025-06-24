@@ -38,7 +38,7 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePa
 	}
 
 	localBranches, err := getLocalBranches(repository)
-	if err != nil || len(localBranches) == 0 {
+	if err != nil {
 		return nil, err
 	}
 
