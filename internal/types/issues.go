@@ -56,12 +56,10 @@ type IssueType int8
 // To maintain backwards compatibility, avoid changing enum numbers
 const (
 	PackageHealth IssueType = iota
-	_                       // Deprecated was CodeQualityIssue
 	CodeSecurityVulnerability
 	LicenseIssue
 	DependencyVulnerability
 	InfrastructureIssue
-	_ // Deprecated was ContainerVulnerability
 )
 
 type CodeAction interface {
