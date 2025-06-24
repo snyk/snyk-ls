@@ -20,6 +20,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 
@@ -125,7 +126,15 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	logger.Debug().Str("result", resAsString).Msg("Command run result")
 
 	if err != nil {
-		logger.Err(err).Msg("Received error running command")
+		var errorType *exec.ExitError
+		if errors.As(err, &errorType) {
+			if errorType.ExitCode() > 1 {
+				// Exit code > 1 means CLI run didn't work
+				logger.Err(err).Msg("Received error running command")
+			}
+		} else {
+			logger.Err(err).Msg("Received error running command")
+		}
 	}
 	return resAsString, nil
 }

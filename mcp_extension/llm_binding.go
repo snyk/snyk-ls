@@ -143,7 +143,7 @@ func (m *McpLLMBinding) HandleSseServer() error {
 		}
 
 		m.mutex.Lock()
-		m.logger.Info().Str("baseURL", m.baseURL.String()).Msg("started")
+		m.logger.Info().Str("baseURL", endpoint).Msg("started")
 		m.started = true
 		m.mutex.Unlock()
 	}()
