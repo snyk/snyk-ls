@@ -371,8 +371,6 @@ Right now the language server supports the following actions:
 - `Code Fix Diffs` allows to retrieve the diffs for autofix suggestions
   - command: `snyk.code.fixDiffs`
   - args:
-    - folderURI string
-    - fileURI string
     - issueID string (UUID)
   - returns an array of suggestions:
   ```json5
