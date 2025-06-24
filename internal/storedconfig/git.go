@@ -79,26 +79,25 @@ func getAdditionalParams(folderSection *config.Subsection) string {
 	return ""
 }
 
-func getConfigSection(path types.FilePath) (*git.Repository, *config2.Config, *config.Config, *config.Subsection, error) {
+func getRepository(path types.FilePath) (*git.Repository, error) {
 	mutex.Lock()
 	// if DeleteEmptySnykSubsection fails, ignore error and attempt to reload config again
 	_ = DeleteEmptySnykSubsection(path)
 	mutex.Unlock()
-	repository, err := git.PlainOpen(string(path))
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
+	return git.PlainOpen(string(path))
+}
 
+func getConfigSection(path types.FilePath, repository *git.Repository) (*config2.Config, *config.Config, *config.Subsection, error) {
 	repoConfig, err := repository.Config()
 
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	raw := repoConfig.Raw
 	section := raw.Section(mainSection)
 	folderSection := section.Subsection(string(path))
-	return repository, repoConfig, raw, folderSection, nil
+	return repoConfig, raw, folderSection, nil
 }
 
 func getLocalBranches(repository *git.Repository) ([]string, error) {
@@ -115,24 +114,6 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 		return nil, err
 	}
 	return localBranches, nil
-}
-
-func SetOption(logger *zerolog.Logger, folderPath types.FilePath, key string, value string) {
-	// Don't set the config option if folder path or value is empty.
-	// Setting empty options causes go-git to fail fetching config sections.
-	if len(folderPath) == 0 || len(value) == 0 {
-		return
-	}
-	repo, repoConfig, _, subsection, err := getConfigSection(folderPath)
-	if err != nil {
-		logger.Error().Err(err).Msg("could not get git config for folder " + string(folderPath))
-		return
-	}
-	subsection.SetOption(key, value)
-	err = repo.Storer.SetConfig(repoConfig)
-	if err != nil {
-		logger.Error().Err(err).Msgf("could not store %s=%s configuration for folder %s", key, value, folderPath)
-	}
 }
 
 func GitFolderPath(folderPath types.FilePath) (string, error) {
@@ -197,20 +178,14 @@ func DeleteGitConfigSnykSubsection(path types.FilePath, subsection types.FilePat
 	return nil
 }
 
-func getFromGit(path types.FilePath) (*types.FolderConfig, error) {
-	repository, repoConfig, _, folderSection, err := getConfigSection(path)
+func getFromGitConfig(path types.FilePath, repository *git.Repository, localBranches []string) (*types.FolderConfig, error) {
+	repoConfig, _, folderSection, err := getConfigSection(path, repository)
 	if err != nil {
 		return nil, nil
 	}
 
-	localBranches, err := getLocalBranches(repository)
-	if err != nil || len(localBranches) == 0 {
-		return nil, err
-	}
-
 	folderConfig := types.FolderConfig{
-		FolderPath:    path,
-		LocalBranches: localBranches,
+		FolderPath: path,
 	}
 
 	baseBranch, err := getBaseBranch(repoConfig, folderSection, localBranches)

@@ -32,7 +32,17 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePa
 		return nil, err
 	}
 
-	gitFolderConfig, err := getFromGit(path)
+	repository, err := getRepository(path)
+	if err != nil {
+		return nil, err
+	}
+
+	localBranches, err := getLocalBranches(repository)
+	if err != nil || len(localBranches) == 0 {
+		return nil, err
+	}
+
+	gitFolderConfig, err := getFromGitConfig(path, repository, localBranches)
 	if err != nil {
 		return folderConfig, nil
 	}
@@ -41,6 +51,9 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePa
 		// the previous git configuration takes precedence
 		folderConfig = mergeFolderConfigs(gitFolderConfig, folderConfig)
 	}
+
+	// Always use the local branches reported by Git.
+	folderConfig.LocalBranches = localBranches
 
 	err = UpdateFolderConfig(conf, folderConfig, logger)
 	if err != nil {
