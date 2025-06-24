@@ -2,7 +2,7 @@
   "tools": [
     {
       "name": "snyk_auth",
-      "description": "Authenticate the user with Snyk. When to use\n When a snyk tool reports that the user is not authenticated. Or when you want to authenticate with Snyk.",
+      "description": "Authenticate the user with Snyk. When to use\n When a snyk tool reports that the user is not authenticated or when authentication is required.",
       "command": [
         "auth"
       ],
@@ -19,7 +19,7 @@
     },
     {
       "name": "snyk_sca_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed and build tools accessible in PATH for accurate dependency resolution. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed for accurate dependency resolution. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
       "command": [
         "test"
       ],
@@ -245,7 +245,7 @@
     },
     {
       "name": "snyk_monitor",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Takes a snapshot of a project's open-source dependencies and sends this to the Snyk platform (snyk.io). This creates a project in the Snyk UI for continuous monitoring against newly disclosed vulnerabilities and license issues. It does not monitor Snyk Code (SAST) issues; those are typically monitored via SCM integration. \nWhen to use: Typically used before a project is integrated into a production environment or as a baseline for a significant release. If dependencies change significantly,the tool must be re-run to update the snapshot. \nDifference from `snyk_sca_scan`: `snyk_sca_scan` provides immediate, one-time feedback for active development and CI. `snyk_monitor` establishes long-term, ongoing surveillance of a specific project snapshot, alerting to new vulnerabilities discovered in existing dependencies *after* the snapshot. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Takes a snapshot of a project's open-source dependencies and sends this to the Snyk platform (snyk.io). This creates a project in the Snyk UI for continuous monitoring against newly disclosed vulnerabilities and license issues. It does not monitor Snyk Code (SAST) issues; those are typically monitored via SCM integration. \nWhen to use: Typically used before a project is integrated into a production environment or as a baseline for a significant release. If dependencies change significantly, the tool must be re-run to update the snapshot. \nDifference from `snyk_sca_scan`: `snyk_sca_scan` provides immediate, one-time feedback for active development and CI. `snyk_monitor` establishes long-term, ongoing surveillance of a specific project snapshot, alerting to new vulnerabilities discovered in existing dependencies *after* the snapshot. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
       "command": [
         "monitor"
       ],
