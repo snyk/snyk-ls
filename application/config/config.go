@@ -376,6 +376,7 @@ func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
 func (c *Config) NonEmptyToken() bool {
 	return c.token != ""
 }
+
 func (c *Config) CliSettings() *CliSettings {
 	return c.cliSettings
 }

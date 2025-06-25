@@ -19,6 +19,7 @@ package authentication
 import (
 	"context"
 	"errors"
+	"github.com/snyk/snyk-ls/internal/types"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -82,4 +83,8 @@ func (p *OAuth2Provider) Authenticator() auth.Authenticator {
 	p.m.Lock()
 	defer p.m.Unlock()
 	return p.authenticator
+}
+
+func (p *OAuth2Provider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.OAuthAuthentication
 }

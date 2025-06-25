@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/snyk/snyk-ls/internal/types"
 	"io"
 	"os"
 	"os/exec"
@@ -216,4 +217,8 @@ func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, cmd *exec.Cmd
 	}
 
 	return err
+}
+
+func (a *CliAuthenticationProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.TokenAuthentication
 }

@@ -46,6 +46,7 @@ import (
 
 const ExpirationMsg = "Your authentication failed due to token expiration. Please re-authenticate to continue using Snyk."
 const InvalidCredsMessage = "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
+const MethodChangedMessage = "Your authentication method has changed. Please re-authenticate to continue using Snyk."
 
 type AuthenticationServiceImpl struct {
 	authProvider  AuthenticationProvider
@@ -384,34 +385,45 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 
 	logger.Debug().Msg("configuring providers")
 
-	var p AuthenticationProvider
-	switch c.AuthenticationMethod() {
-	default:
-		p = Default(c, a)
-		a.setProvider(p)
-	case types.TokenAuthentication:
-		p = Token(c, a.errorReporter)
-		a.setProvider(p)
-	case types.PatAuthentication:
-		p = Pat(c, a)
-		a.setProvider(p)
-	case types.FakeAuthentication:
-		a.setProvider(NewFakeCliAuthenticationProvider(c))
-	case "":
-		// don't do anything
+	authMethodChanged := false
+	if a.provider() == nil || a.provider().AuthenticationMethod() != c.AuthenticationMethod() {
+		authMethodChanged = true
 	}
 
-	// Check whether the authentication method has changed.
+	if authMethodChanged {
+		var p AuthenticationProvider
+		switch c.AuthenticationMethod() {
+		default:
+			p = Default(c, a)
+			a.setProvider(p)
+		case types.TokenAuthentication:
+			p = Token(c, a.errorReporter)
+			a.setProvider(p)
+		case types.PatAuthentication:
+			p = Pat(c, a)
+			a.setProvider(p)
+		case types.FakeAuthentication:
+			a.setProvider(NewFakeCliAuthenticationProvider(c))
+		case "":
+			// don't do anything
+		}
+	}
+
+	// Check whether we have a valid token for the current auth method
 	if c.NonEmptyToken() && !c.AuthenticationMethodMatchesToken() {
-		logger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
 		a.logout(context.Background())
-		a.sendAuthenticationRequest("Your authentication method has changed. Please re-authenticate to continue using Snyk.", "Re-authenticate")
+		if authMethodChanged {
+			logger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
+			a.sendAuthenticationRequest(MethodChangedMessage, "Re-authenticate")
+		} else {
+			logger.Info().Msg("detected token change which is incompatible with auth provider.")
+			a.handleInvalidCredentials()
+		}
 	}
 }
 
 func (a *AuthenticationServiceImpl) handleInvalidCredentials() {
-	msg := InvalidCredsMessage
-	a.sendAuthenticationRequest(msg, "Authenticate")
+	a.sendAuthenticationRequest(InvalidCredsMessage, "Authenticate")
 }
 
 func (a *AuthenticationServiceImpl) sendAuthenticationRequest(msg string, actionName string) {
