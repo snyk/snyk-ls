@@ -18,13 +18,14 @@ package authentication
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/internal/types"
 	"sync"
 
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type PatAuthenticationProvider struct {

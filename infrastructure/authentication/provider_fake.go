@@ -19,9 +19,9 @@ package authentication
 import (
 	"context"
 	"errors"
-	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type FakeAuthenticationProvider struct {
