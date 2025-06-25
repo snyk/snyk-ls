@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/snyk/snyk-ls/internal/types"
 	"net/http"
 	url2 "net/url"
 	"sync"
@@ -34,6 +33,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	config2 "github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var defaultExpiry = time.Now().Add(2 * time.Second)

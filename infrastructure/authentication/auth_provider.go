@@ -19,6 +19,7 @@ package authentication
 import (
 	"context"
 	"errors"
+
 	"github.com/snyk/snyk-ls/internal/types"
 )
 

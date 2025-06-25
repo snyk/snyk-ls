@@ -18,12 +18,12 @@ package authentication
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/internal/types"
 	"os/exec"
 	"testing"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/stretchr/testify/assert"
 )

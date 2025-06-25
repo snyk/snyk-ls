@@ -18,7 +18,6 @@ package authentication
 
 import (
 	"context"
-	"github.com/snyk/snyk-ls/internal/types"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -27,6 +26,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestPatAuthenticationProvider_AuthenticationMethod(t *testing.T) {

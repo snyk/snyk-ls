@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/snyk/snyk-ls/internal/types"
 	"io"
 	"os"
 	"os/exec"
@@ -31,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type CliAuthenticationProvider struct {
