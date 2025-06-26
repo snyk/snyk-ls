@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	errorreporting "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -86,8 +85,10 @@ func TestSnykLearnServicePact(t *testing.T) { //nolint:gocognit // this is a tes
 			c := config.CurrentConfig()
 			c.UpdateApiEndpoints(fmt.Sprintf("http://%s", hostWithPort()))
 			httpClientFunc := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient
+			gafConfig := c.Engine().GetConfiguration()
+			logger := c.Logger()
 
-			cut := New(c, httpClientFunc, errorreporting.NewTestErrorReporter()).(*serviceImpl)
+			cut := New(gafConfig, logger, httpClientFunc).(*serviceImpl)
 
 			_, err = cut.GetAllLessons()
 

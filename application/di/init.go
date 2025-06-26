@@ -118,6 +118,7 @@ func initInfrastructure(c *config.Config) {
 	}
 
 	engine := c.Engine()
+	gafConfiguration := engine.GetConfiguration()
 	// init NetworkAccess
 	networkAccess := engine.GetNetworkAccess()
 	authorizedClient := networkAccess.GetHttpClient
@@ -126,11 +127,10 @@ func initInfrastructure(c *config.Config) {
 	notifier = domainNotify.NewNotifier()
 	errorReporter = sentry.NewSentryErrorReporter(c, notifier)
 	installer = install.NewInstaller(errorReporter, unauthorizedHttpClient)
-	learnService = learn.New(c, unauthorizedHttpClient, errorReporter)
+	learnService = learn.New(gafConfiguration, c.Logger(), unauthorizedHttpClient)
 	instrumentor = performance2.NewInstrumentor()
 	snykApiClient = snyk_api.NewSnykApiClient(c, authorizedClient)
-	gafConfiguration := c.Engine().GetConfiguration()
-	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
+	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), gafConfiguration)
 	scanStateChangeEmitter = scanstates.NewSummaryEmitter(c, notifier)
 	scanStateAggregator = scanstates.NewScanStateAggregator(c, scanStateChangeEmitter)
 	// we initialize the service without providers, as we want to wait for initialization to send the auth method
