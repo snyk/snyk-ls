@@ -156,3 +156,22 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	err := delegatingScanner.executePreScanCommand(context.Background(), c, p, folderConfig, workDir, false)
 	require.NoError(t, err)
 }
+
+func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	dcs := &DelegatingConcurrentScanner{
+		c: c,
+	}
+
+	folderConfig := &types.FolderConfig{
+		ReferenceFolderPath: "",
+		BaseBranch:          "",
+	}
+
+	// Act
+	_, err := dcs.getPersistHash(folderConfig)
+
+	// Assert
+	assert.ErrorIs(t, err, ErrMissingDeltaReference)
+}
