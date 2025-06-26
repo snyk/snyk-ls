@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	config2 "github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var defaultExpiry = time.Now().Add(2 * time.Second)
@@ -123,6 +124,11 @@ func (f *fakeOauthAuthenticator) AddAuthenticationHeader(_ *http.Request) error 
 func (f *fakeOauthAuthenticator) IsSupported() bool {
 	f.addCall(nil, "IsSupported")
 	return f.isSupported
+}
+
+func TestOAuth2Provider_AuthenticationMethod(t *testing.T) {
+	p := &OAuth2Provider{}
+	assert.Equal(t, types.OAuthAuthentication, p.AuthenticationMethod())
 }
 
 func TestAuthenticateUsesAuthenticator(t *testing.T) {

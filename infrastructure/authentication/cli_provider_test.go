@@ -23,9 +23,15 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestCliAuthenticationProvider_AuthenticationMethod(t *testing.T) {
+	p := &CliAuthenticationProvider{}
+	assert.Equal(t, types.TokenAuthentication, p.AuthenticationMethod())
+}
 
 func assertCmd(t *testing.T, expectedArgs []string, actualCmd *exec.Cmd) {
 	t.Helper()

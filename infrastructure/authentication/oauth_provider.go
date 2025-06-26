@@ -25,6 +25,8 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type OAuth2Provider struct {
@@ -82,4 +84,8 @@ func (p *OAuth2Provider) Authenticator() auth.Authenticator {
 	p.m.Lock()
 	defer p.m.Unlock()
 	return p.authenticator
+}
+
+func (p *OAuth2Provider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.OAuthAuthentication
 }

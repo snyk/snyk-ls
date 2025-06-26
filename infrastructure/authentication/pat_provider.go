@@ -24,6 +24,8 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type PatAuthenticationProvider struct {
@@ -75,4 +77,8 @@ func (p *PatAuthenticationProvider) ClearAuthentication(_ context.Context) error
 func (p *PatAuthenticationProvider) AuthURL(_ context.Context) string {
 	// no lock should be used here, as this is usually called during authentication flow, which write-locks the mutex
 	return p.authURL
+}
+
+func (p *PatAuthenticationProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.PatAuthentication
 }
