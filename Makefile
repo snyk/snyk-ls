@@ -37,7 +37,7 @@ TIMEOUT := "-timeout=45m"
 
 ## tools: Install required tooling.
 .PHONY: tools
-tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
+tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact $(TOOLS_BIN)/mockgen
 	@echo "Please make sure to install NPM locally to be able to run analytics verification Ampli."
 
 $(TOOLS_BIN)/go-licenses:
@@ -49,6 +49,10 @@ $(TOOLS_BIN)/golangci-lint:
 
 $(TOOLS_BIN)/pact/bin/pact:
 	cd $(TOOLS_BIN); curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/v$(PACT_V)/install.sh | PACT_CLI_VERSION=v$(PACT_V) bash
+
+$(TOOLS_BIN)/mockgen:
+	@echo "==> Installing mockgen"
+	@GOBIN=$(TOOLS_BIN) go install github.com/golang/mock/mockgen@v1.6.0
 
 ## clean: Delete the build directory
 .PHONY: clean
@@ -95,6 +99,12 @@ instance-test:
 	@echo "==> Running instance tests"
 	@export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
 	@curl -sSL https://static.snyk.io/eclipse/stable/p2.index
+
+## generate: Regenerate generated files (e.g. mocks).
+.PHONY: generate
+generate: tools
+	@echo "==> Generating generated files..."
+	@go generate ./...
 
 ## build: Build binary for default local system's OS and architecture.
 .PHONY: build

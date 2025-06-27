@@ -24,19 +24,17 @@ import (
 	"time"
 
 	"github.com/erni27/imcache"
-	"github.com/pingcap/errors"
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
-
-	"github.com/snyk/snyk-ls/application/config"
 )
 
+//go:generate $GOPATH/bin/mockgen -source=service.go -destination=mock_learn/service_mock.go -package=mock_learn -self_package=github.com/snyk/snyk-ls/infrastructure/learn
+
 type Service interface {
-	LearnEndpoint(conf *config.Config) (learnEndpoint string, err error)
+	LearnEndpoint() (learnEndpoint string, err error)
 	GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType types.IssueType) (lesson *Lesson, err error)
 	GetAllLessons() (lessons []Lesson, err error)
 	MaintainCache() func()
@@ -111,16 +109,14 @@ type serviceImpl struct {
 	logger                  zerolog.Logger
 	lessonsByRuleCache      *imcache.Cache[string, []Lesson]
 	lessonsByEcosystemCache *imcache.Cache[string, []Lesson]
-	conf                    *config.Config
+	conf                    configuration.Configuration
 	httpClient              func() *http.Client
-	er                      error_reporting.ErrorReporter
 }
 
-func New(c *config.Config, httpClientFunc func() *http.Client, er error_reporting.ErrorReporter) Service {
+func New(conf configuration.Configuration, logger *zerolog.Logger, httpClientFunc func() *http.Client) Service {
 	s := &serviceImpl{
-		logger:     c.Logger().With().Str("service", "learn").Logger(),
-		conf:       c,
-		er:         er,
+		logger:     logger.With().Str("service", "learn").Logger(),
+		conf:       conf,
 		httpClient: httpClientFunc,
 		lessonsByRuleCache: imcache.New[string, []Lesson](
 			imcache.WithDefaultExpirationOption[string, []Lesson](cacheExpiry),
@@ -138,7 +134,7 @@ func (s *serviceImpl) MaintainCache() func() {
 			if s.lessonsByEcosystemCache.Len() == 0 {
 				_, err := s.GetAllLessons()
 				if err != nil {
-					s.er.CaptureError(errors.WithMessage(err, "Error updating lessons cache"))
+					s.logger.Error().Err(err).Msg("error updating lessons cache")
 					return
 				}
 				time.Sleep(cacheExpiry - 30*time.Second)
@@ -150,7 +146,7 @@ func (s *serviceImpl) MaintainCache() func() {
 
 func (s *serviceImpl) GetAllLessons() (lessons []Lesson, err error) {
 	logger := s.logger.With().Str("method", "GetAllLessons").Logger()
-	learnEndpoint, err := s.LearnEndpoint(s.conf)
+	learnEndpoint, err := s.LearnEndpoint()
 	if err != nil {
 		return lessons, err
 	}
@@ -333,9 +329,9 @@ func (s *serviceImpl) lessonsLookupParams(
 	return params
 }
 
-func (s *serviceImpl) LearnEndpoint(conf *config.Config) (learnEndpoint string, err error) {
+func (s *serviceImpl) LearnEndpoint() (learnEndpoint string, err error) {
 	logger := s.logger.With().Str("method", "LearnEndpoint").Logger()
-	apiUrl := conf.Engine().GetConfiguration().GetString(configuration.API_URL)
+	apiUrl := s.conf.GetString(configuration.API_URL)
 	endpoint, err := url.Parse(apiUrl)
 	if err != nil {
 		logger.Err(err).Msg("failed to parse Snyk API URL")
