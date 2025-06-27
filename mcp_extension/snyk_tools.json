@@ -1165,6 +1165,29 @@
           "description": "Path to the project folder to trust (default is the absolute path of the current directory, formatted according to the operating system's conventions)."
         }
       ]
+    },
+    {
+      "name": "snyk_get_all_learn_lessons",
+      "description": "Retrieves Snyk Learn lessons for all ecosystems / programming languages / build systems. It is the agent's responsibility to filter to only relevant lessons for the current ecosystem.",
+      "command": [],
+      "ignoreTrust": true,
+      "standardParams": [],
+      "params": []
+    },
+    {
+      "name": "snyk_open_learn_lesson",
+      "description": "Opens a Snyk Learn lesson in the browser for a given title.",
+      "command": [],
+      "ignoreTrust": true,
+      "standardParams": [],
+      "params": [
+        {
+          "name": "lessonTitle",
+          "type": "string",
+          "isRequired": true,
+          "description": "The exact title of the Snyk Learn lesson to open."
+        }
+      ]
     }
   ]
 }

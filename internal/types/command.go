@@ -53,8 +53,10 @@ const (
 	ExecuteMCPToolCall = "snyk.executeMCPToolCall"
 )
 
+type OpenBrowserFunc func(url string)
+
 var (
-	DefaultOpenBrowserFunc = func(url string) {
+	DefaultOpenBrowserFunc OpenBrowserFunc = func(url string) {
 		browser.Stdout = os.Stderr
 		_ = browser.OpenURL(url)
 	}
