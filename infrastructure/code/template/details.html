@@ -100,11 +100,6 @@
     <!-- Tabs Issue Overview Container -->
     <article class="code-issue-panel">
       <div class="main-tabs-nav">
-        {{if or .IsIgnored .IsPending}}
-        <span data-tab="ignore-details" id="ignore-details-tab" class="tab-item is-selected ignore-details-tab">
-          Ignore Details
-        </span>
-        {{end}}
         {{if not .IsIgnored}}
         <span data-tab="fix-analysis" id="fix-analysis-tab"
           class="tab-item {{if not .IsPending}}is-selected{{end}} sn-fix-analysis fix-analysis-tab">
@@ -121,6 +116,11 @@
           Issue Overview
         </span>
         {{end}}
+        {{if or .IsIgnored .IsPending}}
+        <span data-tab="ignore-details" id="ignore-details-tab" class="tab-item is-selected ignore-details-tab">
+          Ignore Details
+        </span>
+        {{end}}
       </div>
 
       <!-- Dynamic Content Sections -->
@@ -129,12 +129,14 @@
         <!-- Start Ignore Details section for tab id="ignore-details-tab" -->
         <div data-content="ignore-details" id="ignore-details-content" class="tab-content main-tab-content is-selected">
           <div class="ignore-details delimiter-top">
-            {{range .IgnoreDetails}}
-            <div class="ignore-details-row">
-              <div class="ignore-details-label">{{.Label}}</div>
-              <div class="ignore-details-value">{{.Value}}</div>
-            </div>
-            {{end}}
+            <table class="ignore-details-table">
+              {{range .IgnoreDetails}}
+              <tr class="ignore-details-row">
+                <td class="ignore-details-label">{{.Label}}</td>
+                <td class="ignore-details-value">{{.Value}}</td>
+              </tr>
+              {{end}}
+            </table>
             <div class="ignore-next-step-text">
               Ignores are currently managed in the Snyk web app.
               To edit or remove the ignore please go to:
