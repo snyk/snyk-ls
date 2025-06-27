@@ -21,6 +21,7 @@ import (
 	"errors"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type FakeAuthenticationProvider struct {
@@ -55,6 +56,10 @@ func (a *FakeAuthenticationProvider) AuthURL(_ context.Context) string {
 
 func (a *FakeAuthenticationProvider) setAuthUrl(url string) {
 	a.authURL = url
+}
+
+func (a *FakeAuthenticationProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.FakeAuthentication
 }
 
 func NewFakeCliAuthenticationProvider(c *config.Config) *FakeAuthenticationProvider {

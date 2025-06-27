@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type CliAuthenticationProvider struct {
@@ -216,4 +217,8 @@ func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, cmd *exec.Cmd
 	}
 
 	return err
+}
+
+func (a *CliAuthenticationProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.TokenAuthentication
 }

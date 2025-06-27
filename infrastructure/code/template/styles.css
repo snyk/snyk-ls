@@ -292,14 +292,15 @@ main {
 table {
   border-collapse: collapse;
 }
-table td {
-  background: var(--container-background-color);
-  padding: 4px;
-}
 
 .data-flow-table {
   background-color: var(--code-background-color);
   margin-top: 0.6rem;
+}
+
+.data-flow-table td {
+  background: var(--container-background-color);
+  padding: 4px;
 }
 
 .data-flow-row {
@@ -503,6 +504,7 @@ table > tbody > tr:last-child .data-flow-line {
   position: fixed;
   bottom: 0;
   width: 100%;
+  padding: 10px 20px;
   margin-block-end: 0;
   background-color: var(--background-color);
   background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.075));
@@ -550,18 +552,20 @@ table > tbody > tr:last-child .data-flow-line {
   width: 100%;
 }
 
-.ignore-details-row {
-  display: flex;
-  justify-content: space-between;
+.ignore-details-table {
   width: 100%;
-  align-items: flex-start;
+  border-collapse: collapse;
+}
+
+.ignore-details-row {
 }
 
 .ignore-details-label {
-  width: 30%;
+  width: 1%;
+  white-space: nowrap;
   text-align: left;
   font-weight: bold;
-  padding-right: 10px;
+  padding-right: 30px;
 }
 
 .ignore-details-value {
@@ -834,6 +838,7 @@ button.sn-apply-fix:hover {
   font-size: inherit;
   height: 100%;
   line-height: inherit;
+  padding: 5px;
   resize: none;
   width: 100%;
 }

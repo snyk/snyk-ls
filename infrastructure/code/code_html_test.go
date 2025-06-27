@@ -196,8 +196,8 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `class="sn-status-message mod-warning"`)
 	assert.Contains(t, codePanelHtml, `class="sn-ignore-badge"`)
 	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
-	assert.Contains(t, codePanelHtml, `class="ignore-details-value">Ignored permanently</div>`)
-	assert.Contains(t, codePanelHtml, `class="ignore-details-value">No expiration</div>`) // Because category is "wont-fix"
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">Ignored permanently</td>`)
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`) // Because category is "wont-fix"
 
 	// assert Footer buttons are not present when issue is ignored
 	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
@@ -236,7 +236,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 
 	// assert Ignore Details section
 	// Asserting an expired date to prevent the test from breaking in the future as the current date changes
-	assert.Contains(t, codePanelHtml, `class="ignore-details-value">Expired</div>`)
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">Expired</td>`)
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {

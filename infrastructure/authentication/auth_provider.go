@@ -19,6 +19,8 @@ package authentication
 import (
 	"context"
 	"errors"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type AuthenticationFailedError struct {
@@ -50,6 +52,9 @@ type AuthenticationProvider interface {
 	setAuthUrl(url string)
 
 	GetCheckAuthenticationFunction() AuthenticationFunction
+
+	// AuthenticationMethod Returns the AuthenticationMethod associated with the provider
+	AuthenticationMethod() types.AuthenticationMethod
 }
 
 var ErrEmptyAPIToken = errors.New("auth-provider: api token is not set")
