@@ -27,6 +27,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
+var ErrMissingDeltaReference = errors.New("must specify reference for delta scans")
+
 func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s types.ProductScanner, folderConfig *types.FolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
 	logger := sc.c.Logger().With().Str("method", "scanBaseBranch").Logger()
 	if folderConfig == nil {
@@ -108,8 +110,10 @@ func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.Folder
 		// this is not a performance problem
 		// jdk repository hashing (2.1 GB with lots of files) takes 5.9s on a Mac M3 Pro
 		persistHash, err = hashdir.Make(string(folderConfig.ReferenceFolderPath), "sha256")
-	} else {
+	} else if folderConfig.BaseBranch != "" {
 		persistHash, err = vcs.HeadRefHashForBranch(&logger, folderConfig.FolderPath, folderConfig.BaseBranch)
+	} else {
+		return "", ErrMissingDeltaReference
 	}
 	return persistHash, err
 }
