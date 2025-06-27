@@ -222,7 +222,7 @@ if (ignoreFormContainer !== null && ignoreFormContainer !== void 0 && ignoreCrea
   var ignoreFormExpirationType = document.getElementById('ignore-form-expiration-type');
   var ignoreFormExpirationDate = document.getElementById('ignore-form-expiration-date');
   ignoreFormExpirationType.addEventListener('change', function(event) {
-    if (event.target.value === 'do-not-expire') {
+    if (event.target.value === 'never') {
       toggleElement(ignoreFormExpirationDate, 'hide');
     } else {
       toggleElement(ignoreFormExpirationDate, 'show');
