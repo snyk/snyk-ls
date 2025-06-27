@@ -30,9 +30,12 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/mcp_extension/logging"
 	"github.com/snyk/snyk-ls/mcp_extension/networking"
 	"github.com/snyk/snyk-ls/mcp_extension/trust"
@@ -46,20 +49,25 @@ const (
 // McpLLMBinding is an implementation of a mcp server that allows interaction between
 // a given SnykLLMBinding and a CommandService.
 type McpLLMBinding struct {
-	logger      *zerolog.Logger
-	mcpServer   *server.MCPServer
-	sseServer   *server.SSEServer
-	folderTrust *trust.FolderTrust
-	baseURL     *url.URL
-	mutex       sync.RWMutex
-	started     bool
-	cliPath     string
+	logger              *zerolog.Logger
+	mcpServer           *server.MCPServer
+	sseServer           *server.SSEServer
+	folderTrust         *trust.FolderTrust
+	baseURL             *url.URL
+	mutex               sync.RWMutex
+	started             bool
+	cliPath             string
+	openBrowserFunc     types.OpenBrowserFunc
+	learnService        learn.Service
+	learnServiceFactory LearnServiceFactoryFunc
 }
 
 func NewMcpLLMBinding(opts ...Option) *McpLLMBinding {
 	logger := zerolog.Nop()
 	mcpServerImpl := &McpLLMBinding{
-		logger: &logger,
+		logger:              &logger,
+		openBrowserFunc:     types.DefaultOpenBrowserFunc,
+		learnServiceFactory: NewDefaultLearnService,
 	}
 
 	for _, opt := range opts {
@@ -87,6 +95,11 @@ func (m *McpLLMBinding) Start(invocationContext workflow.InvocationContext) erro
 
 	m.logger = logging.ConfigureLogging(m.mcpServer)
 	invocationContext.GetEngine().SetLogger(m.logger)
+
+	m.learnService = m.learnServiceFactory(invocationContext, m.logger)
+	if m.learnService == nil {
+		m.logger.Error().Msg("Failed to initialize learn service via factory.")
+	}
 
 	m.folderTrust = trust.NewFolderTrust(m.logger, invocationContext.GetConfiguration())
 
