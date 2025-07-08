@@ -35,12 +35,12 @@ type AuthenticationService interface {
 
 	// UpdateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
 	// client if sendNotification is true
-	UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
+	UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool, initialize bool)
 
 	// updateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
 	// client if sendNotification is true
 	// doesn't have a mutex lock
-	updateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
+	updateCredentials(newToken string, sendNotification bool, updateApiUrl bool, initialize bool)
 
 	Logout(ctx context.Context)
 

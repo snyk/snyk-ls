@@ -122,7 +122,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		a.c.UpdateApiEndpoints(prioritizedUrl)
 	}
 
-	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
+	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification, false)
 	a.configureProviders(a.c)
 	a.sendAuthenticationAnalytics(analytics.Success, nil)
 	return token, err
@@ -135,7 +135,7 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics
 	}
 	event := types.AnalyticsEventParam{
 		InteractionType: "authenticated",
-		Category:        []string{"auth", string(a.c.AuthenticationMethod())},
+		Extension:       map[string]any{"auth::auth-type": string(a.c.AuthenticationMethod())},
 		Status:          string(status),
 		TargetId:        id,
 		TimestampMs:     time.Now().UnixMilli(),
@@ -170,14 +170,14 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	return customUrl
 }
 
-func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
+func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool, initialize bool) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.updateCredentials(newToken, sendNotification, updateApiUrl)
+	a.updateCredentials(newToken, sendNotification, updateApiUrl, initialize)
 }
 
-func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
+func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool, initialize bool) {
 	oldToken := a.c.Token()
 	if oldToken == newToken && !updateApiUrl {
 		return
@@ -188,6 +188,10 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
 		a.authCache.Remove(oldToken)
 		a.c.SetToken(newToken)
+		// If this token change was triggered by a user (instead of initialization), then send analytics.
+		if !initialize {
+			a.sendAuthenticationAnalytics(analytics.Success, nil)
+		}
 	}
 
 	if sendNotification {
@@ -219,7 +223,7 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
 		a.errorReporter.CaptureError(err)
 	}
-	a.updateCredentials("", true, false)
+	a.updateCredentials("", true, false, false)
 	a.configureProviders(a.c)
 }
 

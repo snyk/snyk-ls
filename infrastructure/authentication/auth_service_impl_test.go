@@ -103,7 +103,7 @@ func Test_UpdateCredentials(t *testing.T) {
 		c := testutil.UnitTest(t)
 		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
 
-		service.UpdateCredentials("new-token", false, false)
+		service.UpdateCredentials("new-token", false, false, false)
 
 		assert.Equal(t, "new-token", config.CurrentConfig().Token())
 	})
@@ -121,7 +121,7 @@ func Test_UpdateCredentials(t *testing.T) {
 		assert.NoError(t, err)
 		token := string(tokenBytes)
 
-		service.UpdateCredentials(token, false, false)
+		service.UpdateCredentials(token, false, false, false)
 
 		assert.Equal(t, token, config.CurrentConfig().Token())
 	})
@@ -132,7 +132,7 @@ func Test_UpdateCredentials(t *testing.T) {
 		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
 
 		token := "some_token"
-		service.UpdateCredentials(token, true, false)
+		service.UpdateCredentials(token, true, false, false)
 
 		expectedNotification := types.AuthenticationParams{Token: token, ApiUrl: ""}
 		assert.Equal(t, expectedNotification, mockNotifier.SentMessages()[0])
@@ -144,7 +144,7 @@ func Test_UpdateCredentials(t *testing.T) {
 		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
 
 		token := "some_other_token"
-		service.UpdateCredentials(token, true, true)
+		service.UpdateCredentials(token, true, true, false)
 
 		expectedNotification := types.AuthenticationParams{Token: token, ApiUrl: config.DefaultSnykApiUrl}
 		assert.Equal(t, expectedNotification, mockNotifier.SentMessages()[0])
@@ -156,10 +156,10 @@ func Test_UpdateCredentials(t *testing.T) {
 		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
 
 		token := "some_other_token"
-		service.UpdateCredentials(token, false, false)
+		service.UpdateCredentials(token, false, false, false)
 		assert.Empty(t, mockNotifier.SentMessages())
 
-		service.UpdateCredentials(token, false, true)
+		service.UpdateCredentials(token, false, true, false)
 		assert.Empty(t, mockNotifier.SentMessages())
 	})
 }

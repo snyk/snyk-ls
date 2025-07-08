@@ -258,9 +258,9 @@ func updateDeltaFindings(c *config.Config, settings types.Settings) {
 	}
 }
 
-func updateToken(token string) {
+func updateToken(token string, initialize bool) {
 	// Token was sent from the client, no need to send notification
-	di.AuthenticationService().UpdateCredentials(token, false, false)
+	di.AuthenticationService().UpdateCredentials(token, false, false, initialize)
 }
 
 func updateApiEndpoints(c *config.Config, settings types.Settings, initialization bool) {
