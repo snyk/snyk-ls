@@ -202,7 +202,7 @@ func TestMiddleware(t *testing.T) {
 		sseServer := server.NewSSEServer(mcpServer)
 		handler := middleware(sseServer)
 
-		req := httptest.NewRequest("GET", "/", nil)
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Host = "localhost"
 		req.Header.Set("Origin", "http://localhost:3000")
 
@@ -218,7 +218,7 @@ func TestMiddleware(t *testing.T) {
 		sseServer := server.NewSSEServer(mcpServer)
 		handler := middleware(sseServer)
 
-		req := httptest.NewRequest("GET", "/", nil)
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Host = "example.com"
 		req.Header.Set("Origin", "http://example.com")
 
@@ -241,7 +241,8 @@ func TestHandleStdioServer(t *testing.T) {
 			go func() {
 				defer func() {
 					if r := recover(); r != nil {
-						// Expected to panic due to nil mcpServer, this is fine
+						// Expected to panic due to nil mcpServer, this is fine for testing
+						_ = r // Explicitly ignore the recovered value
 					}
 				}()
 				_ = binding.HandleStdioServer()
