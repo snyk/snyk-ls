@@ -318,6 +318,45 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 		require.True(t, ok)
 		assert.Contains(t, textContent.Text, "Successfully requested to open lesson: Test Lesson")
 	})
+
+	t.Run("returns message when no lesson is found (nil lesson)", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockLearnService := mock_learn.NewMockService(ctrl)
+		logger := zerolog.Nop()
+
+		mcpBinding := &McpLLMBinding{
+			logger:       &logger,
+			learnService: mockLearnService,
+		}
+
+		// Mock GetLesson to return nil (no lesson found)
+		mockLearnService.EXPECT().GetLesson(
+			"javascript",
+			"nonexistent-rule",
+			[]string{},
+			[]string{},
+			types.DependencyVulnerability,
+		).Return(nil, nil)
+
+		toolDef := SnykMcpToolsDefinition{Name: "test_tool"}
+		handler := mcpBinding.snykOpenLearnLessonHandler(nil, toolDef)
+
+		request := createMockRequest(map[string]interface{}{
+			"issueType": "sca",
+			"rule":      "nonexistent-rule",
+			"ecosystem": "javascript",
+		})
+
+		result, err := handler(context.Background(), request)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		assert.Equal(t, "No Snyk Learn lesson found for the given parameters.", textContent.Text)
+	})
 }
 
 func TestLearnServiceIntegration(t *testing.T) {
