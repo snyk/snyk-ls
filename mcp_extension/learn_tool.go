@@ -50,62 +50,62 @@ func NewDefaultLearnService(invocationContext workflow.InvocationContext, logger
 	return serviceInstance
 }
 
+// parseStringArrayParam extracts a comma-separated string array from request arguments
+func parseStringArrayParam(args map[string]interface{}, key string) []string {
+	if val, ok := args[key]; ok {
+		if strVal, isString := val.(string); isString {
+			return strings.Split(strVal, ",")
+		}
+	}
+	return []string{}
+}
+
+// parseStringParam extracts a string parameter from request arguments
+func parseStringParam(args map[string]interface{}, key string) string {
+	if val, ok := args[key]; ok {
+		if strVal, isString := val.(string); isString {
+			return strVal
+		}
+	}
+	return ""
+}
+
+// parseIssueType converts issue type string to types.IssueType
+func parseIssueType(issueTypeString string) types.IssueType {
+	switch issueTypeString {
+	case "sca":
+		return types.DependencyVulnerability
+	case "sast":
+		return types.CodeSecurityVulnerability
+	default:
+		return types.DependencyVulnerability
+	}
+}
+
+// buildLessonURL constructs the lesson URL with IDE location parameter
+func buildLessonURL(lessonURL string) (string, error) {
+	u, err := url.Parse(lessonURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid lesson URL: %w", err)
+	}
+	q := u.Query()
+	q.Set("loc", "ide")
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
 func (m *McpLLMBinding) snykOpenLearnLessonHandler(_ workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", toolDef.Name).Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
 		args := request.GetArguments()
-		cves, ok := args["cves"]
-		cveArray := []string{}
-		sep := ","
-		if ok {
-			if cveStr, isString := cves.(string); isString {
-				cveArray = strings.Split(cveStr, sep)
-			}
-		}
-
-		cwes, ok := args["cwes"]
-		cweArray := []string{}
-		if ok {
-			if cweStr, isString := cwes.(string); isString {
-				cweArray = strings.Split(cweStr, sep)
-			}
-		}
-
-		rule, ok := args["rule"]
-		ruleString := ""
-		if ok {
-			if ruleStr, isString := rule.(string); isString {
-				ruleString = ruleStr
-			}
-		}
-
-		ecosystem, ok := args["ecosystem"]
-		ecosystemString := ""
-		if ok {
-			if ecoStr, isString := ecosystem.(string); isString {
-				ecosystemString = ecoStr
-			}
-		}
-
-		issueTypeArg, ok := args["issueType"]
-		issueTypeString := ""
-		if ok {
-			if issueStr, isString := issueTypeArg.(string); isString {
-				issueTypeString = issueStr
-			}
-		}
-
-		var issueType types.IssueType
-		switch issueTypeString {
-		case "sca":
-			issueType = types.DependencyVulnerability
-		case "sast":
-			issueType = types.CodeSecurityVulnerability
-		default:
-			issueType = types.DependencyVulnerability
-		}
+		cveArray := parseStringArrayParam(args, "cves")
+		cweArray := parseStringArrayParam(args, "cwes")
+		ruleString := parseStringParam(args, "rule")
+		ecosystemString := parseStringParam(args, "ecosystem")
+		issueTypeString := parseStringParam(args, "issueType")
+		issueType := parseIssueType(issueTypeString)
 
 		targetLesson, err := m.learnService.GetLesson(ecosystemString, ruleString, cweArray, cveArray, issueType)
 		if err != nil {
@@ -113,18 +113,19 @@ func (m *McpLLMBinding) snykOpenLearnLessonHandler(_ workflow.InvocationContext,
 			return nil, err
 		}
 
-		u, err := url.Parse(targetLesson.Url)
+		if targetLesson == nil {
+			resultText := "No Snyk Learn lesson found for the given parameters."
+			logger.Debug().Msg(resultText)
+			return mcp.NewToolResultText(resultText), nil
+		}
+
+		lessonURL, err := buildLessonURL(targetLesson.Url)
 		if err != nil {
 			logger.Error().Err(err).Str("url", targetLesson.Url).Msg("Failed to parse lesson URL")
-			return nil, fmt.Errorf("invalid lesson URL: %w", err)
+			return nil, err
 		}
-		q := u.Query()
-		q.Set("loc", "ide")
-		u.RawQuery = q.Encode()
-		lessonURL := u.String()
 
 		logger.Debug().Str("lessonURL", lessonURL).Msg("Attempting to open lesson URL in browser")
-
 		m.openBrowserFunc(lessonURL)
 
 		resultText := fmt.Sprintf("Successfully requested to open lesson: %s", targetLesson.Title)

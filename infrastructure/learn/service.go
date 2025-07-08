@@ -183,11 +183,13 @@ func (s *serviceImpl) updateCaches(lessons []Lesson) []Lesson {
 	s.lessonsByEcosystemCache.RemoveAll()
 	s.lessonsByRuleCache.RemoveAll()
 
+	var filteredLessons []Lesson
 	for _, lesson := range lessons {
 		notSupported := strings.HasPrefix(lesson.Description, learnLessonNotSupportedText)
 		if !lesson.Published || notSupported {
 			continue
 		}
+		filteredLessons = append(filteredLessons, lesson)
 		for _, rule := range lesson.Rules {
 			lessonsForRule, exists := s.lessonsByRuleCache.Get(rule)
 			if !exists {
@@ -205,7 +207,7 @@ func (s *serviceImpl) updateCaches(lessons []Lesson) []Lesson {
 			s.lessonsByEcosystemCache.Set(ecosystem, lessonsForEcosystem, expiration)
 		}
 	}
-	return nil
+	return filteredLessons
 }
 
 func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType types.IssueType) (lesson *Lesson, err error) {
