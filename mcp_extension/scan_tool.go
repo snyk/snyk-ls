@@ -32,14 +32,14 @@ import (
 
 // Tool name constants to maintain backward compatibility
 const (
-	SnykScaTest            = "snyk_sca_scan"
-	SnykCodeTest           = "snyk_code_scan"
-	SnykVersion            = "snyk_version"
-	SnykAuth               = "snyk_auth"
-	SnykAuthStatus         = "snyk_auth_status"
-	SnykLogout             = "snyk_logout"
-	SnykTrust              = "snyk_trust"
-	SnykOpenLearnLesson    = "snyk_open_learn_lesson"
+	SnykScaTest         = "snyk_sca_scan"
+	SnykCodeTest        = "snyk_code_scan"
+	SnykVersion         = "snyk_version"
+	SnykAuth            = "snyk_auth"
+	SnykAuthStatus      = "snyk_auth_status"
+	SnykLogout          = "snyk_logout"
+	SnykTrust           = "snyk_trust"
+	SnykOpenLearnLesson = "snyk_open_learn_lesson"
 )
 
 type SnykMcpToolsDefinition struct {
