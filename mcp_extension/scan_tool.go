@@ -159,7 +159,9 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 
 		trustDisabled := invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) || toolDef.IgnoreTrust
 		if !trustDisabled && !m.folderTrust.IsFolderTrusted(workingDir) {
-			return nil, fmt.Errorf("folder '%s' is not trusted. Please run 'snyk_trust' first", workingDir)
+			trustErr := fmt.Sprintf("folder '%s' is not trusted. Please run 'snyk_trust' first", workingDir)
+			logger.Error().Msg(trustErr)
+			return mcp.NewToolResultText(trustErr), nil
 		}
 
 		args := buildCommand(m.cliPath, toolDef.Command, params)

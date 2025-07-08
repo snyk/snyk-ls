@@ -125,7 +125,10 @@
           "name": "show_vulnerable_paths",
           "type": "string",
           "isRequired": false,
-          "description": "Controls how many vulnerable dependency paths are displayed in the output. Accepted values: `none` (shows no paths), `some` (shows a few examples), `all` (shows all identified paths). Not supported with `json_file_output`."
+          "description": "Controls how many vulnerable dependency paths are displayed in the output. Accepted values: `none` (shows no paths), `some` (shows a few examples), `all` (shows all identified paths). Not supported with `json_file_output`.",
+          "supersedesParams": [
+            "json_file_output"
+          ]
         },
         {
           "name": "project_name",
@@ -149,7 +152,7 @@
           "name": "json_file_output",
           "type": "string",
           "isRequired": false,
-          "description": "Saves the test output in JSON format to the specified file path. Human-readable output is still shown in the console. Not compatible with `show-vulnerable_paths`.",
+          "description": "Saves the test output in JSON format to the specified file path. Human-readable output is still shown in the console. Not compatible with `show-vulnerable_paths`. Only use this parameter if explicitly instructed to use it.",
           "supersedesParams": [
             "show_vulnerable_paths"
           ]
@@ -158,7 +161,7 @@
           "name": "sarif_file_output",
           "type": "string",
           "isRequired": false,
-          "description": "Saves the test output in SARIF format to the specified file path."
+          "description": "Saves the test output in SARIF format to the specified file path. Only use this parameter if explicitly instructed to use it."
         },
         {
           "name": "severity_threshold",
@@ -318,7 +321,10 @@
           "name": "file",
           "type": "string",
           "isRequired": false,
-          "description": "Specifies a particular package manifest file to monitor. Default is auto-detected."
+          "description": "Specifies a particular package manifest file to monitor. Default is auto-detected.",
+          "supersedesParams": [
+            "all_projects"
+          ]
         },
         {
           "name": "package_manager",
@@ -423,19 +429,25 @@
           "name": "json_file_output",
           "type": "string",
           "isRequired": false,
-          "description": "Saves the test output as a JSON data structure to the specified file path. This occurs regardless of whether `json` is also used. Note: For Snyk Code, if no security issues are found, Snyk does not create this JSON file."
+          "description": "Saves the test output as a JSON data structure to the specified file path. This occurs regardless of whether `json` is also used. Note: For Snyk Code, if no security issues are found, Snyk does not create this JSON file. Only use this parameter if explicitly instructed to use it."
         },
         {
           "name": "sarif_file_output",
           "type": "string",
           "isRequired": false,
-          "description": "Saves the test output in SARIF format to the specified file path, irrespective of whether `sarif` is used for console output."
+          "description": "Saves the test output in SARIF format to the specified file path, irrespective of whether `sarif` is used for console output. Only use this parameter if explicitly instructed to use it."
         },
         {
           "name": "severity_threshold",
           "type": "string",
           "isRequired": false,
           "description": "Reports only vulnerabilities that meet or exceed the specified severity level. Accepted values: `low`, `medium`, `high`. Snyk Code configuration issues do not use the `critical` severity level."
+        },
+        {
+          "name": "include_ignores",
+          "type": "boolean",
+          "isRequired": false,
+          "description": "Include ignored vulnerabilities in the output."
         },
         {
           "name": "debug",
@@ -496,13 +508,13 @@
           "name": "json_file_output",
           "type": "string",
           "isRequired": false,
-          "description": "Saves test output in JSON format to the specified file."
+          "description": "Saves test output in JSON format to the specified file. Only use this parameter if explicitly instructed to use it."
         },
         {
           "name": "sarif_file_output",
           "type": "string",
           "isRequired": false,
-          "description": "Saves test output in SARIF format to the specified file."
+          "description": "Saves test output in SARIF format to the specified file. Only use this parameter if explicitly instructed to use it."
         },
         {
           "name": "severity_threshold",
@@ -707,13 +719,13 @@
           "name": "json_file_output",
           "type": "string",
           "isRequired": false,
-          "description": "Saves test output in JSON format to the specified file."
+          "description": "Saves test output in JSON format to the specified file. Only use this parameter if explicitly instructed to use it."
         },
         {
           "name": "sarif_file_output",
           "type": "string",
           "isRequired": false,
-          "description": "Saves test output in SARIF format to the specified file."
+          "description": "Saves test output in SARIF format to the specified file. Only use this parameter if explicitly instructed to use it."
         },
         {
           "name": "project_business_criticality",
@@ -795,7 +807,9 @@
       "command": [
         "sbom"
       ],
-      "standardParams": [],
+      "standardParams": [
+        "all_projects"
+      ],
       "params": [
         {
           "name": "path",
@@ -827,7 +841,10 @@
           "name": "file",
           "type": "string",
           "isRequired": false,
-          "description": "Specifies path to a package manifest file (e.g., `package.json`, `pom.xml`) to base SBOM on. Overrides directory auto-detection. Alias `-f`. Mutually exclusive with `TARGET_DIRECTORY` for target selection. For Python with non-default filename, `package-manager=pip` is mandatory."
+          "description": "Specifies path to a package manifest file (e.g., `package.json`, `pom.xml`) to base SBOM on. Overrides directory auto-detection. Alias `-f`. Mutually exclusive with `TARGET_DIRECTORY` for target selection. For Python with non-default filename, `package-manager=pip` is mandatory.",
+          "supersedesParams": [
+            "all_projects"
+          ]
         },
         {
           "name": "unmanaged",
@@ -881,7 +898,7 @@
           "name": "json_file_output",
           "type": "string",
           "isRequired": false,
-          "description": "Saves SBOM output to specified file path, *only* if chosen `format` includes `+json` (e.g., `cyclonedx1.6+json`). Standard output still occurs. Mutually exclusive with formats not ending in `+json`."
+          "description": "Saves SBOM output to specified file path, *only* if chosen `format` includes `+json` (e.g., `cyclonedx1.6+json`). Standard output still occurs. Mutually exclusive with formats not ending in `+json`. Only use this parameter if explicitly instructed to use it."
         },
         {
           "name": "maven_aggregate_project",
@@ -971,10 +988,10 @@
       "name": "snyk_sbom_scan",
       "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Experimental command. Analyzes an existing SBOM file for known vulnerabilities in its open-source components. Requires components in SBOM to be identified using PackageURLs (purls). \nWhen to use: After SBOM generation (by Snyk or other tools) to assess components. In CI/CD to test generated/received SBOMs. For vulnerability scanning of third-party software when only an SBOM is available. \nHow to use: <snyk_sbom_scan> `file`=`/absolute/path/to/my_app.cdx.json`. \nInput Requirements: SBOMs in CycloneDX (JSON 1.4-1.6) or SPDX (JSON 2.3). Packages must have purls (types: apk, cargo, cocoapods, composer, deb, gem, generic, golang, hex, maven, npm, nuget, pub, pypi, rpm, swift). \nSecure SDLC Integration: Testing/Validation Phase: Scans inventoried components post-SBOM generation. Third-Party Risk Management: Assesses vulnerabilities from SBOMs of external software. Exit codes: `0` (success/no vulns), `1` (vulns found), `2` (error).",
       "command": [
-        "sbom"
+        "sbom",
+        "test"
       ],
       "standardParams": [
-        "test",
         "experimental"
       ],
       "ignoreTrust": true,
@@ -1030,72 +1047,6 @@
       ]
     },
     {
-      "name": "snyk_ignore",
-      "description": "Modifies the project's `.snyk` policy file to ignore specific issues (vulnerabilities, license issues via `id`) or to exclude files/directories from analysis (primarily for Snyk Code and Open Source `unmanaged` scans via `file_path`). \nWhen to use: For risk acceptance (documenting why a vulnerability is acceptable). For Snyk Code scope management (excluding test/generated code). \nHow to use: Ignore npm vuln with expiry/reason: `<snyk_ignore> `id`=`'npm:tough-cookie:20160722'` `expiry`=`'2024-12-31'` `reason`=`'Not exploitable'`. Ignore by path: <snyk_ignore> `id`=`'SNYK-JS-LIB-XXX'` `vulnerable_path`=`'app>pkg>lib'`. Exclude test files from Snyk Code: <snyk_ignore> `file_path`=`'./**/test/**'` `file_path-group`=`'code'`. Ignore IaC misconfig: <snyk_ignore> `id`=`SNYK-CC-TF-118` `path`=`\"resource > type > name\"`. \nSecure SDLC Integration: Vulnerability Management/Triage: Allows teams to formally document and manage accepted risks or refine scan scope as 'policy as code' within the `.snyk` file, which is version controlled with the project.",
-      "command": [
-        "ignore"
-      ],
-      "ignoreTrust": true,
-      "standardParams": [],
-      "params": [
-        {
-          "name": "path",
-          "type": "string",
-          "isRequired": true,
-          "description": "Positional argument for the *ABSOLUTE PATH* to the policy .snyk file. The path MUST be absolute and have the correct path separator.",
-          "isPositional": true
-        },
-        {
-          "name": "id",
-          "type": "string",
-          "isRequired": false,
-          "description": "The Snyk ID of the vulnerability or license issue to ignore (e.g., `SNYK-JS-LODASH-123456`, `snyk:lic:npm:package:MIT`). Required unless `file_path` is used. Mutually exclusive with `file_path` for primary mode."
-        },
-        {
-          "name": "expiry",
-          "type": "string",
-          "isRequired": false,
-          "description": "Sets an expiration date for the ignore rule (YYYY-MM-DD, ISO 8601, RFC 2822). After this, Snyk reports the issue again. Default for ID-based ignore is 30 days; no default expiry if used with `file_path`."
-        },
-        {
-          "name": "reason",
-          "type": "string",
-          "isRequired": false,
-          "description": "Human-readable justification for ignoring the issue, recorded in `.snyk` file. Not supported for Snyk Code ignores (which use `file_path`). Default 'None given' or empty."
-        },
-        {
-          "name": "policy_path",
-          "type": "string",
-          "isRequired": false,
-          "description": "Specifies path to the `.snyk` policy file to modify. Default is `.snyk` in current directory."
-        },
-        {
-          "name": "vulnerable_path",
-          "type": "string",
-          "isRequired": false,
-          "description": "For vulnerability ignores (`id`), specifies the particular vulnerable path in dependency tree (e.g., `A>B>C`). For IaC issues, this is the resource path from `snyk iac test` output. If omitted, ignore applies to all paths (`*`)."
-        },
-        {
-          "name": "file_path",
-          "type": "string",
-          "isRequired": false,
-          "description": "File system path (can include globs like `**/*.test.js`) to exclude from scanning. Primarily for Snyk Code (SAST) and Snyk Open Source `unmanaged` tests. Mutually exclusive with `id` for primary mode."
-        },
-        {
-          "name": "file_path_group",
-          "type": "string",
-          "isRequired": false,
-          "description": "With `file_path`, groups exclusion rule under a category in `.snyk` exclude block. Accepted values: `global`, `code`, `iac-drift`."
-        },
-        {
-          "name": "debug",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Enables debug logging for the ignore operation. Use as `-d`."
-        }
-      ]
-    },
-    {
       "name": "snyk_version",
       "description": "Displays the installed Snyk MCP version. \nWhen to use: To verify current CLI version for compatibility checks or when reporting issues.",
       "command": [
@@ -1147,7 +1098,7 @@
         {
           "name": "json_file_output",
           "type": "string",
-          "description": "Saves the AIBOM output as a JSON data structure to the specified file path. The target directory must exist and be writable."
+          "description": "Saves the AIBOM output as a JSON data structure to the specified file path. The target directory must exist and be writable. Only use this parameter if explicitly instructed to use it."
         }
       ]
     },
