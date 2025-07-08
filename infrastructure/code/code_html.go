@@ -257,7 +257,7 @@ func prepareIgnoreDetailsRow(ignoreDetails *types.IgnoreDetails) []IgnoreDetail 
 		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
 		{"Ignored By", ignoreDetails.IgnoredBy},
 		{"Reason", ignoreDetails.Reason},
-		{"Status", string(ignoreDetails.Status)},
+		{"Status", parseStatus(ignoreDetails.Status)},
 	}
 }
 
@@ -272,6 +272,19 @@ func parseCategory(category string) string {
 		return result
 	}
 	return category
+}
+
+func parseStatus(status codeClientSarif.SuppresionStatus) string {
+	statusMap := map[codeClientSarif.SuppresionStatus]string{
+		codeClientSarif.UnderReview: "Pending",
+		codeClientSarif.Accepted:    "Approved",
+		codeClientSarif.Rejected:    "Rejected",
+	}
+
+	if result, ok := statusMap[status]; ok {
+		return result
+	}
+	return string(status)
 }
 
 func prepareDataFlowTable(issue snyk.CodeIssueData) ([]string, map[string][]DataFlowItem) {
