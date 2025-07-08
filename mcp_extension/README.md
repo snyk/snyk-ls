@@ -43,7 +43,6 @@ To start the Snyk MCP server, use the `snyk mcp` command for a supported transpo
 * `snyk_logout` (logout)
 * `snyk_auth_status` (authentication status check)
 * `snyk_version` (version information)
-* `snyk_get_all_learn_lessons` (retrieves all Snyk Learn lessons)
 * `snyk_open_learn_lesson` (opens a Snyk Learn lesson in the browser by its title)
 
 ## Environment variables for MCP

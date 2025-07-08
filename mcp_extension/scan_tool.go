@@ -39,7 +39,6 @@ const (
 	SnykAuthStatus         = "snyk_auth_status"
 	SnykLogout             = "snyk_logout"
 	SnykTrust              = "snyk_trust"
-	SnykGetAllLearnLessons = "snyk_get_all_learn_lessons"
 	SnykOpenLearnLesson    = "snyk_open_learn_lesson"
 )
 
