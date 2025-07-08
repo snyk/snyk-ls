@@ -293,14 +293,14 @@ func TestSnykCodeTestHandler(t *testing.T) {
 			require.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
 			result, err := handler(context.Background(), request)
-			if tc.requireTrust {
-				require.Error(t, err)
-				return
-			}
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			textContent, ok := result.Content[0].(mcp.TextContent)
 			require.True(t, ok)
+			if tc.requireTrust {
+				require.Contains(t, textContent.Text, "Please run 'snyk_trust' first")
+				return
+			}
 			content := strings.TrimSpace(textContent.Text)
 			require.Contains(t, content, "ok")
 			require.Contains(t, content, "issues")
