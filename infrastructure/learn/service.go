@@ -172,17 +172,20 @@ func (s *serviceImpl) GetAllLessons() (lessons []Lesson, err error) {
 		return lessons, err
 	}
 
-	s.updateCaches(lessons)
+	lessons = s.updateCaches(lessons)
 	return lessons, err
 }
 
-func (s *serviceImpl) updateCaches(lessons []Lesson) {
+const learnLessonNotSupportedText = "This course is no longer supported."
+
+func (s *serviceImpl) updateCaches(lessons []Lesson) []Lesson {
 	expiration := imcache.WithDefaultExpiration()
 	s.lessonsByEcosystemCache.RemoveAll()
 	s.lessonsByRuleCache.RemoveAll()
 
 	for _, lesson := range lessons {
-		if !lesson.Published {
+		notSupported := strings.HasPrefix(lesson.Description, learnLessonNotSupportedText)
+		if !lesson.Published || notSupported {
 			continue
 		}
 		for _, rule := range lesson.Rules {
@@ -202,6 +205,7 @@ func (s *serviceImpl) updateCaches(lessons []Lesson) {
 			s.lessonsByEcosystemCache.Set(ecosystem, lessonsForEcosystem, expiration)
 		}
 	}
+	return nil
 }
 
 func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType types.IssueType) (lesson *Lesson, err error) {
@@ -242,9 +246,6 @@ func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cv
 }
 
 func (s *serviceImpl) getLessonsByEcosystem(params *LessonLookupParams) (ecoLessons []Lesson) {
-	if params.Ecosystem == "npm" {
-		params.Ecosystem = "javascript"
-	}
 	ecoLessons, _ = s.lessonsByEcosystemCache.Get(ecosystemAliases[strings.ToLower(params.Ecosystem)])
 	return
 }

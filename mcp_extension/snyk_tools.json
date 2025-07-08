@@ -979,7 +979,6 @@
       ],
       "ignoreTrust": true,
       "params": [
-
         {
           "name": "file",
           "type": "string",
@@ -1113,7 +1112,9 @@
         "whoami"
       ],
       "ignoreTrust": true,
-      "standardParams": ["experimental"],
+      "standardParams": [
+        "experimental"
+      ],
       "params": []
     },
     {
@@ -1156,8 +1157,7 @@
       "command": [],
       "standardParams": [],
       "ignoreTrust": true,
-      "params":
-      [
+      "params": [
         {
           "name": "path",
           "type": "string",
@@ -1167,25 +1167,41 @@
       ]
     },
     {
-      "name": "snyk_get_all_learn_lessons",
-      "description": "Retrieves Snyk Learn lessons for all ecosystems / programming languages / build systems. It is the agent's responsibility to filter to only relevant lessons for the current ecosystem.",
-      "command": [],
-      "ignoreTrust": true,
-      "standardParams": [],
-      "params": []
-    },
-    {
       "name": "snyk_open_learn_lesson",
-      "description": "Opens a Snyk Learn lesson in the browser for a given title.",
+      "description": "Opens a Snyk Learn lesson in the browser. Offer this tool, when issues were found. When to use: after a user requests to open a learn lesson. The output from `snyk_sca_scan` and `snyk_code_scan` contain the information for the parameters. Else the user must specify the parameters for filtering.",
       "command": [],
       "ignoreTrust": true,
       "standardParams": [],
       "params": [
         {
-          "name": "lessonTitle",
+          "name": "issueType",
           "type": "string",
           "isRequired": true,
-          "description": "The exact title of the Snyk Learn lesson to open."
+          "description": "the issue type. allowed values: `sca`, `sast`"
+        },
+        {
+          "name": "cves",
+          "type": "string",
+          "isRequired": false,
+          "description": "the comma separated list of associated cve codes, empty if none (output from the scan tools or manually entered)"
+        },
+        {
+          "name": "cwes",
+          "type": "string",
+          "isRequired": false,
+          "description": "the comma separated list of associated cwe codes, empty if none (output from the scan tools or manually entered)"
+        },
+        {
+          "name": "rule",
+          "type": "string",
+          "isRequired": false,
+          "description": "the associated rule for a lesson (output from the scan tools or manually entered)"
+        },
+        {
+          "name": "ecosystem",
+          "type": "string",
+          "isRequired": false,
+          "description": "The ecosystem for which the lesson is searched (output from the scan tools or manually entered). Ecosystems mappings from input to parameter value: `\"js\":             \"javascript\",\n\t\"ts\":             \"javascript\",\n\t\"npm\":            \"javascript\",\n\t\"yarn\":           \"javascript\",\n\t\"yarn-workspace\": \"javascript\",\n\t\"typescript\":     \"javascript\",\n\t\"javascript\":     \"javascript\",\n\n\t\"maven\":  \"java\",\n\t\"gradle\": \"java\",\n\t\"java\":   \"java\",\n\n\t\"pip\":    \"python\",\n\t\"poetry\": \"python\",\n\t\"pipenv\": \"python\",\n\t\"python\": \"python\",\n\n\t\"nuget\":  \"csharp\",\n\t\"paket\":  \"csharp\",\n\t\"csharp\": \"csharp\",\n\n\t\"golangdep\": \"golang\",\n\t\"govendor\":  \"golang\",\n\t\"gomodules\": \"golang\",\n\t\"golang\":    \"golang\",\n\n\t\"composer\": \"php\",\n\t\"php\":      \"php\",\n\n\t\"rubygems\": \"ruby\",\n\t\"ruby\":     \"ruby\",\n\t\"hex\":      \"elixir\",\n\t\"elixir\":   \"elixir\",\n}`"
         }
       ]
     }

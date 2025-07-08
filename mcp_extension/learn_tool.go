@@ -17,10 +17,10 @@
 package mcp_extension
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // NewDefaultLearnService creates and returns a new learn.Service instance
@@ -73,29 +74,13 @@ func (m *McpLLMBinding) snykGetAllLearnLessonsHandler(_ workflow.InvocationConte
 			return nil, fmt.Errorf("failed to get learn lessons: %w", err)
 		}
 
-		var lessonOutputs []LessonOutput
-		for _, lesson := range lessons {
-			if strings.HasPrefix(lesson.Description, "This course is no longer supported.") {
-				continue
-			}
-			lessonOutputs = append(lessonOutputs, LessonOutput{
-				Title:       lesson.Title,
-				Description: lesson.Description,
-				Ecosystems:  strings.Join(lesson.Ecosystems, " & "),
-			})
-		}
-
-		var buf bytes.Buffer
-		encoder := json.NewEncoder(&buf)
-		encoder.SetEscapeHTML(false)
-		encoder.SetIndent("", "  ")
-		err = encoder.Encode(lessonOutputs)
+		marshal, err := json.Marshal(lessons)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to encode lessons to JSON.")
 			return nil, fmt.Errorf("failed to encode lessons to JSON: %w", err)
 		}
 
-		return mcp.NewToolResultText(buf.String()), nil
+		return mcp.NewToolResultText(string(marshal)), nil
 	}
 }
 
@@ -105,70 +90,79 @@ func (m *McpLLMBinding) snykOpenLearnLessonHandler(_ workflow.InvocationContext,
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
 		args := request.GetArguments()
-		lessonTitleVal, ok := args["lessonTitle"]
-		if !ok {
-			err := fmt.Errorf("missing 'lessonTitle' parameter for tool %s", toolDef.Name)
-			logger.Error().Err(err).Msg("Parameter error")
-			return nil, err
+		cves, ok := args["cves"]
+		cveArray := []string{}
+		sep := ","
+		if ok {
+			if cveStr, isString := cves.(string); isString {
+				cveArray = strings.Split(cveStr, sep)
+			}
 		}
 
-		lessonTitle, ok := lessonTitleVal.(string)
-		if !ok {
-			err := fmt.Errorf("'lessonTitle' parameter is not a string for tool %s", toolDef.Name)
-			logger.Error().Err(err).Interface("value", lessonTitleVal).Msg("Parameter type error")
-			return nil, err
+		cwes, ok := args["cwes"]
+		cweArray := []string{}
+		if ok {
+			if cweStr, isString := cwes.(string); isString {
+				cweArray = strings.Split(cweStr, sep)
+			}
 		}
 
-		if lessonTitle == "" {
-			err := fmt.Errorf("'lessonTitle' parameter cannot be empty for tool %s", toolDef.Name)
-			logger.Error().Err(err).Msg("Parameter value error")
-			return nil, err
+		rule, ok := args["rule"]
+		ruleString := ""
+		if ok {
+			if ruleStr, isString := rule.(string); isString {
+				ruleString = ruleStr
+			}
 		}
 
-		logger.Info().Str("lessonTitle", lessonTitle).Msg("Parsed parameters for snyk_open_learn_lesson")
-
-		if m.learnService == nil {
-			err := fmt.Errorf("learn service not initialized on McpLLMBinding")
-			logger.Error().Err(err).Msg("Service error")
-			return nil, err
+		ecosystem, ok := args["ecosystem"]
+		ecosystemString := ""
+		if ok {
+			if ecoStr, isString := ecosystem.(string); isString {
+				ecosystemString = ecoStr
+			}
 		}
 
-		allLessons, err := m.learnService.GetAllLessons()
+		issueTypeArg, ok := args["issueType"]
+		issueTypeString := ""
+		if ok {
+			if issueStr, isString := issueTypeArg.(string); isString {
+				issueTypeString = issueStr
+			}
+		}
+
+		var issueType types.IssueType
+		switch issueTypeString {
+		case "sca":
+			issueType = types.DependencyVulnerability
+		case "sast":
+			issueType = types.CodeSecurityVulnerability
+		default:
+			issueType = types.DependencyVulnerability
+		}
+
+		targetLesson, err := m.learnService.GetLesson(ecosystemString, ruleString, cweArray, cveArray, issueType)
 		if err != nil {
-			logger.Error().Err(err).Msg("Failed to get all learn lessons")
-			return nil, fmt.Errorf("failed to retrieve lessons: %w", err)
+			logger.Err(err).Msg("Failed to get lesson.")
+			return nil, err
 		}
 
-		var targetLesson *learn.Lesson
-		for i := range allLessons {
-			// Case-insensitive comparison for robustness
-			if strings.EqualFold(allLessons[i].Title, lessonTitle) {
-				targetLesson = &allLessons[i]
-				break
-			}
+		u, err := url.Parse(targetLesson.Url)
+		if err != nil {
+			logger.Error().Err(err).Str("url", targetLesson.Url).Msg("Failed to parse lesson URL")
+			return nil, fmt.Errorf("invalid lesson URL: %w", err)
 		}
+		q := u.Query()
+		q.Set("loc", "ide")
+		u.RawQuery = q.Encode()
+		lessonURL := u.String()
 
-		if targetLesson == nil {
-			errNotFound := fmt.Errorf("lesson with title '%s' not found", lessonTitle)
-			logger.Warn().Err(errNotFound).Msg("Lesson not found")
-			return nil, errNotFound
-		}
-
-		lessonURL := targetLesson.Url
-		if !strings.Contains(lessonURL, "loc=ide") {
-			if strings.Contains(lessonURL, "?") {
-				lessonURL += "&loc=ide"
-			} else {
-				lessonURL += "?loc=ide"
-			}
-		}
-
-		logger.Info().Str("lessonURL", lessonURL).Msg("Attempting to open lesson URL in browser")
+		logger.Debug().Str("lessonURL", lessonURL).Msg("Attempting to open lesson URL in browser")
 
 		m.openBrowserFunc(lessonURL)
 
-		resultText := fmt.Sprintf("Successfully requested to open lesson: %s", lessonTitle)
-		logger.Info().Msg(resultText)
+		resultText := fmt.Sprintf("Successfully requested to open lesson: %s", targetLesson.Title)
+		logger.Debug().Msg(resultText)
 		return mcp.NewToolResultText(resultText), nil
 	}
 }

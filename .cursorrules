@@ -1,0 +1,39 @@
+# Cursor Rules for Snyk LS Project
+
+## Project Setup
+- Always determine the absolute path of the project directory (use `pwd` command in shell)
+- Use the absolute path when running Snyk scans and tests
+
+## Security Scanning
+- Always use Snyk for SCA (Software Composition Analysis) and code scanning
+- Scan with both Snyk Code and Snyk SCA tools
+- Pass the absolute path of the directory being scanned as a parameter
+- Run `snyk code test` after each code edit (pass absolute path)
+- Run `snyk sca test` after updating package manager/manifest/build files (pass absolute path)
+- Fix issues if they are fixable, taking Snyk scan results as input
+
+## Testing Guidelines
+- Always write and update test cases
+- Iterate until tests pass
+- Use existing mocks, don't create new ones
+- When using mocks, use gomock to generate them
+- Always run tests after editing code
+
+## Code Quality
+- Always lint code using `make lint`
+- Consider the Makefile for build and linting operations
+- Be concise, direct, and avoid unnecessary explanations
+
+## Git Workflow
+- Use Conventional Commit Style (Subject + Body) for commit messages
+- Be descriptive in commit message body
+- If JIRA issue (IDE-XXXX) exists in branch name, use it as postfix: `[IDE-XXXX]`
+- When pushing, use: `git push --set-upstream origin $(current_branch)`
+- Never force push
+- Never push without asking for confirmation
+- Never commit hashicorp gomod files
+- Regularly fetch main branch and offer to merge into current branch
+
+## Code Standards
+- Don't modify copyright headers
+- Maintain existing code patterns and conventions 
