@@ -447,7 +447,7 @@
           "name": "include_ignores",
           "type": "boolean",
           "isRequired": false,
-          "description": "include ignored vulnerabilities in the response"
+          "description": "Include ignored vulnerabilities in the output."
         },
         {
           "name": "debug",
