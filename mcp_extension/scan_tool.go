@@ -93,8 +93,6 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykLogoutHandler(invocationCtx, toolDef))
 		case SnykTrust:
 			m.mcpServer.AddTool(tool, m.snykTrustHandler(invocationCtx, toolDef))
-		case SnykGetAllLearnLessons:
-			m.mcpServer.AddTool(tool, m.snykGetAllLearnLessonsHandler(invocationCtx, toolDef))
 		case SnykOpenLearnLesson:
 			m.mcpServer.AddTool(tool, m.snykOpenLearnLessonHandler(invocationCtx, toolDef))
 		default:

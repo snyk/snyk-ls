@@ -18,7 +18,6 @@ package mcp_extension
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -49,39 +48,6 @@ func NewDefaultLearnService(invocationContext workflow.InvocationContext, logger
 	go serviceInstance.MaintainCache()
 	l.Debug().Msg("Learn service instance created via default factory and cache maintenance started.")
 	return serviceInstance
-}
-
-// LessonOutput defines the structure for JSON output
-type LessonOutput struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Ecosystems  string `json:"ecosystems"`
-}
-
-func (m *McpLLMBinding) snykGetAllLearnLessonsHandler(_ workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		logger := m.logger.With().Str("method", toolDef.Name).Logger()
-		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-
-		if m.learnService == nil {
-			logger.Error().Msg("Learn service is not initialized on McpLLMBinding.")
-			return nil, fmt.Errorf("learn service not initialized on McpLLMBinding")
-		}
-
-		lessons, err := m.learnService.GetAllLessons()
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to get all learn lessons.")
-			return nil, fmt.Errorf("failed to get learn lessons: %w", err)
-		}
-
-		marshal, err := json.Marshal(lessons)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to encode lessons to JSON.")
-			return nil, fmt.Errorf("failed to encode lessons to JSON: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(marshal)), nil
-	}
 }
 
 func (m *McpLLMBinding) snykOpenLearnLessonHandler(_ workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

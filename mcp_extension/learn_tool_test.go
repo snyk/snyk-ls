@@ -18,7 +18,6 @@ package mcp_extension
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 
@@ -34,101 +33,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/types"
 )
-
-func TestSnykGetAllLearnLessonsHandler(t *testing.T) {
-	t.Run("returns all lessons successfully", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockLearnService := mock_learn.NewMockService(ctrl)
-		logger := zerolog.Nop()
-
-		mcpBinding := &McpLLMBinding{
-			logger:       &logger,
-			learnService: mockLearnService,
-		}
-
-		expectedLessons := []learn.Lesson{
-			{
-				LessonId:    "lesson1",
-				Title:       "Test Lesson 1",
-				Description: "Test description 1",
-				Ecosystems:  []string{"javascript"},
-				Url:         "https://learn.snyk.io/lesson1",
-			},
-			{
-				LessonId:    "lesson2",
-				Title:       "Test Lesson 2",
-				Description: "Test description 2",
-				Ecosystems:  []string{"python"},
-				Url:         "https://learn.snyk.io/lesson2",
-			},
-		}
-
-		mockLearnService.EXPECT().GetAllLessons().Return(expectedLessons, nil)
-
-		toolDef := SnykMcpToolsDefinition{Name: "test_tool"}
-		handler := mcpBinding.snykGetAllLearnLessonsHandler(nil, toolDef)
-
-		request := createMockRequest(map[string]interface{}{})
-		result, err := handler(context.Background(), request)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok)
-		var actualLessons []learn.Lesson
-		err = json.Unmarshal([]byte(textContent.Text), &actualLessons)
-		assert.NoError(t, err)
-		assert.Equal(t, expectedLessons, actualLessons)
-	})
-
-	t.Run("returns error when learn service is not initialized", func(t *testing.T) {
-		logger := zerolog.Nop()
-
-		mcpBinding := &McpLLMBinding{
-			logger:       &logger,
-			learnService: nil,
-		}
-
-		toolDef := SnykMcpToolsDefinition{Name: "test_tool"}
-		handler := mcpBinding.snykGetAllLearnLessonsHandler(nil, toolDef)
-
-		request := createMockRequest(map[string]interface{}{})
-		result, err := handler(context.Background(), request)
-
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "learn service not initialized")
-	})
-
-	t.Run("returns error when GetAllLessons fails", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockLearnService := mock_learn.NewMockService(ctrl)
-		logger := zerolog.Nop()
-
-		mcpBinding := &McpLLMBinding{
-			logger:       &logger,
-			learnService: mockLearnService,
-		}
-
-		expectedError := errors.New("failed to get lessons")
-		mockLearnService.EXPECT().GetAllLessons().Return(nil, expectedError)
-
-		toolDef := SnykMcpToolsDefinition{Name: "test_tool"}
-		handler := mcpBinding.snykGetAllLearnLessonsHandler(nil, toolDef)
-
-		request := createMockRequest(map[string]interface{}{})
-		result, err := handler(context.Background(), request)
-
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "failed to get learn lessons")
-	})
-}
 
 func TestSnykOpenLearnLessonHandler(t *testing.T) {
 	t.Run("opens lesson successfully with all parameters", func(t *testing.T) {
