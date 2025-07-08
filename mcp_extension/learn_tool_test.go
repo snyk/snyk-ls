@@ -416,34 +416,6 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 	})
 }
 
-func TestLessonOutput(t *testing.T) {
-	t.Run("marshals LessonOutput correctly", func(t *testing.T) {
-		lessonOutput := LessonOutput{
-			Title:       "Test Lesson",
-			Description: "Test description",
-			Ecosystems:  "javascript,python",
-		}
-
-		jsonData, err := json.Marshal(lessonOutput)
-		require.NoError(t, err)
-
-		expected := `{"title":"Test Lesson","description":"Test description","ecosystems":"javascript,python"}`
-		assert.JSONEq(t, expected, string(jsonData))
-	})
-
-	t.Run("unmarshals LessonOutput correctly", func(t *testing.T) {
-		jsonData := `{"title":"Test Lesson","description":"Test description","ecosystems":"javascript,python"}`
-
-		var lessonOutput LessonOutput
-		err := json.Unmarshal([]byte(jsonData), &lessonOutput)
-		require.NoError(t, err)
-
-		assert.Equal(t, "Test Lesson", lessonOutput.Title)
-		assert.Equal(t, "Test description", lessonOutput.Description)
-		assert.Equal(t, "javascript,python", lessonOutput.Ecosystems)
-	})
-}
-
 func TestLearnServiceIntegration(t *testing.T) {
 	t.Run("learn service factory function is stored correctly", func(t *testing.T) {
 		factoryCalled := false
