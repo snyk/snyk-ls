@@ -162,7 +162,7 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		}
 
 		if cmd, ok := params["command"]; ok && !verifyCommandArgument(cmd.value) {
-			return mcp.NewToolResultText(fmt.Sprintf("Error: The provided binary name is invalid. Only use the command argument for python scanning and provide absolute path of python binary path.")), nil
+			return mcp.NewToolResultText("Error: The provided binary name is invalid. Only use the `command` argument for python scanning and provide absolute path of python binary path."), nil
 		}
 
 		args := buildCommand(m.cliPath, toolDef.Command, params)
