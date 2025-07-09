@@ -89,7 +89,7 @@ func buildLessonURL(lessonURL string) (string, error) {
 		return "", fmt.Errorf("invalid lesson URL: %w", err)
 	}
 	q := u.Query()
-	q.Set("loc", "ide")
+	q.Set("loc", "MCP")
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }
