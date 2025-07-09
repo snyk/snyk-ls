@@ -107,10 +107,14 @@ func (m *McpLLMBinding) snykOpenLearnLessonHandler(_ workflow.InvocationContext,
 		issueTypeString := parseStringParam(args, "issueType")
 		issueType := parseIssueType(issueTypeString)
 
+		if m.learnService == nil {
+			return mcp.NewToolResultText("unable to retrieve learn lesson, learn service not initialized"), nil
+		}
 		targetLesson, err := m.learnService.GetLesson(ecosystemString, ruleString, cweArray, cveArray, issueType)
 		if err != nil {
-			logger.Err(err).Msg("Failed to get lesson.")
-			return nil, err
+			err = fmt.Errorf("failed to retrieve the learn lessen, error: %w", err)
+			logger.Err(err).Send()
+			return mcp.NewToolResultText(err.Error()), nil
 		}
 
 		if targetLesson == nil {
@@ -121,8 +125,9 @@ func (m *McpLLMBinding) snykOpenLearnLessonHandler(_ workflow.InvocationContext,
 
 		lessonURL, err := buildLessonURL(targetLesson.Url)
 		if err != nil {
-			logger.Error().Err(err).Str("url", targetLesson.Url).Msg("Failed to parse lesson URL")
-			return nil, err
+			err = fmt.Errorf("Failed to parse lesson URL, error: %w", err)
+			logger.Err(err).Str("url", targetLesson.Url).Send()
+			return mcp.NewToolResultText(err.Error()), nil
 		}
 
 		logger.Debug().Str("lessonURL", lessonURL).Msg("Attempting to open lesson URL in browser")
