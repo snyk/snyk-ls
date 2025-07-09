@@ -18,10 +18,10 @@ package types
 
 import (
 	"context"
-	"os"
 	"sync"
 
 	"github.com/pkg/browser"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -57,7 +57,7 @@ type OpenBrowserFunc func(url string)
 
 var (
 	DefaultOpenBrowserFunc OpenBrowserFunc = func(url string) {
-		browser.Stdout = os.Stderr
+		browser.Stdout = log.Logger
 		_ = browser.OpenURL(url)
 	}
 )
