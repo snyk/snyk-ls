@@ -112,7 +112,7 @@ func (m *McpLLMBinding) snykOpenLearnLessonHandler(_ workflow.InvocationContext,
 		}
 		targetLesson, err := m.learnService.GetLesson(ecosystemString, ruleString, cweArray, cveArray, issueType)
 		if err != nil {
-			err = fmt.Errorf("failed to retrieve the learn lessen, error: %w", err)
+			err = fmt.Errorf("failed to retrieve the learn lesson, error: %w", err)
 			logger.Err(err).Send()
 			return mcp.NewToolResultText(err.Error()), nil
 		}

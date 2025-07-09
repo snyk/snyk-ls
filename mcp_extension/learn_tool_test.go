@@ -83,7 +83,7 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok)
 		assert.Contains(t, textContent.Text, "Successfully requested to open lesson: Test Lesson")
-		assert.Equal(t, "https://learn.snyk.io/lesson1?loc=ide", openedURL)
+		assert.Equal(t, "https://learn.snyk.io/lesson1?loc=MCP", openedURL)
 	})
 
 	t.Run("opens lesson successfully with SAST issue type", func(t *testing.T) {
@@ -133,7 +133,7 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok)
 		assert.Contains(t, textContent.Text, "Successfully requested to open lesson: SQL Injection Lesson")
-		assert.Equal(t, "https://learn.snyk.io/lesson1?loc=ide", openedURL)
+		assert.Equal(t, "https://learn.snyk.io/lesson1?loc=MCP", openedURL)
 	})
 
 	t.Run("opens lesson with existing query parameters", func(t *testing.T) {
@@ -182,7 +182,7 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok)
 		assert.Contains(t, textContent.Text, "Successfully requested to open lesson: Test Lesson")
-		assert.Equal(t, "https://learn.snyk.io/lesson1?existing=param&loc=ide", openedURL)
+		assert.Equal(t, "https://learn.snyk.io/lesson1?existing=param&loc=MCP", openedURL)
 	})
 
 	t.Run("handles missing optional parameters", func(t *testing.T) {
@@ -227,9 +227,11 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 
 		result, err := handler(context.Background(), request)
 
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Equal(t, expectedError, err)
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		assert.True(t, ok)
+		assert.Contains(t, textContent.Text, "failed to retrieve the learn lesson")
 	})
 
 	t.Run("returns error when lesson URL is invalid", func(t *testing.T) {
@@ -267,9 +269,9 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 
 		result, err := handler(context.Background(), request)
 
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "invalid lesson URL")
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "invalid lesson URL")
 	})
 
 	t.Run("parses comma-separated CVEs and CWEs", func(t *testing.T) {
