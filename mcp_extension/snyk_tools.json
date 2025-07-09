@@ -1152,7 +1152,7 @@
           "name": "ecosystem",
           "type": "string",
           "isRequired": false,
-          "description": "The ecosystem for which the lesson is searched (output from the scan tools or manually entered). Ecosystems mappings from input to parameter value: `\"js\":             \"javascript\",\n\t\"ts\":             \"javascript\",\n\t\"npm\":            \"javascript\",\n\t\"yarn\":           \"javascript\",\n\t\"yarn-workspace\": \"javascript\",\n\t\"typescript\":     \"javascript\",\n\t\"javascript\":     \"javascript\",\n\n\t\"maven\":  \"java\",\n\t\"gradle\": \"java\",\n\t\"java\":   \"java\",\n\n\t\"pip\":    \"python\",\n\t\"poetry\": \"python\",\n\t\"pipenv\": \"python\",\n\t\"python\": \"python\",\n\n\t\"nuget\":  \"csharp\",\n\t\"paket\":  \"csharp\",\n\t\"csharp\": \"csharp\",\n\n\t\"golangdep\": \"golang\",\n\t\"govendor\":  \"golang\",\n\t\"gomodules\": \"golang\",\n\t\"golang\":    \"golang\",\n\n\t\"composer\": \"php\",\n\t\"php\":      \"php\",\n\n\t\"rubygems\": \"ruby\",\n\t\"ruby\":     \"ruby\",\n\t\"hex\":      \"elixir\",\n\t\"elixir\":   \"elixir\",\n}`"
+          "description": "The ecosystem for which the lesson is searched (output from the scan tools or manually entered). Ecosystems accepted values: `js`, `ts`, `npm`, `yarn`, `yarn-workspace`, `typescript`, `javascript`, `maven`, `gradle`, `java`, `pip`, `python`, `poetry`, `pipenv`, `nuget`, `csharp`, `paket`, `golang`, `dep`, `govendor`, `gomodules`, `composer`, `php`, `rubygems`, `ruby`, `hex`, `elixir`"
         }
       ]
     }
