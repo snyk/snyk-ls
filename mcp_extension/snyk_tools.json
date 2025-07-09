@@ -19,7 +19,7 @@
     },
     {
       "name": "snyk_sca_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed for accurate dependency resolution. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter and for python always use the command parameter. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed for accurate dependency resolution. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
       "command": [
         "test"
       ],
@@ -101,7 +101,10 @@
           "name": "package_manager",
           "type": "string",
           "isRequired": false,
-          "description": "Specifies the package manager type when the `file` option points to a manifest file with a non-standard name (e.g., `req.txt` instead of `requirements.txt` for Python). Accepted values: `npm`, `maven`, `pip`, `yarn`, `gradle`, `composer`, `rubygems`, `nuget`, `golangdep`, `govendor`, `gomodules`. Default is auto-detected."
+          "description": "Specifies the package manager type when the `file` option points to a manifest file with a non-standard name (e.g., `req.txt` instead of `requirements.txt` for Python). Accepted values: `npm`, `maven`, `pip`, `yarn`, `gradle`, `composer`, `rubygems`, `nuget`, `golangdep`, `govendor`, `gomodules`. Default is auto-detected.",
+          "supersedesParams": [
+            "all_projects"
+          ]
         },
         {
           "name": "unmanaged",
@@ -243,6 +246,12 @@
           "type": "boolean",
           "isRequired": false,
           "description": "For Python, skips packages not found in the environment"
+        },
+        {
+          "name": "command",
+          "type": "string",
+          "isRequired": false,
+          "description": "For Python and only python YOU MUST USE THIS ARGUMENT. Mandatory, specifies the Python executable (e.g., `python3`, `python` or absolute path to python executable)."
         }
       ]
     },
@@ -330,7 +339,10 @@
           "name": "package_manager",
           "type": "string",
           "isRequired": false,
-          "description": "Specifies package manager (e.g., `pip`, `maven`) if `file` is non-standard. Default is auto-detected."
+          "description": "Specifies package manager (e.g., `pip`, `maven`) if `file` is non-standard. Default is auto-detected.",
+          "supersedesParams": [
+            "all_projects"
+          ]
         },
         {
           "name": "unmanaged",
@@ -937,7 +949,16 @@
           "name": "package_manager",
           "type": "string",
           "isRequired": false,
-          "description": "For Python, mandatory (`package-manager=pip`) if using `file` with a non-default filename like `requirements-dev.txt`."
+          "description": "For Python, mandatory (`package-manager=pip`) if using `file` with a non-default filename like `requirements-dev.txt`.",
+          "supersedesParams": [
+            "all_projects"
+          ]
+        },
+        {
+          "name": "command",
+          "type": "string",
+          "isRequired": false,
+          "description": "For Python and only python YOU MUST USE THIS ARGUMENT. Mandatory, specifies the Python executable (e.g., `python3`, `python` or absolute path to python executable)."
         }
       ]
     },
