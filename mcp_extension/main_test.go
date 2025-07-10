@@ -18,7 +18,6 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 		configuration.WithAutomaticEnv(),
 	)
 	engineConfig.Set("transport", expectedTransportType)
-	engineConfig.Set(configuration.FLAG_EXPERIMENTAL, true)
 
 	//register extension under test
 	err := Init(engine)
@@ -34,6 +33,6 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 	}()
 
 	assert.Eventuallyf(t, func() bool {
-		return expectedTransportType == engineConfig.GetString("transport") && engineConfig.GetBool(configuration.FLAG_EXPERIMENTAL)
-	}, time.Minute, time.Millisecond, "open browser was not called")
+		return expectedTransportType == engineConfig.GetString("transport")
+	}, time.Minute, time.Millisecond, "")
 }
