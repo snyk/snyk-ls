@@ -219,14 +219,14 @@
               {{end}}
             </section>
           </div>
-          <!-- AI Fix -->
+          <!-- Snyk Agent Fix -->
           <div id="ai-fix-wrapper" class="{{if not .HasAIFix}}hidden{{end}}">
-            <!-- AI fix buttons -->
+            <!-- Snyk Agent Fix buttons -->
             <section id="fix-wrapper" class="ai-fix delimiter-top {{if or (eq .AiFixDiffStatus "NOT_STARTED") (eq .AiFixDiffStatus "IN_PROGRESS")}} show {{else}} hidden {{end}} ">
               <h2 class="ai-fix-header">
-                DeepCode AI Fixes
+                Snyk Agent Fix
               </h2>
-              <p class='{{if ne .AiFixDiffStatus "NOT_STARTED"}}hidden{{end}}'>⚡ Fix this issue by generating a solution using Snyk DeepCode AI</p>
+              <p class='{{if ne .AiFixDiffStatus "NOT_STARTED"}}hidden{{end}}'>⚡ Fix this issue by generating a solution using Snyk Agent Fix</p>
 
               <div class="sn-fix-wrapper">
                 <button id="generate-ai-fix" folder-path="{{.FolderPath}}" file-path="{{.FilePath}}"
@@ -263,7 +263,7 @@
                 </div>
               </div>
             </section>
-            <!-- AI fixes -->
+            <!-- Snyk Agent Fix -->
             <section id="fixes-section" class="sn-ai-fixes delimiter-top {{if eq .AiFixDiffStatus "SUCCESS"}} show {{else}} hidden {{end}}">
               <div id="info-no-diffs" class="font-light {{if eq .AiFixResult "{}"}} show {{else}} hidden {{end}}">
                 <h3 class="ai-fix-header">No AI Fix Available:</h3>
