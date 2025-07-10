@@ -1,6 +1,7 @@
 package mcp_extension
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,6 +12,7 @@ func Test_verifyCommandArgument(t *testing.T) {
 		name     string
 		input    any
 		expected bool
+		goos     string
 	}{
 		{
 			name:     "Full path to python with version",
@@ -26,11 +28,13 @@ func Test_verifyCommandArgument(t *testing.T) {
 			name:     "Windows path to python with version and exe",
 			input:    "C:\\Python\\python3.11.9.exe",
 			expected: true,
+			goos:     "windows",
 		},
 		{
 			name:     "Windows path to python with exe",
 			input:    "C:\\Python310\\python.exe",
 			expected: true,
+			goos:     "windows",
 		},
 		{
 			name:     "python with version",
@@ -51,6 +55,7 @@ func Test_verifyCommandArgument(t *testing.T) {
 			name:     "just python with .exe",
 			input:    "python.exe",
 			expected: true,
+			goos:     "windows",
 		},
 		{
 			name:     "another program",
@@ -71,6 +76,9 @@ func Test_verifyCommandArgument(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.goos == "windows" && runtime.GOOS != "windows" {
+				t.Skip("test only for windows")
+			}
 			actual := verifyCommandArgument(tc.input)
 			assert.Equal(t, tc.expected, actual)
 		})
