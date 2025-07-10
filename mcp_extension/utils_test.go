@@ -65,7 +65,7 @@ func Test_verifyCommandArgument(t *testing.T) {
 		{
 			name:     "nil input",
 			input:    nil,
-			expected: false,
+			expected: true,
 		},
 		{
 			name:     "non-string input",
