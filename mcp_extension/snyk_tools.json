@@ -128,10 +128,7 @@
           "name": "show_vulnerable_paths",
           "type": "string",
           "isRequired": false,
-          "description": "Controls how many vulnerable dependency paths are displayed in the output. Accepted values: `none` (shows no paths), `some` (shows a few examples), `all` (shows all identified paths). Not supported with `json_file_output`.",
-          "supersedesParams": [
-            "json_file_output"
-          ]
+          "description": "Controls how many vulnerable dependency paths are displayed in the output. Accepted values: `none` (shows no paths), `some` (shows a few examples), `all` (shows all identified paths)."
         },
         {
           "name": "project_name",
@@ -150,21 +147,6 @@
           "type": "string",
           "isRequired": false,
           "description": "Manually provides the path to a `.snyk` policy file if it's not located in the project root. Default is `.snyk` in project root."
-        },
-        {
-          "name": "json_file_output",
-          "type": "string",
-          "isRequired": false,
-          "description": "Saves the test output in JSON format to the specified file path. Human-readable output is still shown in the console. Not compatible with `show-vulnerable_paths`. Only use this parameter if explicitly instructed to use it.",
-          "supersedesParams": [
-            "show_vulnerable_paths"
-          ]
-        },
-        {
-          "name": "sarif_file_output",
-          "type": "string",
-          "isRequired": false,
-          "description": "Saves the test output in SARIF format to the specified file path. Only use this parameter if explicitly instructed to use it."
         },
         {
           "name": "severity_threshold",
@@ -278,18 +260,6 @@
           "description": "Specifies the Snyk Organization ID (or slug name) under which the test results should be associated. This can influence private test limits and ensures results are reported to the correct Snyk Organization. Default is from `snyk config` or Snyk account."
         },
         {
-          "name": "json_file_output",
-          "type": "string",
-          "isRequired": false,
-          "description": "Saves the test output as a JSON data structure to the specified file path. This occurs regardless of whether `json` is also used. Note: For Snyk Code, if no security issues are found, Snyk does not create this JSON file. Only use this parameter if explicitly instructed to use it."
-        },
-        {
-          "name": "sarif_file_output",
-          "type": "string",
-          "isRequired": false,
-          "description": "Saves the test output in SARIF format to the specified file path, irrespective of whether `sarif` is used for console output. Only use this parameter if explicitly instructed to use it."
-        },
-        {
           "name": "severity_threshold",
           "type": "string",
           "isRequired": false,
@@ -355,18 +325,6 @@
           "type": "string",
           "isRequired": false,
           "description": "Manually provides the path to a `.snyk` policy file containing ignore rules. Default is `.snyk` in project root (if applicable)."
-        },
-        {
-          "name": "json_file_output",
-          "type": "string",
-          "isRequired": false,
-          "description": "Saves test output in JSON format to the specified file. Only use this parameter if explicitly instructed to use it."
-        },
-        {
-          "name": "sarif_file_output",
-          "type": "string",
-          "isRequired": false,
-          "description": "Saves test output in SARIF format to the specified file. Only use this parameter if explicitly instructed to use it."
         },
         {
           "name": "severity_threshold",
@@ -457,18 +415,6 @@
           "type": "string",
           "isRequired": false,
           "description": "Manually specifies the path to a `.snyk` policy file. Default is `.snyk` in root."
-        },
-        {
-          "name": "json_file_output",
-          "type": "string",
-          "isRequired": false,
-          "description": "Saves test output in JSON format to the specified file. Only use this parameter if explicitly instructed to use it."
-        },
-        {
-          "name": "sarif_file_output",
-          "type": "string",
-          "isRequired": false,
-          "description": "Saves test output in SARIF format to the specified file. Only use this parameter if explicitly instructed to use it."
         },
         {
           "name": "project_business_criticality",
