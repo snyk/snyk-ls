@@ -578,7 +578,7 @@
         {
           "name": "json_file_output",
           "type": "string",
-          "description": "Saves the AIBOM output as a JSON data structure to the specified file path. The target directory must exist and be writable. Only use this parameter if explicitly instructed to use it."
+          "description": "Saves the AIBOM output as a JSON data structure to the specified file path. The target directory must exist and be writable."
         }
       ]
     },
