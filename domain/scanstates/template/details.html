@@ -61,7 +61,7 @@
 <div class="snx-summary">
   {{if or .AnyScanSucceededReference .AnyScanSucceededWorkingDirectory }}
   <p class="snx-message">✋️ <span class="snx-highlight">{{.CurrentIssuesFound}} issues</span> found in your code.</p>
-  <p class="snx-message">⚡️ <span class="snx-highlight">{{.CurrentFixableIssueCount}} issues</span> are fixable with Snyk DeepCode AI{{if not .IsDeepCodeAIEnabled}} (disabled){{end}}.</p>
+  <p class="snx-message">⚡️ <span class="snx-highlight">{{.CurrentFixableIssueCount}} issues</span> are fixable with Snyk Agent Fix{{if not .IsSnykAgentFixEnabled}} (disabled){{end}}.</p>
   {{else}}
   <p class="snx-message">✋️ Scanning for issues in your code.</p>
   <p class="snx-message">⚡ Identifying fixable issues.</p>

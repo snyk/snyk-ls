@@ -156,7 +156,13 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 
 		trustDisabled := invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) || toolDef.IgnoreTrust
 		if !trustDisabled && !m.folderTrust.IsFolderTrusted(workingDir) {
-			return nil, fmt.Errorf("folder '%s' is not trusted. Please run 'snyk_trust' first", workingDir)
+			trustErr := fmt.Sprintf("Error: folder '%s' is not trusted. Please run 'snyk_trust' first", workingDir)
+			logger.Error().Msg(trustErr)
+			return mcp.NewToolResultText(trustErr), nil
+		}
+
+		if cmd, ok := params["command"]; ok && !verifyCommandArgument(cmd.value) {
+			return mcp.NewToolResultText("Error: The provided binary name is invalid. Only use the `command` argument for python scanning and provide absolute path of python binary path."), nil
 		}
 
 		args := buildCommand(m.cliPath, toolDef.Command, params)
