@@ -18,7 +18,6 @@ package mcp_extension
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -62,11 +61,6 @@ func mcpWorkflow(
 		config.Set(configuration.INTEGRATION_VERSION, runtimeInfo.GetVersion())
 	} else {
 		config.Set(configuration.INTEGRATION_VERSION, "unknown")
-	}
-
-	// only run if experimental flag is set
-	if !config.GetBool(configuration.FLAG_EXPERIMENTAL) {
-		return nil, fmt.Errorf("set `--experimental` flag to enable mcp command")
 	}
 
 	output = []workflow.Data{}
