@@ -86,7 +86,6 @@ function nextDiff() {
   showCurrentDiff();
 }
 function retryGenerateAIFix() {
-  console.log('retrying generate AI Fix');
   toggleElement(fixWrapperElem, 'show');
   toggleElement(fixErrorSectionElem, 'hide');
   generateAIFix();

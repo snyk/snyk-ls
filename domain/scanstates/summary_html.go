@@ -93,7 +93,7 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 		"TotalScansCount":                   state.TotalScansCount,
 		"RunningScansCount":                 state.ScansSuccessCount + state.ScansErrorCount,
 		"IsDeltaEnabled":                    isDeltaEnabled,
-		"IsDeepCodeAIEnabled":               renderer.c.IsDeepCodeAIFixEnabled(),
+		"IsDeepCodeAIEnabled":               renderer.c.IsSnykAgentFixEnabled(),
 	}
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {

@@ -173,7 +173,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		sc.updateCodeApiLocalEngine(sastResponse)
 	}
 
-	sc.C.SetDeepCodeAIFixEnabled(sastResponse.AutofixEnabled)
+	sc.C.SetSnykAgentFixEnabled(sastResponse.AutofixEnabled)
 
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[folderPath] == nil {

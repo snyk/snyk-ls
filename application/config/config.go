@@ -202,7 +202,7 @@ type Config struct {
 	mcpServerEnabled                 bool
 	mcpBaseURL                       *url.URL
 	isLSPInitialized                 bool
-	deepCodeAiFixEnabled             bool
+	snykAgentFixEnabled              bool
 }
 
 func CurrentConfig() *Config {
@@ -1318,18 +1318,18 @@ func (c *Config) SetLSPInitialized(initialized bool) {
 	c.isLSPInitialized = initialized
 }
 
-func (c *Config) SetDeepCodeAIFixEnabled(enabled bool) {
+func (c *Config) SetSnykAgentFixEnabled(enabled bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	c.deepCodeAiFixEnabled = enabled
+	c.snykAgentFixEnabled = enabled
 }
 
-func (c *Config) IsDeepCodeAIFixEnabled() bool {
+func (c *Config) IsSnykAgentFixEnabled() bool {
 	c.m.RLock()
 	defer c.m.RUnlock()
 
-	return c.deepCodeAiFixEnabled
+	return c.snykAgentFixEnabled
 }
 
 func (c *Config) EmptyToken() bool {
