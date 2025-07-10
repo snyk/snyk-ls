@@ -197,7 +197,7 @@ var re = regexp.MustCompile(`^python(\d+(\.\d+)?(\.\d+)?)?(\.exe)?$`)
 // verifyCommandArgument verifies if provided command from the LLM used for python matches python binary name
 func verifyCommandArgument(command any) bool {
 	if command == nil {
-		return false
+		return true
 	}
 
 	cmdStr, ok := command.(string)
