@@ -54,7 +54,9 @@ type AuthenticationServiceImpl struct {
 	notifier      noti.Notifier
 	c             *config.Config
 	// key = token, value = isAuthenticated
-	authCache                   *imcache.Cache[string, bool]
+	authCache *imcache.Cache[string, bool]
+	// Last token that was successfully used for authentication. It might have expired (so not be present in authCache).
+	lastUsedToken               string
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
@@ -122,13 +124,13 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		a.c.UpdateApiEndpoints(prioritizedUrl)
 	}
 
-	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification, false)
+	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
 	a.configureProviders(a.c)
-	a.sendAuthenticationAnalytics(analytics.Success, nil)
+	a.sendAuthenticationAnalytics()
 	return token, err
 }
 
-func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics.Status, err error) {
+func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 	id, err2 := instrumentation.GetTargetId(os.Args[0], instrumentation.FilesystemTargetId)
 	if err2 != nil {
 		id = "pkg:filesystem/dummy/dummy"
@@ -136,12 +138,12 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(status analytics
 	event := types.AnalyticsEventParam{
 		InteractionType: "authenticated",
 		Extension:       map[string]any{"auth::auth-type": string(a.c.AuthenticationMethod())},
-		Status:          string(status),
+		Status:          string(analytics.Success),
 		TargetId:        id,
 		TimestampMs:     time.Now().UnixMilli(),
 	}
 
-	analytics2.SendAnalytics(a.c, event, err)
+	analytics2.SendAnalytics(a.c, event, nil)
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
@@ -170,14 +172,14 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	return customUrl
 }
 
-func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool, initialize bool) {
+func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.updateCredentials(newToken, sendNotification, updateApiUrl, initialize)
+	a.updateCredentials(newToken, sendNotification, updateApiUrl)
 }
 
-func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool, initialize bool) {
+func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	oldToken := a.c.Token()
 	if oldToken == newToken && !updateApiUrl {
 		return
@@ -188,10 +190,6 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
 		a.authCache.Remove(oldToken)
 		a.c.SetToken(newToken)
-		// If this token change was triggered by a user (instead of initialization), then send analytics.
-		if !initialize {
-			a.sendAuthenticationAnalytics(analytics.Success, nil)
-		}
 	}
 
 	if sendNotification {
@@ -223,7 +221,7 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
 		a.errorReporter.CaptureError(err)
 	}
-	a.updateCredentials("", true, false, false)
+	a.updateCredentials("", true, false)
 	a.configureProviders(a.c)
 }
 
@@ -239,8 +237,8 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	logger := a.c.Logger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
 
-	_, found := a.authCache.Get(a.c.Token())
-	if found {
+	_, isNotExpired := a.authCache.Get(a.c.Token())
+	if isNotExpired {
 		logger.Debug().Msg("IsAuthenticated (found in cache)")
 		return true
 	}
@@ -276,6 +274,17 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	// We cache the API auth ok for up to 1 minute after last access. If more than a minute has passed, a new check is
 	// performed.
 	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
+
+	// For API Token and PAT authentication, the user may not have authenticated as part of the authenticate flow; e.g.,
+	// they could have pasted the token or PAT in to the IDE. In those cases, this will be the first time they have
+	// authenticated using that token or PAT
+	if a.lastUsedToken != a.c.Token() {
+		a.lastUsedToken = a.c.Token()
+
+		if a.c.AuthenticationMethod() != types.OAuthAuthentication {
+			a.sendAuthenticationAnalytics()
+		}
+	}
 	logger.Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
 	return true
 }
