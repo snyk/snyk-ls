@@ -46,7 +46,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS,
-		gomock.Any(), gomock.Any()).Return(nil, nil)
+		gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
 
 	output, err := cmd.Execute(context.Background())
 	require.NoError(t, err)
@@ -75,6 +75,18 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 
+	mockEngine.EXPECT().InvokeWithInputAndConfig(
+		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
+		mock.MatchedBy(func(i interface{}) bool {
+			inputData, ok := i.([]workflow.Data)
+			require.Truef(t, ok, "input should be workflow data")
+			require.Lenf(t, inputData, 1, "should only have one input")
+			payload := string(inputData[0].GetPayload().([]byte))
+
+			require.Contains(t, payload, "authenticated")
+			return true
+		}),
+		gomock.Any())
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
 		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
 		mock.MatchedBy(func(i interface{}) bool {
