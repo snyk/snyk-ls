@@ -138,6 +138,7 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 	event := types.AnalyticsEventParam{
 		InteractionType: "authenticated",
 		Extension:       map[string]any{"auth::auth-type": string(a.c.AuthenticationMethod())},
+		Category:        []string{},
 		Status:          string(analytics.Success),
 		TargetId:        id,
 		TimestampMs:     time.Now().UnixMilli(),
