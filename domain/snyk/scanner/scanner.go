@@ -41,7 +41,6 @@ import (
 var (
 	_ Scanner                  = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
-	_ PackageScanner           = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.CacheProvider       = (*DelegatingConcurrentScanner)(nil)
 )
 
@@ -160,19 +159,6 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 	for _, productScanner := range sc.scanners {
 		if cacheProvider, isCacheProvider := productScanner.(snyk.CacheProvider); isCacheProvider {
 			cacheProvider.RegisterCacheRemovalHandler(handler)
-		}
-	}
-}
-
-func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config *config.Config, path types.FilePath, content string) {
-	if config.Offline() {
-		config.Logger().Warn().Str("method", "ScanPackages").Msgf("we are offline, not scanning %s, %s", path, content)
-		return
-	}
-
-	for _, scanner := range sc.scanners {
-		if s, ok := scanner.(PackageScanner); ok {
-			s.ScanPackages(ctx, config, path, content)
 		}
 	}
 }

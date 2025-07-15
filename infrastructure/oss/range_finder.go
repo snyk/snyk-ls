@@ -17,7 +17,6 @@
 package oss
 
 import (
-	"path/filepath"
 	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -47,11 +46,7 @@ func getDependencyNode(c *config.Config, path types.FilePath, issue ossIssue, fi
 	pathAsString := string(path)
 	switch issue.PackageManager {
 	case "npm":
-		if packageScanSupportedExtensions[filepath.Ext(pathAsString)] {
-			finder = &htmlRangeFinder{path: path, fileContent: fileContent, config: c}
-		} else {
-			finder = &NpmRangeFinder{uri: path, fileContent: fileContent}
-		}
+		finder = &NpmRangeFinder{uri: path, fileContent: fileContent}
 	case "maven":
 		if strings.HasSuffix(pathAsString, "pom.xml") {
 			finder = &mavenRangeFinder{path: path, fileContent: fileContent, c: c}
