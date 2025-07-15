@@ -1354,6 +1354,9 @@ func TestSnykTrustHandler(t *testing.T) {
 }
 
 func TestScanToolJSONOutput(t *testing.T) {
+	// Use a temporary directory as scan path
+	scanPath := t.TempDir()
+
 	tests := []struct {
 		name     string
 		toolName string
@@ -1421,8 +1424,8 @@ func TestScanToolJSONOutput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Test the mapping function directly
-			result := mapScanResponse(tt.toolName, tt.mockJSON, true)
+			// Test the mapping function directly with scan path
+			result := mapScanResponse(tt.toolName, tt.mockJSON, true, scanPath)
 
 			// Parse the result
 			var enhanced EnhancedScanResult

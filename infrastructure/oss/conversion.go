@@ -19,6 +19,7 @@ package oss
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
@@ -97,3 +98,84 @@ func convertVulnerabilityToIssue(vuln ossIssue, scanResult *scanResult) *snyk.Is
 
 // Export type for use in conversion
 type ScanResult = scanResult
+
+// GetSafeAdditionalData creates OssIssueData with safe remediation handling
+func GetSafeAdditionalData(vuln ossIssue, scanResult *scanResult, affectedFilePath types.FilePath) snyk.OssIssueData {
+	additionalData := snyk.OssIssueData{
+		Key:               fmt.Sprintf("%s-%s-%d", vuln.Id, affectedFilePath, 0), // Simplified key without util package
+		Title:             vuln.Title,
+		Name:              vuln.Name,
+		Identifiers:       snyk.Identifiers{CWE: vuln.Identifiers.CWE, CVE: vuln.Identifiers.CVE},
+		LineNumber:        vuln.LineNumber,
+		Description:       vuln.Description,
+		Version:           vuln.Version,
+		License:           vuln.License,
+		PackageManager:    vuln.PackageManager,
+		PackageName:       vuln.PackageName,
+		From:              vuln.From,
+		FixedIn:           vuln.FixedIn,
+		UpgradePath:       vuln.UpgradePath,
+		IsUpgradable:      vuln.IsUpgradable,
+		CVSSv3:            vuln.CVSSv3,
+		CvssScore:         vuln.CvssScore,
+		Exploit:           vuln.Exploit,
+		IsPatchable:       vuln.IsPatchable,
+		ProjectName:       scanResult.ProjectName,
+		DisplayTargetFile: affectedFilePath,
+		Language:          vuln.Language,
+		Remediation:       getSafeRemediation(vuln),
+	}
+
+	// Add references
+	for _, ref := range vuln.References {
+		u, _ := url.Parse(string(ref.Url))
+		additionalData.References = append(additionalData.References, types.Reference{
+			Url:   u,
+			Title: ref.Title,
+		})
+	}
+
+	return additionalData
+}
+
+// getSafeRemediation provides remediation advice with safe bounds checking
+func getSafeRemediation(vuln ossIssue) string {
+	// Check if we have a valid upgrade path
+	hasUpgradePath := len(vuln.UpgradePath) > 1
+
+	if vuln.IsUpgradable || vuln.IsPatchable {
+		if hasUpgradePath {
+			// Safe access to upgrade path
+			upgradePath, ok := vuln.UpgradePath[1].(string)
+			if ok && upgradePath != "" {
+				upgradeMessage := "Upgrade to " + upgradePath
+
+				// Check if it's outdated (safe bounds checking)
+				if len(vuln.From) > 1 && vuln.UpgradePath[1] == vuln.From[1] {
+					if vuln.IsPatchable {
+						return upgradeMessage
+					} else {
+						return getOutdatedMessage(vuln)
+					}
+				}
+				return upgradeMessage
+			}
+		}
+	}
+
+	return "No remediation advice available"
+}
+
+// getOutdatedMessage returns message for outdated dependencies
+func getOutdatedMessage(vuln ossIssue) string {
+	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
+		"otherwise you would be using a newer %s than %s@%s. ", vuln.Name, vuln.Name, vuln.Version)
+
+	if vuln.PackageManager == "npm" || vuln.PackageManager == "yarn" || vuln.PackageManager == "yarn-workspace" {
+		remediationAdvice += "Try relocking your lockfile or deleting node_modules and reinstalling" +
+			" your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	} else {
+		remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	}
+	return remediationAdvice
+}

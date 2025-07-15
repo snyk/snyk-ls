@@ -28,8 +28,8 @@ import (
 
 // ConvertSARIFJSONToIssues converts SARIF JSON output to Issues without requiring a full scanner instance
 // This is a simplified version for use by MCP and other tools that need conversion without full scanner
-// Note: This uses a simplified path (no base directory) so file paths will be relative
-func ConvertSARIFJSONToIssues(sarifJSON []byte) ([]types.Issue, error) {
+// basePath is the absolute path where the scan was run (optional - if empty, paths remain relative)
+func ConvertSARIFJSONToIssues(sarifJSON []byte, basePath string) ([]types.Issue, error) {
 	var sarifResponse codeClientSarif.SarifResponse
 
 	err := json.Unmarshal(sarifJSON, &sarifResponse)
@@ -41,8 +41,8 @@ func ConvertSARIFJSONToIssues(sarifJSON []byte) ([]types.Issue, error) {
 	c := config.CurrentConfig()
 	converter := SarifConverter{sarif: sarifResponse, c: c}
 
-	// Convert with empty base directory - paths will be relative
-	issues, err := converter.toIssues(types.FilePath(""))
+	// Convert with provided base path (or empty for relative paths)
+	issues, err := converter.toIssues(types.FilePath(basePath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert SARIF to issues: %w", err)
 	}

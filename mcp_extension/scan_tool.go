@@ -178,26 +178,42 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return nil, err
 		}
 
-		// For SCA and SAST scans with JSON output, enhance the response
-		if toolDef.Name == SnykScaTest || toolDef.Name == SnykCodeTest {
-			// Check if --json flag is present in the command
-			hasJSON := false
-			for _, arg := range args {
-				if arg == "--json" {
-					hasJSON = true
-					break
-				}
-			}
-
-			if hasJSON {
-				// Map the response to include structured issue data
-				enhancedOutput := mapScanResponse(toolDef.Name, output, err == nil)
-				return mcp.NewToolResultText(enhancedOutput), nil
-			}
+		// Check if we should enhance the output
+		if shouldEnhanceOutput(toolDef, params) {
+			output = m.enhanceOutput(toolDef.Name, output, err == nil, params)
 		}
 
 		return mcp.NewToolResultText(output), nil
 	}
+}
+
+// shouldEnhanceOutput checks if the output should be enhanced for LLMs
+func shouldEnhanceOutput(toolDef SnykMcpToolsDefinition, params map[string]convertedToolParameter) bool {
+	// Only enhance for SCA and SAST scans
+	if toolDef.Name != SnykScaTest && toolDef.Name != SnykCodeTest {
+		return false
+	}
+
+	// Check if JSON output was requested
+	if val, ok := params["json"]; ok && val.value == true {
+		return true
+	}
+
+	return false
+}
+
+// enhanceOutput enhances the scan output with structured issue data
+func (m *McpLLMBinding) enhanceOutput(toolName string, output string, success bool, params map[string]convertedToolParameter) string {
+	// Extract the scan path from params
+	scanPath := ""
+	if pathParam, ok := params["path"]; ok {
+		if pathStr, ok := pathParam.value.(string); ok {
+			scanPath = pathStr
+		}
+	}
+
+	// Map the response to enhanced format
+	return mapScanResponse(toolName, output, success, scanPath)
 }
 
 func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

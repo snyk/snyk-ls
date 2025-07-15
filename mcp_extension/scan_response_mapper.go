@@ -18,7 +18,6 @@ package mcp_extension
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -42,6 +41,7 @@ type IssueData struct {
 	FilePath    string   `json:"filePath,omitempty"`
 	Line        int      `json:"line,omitempty"`
 	Column      int      `json:"column,omitempty"`
+	Message     string   `json:"message,omitempty"` // Added for SAST issues
 }
 
 // EnhancedScanResult contains the original scan output and extracted issues
@@ -53,84 +53,106 @@ type EnhancedScanResult struct {
 	Issues         []IssueData `json:"issues"`
 }
 
-// mapScanResponse maps the scan response based on the tool name
-func mapScanResponse(toolName string, output string, success bool) string {
-	if !strings.HasPrefix(toolName, "snyk_") || (!strings.Contains(toolName, "_scan") && toolName != "snyk_sca_scan") {
-		return output
-	}
-
-	var scanType string
-	switch toolName {
-	case "snyk_sca_scan":
-		scanType = "SCA"
-	case "snyk_code_scan":
-		scanType = "SAST"
-	default:
-		return output
-	}
-
-	var issues []types.Issue
-	var err error
-
-	if scanType == "SCA" {
-		issues, err = oss.ConvertJSONToIssues([]byte(output))
-	} else if scanType == "SAST" {
-		issues, err = code.ConvertSARIFJSONToIssues([]byte(output))
-	}
-
-	if err != nil {
-		// Return original output if parsing fails
-		return output
-	}
-
-	// Convert issues to IssueData for serialization
-	issueDataList := make([]IssueData, 0, len(issues))
-	for _, issue := range issues {
-		issueData := IssueData{
-			ID:       issue.GetID(),
-			Title:    issue.GetAdditionalData().GetTitle(),
-			Severity: strings.ToLower(issue.GetSeverity().String()),
-			CWEs:     issue.GetCWEs(),
-			CVEs:     issue.GetCVEs(),
-		}
-
-		// Add type-specific fields
-		if scanType == "SCA" {
-			if additionalData, ok := issue.GetAdditionalData().(snyk.OssIssueData); ok {
-				issueData.PackageName = additionalData.PackageName
-				issueData.Version = additionalData.Version
-				issueData.Ecosystem = additionalData.PackageManager
-				issueData.FixedIn = additionalData.FixedIn
-				issueData.Remediation = additionalData.Remediation
-			}
-		} else if scanType == "SAST" {
-			if additionalData, ok := issue.GetAdditionalData().(snyk.CodeIssueData); ok {
-				issueData.RuleID = additionalData.RuleId
-				issueData.FilePath = string(issue.GetAffectedFilePath())
-				if len(additionalData.Rows) > 0 {
-					issueData.Line = additionalData.Rows[0] + 1 // Convert to 1-based
-				}
-				if len(additionalData.Cols) > 0 {
-					issueData.Column = additionalData.Cols[0] + 1
-				}
-			}
-		}
-
-		issueDataList = append(issueDataList, issueData)
-	}
-
+// mapScanResponse maps the scan output to an enhanced format for LLMs
+func mapScanResponse(toolName string, output string, success bool, scanPath string) string {
 	result := EnhancedScanResult{
 		OriginalOutput: output,
 		Success:        success,
-		ScanType:       strings.ToLower(scanType),
-		IssueCount:     len(issueDataList),
-		Issues:         issueDataList,
+		Issues:         []IssueData{},
 	}
 
-	enhancedOutput, err := json.Marshal(result)
-	if err != nil {
+	// Extract scan type and handle response
+	if isSCATool(toolName) {
+		result.ScanType = "sca"
+		extractSCAIssues(&result)
+	} else if isSASTTool(toolName) {
+		result.ScanType = "sast"
+		extractSASTIssues(&result, scanPath)
+	} else {
+		// For other tools, just return the original output
 		return output
 	}
 
-	return string(enhancedOutput)
+	// Marshal enhanced result
+	enhancedJSON, err := json.Marshal(result)
+	if err != nil {
+		// Fallback to original output if marshaling fails
+		return output
+	}
+
+	return string(enhancedJSON)
+}
+
+// isSCATool checks if the tool is an SCA scanner
+func isSCATool(toolName string) bool {
+	return toolName == "snyk_sca_scan"
+}
+
+// isSASTTool checks if the tool is a SAST scanner
+func isSASTTool(toolName string) bool {
+	return toolName == "snyk_code_scan"
+}
+
+// extractSCAIssues extracts issues from SCA scan output
+func extractSCAIssues(result *EnhancedScanResult) {
+	// Try to parse JSON output
+	issues, err := oss.ConvertJSONToIssues([]byte(result.OriginalOutput))
+	if err != nil {
+		// If parsing fails, just keep the original output
+		return
+	}
+
+	// Convert to IssueData format
+	for _, issue := range issues {
+		result.Issues = append(result.Issues, convertIssueToData(issue))
+	}
+	result.IssueCount = len(result.Issues)
+}
+
+// extractSASTIssues extracts issues from SAST scan output
+func extractSASTIssues(result *EnhancedScanResult, scanPath string) {
+	// Try to parse SARIF JSON output
+	issues, err := code.ConvertSARIFJSONToIssues([]byte(result.OriginalOutput), scanPath)
+	if err != nil {
+		// If parsing fails, just keep the original output
+		return
+	}
+
+	// Convert to IssueData format
+	for _, issue := range issues {
+		result.Issues = append(result.Issues, convertIssueToData(issue))
+	}
+	result.IssueCount = len(result.Issues)
+}
+
+// convertIssueToData converts a types.Issue to IssueData
+func convertIssueToData(issue types.Issue) IssueData {
+	issueData := IssueData{
+		ID:       issue.GetID(),
+		Title:    issue.GetAdditionalData().GetTitle(),
+		Severity: issue.GetSeverity().String(),
+		RuleID:   issue.GetID(), // For Snyk, ID is often the rule ID
+		CWEs:     issue.GetCWEs(),
+		CVEs:     issue.GetCVEs(),
+	}
+
+	// Extract additional data based on issue type
+	if additionalData, ok := issue.GetAdditionalData().(snyk.OssIssueData); ok {
+		issueData.PackageName = additionalData.PackageName
+		issueData.Version = additionalData.Version
+		issueData.Ecosystem = additionalData.PackageManager
+		issueData.FixedIn = additionalData.FixedIn
+		issueData.Remediation = additionalData.Remediation
+		issueData.FilePath = string(additionalData.DisplayTargetFile)
+		issueData.Line = additionalData.LineNumber
+	}
+
+	if additionalData, ok := issue.GetAdditionalData().(snyk.CodeIssueData); ok {
+		issueData.FilePath = string(issue.GetAffectedFilePath())
+		issueData.Line = issue.GetRange().Start.Line
+		issueData.Column = issue.GetRange().Start.Character
+		issueData.Message = additionalData.Message
+	}
+
+	return issueData
 }
