@@ -126,7 +126,7 @@ func TestSnykTestHandler(t *testing.T) {
 	fixture := setupTestFixture(t)
 
 	// Configure mock CLI to return a specific JSON response
-	mockOutput := `{ok": false,"vulnerabilities": [{"id": "SNYK-JS-ACORN-559469","title": "Regular Expression Denial of Service (ReDoS)","severity":"high","packageName": "acorn"},{"id": "SNYK-JS-TUNNELAGENT-1572284","title": "Uninitialized Memory Exposure","severity": "medium","packageName": "tunnel-agent"}],"dependencyCount": 42,"packageManager": "npm"}`
+	mockOutput := `{"ok": false,"vulnerabilities": [{"id": "SNYK-JS-ACORN-559469","title": "Regular Expression Denial of Service (ReDoS)","severity":"high","packageName": "acorn","version": "5.5.3","CVE": ["CVE-2020-7598"],"CWE": ["CWE-400"],"fixedIn": ["5.7.4", "6.4.1", "7.1.1"]},{"id": "SNYK-JS-TUNNELAGENT-1572284","title": "Uninitialized Memory Exposure","severity": "medium","packageName": "tunnel-agent","version": "0.6.0","CVE": [],"CWE": ["CWE-201"],"fixedIn": []}],"dependencyCount": 42,"packageManager": "npm"}`
 	fixture.mockCliOutput(mockOutput)
 	tool := getToolWithName(t, fixture.tools, SnykScaTest)
 	require.NotNil(t, tool)
@@ -203,10 +203,29 @@ func TestSnykTestHandler(t *testing.T) {
 			textContent, ok := result.Content[0].(mcp.TextContent)
 			require.True(t, ok)
 			content := strings.TrimSpace(textContent.Text)
-			require.Contains(t, content, "ok")
-			require.Contains(t, content, "vulnerabilities")
-			require.Contains(t, content, "dependencyCount")
-			require.Contains(t, content, "packageManager")
+
+			// Parse the enhanced JSON response
+			var enhanced EnhancedScanResult
+			err = json.Unmarshal([]byte(content), &enhanced)
+			require.NoError(t, err, "Failed to parse enhanced scan result")
+
+			// Check that we have both original output and structured data
+			require.NotEmpty(t, enhanced.OriginalOutput)
+			require.True(t, enhanced.Success)
+			require.NotNil(t, enhanced.StructuredData)
+
+			// Verify structured data
+			require.Equal(t, "sca", enhanced.StructuredData.ScanType)
+			require.Equal(t, "npm", enhanced.StructuredData.Ecosystem)
+			require.Equal(t, 42, enhanced.StructuredData.DependencyCount)
+			require.Equal(t, 2, enhanced.StructuredData.IssueCount)
+			require.Len(t, enhanced.StructuredData.Vulnerabilities, 2)
+
+			// Check first vulnerability details
+			vuln := enhanced.StructuredData.Vulnerabilities[0]
+			require.Equal(t, "SNYK-JS-ACORN-559469", vuln.ID)
+			require.Contains(t, vuln.CVEs, "CVE-2020-7598")
+			require.Contains(t, vuln.CWEs, "CWE-400")
 		})
 	}
 }
@@ -215,8 +234,8 @@ func TestSnykCodeTestHandler(t *testing.T) {
 	// Setup
 	fixture := setupTestFixture(t)
 
-	// Configure mock CLI
-	mockJsonResponse := `{"ok":false,"issues":[],"filesAnalyzed":10}`
+	// Configure mock CLI with SARIF response
+	mockJsonResponse := `{"type":"sarif","progress":1,"status":"COMPLETE","sarif":{"runs":[{"tool":{"driver":{"rules":[{"id":"javascript/DangerousEval","shortDescription":{"text":"Code Injection"},"properties":{"cwe":["CWE-94","CWE-95"]}}]}},"results":[{"ruleId":"javascript/DangerousEval","level":"warning","locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/app.js"},"region":{"startLine":10,"startColumn":5}}}]}]}]},"coverage":[{"files":10}]}`
 	fixture.mockCliOutput(mockJsonResponse)
 
 	// Get the tool definition
@@ -302,9 +321,30 @@ func TestSnykCodeTestHandler(t *testing.T) {
 				return
 			}
 			content := strings.TrimSpace(textContent.Text)
-			require.Contains(t, content, "ok")
-			require.Contains(t, content, "issues")
-			require.Contains(t, content, "filesAnalyzed")
+
+			// Parse the enhanced JSON response
+			var enhanced EnhancedScanResult
+			err = json.Unmarshal([]byte(content), &enhanced)
+			require.NoError(t, err, "Failed to parse enhanced scan result")
+
+			// Check that we have both original output and structured data
+			require.NotEmpty(t, enhanced.OriginalOutput)
+			require.True(t, enhanced.Success)
+			require.NotNil(t, enhanced.StructuredData)
+
+			// Verify structured data
+			require.Equal(t, "sast", enhanced.StructuredData.ScanType)
+			require.Equal(t, 10, enhanced.StructuredData.FilesAnalyzed)
+			require.Equal(t, 1, enhanced.StructuredData.IssueCount)
+			require.Len(t, enhanced.StructuredData.CodeIssues, 1)
+
+			// Check issue details
+			issue := enhanced.StructuredData.CodeIssues[0]
+			require.Equal(t, "javascript/DangerousEval", issue.RuleID)
+			require.Equal(t, "Code Injection", issue.Title)
+			require.Equal(t, "medium", issue.Severity)
+			require.Contains(t, issue.CWEs, "CWE-94")
+			require.Contains(t, issue.CWEs, "CWE-95")
 		})
 	}
 }

@@ -177,6 +177,13 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		if err != nil {
 			return nil, err
 		}
+
+		// Use mapper for SCA and SAST tools to provide enhanced output
+		if toolDef.Name == SnykScaTest || toolDef.Name == SnykCodeTest {
+			mapper := NewScanResponseMapper(&logger)
+			return mapper.MapScanResponse(toolDef.Name, output)
+		}
+
 		return mcp.NewToolResultText(output), nil
 	}
 }

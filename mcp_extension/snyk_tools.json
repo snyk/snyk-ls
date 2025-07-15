@@ -24,7 +24,8 @@
         "test"
       ],
       "standardParams": [
-        "all_projects"
+        "all_projects",
+        "json"
       ],
       "params": [
         {
@@ -244,7 +245,7 @@
         "code",
         "test"
       ],
-      "standardParams": [],
+      "standardParams": ["json"],
       "params": [
         {
           "name": "path",
