@@ -126,7 +126,7 @@ func TestSnykTestHandler(t *testing.T) {
 	fixture := setupTestFixture(t)
 
 	// Configure mock CLI to return a specific JSON response
-	mockOutput := `{"ok": false,"vulnerabilities": [{"id": "SNYK-JS-ACORN-559469","title": "Regular Expression Denial of Service (ReDoS)","severity":"high","packageName": "acorn","version": "5.5.3","CVE": ["CVE-2020-7598"],"CWE": ["CWE-400"],"fixedIn": ["5.7.4", "6.4.1", "7.1.1"]},{"id": "SNYK-JS-TUNNELAGENT-1572284","title": "Uninitialized Memory Exposure","severity": "medium","packageName": "tunnel-agent","version": "0.6.0","CVE": [],"CWE": ["CWE-201"],"fixedIn": []}],"dependencyCount": 42,"packageManager": "npm"}`
+	mockOutput := `{"ok": false,"vulnerabilities": [{"id": "SNYK-JS-ACORN-559469","title": "Regular Expression Denial of Service (ReDoS)","severity":"high","packageName": "acorn","version": "5.5.3","CVE": ["CVE-2020-7598"],"CWE": ["CWE-400"],"fixedIn": ["5.7.4", "6.4.1", "7.1.1"],"isUpgradable": true,"isPatchable": false,"upgradePath": ["my-app@1.0.0", "acorn@7.1.1"],"from": ["my-app@1.0.0", "acorn@5.5.3"]},{"id": "SNYK-JS-TUNNELAGENT-1572284","title": "Uninitialized Memory Exposure","severity": "medium","packageName": "tunnel-agent","version": "0.6.0","CVE": [],"CWE": ["CWE-201"],"fixedIn": [],"isUpgradable": false,"isPatchable": false,"upgradePath": [],"from": ["my-app@1.0.0", "tunnel-agent@0.6.0"]}],"dependencyCount": 42,"packageManager": "npm"}`
 	fixture.mockCliOutput(mockOutput)
 	tool := getToolWithName(t, fixture.tools, SnykScaTest)
 	require.NotNil(t, tool)
@@ -226,6 +226,12 @@ func TestSnykTestHandler(t *testing.T) {
 			require.Equal(t, "SNYK-JS-ACORN-559469", vuln.ID)
 			require.Contains(t, vuln.CVEs, "CVE-2020-7598")
 			require.Contains(t, vuln.CWEs, "CWE-400")
+			require.Equal(t, "Upgrade to acorn@7.1.1", vuln.Remediation)
+
+			// Check second vulnerability details
+			vuln2 := enhanced.StructuredData.Vulnerabilities[1]
+			require.Equal(t, "SNYK-JS-TUNNELAGENT-1572284", vuln2.ID)
+			require.Equal(t, "No remediation advice available", vuln2.Remediation)
 		})
 	}
 }

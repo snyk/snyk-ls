@@ -61,6 +61,7 @@ type ScaVulnInfo struct {
 	CVEs        []string `json:"cves,omitempty"`
 	CWEs        []string `json:"cwes,omitempty"`
 	FixedIn     []string `json:"fixedIn,omitempty"`
+	Remediation string   `json:"remediation,omitempty"`
 }
 
 // SastIssueInfo contains issue information for SAST
@@ -137,14 +138,18 @@ func (m *ScanResponseMapper) parseScaOutput(output string) (*StructuredScanData,
 	// SCA output structure based on infrastructure/oss/types.go
 	type scaResult struct {
 		Vulnerabilities []struct {
-			ID          string   `json:"id"`
-			Title       string   `json:"title"`
-			Severity    string   `json:"severity"`
-			PackageName string   `json:"packageName"`
-			Version     string   `json:"version"`
-			CVE         []string `json:"CVE,omitempty"`
-			CWE         []string `json:"CWE,omitempty"`
-			FixedIn     []string `json:"fixedIn,omitempty"`
+			ID           string   `json:"id"`
+			Title        string   `json:"title"`
+			Severity     string   `json:"severity"`
+			PackageName  string   `json:"packageName"`
+			Version      string   `json:"version"`
+			CVE          []string `json:"CVE,omitempty"`
+			CWE          []string `json:"CWE,omitempty"`
+			FixedIn      []string `json:"fixedIn,omitempty"`
+			IsUpgradable bool     `json:"isUpgradable,omitempty"`
+			IsPatchable  bool     `json:"isPatchable,omitempty"`
+			UpgradePath  []any    `json:"upgradePath,omitempty"`
+			From         []string `json:"from,omitempty"`
 		} `json:"vulnerabilities"`
 		Ok              bool   `json:"ok"`
 		DependencyCount int    `json:"dependencyCount"`
@@ -185,6 +190,7 @@ func (m *ScanResponseMapper) parseScaOutput(output string) (*StructuredScanData,
 				CVEs:        vuln.CVE,
 				CWEs:        vuln.CWE,
 				FixedIn:     vuln.FixedIn,
+				Remediation: m.getRemediationAdvice(vuln, result.PackageManager),
 			})
 			data.IssueCount++
 		}
@@ -306,4 +312,62 @@ func (m *ScanResponseMapper) mapSarifLevel(level string) string {
 	default:
 		return "low"
 	}
+}
+
+// getRemediationAdvice generates remediation advice based on Snyk's logic
+func (m *ScanResponseMapper) getRemediationAdvice(vuln struct {
+	ID           string   `json:"id"`
+	Title        string   `json:"title"`
+	Severity     string   `json:"severity"`
+	PackageName  string   `json:"packageName"`
+	Version      string   `json:"version"`
+	CVE          []string `json:"CVE,omitempty"`
+	CWE          []string `json:"CWE,omitempty"`
+	FixedIn      []string `json:"fixedIn,omitempty"`
+	IsUpgradable bool     `json:"isUpgradable,omitempty"`
+	IsPatchable  bool     `json:"isPatchable,omitempty"`
+	UpgradePath  []any    `json:"upgradePath,omitempty"`
+	From         []string `json:"from,omitempty"`
+}, packageManager string) string {
+	// Get upgrade message
+	upgradeMessage := ""
+	hasUpgradePath := len(vuln.UpgradePath) > 1
+	if hasUpgradePath {
+		upgradePath, ok := vuln.UpgradePath[1].(string)
+		if ok {
+			upgradeMessage = "Upgrade to " + upgradePath
+		}
+	}
+
+	// Check if outdated
+	isOutdated := hasUpgradePath && len(vuln.From) > 1 && vuln.UpgradePath[1] == vuln.From[1]
+
+	if vuln.IsUpgradable || vuln.IsPatchable {
+		if isOutdated {
+			if vuln.IsPatchable {
+				return upgradeMessage
+			} else {
+				return m.getOutdatedDependencyMessage(vuln.PackageName, vuln.Version, packageManager)
+			}
+		} else if upgradeMessage != "" {
+			return upgradeMessage
+		}
+	}
+
+	return "No remediation advice available"
+}
+
+// getOutdatedDependencyMessage generates message for outdated dependencies
+func (m *ScanResponseMapper) getOutdatedDependencyMessage(packageName, version, packageManager string) string {
+	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
+		"otherwise you would be using a newer %s than %s@%s. ", packageName, packageName, version)
+
+	if packageManager == "npm" || packageManager == "yarn" || packageManager == "yarn-workspace" {
+		remediationAdvice += "Try relocking your lockfile or deleting node_modules and reinstalling" +
+			" your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	} else {
+		remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	}
+
+	return remediationAdvice
 }
