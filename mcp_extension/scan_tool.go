@@ -139,7 +139,7 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	return resAsString, nil
 }
 
-// defaultHandler creates a generic handler for Snyk commands that applies standard parameters
+// defaultHandler executes a command and enhances output for scan tools
 func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "defaultHandler").Logger()
@@ -178,10 +178,22 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return nil, err
 		}
 
-		// For SCA and SAST scans, map the response to include additional fields
+		// For SCA and SAST scans with JSON output, enhance the response
 		if toolDef.Name == SnykScaTest || toolDef.Name == SnykCodeTest {
-			mapper := NewScanResponseMapper(logger)
-			return mapper.MapResponse(toolDef.Name, output)
+			// Check if --json flag is present in the command
+			hasJSON := false
+			for _, arg := range args {
+				if arg == "--json" {
+					hasJSON = true
+					break
+				}
+			}
+
+			if hasJSON {
+				// Map the response to include structured issue data
+				enhancedOutput := mapScanResponse(toolDef.Name, output, err == nil)
+				return mcp.NewToolResultText(enhancedOutput), nil
+			}
 		}
 
 		return mcp.NewToolResultText(output), nil
