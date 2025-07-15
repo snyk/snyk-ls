@@ -25,116 +25,91 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// EnhancedScanResult contains both the original CLI output and additional structured data
+// EnhancedScanResult contains both the original CLI output and extracted issue information
 type EnhancedScanResult struct {
-	// OriginalOutput is the human-readable CLI output
-	OriginalOutput string `json:"originalOutput"`
-	// StructuredData contains the parsed JSON/SARIF data with additional fields
-	StructuredData *StructuredScanData `json:"structuredData,omitempty"`
-	// Success indicates if the scan was successful
-	Success bool `json:"success"`
+	OriginalOutput string      `json:"originalOutput"`
+	Success        bool        `json:"success"`
+	ScanType       string      `json:"scanType"`
+	IssueCount     int         `json:"issueCount"`
+	Issues         []IssueData `json:"issues,omitempty"`
 }
 
-// StructuredScanData contains the additional fields needed by LLMs
-type StructuredScanData struct {
+// IssueData contains the essential fields needed by LLMs
+type IssueData struct {
 	// Common fields
-	IssueCount int    `json:"issueCount"`
-	ScanType   string `json:"scanType"` // "sca" or "sast"
-
-	// SCA specific fields
-	Ecosystem       string        `json:"ecosystem,omitempty"` // package manager
-	DependencyCount int           `json:"dependencyCount,omitempty"`
-	Vulnerabilities []ScaVulnInfo `json:"vulnerabilities,omitempty"`
-
-	// SAST specific fields
-	FilesAnalyzed int             `json:"filesAnalyzed,omitempty"`
-	CodeIssues    []SastIssueInfo `json:"codeIssues,omitempty"`
-}
-
-// ScaVulnInfo contains vulnerability information for SCA
-type ScaVulnInfo struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Severity    string   `json:"severity"`
-	PackageName string   `json:"packageName"`
-	Version     string   `json:"version"`
-	CVEs        []string `json:"cves,omitempty"`
-	CWEs        []string `json:"cwes,omitempty"`
-	FixedIn     []string `json:"fixedIn,omitempty"`
-	Remediation string   `json:"remediation,omitempty"`
-}
-
-// SastIssueInfo contains issue information for SAST
-type SastIssueInfo struct {
-	RuleID   string   `json:"ruleId"`
+	ID       string   `json:"id"`
 	Title    string   `json:"title"`
 	Severity string   `json:"severity"`
-	FilePath string   `json:"filePath"`
-	Line     int      `json:"line"`
-	Column   int      `json:"column"`
+	RuleID   string   `json:"ruleId,omitempty"`
 	CWEs     []string `json:"cwes,omitempty"`
+	CVEs     []string `json:"cves,omitempty"`
+
+	// SCA specific
+	PackageName string   `json:"packageName,omitempty"`
+	Version     string   `json:"version,omitempty"`
+	Ecosystem   string   `json:"ecosystem,omitempty"`
+	FixedIn     []string `json:"fixedIn,omitempty"`
+	Remediation string   `json:"remediation,omitempty"`
+
+	// SAST specific
+	FilePath string `json:"filePath,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Column   int    `json:"column,omitempty"`
 }
 
-// ScanResponseMapper handles mapping of scan results
+// ScanResponseMapper handles parsing of scan JSON/SARIF responses
 type ScanResponseMapper struct {
-	logger *zerolog.Logger
+	logger zerolog.Logger
 }
 
-// NewScanResponseMapper creates a new mapper instance
-func NewScanResponseMapper(logger *zerolog.Logger) *ScanResponseMapper {
-	return &ScanResponseMapper{logger: logger}
+// NewScanResponseMapper creates a new instance of ScanResponseMapper
+func NewScanResponseMapper(logger zerolog.Logger) *ScanResponseMapper {
+	return &ScanResponseMapper{
+		logger: logger,
+	}
 }
 
-// MapScanResponse maps the CLI output to an enhanced result based on the tool name
-func (m *ScanResponseMapper) MapScanResponse(toolName string, cliOutput string) (*mcp.CallToolResult, error) {
-	m.logger.Debug().Str("toolName", toolName).Msg("Mapping scan response")
+// MapResponse processes JSON output from scanners and returns enhanced response
+func (m *ScanResponseMapper) MapResponse(toolName string, jsonOutput string) (*mcp.CallToolResult, error) {
+	m.logger.Debug().
+		Str("tool", toolName).
+		Msg("Mapping scan response")
 
-	// For non-scan tools, return the output as-is
-	if toolName != SnykScaTest && toolName != SnykCodeTest {
-		return mcp.NewToolResultText(cliOutput), nil
-	}
-
-	// Create enhanced result
-	enhanced := &EnhancedScanResult{
-		OriginalOutput: cliOutput,
-		Success:        true,
-	}
-
-	// Try to parse structured data based on tool type
+	// Parse based on scanner type
+	var enhanced EnhancedScanResult
 	switch toolName {
-	case SnykScaTest:
-		structuredData, err := m.parseScaOutput(cliOutput)
-		if err != nil {
-			m.logger.Warn().Err(err).Msg("Failed to parse SCA JSON, returning original output only")
-			// Still return the original output even if parsing fails
-			enhanced.Success = false
-		} else {
-			enhanced.StructuredData = structuredData
-		}
-
-	case SnykCodeTest:
-		structuredData, err := m.parseSastOutput(cliOutput)
-		if err != nil {
-			m.logger.Warn().Err(err).Msg("Failed to parse SAST SARIF, returning original output only")
-			// Still return the original output even if parsing fails
-			enhanced.Success = false
-		} else {
-			enhanced.StructuredData = structuredData
-		}
+	case "snyk_sca_scan":
+		enhanced = m.mapSCAResponse(jsonOutput)
+	case "snyk_code_scan":
+		enhanced = m.mapSASTResponse(jsonOutput)
+	default:
+		// Return original output for non-scanner tools
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{mcp.TextContent{Type: "text", Text: jsonOutput}},
+		}, nil
 	}
 
-	// Convert to JSON for structured response
-	jsonBytes, err := json.Marshal(enhanced)
+	// Serialize the enhanced result to JSON
+	resultJSON, err := json.MarshalIndent(enhanced, "", "  ")
 	if err != nil {
-		m.logger.Error().Err(err).Msg("Failed to marshal enhanced result")
-		return mcp.NewToolResultText(cliOutput), nil
+		m.logger.Err(err).Msg("Failed to serialize enhanced result")
+		return nil, fmt.Errorf("failed to serialize result: %w", err)
 	}
 
-	return mcp.NewToolResultText(string(jsonBytes)), nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{mcp.TextContent{Type: "text", Text: string(resultJSON)}},
+	}, nil
 }
 
-// parseScaOutput parses SCA JSON output
-func (m *ScanResponseMapper) parseScaOutput(output string) (*StructuredScanData, error) {
+// mapSCAResponse handles SCA (Open Source) scan output
+func (m *ScanResponseMapper) mapSCAResponse(jsonOutput string) EnhancedScanResult {
+	result := EnhancedScanResult{
+		OriginalOutput: jsonOutput,
+		Success:        true,
+		ScanType:       "sca",
+		Issues:         []IssueData{},
+	}
+
 	// SCA output structure based on infrastructure/oss/types.go
 	type scaResult struct {
 		Vulnerabilities []struct {
@@ -159,29 +134,26 @@ func (m *ScanResponseMapper) parseScaOutput(output string) (*StructuredScanData,
 	var results []scaResult
 
 	// Try to parse as array first (multiple projects)
-	if err := json.Unmarshal([]byte(output), &results); err != nil {
+	if err := json.Unmarshal([]byte(jsonOutput), &results); err != nil {
 		// Try single result
 		var singleResult scaResult
-		if err := json.Unmarshal([]byte(output), &singleResult); err != nil {
-			return nil, fmt.Errorf("failed to parse SCA JSON: %w", err)
+		if err := json.Unmarshal([]byte(jsonOutput), &singleResult); err != nil {
+			m.logger.Err(err).Msg("Failed to parse SCA JSON")
+			result.Success = false
+			return result
 		}
 		results = []scaResult{singleResult}
 	}
 
-	// Aggregate results
-	data := &StructuredScanData{
-		ScanType:        "sca",
-		Vulnerabilities: []ScaVulnInfo{},
-	}
-
-	for _, result := range results {
-		if data.Ecosystem == "" && result.PackageManager != "" {
-			data.Ecosystem = result.PackageManager
+	// Extract issues
+	ecosystem := ""
+	for _, scanResult := range results {
+		if ecosystem == "" && scanResult.PackageManager != "" {
+			ecosystem = scanResult.PackageManager
 		}
-		data.DependencyCount += result.DependencyCount
 
-		for _, vuln := range result.Vulnerabilities {
-			data.Vulnerabilities = append(data.Vulnerabilities, ScaVulnInfo{
+		for _, vuln := range scanResult.Vulnerabilities {
+			issue := IssueData{
 				ID:          vuln.ID,
 				Title:       vuln.Title,
 				Severity:    vuln.Severity,
@@ -190,23 +162,31 @@ func (m *ScanResponseMapper) parseScaOutput(output string) (*StructuredScanData,
 				CVEs:        vuln.CVE,
 				CWEs:        vuln.CWE,
 				FixedIn:     vuln.FixedIn,
-				Remediation: m.getRemediationAdvice(vuln, result.PackageManager),
-			})
-			data.IssueCount++
+				Ecosystem:   scanResult.PackageManager,
+				Remediation: m.getRemediationAdvice(vuln, scanResult.PackageManager),
+			}
+			result.Issues = append(result.Issues, issue)
 		}
 	}
 
-	return data, nil
+	result.IssueCount = len(result.Issues)
+	return result
 }
 
-// parseSastOutput parses SAST SARIF output
-func (m *ScanResponseMapper) parseSastOutput(output string) (*StructuredScanData, error) {
-	// SARIF structure based on infrastructure/code/convert.go
-	type sarifResponse struct {
-		Type     string  `json:"type"`
-		Progress float64 `json:"progress"`
-		Status   string  `json:"status"`
-		Sarif    struct {
+// mapSASTResponse handles SAST (Code) scan output
+func (m *ScanResponseMapper) mapSASTResponse(jsonOutput string) EnhancedScanResult {
+	result := EnhancedScanResult{
+		OriginalOutput: jsonOutput,
+		Success:        true,
+		ScanType:       "sast",
+		Issues:         []IssueData{},
+	}
+
+	// Parse the SARIF response structure
+	var sarifResp struct {
+		Type   string `json:"type"`
+		Status string `json:"status"`
+		Sarif  struct {
 			Runs []struct {
 				Tool struct {
 					Driver struct {
@@ -238,30 +218,19 @@ func (m *ScanResponseMapper) parseSastOutput(output string) (*StructuredScanData
 				} `json:"results"`
 			} `json:"runs"`
 		} `json:"sarif"`
-		Coverage []struct {
-			Files int `json:"files"`
-		} `json:"coverage"`
 	}
 
-	var sarif sarifResponse
-	if err := json.Unmarshal([]byte(output), &sarif); err != nil {
-		return nil, fmt.Errorf("failed to parse SARIF JSON: %w", err)
+	err := json.Unmarshal([]byte(jsonOutput), &sarifResp)
+	if err != nil {
+		m.logger.Err(err).Msg("Failed to parse SAST JSON")
+		result.Success = false
+		return result
 	}
 
-	data := &StructuredScanData{
-		ScanType:   "sast",
-		CodeIssues: []SastIssueInfo{},
-	}
+	if len(sarifResp.Sarif.Runs) > 0 {
+		run := sarifResp.Sarif.Runs[0]
 
-	// Count analyzed files
-	for _, cov := range sarif.Coverage {
-		data.FilesAnalyzed += cov.Files
-	}
-
-	if len(sarif.Sarif.Runs) > 0 {
-		run := sarif.Sarif.Runs[0]
-
-		// Build a map of rule ID to rule info
+		// Build rule map
 		ruleMap := make(map[string]struct {
 			title string
 			cwes  []string
@@ -278,26 +247,27 @@ func (m *ScanResponseMapper) parseSastOutput(output string) (*StructuredScanData
 		}
 
 		// Process results
-		for _, result := range run.Results {
-			ruleInfo := ruleMap[result.RuleID]
+		for _, res := range run.Results {
+			ruleInfo := ruleMap[res.RuleID]
 
-			for _, loc := range result.Locations {
-				issue := SastIssueInfo{
-					RuleID:   result.RuleID,
+			for _, loc := range res.Locations {
+				issue := IssueData{
+					ID:       res.RuleID,
+					RuleID:   res.RuleID,
 					Title:    ruleInfo.title,
-					Severity: m.mapSarifLevel(result.Level),
+					Severity: m.mapSarifLevel(res.Level),
+					CWEs:     ruleInfo.cwes,
 					FilePath: loc.PhysicalLocation.ArtifactLocation.URI,
 					Line:     loc.PhysicalLocation.Region.StartLine,
 					Column:   loc.PhysicalLocation.Region.StartColumn,
-					CWEs:     ruleInfo.cwes,
 				}
-				data.CodeIssues = append(data.CodeIssues, issue)
-				data.IssueCount++
+				result.Issues = append(result.Issues, issue)
 			}
 		}
 	}
 
-	return data, nil
+	result.IssueCount = len(result.Issues)
+	return result
 }
 
 // mapSarifLevel maps SARIF severity levels to standard severity strings
@@ -314,7 +284,7 @@ func (m *ScanResponseMapper) mapSarifLevel(level string) string {
 	}
 }
 
-// getRemediationAdvice generates remediation advice based on Snyk's logic
+// getRemediationAdvice generates remediation advice for SCA vulnerabilities
 func (m *ScanResponseMapper) getRemediationAdvice(vuln struct {
 	ID           string   `json:"id"`
 	Title        string   `json:"title"`

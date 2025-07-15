@@ -178,10 +178,10 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return nil, err
 		}
 
-		// Use mapper for SCA and SAST tools to provide enhanced output
+		// For SCA and SAST scans, map the response to include additional fields
 		if toolDef.Name == SnykScaTest || toolDef.Name == SnykCodeTest {
-			mapper := NewScanResponseMapper(&logger)
-			return mapper.MapScanResponse(toolDef.Name, output)
+			mapper := NewScanResponseMapper(logger)
+			return mapper.MapResponse(toolDef.Name, output)
 		}
 
 		return mcp.NewToolResultText(output), nil

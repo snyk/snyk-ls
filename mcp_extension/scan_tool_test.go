@@ -209,29 +209,25 @@ func TestSnykTestHandler(t *testing.T) {
 			err = json.Unmarshal([]byte(content), &enhanced)
 			require.NoError(t, err, "Failed to parse enhanced scan result")
 
-			// Check that we have both original output and structured data
+			// Check that we have both original output and issue data
 			require.NotEmpty(t, enhanced.OriginalOutput)
 			require.True(t, enhanced.Success)
-			require.NotNil(t, enhanced.StructuredData)
+			require.Equal(t, "sca", enhanced.ScanType)
+			require.Equal(t, 2, enhanced.IssueCount)
+			require.Len(t, enhanced.Issues, 2)
 
-			// Verify structured data
-			require.Equal(t, "sca", enhanced.StructuredData.ScanType)
-			require.Equal(t, "npm", enhanced.StructuredData.Ecosystem)
-			require.Equal(t, 42, enhanced.StructuredData.DependencyCount)
-			require.Equal(t, 2, enhanced.StructuredData.IssueCount)
-			require.Len(t, enhanced.StructuredData.Vulnerabilities, 2)
+			// Check first issue details
+			issue := enhanced.Issues[0]
+			require.Equal(t, "SNYK-JS-ACORN-559469", issue.ID)
+			require.Contains(t, issue.CVEs, "CVE-2020-7598")
+			require.Contains(t, issue.CWEs, "CWE-400")
+			require.Equal(t, "npm", issue.Ecosystem)
+			require.Equal(t, "Upgrade to acorn@7.1.1", issue.Remediation)
 
-			// Check first vulnerability details
-			vuln := enhanced.StructuredData.Vulnerabilities[0]
-			require.Equal(t, "SNYK-JS-ACORN-559469", vuln.ID)
-			require.Contains(t, vuln.CVEs, "CVE-2020-7598")
-			require.Contains(t, vuln.CWEs, "CWE-400")
-			require.Equal(t, "Upgrade to acorn@7.1.1", vuln.Remediation)
-
-			// Check second vulnerability details
-			vuln2 := enhanced.StructuredData.Vulnerabilities[1]
-			require.Equal(t, "SNYK-JS-TUNNELAGENT-1572284", vuln2.ID)
-			require.Equal(t, "No remediation advice available", vuln2.Remediation)
+			// Check second issue details
+			issue2 := enhanced.Issues[1]
+			require.Equal(t, "SNYK-JS-TUNNELAGENT-1572284", issue2.ID)
+			require.Equal(t, "No remediation advice available", issue2.Remediation)
 		})
 	}
 }
@@ -333,19 +329,15 @@ func TestSnykCodeTestHandler(t *testing.T) {
 			err = json.Unmarshal([]byte(content), &enhanced)
 			require.NoError(t, err, "Failed to parse enhanced scan result")
 
-			// Check that we have both original output and structured data
+			// Check that we have both original output and issue data
 			require.NotEmpty(t, enhanced.OriginalOutput)
 			require.True(t, enhanced.Success)
-			require.NotNil(t, enhanced.StructuredData)
-
-			// Verify structured data
-			require.Equal(t, "sast", enhanced.StructuredData.ScanType)
-			require.Equal(t, 10, enhanced.StructuredData.FilesAnalyzed)
-			require.Equal(t, 1, enhanced.StructuredData.IssueCount)
-			require.Len(t, enhanced.StructuredData.CodeIssues, 1)
+			require.Equal(t, "sast", enhanced.ScanType)
+			require.Equal(t, 1, enhanced.IssueCount)
+			require.Len(t, enhanced.Issues, 1)
 
 			// Check issue details
-			issue := enhanced.StructuredData.CodeIssues[0]
+			issue := enhanced.Issues[0]
 			require.Equal(t, "javascript/DangerousEval", issue.RuleID)
 			require.Equal(t, "Code Injection", issue.Title)
 			require.Equal(t, "medium", issue.Severity)
