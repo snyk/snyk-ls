@@ -93,16 +93,15 @@ func isSASTTool(toolName string) bool {
 	return toolName == "snyk_code_scan"
 }
 
-// extractSCAIssues extracts issues from SCA scan output
+// extractSCAIssues extracts structured issue data from SCA JSON output
 func extractSCAIssues(result *EnhancedScanResult) {
-	// Try to parse JSON output
-	issues, err := oss.ConvertJSONToIssues([]byte(result.OriginalOutput))
+	// Use existing OSS converter
+	issues, err := oss.ConvertJSONToIssuesWithoutDependencies([]byte(result.OriginalOutput))
 	if err != nil {
-		// If parsing fails, just keep the original output
 		return
 	}
 
-	// Convert to IssueData format
+	// Convert to IssueData format for serialization
 	for _, issue := range issues {
 		result.Issues = append(result.Issues, convertIssueToData(issue))
 	}
