@@ -42,7 +42,7 @@ type IssueData struct {
 	FilePath    string   `json:"filePath,omitempty"`
 	Line        int      `json:"line,omitempty"`
 	Column      int      `json:"column,omitempty"`
-	Message     string   `json:"message,omitempty"` // Added for SAST issues
+	Message     string   `json:"message,omitempty"`
 	LearnURL    string   `json:"learnUrl,omitempty"`
 }
 
@@ -128,7 +128,7 @@ func extractSASTIssues(result *EnhancedScanResult, scanPath string) {
 // convertIssueToData converts a types.Issue to IssueData for serialization
 func convertIssueToData(issue types.Issue) IssueData {
 	title := ""
-	learnURL := issue.GetLessonUrl() // Default to wrapper's lesson URL
+	learnURL := issue.GetLessonUrl()
 
 	if additionalData := issue.GetAdditionalData(); additionalData != nil {
 		title = additionalData.GetTitle()
@@ -153,7 +153,7 @@ func convertIssueToData(issue types.Issue) IssueData {
 			data.Remediation = ad.Remediation
 			data.CVEs = ad.Identifiers.CVE
 			data.CWEs = ad.Identifiers.CWE
-			data.RuleID = ad.Key // For OSS, the key contains the rule ID
+			data.RuleID = ad.Key
 			// OSS stores lesson URL in additional data
 			if ad.Lesson != "" {
 				data.LearnURL = ad.Lesson
@@ -162,8 +162,6 @@ func convertIssueToData(issue types.Issue) IssueData {
 		case snyk.CodeIssueData:
 			data.RuleID = ad.RuleId
 			data.CWEs = ad.CWE
-			// For SAST, CVEs are not typically applicable
-			// Code issues use the wrapper's lesson URL which is already set
 		}
 	}
 

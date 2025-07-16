@@ -1478,8 +1478,6 @@ func TestScanToolJSONOutput(t *testing.T) {
 				require.NotEmpty(t, issue.Ecosystem)
 				require.NotEmpty(t, issue.CVEs)
 				require.NotEmpty(t, issue.CWEs)
-				// TODO: Fix LearnURL population
-				// require.NotEmpty(t, issue.LearnURL, "LearnURL should be populated for SCA issues")
 			} else if tt.toolName == "snyk_code_scan" {
 				require.Equal(t, "sast", enhancedResult.ScanType)
 				// Check SAST-specific fields
@@ -1487,8 +1485,6 @@ func TestScanToolJSONOutput(t *testing.T) {
 				require.NotEmpty(t, issue.RuleID)
 				require.NotEmpty(t, issue.FilePath)
 				require.Greater(t, issue.Line, 0)
-				// TODO: Fix LearnURL population
-				// require.NotEmpty(t, issue.LearnURL, "LearnURL should be populated for SAST issues")
 			}
 		})
 	}
