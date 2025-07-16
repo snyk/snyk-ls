@@ -8,6 +8,7 @@
 - Maintain existing code patterns and conventions 
 
 ** how to implement **
+- don't comment what is done, instead comment why something is done if the code is not clear
 - always write and update test cases. iterate until they pass.
 - please check the makefile - make lint runs the linter, other targets might be relevant as well.
 - use existing mocks, don't write new ones.

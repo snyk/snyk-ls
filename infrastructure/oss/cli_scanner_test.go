@@ -29,6 +29,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -310,6 +311,12 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 
 	learnService := mock_learn.NewMockService(ctrl)
 	errorReporter := error_reporting.NewTestErrorReporter()
+
+	// Expect GetLesson to be called for the non-ignored issue (SNYK-1) when there's no AST node
+	learnService.EXPECT().
+		GetLesson("", "SNYK-1", nil, nil, types.DependencyVulnerability).
+		Return(&learn.Lesson{Url: "https://learn.snyk.io/lesson/test"}, nil).
+		Times(1)
 
 	// Empty package issue cache
 	packageIssueCache := make(map[string][]types.Issue)

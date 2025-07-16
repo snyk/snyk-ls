@@ -45,6 +45,15 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 	// this needs to be first so that the lesson from Snyk Learn is added
 	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueDepNode)
 
+	// If no code actions were added (e.g., no AST node), but we have a learn service,
+	// try to get the lesson directly for the MCP use case
+	if len(codeActions) == 0 && learnService != nil && issue.lesson == nil && !issue.isLicenseIssue() && !issue.IsIgnored {
+		lesson, err := learnService.GetLesson(issue.PackageManager, issue.Id, issue.Identifiers.CWE, issue.Identifiers.CVE, types.DependencyVulnerability)
+		if err == nil && lesson != nil && lesson.Url != "" {
+			issue.lesson = lesson
+		}
+	}
+
 	var codelensCommands []types.CommandData
 	for _, codeAction := range codeActions {
 		if strings.Contains(codeAction.GetTitle(), "Upgrade to") {
