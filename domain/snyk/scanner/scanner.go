@@ -50,10 +50,6 @@ type Scanner interface {
 	Init() error
 }
 
-type PackageScanner interface {
-	ScanPackages(ctx context.Context, config *config.Config, path types.FilePath, content string)
-}
-
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
 	scanners            []types.ProductScanner
