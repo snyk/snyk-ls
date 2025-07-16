@@ -40,13 +40,11 @@ func ConvertJSONToIssuesWithoutDependencies(jsonOutput []byte) ([]types.Issue, e
 // ConvertJSONToIssuesWithLearnService converts OSS JSON output to Issue objects with optional learn service
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
 func ConvertJSONToIssuesWithLearnService(jsonData []byte, learnService learn.Service) ([]types.Issue, error) {
-	// Create minimal dependencies
 	c := config.CurrentConfig()
 	if c == nil {
 		c = config.New()
 		config.SetCurrentConfig(c)
 	}
-	errorReporter := error_reporting.NewTestErrorReporter()
 
 	// Call the standalone version of unmarshallAndRetrieveAnalysis
 	issues := UnmarshallAndRetrieveAnalysis(
@@ -55,7 +53,7 @@ func ConvertJSONToIssuesWithLearnService(jsonData []byte, learnService learn.Ser
 		"", // workDir
 		"", // path
 		c,
-		errorReporter,
+		error_reporting.NewTestErrorReporter(),
 		learnService,
 		make(map[string][]types.Issue), // empty package issue cache
 		false,                          // readFiles
@@ -88,27 +86,24 @@ func UnmarshallAndRetrieveAnalysis(
 		return nil
 	}
 
-	var issues []types.Issue
+	var allIssues []types.Issue
 	for _, scanResult := range scanResults {
 		targetFilePath := getAbsTargetFilePath(c, scanResult, workDir, path)
+
 		var fileContent []byte
 
-		if readFiles && targetFilePath != "" && uri.IsRegularFile(targetFilePath) {
+		if targetFilePath != "" && readFiles && uri.IsRegularFile(targetFilePath) {
 			fileContent, err = os.ReadFile(string(targetFilePath))
 			if err != nil {
-				reportedErr := fmt.Errorf("skipping scanResult for path: %s displayTargetFile: %s in workDir: %s as we can't determine the absolute filesystem path. %w", scanResult.Path, scanResult.DisplayTargetFile, workDir, err)
-				errorReporter.CaptureErrorAndReportAsIssue(targetFilePath, reportedErr)
-				logger.Error().Err(reportedErr).Send()
-				continue
+				logger.Error().Err(err).Str("filePath", string(targetFilePath)).Msg("Failed to read file")
 			}
 		}
 
-		// Retrieve issues using the existing converter
-		resultIssues := convertScanResultToIssues(c, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache)
-		issues = append(issues, resultIssues...)
+		issues := convertScanResultToIssues(c, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache)
+		allIssues = append(allIssues, issues...)
 	}
 
-	return issues
+	return allIssues
 }
 
 // UnmarshallOssJson is a standalone version of CLIScanner.unmarshallOssJson

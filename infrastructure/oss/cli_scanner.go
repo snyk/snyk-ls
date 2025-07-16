@@ -328,7 +328,6 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	workDir types.FilePath,
 	path types.FilePath,
 ) (issues []types.Issue) {
-	// Use the standalone function to get issues
 	issues = UnmarshallAndRetrieveAnalysis(
 		ctx,
 		res,
