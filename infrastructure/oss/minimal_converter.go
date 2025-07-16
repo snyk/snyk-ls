@@ -17,97 +17,117 @@
 package oss
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-
-	"github.com/golang/mock/gomock"
+	"os"
+	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 // ConvertJSONToIssuesWithoutDependencies converts OSS JSON output to Issues using the existing converter
-// with minimal dependencies (test error reporter and mock learn service)
+// with minimal dependencies (test error reporter)
 func ConvertJSONToIssuesWithoutDependencies(jsonOutput []byte) ([]types.Issue, error) {
 	return ConvertJSONToIssuesWithLearnService(jsonOutput, nil)
 }
 
-// ConvertJSONToIssuesWithLearnService converts OSS JSON output to Issues using the existing converter
-// with minimal dependencies. If learnService is nil, a mock will be used.
-func ConvertJSONToIssuesWithLearnService(jsonOutput []byte, learnService learn.Service) ([]types.Issue, error) {
-	var scanResults []scanResult
-	var allIssues []types.Issue
-
-	// Try parsing as array first
-	if err := json.Unmarshal(jsonOutput, &scanResults); err != nil {
-		// Try parsing as single object
-		var singleResult scanResult
-		if err := json.Unmarshal(jsonOutput, &singleResult); err != nil {
-			return nil, fmt.Errorf("failed to parse OSS JSON: %w", err)
-		}
-		scanResults = append(scanResults, singleResult)
-	}
-
+// ConvertJSONToIssuesWithLearnService converts OSS JSON output to Issue objects with optional learn service
+// This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
+func ConvertJSONToIssuesWithLearnService(jsonData []byte, learnService learn.Service) ([]types.Issue, error) {
 	// Create minimal dependencies
 	c := config.CurrentConfig()
 	if c == nil {
 		c = config.New()
 		config.SetCurrentConfig(c)
 	}
-
-	// Use test error reporter
 	errorReporter := error_reporting.NewTestErrorReporter()
 
-	// Use provided learn service or create mock
-	if learnService == nil {
-		ctrl := gomock.NewController(&mockTB{})
-		learnService = mock_learn.NewMockService(ctrl)
-		learnService.(*mock_learn.MockService).
-			EXPECT().
-			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(nil, nil).AnyTimes()
-	}
+	// Call the standalone version of unmarshallAndRetrieveAnalysis
+	issues := UnmarshallAndRetrieveAnalysis(
+		context.Background(),
+		jsonData,
+		"", // workDir
+		"", // path
+		c,
+		errorReporter,
+		learnService,
+		make(map[string][]types.Issue), // empty package issue cache
+		false,                          // readFiles
+	)
 
-	// Empty package issue cache
-	packageIssueCache := make(map[string][]types.Issue)
-
-	for _, scanResult := range scanResults {
-		// Determine paths
-		workDir := types.FilePath("")
-		targetFilePath := types.FilePath(scanResult.DisplayTargetFile)
-		if targetFilePath == "" {
-			targetFilePath = types.FilePath(scanResult.Path)
-		}
-
-		// Use the existing converter with empty file content (no AST parsing)
-		issues := convertScanResultToIssues(c, &scanResult, workDir, targetFilePath, []byte{}, learnService, errorReporter, packageIssueCache)
-		allIssues = append(allIssues, issues...)
-	}
-
-	return allIssues, nil
+	return issues, nil
 }
 
-// mockTB is a minimal implementation of testing.TB for gomock
-type mockTB struct{}
+// UnmarshallAndRetrieveAnalysis is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
+// that can be used without a CLIScanner instance
+func UnmarshallAndRetrieveAnalysis(
+	ctx context.Context,
+	res []byte,
+	workDir types.FilePath,
+	path types.FilePath,
+	c *config.Config,
+	errorReporter error_reporting.ErrorReporter,
+	learnService learn.Service,
+	packageIssueCache map[string][]types.Issue,
+	readFiles bool,
+) []types.Issue {
+	logger := c.Logger().With().Str("method", "UnmarshallAndRetrieveAnalysis").Logger()
+	if ctx.Err() != nil {
+		return nil
+	}
 
-func (t *mockTB) Cleanup(func())                {}
-func (t *mockTB) Error(args ...interface{})     {}
-func (t *mockTB) Errorf(string, ...interface{}) {}
-func (t *mockTB) Fail()                         {}
-func (t *mockTB) FailNow()                      {}
-func (t *mockTB) Failed() bool                  { return false }
-func (t *mockTB) Fatal(args ...interface{})     {}
-func (t *mockTB) Fatalf(string, ...interface{}) {}
-func (t *mockTB) Helper()                       {}
-func (t *mockTB) Log(args ...interface{})       {}
-func (t *mockTB) Logf(string, ...interface{})   {}
-func (t *mockTB) Name() string                  { return "ConvertJSONToIssuesWithoutDependencies" }
-func (t *mockTB) Setenv(string, string)         {}
-func (t *mockTB) Skip(args ...interface{})      {}
-func (t *mockTB) SkipNow()                      {}
-func (t *mockTB) Skipf(string, ...interface{})  {}
-func (t *mockTB) Skipped() bool                 { return false }
-func (t *mockTB) TempDir() string               { return "" }
+	scanResults, err := UnmarshallOssJson(res)
+	if err != nil {
+		errorReporter.CaptureErrorAndReportAsIssue(path, err)
+		return nil
+	}
+
+	var issues []types.Issue
+	for _, scanResult := range scanResults {
+		targetFilePath := getAbsTargetFilePath(c, scanResult, workDir, path)
+		var fileContent []byte
+
+		if readFiles && targetFilePath != "" && uri.IsRegularFile(targetFilePath) {
+			fileContent, err = os.ReadFile(string(targetFilePath))
+			if err != nil {
+				reportedErr := fmt.Errorf("skipping scanResult for path: %s displayTargetFile: %s in workDir: %s as we can't determine the absolute filesystem path. %w", scanResult.Path, scanResult.DisplayTargetFile, workDir, err)
+				errorReporter.CaptureErrorAndReportAsIssue(targetFilePath, reportedErr)
+				logger.Error().Err(reportedErr).Send()
+				continue
+			}
+		}
+
+		// Retrieve issues using the existing converter
+		resultIssues := convertScanResultToIssues(c, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache)
+		issues = append(issues, resultIssues...)
+	}
+
+	return issues
+}
+
+// UnmarshallOssJson is a standalone version of CLIScanner.unmarshallOssJson
+func UnmarshallOssJson(res []byte) (scanResults []scanResult, err error) {
+	output := string(res)
+	if strings.HasPrefix(output, "[") {
+		err = json.Unmarshal(res, &scanResults)
+		if err != nil {
+			err = errors.Join(err, fmt.Errorf("couldn't unmarshal CLI response. Input: %s", output))
+			return nil, err
+		}
+	} else {
+		var result scanResult
+		err = json.Unmarshal(res, &result)
+		if err != nil {
+			err = errors.Join(err, fmt.Errorf("couldn't unmarshal CLI response. Input: %s", output))
+			return nil, err
+		}
+		scanResults = append(scanResults, result)
+	}
+	return scanResults, err
+}

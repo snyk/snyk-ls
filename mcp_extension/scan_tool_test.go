@@ -126,7 +126,7 @@ func TestSnykTestHandler(t *testing.T) {
 	fixture := setupTestFixture(t)
 
 	// Configure mock CLI to return a specific JSON response
-	mockOutput := `{"ok": false,"vulnerabilities": [{"id": "SNYK-JS-ACORN-559469","title": "Regular Expression Denial of Service (ReDoS)","severity":"high","packageName": "acorn","version": "5.5.3","identifiers": {"CVE": ["CVE-2020-7598"],"CWE": ["CWE-400"]},"fixedIn": ["5.7.4", "6.4.1", "7.1.1"],"isUpgradable": true,"isPatchable": false,"upgradePath": ["my-app@1.0.0", "acorn@7.1.1"],"from": ["my-app@1.0.0", "acorn@5.5.3"],"packageManager": "npm"},{"id": "SNYK-JS-TUNNELAGENT-1572284","title": "Uninitialized Memory Exposure","severity": "medium","packageName": "tunnel-agent","version": "0.6.0","identifiers": {"CVE": [],"CWE": ["CWE-201"]},"fixedIn": [],"isUpgradable": false,"isPatchable": false,"upgradePath": [],"from": ["my-app@1.0.0", "tunnel-agent@0.6.0"],"packageManager": "npm"}],"dependencyCount": 42,"packageManager": "npm"}`
+	mockOutput := `[{"ok": false,"vulnerabilities": [{"id": "SNYK-JS-ACORN-559469","title": "Regular Expression Denial of Service (ReDoS)","severity":"high","packageName": "acorn","version": "5.5.3","identifiers": {"CVE": ["CVE-2020-7598"],"CWE": ["CWE-400"]},"fixedIn": ["5.7.4", "6.4.1", "7.1.1"],"isUpgradable": true,"isPatchable": false,"upgradePath": ["my-app@1.0.0", "acorn@7.1.1"],"from": ["my-app@1.0.0", "acorn@5.5.3"],"packageManager": "npm"},{"id": "SNYK-JS-TUNNELAGENT-1572284","title": "Uninitialized Memory Exposure","severity": "medium","packageName": "tunnel-agent","version": "0.6.0","identifiers": {"CVE": [],"CWE": ["CWE-201"]},"fixedIn": [],"isUpgradable": false,"isPatchable": false,"upgradePath": [],"from": ["my-app@1.0.0", "tunnel-agent@0.6.0"],"packageManager": "npm"}],"dependencyCount": 42,"packageManager": "npm"}]`
 	fixture.mockCliOutput(mockOutput)
 	tool := getToolWithName(t, fixture.tools, SnykScaTest)
 	require.NotNil(t, tool)
@@ -1468,58 +1468,5 @@ func TestScanToolJSONOutput(t *testing.T) {
 				require.Greater(t, issue.Line, 0)
 			}
 		})
-	}
-}
-
-func verifyEnhancedResult(t *testing.T, enhanced *EnhancedScanResult, mockJSON string) {
-	t.Helper()
-	if enhanced.ScanType == "" {
-		t.Error("ScanType should not be empty")
-	}
-	if enhanced.OriginalOutput != mockJSON {
-		t.Error("OriginalOutput should contain the original JSON")
-	}
-	if !enhanced.Success {
-		t.Error("Success should be true")
-	}
-	if enhanced.IssueCount == 0 {
-		t.Error("Should have extracted at least one issue")
-	}
-	if len(enhanced.Issues) != enhanced.IssueCount {
-		t.Errorf("Issue count mismatch: count=%d, actual=%d", enhanced.IssueCount, len(enhanced.Issues))
-	}
-}
-
-func verifySCAIssue(t *testing.T, issues []IssueData) {
-	t.Helper()
-	if len(issues) == 0 {
-		return
-	}
-	issue := issues[0]
-	if issue.ID != "SNYK-JS-LODASH-1018905" {
-		t.Errorf("Expected issue ID SNYK-JS-LODASH-1018905, got %s", issue.ID)
-	}
-	if len(issue.CWEs) == 0 {
-		t.Errorf("Expected CWEs to be populated, got: %+v", issue)
-	}
-	if len(issue.CVEs) == 0 {
-		t.Errorf("Expected CVEs to be populated, got: %+v", issue)
-	}
-	if issue.Ecosystem != "npm" {
-		t.Errorf("Expected ecosystem npm, got %s", issue.Ecosystem)
-	}
-}
-
-func verifySASTIssue(t *testing.T, issues []IssueData) {
-	t.Helper()
-	if len(issues) == 0 {
-		return
-	}
-	issue := issues[0]
-	if issue.ID != "javascript/NoHardcodedPasswords" {
-		t.Errorf("Expected issue ID javascript/NoHardcodedPasswords, got %s", issue.ID)
-	}
-	if len(issue.CWEs) == 0 {
-		t.Error("Expected CWEs to be populated")
 	}
 }
