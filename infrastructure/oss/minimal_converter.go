@@ -23,6 +23,7 @@ import (
 	"github.com/golang/mock/gomock"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -31,6 +32,12 @@ import (
 // ConvertJSONToIssuesWithoutDependencies converts OSS JSON output to Issues using the existing converter
 // with minimal dependencies (test error reporter and mock learn service)
 func ConvertJSONToIssuesWithoutDependencies(jsonOutput []byte) ([]types.Issue, error) {
+	return ConvertJSONToIssuesWithLearnService(jsonOutput, nil)
+}
+
+// ConvertJSONToIssuesWithLearnService converts OSS JSON output to Issues using the existing converter
+// with minimal dependencies. If learnService is nil, a mock will be used.
+func ConvertJSONToIssuesWithLearnService(jsonOutput []byte, learnService learn.Service) ([]types.Issue, error) {
 	var scanResults []scanResult
 	var allIssues []types.Issue
 
@@ -54,13 +61,15 @@ func ConvertJSONToIssuesWithoutDependencies(jsonOutput []byte) ([]types.Issue, e
 	// Use test error reporter
 	errorReporter := error_reporting.NewTestErrorReporter()
 
-	// Create mock learn service
-	ctrl := gomock.NewController(&mockTB{})
-	learnService := mock_learn.NewMockService(ctrl)
-	learnService.
-		EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil, nil).AnyTimes()
+	// Use provided learn service or create mock
+	if learnService == nil {
+		ctrl := gomock.NewController(&mockTB{})
+		learnService = mock_learn.NewMockService(ctrl)
+		learnService.(*mock_learn.MockService).
+			EXPECT().
+			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil, nil).AnyTimes()
+	}
 
 	// Empty package issue cache
 	packageIssueCache := make(map[string][]types.Issue)

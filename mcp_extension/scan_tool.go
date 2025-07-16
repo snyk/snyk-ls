@@ -32,13 +32,14 @@ import (
 
 // Tool name constants to maintain backward compatibility
 const (
-	SnykScaTest    = "snyk_sca_scan"
-	SnykCodeTest   = "snyk_code_scan"
-	SnykVersion    = "snyk_version"
-	SnykAuth       = "snyk_auth"
-	SnykAuthStatus = "snyk_auth_status"
-	SnykLogout     = "snyk_logout"
-	SnykTrust      = "snyk_trust"
+	SnykScaTest         = "snyk_sca_scan"
+	SnykCodeTest        = "snyk_code_scan"
+	SnykVersion         = "snyk_version"
+	SnykAuth            = "snyk_auth"
+	SnykAuthStatus      = "snyk_auth_status"
+	SnykLogout          = "snyk_logout"
+	SnykTrust           = "snyk_trust"
+	SnykOpenLearnLesson = "snyk_open_learn_lesson"
 )
 
 type SnykMcpToolsDefinition struct {
@@ -91,6 +92,8 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykLogoutHandler(invocationCtx, toolDef))
 		case SnykTrust:
 			m.mcpServer.AddTool(tool, m.snykTrustHandler(invocationCtx, toolDef))
+		case SnykOpenLearnLesson:
+			m.mcpServer.AddTool(tool, m.snykOpenLearnLessonHandler(invocationCtx, toolDef))
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -212,8 +215,8 @@ func (m *McpLLMBinding) enhanceOutput(toolName string, output string, success bo
 		}
 	}
 
-	// Map the response to enhanced format
-	return mapScanResponse(toolName, output, success, scanPath)
+	// Map the response to enhanced format with learn service
+	return mapScanResponse(toolName, output, success, scanPath, m.learnService)
 }
 
 func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

@@ -21,6 +21,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -54,7 +55,7 @@ type EnhancedScanResult struct {
 }
 
 // mapScanResponse maps the scan output to an enhanced format for LLMs
-func mapScanResponse(toolName string, output string, success bool, scanPath string) string {
+func mapScanResponse(toolName string, output string, success bool, scanPath string, learnService learn.Service) string {
 	result := EnhancedScanResult{
 		OriginalOutput: output,
 		Success:        success,
@@ -64,7 +65,7 @@ func mapScanResponse(toolName string, output string, success bool, scanPath stri
 	// Extract scan type and handle response
 	if isSCATool(toolName) {
 		result.ScanType = "sca"
-		extractSCAIssues(&result)
+		extractSCAIssues(&result, learnService)
 	} else if isSASTTool(toolName) {
 		result.ScanType = "sast"
 		extractSASTIssues(&result, scanPath)
@@ -94,9 +95,9 @@ func isSASTTool(toolName string) bool {
 }
 
 // extractSCAIssues extracts structured issue data from SCA JSON output
-func extractSCAIssues(result *EnhancedScanResult) {
-	// Use existing OSS converter
-	issues, err := oss.ConvertJSONToIssuesWithoutDependencies([]byte(result.OriginalOutput))
+func extractSCAIssues(result *EnhancedScanResult, learnService learn.Service) {
+	// Use existing OSS converter with learn service
+	issues, err := oss.ConvertJSONToIssuesWithLearnService([]byte(result.OriginalOutput), learnService)
 	if err != nil {
 		return
 	}
@@ -110,48 +111,63 @@ func extractSCAIssues(result *EnhancedScanResult) {
 
 // extractSASTIssues extracts issues from SAST scan output
 func extractSASTIssues(result *EnhancedScanResult, scanPath string) {
-	// Try to parse SARIF JSON output
+	// Use existing SARIF converter
 	issues, err := code.ConvertSARIFJSONToIssues([]byte(result.OriginalOutput), scanPath)
 	if err != nil {
-		// If parsing fails, just keep the original output
 		return
 	}
 
-	// Convert to IssueData format
+	// Convert to IssueData format for serialization
 	for _, issue := range issues {
 		result.Issues = append(result.Issues, convertIssueToData(issue))
 	}
 	result.IssueCount = len(result.Issues)
 }
 
-// convertIssueToData converts a types.Issue to IssueData
+// convertIssueToData converts a types.Issue to IssueData for serialization
 func convertIssueToData(issue types.Issue) IssueData {
-	issueData := IssueData{
+	// Get title from additional data
+	title := ""
+	if additionalData := issue.GetAdditionalData(); additionalData != nil {
+		title = additionalData.GetTitle()
+	}
+
+	data := IssueData{
 		ID:       issue.GetID(),
-		Title:    issue.GetAdditionalData().GetTitle(),
+		Title:    title,
 		Severity: issue.GetSeverity().String(),
-		RuleID:   issue.GetID(), // For Snyk, ID is often the rule ID
-		CWEs:     issue.GetCWEs(),
-		CVEs:     issue.GetCVEs(),
+		Message:  issue.GetMessage(),
 	}
 
-	// Extract additional data based on issue type
-	if additionalData, ok := issue.GetAdditionalData().(snyk.OssIssueData); ok {
-		issueData.PackageName = additionalData.PackageName
-		issueData.Version = additionalData.Version
-		issueData.Ecosystem = additionalData.PackageManager
-		issueData.FixedIn = additionalData.FixedIn
-		issueData.Remediation = additionalData.Remediation
-		issueData.FilePath = string(additionalData.DisplayTargetFile)
-		issueData.Line = additionalData.LineNumber
+	// Handle different issue types
+	if additionalData := issue.GetAdditionalData(); additionalData != nil {
+		switch ad := additionalData.(type) {
+		case snyk.OssIssueData:
+			data.PackageName = ad.PackageName
+			data.Version = ad.Version
+			data.Ecosystem = ad.PackageManager
+			data.FixedIn = ad.FixedIn
+			data.Remediation = ad.Remediation
+			data.CVEs = ad.Identifiers.CVE
+			data.CWEs = ad.Identifiers.CWE
+			data.RuleID = ad.Key // For OSS, the key contains the rule ID
+
+		case snyk.CodeIssueData:
+			data.RuleID = ad.RuleId
+			data.CWEs = ad.CWE
+			// For SAST, CVEs are not typically applicable
+		}
 	}
 
-	if additionalData, ok := issue.GetAdditionalData().(snyk.CodeIssueData); ok {
-		issueData.FilePath = string(issue.GetAffectedFilePath())
-		issueData.Line = issue.GetRange().Start.Line
-		issueData.Column = issue.GetRange().Start.Character
-		issueData.Message = additionalData.Message
+	// Add file location if available
+	if affectedFile := issue.GetAffectedFilePath(); affectedFile != "" {
+		data.FilePath = string(affectedFile)
+		r := issue.GetRange()
+		if r.Start.Line >= 0 && r.Start.Character >= 0 {
+			data.Line = r.Start.Line + 1 // Convert 0-based to 1-based
+			data.Column = r.Start.Character + 1
+		}
 	}
 
-	return issueData
+	return data
 }

@@ -1379,11 +1379,11 @@ func TestScanToolJSONOutput(t *testing.T) {
 					},
 					"fixedIn": ["4.17.20"],
 					"isUpgradable": true,
-					"upgradePath": ["myapp@1.0.0", "lodash@4.17.20"]
+					"isPatchable": false,
+					"upgradePath": ["*", "lodash@4.17.20"],
+					"from": ["myapp@1.0.0", "lodash@4.17.4"]
 				}],
-				"ok": false,
-				"dependencyCount": 5,
-				"packageManager": "npm"
+				"ok": false
 			}]`,
 		},
 		{
@@ -1391,17 +1391,26 @@ func TestScanToolJSONOutput(t *testing.T) {
 			toolName: "snyk_code_scan",
 			mockJSON: `{
 				"type": "sarif",
+				"progress": 1,
 				"status": "COMPLETE",
+				"timing": {
+					"fetchingCode": 2,
+					"queue": 22,
+					"analysis": 3015
+				},
 				"sarif": {
+					"$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+					"version": "2.1.0",
 					"runs": [{
 						"tool": {
 							"driver": {
+								"name": "SnykCode",
 								"rules": [{
 									"id": "javascript/NoHardcodedPasswords",
-									"shortDescription": {"text": "Hardcoded Password"},
+									"name": "NoHardcodedPasswords",
 									"properties": {
-										"cwe": ["CWE-798"],
-										"categories": ["Security"]
+										"categories": ["Security"],
+										"cwe": ["CWE-798"]
 									}
 								}]
 							}
@@ -1409,10 +1418,11 @@ func TestScanToolJSONOutput(t *testing.T) {
 						"results": [{
 							"ruleId": "javascript/NoHardcodedPasswords",
 							"level": "error",
+							"message": {"text": "Hardcoded secret found"},
 							"locations": [{
 								"physicalLocation": {
 									"artifactLocation": {"uri": "src/app.js"},
-									"region": {"startLine": 42, "startColumn": 15}
+									"region": {"startLine": 42, "startColumn": 10}
 								}
 							}]
 						}]
@@ -1424,24 +1434,38 @@ func TestScanToolJSONOutput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Test the mapping function directly with scan path
-			result := mapScanResponse(tt.toolName, tt.mockJSON, true, scanPath)
+			// Map the response (pass nil for learn service in tests)
+			result := mapScanResponse(tt.toolName, tt.mockJSON, true, scanPath, nil)
 
-			// Parse the result
-			var enhanced EnhancedScanResult
-			err := json.Unmarshal([]byte(result), &enhanced)
-			if err != nil {
-				t.Fatalf("Failed to unmarshal enhanced result: %v", err)
-			}
+			// Parse the enhanced result
+			var enhancedResult EnhancedScanResult
+			err := json.Unmarshal([]byte(result), &enhancedResult)
+			require.NoError(t, err, "Failed to parse enhanced result")
 
-			// Basic verification
-			verifyEnhancedResult(t, &enhanced, tt.mockJSON)
+			// Verify the structure
+			require.Equal(t, tt.mockJSON, enhancedResult.OriginalOutput)
+			require.True(t, enhancedResult.Success)
+			require.NotEmpty(t, enhancedResult.ScanType)
+			require.Greater(t, enhancedResult.IssueCount, 0)
+			require.NotEmpty(t, enhancedResult.Issues)
 
-			// Tool-specific verification
+			// Check specific fields based on scan type
 			if tt.toolName == "snyk_sca_scan" {
-				verifySCAIssue(t, enhanced.Issues)
+				require.Equal(t, "sca", enhancedResult.ScanType)
+				// Check SCA-specific fields
+				issue := enhancedResult.Issues[0]
+				require.NotEmpty(t, issue.PackageName)
+				require.NotEmpty(t, issue.Version)
+				require.NotEmpty(t, issue.Ecosystem)
+				require.NotEmpty(t, issue.CVEs)
+				require.NotEmpty(t, issue.CWEs)
 			} else if tt.toolName == "snyk_code_scan" {
-				verifySASTIssue(t, enhanced.Issues)
+				require.Equal(t, "sast", enhancedResult.ScanType)
+				// Check SAST-specific fields
+				issue := enhancedResult.Issues[0]
+				require.NotEmpty(t, issue.RuleID)
+				require.NotEmpty(t, issue.FilePath)
+				require.Greater(t, issue.Line, 0)
 			}
 		})
 	}
