@@ -18,6 +18,7 @@ package mcp_extension
 
 import (
 	"encoding/json"
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -48,7 +49,7 @@ type IssueData struct {
 
 // EnhancedScanResult contains the original scan output and extracted issues
 type EnhancedScanResult struct {
-	OriginalOutput string      `json:"originalOutput"`
+	OriginalOutput string      `json:"-"`
 	Success        bool        `json:"success"`
 	ScanType       string      `json:"scanType"`
 	IssueCount     int         `json:"issueCount"`
@@ -56,7 +57,7 @@ type EnhancedScanResult struct {
 }
 
 // mapScanResponse maps the scan output to an enhanced format for LLMs
-func mapScanResponse(toolName string, output string, success bool, scanPath string, learnService learn.Service) string {
+func mapScanResponse(logger *zerolog.Logger, toolName string, output string, success bool, scanPath string, learnService learn.Service) string {
 	result := EnhancedScanResult{
 		OriginalOutput: output,
 		Success:        success,
@@ -66,10 +67,10 @@ func mapScanResponse(toolName string, output string, success bool, scanPath stri
 	// Extract scan type and handle response
 	if isSCATool(toolName) {
 		result.ScanType = "sca"
-		extractSCAIssues(&result, learnService)
+		extractSCAIssues(logger, &result, learnService)
 	} else if isSASTTool(toolName) {
 		result.ScanType = "sast"
-		extractSASTIssues(&result, scanPath)
+		extractSASTIssues(logger, &result, scanPath)
 	} else {
 		// For other tools, just return the original output
 		return output
@@ -96,14 +97,12 @@ func isSASTTool(toolName string) bool {
 }
 
 // extractSCAIssues extracts structured issue data from SCA JSON output
-func extractSCAIssues(result *EnhancedScanResult, learnService learn.Service) {
-	// Use existing OSS converter with learn service
-	issues, err := oss.ConvertJSONToIssuesWithLearnService([]byte(result.OriginalOutput), learnService)
+func extractSCAIssues(logger *zerolog.Logger, result *EnhancedScanResult, learnService learn.Service) {
+	issues, err := oss.ConvertJSONToIssuesWithLearnService(logger, []byte(result.OriginalOutput), learnService)
 	if err != nil {
 		return
 	}
 
-	// Convert to IssueData format for serialization
 	for _, issue := range issues {
 		result.Issues = append(result.Issues, convertIssueToData(issue))
 	}
@@ -111,9 +110,9 @@ func extractSCAIssues(result *EnhancedScanResult, learnService learn.Service) {
 }
 
 // extractSASTIssues extracts issues from SAST scan output
-func extractSASTIssues(result *EnhancedScanResult, scanPath string) {
+func extractSASTIssues(logger *zerolog.Logger, result *EnhancedScanResult, scanPath string) {
 	// Use existing SARIF converter
-	issues, err := code.ConvertSARIFJSONToIssues([]byte(result.OriginalOutput), scanPath)
+	issues, err := code.ConvertSARIFJSONToIssues(logger, 0, []byte(result.OriginalOutput), scanPath)
 	if err != nil {
 		return
 	}

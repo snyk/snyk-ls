@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog"
 	"os"
 	"strings"
 
@@ -34,25 +35,19 @@ import (
 // ConvertJSONToIssuesWithoutDependencies converts OSS JSON output to Issues using the existing converter
 // with minimal dependencies (test error reporter)
 func ConvertJSONToIssuesWithoutDependencies(jsonOutput []byte) ([]types.Issue, error) {
-	return ConvertJSONToIssuesWithLearnService(jsonOutput, nil)
+	return ConvertJSONToIssuesWithLearnService(nil, jsonOutput, nil)
 }
 
 // ConvertJSONToIssuesWithLearnService converts OSS JSON output to Issue objects with optional learn service
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
-func ConvertJSONToIssuesWithLearnService(jsonData []byte, learnService learn.Service) ([]types.Issue, error) {
-	c := config.CurrentConfig()
-	if c == nil {
-		c = config.New()
-		config.SetCurrentConfig(c)
-	}
-
+func ConvertJSONToIssuesWithLearnService(logger *zerolog.Logger, jsonData []byte, learnService learn.Service) ([]types.Issue, error) {
 	// Call the standalone version of unmarshallAndRetrieveAnalysis
 	issues := UnmarshallAndRetrieveAnalysis(
 		context.Background(),
 		jsonData,
 		"", // workDir
 		"", // path
-		c,
+		logger,
 		error_reporting.NewTestErrorReporter(),
 		learnService,
 		make(map[string][]types.Issue), // empty package issue cache
@@ -69,13 +64,12 @@ func UnmarshallAndRetrieveAnalysis(
 	res []byte,
 	workDir types.FilePath,
 	path types.FilePath,
-	c *config.Config,
+	logger *zerolog.Logger,
 	errorReporter error_reporting.ErrorReporter,
 	learnService learn.Service,
 	packageIssueCache map[string][]types.Issue,
 	readFiles bool,
 ) []types.Issue {
-	logger := c.Logger().With().Str("method", "UnmarshallAndRetrieveAnalysis").Logger()
 	if ctx.Err() != nil {
 		return nil
 	}
@@ -88,7 +82,7 @@ func UnmarshallAndRetrieveAnalysis(
 
 	var allIssues []types.Issue
 	for _, scanResult := range scanResults {
-		targetFilePath := getAbsTargetFilePath(c, scanResult, workDir, path)
+		targetFilePath := getAbsTargetFilePath(logger, scanResult, workDir, path)
 
 		var fileContent []byte
 

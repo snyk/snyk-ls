@@ -408,7 +408,7 @@ func (s *SnykCodeHTTPClient) RunAnalysis(
 		return nil, status, nil
 	}
 
-	converter := SarifConverter{sarif: response, c: s.c}
+	converter := SarifConverter{sarif: response, hoverVerbosity: s.c.HoverVerbosity(), logger: s.c.Logger()}
 	issues, err := converter.toIssues(baseDir)
 	return issues, status, err
 }

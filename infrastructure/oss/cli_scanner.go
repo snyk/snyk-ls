@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -333,7 +334,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 		res,
 		workDir,
 		path,
-		cliScanner.config,
+		cliScanner.config.Logger(),
 		cliScanner.errorReporter,
 		cliScanner.learnService,
 		cliScanner.packageIssueCache,
@@ -350,8 +351,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	return issues
 }
 
-func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir types.FilePath, path types.FilePath) types.FilePath {
-	logger := c.Logger().With().Str("method", "getAbsTargetFilePath").Logger()
+func getAbsTargetFilePath(logger *zerolog.Logger, scanResult scanResult, workDir types.FilePath, path types.FilePath) types.FilePath {
 	if scanResult.DisplayTargetFile == "" && path != "" {
 		return path
 	}
