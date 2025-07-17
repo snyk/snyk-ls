@@ -237,9 +237,9 @@ func (m *McpLLMBinding) expandedEnv(integrationVersion, environmentName, environ
 		}
 		expandedEnv = append(expandedEnv, v)
 	}
-	expandedEnv = append(expandedEnv, configuration.INTEGRATION_NAME+"=MCP")
-	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", configuration.INTEGRATION_VERSION, integrationVersion))
-	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", configuration.INTEGRATION_ENVIRONMENT, environmentName))
-	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", configuration.INTEGRATION_ENVIRONMENT_VERSION, environmentVersion))
+	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_NAME), "MCP"))
+	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_VERSION), integrationVersion))
+	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT), environmentName))
+	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT_VERSION), environmentVersion))
 	return expandedEnv
 }
