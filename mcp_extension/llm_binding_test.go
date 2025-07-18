@@ -60,26 +60,26 @@ func TestDefaultURL(t *testing.T) {
 }
 
 func TestExpandedEnv(t *testing.T) {
-	t.Setenv(configuration.INTEGRATION_NAME, "abc")
-	t.Setenv(configuration.INTEGRATION_VERSION, "abc")
+	t.Setenv(strings.ToUpper(configuration.INTEGRATION_NAME), "abc")
+	t.Setenv(strings.ToUpper(configuration.INTEGRATION_VERSION), "abc")
 	binding := NewMcpLLMBinding()
 
 	env := binding.expandedEnv("1.x.1", "Client1", "1.0.0")
 
 	for _, s := range os.Environ() {
-		if strings.HasPrefix(s, configuration.INTEGRATION_NAME) {
+		if strings.HasPrefix(s, strings.ToUpper(configuration.INTEGRATION_NAME)) {
 			continue
 		}
-		if strings.HasPrefix(s, configuration.INTEGRATION_VERSION) {
+		if strings.HasPrefix(s, strings.ToUpper(configuration.INTEGRATION_VERSION)) {
 			continue
 		}
 		assert.Contains(t, env, s)
 	}
 
-	assert.Contains(t, env, configuration.INTEGRATION_NAME+"=MCP")
-	assert.Contains(t, env, configuration.INTEGRATION_VERSION+"=1.x.1")
-	assert.Contains(t, env, configuration.INTEGRATION_ENVIRONMENT+"=Client1")
-	assert.Contains(t, env, configuration.INTEGRATION_ENVIRONMENT_VERSION+"=1.0.0")
+	assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_NAME)+"=MCP")
+	assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_VERSION)+"=1.x.1")
+	assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT)+"=Client1")
+	assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT_VERSION)+"=1.0.0")
 }
 
 func TestIsValidHttpRequest(t *testing.T) {
