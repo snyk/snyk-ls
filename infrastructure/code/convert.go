@@ -19,6 +19,7 @@ package code
 import (
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog"
 	"net/url"
 	"os"
 	"regexp"
@@ -79,8 +80,9 @@ func (c *exampleCommit) toReference() (reference types.Reference) {
 }
 
 type SarifConverter struct {
-	sarif codeClientSarif.SarifResponse
-	c     *config.Config
+	sarif          codeClientSarif.SarifResponse
+	logger         *zerolog.Logger
+	hoverVerbosity int
 }
 
 func (s *SarifConverter) getReferences(r codeClientSarif.Rule) (references []types.Reference) {
@@ -134,7 +136,7 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir types.Fil
 				physicalLoc := tFlowLocation.Location.PhysicalLocation
 				path, err := DecodePath(ToAbsolutePath(baseDir, types.FilePath(physicalLoc.ArtifactLocation.URI)))
 				if err != nil {
-					s.c.Logger().Error().
+					s.logger.Error().
 						Err(err).
 						Msg("failed to convert URI to absolute path: base directory: " +
 							string(baseDir) +
@@ -159,7 +161,7 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir types.Fil
 					fileUtil := filesystem.New()
 					content, err := fileUtil.GetLineOfCode(path, myRange.Start.Line+1)
 					if err != nil {
-						s.c.Logger().Warn().Str("method", "code.getCodeFlow").Err(err).Msg("cannot load line Content from file")
+						s.logger.Warn().Str("method", "code.getCodeFlow").Err(err).Msg("cannot load line Content from file")
 					}
 					d := snyk.DataFlowElement{
 						Position:  len(dataflow),
@@ -167,7 +169,7 @@ func (s *SarifConverter) getCodeFlow(r codeClientSarif.Result, baseDir types.Fil
 						FlowRange: myRange,
 						Content:   content,
 					}
-					s.c.Logger().Debug().Str("method", method).Str("DataFlowElement", d.String()).Send()
+					s.logger.Debug().Str("method", method).Str("DataFlowElement", d.String()).Send()
 					dataflow = append(dataflow, d)
 					dedupMap[key] = true
 				}
@@ -204,7 +206,7 @@ func (s *SarifConverter) detailsOrEmpty(r codeClientSarif.Rule) string {
 }
 
 func (s *SarifConverter) formattedMessageMarkdown(r codeClientSarif.Result, rule codeClientSarif.Rule, baseDir types.FilePath) string {
-	hoverVerbosity := s.c.HoverVerbosity()
+	hoverVerbosity := s.hoverVerbosity
 	var builder strings.Builder
 	const separator = "\n\n\n\n"
 	if hoverVerbosity >= 1 {
@@ -315,7 +317,7 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 			// Response contains encoded relative paths that should be decoded and converted to absolute.
 			absPath, err := DecodePath(ToAbsolutePath(baseDir, types.FilePath(loc.PhysicalLocation.ArtifactLocation.URI)))
 			if err != nil {
-				s.c.Logger().Error().
+				s.logger.Error().
 					Err(err).
 					Msg("failed to convert URI to absolute path: base directory: " +
 						string(baseDir) +
@@ -519,7 +521,7 @@ func (s *SarifConverter) getMarkers(r codeClientSarif.Result, baseDir types.File
 
 			filePath, err := DecodePath(ToAbsolutePath(baseDir, types.FilePath(loc.Location.PhysicalLocation.ArtifactLocation.URI)))
 			if err != nil {
-				s.c.Logger().Error().
+				s.logger.Error().
 					Err(err).
 					Msg("failed to convert URI to absolute path: base directory: " +
 						string(baseDir) +

@@ -37,6 +37,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
 
@@ -89,6 +91,17 @@ func setupTestFixture(t *testing.T) *testFixture {
 	binding := NewMcpLLMBinding(WithCliPath(snykCliPath), WithLogger(invocationCtx.GetEnhancedLogger()))
 	binding.folderTrust = trust.NewFolderTrust(&logger, invocationCtx.GetConfiguration())
 	binding.mcpServer = server.NewMCPServer("Snyk", "1.1.1")
+
+	// Create and set mock learn service
+	mockLearnService := mock_learn.NewMockService(mockctl)
+	mockLearnService.EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&learn.Lesson{
+			Url: "https://learn.snyk.io/lesson/mock-lesson",
+		}, nil).
+		AnyTimes()
+	binding.learnService = mockLearnService
+
 	tools, err := loadMcpToolsFromJson()
 	require.NoError(t, err)
 	return &testFixture{
@@ -126,7 +139,7 @@ func TestSnykTestHandler(t *testing.T) {
 	fixture := setupTestFixture(t)
 
 	// Configure mock CLI to return a specific JSON response
-	mockOutput := `{ok": false,"vulnerabilities": [{"id": "SNYK-JS-ACORN-559469","title": "Regular Expression Denial of Service (ReDoS)","severity":"high","packageName": "acorn"},{"id": "SNYK-JS-TUNNELAGENT-1572284","title": "Uninitialized Memory Exposure","severity": "medium","packageName": "tunnel-agent"}],"dependencyCount": 42,"packageManager": "npm"}`
+	mockOutput := `[{"ok": false,"vulnerabilities": [{"id": "SNYK-JS-ACORN-559469","title": "Regular Expression Denial of Service (ReDoS)","severity":"high","packageName": "acorn","version": "5.5.3","identifiers": {"CVE": ["CVE-2020-7598"],"CWE": ["CWE-400"]},"fixedIn": ["5.7.4", "6.4.1", "7.1.1"],"isUpgradable": true,"isPatchable": false,"upgradePath": ["my-app@1.0.0", "acorn@7.1.1"],"from": ["my-app@1.0.0", "acorn@5.5.3"],"packageManager": "npm"},{"id": "SNYK-JS-TUNNELAGENT-1572284","title": "Uninitialized Memory Exposure","severity": "medium","packageName": "tunnel-agent","version": "0.6.0","identifiers": {"CVE": [],"CWE": ["CWE-201"]},"fixedIn": [],"isUpgradable": false,"isPatchable": false,"upgradePath": [],"from": ["my-app@1.0.0", "tunnel-agent@0.6.0"],"packageManager": "npm"}],"dependencyCount": 42,"packageManager": "npm"}]`
 	fixture.mockCliOutput(mockOutput)
 	tool := getToolWithName(t, fixture.tools, SnykScaTest)
 	require.NotNil(t, tool)
@@ -203,10 +216,27 @@ func TestSnykTestHandler(t *testing.T) {
 			textContent, ok := result.Content[0].(mcp.TextContent)
 			require.True(t, ok)
 			content := strings.TrimSpace(textContent.Text)
-			require.Contains(t, content, "ok")
-			require.Contains(t, content, "vulnerabilities")
-			require.Contains(t, content, "dependencyCount")
-			require.Contains(t, content, "packageManager")
+
+			// Parse the enhanced JSON response
+			var enhanced EnhancedScanResult
+			err = json.Unmarshal([]byte(content), &enhanced)
+			require.NoError(t, err, "Failed to parse enhanced scan result")
+
+			// Debug output
+			t.Logf("Enhanced result: %+v", enhanced)
+			if len(enhanced.Issues) > 0 {
+				t.Logf("First issue: %+v", enhanced.Issues[0])
+			}
+
+			// Check that we have both original output and issue data
+			require.NotEmpty(t, enhanced.OriginalOutput)
+			require.True(t, enhanced.Success)
+			require.Equal(t, "sca", enhanced.ScanType)
+			require.Equal(t, 2, enhanced.IssueCount)
+			require.Len(t, enhanced.Issues, 2)
+
+			// Verify we extracted the issues successfully
+			// The actual issue verification is done in the dedicated test
 		})
 	}
 }
@@ -215,8 +245,8 @@ func TestSnykCodeTestHandler(t *testing.T) {
 	// Setup
 	fixture := setupTestFixture(t)
 
-	// Configure mock CLI
-	mockJsonResponse := `{"ok":false,"issues":[],"filesAnalyzed":10}`
+	// Configure mock CLI with SARIF response
+	mockJsonResponse := `{"type":"sarif","progress":1,"status":"COMPLETE","sarif":{"runs":[{"tool":{"driver":{"rules":[{"id":"javascript/DangerousEval","shortDescription":{"text":"Code Injection"},"properties":{"cwe":["CWE-94","CWE-95"],"categories":["Security"]}}]}},"results":[{"ruleId":"javascript/DangerousEval","level":"warning","locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/app.js"},"region":{"startLine":10,"startColumn":5}}}]}]}]},"coverage":[{"files":10}]}`
 	fixture.mockCliOutput(mockJsonResponse)
 
 	// Get the tool definition
@@ -302,9 +332,21 @@ func TestSnykCodeTestHandler(t *testing.T) {
 				return
 			}
 			content := strings.TrimSpace(textContent.Text)
-			require.Contains(t, content, "ok")
-			require.Contains(t, content, "issues")
-			require.Contains(t, content, "filesAnalyzed")
+
+			// Parse the enhanced JSON response
+			var enhanced EnhancedScanResult
+			err = json.Unmarshal([]byte(content), &enhanced)
+			require.NoError(t, err, "Failed to parse enhanced scan result")
+
+			// Check that we have both original output and issue data
+			require.NotEmpty(t, enhanced.OriginalOutput)
+			require.True(t, enhanced.Success)
+			require.Equal(t, "sast", enhanced.ScanType)
+			require.Equal(t, 1, enhanced.IssueCount)
+			require.Len(t, enhanced.Issues, 1)
+
+			// Verify we extracted the issues successfully
+			// The actual issue verification is done in the dedicated test
 		})
 	}
 }
@@ -1328,4 +1370,122 @@ func TestSnykTrustHandler(t *testing.T) {
 		require.Nil(t, result)
 		require.Contains(t, err.Error(), "empty path given to tool snyk_trust")
 	})
+}
+
+func TestScanToolJSONOutput(t *testing.T) {
+	// Use a temporary directory as scan path
+	scanPath := t.TempDir()
+	logger := zerolog.Nop()
+	tests := []struct {
+		name     string
+		toolName string
+		mockJSON string
+	}{
+		{
+			name:     "SCA scan JSON output",
+			toolName: "snyk_sca_scan",
+			mockJSON: `[{
+				"vulnerabilities": [{
+					"id": "SNYK-JS-LODASH-1018905",
+					"title": "Prototype Pollution",
+					"severity": "high",
+					"packageName": "lodash",
+					"version": "4.17.4",
+					"packageManager": "npm",
+					"identifiers": {
+						"CVE": ["CVE-2020-8203"],
+						"CWE": ["CWE-1321"]
+					},
+					"fixedIn": ["4.17.20"],
+					"isUpgradable": true,
+					"isPatchable": false,
+					"upgradePath": ["*", "lodash@4.17.20"],
+					"from": ["myapp@1.0.0", "lodash@4.17.4"]
+				}],
+				"ok": false
+			}]`,
+		},
+		{
+			name:     "SAST scan JSON output",
+			toolName: "snyk_code_scan",
+			mockJSON: `{
+				"type": "sarif",
+				"progress": 1,
+				"status": "COMPLETE",
+				"timing": {
+					"fetchingCode": 2,
+					"queue": 22,
+					"analysis": 3015
+				},
+				"sarif": {
+					"$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+					"version": "2.1.0",
+					"runs": [{
+						"tool": {
+							"driver": {
+								"name": "SnykCode",
+								"rules": [{
+									"id": "javascript/NoHardcodedPasswords",
+									"name": "NoHardcodedPasswords",
+									"properties": {
+										"categories": ["Security"],
+										"cwe": ["CWE-798"]
+									}
+								}]
+							}
+						},
+						"results": [{
+							"ruleId": "javascript/NoHardcodedPasswords",
+							"level": "error",
+							"message": {"text": "Hardcoded secret found"},
+							"locations": [{
+								"physicalLocation": {
+									"artifactLocation": {"uri": "src/app.js"},
+									"region": {"startLine": 42, "startColumn": 10}
+								}
+							}]
+						}]
+					}]
+				}
+			}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Map the response (pass nil for learn service in tests)
+			result := mapScanResponse(tt.toolName, tt.mockJSON, true, scanPath, nil)
+
+			// Parse the enhanced result
+			var enhancedResult EnhancedScanResult
+			err := json.Unmarshal([]byte(result), &enhancedResult)
+			require.NoError(t, err, "Failed to parse enhanced result")
+
+			// Verify the structure
+			require.Equal(t, tt.mockJSON, enhancedResult.OriginalOutput)
+			require.True(t, enhancedResult.Success)
+			require.NotEmpty(t, enhancedResult.ScanType)
+			require.Greater(t, enhancedResult.IssueCount, 0)
+			require.NotEmpty(t, enhancedResult.Issues)
+
+			// Check specific fields based on scan type
+			if tt.toolName == "snyk_sca_scan" {
+				require.Equal(t, "sca", enhancedResult.ScanType)
+				// Check SCA-specific fields
+				issue := enhancedResult.Issues[0]
+				require.NotEmpty(t, issue.PackageName)
+				require.NotEmpty(t, issue.Version)
+				require.NotEmpty(t, issue.Ecosystem)
+				require.NotEmpty(t, issue.CVEs)
+				require.NotEmpty(t, issue.CWEs)
+			} else if tt.toolName == "snyk_code_scan" {
+				require.Equal(t, "sast", enhancedResult.ScanType)
+				// Check SAST-specific fields
+				issue := enhancedResult.Issues[0]
+				require.NotEmpty(t, issue.RuleID)
+				require.NotEmpty(t, issue.FilePath)
+				require.Greater(t, issue.Line, 0)
+			}
+		})
+	}
 }

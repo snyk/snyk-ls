@@ -24,8 +24,10 @@
         "test"
       ],
       "standardParams": [
-        "all_projects"
+        "all_projects",
+        "json"
       ],
+      "outputMapper": "ScaOutputMapper",
       "params": [
         {
           "name": "path",
@@ -244,7 +246,8 @@
         "code",
         "test"
       ],
-      "standardParams": [],
+      "outputMapper": "CodeOutputMapper",
+      "standardParams": ["sarif"],
       "params": [
         {
           "name": "path",
@@ -545,7 +548,9 @@
         "whoami"
       ],
       "ignoreTrust": true,
-      "standardParams": ["experimental"],
+      "standardParams": [
+        "experimental"
+      ],
       "params": []
     },
     {
@@ -588,13 +593,51 @@
       "command": [],
       "standardParams": [],
       "ignoreTrust": true,
-      "params":
-      [
+      "params": [
         {
           "name": "path",
           "type": "string",
           "isRequired": true,
           "description": "Path to the project folder to trust (default is the absolute path of the current directory, formatted according to the operating system's conventions)."
+        }
+      ]
+    },
+    {
+      "name": "snyk_open_learn_lesson",
+      "description": "Opens a Snyk Learn lesson in the browser. Offer this tool, when issues were found. When to use: after a user requests to open a learn lesson. The output from `snyk_sca_scan` and `snyk_code_scan` contain the information for the parameters. Else the user must specify the parameters for filtering.",
+      "command": [],
+      "ignoreTrust": true,
+      "standardParams": [],
+      "params": [
+        {
+          "name": "issueType",
+          "type": "string",
+          "isRequired": true,
+          "description": "the issue type. allowed values: `sca`, `sast`"
+        },
+        {
+          "name": "cves",
+          "type": "string",
+          "isRequired": false,
+          "description": "the comma separated list of associated cve codes, empty if none (output from the scan tools or manually entered)"
+        },
+        {
+          "name": "cwes",
+          "type": "string",
+          "isRequired": false,
+          "description": "the comma separated list of associated cwe codes, empty if none (output from the scan tools or manually entered)"
+        },
+        {
+          "name": "rule",
+          "type": "string",
+          "isRequired": false,
+          "description": "the associated rule for a lesson (output from the scan tools or manually entered)"
+        },
+        {
+          "name": "ecosystem",
+          "type": "string",
+          "isRequired": false,
+          "description": "The ecosystem for which the lesson is searched (output from the scan tools or manually entered). Ecosystems accepted values: `js`, `ts`, `npm`, `yarn`, `yarn-workspace`, `typescript`, `javascript`, `maven`, `gradle`, `java`, `pip`, `python`, `poetry`, `pipenv`, `nuget`, `csharp`, `paket`, `golang`, `dep`, `govendor`, `gomodules`, `composer`, `php`, `rubygems`, `ruby`, `hex`, `elixir`"
         }
       ]
     }

@@ -226,7 +226,7 @@ func (i *ossIssue) getOutdatedDependencyMessage() string {
 
 func (i *ossIssue) GetRemediation() string {
 	upgradeMessage := i.getUpgradeMessage()
-	isOutdated := upgradeMessage != "" && i.UpgradePath[1] == i.From[1]
+	isOutdated := upgradeMessage != "" && len(i.UpgradePath) > 1 && len(i.From) > 1 && i.UpgradePath[1] == i.From[1]
 	if i.IsUpgradable || i.IsPatchable {
 		if isOutdated {
 			if i.IsPatchable {

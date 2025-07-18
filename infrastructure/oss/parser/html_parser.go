@@ -2,12 +2,12 @@ package parser
 
 import (
 	"fmt"
+	"github.com/rs/zerolog"
 	"os"
 	"strings"
 
 	"golang.org/x/net/html"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -23,11 +23,11 @@ var (
 )
 
 type htmlParser struct {
-	config *config.Config
+	logger *zerolog.Logger
 }
 
 func (h htmlParser) ParseContent(content string) (dependencies []Dependency, err error) {
-	logger := h.config.Logger().With().Str("method", "ParseContent").Logger()
+	logger := h.logger.With().Str("method", "ParseContent").Logger()
 	doc, err := html.Parse(strings.NewReader(content))
 	if err != nil {
 		logger.Err(err).Msg("couldn't parse file")
@@ -44,7 +44,7 @@ func (h htmlParser) ParseContent(content string) (dependencies []Dependency, err
 }
 
 func (h htmlParser) Parse(filePath types.FilePath) (dependencies []Dependency, err error) {
-	logger := h.config.Logger().With().Str("method", "htmlParser.Parse").Str("file", string(filePath)).Logger()
+	logger := h.logger.With().Str("method", "htmlParser.Parse").Str("file", string(filePath)).Logger()
 
 	bytes, err := os.ReadFile(string(filePath))
 	if err != nil {
@@ -57,11 +57,11 @@ func (h htmlParser) Parse(filePath types.FilePath) (dependencies []Dependency, e
 }
 
 func (h htmlParser) parseDependencies(deps []string, fileContent string) (dependencies []Dependency, err error) {
-	logger := h.config.Logger().With().Str("method", "htmlParser.parseDependencies").Logger()
+	logger := h.logger.With().Str("method", "htmlParser.parseDependencies").Logger()
 	for _, dep := range deps {
 		dependency, err := h.dependencyFromString(dep)
 		if err != nil {
-			h.config.Logger().Debug().Any("dependency", dep).Msg("couldn't parse dependency, skipping.")
+			h.logger.Debug().Any("dependency", dep).Msg("couldn't parse dependency, skipping.")
 			continue
 		}
 		logger.Trace().Msgf("found dependency: %s", dependency)
@@ -199,6 +199,6 @@ func extractSrc(n *html.Node) []string {
 	return deps
 }
 
-func NewHTMLParser(config *config.Config) DependencyParser {
-	return &htmlParser{config: config}
+func NewHTMLParser(logger *zerolog.Logger) DependencyParser {
+	return &htmlParser{logger: logger}
 }
