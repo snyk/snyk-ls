@@ -41,7 +41,6 @@ import (
 var (
 	_ Scanner                  = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
-	_ PackageScanner           = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.CacheProvider       = (*DelegatingConcurrentScanner)(nil)
 )
 
@@ -49,10 +48,6 @@ type Scanner interface {
 	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
 	Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, folderPath types.FilePath)
 	Init() error
-}
-
-type PackageScanner interface {
-	ScanPackages(ctx context.Context, config *config.Config, path types.FilePath, content string)
 }
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
@@ -160,19 +155,6 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 	for _, productScanner := range sc.scanners {
 		if cacheProvider, isCacheProvider := productScanner.(snyk.CacheProvider); isCacheProvider {
 			cacheProvider.RegisterCacheRemovalHandler(handler)
-		}
-	}
-}
-
-func (sc *DelegatingConcurrentScanner) ScanPackages(ctx context.Context, config *config.Config, path types.FilePath, content string) {
-	if config.Offline() {
-		config.Logger().Warn().Str("method", "ScanPackages").Msgf("we are offline, not scanning %s, %s", path, content)
-		return
-	}
-
-	for _, scanner := range sc.scanners {
-		if s, ok := scanner.(PackageScanner); ok {
-			s.ScanPackages(ctx, config, path, content)
 		}
 	}
 }
