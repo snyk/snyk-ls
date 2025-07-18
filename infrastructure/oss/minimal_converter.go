@@ -22,36 +22,30 @@ import (
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog"
+	"github.com/snyk/snyk-ls/application/config"
 	"os"
 	"strings"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// ConvertJSONToIssuesWithoutDependencies converts OSS JSON output to Issues using the existing converter
-// with minimal dependencies (test error reporter)
-func ConvertJSONToIssuesWithoutDependencies(jsonOutput []byte) ([]types.Issue, error) {
-	return ConvertJSONToIssuesWithLearnService(nil, jsonOutput, nil)
-}
-
-// ConvertJSONToIssuesWithLearnService converts OSS JSON output to Issue objects with optional learn service
+// ConvertJSONToIssues converts OSS JSON output to Issue objects with optional learn service
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
-func ConvertJSONToIssuesWithLearnService(logger *zerolog.Logger, jsonData []byte, learnService learn.Service) ([]types.Issue, error) {
+func ConvertJSONToIssues(logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
 	// Call the standalone version of unmarshallAndRetrieveAnalysis
 	issues := UnmarshallAndRetrieveAnalysis(
 		context.Background(),
 		jsonData,
-		"", // workDir
-		"", // path
+		types.FilePath(workDir),
+		"",
 		logger,
 		error_reporting.NewTestErrorReporter(),
 		learnService,
 		make(map[string][]types.Issue), // empty package issue cache
-		false,                          // readFiles
+		false,
 	)
 
 	return issues, nil
@@ -93,7 +87,7 @@ func UnmarshallAndRetrieveAnalysis(
 			}
 		}
 
-		issues := convertScanResultToIssues(c, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache)
+		issues := convertScanResultToIssues(logger, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, config.FormatMd)
 		allIssues = append(allIssues, issues...)
 	}
 

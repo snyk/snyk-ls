@@ -32,7 +32,7 @@ import (
 func ConvertSARIFJSONToIssues(logger *zerolog.Logger, hoverVerbosity int, sarifJSON []byte, basePath string) ([]types.Issue, error) {
 	var sarifResponse codeClientSarif.SarifResponse
 
-	err := json.Unmarshal(sarifJSON, &sarifResponse)
+	err := json.Unmarshal(sarifJSON, &sarifResponse.Sarif)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SARIF JSON: %w", err)
 	}

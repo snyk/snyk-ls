@@ -19,18 +19,18 @@ package maven
 import (
 	"encoding/xml"
 	"errors"
+	"github.com/rs/zerolog"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Parser struct {
-	config *config.Config
+	logger *zerolog.Logger
 }
 
 type Parent struct {
@@ -48,9 +48,9 @@ type Dependency struct {
 	Type       string `xml:"type"`
 }
 
-func New(c *config.Config) Parser {
+func New(logger *zerolog.Logger) Parser {
 	return Parser{
-		config: c,
+		logger: logger,
 	}
 }
 
@@ -66,7 +66,7 @@ func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
 			// EOF means we're done.
 			break
 		} else if err != nil {
-			p.config.Logger().Err(err).Msg("Couldn't parse XML")
+			p.logger.Err(err).Msg("Couldn't parse XML")
 		}
 
 		switch xmlType := token.(type) {
@@ -74,7 +74,7 @@ func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
 			if xmlType.Name.Local == "dependency" {
 				var dep Dependency
 				if err = d.DecodeElement(&dep, &xmlType); err != nil {
-					p.config.Logger().Err(err).Msg("Couldn't decode Dependency")
+					p.logger.Err(err).Msg("Couldn't decode Dependency")
 					continue
 				}
 
@@ -84,13 +84,13 @@ func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
 
 				offsetAfter := d.InputOffset()
 				node := p.addNewNodeTo(tree.Root, offset, offsetAfter, dep)
-				p.config.Logger().Debug().Interface("nodeName", node.Name).Str("path", tree.Document).Msg("Added Dependency node")
+				p.logger.Debug().Interface("nodeName", node.Name).Str("path", tree.Document).Msg("Added Dependency node")
 			}
 			if xmlType.Name.Local == "parent" {
 				// parse Parent pom
 				var parentPOM Parent
 				if err = d.DecodeElement(&parentPOM, &xmlType); err != nil {
-					p.config.Logger().Err(err).Msg("Couldn't decode Parent")
+					p.logger.Err(err).Msg("Couldn't decode Parent")
 					continue
 				}
 
@@ -100,12 +100,12 @@ func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
 
 				parentAbsPath, err := filepath.Abs(filepath.Join(pomDir, parentPOM.RelativePath))
 				if err != nil {
-					p.config.Logger().Err(err).Msg("Couldn't resolve Parent path")
+					p.logger.Err(err).Msg("Couldn't resolve Parent path")
 					continue
 				}
 				content, err := os.ReadFile(parentAbsPath)
 				if err != nil {
-					p.config.Logger().Err(err).Msg("Couldn't read Parent file")
+					p.logger.Err(err).Msg("Couldn't read Parent file")
 					continue
 				}
 				parentTree := p.Parse(string(content), types.FilePath(parentAbsPath))

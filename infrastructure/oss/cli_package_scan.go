@@ -93,7 +93,7 @@ func (cliScanner *CLIScanner) ScanPackages(
 
 func (cliScanner *CLIScanner) getDependencies(config *config.Config, path types.FilePath, content string) (dependencies []parser.Dependency, err error) {
 	logger := config.Logger().With().Str("method", "CLIScanner.getDependencies").Logger()
-	p := parser.NewParser(config, path)
+	p := parser.NewParser(config.Logger(), path)
 	if content == "" {
 		dependencies, err = p.Parse(path)
 		if err != nil {

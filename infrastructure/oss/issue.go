@@ -19,6 +19,7 @@ package oss
 import (
 	_ "embed"
 	"fmt"
+	"github.com/rs/zerolog"
 	"strings"
 
 	"github.com/snyk/snyk-ls/ast"
@@ -41,7 +42,7 @@ var issuesSeverity = map[string]types.Severity{
 	"medium":   types.Medium,
 }
 
-func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter) *snyk.Issue {
+func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string) *snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
 	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueDepNode)
 
@@ -83,7 +84,7 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 	additionalData := issue.toAdditionalData(scanResult, matchingIssues, affectedFilePath)
 
 	title := issue.Title
-	if c.Format() == config.FormatHtml {
+	if format == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
 
@@ -135,14 +136,14 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 	return r
 }
 
-func convertScanResultToIssues(c *config.Config, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue) []types.Issue {
+func convertScanResultToIssues(logger *zerolog.Logger, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string) []types.Issue {
 	var issues []types.Issue
 
 	duplicateCheckMap := map[string]bool{}
 
 	for _, issue := range res.Vulnerabilities {
 		if issue.IsIgnored {
-			c.Logger().Debug().Msgf("skipping ignored issue %s", issue.Id)
+			logger.Debug().Msgf("skipping ignored issue %s", issue.Id)
 			continue
 		}
 		packageKey := issue.PackageName + "@" + issue.Version
@@ -150,8 +151,8 @@ func convertScanResultToIssues(c *config.Config, res *scanResult, workDir types.
 		if duplicateCheckMap[duplicateKey] {
 			continue
 		}
-		node := getDependencyNode(c, targetFilePath, issue, fileContent)
-		snykIssue := toIssue(c, workDir, targetFilePath, issue, res, node, ls, ep)
+		node := getDependencyNode(logger, targetFilePath, issue, fileContent)
+		snykIssue := toIssue(workDir, targetFilePath, issue, res, node, ls, ep, format)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true

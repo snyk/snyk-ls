@@ -18,8 +18,8 @@ package oss
 
 import (
 	"fmt"
+	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/infrastructure/oss/parser"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -28,11 +28,11 @@ import (
 type htmlRangeFinder struct {
 	path        types.FilePath
 	fileContent []byte
-	config      *config.Config
+	logger      *zerolog.Logger
 }
 
 func (h htmlRangeFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {
-	dependencyParser := parser.NewParser(h.config, h.path)
+	dependencyParser := parser.NewParser(h.logger, h.path)
 	dependencies, err := dependencyParser.Parse(h.path)
 	if err != nil {
 		return nil, nil

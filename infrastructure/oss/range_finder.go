@@ -17,10 +17,10 @@
 package oss
 
 import (
+	"github.com/rs/zerolog"
 	"path/filepath"
 	"strings"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -32,12 +32,12 @@ type RangeFinder interface {
 type DefaultFinder struct {
 	path        types.FilePath
 	fileContent []byte
-	c           *config.Config
+	logger      *zerolog.Logger
 }
 
 // getDependencyNode will return the dependency node with range information
 // in case of maven, the node will also contain tree links information for the whole dep tree
-func getDependencyNode(c *config.Config, path types.FilePath, issue ossIssue, fileContent []byte) *ast.Node {
+func getDependencyNode(logger *zerolog.Logger, path types.FilePath, issue ossIssue, fileContent []byte) *ast.Node {
 	var finder RangeFinder
 
 	if len(fileContent) == 0 {
@@ -48,18 +48,18 @@ func getDependencyNode(c *config.Config, path types.FilePath, issue ossIssue, fi
 	switch issue.PackageManager {
 	case "npm":
 		if packageScanSupportedExtensions[filepath.Ext(pathAsString)] {
-			finder = &htmlRangeFinder{path: path, fileContent: fileContent, config: c}
+			finder = &htmlRangeFinder{path: path, fileContent: fileContent, logger: logger}
 		} else {
 			finder = &NpmRangeFinder{uri: path, fileContent: fileContent}
 		}
 	case "maven":
 		if strings.HasSuffix(pathAsString, "pom.xml") {
-			finder = &mavenRangeFinder{path: path, fileContent: fileContent, c: c}
+			finder = &mavenRangeFinder{path: path, fileContent: fileContent, logger: logger}
 		} else {
-			finder = &DefaultFinder{path: path, fileContent: fileContent, c: c}
+			finder = &DefaultFinder{path: path, fileContent: fileContent, logger: logger}
 		}
 	default:
-		finder = &DefaultFinder{path: path, fileContent: fileContent, c: c}
+		finder = &DefaultFinder{path: path, fileContent: fileContent, logger: logger}
 	}
 
 	introducingPackageName, introducingVersion := introducingPackageAndVersion(issue)
@@ -70,13 +70,13 @@ func getDependencyNode(c *config.Config, path types.FilePath, issue ossIssue, fi
 	// we go recurse to the parent of it
 	if currentDep == nil && parsedTree != nil && parsedTree.ParentTree != nil {
 		tree := parsedTree.ParentTree
-		currentDep = getDependencyNode(c, types.FilePath(tree.Document), issue, []byte(tree.Root.Value))
+		currentDep = getDependencyNode(logger, types.FilePath(tree.Document), issue, []byte(tree.Root.Value))
 	}
 
 	// recurse until a dependency with version was found
 	if currentDep != nil && currentDep.Value == "" && currentDep.Tree != nil && currentDep.Tree.ParentTree != nil {
 		tree := currentDep.Tree.ParentTree
-		currentDep.LinkedParentDependencyNode = getDependencyNode(c, types.FilePath(tree.Document), issue, []byte(tree.Root.Value))
+		currentDep.LinkedParentDependencyNode = getDependencyNode(logger, types.FilePath(tree.Document), issue, []byte(tree.Root.Value))
 	}
 
 	return currentDep
@@ -96,7 +96,7 @@ func (f *DefaultFinder) find(introducingPackageName string, introducingVersion s
 				Start: types.Position{Line: i, Character: strings.Index(line, introducingPackageName)},
 				End:   types.Position{Line: i, Character: endChar},
 			}
-			f.c.Logger().Debug().Str("package", introducingPackageName).
+			f.logger.Debug().Str("package", introducingPackageName).
 				Str("version", introducingVersion).
 				Str("path", string(f.path)).
 				Interface("range", r).Msg("found range")

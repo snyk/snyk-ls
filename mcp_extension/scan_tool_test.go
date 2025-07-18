@@ -1375,7 +1375,7 @@ func TestSnykTrustHandler(t *testing.T) {
 func TestScanToolJSONOutput(t *testing.T) {
 	// Use a temporary directory as scan path
 	scanPath := t.TempDir()
-
+	logger := zerolog.Nop()
 	tests := []struct {
 		name     string
 		toolName string

@@ -19,7 +19,6 @@ package mcp_extension
 import (
 	"encoding/json"
 	"github.com/rs/zerolog"
-
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -29,23 +28,29 @@ import (
 
 // IssueData contains extracted issue information for serialization
 type IssueData struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Severity    string   `json:"severity"`
-	RuleID      string   `json:"ruleId,omitempty"`
-	CWEs        []string `json:"cwes,omitempty"`
-	CVEs        []string `json:"cves,omitempty"`
-	PackageName string   `json:"packageName,omitempty"`
-	Version     string   `json:"version,omitempty"`
-	Ecosystem   string   `json:"ecosystem,omitempty"`
-	FixedIn     []string `json:"fixedIn,omitempty"`
-	Remediation string   `json:"remediation,omitempty"`
-	FilePath    string   `json:"filePath,omitempty"`
-	Line        int      `json:"line,omitempty"`
-	Column      int      `json:"column,omitempty"`
-	Message     string   `json:"message,omitempty"`
-	LearnURL    string   `json:"learnUrl,omitempty"`
+	ID          string                 `json:"id"`
+	Title       string                 `json:"title"`
+	Severity    string                 `json:"severity"`
+	RuleID      string                 `json:"ruleId,omitempty"`
+	Dataflow    []snyk.DataFlowElement `json:"dataflow,omitempty"`
+	CWEs        []string               `json:"cwes,omitempty"`
+	CVEs        []string               `json:"cves,omitempty"`
+	PackageName string                 `json:"packageName,omitempty"`
+	Version     string                 `json:"version,omitempty"`
+	Ecosystem   string                 `json:"ecosystem,omitempty"`
+	FixedIn     []string               `json:"fixedIn,omitempty"`
+	Remediation string                 `json:"remediation,omitempty"`
+	FilePath    string                 `json:"filePath,omitempty"`
+	Line        int                    `json:"line,omitempty"`
+	Column      int                    `json:"column,omitempty"`
+	Message     string                 `json:"message,omitempty"`
+	LearnURL    string                 `json:"learnUrl,omitempty"`
 }
+
+const (
+	CodeOutputMapper = "CodeOutputMapper"
+	ScaOutputMapper  = "ScaOutputMapper"
+)
 
 // EnhancedScanResult contains the original scan output and extracted issues
 type EnhancedScanResult struct {
@@ -57,48 +62,31 @@ type EnhancedScanResult struct {
 }
 
 // mapScanResponse maps the scan output to an enhanced format for LLMs
-func mapScanResponse(logger *zerolog.Logger, toolName string, output string, success bool, scanPath string, learnService learn.Service) string {
+func mapScanResponse(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, workDir string, learnService learn.Service) string {
+	mapperFunc, ok := outputMapperMap[toolDef.OutputMapper]
+	if !ok {
+		return output
+	}
+
 	result := EnhancedScanResult{
 		OriginalOutput: output,
 		Success:        success,
 		Issues:         []IssueData{},
 	}
 
-	// Extract scan type and handle response
-	if isSCATool(toolName) {
-		result.ScanType = "sca"
-		extractSCAIssues(logger, &result, learnService)
-	} else if isSASTTool(toolName) {
-		result.ScanType = "sast"
-		extractSASTIssues(logger, &result, scanPath)
-	} else {
-		// For other tools, just return the original output
-		return output
-	}
+	mapperFunc(logger, &result, learnService, workDir)
 
-	// Marshal enhanced result
 	enhancedJSON, err := json.Marshal(result)
 	if err != nil {
-		// Fallback to original output if marshaling fails
 		return output
 	}
 
 	return string(enhancedJSON)
 }
 
-// isSCATool checks if the tool is an SCA scanner
-func isSCATool(toolName string) bool {
-	return toolName == "snyk_sca_scan"
-}
-
-// isSASTTool checks if the tool is a SAST scanner
-func isSASTTool(toolName string) bool {
-	return toolName == "snyk_code_scan"
-}
-
 // extractSCAIssues extracts structured issue data from SCA JSON output
-func extractSCAIssues(logger *zerolog.Logger, result *EnhancedScanResult, learnService learn.Service) {
-	issues, err := oss.ConvertJSONToIssuesWithLearnService(logger, []byte(result.OriginalOutput), learnService)
+func extractSCAIssues(logger *zerolog.Logger, result *EnhancedScanResult, learnService learn.Service, workDir string) {
+	issues, err := oss.ConvertJSONToIssues(logger, []byte(result.OriginalOutput), learnService, workDir)
 	if err != nil {
 		return
 	}
@@ -110,14 +98,12 @@ func extractSCAIssues(logger *zerolog.Logger, result *EnhancedScanResult, learnS
 }
 
 // extractSASTIssues extracts issues from SAST scan output
-func extractSASTIssues(logger *zerolog.Logger, result *EnhancedScanResult, scanPath string) {
-	// Use existing SARIF converter
-	issues, err := code.ConvertSARIFJSONToIssues(logger, 0, []byte(result.OriginalOutput), scanPath)
+func extractSASTIssues(logger *zerolog.Logger, result *EnhancedScanResult, _ learn.Service, workDir string) {
+	issues, err := code.ConvertSARIFJSONToIssues(logger, 0, []byte(result.OriginalOutput), workDir)
 	if err != nil {
 		return
 	}
 
-	// Convert to IssueData format for serialization
 	for _, issue := range issues {
 		result.Issues = append(result.Issues, convertIssueToData(issue))
 	}
@@ -161,6 +147,7 @@ func convertIssueToData(issue types.Issue) IssueData {
 		case snyk.CodeIssueData:
 			data.RuleID = ad.RuleId
 			data.CWEs = ad.CWE
+			data.Dataflow = ad.DataFlow
 		}
 	}
 

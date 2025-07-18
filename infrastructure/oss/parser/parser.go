@@ -17,9 +17,9 @@
 package parser
 
 import (
+	"github.com/rs/zerolog"
 	"path/filepath"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -42,16 +42,16 @@ type DependencyParser interface {
 	ParseContent(content string) (dependencies []Dependency, err error)
 }
 
-var parserConstructors = map[string]func(config *config.Config) DependencyParser{
-	".html": func(config *config.Config) DependencyParser { return NewHTMLParser(config) },
-	".htm":  func(config *config.Config) DependencyParser { return NewHTMLParser(config) },
+var parserConstructors = map[string]func(logger *zerolog.Logger) DependencyParser{
+	".html": func(logger *zerolog.Logger) DependencyParser { return NewHTMLParser(logger) },
+	".htm":  func(logger *zerolog.Logger) DependencyParser { return NewHTMLParser(logger) },
 }
 
-func NewParser(config *config.Config, path types.FilePath) DependencyParser {
+func NewParser(logger *zerolog.Logger, path types.FilePath) DependencyParser {
 	ext := filepath.Ext(string(path))
 	parserConstructor := parserConstructors[ext]
 	if parserConstructor == nil {
 		return nil
 	}
-	return parserConstructor(config)
+	return parserConstructor(logger)
 }

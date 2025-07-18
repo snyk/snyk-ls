@@ -178,7 +178,7 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 }
 
 func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
-	// Create a mock config
+	// Create a mock logger
 	c := testutil.UnitTest(t)
 
 	// Setup test CLI executor
@@ -233,14 +233,14 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 
 	// Test case 2: Command with both --all-projects and a conflicting parameter
 	t.Run("handles conflicting parameters with --all-projects", func(t *testing.T) {
-		// Create a new config with conflicting parameters
+		// Create a new logger with conflicting parameters
 		configWithConflicts := testutil.UnitTest(t)
 
 		// Set conflicting parameters directly in the CLI settings
 		clisettings := configWithConflicts.CliSettings()
 		clisettings.AdditionalOssParameters = []string{"--file=package.json"}
 
-		// Update the scanner to use our new config
+		// Update the scanner to use our new logger
 		originalConfig := cliScanner.config
 		cliScanner.config = configWithConflicts
 
@@ -263,13 +263,13 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		assert.False(t, containsAllProjects, "--all-projects should not be present when there are conflicting parameters")
 		assert.Contains(t, result, "--file=package.json", "The conflicting parameter should be present")
 
-		// Restore the original config to avoid affecting other tests
+		// Restore the original logger to avoid affecting other tests
 		cliScanner.config = originalConfig
 	})
 }
 
 func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
-	// Create a mock config
+	// Create a mock logger
 	c := testutil.UnitTest(t)
 
 	// Create a mock scan result with both ignored and non-ignored issues

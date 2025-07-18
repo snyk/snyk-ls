@@ -466,7 +466,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path types.F
 	sc.bundleHashes[path] = bundleHash
 	sc.bundleHashesMutex.Unlock()
 
-	converter := SarifConverter{sarif: *sarif, c: sc.C}
+	converter := SarifConverter{sarif: *sarif, logger: sc.C.Logger()}
 	issues, err = converter.toIssues(path)
 	if err != nil {
 		return []types.Issue{}, err

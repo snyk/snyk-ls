@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"os/exec"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -48,6 +50,7 @@ type SnykMcpToolsDefinition struct {
 	Command        []string               `json:"command"`
 	StandardParams []string               `json:"standardParams"`
 	IgnoreTrust    bool                   `json:"ignoreTrust"`
+	OutputMapper   string                 `json:"outputMapper"`
 	Params         []SnykMcpToolParameter `json:"params"`
 }
 
@@ -63,6 +66,13 @@ type SnykMcpToolParameter struct {
 
 //go:embed snyk_tools.json
 var snykToolsJson string
+
+var (
+	outputMapperMap = map[string]func(logger *zerolog.Logger, result *EnhancedScanResult, learnService learn.Service, workDir string){
+		ScaOutputMapper:  extractSCAIssues,
+		CodeOutputMapper: extractSASTIssues,
+	}
+)
 
 type SnykMcpTools struct {
 	Tools []SnykMcpToolsDefinition `json:"tools"`
@@ -181,42 +191,15 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return nil, err
 		}
 
-		// Check if we should enhance the output
-		if shouldEnhanceOutput(toolDef, params) {
-			output = m.enhanceOutput(toolDef.Name, output, err == nil, params)
-		}
+		output = m.enhanceOutput(&logger, toolDef, output, err == nil, params, workingDir)
 
 		return mcp.NewToolResultText(output), nil
 	}
 }
 
-// shouldEnhanceOutput checks if the output should be enhanced for LLMs
-func shouldEnhanceOutput(toolDef SnykMcpToolsDefinition, params map[string]convertedToolParameter) bool {
-	// Only enhance for SCA and SAST scans
-	if toolDef.Name != SnykScaTest && toolDef.Name != SnykCodeTest {
-		return false
-	}
-
-	// Check if JSON output was requested
-	if val, ok := params["json"]; ok && val.value == true {
-		return true
-	}
-
-	return false
-}
-
 // enhanceOutput enhances the scan output with structured issue data
-func (m *McpLLMBinding) enhanceOutput(toolName string, output string, success bool, params map[string]convertedToolParameter) string {
-	// Extract the scan path from params
-	scanPath := ""
-	if pathParam, ok := params["path"]; ok {
-		if pathStr, ok := pathParam.value.(string); ok {
-			scanPath = pathStr
-		}
-	}
-
-	// Map the response to enhanced format with learn service
-	return mapScanResponse(toolName, output, success, scanPath, m.learnService)
+func (m *McpLLMBinding) enhanceOutput(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, params map[string]convertedToolParameter, workDir string) string {
+	return mapScanResponse(logger, toolDef, output, success, workDir, m.learnService)
 }
 
 func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

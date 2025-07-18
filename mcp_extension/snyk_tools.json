@@ -27,6 +27,7 @@
         "all_projects",
         "json"
       ],
+      "outputMapper": "ScaOutputMapper",
       "params": [
         {
           "name": "path",
@@ -245,7 +246,8 @@
         "code",
         "test"
       ],
-      "standardParams": ["json"],
+      "outputMapper": "CodeOutputMapper",
+      "standardParams": ["sarif"],
       "params": [
         {
           "name": "path",

@@ -17,7 +17,7 @@
 package oss
 
 import (
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/rs/zerolog"
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/ast/maven"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -26,11 +26,11 @@ import (
 type mavenRangeFinder struct {
 	path        types.FilePath
 	fileContent []byte
-	c           *config.Config
+	logger      *zerolog.Logger
 }
 
 func (m *mavenRangeFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {
-	parser := maven.New(m.c)
+	parser := maven.New(m.logger)
 	tree := parser.Parse(string(m.fileContent), m.path)
 	for _, depNode := range tree.Root.Children {
 		if introducingPackageName == depNode.Name {
