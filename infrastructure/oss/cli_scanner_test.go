@@ -168,7 +168,7 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 				require.NoError(t, os.WriteFile(absFile, []byte(tc.displayTargetFileInWorkDir), 0666))
 			}
 
-			actual := getAbsTargetFilePath(c, scanResult{
+			actual := getAbsTargetFilePath(c.Logger(), scanResult{
 				DisplayTargetFile: tc.displayTargetFile,
 				Path:              filepath.Join(base, adjustedPath),
 			}, types.FilePath(filepath.Join(base, adjustedWorkDir)), types.FilePath(filepath.Join(base, adjustedPath)))
@@ -178,7 +178,7 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 }
 
 func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
-	// Create a mock logger
+	// Create a mock config
 	c := testutil.UnitTest(t)
 
 	// Setup test CLI executor
@@ -233,14 +233,14 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 
 	// Test case 2: Command with both --all-projects and a conflicting parameter
 	t.Run("handles conflicting parameters with --all-projects", func(t *testing.T) {
-		// Create a new logger with conflicting parameters
+		// Create a new config with conflicting parameters
 		configWithConflicts := testutil.UnitTest(t)
 
 		// Set conflicting parameters directly in the CLI settings
 		clisettings := configWithConflicts.CliSettings()
 		clisettings.AdditionalOssParameters = []string{"--file=package.json"}
 
-		// Update the scanner to use our new logger
+		// Update the scanner to use our new Config
 		originalConfig := cliScanner.config
 		cliScanner.config = configWithConflicts
 
@@ -263,13 +263,13 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		assert.False(t, containsAllProjects, "--all-projects should not be present when there are conflicting parameters")
 		assert.Contains(t, result, "--file=package.json", "The conflicting parameter should be present")
 
-		// Restore the original logger to avoid affecting other tests
+		// Restore the original config to avoid affecting other tests
 		cliScanner.config = originalConfig
 	})
 }
 
 func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
-	// Create a mock logger
+	// Create a mock config
 	c := testutil.UnitTest(t)
 
 	// Create a mock scan result with both ignored and non-ignored issues
@@ -322,7 +322,7 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	packageIssueCache := make(map[string][]types.Issue)
 
 	// Convert scan results to issues
-	issues := convertScanResultToIssues(c, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache)
+	issues := convertScanResultToIssues(c.Logger(), scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, c.Format())
 
 	// Verify that only non-ignored issues are included in the result
 	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")
