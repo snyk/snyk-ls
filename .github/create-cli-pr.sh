@@ -25,7 +25,7 @@ popd
 
 WHAT_CHANGED=$(git whatchanged "$LS_COMMIT_HASH"...HEAD)
 BODY=$(printf "## Changes since last integration of Language Server\n\n\`\`\`\n%s\n\`\`\`" "$WHAT_CHANGED")
-BRANCH=feat/automatic-upgrade-of-ls
+BRANCH=chore/automatic-upgrade-of-ls
 
 pushd $CLI_DIR
   git checkout -B $BRANCH
@@ -42,11 +42,11 @@ pushd $CLI_DIR
   echo $PUB_SIGNING_KEY > signingkey.pub
   git config --global user.signingkey ./signingkey.pub
 
-  git commit -am "feat: automatic integration of language server $LS_VERSION" || echo "No files to commit"
+  git commit -am "chore: automatic integration of language server $LS_VERSION" || echo "No files to commit"
 
   git push -f --set-upstream origin $BRANCH
 
-  TITLE="feat(language-server): integrate LS"
+  TITLE="chore(language-server): integrate LS"
   PR=$(gh pr list --search "$TITLE" 2>&1 | grep -e "$TITLE" | cut -f1)
   if [[ ! $PR  ]]; then
     echo "Creating new PR"

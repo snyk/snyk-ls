@@ -32,7 +32,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 
 	"github.com/creachadair/jrpc2"
@@ -53,7 +52,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/data_structure"
-	"github.com/snyk/snyk-ls/internal/debounce"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -118,7 +116,6 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 }
 
 func textDocumentDidChangeHandler() jrpc2.Handler {
-	debouncerMap := make(map[types.FilePath]*debounce.Debouncer)
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
 		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "TextDocumentDidChangeHandler").Logger()
@@ -138,23 +135,6 @@ func textDocumentDidChangeHandler() jrpc2.Handler {
 
 		di.FileWatcher().SetFileAsChanged(params.TextDocument.URI)
 
-		debouncedCallback := func() {
-			for _, change := range params.ContentChanges {
-				if packageScanner, ok := di.Scanner().(scanner.PackageScanner); ok {
-					go packageScanner.ScanPackages(ctx, c, pathFromUri, change.Text)
-				}
-			}
-		}
-
-		var debouncer = debouncerMap[pathFromUri]
-		if debouncer == nil {
-			debouncer = debounce.NewDebouncer(time.Millisecond*500, debouncedCallback)
-			debouncerMap[pathFromUri] = debouncer
-		} else {
-			debouncer.UpdateDebounceCallback(debouncedCallback)
-		}
-
-		debouncer.Debounce()
 		return nil, nil
 	})
 }
@@ -701,9 +681,6 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 			di.Notifier().Send(diagnosticParams)
 		}
 
-		if sc, ok := di.Scanner().(scanner.PackageScanner); ok {
-			sc.ScanPackages(context.Background(), c, filePath, "")
-		}
 		return nil, nil
 	})
 }

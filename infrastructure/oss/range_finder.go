@@ -18,7 +18,6 @@ package oss
 
 import (
 	"github.com/rs/zerolog"
-	"path/filepath"
 	"strings"
 
 	"github.com/snyk/snyk-ls/ast"
@@ -47,11 +46,7 @@ func getDependencyNode(logger *zerolog.Logger, path types.FilePath, issue ossIss
 	pathAsString := string(path)
 	switch issue.PackageManager {
 	case "npm":
-		if packageScanSupportedExtensions[filepath.Ext(pathAsString)] {
-			finder = &htmlRangeFinder{path: path, fileContent: fileContent, logger: logger}
-		} else {
-			finder = &NpmRangeFinder{uri: path, fileContent: fileContent}
-		}
+		finder = &NpmRangeFinder{uri: path, fileContent: fileContent}
 	case "maven":
 		if strings.HasSuffix(pathAsString, "pom.xml") {
 			finder = &mavenRangeFinder{path: path, fileContent: fileContent, logger: logger}
