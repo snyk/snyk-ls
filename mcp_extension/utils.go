@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -189,4 +190,22 @@ func ClientInfoFromContext(ctx context.Context) mcp.Implementation {
 		clientInfo = sessionWithClientInfo.GetClientInfo()
 	}
 	return clientInfo
+}
+
+var re = regexp.MustCompile(`^python(\d+(\.\d+)?(\.\d+)?)?(\.exe)?$`)
+
+// verifyCommandArgument verifies if provided command from the LLM used for python matches python binary name
+func verifyCommandArgument(command any) bool {
+	if command == nil {
+		return true
+	}
+
+	cmdStr, ok := command.(string)
+	if !ok {
+		return true
+	}
+
+	binaryName := filepath.Base(cmdStr)
+	isMatch := re.MatchString(binaryName)
+	return isMatch
 }

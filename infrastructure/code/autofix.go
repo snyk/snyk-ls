@@ -117,7 +117,7 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 				return nil, autofixErr
 			} else if fixStatus.Message == completeStatus {
 				if len(suggestions) == 0 {
-					logger.Info().Msg("AI fix returned successfully but no good fix could be computed.")
+					logger.Info().Msg("Snyk Agent Fix returned successfully but no good fix could be computed.")
 				}
 				return suggestions, nil
 			}

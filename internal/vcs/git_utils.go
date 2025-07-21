@@ -53,7 +53,7 @@ func HeadRefHashForBranch(logger *zerolog.Logger, repoPath types.FilePath, branc
 
 	ref, err := repo.Reference(branchReferenceName, true)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get reference")
+		logger.Error().Err(err).Str("branchReferenceName", branchReferenceName.String()).Msg("Failed to get reference")
 		return "", err
 	}
 

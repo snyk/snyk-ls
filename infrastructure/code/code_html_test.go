@@ -24,6 +24,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -196,8 +198,8 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `class="sn-status-message mod-warning"`)
 	assert.Contains(t, codePanelHtml, `class="sn-ignore-badge"`)
 	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
-	assert.Contains(t, codePanelHtml, `class="ignore-details-value">Ignored permanently</div>`)
-	assert.Contains(t, codePanelHtml, `class="ignore-details-value">No expiration</div>`) // Because category is "wont-fix"
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">Ignored permanently</td>`)
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`) // Because category is "wont-fix"
 
 	// assert Footer buttons are not present when issue is ignored
 	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
@@ -236,7 +238,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 
 	// assert Ignore Details section
 	// Asserting an expired date to prevent the test from breaking in the future as the current date changes
-	assert.Contains(t, codePanelHtml, `class="ignore-details-value">Expired</div>`)
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">Expired</td>`)
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
@@ -531,4 +533,63 @@ func Test_Code_Html_updateFeatureFlags_NonVSCodeIntegration(t *testing.T) {
 
 	// Assert that inlineIgnoresEnabled is false because the integration is not VS_CODE
 	assert.False(t, htmlRenderer.inlineIgnoresEnabled, "inlineIgnoresEnabled should be false for non-VSCode integrations")
+}
+
+func Test_prepareIgnoreDetailsRow(t *testing.T) {
+	ignoredOn := time.Now()
+
+	testCases := []struct {
+		name          string
+		ignoreDetails *types.IgnoreDetails
+		expectedValue []string
+	}{
+		{
+			name: "should format wont-fix correctly",
+			ignoreDetails: &types.IgnoreDetails{
+				Category:   "wont-fix",
+				Reason:     "test reason",
+				Expiration: "",
+				IgnoredOn:  ignoredOn,
+				IgnoredBy:  "John Smith",
+				Status:     codeClientSarif.Accepted,
+			},
+			expectedValue: []string{
+				"Ignored permanently",
+				"No expiration",
+				formatDate(ignoredOn),
+				"John Smith",
+				"test reason",
+				"Approved",
+			},
+		},
+		{
+			name: "should format temporary-ignore correctly",
+			ignoreDetails: &types.IgnoreDetails{
+				Category:   "temporary-ignore",
+				Reason:     "another reason",
+				Expiration: time.Now().Add(73 * time.Hour).Format(time.RFC3339),
+				IgnoredOn:  ignoredOn,
+				IgnoredBy:  "Jane Doe",
+				Status:     codeClientSarif.UnderReview,
+			},
+			expectedValue: []string{
+				"Ignored temporarily",
+				"3 days",
+				formatDate(ignoredOn),
+				"Jane Doe",
+				"another reason",
+				"Pending",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			row := prepareIgnoreDetailsRow(tc.ignoreDetails)
+			for i, detail := range row {
+				assert.Equal(t, tc.expectedValue[i], detail.Value)
+			}
+			assert.Equal(t, len(tc.expectedValue), len(row))
+		})
+	}
 }
