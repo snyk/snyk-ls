@@ -52,7 +52,7 @@ jobs:
             echo "No documentation changes detected, exiting."
           fi
         env:
-          SOURCE_PATH: ./docs/docs/snyk-cli/snyk-mcp-experimental.md
+          SOURCE_PATH: ./docs/docs/cli-ide-and-ci-cd-integrations/snyk-cli/developer-guardrails-for-agentic-workflows/snyk-mcp-early-access/README.md
           FILE_TO_COMMIT: ./mcp_extension/README.md
           DESTINATION_REPOSITORY: snyk-ls
           DESTINATION_BRANCH: docs/automatic-gitbook-update
