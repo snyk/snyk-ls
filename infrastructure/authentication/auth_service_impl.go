@@ -128,6 +128,8 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 
 func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 	event := analytics2.NewAnalyticsEventParam("authenticated", nil, "")
+	// Add the authentication details in the extension fields. We only send the method name; we must not include any
+	// authentication tokens.
 	event.Extension = map[string]any{
 		"auth::auth-type": string(a.c.AuthenticationMethod()),
 	}

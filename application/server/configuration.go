@@ -289,7 +289,6 @@ func updateOrganization(c *config.Config, settings types.Settings) {
 		if oldOrgId != newOrgId {
 			go sendConfigChangedAnalyticsEvent(c, "organization", oldOrgId, newOrgId, "")
 		}
-
 	}
 }
 

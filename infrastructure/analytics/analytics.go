@@ -43,6 +43,8 @@ func NewAnalyticsEventParam(interactionType string, err error, path types.FilePa
 	}
 
 	var targetId string
+	// If we have a file path, we use that to determine the target ID. For analytics such as authentication events, which
+	// are not associated with a file, we use the binary name as the target ID (with a fallback if that fails).
 	if path != "" {
 		targetId, _ = instrumentation.GetTargetId(string(path), instrumentation.AutoDetectedTargetId)
 	} else {
