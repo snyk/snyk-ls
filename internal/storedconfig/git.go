@@ -215,10 +215,12 @@ func getFromGit(path types.FilePath) (*types.FolderConfig, error) {
 
 	baseBranch, err := getBaseBranch(repoConfig, folderSection, localBranches)
 	if err != nil {
-		return &folderConfig, err
+		// Don't fail completely if we can't determine base branch
+		// We still have valid local branches that should be used
+		// Just skip setting the base branch
+	} else {
+		folderConfig.BaseBranch = baseBranch
 	}
-
-	folderConfig.BaseBranch = baseBranch
 
 	additionalParams := getAdditionalParams(folderSection)
 	if len(additionalParams) > 0 {
