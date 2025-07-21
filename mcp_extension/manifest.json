@@ -1,0 +1,42 @@
+{
+  "dxt_version": "0.1",
+  "name": "Snyk Security",
+  "version": "1.1298.1",
+  "description": "Easily find and fix security issues in your applications leveraging Snyk platform capabilities.",
+  "author": {
+    "name": "Snyk"
+  },
+  "homepage": "https://snyk.io",
+  "documentation": "https://docs.snyk.io",
+  "support": "https://support.snyk.io",
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "npx snyk",
+    "mcp_config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "snyk",
+        "mcp",
+        "-t",
+        "stdio"
+      ],
+      "env": {}
+    }
+  },
+  "tools_generated": true,
+  "keywords": [
+    "security",
+    "sast",
+    "sca",
+    "iac",
+    "container",
+    "ai"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/snyk/snyk-ls/tree/main/mcp_extension"
+  }
+}
