@@ -18,6 +18,7 @@ package analytics
 
 import (
 	"encoding/json"
+	"os"
 	"sync"
 	"time"
 
@@ -40,7 +41,16 @@ func NewAnalyticsEventParam(interactionType string, err error, path types.FilePa
 	if err != nil {
 		status = string(analytics.Failure)
 	}
-	targetId, _ := instrumentation.GetTargetId(string(path), instrumentation.AutoDetectedTargetId)
+
+	var targetId string
+	if path != "" {
+		targetId, _ = instrumentation.GetTargetId(string(path), instrumentation.AutoDetectedTargetId)
+	} else {
+		targetId, _ = instrumentation.GetTargetId(os.Args[0], instrumentation.FilesystemTargetId)
+		if targetId == "" {
+			targetId = "pkg:filesystem/dummy/dummy"
+		}
+	}
 
 	return types.AnalyticsEventParam{
 		InteractionType: interactionType,
