@@ -19,6 +19,7 @@ package storedconfig
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -101,6 +102,81 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 	actual, err := GetOrCreateFolderConfig(conf, path, nil)
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)
+}
+
+func Test_GetOrCreateFolderConfig_shouldReturnLocalBranchesEvenWithoutBaseBranch(t *testing.T) {
+	// Create a temporary directory for the test repo
+	tempDir := t.TempDir()
+
+	// Initialize a new git repo
+	cmd := exec.Command("git", "init")
+	cmd.Dir = tempDir
+	err := cmd.Run()
+	require.NoError(t, err)
+
+	// Configure git user for commits (required on Windows and CI)
+	cmd = exec.Command("git", "config", "user.email", "test@example.com")
+	cmd.Dir = tempDir
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	cmd = exec.Command("git", "config", "user.name", "Test User")
+	cmd.Dir = tempDir
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	// Create and commit a file
+	testFile := filepath.Join(tempDir, "test.txt")
+	err = os.WriteFile(testFile, []byte("test content"), 0644)
+	require.NoError(t, err)
+
+	cmd = exec.Command("git", "add", ".")
+	cmd.Dir = tempDir
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	cmd = exec.Command("git", "commit", "-m", "initial commit")
+	cmd.Dir = tempDir
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	// Create branches that are neither main nor master
+	cmd = exec.Command("git", "checkout", "-b", "feature-branch")
+	cmd.Dir = tempDir
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	cmd = exec.Command("git", "checkout", "-b", "develop")
+	cmd.Dir = tempDir
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	// Delete main and master branches if they exist
+	cmd = exec.Command("git", "branch", "-D", "main")
+	cmd.Dir = tempDir
+	_ = cmd.Run() // Ignore error if branch doesn't exist
+
+	cmd = exec.Command("git", "branch", "-D", "master")
+	cmd.Dir = tempDir
+	_ = cmd.Run() // Ignore error if branch doesn't exist
+
+	// Test GetOrCreateFolderConfig
+	conf, _ := SetupConfigurationWithStorage(t)
+	logger := zerolog.Nop()
+
+	folderConfig, err := GetOrCreateFolderConfig(conf, types.FilePath(tempDir), &logger)
+
+	// Should not return an error
+	require.NoError(t, err)
+	require.NotNil(t, folderConfig)
+
+	// Should have local branches from git
+	require.NotEmpty(t, folderConfig.LocalBranches)
+	require.Contains(t, folderConfig.LocalBranches, "feature-branch")
+	require.Contains(t, folderConfig.LocalBranches, "develop")
+
+	// Base branch should be empty since we couldn't determine it
+	require.Empty(t, folderConfig.BaseBranch)
 }
 
 func Test_mergeFolderConfigs(t *testing.T) {
