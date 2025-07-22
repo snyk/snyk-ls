@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -66,7 +67,9 @@ func (e *GitHubProtocolExtractor) ExtractProtocolVersion(plugin IDEPlugin, tag s
 	}
 
 	// Cache the result
-	_ = e.cache.Set(cacheKey, version, 7*24*time.Hour) // Cache for 7 days
+	if err := e.cache.Set(cacheKey, version, 7*24*time.Hour); err != nil {
+		log.Printf("Warning: failed to cache protocol version for %s: %v", cacheKey, err)
+	}
 
 	return version, nil
 }

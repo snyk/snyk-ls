@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -56,7 +57,9 @@ func (m *CLIVersionMapper) GetCLIVersion(protocolVersion string) (string, error)
 	}
 
 	// Cache the result
-	_ = m.cache.Set(cacheKey, version, 24*time.Hour) // Cache for 24 hours
+	if err := m.cache.Set(cacheKey, version, 24*time.Hour); err != nil {
+		log.Printf("Warning: failed to cache CLI version for %s: %v", cacheKey, err)
+	}
 
 	return version, nil
 }
