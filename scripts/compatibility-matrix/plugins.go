@@ -332,10 +332,14 @@ func extractTarGz(r io.Reader, destDir string) error {
 			if err != nil {
 				return err
 			}
-			defer f.Close()
 
-			if _, err := io.Copy(f, tr); err != nil {
-				return err
+			_, copyErr := io.Copy(f, tr)
+			closeErr := f.Close()
+			if copyErr != nil {
+				return copyErr
+			}
+			if closeErr != nil {
+				return closeErr
 			}
 		}
 	}
