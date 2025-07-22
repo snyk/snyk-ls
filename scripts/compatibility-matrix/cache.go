@@ -56,8 +56,8 @@ func (c *Cache) Get(key string, result interface{}) (bool, error) {
 	}
 
 	var entry CacheEntry
-	if err := json.Unmarshal(data, &entry); err != nil {
-		return false, err
+	if unmarshalErr := json.Unmarshal(data, &entry); unmarshalErr != nil {
+		return false, unmarshalErr
 	}
 
 	// Check if cache is expired

@@ -17,7 +17,6 @@
 package main
 
 import (
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -47,11 +46,7 @@ func TestGenerateMatrix(t *testing.T) {
 	}
 
 	// Use temporary cache
-	tempDir, err := os.MkdirTemp("", "test-cache-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	cache := NewCache(tempDir)
 

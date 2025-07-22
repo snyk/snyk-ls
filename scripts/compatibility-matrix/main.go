@@ -58,7 +58,7 @@ func main() {
 
 	// Write output
 	if *dryRun {
-		fmt.Println(matrix)
+		_, _ = fmt.Fprintln(os.Stdout, matrix)
 	} else {
 		if err := os.WriteFile(*outputFile, []byte(matrix), 0644); err != nil {
 			log.Fatalf("Failed to write output file: %v", err)

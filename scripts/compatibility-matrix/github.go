@@ -59,7 +59,7 @@ func (g *GitHubClient) FetchReleases(owner, repo string, since time.Time) ([]Git
 	for {
 		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?page=%d&per_page=%d", owner, repo, page, perPage)
 
-		req, err := http.NewRequest("GET", url, nil)
+		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
 			return nil, err
 		}
