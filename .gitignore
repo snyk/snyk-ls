@@ -51,3 +51,6 @@ infrastructure/analytics/pacts/snyk-ls-analyticsprovider.json
 infrastructure/oss/testdata/go.sum
 
 .qodo
+
+# Compatibility matrix cache
+.cache/compatibility-matrix/

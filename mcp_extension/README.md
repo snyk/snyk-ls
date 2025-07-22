@@ -2,13 +2,15 @@
 
 MCP (Model Context Protocol) is an open protocol that standardizes how applications share context with large language models.
 
-MCP can support AI systems with the context needed to generate accurate and relevant responses for use cases where the AI systems do not have the context, by integrating the AI systems with tools and platforms that have specific capabilities. You can integrate Snyk MCP into certain AI-enabled security tools to provide Snyk security context.
+MCP can provide AI systems with additional information needed to generate accurate and relevant responses for use cases where the AI systems do not have the context, by integrating the AI systems with tools and platforms that have specific capabilities.&#x20;
 
-Snyk is introducing an MCP server as part of the Snyk CLI. This will allow MCP-enabled security tools to integrate Snyk security scanning capabilities directly, thus bridging the gap between security scanning and emerging AI-assisted workflows.
+You can integrate Snyk MCP into MCP-supporting tools to provide Snyk security context.
+
+Snyk is introducing an MCP server as part of the Snyk CLI. This allows MCP-enabled agentic tools to integrate Snyk security scanning capabilities directly, thus bridging the gap between security scanning and AI-assisted workflows.
 
 The `snyk mcp` command is available in Early Access for the following reasons:
 
-* MCP is a new and evolving standard.
+* MCP is a new and rapidly evolving standard.
 * The `snyk mcp` command is an early implementation of integrating Snyk security scanning into the MCP-enabled environment.
 * Snyk wants to gather feedback on the benefits of MCP as an integration pattern for Snyk security.
 
@@ -39,3 +41,5 @@ In environments or applications that use MCP, you can use the `snyk mcp` CLI com
 
 Running `snyk_sca_scan` may execute third-party ecosystem tools (for example, Gradle or Maven) on your machine to fetch the project's dependency tree.
 
+
+For more details, see the [Snyk MCP installation, configuration and startup](snyk-mcp-installation-configuration-and-startup.md) and [Troubleshooting for the Snyk MCP server](../../../../snyk-cli/developer-guardrails-for-agentic-workflows/snyk-mcp-experimental/troubleshooting-for-the-snyk-mcp-server.md) pages.
