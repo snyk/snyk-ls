@@ -176,7 +176,7 @@ func generateMatrix(releases []Release, cache *Cache) (string, error) {
 	sb.WriteString("\n## Notes\n\n")
 	sb.WriteString("- This matrix is automatically generated and updated daily\n")
 	sb.WriteString("- Only stable releases are included (pre-releases and drafts are excluded)\n")
-	sb.WriteString("- CLI versions shown are from the preview channel\n")
+	sb.WriteString("- CLI versions shown are from the stable channel\n")
 
 	return sb.String(), nil
 }

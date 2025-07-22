@@ -115,7 +115,7 @@ func (c *Cache) Clear() error {
 
 // GetCLIVersionCacheKey generates a cache key for CLI version lookups
 func GetCLIVersionCacheKey(protocolVersion string) string {
-	return fmt.Sprintf("cli-version-preview-%s", protocolVersion)
+	return fmt.Sprintf("cli-version-stable-%s", protocolVersion)
 }
 
 // GetReleaseCacheKey generates a cache key for release data

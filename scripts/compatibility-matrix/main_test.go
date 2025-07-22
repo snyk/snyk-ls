@@ -106,7 +106,7 @@ func TestCacheKeyGeneration(t *testing.T) {
 		{
 			name:     "CLI version cache key",
 			fn:       func() string { return GetCLIVersionCacheKey("20") },
-			expected: "cli-version-preview-20",
+			expected: "cli-version-stable-20",
 		},
 		{
 			name:     "Release cache key",

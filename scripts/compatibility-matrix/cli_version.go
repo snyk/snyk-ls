@@ -63,8 +63,8 @@ func (m *CLIVersionMapper) GetCLIVersion(protocolVersion string) (string, error)
 
 // fetchCLIVersion fetches the CLI version from Snyk API
 func (m *CLIVersionMapper) fetchCLIVersion(protocolVersion string) (string, error) {
-	// Use preview channel as specified in the plan
-	url := fmt.Sprintf("https://downloads.snyk.io/cli/preview/ls-protocol-version-%s", protocolVersion)
+	// Use stable channel for CLI versions
+	url := fmt.Sprintf("https://downloads.snyk.io/cli/stable/ls-protocol-version-%s", protocolVersion)
 
 	resp, err := m.httpClient.Get(url)
 	if err != nil {
