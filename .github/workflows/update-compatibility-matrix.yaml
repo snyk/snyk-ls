@@ -73,8 +73,8 @@ jobs:
       - name: Update compatibility matrix in user-docs
         if: github.event.inputs.dry_run != 'true'
         run: |
-          mkdir -p user-docs/docs/cli-ide-and-ci-cd-integrations/
-          cp output/compatibility-matrix.md user-docs/docs/cli-ide-and-ci-cd-integrations/
+          mkdir -p user-docs/docs/cli-ide-and-ci-cd-integrations/snyk-ide-plugins-and-extensions
+          cp output/compatibility-matrix.md user-docs/docs/cli-ide-and-ci-cd-integrations/snyk-ide-plugins-and-extensions/compatibility-matrix.md
 
       - name: Create pull request
         if: github.event.inputs.dry_run != 'true'
@@ -92,7 +92,7 @@ jobs:
           git checkout -b "$BRANCH_NAME"
           
           # Commit changes
-          git add docs/cli-ide-and-ci-cd-integrations/compatibility-matrix.md
+          git add docs/cli-ide-and-ci-cd-integrations/snyk-ide-plugins-and-extensions/compatibility-matrix.md
           
           # Check if there are changes to commit
           if git diff --staged --quiet; then
