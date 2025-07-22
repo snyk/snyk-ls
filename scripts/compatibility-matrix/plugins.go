@@ -19,6 +19,7 @@ package main
 import (
 	"archive/tar"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -29,6 +30,9 @@ import (
 	"strings"
 	"time"
 )
+
+// errStopWalk is a sentinel error used to stop filepath.Walk early
+var errStopWalk = errors.New("stop walk")
 
 // ProtocolExtractor extracts protocol version from plugin source
 type ProtocolExtractor interface {
@@ -121,6 +125,7 @@ func (e *GitHubProtocolExtractor) extractFromSource(plugin IDEPlugin, tag string
 func (e *GitHubProtocolExtractor) extractVSCodeProtocol(sourceDir string) (string, error) {
 	// Look for PROTOCOL_VERSION in TypeScript files
 	pattern := regexp.MustCompile(`(?m)^export\s+const\s+PROTOCOL_VERSION\s*=\s*(\d+)`)
+	var protocolVersion string
 
 	err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
@@ -135,20 +140,27 @@ func (e *GitHubProtocolExtractor) extractVSCodeProtocol(sourceDir string) (strin
 
 			matches := pattern.FindSubmatch(content)
 			if len(matches) > 1 {
-				return fmt.Errorf("FOUND:%s", string(matches[1]))
+				protocolVersion = string(matches[1])
+				return errStopWalk
 			}
 		}
 		return nil
 	})
 
-	if err != nil && strings.HasPrefix(err.Error(), "FOUND:") {
-		return strings.TrimPrefix(err.Error(), "FOUND:"), nil
+	if err != nil && !errors.Is(err, errStopWalk) {
+		return "", err
 	}
 
-	return "", fmt.Errorf("protocol version not found in VSCode extension")
+	if protocolVersion == "" {
+		return "", fmt.Errorf("protocol version not found in VSCode extension")
+	}
+
+	return protocolVersion, nil
 }
 
 // extractIntelliJProtocol extracts protocol version from IntelliJ plugin
+//
+//nolint:dupl // Each extract function is similar but handles different file types and patterns
 func (e *GitHubProtocolExtractor) extractIntelliJProtocol(sourceDir string) (string, error) {
 	// Look for protocol version in Kotlin/Java files
 	patterns := []*regexp.Regexp{
@@ -156,8 +168,8 @@ func (e *GitHubProtocolExtractor) extractIntelliJProtocol(sourceDir string) (str
 		regexp.MustCompile(`(?m)private\s+static\s+final\s+(?:String|int)\s+PROTOCOL_VERSION\s*=\s*"?(\d+)"?`),
 		regexp.MustCompile(`(?m)requiredProtocolVersion["\s:=]+(\d+)`),
 	}
+	var protocolVersion string
 
-	var lastErr error
 	err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return err
@@ -172,22 +184,28 @@ func (e *GitHubProtocolExtractor) extractIntelliJProtocol(sourceDir string) (str
 			for _, pattern := range patterns {
 				matches := pattern.FindSubmatch(content)
 				if len(matches) > 1 {
-					return fmt.Errorf("FOUND:%s", string(matches[1]))
+					protocolVersion = string(matches[1])
+					return errStopWalk
 				}
 			}
 		}
 		return nil
 	})
 
-	if err != nil && strings.HasPrefix(err.Error(), "FOUND:") {
-		return strings.TrimPrefix(err.Error(), "FOUND:"), nil
+	if err != nil && !errors.Is(err, errStopWalk) {
+		return "", err
 	}
 
-	lastErr = fmt.Errorf("protocol version not found in IntelliJ plugin")
-	return "", lastErr
+	if protocolVersion == "" {
+		return "", fmt.Errorf("protocol version not found in IntelliJ plugin")
+	}
+
+	return protocolVersion, nil
 }
 
 // extractVisualStudioProtocol extracts protocol version from Visual Studio plugin
+//
+//nolint:dupl // Each extract function is similar but handles different file types and patterns
 func (e *GitHubProtocolExtractor) extractVisualStudioProtocol(sourceDir string) (string, error) {
 	// Look for protocol version in C# files
 	patterns := []*regexp.Regexp{
@@ -195,6 +213,7 @@ func (e *GitHubProtocolExtractor) extractVisualStudioProtocol(sourceDir string) 
 		regexp.MustCompile(`(?m)RequiredProtocolVersion\s*[=:]\s*"?(\d+)"?`),
 		regexp.MustCompile(`(?m)"requiredProtocolVersion"\s*:\s*"?(\d+)"?`),
 	}
+	var protocolVersion string
 
 	err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
@@ -210,18 +229,23 @@ func (e *GitHubProtocolExtractor) extractVisualStudioProtocol(sourceDir string) 
 			for _, pattern := range patterns {
 				matches := pattern.FindSubmatch(content)
 				if len(matches) > 1 {
-					return fmt.Errorf("FOUND:%s", string(matches[1]))
+					protocolVersion = string(matches[1])
+					return errStopWalk
 				}
 			}
 		}
 		return nil
 	})
 
-	if err != nil && strings.HasPrefix(err.Error(), "FOUND:") {
-		return strings.TrimPrefix(err.Error(), "FOUND:"), nil
+	if err != nil && !errors.Is(err, errStopWalk) {
+		return "", err
 	}
 
-	return "", fmt.Errorf("protocol version not found in Visual Studio plugin")
+	if protocolVersion == "" {
+		return "", fmt.Errorf("protocol version not found in Visual Studio plugin")
+	}
+
+	return protocolVersion, nil
 }
 
 // extractEclipseProtocol extracts protocol version from Eclipse plugin
@@ -232,6 +256,7 @@ func (e *GitHubProtocolExtractor) extractEclipseProtocol(sourceDir string) (stri
 		regexp.MustCompile(`(?m)protocolVersion\s*=\s*"?(\d+)"?`),
 		regexp.MustCompile(`(?m)requiredProtocolVersion["\s:=]+(\d+)`),
 	}
+	var protocolVersion string
 
 	err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
@@ -248,18 +273,23 @@ func (e *GitHubProtocolExtractor) extractEclipseProtocol(sourceDir string) (stri
 			for _, pattern := range patterns {
 				matches := pattern.FindSubmatch(content)
 				if len(matches) > 1 {
-					return fmt.Errorf("FOUND:%s", string(matches[1]))
+					protocolVersion = string(matches[1])
+					return errStopWalk
 				}
 			}
 		}
 		return nil
 	})
 
-	if err != nil && strings.HasPrefix(err.Error(), "FOUND:") {
-		return strings.TrimPrefix(err.Error(), "FOUND:"), nil
+	if err != nil && !errors.Is(err, errStopWalk) {
+		return "", err
 	}
 
-	return "", fmt.Errorf("protocol version not found in Eclipse plugin")
+	if protocolVersion == "" {
+		return "", fmt.Errorf("protocol version not found in Eclipse plugin")
+	}
+
+	return protocolVersion, nil
 }
 
 // extractTarGz extracts a tar.gz archive to a directory
