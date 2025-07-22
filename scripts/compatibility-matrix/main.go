@@ -177,7 +177,6 @@ func generateMatrix(releases []Release) (string, error) {
 	sb.WriteString("# IDE Plugin Compatibility Matrix\n\n")
 	sb.WriteString("This matrix shows the compatible CLI version range for each IDE plugin version ")
 	sb.WriteString("released in the past 12 months.\n\n")
-	sb.WriteString("Last updated: " + time.Now().UTC().Format("2006-01-02 15:04:05 UTC") + "\n\n")
 
 	// Write table header
 	sb.WriteString("| Release Date | IDE Plugin | Compatible CLIs |\n")
