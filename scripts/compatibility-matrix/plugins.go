@@ -313,6 +313,11 @@ func extractTarGz(r io.Reader, destDir string) error {
 
 		target := filepath.Join(destDir, header.Name)
 
+		// Prevent path traversal attacks (Zip Slip)
+		if !strings.HasPrefix(target, filepath.Clean(destDir)+string(os.PathSeparator)) {
+			return fmt.Errorf("tar entry is trying to escape destination directory: %s", header.Name)
+		}
+
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0755); err != nil {
