@@ -159,8 +159,6 @@ func (e *GitHubProtocolExtractor) extractVSCodeProtocol(sourceDir string) (strin
 }
 
 // extractIntelliJProtocol extracts protocol version from IntelliJ plugin
-//
-//nolint:dupl // Each extract function is similar but handles different file types and patterns
 func (e *GitHubProtocolExtractor) extractIntelliJProtocol(sourceDir string) (string, error) {
 	// Look for protocol version in Kotlin/Java files
 	patterns := []*regexp.Regexp{
@@ -205,8 +203,6 @@ func (e *GitHubProtocolExtractor) extractIntelliJProtocol(sourceDir string) (str
 }
 
 // extractVisualStudioProtocol extracts protocol version from Visual Studio plugin
-//
-//nolint:dupl // Each extract function is similar but handles different file types and patterns
 func (e *GitHubProtocolExtractor) extractVisualStudioProtocol(sourceDir string) (string, error) {
 	// Look for protocol version in C# files
 	patterns := []*regexp.Regexp{
