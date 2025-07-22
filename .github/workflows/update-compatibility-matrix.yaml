@@ -16,8 +16,8 @@ name: Update Compatibility Matrix
 
 on:
   schedule:
-    # Run weekly at 2 AM UTC
-    - cron: '0 2 * * 0'
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -125,7 +125,7 @@ jobs:
           - Matrix includes: VSCode, IntelliJ, Visual Studio, and Eclipse plugins
 
           ## Notes
-          - This is an automated PR generated weekly
+          - This is an automated PR generated daily
           - The matrix is generated from GitHub releases of the IDE plugins
           - CLI versions shown are from the stable channel
 
