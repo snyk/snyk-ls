@@ -719,7 +719,7 @@ func Test_getFormattedMessage(t *testing.T) {
 	run := sarifResponse.Sarif.Runs[0]
 	testResult := run.Results[0]
 
-	sarifConverter := SarifConverter{sarif: sarifResponse, logger: c.Logger()}
+	sarifConverter := SarifConverter{sarif: sarifResponse, logger: c.Logger(), hoverVerbosity: c.HoverVerbosity()}
 	msg := sarifConverter.formattedMessageMarkdown(testResult, sarifConverter.getRule(run, "1"), types.FilePath(filepath.Dir(p)))
 
 	assert.Contains(t, msg, "Example Commit Fixes")
@@ -748,7 +748,7 @@ func setupConversionTests(t *testing.T, activateSnykCodeSecurity bool) (path str
 	responseJson := getSarifResponseJson(encodedPath)
 	err = json.Unmarshal([]byte(responseJson), &analysisResponse)
 
-	sarifConverter := SarifConverter{sarif: analysisResponse, logger: c.Logger()}
+	sarifConverter := SarifConverter{sarif: analysisResponse, logger: c.Logger(), hoverVerbosity: c.HoverVerbosity()}
 
 	if err != nil {
 		t.Fatal(err, "couldn't unmarshal sarif response")
