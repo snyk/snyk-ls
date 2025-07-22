@@ -31,7 +31,7 @@ func TestGenerateMatrix(t *testing.T) {
 			Version:         "v2.2.0",
 			ReleaseDate:     time.Date(2025, 5, 16, 0, 0, 0, 0, time.UTC),
 			ProtocolVersion: "20",
-			CLIVersion:      "v1.1297.0",
+			CLIVersionRange: "v1.1297.0",
 		},
 		{
 			Repository:      "snyk-intellij-plugin",
@@ -39,7 +39,7 @@ func TestGenerateMatrix(t *testing.T) {
 			Version:         "v3.4.2",
 			ReleaseDate:     time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC),
 			ProtocolVersion: "20",
-			CLIVersion:      "v1.1297.0",
+			CLIVersionRange: "v1.1297.0",
 		},
 	}
 
@@ -52,7 +52,7 @@ func TestGenerateMatrix(t *testing.T) {
 	// Verify output contains expected content
 	expectedContent := []string{
 		"# IDE Plugin Compatibility Matrix",
-		"| Release Date | IDE Plugin | Latest Compatible CLI Version |",
+		"| Release Date | IDE Plugin | Compatible CLIs |",
 		"| 2025-05-16 | VSCode v2.2.0 | v1.1297.0 |",
 		"| 2025-05-15 | IntelliJ v3.4.2 | v1.1297.0 |",
 	}

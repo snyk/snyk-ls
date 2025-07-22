@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -42,9 +43,18 @@ func main() {
 	// Calculate cutoff date
 	cutoffDate := time.Now().AddDate(0, -(*months), 0)
 
+	// Analyze CLI releases to build protocol version mapping
+	log.Println("Analyzing CLI releases...")
+	cliAnalyzer := NewCLIAnalyzer(cache, filepath.Join(*cachePath, "repos"))
+	protocolToCLI, err := cliAnalyzer.AnalyzeCLIReleases(*months)
+	if err != nil {
+		log.Fatalf("Failed to analyze CLI releases: %v", err)
+	}
+	log.Printf("Found %d protocol versions with CLI mappings", len(protocolToCLI))
+
 	// Fetch releases from all IDE plugins
 	log.Println("Fetching releases from IDE plugin repositories...")
-	releases, err := fetchAllReleases(cutoffDate, cache)
+	releases, err := fetchAllReleases(cutoffDate, cache, protocolToCLI)
 	if err != nil {
 		log.Fatalf("Failed to fetch releases: %v", err)
 	}
@@ -75,15 +85,15 @@ type Release struct {
 	SemanticVersion string // For Eclipse: semantic version from MANIFEST.MF
 	ReleaseDate     time.Time
 	ProtocolVersion string
-	CLIVersion      string
+	CLIVersionRange string       // Range of compatible CLI versions
+	CompatibleCLIs  []CLIRelease // Full list of compatible CLI releases
 }
 
 // fetchAllReleases fetches releases from all monitored IDE plugin repositories
-func fetchAllReleases(cutoffDate time.Time, cache *Cache) ([]Release, error) {
+func fetchAllReleases(cutoffDate time.Time, cache *Cache, protocolToCLI map[string][]CLIRelease) ([]Release, error) {
 	plugins := GetIDEPlugins()
 	githubClient := NewGitHubClient()
 	protocolExtractor := NewProtocolExtractor(cache)
-	cliMapper := NewCLIVersionMapper(cache)
 
 	var allReleases []Release
 	var allErrors []error
@@ -127,14 +137,15 @@ func fetchAllReleases(cutoffDate time.Time, cache *Cache) ([]Release, error) {
 				release.ProtocolVersion = versionInfo.ProtocolVersion
 				release.SemanticVersion = versionInfo.SemanticVersion
 
-				// Get CLI version
-				cliVersion, err := cliMapper.GetCLIVersion(versionInfo.ProtocolVersion)
-				if err != nil {
-					log.Printf("Warning: Failed to get CLI version for protocol %s: %v",
-						versionInfo.ProtocolVersion, err)
+				// Get compatible CLI versions from mapping
+				compatibleCLIs, ok := protocolToCLI[versionInfo.ProtocolVersion]
+				if !ok || len(compatibleCLIs) == 0 {
+					log.Printf("Warning: No compatible CLI versions found for protocol %s",
+						versionInfo.ProtocolVersion)
 					continue
 				}
-				release.CLIVersion = cliVersion
+				release.CompatibleCLIs = compatibleCLIs
+				release.CLIVersionRange = FormatCLIRange(compatibleCLIs)
 
 				mu.Lock()
 				allReleases = append(allReleases, release)
@@ -164,13 +175,13 @@ func generateMatrix(releases []Release) (string, error) {
 
 	// Write header
 	sb.WriteString("# IDE Plugin Compatibility Matrix\n\n")
-	sb.WriteString("This matrix shows the latest compatible CLI version for each IDE plugin version ")
+	sb.WriteString("This matrix shows the compatible CLI version range for each IDE plugin version ")
 	sb.WriteString("released in the past 12 months.\n\n")
 	sb.WriteString("Last updated: " + time.Now().UTC().Format("2006-01-02 15:04:05 UTC") + "\n\n")
 
 	// Write table header
-	sb.WriteString("| Release Date | IDE Plugin | Latest Compatible CLI Version |\n")
-	sb.WriteString("|--------------|------------|-------------------------------|\n")
+	sb.WriteString("| Release Date | IDE Plugin | Compatible CLIs |\n")
+	sb.WriteString("|--------------|------------|-----------------|\n")
 
 	// Write table rows
 	for _, release := range releases {
@@ -187,7 +198,7 @@ func generateMatrix(releases []Release) (string, error) {
 		}
 
 		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n",
-			date, plugin, release.CLIVersion))
+			date, plugin, release.CLIVersionRange))
 	}
 
 	// Add footer

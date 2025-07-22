@@ -1,13 +1,13 @@
 # IDE Plugin Compatibility Matrix Generator
 
-This tool generates a compatibility matrix showing the latest compatible CLI version for each IDE plugin version.
+This tool generates a compatibility matrix showing the compatible CLI version range for each IDE plugin version.
 
 ## Overview
 
 The compatibility matrix generator:
 - Fetches releases from all Snyk IDE plugin repositories (VSCode, IntelliJ, Visual Studio, Eclipse)
 - Extracts the required protocol version from each release
-- Maps protocol versions to latest compatible CLI versions
+- Maps protocol versions to compatible CLI version ranges
 - Generates a markdown table sorted by release date
 
 ## Usage
@@ -41,8 +41,12 @@ go build -o compatibility-matrix .
 
 1. **Fetch Releases**: Uses GitHub API to fetch releases from each IDE plugin repository
 2. **Extract Protocol Version**: Downloads source archives and extracts the required protocol version using plugin-specific patterns
-3. **Map to CLI Version**: Queries Snyk API to find the latest compatible CLI version for each protocol version
-4. **Generate Matrix**: Creates a markdown table with all the information
+3. **Analyze CLI Releases**: 
+   - Clones the Snyk CLI repository
+   - Analyzes each CLI release's go.mod to extract the snyk-ls dependency
+   - Maps each CLI version to its protocol version
+4. **Calculate Compatible CLI Ranges**: Finds all CLI versions that match each IDE's required protocol version
+5. **Generate Matrix**: Creates a markdown table with all the information
 
 ## Caching
 

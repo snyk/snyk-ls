@@ -39,6 +39,24 @@ Create a compatibility matrix that surfaces the latest compatible CLI version fo
    - Sort by release date (descending)
    - Include: Release date, IDE plugin (name + version), Latest Compatible CLI version
 
+### Phase 1.5: Enhance with CLI Version Range Support
+1. **Clone and analyze Snyk CLI repository**
+   - Clone github.com/snyk/cli temporarily
+   - Get all releases from the past 12+ months
+   - For each CLI release, extract the snyk-ls dependency from go.mod
+   
+2. **Extract protocol version from snyk-ls commits**
+   - For each CLI release, get the snyk-ls commit hash from go.mod
+   - Clone/cache snyk-ls repository
+   - Check out the specific commit and extract its protocol version
+   - Build a mapping: CLI version -> protocol version
+
+3. **Calculate compatible CLI ranges**
+   - For each IDE plugin's required protocol version
+   - Find all CLI versions that use the same protocol version
+   - Display as a range (e.g., "v1.1290.0 - v1.1298.0")
+   - Rename column to "Compatible CLIs"
+
 ### Phase 2: Automation
 1. **Create GitHub Action workflow that updates the documentation**   
    - run daily to maintain 12-month window
