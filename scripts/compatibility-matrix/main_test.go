@@ -52,7 +52,7 @@ func TestGenerateMatrix(t *testing.T) {
 	// Verify output contains expected content
 	expectedContent := []string{
 		"# IDE Plugin Compatibility Matrix",
-		"| Release Date | IDE Plugin | Minimum CLI Version |",
+		"| Release Date | IDE Plugin | Latest Compatible CLI Version |",
 		"| 2025-05-16 | VSCode v2.2.0 | v1.1297.0 |",
 		"| 2025-05-15 | IntelliJ v3.4.2 | v1.1297.0 |",
 	}

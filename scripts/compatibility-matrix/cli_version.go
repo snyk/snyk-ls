@@ -41,7 +41,7 @@ func NewCLIVersionMapper(cache *Cache) *CLIVersionMapper {
 	}
 }
 
-// GetCLIVersion gets the minimum CLI version for a protocol version
+// GetCLIVersion gets the latest compatible CLI version for a protocol version
 func (m *CLIVersionMapper) GetCLIVersion(protocolVersion string) (string, error) {
 	// Check cache first
 	cacheKey := GetCLIVersionCacheKey(protocolVersion)
