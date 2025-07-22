@@ -86,6 +86,7 @@ func fetchAllReleases(cutoffDate time.Time, cache *Cache) ([]Release, error) {
 	cliMapper := NewCLIVersionMapper(cache)
 
 	var allReleases []Release
+	var allErrors []error
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -100,6 +101,9 @@ func fetchAllReleases(cutoffDate time.Time, cache *Cache) ([]Release, error) {
 			// Fetch GitHub releases
 			ghReleases, err := githubClient.FetchReleases(p.Owner, p.Repo, cutoffDate)
 			if err != nil {
+				mu.Lock()
+				allErrors = append(allErrors, fmt.Errorf("failed to fetch releases for %s: %w", p.DisplayName, err))
+				mu.Unlock()
 				log.Printf("Error fetching releases for %s: %v", p.DisplayName, err)
 				return
 			}
@@ -140,6 +144,11 @@ func fetchAllReleases(cutoffDate time.Time, cache *Cache) ([]Release, error) {
 	}
 
 	wg.Wait()
+
+	// Check if any errors occurred
+	if len(allErrors) > 0 {
+		return nil, fmt.Errorf("failed to fetch releases from %d plugin(s): %v", len(allErrors), allErrors)
+	}
 
 	// Sort by release date (descending)
 	sort.Slice(allReleases, func(i, j int) bool {

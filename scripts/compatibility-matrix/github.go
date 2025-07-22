@@ -78,7 +78,7 @@ func (g *GitHubClient) FetchReleases(owner, repo string, since time.Time) ([]Git
 		if resp.StatusCode != http.StatusOK {
 			body, readErr := io.ReadAll(resp.Body)
 			if readErr != nil {
-				return nil, fmt.Errorf("GitHub API error: %s (failed to read body: %v)", resp.Status, readErr)
+				return nil, fmt.Errorf("GitHub API error: %s (failed to read body: %w)", resp.Status, readErr)
 			}
 			return nil, fmt.Errorf("GitHub API error: %s - %s", resp.Status, string(body))
 		}
