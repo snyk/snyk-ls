@@ -1,5 +1,8 @@
 {
-  "data": "20",
-  "timestamp": "2025-07-22T10:38:58.354132+02:00",
+  "data": {
+    "ProtocolVersion": "20",
+    "SemanticVersion": ""
+  },
+  "timestamp": "2025-07-22T14:24:21.149186+02:00",
   "ttl": 604800000000000
 }

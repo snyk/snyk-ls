@@ -72,6 +72,7 @@ type Release struct {
 	Repository      string
 	PluginName      string
 	Version         string
+	SemanticVersion string // For Eclipse: semantic version from MANIFEST.MF
 	ReleaseDate     time.Time
 	ProtocolVersion string
 	CLIVersion      string
@@ -117,19 +118,20 @@ func fetchAllReleases(cutoffDate time.Time, cache *Cache) ([]Release, error) {
 				}
 
 				// Extract protocol version
-				protocolVersion, err := protocolExtractor.ExtractProtocolVersion(p, ghRelease.TagName)
+				versionInfo, err := protocolExtractor.ExtractProtocolVersion(p, ghRelease.TagName)
 				if err != nil {
 					log.Printf("Warning: Failed to extract protocol version for %s %s: %v",
 						p.DisplayName, ghRelease.TagName, err)
 					continue
 				}
-				release.ProtocolVersion = protocolVersion
+				release.ProtocolVersion = versionInfo.ProtocolVersion
+				release.SemanticVersion = versionInfo.SemanticVersion
 
 				// Get CLI version
-				cliVersion, err := cliMapper.GetCLIVersion(protocolVersion)
+				cliVersion, err := cliMapper.GetCLIVersion(versionInfo.ProtocolVersion)
 				if err != nil {
 					log.Printf("Warning: Failed to get CLI version for protocol %s: %v",
-						protocolVersion, err)
+						versionInfo.ProtocolVersion, err)
 					continue
 				}
 				release.CLIVersion = cliVersion
@@ -173,7 +175,16 @@ func generateMatrix(releases []Release) (string, error) {
 	// Write table rows
 	for _, release := range releases {
 		date := release.ReleaseDate.Format("2006-01-02")
-		plugin := fmt.Sprintf("%s %s", release.PluginName, release.Version)
+
+		// Format plugin name differently for Eclipse
+		var plugin string
+		if release.PluginName == "Eclipse" && release.SemanticVersion != "" {
+			// Eclipse format: Eclipse v3.3 (v20250717.103834)
+			plugin = fmt.Sprintf("Eclipse v%s (%s)", release.SemanticVersion, release.Version)
+		} else {
+			// Regular format for other plugins
+			plugin = fmt.Sprintf("%s %s", release.PluginName, release.Version)
+		}
 
 		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n",
 			date, plugin, release.CLIVersion))

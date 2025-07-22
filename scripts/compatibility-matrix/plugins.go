@@ -34,9 +34,15 @@ import (
 // errStopWalk is a sentinel error used to stop filepath.Walk early
 var errStopWalk = errors.New("stop walk")
 
+// ProtocolVersionInfo contains both protocol version and semantic version
+type ProtocolVersionInfo struct {
+	ProtocolVersion string
+	SemanticVersion string // Optional, used for Eclipse
+}
+
 // ProtocolExtractor extracts protocol version from plugin source
 type ProtocolExtractor interface {
-	ExtractProtocolVersion(plugin IDEPlugin, tag string) (string, error)
+	ExtractProtocolVersion(plugin IDEPlugin, tag string) (*ProtocolVersionInfo, error)
 }
 
 // GitHubProtocolExtractor extracts protocol version by downloading source archives
@@ -56,34 +62,34 @@ func NewProtocolExtractor(cache *Cache) ProtocolExtractor {
 }
 
 // ExtractProtocolVersion extracts the protocol version from a plugin release
-func (e *GitHubProtocolExtractor) ExtractProtocolVersion(plugin IDEPlugin, tag string) (string, error) {
+func (e *GitHubProtocolExtractor) ExtractProtocolVersion(plugin IDEPlugin, tag string) (*ProtocolVersionInfo, error) {
 	// Check cache first
 	cacheKey := GetReleaseCacheKey(plugin.Repo, tag)
-	var cachedVersion string
+	var cachedVersion ProtocolVersionInfo
 	if found, err := e.cache.Get(cacheKey, &cachedVersion); found && err == nil {
-		return cachedVersion, nil
+		return &cachedVersion, nil
 	}
 
 	// Download and extract from source
-	version, err := e.extractFromSource(plugin, tag)
+	versionInfo, err := e.extractFromSource(plugin, tag)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Cache the result
-	if err := e.cache.Set(cacheKey, version, 7*24*time.Hour); err != nil {
+	if err := e.cache.Set(cacheKey, versionInfo, 7*24*time.Hour); err != nil {
 		log.Printf("Warning: failed to cache protocol version for %s: %v", cacheKey, err)
 	}
 
-	return version, nil
+	return versionInfo, nil
 }
 
 // extractFromSource downloads the source archive and extracts protocol version
-func (e *GitHubProtocolExtractor) extractFromSource(plugin IDEPlugin, tag string) (string, error) {
+func (e *GitHubProtocolExtractor) extractFromSource(plugin IDEPlugin, tag string) (*ProtocolVersionInfo, error) {
 	// Create temp directory
 	tempDir, err := os.MkdirTemp("", "plugin-source-*")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer os.RemoveAll(tempDir)
 
@@ -93,32 +99,58 @@ func (e *GitHubProtocolExtractor) extractFromSource(plugin IDEPlugin, tag string
 
 	resp, err := e.httpClient.Get(archiveURL)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to download source: %s", resp.Status)
+		return nil, fmt.Errorf("failed to download source: %s", resp.Status)
 	}
 
 	// Extract tar.gz
 	if err := extractTarGz(resp.Body, tempDir); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Find protocol version based on plugin type
+	versionInfo := &ProtocolVersionInfo{}
+
 	switch plugin.Repo {
 	case "vscode-extension":
-		return e.extractVSCodeProtocol(tempDir)
+		protocolVersion, err := e.extractVSCodeProtocol(tempDir)
+		if err != nil {
+			return nil, err
+		}
+		versionInfo.ProtocolVersion = protocolVersion
+
 	case "snyk-intellij-plugin":
-		return e.extractIntelliJProtocol(tempDir)
+		protocolVersion, err := e.extractIntelliJProtocol(tempDir)
+		if err != nil {
+			return nil, err
+		}
+		versionInfo.ProtocolVersion = protocolVersion
+
 	case "snyk-visual-studio-plugin":
-		return e.extractVisualStudioProtocol(tempDir)
+		protocolVersion, err := e.extractVisualStudioProtocol(tempDir)
+		if err != nil {
+			return nil, err
+		}
+		versionInfo.ProtocolVersion = protocolVersion
+
 	case "snyk-eclipse-plugin":
-		return e.extractEclipseProtocol(tempDir)
+		protocolVersion, err := e.extractEclipseProtocol(tempDir)
+		if err != nil {
+			return nil, err
+		}
+		versionInfo.ProtocolVersion = protocolVersion
+		// Also extract semantic version for Eclipse
+		versionInfo.SemanticVersion = e.extractEclipseSemanticVersion(tempDir)
+
 	default:
-		return "", fmt.Errorf("unknown plugin: %s", plugin.Repo)
+		return nil, fmt.Errorf("unknown plugin: %s", plugin.Repo)
 	}
+
+	return versionInfo, nil
 }
 
 // extractVSCodeProtocol extracts protocol version from VSCode extension
@@ -287,6 +319,39 @@ func (e *GitHubProtocolExtractor) extractEclipseProtocol(sourceDir string) (stri
 	}
 
 	return protocolVersion, nil
+}
+
+// extractEclipseSemanticVersion extracts semantic version from Eclipse plugin MANIFEST.MF
+func (e *GitHubProtocolExtractor) extractEclipseSemanticVersion(sourceDir string) string {
+	var semanticVersion string
+	// Pattern to match Bundle-Version in MANIFEST.MF (excluding .identifier suffix)
+	versionPattern := regexp.MustCompile(`(?m)Bundle-Version:\s*(\d+\.\d+\.\d+)(?:\.identifier)?`)
+
+	err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+
+		if strings.HasSuffix(path, "MANIFEST.MF") {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return nil // Continue walking
+			}
+
+			matches := versionPattern.FindSubmatch(content)
+			if len(matches) > 1 {
+				semanticVersion = string(matches[1])
+				return errStopWalk
+			}
+		}
+		return nil
+	})
+
+	if err != nil && !errors.Is(err, errStopWalk) {
+		return ""
+	}
+
+	return semanticVersion
 }
 
 // extractTarGz extracts a tar.gz archive to a directory
