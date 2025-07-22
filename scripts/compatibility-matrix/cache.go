@@ -38,9 +38,9 @@ func NewCache(basePath string) *Cache {
 
 // CacheEntry represents a cached item with metadata
 type CacheEntry struct {
-	Data      interface{}   `json:"data"`
-	Timestamp time.Time     `json:"timestamp"`
-	TTL       time.Duration `json:"ttl"`
+	Data      json.RawMessage `json:"data"`
+	Timestamp time.Time       `json:"timestamp"`
+	TTL       time.Duration   `json:"ttl"`
 }
 
 // Get retrieves a cached value
@@ -66,18 +66,19 @@ func (c *Cache) Get(key string, result interface{}) (bool, error) {
 	}
 
 	// Unmarshal the actual data
-	dataBytes, err := json.Marshal(entry.Data)
-	if err != nil {
-		return false, err
-	}
-
-	return true, json.Unmarshal(dataBytes, result)
+	return true, json.Unmarshal(entry.Data, result)
 }
 
 // Set stores a value in the cache
 func (c *Cache) Set(key string, value interface{}, ttl time.Duration) error {
+	// Marshal the value to json.RawMessage
+	dataBytes, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+
 	entry := CacheEntry{
-		Data:      value,
+		Data:      json.RawMessage(dataBytes),
 		Timestamp: time.Now(),
 		TTL:       ttl,
 	}
