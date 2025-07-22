@@ -134,13 +134,4 @@ jobs:
             --base main \
             --head "$BRANCH_NAME" \
             --repo snyk/user-docs
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: compatibility-matrix
-          path: |
-            output/compatibility-matrix.md
-            .cache/compatibility-matrix/
-          retention-days: 7 
+            
