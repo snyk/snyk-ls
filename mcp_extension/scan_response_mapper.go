@@ -58,7 +58,6 @@ const (
 type EnhancedScanResult struct {
 	OriginalOutput string      `json:"-"`
 	Success        bool        `json:"success"`
-	ScanType       string      `json:"scanType"`
 	IssueCount     int         `json:"issueCount"`
 	Issues         []IssueData `json:"issues"`
 }

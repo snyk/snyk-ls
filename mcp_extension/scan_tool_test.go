@@ -229,9 +229,7 @@ func TestSnykTestHandler(t *testing.T) {
 			}
 
 			// Check that we have both original output and issue data
-			require.NotEmpty(t, enhanced.OriginalOutput)
 			require.True(t, enhanced.Success)
-			require.Equal(t, "sca", enhanced.ScanType)
 			require.Equal(t, 2, enhanced.IssueCount)
 			require.Len(t, enhanced.Issues, 2)
 
@@ -246,7 +244,7 @@ func TestSnykCodeTestHandler(t *testing.T) {
 	fixture := setupTestFixture(t)
 
 	// Configure mock CLI with SARIF response
-	mockJsonResponse := `{"type":"sarif","progress":1,"status":"COMPLETE","sarif":{"runs":[{"tool":{"driver":{"rules":[{"id":"javascript/DangerousEval","shortDescription":{"text":"Code Injection"},"properties":{"cwe":["CWE-94","CWE-95"],"categories":["Security"]}}]}},"results":[{"ruleId":"javascript/DangerousEval","level":"warning","locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/app.js"},"region":{"startLine":10,"startColumn":5}}}]}]}]},"coverage":[{"files":10}]}`
+	mockJsonResponse := `{"runs":[{"tool":{"driver":{"rules":[{"id":"javascript/DangerousEval","shortDescription":{"text":"Code Injection"},"properties":{"cwe":["CWE-94","CWE-95"],"categories":["Security"]}}]}},"results":[{"ruleId":"javascript/DangerousEval","level":"warning","locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/app.js"},"region":{"startLine":10,"startColumn":5}}}]}]}]}`
 	fixture.mockCliOutput(mockJsonResponse)
 
 	// Get the tool definition
@@ -339,9 +337,7 @@ func TestSnykCodeTestHandler(t *testing.T) {
 			require.NoError(t, err, "Failed to parse enhanced scan result")
 
 			// Check that we have both original output and issue data
-			require.NotEmpty(t, enhanced.OriginalOutput)
 			require.True(t, enhanced.Success)
-			require.Equal(t, "sast", enhanced.ScanType)
 			require.Equal(t, 1, enhanced.IssueCount)
 			require.Len(t, enhanced.Issues, 1)
 
