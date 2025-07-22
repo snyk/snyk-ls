@@ -167,6 +167,7 @@ func (e *GitHubProtocolExtractor) extractIntelliJProtocol(sourceDir string) (str
 		regexp.MustCompile(`(?m)(?:val|const)\s+PROTOCOL_VERSION\s*=\s*"?(\d+)"?`),
 		regexp.MustCompile(`(?m)private\s+static\s+final\s+(?:String|int)\s+PROTOCOL_VERSION\s*=\s*"?(\d+)"?`),
 		regexp.MustCompile(`(?m)requiredProtocolVersion["\s:=]+(\d+)`),
+		regexp.MustCompile(`(?m)val\s+requiredLsProtocolVersion\s*=\s*"?(\d+)"?`),
 	}
 	var protocolVersion string
 
