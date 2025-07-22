@@ -45,7 +45,7 @@ func NewDefaultLearnService(invocationContext workflow.InvocationContext, logger
 		return nil
 	}
 
-	go serviceInstance.MaintainCache()
+	go serviceInstance.MaintainCache()()
 	l.Debug().Msg("Learn service instance created via default factory and cache maintenance started.")
 	return serviceInstance
 }

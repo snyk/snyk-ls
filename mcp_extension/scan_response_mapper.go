@@ -138,7 +138,7 @@ func convertIssueToData(issue types.Issue) IssueData {
 			data.Remediation = ad.Remediation
 			data.CVEs = ad.Identifiers.CVE
 			data.CWEs = ad.Identifiers.CWE
-			data.RuleID = ad.Key
+			data.RuleID = issue.GetRuleID()
 			// OSS stores lesson URL in additional data
 			if ad.Lesson != "" {
 				data.LearnURL = ad.Lesson
