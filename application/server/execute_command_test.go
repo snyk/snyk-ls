@@ -175,8 +175,14 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 
 	// Assert
 	assert.NotEmpty(t, tokenResponse.ResultString())
-	assert.Eventually(t, func() bool { return len(jsonRPCRecorder.Notifications()) > 0 }, 10*time.Second, 50*time.Millisecond)
+	assert.Eventually(t, func() bool {
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")
+		return len(notifications) > 0
+	}, 10*time.Second, 50*time.Millisecond)
+
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")
+	require.NotEmpty(t, notifications, "Expected at least one hasAuthenticated notification")
+
 	var hasAuthenticatedNotification types.AuthenticationParams
 	err = notifications[0].UnmarshalParams(&hasAuthenticatedNotification)
 	assert.NoError(t, err)
