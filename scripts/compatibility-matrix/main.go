@@ -72,7 +72,6 @@ type Release struct {
 	Repository      string
 	PluginName      string
 	Version         string
-	Tag             string
 	ReleaseDate     time.Time
 	ProtocolVersion string
 	CLIVersion      string
@@ -114,7 +113,6 @@ func fetchAllReleases(cutoffDate time.Time, cache *Cache) ([]Release, error) {
 					Repository:  p.Repo,
 					PluginName:  p.DisplayName,
 					Version:     ghRelease.TagName,
-					Tag:         ghRelease.TagName,
 					ReleaseDate: ghRelease.PublishedAt,
 				}
 
