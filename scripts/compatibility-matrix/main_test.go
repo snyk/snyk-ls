@@ -45,13 +45,8 @@ func TestGenerateMatrix(t *testing.T) {
 		},
 	}
 
-	// Use temporary cache
-	tempDir := t.TempDir()
-
-	cache := NewCache(tempDir)
-
 	// Generate matrix
-	matrix, err := generateMatrix(releases, cache)
+	matrix, err := generateMatrix(releases)
 	if err != nil {
 		t.Fatalf("generateMatrix failed: %v", err)
 	}

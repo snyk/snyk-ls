@@ -51,7 +51,7 @@ func main() {
 
 	// Generate compatibility matrix
 	log.Printf("Generating compatibility matrix for %d releases...", len(releases))
-	matrix, err := generateMatrix(releases, cache)
+	matrix, err := generateMatrix(releases)
 	if err != nil {
 		log.Fatalf("Failed to generate matrix: %v", err)
 	}
@@ -159,7 +159,7 @@ func fetchAllReleases(cutoffDate time.Time, cache *Cache) ([]Release, error) {
 }
 
 // generateMatrix generates the markdown compatibility matrix
-func generateMatrix(releases []Release, cache *Cache) (string, error) {
+func generateMatrix(releases []Release) (string, error) {
 	var sb strings.Builder
 
 	// Write header
