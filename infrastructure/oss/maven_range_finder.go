@@ -18,6 +18,7 @@ package oss
 
 import (
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/ast/maven"
 	"github.com/snyk/snyk-ls/internal/types"

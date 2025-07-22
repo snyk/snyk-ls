@@ -19,13 +19,14 @@ package code
 import (
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
 	"net/url"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"

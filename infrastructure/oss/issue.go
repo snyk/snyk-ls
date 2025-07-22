@@ -19,8 +19,9 @@ package oss
 import (
 	_ "embed"
 	"fmt"
-	"github.com/rs/zerolog"
 	"strings"
+
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/infrastructure/utils"

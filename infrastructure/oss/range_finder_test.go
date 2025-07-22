@@ -33,7 +33,7 @@ func Test_DefaultFinder_FindRange(t *testing.T) {
 	issue, testPath, testContent := setupDefaultFinderEnvForTesting()
 	expectedRange := getExpectedRangeForDefaultFinderTests()
 
-	actualRange := getDependencyNode(c, testPath, issue, testContent)
+	actualRange := getDependencyNode(c.Logger(), testPath, issue, testContent)
 
 	assert.Equal(t, expectedRange, getRangeFromNode(actualRange))
 }
@@ -47,7 +47,7 @@ func TestDefaultFinder_Find(t *testing.T) {
 	defaultFinder := DefaultFinder{
 		path:        testPath,
 		fileContent: testContent,
-		c:           c,
+		logger:      c.Logger(),
 	}
 
 	expectedRange := getExpectedRangeForDefaultFinderTests()

@@ -19,11 +19,12 @@ package maven
 import (
 	"encoding/xml"
 	"errors"
-	"github.com/rs/zerolog"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/internal/types"

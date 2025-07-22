@@ -22,9 +22,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"os/exec"
+
+	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/snyk/go-application-framework/pkg/workflow"

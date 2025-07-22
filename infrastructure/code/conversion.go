@@ -19,6 +19,7 @@ package code
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/rs/zerolog"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"

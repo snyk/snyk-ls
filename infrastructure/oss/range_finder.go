@@ -17,8 +17,9 @@
 package oss
 
 import (
-	"github.com/rs/zerolog"
 	"strings"
+
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/internal/types"

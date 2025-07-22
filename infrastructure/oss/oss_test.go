@@ -74,7 +74,7 @@ func Test_FindRange(t *testing.T) {
 	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
 	var p = "build.gradle"
-	node := getDependencyNode(c, types.FilePath(p), issue, []byte(content))
+	node := getDependencyNode(c.Logger(), types.FilePath(p), issue, []byte(content))
 	foundRange := getRangeFromNode(node)
 
 	assert.Equal(t, 3, foundRange.Start.Line)
@@ -108,7 +108,7 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 		learnService: getLearnMock(t),
 	}
 	contentRoot := types.FilePath("/path/to/issue")
-	issue := toIssue(c, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
+	issue := toIssue(contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, c.Format())
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
@@ -152,7 +152,7 @@ func Test_toIssue_CodeActions(t *testing.T) {
 			sampleOssIssue.UpgradePath = []any{"false", test.packageName}
 			contentRoot := types.FilePath("/path/to/issue")
 
-			issue := toIssue(c, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
+			issue := toIssue(contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, c.Format())
 
 			assert.Equal(t, sampleOssIssue.Id, issue.ID)
 			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].GetTitle())
@@ -183,7 +183,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	sampleOssIssue.UpgradePath = []any{"*"}
 	contentRoot := types.FilePath("/path/to/issue")
 
-	issue := toIssue(c, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter)
+	issue := toIssue(contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, c.Format())
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 2, len(issue.CodeActions))

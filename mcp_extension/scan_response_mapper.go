@@ -18,7 +18,9 @@ package mcp_extension
 
 import (
 	"encoding/json"
+
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
