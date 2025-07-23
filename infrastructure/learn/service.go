@@ -37,7 +37,7 @@ type Service interface {
 	LearnEndpoint() (learnEndpoint string, err error)
 	GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType types.IssueType) (lesson *Lesson, err error)
 	GetAllLessons() (lessons []Lesson, err error)
-	MaintainCache() func()
+	MaintainCacheFunc() func()
 }
 
 type Lesson struct {
@@ -128,7 +128,7 @@ func New(conf configuration.Configuration, logger *zerolog.Logger, httpClientFun
 	return s
 }
 
-func (s *serviceImpl) MaintainCache() func() {
+func (s *serviceImpl) MaintainCacheFunc() func() {
 	return func() {
 		for {
 			if s.lessonsByEcosystemCache.Len() == 0 {

@@ -424,7 +424,7 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 				logger.Err(err).Msg("Error initializing lessons cache")
 			}
 			// start goroutine that keeps the cache filled
-			go learnService.MaintainCache()
+			go learnService.MaintainCacheFunc()()
 		}()
 
 		// CLI & Authentication initialization - returns error if not authenticated
