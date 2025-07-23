@@ -220,7 +220,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path types.FileP
 		}
 	}
 
-	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, res, workDir, path)
+	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, res, workDir, path, cliScanner.config.Format())
 
 	cliScanner.mutex.Lock()
 	logger.Debug().Msgf("Scan %v is done", i)
@@ -329,6 +329,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	res []byte,
 	workDir types.FilePath,
 	path types.FilePath,
+	format string,
 ) (issues []types.Issue) {
 	issues = UnmarshallAndRetrieveAnalysis(
 		ctx,
@@ -340,6 +341,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 		cliScanner.learnService,
 		cliScanner.packageIssueCache,
 		true, // readFiles = true for CLIScanner
+		format,
 	)
 
 	// Add vulnerability counts to cache (CLIScanner-specific behavior)

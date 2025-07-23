@@ -21,12 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/snyk/snyk-ls/application/config"
 	"os"
 	"strings"
 
 	"github.com/rs/zerolog"
-
-	"github.com/snyk/snyk-ls/application/config"
 
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -48,6 +47,7 @@ func ConvertJSONToIssues(logger *zerolog.Logger, jsonData []byte, learnService l
 		learnService,
 		make(map[string][]types.Issue), // empty package issue cache
 		false,
+		config.FormatMd,
 	)
 
 	return issues, nil
@@ -65,6 +65,7 @@ func UnmarshallAndRetrieveAnalysis(
 	learnService learn.Service,
 	packageIssueCache map[string][]types.Issue,
 	readFiles bool,
+	format string,
 ) []types.Issue {
 	if ctx.Err() != nil {
 		return nil
@@ -89,7 +90,7 @@ func UnmarshallAndRetrieveAnalysis(
 			}
 		}
 
-		issues := convertScanResultToIssues(logger, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, config.FormatMd)
+		issues := convertScanResultToIssues(logger, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format)
 		allIssues = append(allIssues, issues...)
 	}
 
