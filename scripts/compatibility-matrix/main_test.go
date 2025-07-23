@@ -35,7 +35,7 @@ func TestGenerateMatrix(t *testing.T) {
 		},
 		{
 			Repository:      "snyk-intellij-plugin",
-			PluginName:      "IntelliJ",
+			PluginName:      "JetBrains",
 			Version:         "v3.4.2",
 			ReleaseDate:     time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC),
 			ProtocolVersion: "20",
@@ -54,7 +54,7 @@ func TestGenerateMatrix(t *testing.T) {
 		"# IDE Plugin Compatibility Matrix",
 		"| Release Date | IDE Plugin | Compatible CLIs |",
 		"| 2025-05-16 | VSCode v2.2.0 | v1.1297.0 |",
-		"| 2025-05-15 | IntelliJ v3.4.2 | v1.1297.0 |",
+		"| 2025-05-15 | JetBrains v3.4.2 | v1.1297.0 |",
 	}
 
 	for _, expected := range expectedContent {
@@ -73,7 +73,7 @@ func TestGetIDEPlugins(t *testing.T) {
 
 	expectedRepos := map[string]string{
 		"vscode-extension":          "VSCode",
-		"snyk-intellij-plugin":      "IntelliJ",
+		"snyk-intellij-plugin":      "JetBrains",
 		"snyk-visual-studio-plugin": "Visual Studio",
 		"snyk-eclipse-plugin":       "Eclipse",
 	}

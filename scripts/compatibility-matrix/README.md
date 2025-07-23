@@ -5,7 +5,7 @@ This tool generates a compatibility matrix showing the compatible CLI version ra
 ## Overview
 
 The compatibility matrix generator:
-- Fetches releases from all Snyk IDE plugin repositories (VSCode, IntelliJ, Visual Studio, Eclipse)
+- Fetches releases from all Snyk IDE plugin repositories (VSCode, JetBrains, Visual Studio, Eclipse)
 - Extracts the required protocol version from each release
 - Maps protocol versions to compatible CLI version ranges
 - Generates a markdown table sorted by release date
@@ -71,7 +71,7 @@ The tool is run daily by a GitHub Action that:
 Each IDE plugin stores the required protocol version differently:
 
 - **VSCode**: `PROTOCOL_VERSION` constant in TypeScript files
-- **IntelliJ**: Protocol version in Kotlin/Java files
+- **JetBrains**: Protocol version in Kotlin/Java files
 - **Visual Studio**: Protocol version in C# files or JSON configuration
 - **Eclipse**: Protocol version in Java files or manifest
 
