@@ -124,7 +124,7 @@ func (e *GitHubProtocolExtractor) extractFromSource(plugin IDEPlugin, tag string
 		versionInfo.ProtocolVersion = protocolVersion
 
 	case "snyk-intellij-plugin":
-		protocolVersion, err := e.extractIntelliJProtocol(tempDir)
+		protocolVersion, err := e.extractJetBrainsProtocol(tempDir)
 		if err != nil {
 			return nil, err
 		}
@@ -190,8 +190,8 @@ func (e *GitHubProtocolExtractor) extractVSCodeProtocol(sourceDir string) (strin
 	return protocolVersion, nil
 }
 
-// extractIntelliJProtocol extracts protocol version from IntelliJ plugin
-func (e *GitHubProtocolExtractor) extractIntelliJProtocol(sourceDir string) (string, error) {
+// extractJetBrainsProtocol extracts protocol version from JetBrains plugin
+func (e *GitHubProtocolExtractor) extractJetBrainsProtocol(sourceDir string) (string, error) {
 	// Look for protocol version in Kotlin/Java files
 	patterns := []*regexp.Regexp{
 		regexp.MustCompile(`(?m)(?:val|const)\s+PROTOCOL_VERSION\s*=\s*"?(\d+)"?`),
@@ -228,7 +228,7 @@ func (e *GitHubProtocolExtractor) extractIntelliJProtocol(sourceDir string) (str
 	}
 
 	if protocolVersion == "" {
-		return "", fmt.Errorf("protocol version not found in IntelliJ plugin")
+		return "", fmt.Errorf("protocol version not found in JetBrains plugin")
 	}
 
 	return protocolVersion, nil
