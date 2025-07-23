@@ -131,7 +131,7 @@ func GetIDEPlugins() []IDEPlugin {
 		{
 			Owner:       "snyk",
 			Repo:        "snyk-intellij-plugin",
-			DisplayName: "Jetbrains",
+			DisplayName: "JetBrains",
 		},
 		{
 			Owner:       "snyk",
