@@ -18,10 +18,10 @@ package types
 
 import (
 	"context"
-	"os"
 	"sync"
 
 	"github.com/pkg/browser"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -53,9 +53,11 @@ const (
 	ExecuteMCPToolCall = "snyk.executeMCPToolCall"
 )
 
+type OpenBrowserFunc func(url string)
+
 var (
-	DefaultOpenBrowserFunc = func(url string) {
-		browser.Stdout = os.Stderr
+	DefaultOpenBrowserFunc OpenBrowserFunc = func(url string) {
+		browser.Stdout = log.Logger
 		_ = browser.OpenURL(url)
 	}
 )

@@ -37,6 +37,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
 
@@ -89,6 +91,17 @@ func setupTestFixture(t *testing.T) *testFixture {
 	binding := NewMcpLLMBinding(WithCliPath(snykCliPath), WithLogger(invocationCtx.GetEnhancedLogger()))
 	binding.folderTrust = trust.NewFolderTrust(&logger, invocationCtx.GetConfiguration())
 	binding.mcpServer = server.NewMCPServer("Snyk", "1.1.1")
+
+	// Create and set mock learn service
+	mockLearnService := mock_learn.NewMockService(mockctl)
+	mockLearnService.EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&learn.Lesson{
+			Url: "https://learn.snyk.io/lesson/mock-lesson",
+		}, nil).
+		AnyTimes()
+	binding.learnService = mockLearnService
+
 	tools, err := loadMcpToolsFromJson()
 	require.NoError(t, err)
 	return &testFixture{
@@ -126,7 +139,7 @@ func TestSnykTestHandler(t *testing.T) {
 	fixture := setupTestFixture(t)
 
 	// Configure mock CLI to return a specific JSON response
-	mockOutput := `{ok": false,"vulnerabilities": [{"id": "SNYK-JS-ACORN-559469","title": "Regular Expression Denial of Service (ReDoS)","severity":"high","packageName": "acorn"},{"id": "SNYK-JS-TUNNELAGENT-1572284","title": "Uninitialized Memory Exposure","severity": "medium","packageName": "tunnel-agent"}],"dependencyCount": 42,"packageManager": "npm"}`
+	mockOutput := `[{"ok": false,"vulnerabilities": [{"id": "SNYK-JS-ACORN-559469","title": "Regular Expression Denial of Service (ReDoS)","severity":"high","packageName": "acorn","version": "5.5.3","identifiers": {"CVE": ["CVE-2020-7598"],"CWE": ["CWE-400"]},"fixedIn": ["5.7.4", "6.4.1", "7.1.1"],"isUpgradable": true,"isPatchable": false,"upgradePath": ["my-app@1.0.0", "acorn@7.1.1"],"from": ["my-app@1.0.0", "acorn@5.5.3"],"packageManager": "npm"},{"id": "SNYK-JS-TUNNELAGENT-1572284","title": "Uninitialized Memory Exposure","severity": "medium","packageName": "tunnel-agent","version": "0.6.0","identifiers": {"CVE": [],"CWE": ["CWE-201"]},"fixedIn": [],"isUpgradable": false,"isPatchable": false,"upgradePath": [],"from": ["my-app@1.0.0", "tunnel-agent@0.6.0"],"packageManager": "npm"}],"dependencyCount": 42,"packageManager": "npm"}]`
 	fixture.mockCliOutput(mockOutput)
 	tool := getToolWithName(t, fixture.tools, SnykScaTest)
 	require.NotNil(t, tool)
@@ -203,10 +216,25 @@ func TestSnykTestHandler(t *testing.T) {
 			textContent, ok := result.Content[0].(mcp.TextContent)
 			require.True(t, ok)
 			content := strings.TrimSpace(textContent.Text)
-			require.Contains(t, content, "ok")
-			require.Contains(t, content, "vulnerabilities")
-			require.Contains(t, content, "dependencyCount")
-			require.Contains(t, content, "packageManager")
+
+			// Parse the enhanced JSON response
+			var enhanced EnhancedScanResult
+			err = json.Unmarshal([]byte(content), &enhanced)
+			require.NoError(t, err, "Failed to parse enhanced scan result")
+
+			// Debug output
+			t.Logf("Enhanced result: %+v", enhanced)
+			if len(enhanced.Issues) > 0 {
+				t.Logf("First issue: %+v", enhanced.Issues[0])
+			}
+
+			// Check that we have both original output and issue data
+			require.True(t, enhanced.Success)
+			require.Equal(t, 2, enhanced.IssueCount)
+			require.Len(t, enhanced.Issues, 2)
+
+			// Verify we extracted the issues successfully
+			// The actual issue verification is done in the dedicated test
 		})
 	}
 }
@@ -215,8 +243,8 @@ func TestSnykCodeTestHandler(t *testing.T) {
 	// Setup
 	fixture := setupTestFixture(t)
 
-	// Configure mock CLI
-	mockJsonResponse := `{"ok":false,"issues":[],"filesAnalyzed":10}`
+	// Configure mock CLI with SARIF response
+	mockJsonResponse := `{"runs":[{"tool":{"driver":{"rules":[{"id":"javascript/DangerousEval","shortDescription":{"text":"Code Injection"},"properties":{"cwe":["CWE-94","CWE-95"],"categories":["Security"]}}]}},"results":[{"ruleId":"javascript/DangerousEval","level":"warning","locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/app.js"},"region":{"startLine":10,"startColumn":5}}}]}]}]}`
 	fixture.mockCliOutput(mockJsonResponse)
 
 	// Get the tool definition
@@ -302,9 +330,19 @@ func TestSnykCodeTestHandler(t *testing.T) {
 				return
 			}
 			content := strings.TrimSpace(textContent.Text)
-			require.Contains(t, content, "ok")
-			require.Contains(t, content, "issues")
-			require.Contains(t, content, "filesAnalyzed")
+
+			// Parse the enhanced JSON response
+			var enhanced EnhancedScanResult
+			err = json.Unmarshal([]byte(content), &enhanced)
+			require.NoError(t, err, "Failed to parse enhanced scan result")
+
+			// Check that we have both original output and issue data
+			require.True(t, enhanced.Success)
+			require.Equal(t, 1, enhanced.IssueCount)
+			require.Len(t, enhanced.Issues, 1)
+
+			// Verify we extracted the issues successfully
+			// The actual issue verification is done in the dedicated test
 		})
 	}
 }

@@ -29,6 +29,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -167,7 +168,7 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 				require.NoError(t, os.WriteFile(absFile, []byte(tc.displayTargetFileInWorkDir), 0666))
 			}
 
-			actual := getAbsTargetFilePath(c, scanResult{
+			actual := getAbsTargetFilePath(c.Logger(), scanResult{
 				DisplayTargetFile: tc.displayTargetFile,
 				Path:              filepath.Join(base, adjustedPath),
 			}, types.FilePath(filepath.Join(base, adjustedWorkDir)), types.FilePath(filepath.Join(base, adjustedPath)))
@@ -239,7 +240,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		clisettings := configWithConflicts.CliSettings()
 		clisettings.AdditionalOssParameters = []string{"--file=package.json"}
 
-		// Update the scanner to use our new config
+		// Update the scanner to use our new Config
 		originalConfig := cliScanner.config
 		cliScanner.config = configWithConflicts
 
@@ -311,11 +312,17 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	learnService := mock_learn.NewMockService(ctrl)
 	errorReporter := error_reporting.NewTestErrorReporter()
 
+	// Expect GetLesson to be called for the non-ignored issue (SNYK-1) when there's no AST node
+	learnService.EXPECT().
+		GetLesson("", "SNYK-1", nil, nil, types.DependencyVulnerability).
+		Return(&learn.Lesson{Url: "https://learn.snyk.io/lesson/test"}, nil).
+		Times(1)
+
 	// Empty package issue cache
 	packageIssueCache := make(map[string][]types.Issue)
 
 	// Convert scan results to issues
-	issues := convertScanResultToIssues(c, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache)
+	issues := convertScanResultToIssues(c.Logger(), scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, c.Format())
 
 	// Verify that only non-ignored issues are included in the result
 	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")

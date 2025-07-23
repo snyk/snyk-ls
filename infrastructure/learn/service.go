@@ -37,7 +37,7 @@ type Service interface {
 	LearnEndpoint() (learnEndpoint string, err error)
 	GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType types.IssueType) (lesson *Lesson, err error)
 	GetAllLessons() (lessons []Lesson, err error)
-	MaintainCache() func()
+	MaintainCacheFunc() func()
 }
 
 type Lesson struct {
@@ -128,7 +128,7 @@ func New(conf configuration.Configuration, logger *zerolog.Logger, httpClientFun
 	return s
 }
 
-func (s *serviceImpl) MaintainCache() func() {
+func (s *serviceImpl) MaintainCacheFunc() func() {
 	return func() {
 		for {
 			if s.lessonsByEcosystemCache.Len() == 0 {
@@ -172,19 +172,24 @@ func (s *serviceImpl) GetAllLessons() (lessons []Lesson, err error) {
 		return lessons, err
 	}
 
-	s.updateCaches(lessons)
+	lessons = s.updateCaches(lessons)
 	return lessons, err
 }
 
-func (s *serviceImpl) updateCaches(lessons []Lesson) {
+const learnLessonNotSupportedText = "This course is no longer supported."
+
+func (s *serviceImpl) updateCaches(lessons []Lesson) []Lesson {
 	expiration := imcache.WithDefaultExpiration()
 	s.lessonsByEcosystemCache.RemoveAll()
 	s.lessonsByRuleCache.RemoveAll()
 
+	var filteredLessons []Lesson
 	for _, lesson := range lessons {
-		if !lesson.Published {
+		notSupported := strings.HasPrefix(lesson.Description, learnLessonNotSupportedText)
+		if !lesson.Published || notSupported {
 			continue
 		}
+		filteredLessons = append(filteredLessons, lesson)
 		for _, rule := range lesson.Rules {
 			lessonsForRule, exists := s.lessonsByRuleCache.Get(rule)
 			if !exists {
@@ -202,6 +207,7 @@ func (s *serviceImpl) updateCaches(lessons []Lesson) {
 			s.lessonsByEcosystemCache.Set(ecosystem, lessonsForEcosystem, expiration)
 		}
 	}
+	return filteredLessons
 }
 
 func (s *serviceImpl) GetLesson(ecosystem string, rule string, cwes []string, cves []string, issueType types.IssueType) (lesson *Lesson, err error) {
