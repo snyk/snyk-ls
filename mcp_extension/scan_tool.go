@@ -24,6 +24,10 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -32,13 +36,14 @@ import (
 
 // Tool name constants to maintain backward compatibility
 const (
-	SnykScaTest    = "snyk_sca_scan"
-	SnykCodeTest   = "snyk_code_scan"
-	SnykVersion    = "snyk_version"
-	SnykAuth       = "snyk_auth"
-	SnykAuthStatus = "snyk_auth_status"
-	SnykLogout     = "snyk_logout"
-	SnykTrust      = "snyk_trust"
+	SnykScaTest         = "snyk_sca_scan"
+	SnykCodeTest        = "snyk_code_scan"
+	SnykVersion         = "snyk_version"
+	SnykAuth            = "snyk_auth"
+	SnykAuthStatus      = "snyk_auth_status"
+	SnykLogout          = "snyk_logout"
+	SnykTrust           = "snyk_trust"
+	SnykOpenLearnLesson = "snyk_open_learn_lesson"
 )
 
 type SnykMcpToolsDefinition struct {
@@ -47,6 +52,7 @@ type SnykMcpToolsDefinition struct {
 	Command        []string               `json:"command"`
 	StandardParams []string               `json:"standardParams"`
 	IgnoreTrust    bool                   `json:"ignoreTrust"`
+	OutputMapper   string                 `json:"outputMapper"`
 	Params         []SnykMcpToolParameter `json:"params"`
 }
 
@@ -62,6 +68,13 @@ type SnykMcpToolParameter struct {
 
 //go:embed snyk_tools.json
 var snykToolsJson string
+
+var (
+	outputMapperMap = map[string]func(logger *zerolog.Logger, result *EnhancedScanResult, learnService learn.Service, workDir string){
+		ScaOutputMapper:  extractSCAIssues,
+		CodeOutputMapper: extractSASTIssues,
+	}
+)
 
 type SnykMcpTools struct {
 	Tools []SnykMcpToolsDefinition `json:"tools"`
@@ -91,6 +104,8 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykLogoutHandler(invocationCtx, toolDef))
 		case SnykTrust:
 			m.mcpServer.AddTool(tool, m.snykTrustHandler(invocationCtx, toolDef))
+		case SnykOpenLearnLesson:
+			m.mcpServer.AddTool(tool, m.snykOpenLearnLessonHandler(invocationCtx, toolDef))
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -139,7 +154,7 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	return resAsString, nil
 }
 
-// defaultHandler creates a generic handler for Snyk commands that applies standard parameters
+// defaultHandler executes a command and enhances output for scan tools
 func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "defaultHandler").Logger()
@@ -177,8 +192,16 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		if err != nil {
 			return nil, err
 		}
+
+		output = m.enhanceOutput(&logger, toolDef, output, err == nil, params, workingDir)
+
 		return mcp.NewToolResultText(output), nil
 	}
+}
+
+// enhanceOutput enhances the scan output with structured issue data
+func (m *McpLLMBinding) enhanceOutput(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, params map[string]convertedToolParameter, workDir string) string {
+	return mapScanResponse(logger, toolDef, output, success, workDir, m.learnService)
 }
 
 func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

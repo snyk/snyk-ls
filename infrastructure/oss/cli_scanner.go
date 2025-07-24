@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -218,7 +220,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path types.FileP
 		}
 	}
 
-	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, res, workDir, path)
+	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, res, workDir, path, cliScanner.config.Format())
 
 	cliScanner.mutex.Lock()
 	logger.Debug().Msgf("Scan %v is done", i)
@@ -327,39 +329,32 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	res []byte,
 	workDir types.FilePath,
 	path types.FilePath,
+	format string,
 ) (issues []types.Issue) {
-	logger := cliScanner.config.Logger().With().Str("method", "getAbsTargetFilePath").Logger()
-	if ctx.Err() != nil {
-		return nil
-	}
+	issues = UnmarshallAndRetrieveAnalysis(
+		ctx,
+		res,
+		workDir,
+		path,
+		cliScanner.config.Logger(),
+		cliScanner.errorReporter,
+		cliScanner.learnService,
+		cliScanner.packageIssueCache,
+		true, // readFiles = true for CLIScanner
+		format,
+	)
 
-	scanResults, err := cliScanner.unmarshallOssJson(res)
-	if err != nil {
-		cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
-		return nil
-	}
-
-	for _, scanResult := range scanResults {
-		targetFilePath := getAbsTargetFilePath(cliScanner.config, scanResult, workDir, path)
-		var fileContent []byte
-
-		if targetFilePath != "" && uri.IsRegularFile(targetFilePath) {
-			fileContent, err = os.ReadFile(string(targetFilePath))
-			if err != nil {
-				reportedErr := fmt.Errorf("skipping scanResult for path: %s displayTargetFile: %s in workDir: %s as we can't determine the absolute filesystem path. %w", scanResult.Path, scanResult.DisplayTargetFile, workDir, err)
-				cliScanner.errorReporter.CaptureErrorAndReportAsIssue(targetFilePath, reportedErr)
-				logger.Error().Err(reportedErr).Send()
-				continue
-			}
-		}
-		issues = append(issues, cliScanner.retrieveIssues(&scanResult, workDir, targetFilePath, fileContent)...)
+	// Add vulnerability counts to cache (CLIScanner-specific behavior)
+	if len(issues) > 0 {
+		cliScanner.mutex.Lock()
+		cliScanner.addVulnerabilityCountsToCache(issues)
+		cliScanner.mutex.Unlock()
 	}
 
 	return issues
 }
 
-func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir types.FilePath, path types.FilePath) types.FilePath {
-	logger := c.Logger().With().Str("method", "getAbsTargetFilePath").Logger()
+func getAbsTargetFilePath(logger *zerolog.Logger, scanResult scanResult, workDir types.FilePath, path types.FilePath) types.FilePath {
 	if scanResult.DisplayTargetFile == "" && path != "" {
 		return path
 	}
@@ -429,23 +424,7 @@ func getAbsTargetFilePath(c *config.Config, scanResult scanResult, workDir types
 }
 
 func (cliScanner *CLIScanner) unmarshallOssJson(res []byte) (scanResults []scanResult, err error) {
-	output := string(res)
-	if strings.HasPrefix(output, "[") {
-		err = json.Unmarshal(res, &scanResults)
-		if err != nil {
-			err = errors.Join(err, fmt.Errorf("couldn't unmarshal CLI response. Input: %s", output))
-			return nil, err
-		}
-	} else {
-		var result scanResult
-		err = json.Unmarshal(res, &result)
-		if err != nil {
-			err = errors.Join(err, fmt.Errorf("couldn't unmarshal CLI response. Input: %s", output))
-			return nil, err
-		}
-		scanResults = append(scanResults, result)
-	}
-	return scanResults, err
+	return UnmarshallOssJson(res)
 }
 
 // Returns true if CLI run failed, false otherwise
@@ -499,18 +478,6 @@ func determineTargetFile(displayTargetFile string) string {
 		return displayTargetFile
 	}
 	return strings.Replace(displayTargetFile, fileName, manifestFileName, 1)
-}
-
-func (cliScanner *CLIScanner) retrieveIssues(res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte) []types.Issue {
-	// we are updating the cli scanner maps/attributes in parallel, so we need to lock
-	cliScanner.mutex.Lock()
-	defer cliScanner.mutex.Unlock()
-	issues := convertScanResultToIssues(cliScanner.config, res, workDir, targetFilePath, fileContent, cliScanner.learnService, cliScanner.errorReporter, cliScanner.packageIssueCache)
-
-	// repopulate
-	cliScanner.addVulnerabilityCountsToCache(issues)
-
-	return issues
 }
 
 // scheduleRefreshScan Schedules new scan after refreshScanWaitDuration once existing OSS results might be stale.

@@ -51,7 +51,7 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 	finder := mavenRangeFinder{
 		path:        types.FilePath(testPath),
 		fileContent: testContent,
-		c:           c,
+		logger:      c.Logger(),
 	}
 
 	expected := ast.Node{
@@ -88,7 +88,7 @@ func TestMavenRangeFinder_FindInPomHierarchy(t *testing.T) {
 	finder := mavenRangeFinder{
 		path:        types.FilePath(testPath),
 		fileContent: testContent,
-		c:           c,
+		logger:      c.Logger(),
 	}
 
 	expected := ast.Node{

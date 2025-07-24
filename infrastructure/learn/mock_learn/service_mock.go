@@ -81,9 +81,9 @@ func (mr *MockServiceMockRecorder) LearnEndpoint() *gomock.Call {
 }
 
 // MaintainCache mocks base method.
-func (m *MockService) MaintainCache() func() {
+func (m *MockService) MaintainCacheFunc() func() {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MaintainCache")
+	ret := m.ctrl.Call(m, "MaintainCacheFunc")
 	ret0, _ := ret[0].(func())
 	return ret0
 }
@@ -91,5 +91,5 @@ func (m *MockService) MaintainCache() func() {
 // MaintainCache indicates an expected call of MaintainCache.
 func (mr *MockServiceMockRecorder) MaintainCache() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaintainCache", reflect.TypeOf((*MockService)(nil).MaintainCache))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaintainCacheFunc", reflect.TypeOf((*MockService)(nil).MaintainCacheFunc))
 }

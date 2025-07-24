@@ -36,6 +36,7 @@ In environments or applications that use MCP, you can use the `snyk mcp` CLI com
 * `snyk_logout` (logout)
 * `snyk_auth_status` (authentication status check)
 * `snyk_version` (version information)
+* `snyk_open_learn_lesson` (opens a Snyk Learn lesson in the browser by its title)
 
 
 Running `snyk_sca_scan` may execute third-party ecosystem tools (for example, Gradle or Maven) on your machine to fetch the project's dependency tree.
