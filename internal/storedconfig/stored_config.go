@@ -32,7 +32,17 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePa
 		return nil, err
 	}
 
-	gitFolderConfig, err := getFromGit(path)
+	repository, err := getRepository(path)
+	if err != nil {
+		return nil, err
+	}
+
+	localBranches, err := getLocalBranches(repository)
+	if err != nil {
+		return nil, err
+	}
+
+	gitFolderConfig, err := getFromGitConfig(path, repository, localBranches)
 	if err != nil {
 		return folderConfig, nil
 	}
@@ -41,6 +51,9 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePa
 		// the previous git configuration takes precedence
 		folderConfig = mergeFolderConfigs(gitFolderConfig, folderConfig)
 	}
+
+	// Always use the local branches reported by Git.
+	folderConfig.LocalBranches = localBranches
 
 	err = UpdateFolderConfig(conf, folderConfig, logger)
 	if err != nil {
@@ -53,7 +66,7 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePa
 	return folderConfig, nil
 }
 
-// mergeFolderConfigs merges two folderConfigs, with the first taking precedence over the second
+// mergeFolderConfigs merges two folderConfigs, the first being fresh from git, the second being the saved config
 func mergeFolderConfigs(first *types.FolderConfig, second *types.FolderConfig) *types.FolderConfig {
 	if second.FolderPath != first.FolderPath {
 		return first
@@ -66,10 +79,6 @@ func mergeFolderConfigs(first *types.FolderConfig, second *types.FolderConfig) *
 				first.AdditionalParameters = append(first.AdditionalParameters, parameter)
 			}
 		}
-	}
-
-	if second.LocalBranches != nil {
-		first.LocalBranches = second.LocalBranches
 	}
 
 	if second.BaseBranch != "" {
