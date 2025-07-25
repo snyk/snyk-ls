@@ -218,6 +218,12 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 			return nil, fmt.Errorf("empty path given to tool %s", toolDef.Name)
 		}
 
+		if m.folderTrust.IsFolderTrusted(folderPath) {
+			msg := fmt.Sprintf("Folder '%s' is already trusted", folderPath)
+			logger.Info().Msg(msg)
+			return mcp.NewToolResultText(msg), nil
+		}
+
 		return m.folderTrust.HandleTrust(ctx, folderPath, logger)
 	}
 }
