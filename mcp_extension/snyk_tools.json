@@ -19,7 +19,7 @@
     },
     {
       "name": "snyk_sca_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter and for python always use the command parameter. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed for accurate dependency resolution. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed for accurate dependency resolution. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
       "command": [
         "test"
       ],
@@ -284,7 +284,7 @@
     },
     {
       "name": "snyk_container_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Scans container images for known vulnerabilities in OS packages and application dependencies. \nWhen to use: Locally by developers after building images. In CI/CD pipelines to scan images before pushing to a registry or deploying, acting as a security gate. \nHow to use: Test image: <snyk_container_scan> `IMAGE`=`my-image:v1`. Test with Dockerfile for context: <snyk_container_scan> `IMAGE`=`my-image:v1` `file`=`absolute/path/to/Dockerfile`. Test and exclude base image vulns: <snyk_container_scan> `IMAGE`=`my-image:v1` `exclude_base_image_vulns`. Test OCI archive: <snyk_container_scan> `IMAGE`=`oci-archive:image.tar` `platform`=`linux/arm64`. \nSecure SDLC Integration: Crucial for securing containerized applications. Local Development: Immediate feedback. CI/CD Pipelines: Automates scanning, acting as a security gate for container images. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
+      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Scans container images for known vulnerabilities in OS packages and application dependencies.\nHow to use: Test image: <snyk_container_scan> `IMAGE`=`my-image:v1`. Test with Dockerfile for context: <snyk_container_scan> `IMAGE`=`my-image:v1` `file`=`absolute/path/to/Dockerfile`. Test and exclude base image vulns: <snyk_container_scan> `IMAGE`=`my-image:v1` `exclude_base_image_vulns`. Test OCI archive: <snyk_container_scan> `IMAGE`=`oci-archive:image.tar` `platform`=`linux/arm64`. Exit codes: `0` (no issues or below threshold), `1` (issues found), `2` (error).",
       "command": [
         "container",
         "test"
@@ -589,7 +589,7 @@
     },
     {
       "name": "snyk_trust",
-      "description": "Trust a given folder to allow Snyk to scan it.",
+      "description": "Trust a given folder to allow Snyk to scan it. ONLY RUN THIS TOOL IF INSTRUCTED TO DO SO.",
       "command": [],
       "standardParams": [],
       "ignoreTrust": true,
