@@ -1,4 +1,10 @@
-# Snyk MCP - Early Access
+# Snyk MCP
+
+
+**Release status**&#x20;
+
+Snyk MCP is in Early Access and available only with Enterprise plans with Snyk AppRisk. You can access it through the Snyk CLI.
+
 
 MCP (Model Context Protocol) is an open protocol that standardizes how applications share context with large language models.
 
@@ -36,7 +42,6 @@ In environments or applications that use MCP, you can use the `snyk mcp` CLI com
 * `snyk_logout` (logout)
 * `snyk_auth_status` (authentication status check)
 * `snyk_version` (version information)
-* `snyk_open_learn_lesson` (opens a Snyk Learn lesson in the browser by its title)
 
 
 Running `snyk_sca_scan` may execute third-party ecosystem tools (for example, Gradle or Maven) on your machine to fetch the project's dependency tree.
