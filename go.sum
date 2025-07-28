@@ -322,8 +322,8 @@ github.com/shirou/gopsutil v3.21.11+incompatible/go.mod h1:5b4v6he4MtMOwMlS0TUMT
 github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
 github.com/skeema/knownhosts v1.3.1 h1:X2osQ+RAjK76shCbvhHHHVl3ZlgDm8apHEHFqRjnBY8=
 github.com/skeema/knownhosts v1.3.1/go.mod h1:r7KTdC8l4uxWRyK2TpQZ/1o5HaSzh06ePQNxPwTcfiY=
-github.com/snyk/code-client-go v1.22.1 h1:bgMaShTO+zoCGNp7SRT6tKSngfhVBn0IRK2QEvpj4Vs=
-github.com/snyk/code-client-go v1.22.1/go.mod h1:Jx3Jpo8kHlqHjhGa7a0ROQzPu+X15TBN0zRD+wNcUds=
+github.com/snyk/code-client-go v1.22.3 h1:xDT/SHwHd6ondz0uEiysoc7S6b9L1NMeWUIH7ugmtqo=
+github.com/snyk/code-client-go v1.22.3/go.mod h1:Jx3Jpo8kHlqHjhGa7a0ROQzPu+X15TBN0zRD+wNcUds=
 github.com/snyk/error-catalog-golang-public v0.0.0-20250429130542-564b0605020e h1:XFGkHDWA8JTPLr82QzoKVqGytofEYBf68VqoUq8yvXk=
 github.com/snyk/error-catalog-golang-public v0.0.0-20250429130542-564b0605020e/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
 github.com/snyk/go-application-framework v0.0.0-20250623133541-b839adde73f3 h1:hVtkGhifvAhIsvUYOq7zUFllE3XHJdpd4F6WNcpgWp4=

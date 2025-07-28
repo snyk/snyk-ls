@@ -19,7 +19,6 @@ require (
 	github.com/mark3labs/mcp-go v0.31.0
 	github.com/otiai10/copy v1.14.1
 	github.com/pact-foundation/pact-go v1.10.0
-	github.com/pingcap/errors v0.11.4
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pkg/errors v0.9.1
 	github.com/puzpuzpuz/xsync v1.5.2
@@ -27,7 +26,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/code-client-go v1.22.1
+	github.com/snyk/code-client-go v1.22.3
 	github.com/snyk/go-application-framework v0.0.0-20250623133541-b839adde73f3
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.6
