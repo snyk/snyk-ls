@@ -18,10 +18,10 @@ package performance
 
 import (
 	"context"
-	"github.com/snyk/code-client-go/observability"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/snyk/code-client-go/observability"
 )
 
 const traceIdKey = "trace_id"
