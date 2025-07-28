@@ -80,8 +80,8 @@ func hasUncommitedChanges(repo *git.Repository) bool {
 	return false
 }
 
-func GetBaseBranchName(conf configuration.Configuration, folderPath types.FilePath) string {
-	folderConfig, err := storedConfig.GetOrCreateFolderConfig(conf, folderPath, nil)
+func GetBaseBranchName(conf configuration.Configuration, folderPath types.FilePath, logger *zerolog.Logger) string {
+	folderConfig, err := storedConfig.GetOrCreateFolderConfig(conf, folderPath, logger)
 	if err != nil {
 		return "master"
 	}
