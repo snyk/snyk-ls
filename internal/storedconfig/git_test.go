@@ -50,6 +50,11 @@ func Test_getFromGit_ReturnsLocalBranchesEvenWithoutMainOrMaster(t *testing.T) {
 	err = cmd.Run()
 	require.NoError(t, err)
 
+	cmd = exec.Command("git", "config", "commit.gpgsign", "false")
+	cmd.Dir = tempDir
+	err = cmd.Run()
+	require.NoError(t, err)
+
 	// Create and commit a file
 	testFile := filepath.Join(tempDir, "test.txt")
 	err = os.WriteFile(testFile, []byte("test content"), 0644)
@@ -62,8 +67,8 @@ func Test_getFromGit_ReturnsLocalBranchesEvenWithoutMainOrMaster(t *testing.T) {
 
 	cmd = exec.Command("git", "commit", "-m", "initial commit")
 	cmd.Dir = tempDir
-	err = cmd.Run()
-	require.NoError(t, err)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "git commit failed: %s", string(output))
 
 	// Create a branch that is neither main nor master
 	cmd = exec.Command("git", "checkout", "-b", "feature-branch")

@@ -125,6 +125,11 @@ func Test_GetOrCreateFolderConfig_shouldReturnLocalBranchesEvenWithoutBaseBranch
 	err = cmd.Run()
 	require.NoError(t, err)
 
+	cmd = exec.Command("git", "config", "commit.gpgsign", "false")
+	cmd.Dir = tempDir
+	err = cmd.Run()
+	require.NoError(t, err)
+
 	// Create and commit a file
 	testFile := filepath.Join(tempDir, "test.txt")
 	err = os.WriteFile(testFile, []byte("test content"), 0644)
