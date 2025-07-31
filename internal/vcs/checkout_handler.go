@@ -65,7 +65,7 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConf
 		return nil
 	}
 
-	baseBranchName := GetBaseBranchName(ch.conf, folderPath)
+	baseBranchName := GetBaseBranchName(ch.conf, folderPath, logger)
 
 	tmpFolderName := fmt.Sprintf(
 		"%s_%s",

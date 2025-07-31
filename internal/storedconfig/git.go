@@ -17,49 +17,32 @@
 package storedconfig
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-	"sync"
 	"testing"
 
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/storage/filesystem"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/ini.v1"
-
-	config2 "github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/format/config"
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-const (
-	mainSection          = "snyk"
-	baseBranchKey        = "baseBranch"
-	additionalParameters = "additionalParameters"
-)
-
-var (
-	mutex sync.RWMutex
-)
-
-func getBaseBranch(repoConfig *config2.Config, folderSection *config.Subsection, localBranches []string) (string, error) {
-	// base branch is either overwritten or we return the default branch
-	baseBranch := repoConfig.Init.DefaultBranch
-	if folderSection.HasOption(baseBranchKey) {
-		baseBranch = folderSection.Option(baseBranchKey)
+func getBaseBranch(repository *git.Repository, localBranches []string) (string, error) {
+	repoConfig, err := repository.Config()
+	if err != nil {
+		return "", err
 	}
 
+	// Try the default branch ...
+	baseBranch := repoConfig.Init.DefaultBranch
+
+	// ... fall back to common defaults if no default branch is set
 	if baseBranch == "" {
 		if slices.Contains(localBranches, "main") {
 			baseBranch = "main"
@@ -69,36 +52,8 @@ func getBaseBranch(repoConfig *config2.Config, folderSection *config.Subsection,
 			return "", fmt.Errorf("could not determine base branch")
 		}
 	}
+
 	return baseBranch, nil
-}
-
-func getAdditionalParams(folderSection *config.Subsection) string {
-	if folderSection.HasOption(additionalParameters) {
-		return folderSection.Option(additionalParameters)
-	}
-	return ""
-}
-
-func getConfigSection(path types.FilePath) (*git.Repository, *config2.Config, *config.Config, *config.Subsection, error) {
-	mutex.Lock()
-	// if DeleteEmptySnykSubsection fails, ignore error and attempt to reload config again
-	_ = DeleteEmptySnykSubsection(path)
-	mutex.Unlock()
-	repository, err := git.PlainOpen(string(path))
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
-	repoConfig, err := repository.Config()
-
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
-	raw := repoConfig.Raw
-	section := raw.Section(mainSection)
-	folderSection := section.Subsection(string(path))
-	return repository, repoConfig, raw, folderSection, nil
 }
 
 func getLocalBranches(repository *git.Repository) ([]string, error) {
@@ -117,121 +72,38 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 	return localBranches, nil
 }
 
-func SetOption(logger *zerolog.Logger, folderPath types.FilePath, key string, value string) {
-	// Don't set the config option if folder path or value is empty.
-	// Setting empty options causes go-git to fail fetching config sections.
-	if len(folderPath) == 0 || len(value) == 0 {
-		return
-	}
-	repo, repoConfig, _, subsection, err := getConfigSection(folderPath)
+func enrichFromGit(logger *zerolog.Logger, folderConfig *types.FolderConfig) *types.FolderConfig {
+	l := logger.With().Str("method", "enrichFromGit").Logger()
+
+	repository, err := git.PlainOpen(string(folderConfig.FolderPath))
 	if err != nil {
-		logger.Error().Err(err).Msg("could not get git config for folder " + string(folderPath))
-		return
-	}
-	subsection.SetOption(key, value)
-	err = repo.Storer.SetConfig(repoConfig)
-	if err != nil {
-		logger.Error().Err(err).Msgf("could not store %s=%s configuration for folder %s", key, value, folderPath)
-	}
-}
-
-func GitFolderPath(folderPath types.FilePath) (string, error) {
-	repo, err := git.PlainOpen(string(folderPath))
-	if err != nil {
-		return "", fmt.Errorf("failed to open repository: %s %w", folderPath, err)
+		return folderConfig // Probably not a git repo and that's okay
 	}
 
-	fsStorer, ok := repo.Storer.(*filesystem.Storage)
-	if !ok {
-		return "", fmt.Errorf("failed to get fs storage for: %s %w", folderPath, err)
-	}
-	repoPath := fsStorer.Filesystem().Root()
-	if repoPath == "" {
-		return "", errors.New("repository path is empty")
-	}
-
-	if !strings.HasSuffix(repoPath, ".git") {
-		repoPath = filepath.Join(repoPath, ".git")
-	}
-
-	return repoPath, nil
-}
-
-// DeleteEmptySnykSubsection This is a migration function to be executed if empty subsections exists
-func DeleteEmptySnykSubsection(path types.FilePath) error {
-	return DeleteGitConfigSnykSubsection(path, `""`)
-}
-
-func DeleteGitConfigSnykSubsection(path types.FilePath, subsection types.FilePath) error {
-	gitFolderPath, err := GitFolderPath(path)
-	if err != nil {
-		return err
-	}
-	configPath := filepath.Join(gitFolderPath, "config")
-	cfg, err := ini.Load(configPath)
-	if err != nil {
-		return err
-	}
-	// Construct the section name with the empty subsection
-	sectionToDelete := fmt.Sprintf(`%s %s`, mainSection, subsection)
-	section, err := cfg.GetSection(sectionToDelete)
-	if section == nil || err != nil {
-		return nil
-	}
-	cfg.DeleteSection(sectionToDelete)
-
-	// make sure we are not writing empty config
-	buf := new(bytes.Buffer)
-	_, err = cfg.WriteTo(buf)
-	if err != nil {
-		return err
-	}
-	if buf.Len() == 0 {
-		return nil
-	}
-
-	err = cfg.SaveToIndent(configPath, "\t")
-	if err != nil {
-		return fmt.Errorf("failed to save changes to git config %w", err)
-	}
-	return nil
-}
-
-func getFromGit(path types.FilePath) (*types.FolderConfig, error) {
-	repository, repoConfig, _, folderSection, err := getConfigSection(path)
-	if err != nil {
-		return nil, nil
-	}
-
+	// Always get the fresh local branches
 	localBranches, err := getLocalBranches(repository)
-	if err != nil || len(localBranches) == 0 {
-		return nil, err
-	}
-
-	folderConfig := types.FolderConfig{
-		FolderPath:    path,
-		LocalBranches: localBranches,
-	}
-
-	baseBranch, err := getBaseBranch(repoConfig, folderSection, localBranches)
 	if err != nil {
-		// Don't fail completely if we can't determine base branch
-		// We still have valid local branches that should be used
-		// Just skip setting the base branch
+		// Don't fail completely if we can't determine local branches
+		// We should still try to get the base branch from the repo config
+		l.Debug().Err(err).Msgf("could not get local branches for path %s", folderConfig.FolderPath)
 	} else {
-		folderConfig.BaseBranch = baseBranch
+		folderConfig.LocalBranches = localBranches
 	}
 
-	additionalParams := getAdditionalParams(folderSection)
-	if len(additionalParams) > 0 {
-		var additionalParamsFromGit []string
-		err = json.Unmarshal([]byte(additionalParams), &additionalParamsFromGit)
+	// Only determine the base branch if not set (potentially overwritten) in the stored config
+	if folderConfig.BaseBranch == "" {
+		baseBranch, err := getBaseBranch(repository, localBranches)
 		if err != nil {
-			return &folderConfig, err
+			// Don't fail completely if we can't determine base branch
+			// We still have valid local branches that should be used
+			// Just skip setting the base branch
+			l.Debug().Err(err).Msgf("could not determine base branch for path %s", folderConfig.FolderPath)
+		} else {
+			folderConfig.BaseBranch = baseBranch
 		}
-		folderConfig.AdditionalParameters = append(folderConfig.AdditionalParameters, additionalParamsFromGit...)
 	}
-	return &folderConfig, nil
+
+	return folderConfig
 }
 
 func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targetCommit string, logger *zerolog.Logger) (types.FilePath, error) {

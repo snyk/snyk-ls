@@ -48,7 +48,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 
 	var folderConfigs []types.FolderConfig
 	for _, folder := range c.Workspace().Folders() {
-		storedConfig, err2 := storedconfig.GetOrCreateFolderConfig(configuration, folder.Path(), nil)
+		storedConfig, err2 := storedconfig.GetOrCreateFolderConfig(configuration, folder.Path(), &logger)
 		if err2 != nil {
 			logger.Err(err2).Msg("unable to load stored config")
 			return

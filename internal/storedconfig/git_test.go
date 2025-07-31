@@ -23,81 +23,77 @@ import (
 	"testing"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func Test_getFromGit_ReturnsLocalBranchesEvenWithoutMainOrMaster(t *testing.T) {
-	// Create a temporary directory for the test repo
-	tempDir := t.TempDir()
+// initializeTestGitRepo creates a Git repository with an initial commit (required for branches to actually exist)
+// and specified branches.
+func initializeTestGitRepo(t *testing.T, repoDir string, branches []string) {
+	t.Helper()
 
-	// Initialize a new git repo
-	cmd := exec.Command("git", "init")
-	cmd.Dir = tempDir
+	// Initialize Git repo with first branch as initial branch
+	cmd := exec.Command("git", "init", "--initial-branch="+branches[0])
+	cmd.Dir = repoDir
 	err := cmd.Run()
 	require.NoError(t, err)
 
 	// Configure git user for commits (required on Windows and CI)
 	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = tempDir
+	cmd.Dir = repoDir
 	err = cmd.Run()
 	require.NoError(t, err)
 
 	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = tempDir
+	cmd.Dir = repoDir
 	err = cmd.Run()
 	require.NoError(t, err)
 
-	// Create and commit a file
-	testFile := filepath.Join(tempDir, "test.txt")
+	// Create and commit a file (required for branches to exist)
+	testFile := filepath.Join(repoDir, "test.txt")
 	err = os.WriteFile(testFile, []byte("test content"), 0644)
 	require.NoError(t, err)
 
 	cmd = exec.Command("git", "add", ".")
-	cmd.Dir = tempDir
+	cmd.Dir = repoDir
 	err = cmd.Run()
 	require.NoError(t, err)
 
 	cmd = exec.Command("git", "commit", "-m", "initial commit")
-	cmd.Dir = tempDir
+	cmd.Dir = repoDir
 	err = cmd.Run()
 	require.NoError(t, err)
 
-	// Create a branch that is neither main nor master
-	cmd = exec.Command("git", "checkout", "-b", "feature-branch")
-	cmd.Dir = tempDir
-	err = cmd.Run()
-	require.NoError(t, err)
+	// Create additional branches
+	for _, branch := range branches[1:] {
+		cmd = exec.Command("git", "checkout", "-b", branch)
+		cmd.Dir = repoDir
+		err = cmd.Run()
+		require.NoError(t, err)
+	}
+}
 
-	// Create another branch
-	cmd = exec.Command("git", "checkout", "-b", "develop")
-	cmd.Dir = tempDir
-	err = cmd.Run()
-	require.NoError(t, err)
+func Test_enrichFromGit_ReturnsLocalBranchesEvenWithoutMainOrMaster(t *testing.T) {
+	// Create a temporary test Git repository with an initial commit and branches
+	tempDir := t.TempDir()
+	branches := []string{"feature-branch", "develop"}
+	initializeTestGitRepo(t, tempDir, branches)
 
-	// Delete main and master branches if they exist
-	// This ensures we test the scenario where neither exists
-	cmd = exec.Command("git", "branch", "-D", "main")
-	cmd.Dir = tempDir
-	_ = cmd.Run() // Ignore error if branch doesn't exist
+	logger := zerolog.New(zerolog.NewTestWriter(t))
 
-	cmd = exec.Command("git", "branch", "-D", "master")
-	cmd.Dir = tempDir
-	_ = cmd.Run() // Ignore error if branch doesn't exist
+	folderConfig := &types.FolderConfig{
+		FolderPath: types.FilePath(tempDir),
+	}
 
-	// Test getFromGit
-	folderConfig, err := getFromGit(types.FilePath(tempDir))
-
-	// Should not return an error anymore
-	assert.NoError(t, err)
-	assert.NotNil(t, folderConfig)
+	// Act
+	folderConfig = enrichFromGit(&logger, folderConfig)
 
 	// Should have local branches
-	assert.NotEmpty(t, folderConfig.LocalBranches)
-	assert.Contains(t, folderConfig.LocalBranches, "feature-branch")
-	assert.Contains(t, folderConfig.LocalBranches, "develop")
+	require.NotNil(t, folderConfig)
+	assert.ElementsMatch(t, branches, folderConfig.LocalBranches)
 
 	// Base branch should be empty since we couldn't determine it
 	assert.Empty(t, folderConfig.BaseBranch)
@@ -111,14 +107,54 @@ func Test_getBaseBranch_ReturnsErrorWhenNoDefaultBranch(t *testing.T) {
 	repo, err := git.PlainInit(tempDir, false)
 	require.NoError(t, err)
 
-	repoConfig, err := repo.Config()
-	require.NoError(t, err)
-
 	// Test with branches that are neither main nor master
 	localBranches := []string{"feature-branch", "develop", "release"}
 
 	// Should return error when no main/master branch exists
-	_, err = getBaseBranch(repoConfig, repoConfig.Raw.Section("snyk").Subsection(tempDir), localBranches)
+	_, err = getBaseBranch(repo, localBranches)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "could not determine base branch")
+}
+
+func Test_getBaseBranch_UsesInitDefaultBranchWhenSet(t *testing.T) {
+	// Create a test Git repository with an initial commit and branches
+	tempDir := t.TempDir()
+	testDefaultBranch := "new-default-trunk-branch"
+	branches := []string{"main", "master", testDefaultBranch, "feature"}
+	initializeTestGitRepo(t, tempDir, branches)
+
+	// Set init.defaultBranch in the repo config
+	cmd := exec.Command("git", "config", "init.defaultBranch", testDefaultBranch)
+	cmd.Dir = tempDir
+	err := cmd.Run()
+	require.NoError(t, err)
+
+	// Open the repository
+	repo, err := git.PlainOpen(tempDir)
+	require.NoError(t, err)
+
+	// Act
+	baseBranch, err := getBaseBranch(repo, branches)
+	require.NoError(t, err)
+
+	// Assert we return the default branch
+	assert.Equal(t, testDefaultBranch, baseBranch)
+}
+
+func Test_getBaseBranch_FallsBackToMasterWhenMainNotPresent(t *testing.T) {
+	// Create a test Git repository with an initial commit and branches (including master but not main)
+	tempDir := t.TempDir()
+	branches := []string{"master", "feature-branch", "develop"}
+	initializeTestGitRepo(t, tempDir, branches)
+
+	// Open the repository
+	repo, err := git.PlainOpen(tempDir)
+	require.NoError(t, err)
+
+	// Act
+	baseBranch, err := getBaseBranch(repo, branches)
+	require.NoError(t, err)
+
+	// Assert we fall back to master (since it exists) and init.defaultBranch & main are not present
+	assert.Equal(t, "master", baseBranch)
 }

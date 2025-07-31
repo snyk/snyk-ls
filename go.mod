@@ -39,7 +39,6 @@ require (
 	golang.org/x/net v0.38.0
 	golang.org/x/oauth2 v0.27.0
 	golang.org/x/sync v0.13.0
-	gopkg.in/ini.v1 v1.67.0
 )
 
 require (

@@ -51,9 +51,12 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 	}
 
 	if sc.FolderConfigs[path] == nil {
-		folderConfig := &types.FolderConfig{FolderPath: path}
+		folderConfig := &types.FolderConfig{}
 		sc.FolderConfigs[path] = folderConfig
 	}
+
+	// Always override the stored folder path value, just in case it was wrong.
+	sc.FolderConfigs[path].FolderPath = path
 
 	return sc.FolderConfigs[path], nil
 }
