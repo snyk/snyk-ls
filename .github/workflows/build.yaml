@@ -83,6 +83,7 @@ jobs:
           make clean test
 
   integration-tests:
+    timeout-minutes: 360
     name: integration-tests
     needs: [lint]
     runs-on: ${{ matrix.os }}
