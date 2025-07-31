@@ -35,7 +35,7 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePa
 		return nil, err
 	}
 
-	enrichFromGit(&l, folderConfig)
+	folderConfig = enrichFromGit(&l, folderConfig)
 
 	err = UpdateFolderConfig(conf, folderConfig, &l)
 	if err != nil {

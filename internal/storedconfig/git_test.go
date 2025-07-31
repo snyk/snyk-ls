@@ -89,7 +89,7 @@ func Test_enrichFromGit_ReturnsLocalBranchesEvenWithoutMainOrMaster(t *testing.T
 	}
 
 	// Act
-	enrichFromGit(&logger, folderConfig)
+	folderConfig = enrichFromGit(&logger, folderConfig)
 
 	// Should have local branches
 	require.NotNil(t, folderConfig)

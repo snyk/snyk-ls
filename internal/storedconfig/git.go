@@ -72,12 +72,12 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 	return localBranches, nil
 }
 
-func enrichFromGit(logger *zerolog.Logger, folderConfig *types.FolderConfig) {
+func enrichFromGit(logger *zerolog.Logger, folderConfig *types.FolderConfig) *types.FolderConfig {
 	l := logger.With().Str("method", "enrichFromGit").Logger()
 
 	repository, err := git.PlainOpen(string(folderConfig.FolderPath))
 	if err != nil {
-		return // Probably not a git repo and that's okay
+		return folderConfig // Probably not a git repo and that's okay
 	}
 
 	// Always get the fresh local branches
@@ -102,6 +102,8 @@ func enrichFromGit(logger *zerolog.Logger, folderConfig *types.FolderConfig) {
 			folderConfig.BaseBranch = baseBranch
 		}
 	}
+
+	return folderConfig
 }
 
 func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targetCommit string, logger *zerolog.Logger) (types.FilePath, error) {
