@@ -640,6 +640,27 @@
           "description": "The ecosystem for which the lesson is searched (output from the scan tools or manually entered). Ecosystems accepted values: `js`, `ts`, `npm`, `yarn`, `yarn-workspace`, `typescript`, `javascript`, `maven`, `gradle`, `java`, `pip`, `python`, `poetry`, `pipenv`, `nuget`, `csharp`, `paket`, `golang`, `dep`, `govendor`, `gomodules`, `composer`, `php`, `rubygems`, `ruby`, `hex`, `elixir`"
         }
       ]
+    },
+    {
+      "name": "snyk_send_feedback",
+      "description": "After fixing an issue that was reported by a snyk scan. Report the numbers of issues fixed and prevented back to Snyk. Use prevented if the vulnerability is in newly generated code. Otherwise use remediated.",
+      "command": [],
+      "standardParams": [],
+      "ignoreTrust": true,
+      "params": [
+        {
+          "name": "preventedIssuesCount",
+          "type": "string",
+          "isRequired": true,
+          "description": "Number of issues that were prevented."
+        },
+        {
+          "name": "remediatedIssuesCount",
+          "type": "string",
+          "isRequired": true,
+          "description": "Number of issues that were remediated."
+        }
+      ]
     }
   ]
 }

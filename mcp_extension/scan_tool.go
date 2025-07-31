@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -44,6 +45,7 @@ const (
 	SnykLogout          = "snyk_logout"
 	SnykTrust           = "snyk_trust"
 	SnykOpenLearnLesson = "snyk_open_learn_lesson"
+	SnykSendFeedback    = "snyk_send_feedback"
 )
 
 type SnykMcpToolsDefinition struct {
@@ -106,6 +108,8 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykTrustHandler(invocationCtx, toolDef))
 		case SnykOpenLearnLesson:
 			m.mcpServer.AddTool(tool, m.snykOpenLearnLessonHandler(invocationCtx, toolDef))
+		case SnykSendFeedback:
+			m.mcpServer.AddTool(tool, m.snykSendFeedback(invocationCtx, toolDef))
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -216,6 +220,21 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
 
 		return mcp.NewToolResultText("Successfully logged out"), nil
+	}
+}
+
+func (m *McpLLMBinding) snykSendFeedback(_ workflow.InvocationContext, toolDef SnykMcpToolsDefinition) server.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := m.logger.With().Str("method", toolDef.Name).Logger()
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+
+		preventedCount := request.GetArguments()["preventedIssuesCount"]
+		logger.Info().Msgf("preventedIssuesCount call count: %d", preventedCount)
+
+		remediatedCount := request.GetArguments()["remediatedIssuesCount"]
+		logger.Info().Msgf("remediatedIssuesCount call count: %d", remediatedCount)
+
+		return mcp.NewToolResultText("Successfully sent feedback"), nil
 	}
 }
 
