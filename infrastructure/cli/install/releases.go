@@ -27,8 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
-
 	http2 "github.com/snyk/code-client-go/http"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -159,25 +157,25 @@ func GetCLIDownloadURLForProtocol(c *config.Config, baseURL string, httpClient h
 	releaseChannel := getDistributionChannel(c)
 	versionURL := fmt.Sprintf("%s/cli/%s/ls-protocol-version-%s", baseURL, releaseChannel, protocolVersion)
 
-	logger.Debug().Str("versionURL", versionURL).Str("protocolVersion", protocolVersion).Msg("determined base version URL")
+	logger.Debug().Str("versionURL", versionURL).Msg("determined base version URL")
 
 	bodyReader := &bytes.Buffer{}
 	req, err := http.NewRequest(http.MethodGet, versionURL, bodyReader)
 	if err != nil {
-		logger.Err(err).Msg("could not create request to retrieve CLI version")
+		logger.Err(err).Str("versionURL", versionURL).Msg("could not create request to retrieve CLI version")
 		return defaultFallBack
 	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil || resp.StatusCode >= http.StatusBadRequest {
-		logger.Err(errors.Wrap(err, "couldn't get version of CLI that supports the protocol version"))
+		logger.Err(err).Str("versionURL", versionURL).Msg("couldn't get version of CLI that supports the protocol version")
 		return defaultFallBack
 	}
 	defer resp.Body.Close()
 
 	versionBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Err(errors.Wrap(err, "couldn't get version of CLI that supports the protocol version"))
+		logger.Err(err).Str("versionURL", versionURL).Msg("couldn't get version of CLI that supports the protocol version")
 		return defaultFallBack
 	}
 
