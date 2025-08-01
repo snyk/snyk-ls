@@ -124,27 +124,42 @@ func (r *CLIRelease) GetLatestRelease() (*Release, error) {
 }
 
 func getDistributionChannel(c *config.Config) string {
+	logger := c.Logger().With().Str("method", "getDistributionChannel").Logger()
 	info := c.Engine().GetRuntimeInfo()
 	if info == nil {
+		logger.Debug().Msg("no runtime info, assuming stable")
 		return "stable"
 	}
 	version := info.GetVersion()
+	logger.Debug().Str("runtimeVersion", version).Msg("checking version")
 	if strings.Contains(version, "-preview.") {
+		logger.Debug().Msg("using preview channel")
 		return "preview"
 	}
 	if strings.Contains(version, "-rc.") {
+		logger.Debug().Msg("using rc channel")
 		return "rc"
 	}
+	logger.Debug().Msg("not rc or preview, using stable channel")
 	return "stable"
 }
 
 func GetCLIDownloadURL(c *config.Config, baseURL string, httpClient http2.HTTPClient) string {
-	logger := c.Logger().With().Str("method", "getCLIDownloadURL").Logger()
+	return GetCLIDownloadURLForProtocol(c, baseURL, httpClient, config.LsProtocolVersion)
+}
+
+func GetLSDownloadURL(c *config.Config, httpClient http2.HTTPClient) string {
+	return GetLSDownloadURLForProtocol(c, httpClient, config.LsProtocolVersion)
+}
+
+// GetCLIDownloadURLForProtocol returns the CLI download URL for a specific protocol version
+func GetCLIDownloadURLForProtocol(c *config.Config, baseURL string, httpClient http2.HTTPClient, protocolVersion string) string {
+	logger := c.Logger().With().Str("method", "getCLIDownloadURLForProtocol").Logger()
 	defaultFallBack := "https://github.com/snyk/cli/releases"
 	releaseChannel := getDistributionChannel(c)
-	versionURL := fmt.Sprintf("%s/cli/%s/ls-protocol-version-%s", baseURL, releaseChannel, config.LsProtocolVersion)
+	versionURL := fmt.Sprintf("%s/cli/%s/ls-protocol-version-%s", baseURL, releaseChannel, protocolVersion)
 
-	logger.Debug().Str("versionURL", versionURL).Msg("determined base version URL")
+	logger.Debug().Str("versionURL", versionURL).Str("protocolVersion", protocolVersion).Msg("determined base version URL")
 
 	bodyReader := &bytes.Buffer{}
 	req, err := http.NewRequest(http.MethodGet, versionURL, bodyReader)
@@ -155,14 +170,14 @@ func GetCLIDownloadURL(c *config.Config, baseURL string, httpClient http2.HTTPCl
 
 	resp, err := httpClient.Do(req)
 	if err != nil || resp.StatusCode >= http.StatusBadRequest {
-		logger.Err(errors.Wrap(err, "couldn't get version of CLI that supports current protocol version"))
+		logger.Err(errors.Wrap(err, "couldn't get version of CLI that supports the protocol version"))
 		return defaultFallBack
 	}
 	defer resp.Body.Close()
 
 	versionBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Err(errors.Wrap(err, "couldn't get version of CLI that supports current protocol version"))
+		logger.Err(errors.Wrap(err, "couldn't get version of CLI that supports the protocol version"))
 		return defaultFallBack
 	}
 
@@ -174,10 +189,12 @@ func GetCLIDownloadURL(c *config.Config, baseURL string, httpClient http2.HTTPCl
 	return downloadURL
 }
 
-func GetLSDownloadURL(c *config.Config, httpClient http2.HTTPClient) string {
-	logger := c.Logger().With().Str("method", "GetLSDownloadURL").Logger()
+// GetLSDownloadURLForProtocol returns the LS download URL for a specific protocol version
+func GetLSDownloadURLForProtocol(c *config.Config, httpClient http2.HTTPClient, protocolVersion string) string {
+	logger := c.Logger().With().Str("method", "GetLSDownloadURLForProtocol").Logger()
+	logger.Debug().Str("protocolVersion", protocolVersion).Msg("getting LS download URL for protocol version")
 	defaultFallBack := "https://github.com/snyk/snyk-ls/releases"
-	baseURL := fmt.Sprintf("https://static.snyk.io/snyk-ls/%s", config.LsProtocolVersion)
+	baseURL := fmt.Sprintf("https://static.snyk.io/snyk-ls/%s", protocolVersion)
 	metadataURL := fmt.Sprintf("%s/metadata.json", baseURL)
 	bodyReader := &bytes.Buffer{}
 
@@ -189,7 +206,7 @@ func GetLSDownloadURL(c *config.Config, httpClient http2.HTTPClient) string {
 
 	response, err := httpClient.Do(req)
 	if err != nil {
-		logger.Err(err).Msg("couldn't get metadata for download")
+		logger.Err(err).Str("protocolVersion", protocolVersion).Msg("couldn't get metadata for download")
 		return defaultFallBack
 	}
 
@@ -197,6 +214,7 @@ func GetLSDownloadURL(c *config.Config, httpClient http2.HTTPClient) string {
 		logger.Error().
 			Int("statusCode", response.StatusCode).
 			Str("status", response.Status).
+			Str("protocolVersion", protocolVersion).
 			Msg("http request returned error status code")
 		return defaultFallBack
 	}
@@ -204,13 +222,14 @@ func GetLSDownloadURL(c *config.Config, httpClient http2.HTTPClient) string {
 
 	metadataJson, err := io.ReadAll(response.Body)
 	if err != nil {
-		logger.Err(err).Msg("couldn't read response body")
+		logger.Err(err).Str("protocolVersion", protocolVersion).Msg("couldn't read response body")
+		return defaultFallBack
 	}
 
 	var metadata LSReleaseMetadata
 	err = json.Unmarshal(metadataJson, &metadata)
 	if err != nil {
-		logger.Err(err).Str("metadata", string(metadataJson)).Msg("couldn't unmarshall metadata")
+		logger.Err(err).Str("metadata", string(metadataJson)).Str("protocolVersion", protocolVersion).Msg("couldn't unmarshall metadata")
 		return defaultFallBack
 	}
 	exeIfNeeded := ""
