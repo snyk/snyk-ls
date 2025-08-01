@@ -1121,7 +1121,7 @@ func Test_getDownloadURL(t *testing.T) {
 		c := testutil.UnitTest(t)
 		c.Engine().GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
 
-		downloadURL := getDownloadURL(c)
+		downloadURL := getDownloadURL(c, config.LsProtocolVersion)
 
 		// default CLI fallback, as we're not mocking the CLI calls
 		assert.Contains(t, downloadURL, "cli")
@@ -1139,7 +1139,7 @@ func Test_getDownloadURL(t *testing.T) {
 			),
 		)
 
-		downloadURL := getDownloadURL(c)
+		downloadURL := getDownloadURL(c, config.LsProtocolVersion)
 
 		prefix := "https://static.snyk.io/snyk-ls/12/snyk-ls"
 		assert.True(t, strings.HasPrefix(downloadURL, prefix), downloadURL+" does not start with "+prefix)
@@ -1149,19 +1149,22 @@ func Test_getDownloadURL(t *testing.T) {
 func Test_handleProtocolVersion(t *testing.T) {
 	t.Run("required != current", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		// Set CLI extension mode to test CLI download path
+		c.Engine().GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
 
-		ourProtocolVersion := "12"
-		reqProtocolVersion := "1"
+		ourProtocolVersion := "17"
+		reqProtocolVersion := "18"
 
-		notificationReceived := make(chan bool)
+		notificationReceived := make(chan types.ShowMessageRequest)
 		f := func(params any) {
 			mrq, ok := params.(types.ShowMessageRequest)
 			require.True(t, ok)
-			require.Contains(t, mrq.Message, "does not match")
-			notificationReceived <- true
+			notificationReceived <- mrq
 		}
 		testNotifier := notification.NewNotifier()
 		go testNotifier.CreateListener(f)
+
+		// Act
 		handleProtocolVersion(
 			c,
 			testNotifier,
@@ -1169,9 +1172,29 @@ func Test_handleProtocolVersion(t *testing.T) {
 			reqProtocolVersion,
 		)
 
-		assert.Eventuallyf(t, func() bool {
-			return <-notificationReceived
-		}, 10*time.Second, 10*time.Millisecond, "no message sent via notifier")
+		// Wait for notification and verify download URL
+		select {
+		case mrq := <-notificationReceived:
+			require.Contains(t, mrq.Message, "does not match")
+
+			// Find the "Download manually in browser" action
+			var downloadAction *types.CommandData
+			for _, actionKey := range mrq.Actions.Keys() {
+				if actionData, ok := mrq.Actions.Get(actionKey); ok {
+					if actionData.Title == "Download manually in browser" {
+						downloadAction = &actionData
+						break
+					}
+				}
+			}
+
+			require.NotNil(t, downloadAction, "\"Download manually in browser\" action not found")
+			require.Equal(t, types.OpenBrowserCommand, downloadAction.CommandId)
+			require.Len(t, downloadAction.Arguments, 1, "Expected exactly one argument (download URL)")
+			assert.Contains(t, downloadAction.Arguments[0].(string), "downloads.snyk.io/cli/v1.1296.2/", "Should be CLI download URL with version v1.1296.2 for protocol 18")
+		case <-time.After(10 * time.Second):
+			t.Fatal("No notification received within timeout")
+		}
 	})
 
 	t.Run("required == current", func(t *testing.T) {
