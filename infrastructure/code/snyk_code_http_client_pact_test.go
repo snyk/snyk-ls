@@ -204,15 +204,23 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 				severity:     0,
 			}
 
-			issues, _, err := client.RunAnalysis(context.Background(), analysisOptions, "")
+			sarifResponse, _, err := client.RunAnalysis(context.Background(), analysisOptions, "")
 
 			if err != nil {
 				return err
 			}
-			if issues != nil {
-				returnValue := assert.NotEqual(t, 0, len(issues))
-				if returnValue {
-					return fmt.Errorf("Issues length is not 0")
+			if sarifResponse.Status == "COMPLETE" {
+				// Convert SARIF response to issues for pact test validation
+				converter := SarifConverter{sarif: sarifResponse, hoverVerbosity: c.HoverVerbosity(), logger: c.Logger()}
+				issues, convErr := converter.toIssues("")
+				if convErr != nil {
+					return fmt.Errorf("Error converting SARIF to issues: %v", convErr)
+				}
+				if issues != nil {
+					returnValue := assert.NotEqual(t, 0, len(issues))
+					if returnValue {
+						return fmt.Errorf("Issues length is not 0")
+					}
 				}
 			}
 

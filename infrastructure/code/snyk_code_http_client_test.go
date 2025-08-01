@@ -175,11 +175,18 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 			limitToFiles: limitToFiles,
 			severity:     0,
 		}
-		issues, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions, workDir)
+		sarifResponse, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions, workDir)
 		if err != nil {
 			return false
 		}
 		if callStatus.message == "COMPLETE" {
+			// Convert SARIF response to issues to test the conversion logic
+			converter := SarifConverter{sarif: sarifResponse, hoverVerbosity: c.HoverVerbosity(), logger: c.Logger()}
+			issues, convErr := converter.toIssues(workDir)
+			if convErr != nil {
+				t.Logf("Error converting SARIF to issues: %v", convErr)
+				return false
+			}
 			assert.Greater(t, len(issues), 0)
 			return true
 		}

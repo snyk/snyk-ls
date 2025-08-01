@@ -126,7 +126,7 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]t
 			progress.Cancel(t.GetToken())
 			return []types.Issue{}, nil
 		}
-		issues, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions, b.rootPath)
+		sarifResponse, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions, b.rootPath)
 
 		if err != nil {
 			logger.Error().Err(err).
@@ -140,6 +140,15 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]t
 		if status.message == completeStatus {
 			logger.Trace().Msg("sending diagnostics...")
 			t.ReportWithMessage(90, "Analysis complete.")
+
+			// Convert SARIF response to issues
+			converter := SarifConverter{sarif: sarifResponse, hoverVerbosity: c.HoverVerbosity(), logger: b.logger}
+			issues, err := converter.toIssues(b.rootPath)
+			if err != nil {
+				logger.Error().Err(err).Msg("error converting SARIF to issues")
+				b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: string(b.rootPath)})
+				return []types.Issue{}, err
+			}
 
 			b.issueEnhancer.addIssueActions(ctx, issues)
 

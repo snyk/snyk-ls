@@ -31,6 +31,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -246,7 +248,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	_ context.Context,
 	options AnalysisOptions,
 	_ types.FilePath,
-) ([]types.Issue, AnalysisStatus, error) {
+) (codeClientSarif.SarifResponse, AnalysisStatus, error) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.currentConcurrentScans++
 	if f.currentConcurrentScans > f.maxConcurrentScans {
@@ -265,21 +267,19 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 	FakeSnykCodeApiServiceMutex.Unlock()
 
 	FakeSnykCodeApiServiceMutex.Lock()
-	issueClone := FakeIssue.Clone()
-
-	issues := []types.Issue{issueClone}
-	if f.NoFixSuggestions {
-		if issueData, ok := issues[0].GetAdditionalData().(snyk.CodeIssueData); ok {
-			issueData.IsAutofixable = false
-			issues[0].SetAdditionalData(issueData)
-		}
-	}
 	f.Options[options.bundleHash] = options
 	FakeSnykCodeApiServiceMutex.Unlock()
 
+	// Create a fake SARIF response with complete status and 100% progress
+	fakeSarifResponse := codeClientSarif.SarifResponse{
+		Status:   "COMPLETE",
+		Progress: 1.0,
+		Type:     "sarif",
+	}
+
 	f.C.Logger().Trace().Str("method", "RunAnalysis").Interface(
-		"fakeDiagnostic",
-		FakeIssue,
+		"fakeSarifResponse",
+		fakeSarifResponse,
 	).Msg("fake backend call received & answered")
-	return issues, successfulResult, nil
+	return fakeSarifResponse, successfulResult, nil
 }

@@ -19,6 +19,8 @@ package code
 import (
 	"context"
 
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
+
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -46,7 +48,7 @@ type SnykCodeClient interface {
 		options AnalysisOptions,
 		baseDir types.FilePath,
 	) (
-		[]types.Issue,
+		codeClientSarif.SarifResponse,
 		AnalysisStatus,
 		error,
 	)
