@@ -434,7 +434,7 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 		Extension:       extension,
 	}
 
-	ic := analytics.PayloadForAnalyticsEventParam(c, param)
+	ic := analytics.PayloadForAnalyticsEventParam(c.Engine(), c.DeviceID(), param)
 
 	// test specific data is not handled in the PayloadForAnalytics helper
 	// and must be added explicitly
@@ -451,7 +451,7 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 		logger.Error().Err(err).Msg("Failed to marshal analytics")
 	}
 
-	err = analytics.SendAnalyticsToAPI(c, v2InstrumentationData)
+	err = analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), v2InstrumentationData)
 	if err != nil {
 		logger.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
 		return

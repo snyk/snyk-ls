@@ -144,7 +144,7 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 		TimestampMs:     time.Now().UnixMilli(),
 	}
 
-	analytics2.SendAnalytics(a.c, event, nil)
+	analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), event, nil)
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {

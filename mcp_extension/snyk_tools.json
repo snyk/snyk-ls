@@ -659,6 +659,12 @@
           "type": "string",
           "isRequired": true,
           "description": "Number of issues that were remediated."
+        },
+        {
+          "name": "path",
+          "type": "string",
+          "isRequired": true,
+          "description": "argument for the *absolute path* to a file or directory to scan. The path MUST be absolute and have the correct path separator. You can retrieve the absolute path by invoking `pwd` on the command line in the working directory. Example: `/a/my-project` on linux/macOS or, on Windows `C:\\a\\my-project`"
         }
       ]
     }

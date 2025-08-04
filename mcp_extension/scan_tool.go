@@ -24,14 +24,16 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/infrastructure/learn"
-
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
 
@@ -223,7 +225,7 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 	}
 }
 
-func (m *McpLLMBinding) snykSendFeedback(_ workflow.InvocationContext, toolDef SnykMcpToolsDefinition) server.ToolHandlerFunc {
+func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", toolDef.Name).Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
@@ -233,6 +235,25 @@ func (m *McpLLMBinding) snykSendFeedback(_ workflow.InvocationContext, toolDef S
 
 		remediatedCount := request.GetArguments()["remediatedIssuesCount"]
 		logger.Info().Msgf("remediatedIssuesCount call count: %d", remediatedCount)
+		pathArg := request.GetArguments()["path"]
+		if pathArg == nil {
+			return nil, fmt.Errorf("argument 'path' is missing for tool %s", toolDef.Name)
+		}
+		path, ok := pathArg.(string)
+		if !ok {
+			return nil, fmt.Errorf("argument 'path' is not a string for tool %s", toolDef.Name)
+		}
+		if path == "" {
+			return nil, fmt.Errorf("empty path given to tool %s", toolDef.Name)
+		}
+
+		event := analytics.NewAnalyticsEventParam("SendFeedback", nil, types.FilePath(path))
+
+		event.Extension = map[string]any{
+			"preventedIssuesCount":  preventedCount,
+			"remediatedIssuesCount": remediatedCount,
+		}
+		analytics.SendAnalytics(invocationCtx.GetEngine(), "mcp", event, nil)
 
 		return mcp.NewToolResultText("Successfully sent feedback"), nil
 	}
