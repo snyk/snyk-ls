@@ -24,10 +24,9 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/rs/zerolog"
-
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -131,12 +130,10 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	if workingDir != "" {
 		command.Dir = workingDir
 	}
-	runtimeInfo := invocationCtx.GetRuntimeInfo()
-	if runtimeInfo != nil {
-		command.Env = m.expandedEnv(runtimeInfo.GetVersion(), clientInfo.Name, clientInfo.Version)
-	} else {
-		command.Env = m.expandedEnv("unknown", clientInfo.Name, clientInfo.Version)
-	}
+
+	m.updateGafConfigWithIntegrationEnvironment(invocationCtx, clientInfo.Name, clientInfo.Version)
+	command.Env = m.expandedEnv(invocationCtx, clientInfo.Name, clientInfo.Version)
+
 	logger.Debug().Strs("args", command.Args).Str("workingDir", command.Dir).Msg("Running Command with")
 	logger.Trace().Strs("env", command.Env).Msg("Environment")
 
@@ -247,6 +244,9 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 			return nil, fmt.Errorf("empty path given to tool %s", toolDef.Name)
 		}
 
+		clientInfo := ClientInfoFromContext(ctx)
+
+		m.updateGafConfigWithIntegrationEnvironment(invocationCtx, clientInfo.Name, clientInfo.Version)
 		event := analytics.NewAnalyticsEventParam("SendFeedback", nil, types.FilePath(path))
 
 		event.Extension = map[string]any{
