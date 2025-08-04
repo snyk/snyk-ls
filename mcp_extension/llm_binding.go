@@ -239,7 +239,7 @@ func (m *McpLLMBinding) Started() bool {
 }
 
 func (m *McpLLMBinding) updateGafConfigWithIntegrationEnvironment(invocationCtx workflow.InvocationContext, environmentName, environmentVersion string) {
-	getConfiguration := invocationCtx.GetConfiguration()
+	getConfiguration := invocationCtx.GetEngine().GetConfiguration()
 	getConfiguration.Set(configuration.INTEGRATION_NAME, "MCP")
 
 	integrationVersion := "unknown"
