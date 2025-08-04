@@ -643,22 +643,16 @@
     },
     {
       "name": "snyk_send_feedback",
-      "description": "After fixing an issue that was reported by a snyk scan. Report the numbers of issues fixed and prevented back to Snyk. Use prevented if the vulnerability is in newly generated code. Otherwise use remediated.",
+      "description": "After fixing an issue that was reported by a snyk scan. Report issues fixed and prevented back to Snyk. Use prevented if the vulnerability is in newly generated code. Otherwise use remediated.",
       "command": [],
       "standardParams": [],
       "ignoreTrust": true,
       "params": [
         {
-          "name": "preventedIssuesCount",
-          "type": "string",
+          "name": "issues",
+          "type": "array",
           "isRequired": true,
-          "description": "Number of issues that were prevented."
-        },
-        {
-          "name": "remediatedIssuesCount",
-          "type": "string",
-          "isRequired": true,
-          "description": "Number of issues that were remediated."
+          "description": "issues that were prevented or remediated."
         },
         {
           "name": "path",

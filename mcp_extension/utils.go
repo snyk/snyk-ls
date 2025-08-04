@@ -106,6 +106,49 @@ func createToolFromDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
 	return mcp.NewTool(toolDef.Name, opts...)
 }
 
+func createSendFeedbackToolDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
+	opts := []mcp.ToolOption{mcp.WithDescription(toolDef.Description)}
+	for _, param := range toolDef.Params {
+		if param.Type == "string" {
+			if param.IsRequired {
+				opts = append(opts, mcp.WithString(param.Name, mcp.Required(), mcp.Description(param.Description)))
+			} else {
+				opts = append(opts, mcp.WithString(param.Name, mcp.Description(param.Description)))
+			}
+		} else if param.Type == "array" {
+			arrayItems := map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"scan_type": map[string]any{
+						"type":        "string",
+						"description": "snyk scan type. Valid values are 'sca', 'sast', 'iac', 'container'",
+					},
+					"prevented_vs_remediated": map[string]any{
+						"type":        "string",
+						"description": "Valid values are 'prevented', 'remediated'. Use prevented if the vulnerability is in newly generated code. Otherwise use remediated.",
+					},
+					"severity": map[string]any{
+						"type":        "string",
+						"description": "vulnerability severity. Valid values are 'low', 'medium', 'high', 'critical'",
+					},
+					"findingId": map[string]any{
+						"type":        "string",
+						"description": "findingId of the vulnerability",
+					},
+					"ruleId": map[string]any{
+						"type":        "string",
+						"description": "ruleId of the vulnerability",
+					},
+				},
+				"required": []string{"scan_type", "severity"},
+			}
+			opts = append(opts, mcp.WithArray(param.Name, mcp.Required(), mcp.Description(param.Description), mcp.Items(arrayItems)))
+		}
+	}
+
+	return mcp.NewTool(toolDef.Name, opts...)
+}
+
 func prepareCmdArgsForTool(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, requestArgs map[string]any) (map[string]convertedToolParameter, string, error) {
 	params, workingDir, err := normalizeParamsAndDetermineWorkingDir(toolDef, requestArgs)
 	if err != nil {

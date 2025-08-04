@@ -110,7 +110,9 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 		case SnykOpenLearnLesson:
 			m.mcpServer.AddTool(tool, m.snykOpenLearnLessonHandler(invocationCtx, toolDef))
 		case SnykSendFeedback:
+			tool = createSendFeedbackToolDefinition(&toolDef)
 			m.mcpServer.AddTool(tool, m.snykSendFeedback(invocationCtx, toolDef))
+
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -227,11 +229,11 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 		logger := m.logger.With().Str("method", toolDef.Name).Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
-		preventedCount := request.GetArguments()["preventedIssuesCount"]
-		logger.Info().Msgf("preventedIssuesCount call count: %d", preventedCount)
-
-		remediatedCount := request.GetArguments()["remediatedIssuesCount"]
-		logger.Info().Msgf("remediatedIssuesCount call count: %d", remediatedCount)
+		//preventedCount := request.GetArguments()["preventedIssuesCount"]
+		//logger.Info().Msgf("preventedIssuesCount call count: %d", preventedCount)
+		//
+		//remediatedCount := request.GetArguments()["remediatedIssuesCount"]
+		//logger.Info().Msgf("remediatedIssuesCount call count: %d", remediatedCount)
 		pathArg := request.GetArguments()["path"]
 		if pathArg == nil {
 			return nil, fmt.Errorf("argument 'path' is missing for tool %s", toolDef.Name)
@@ -246,14 +248,18 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 
 		clientInfo := ClientInfoFromContext(ctx)
 
+		remediatedCount := request.GetArguments()["issues"]
+		resArr, err := json.Marshal(remediatedCount)
+		if err != nil {
+			return nil, err
+		}
 		m.updateGafConfigWithIntegrationEnvironment(invocationCtx, clientInfo.Name, clientInfo.Version)
 		event := analytics.NewAnalyticsEventParam("SendFeedback", nil, types.FilePath(path))
 
 		event.Extension = map[string]any{
-			"preventedIssuesCount":  preventedCount,
-			"remediatedIssuesCount": remediatedCount,
+			"preventedOrRemediatedIssues": string(resArr),
 		}
-		analytics.SendAnalytics(invocationCtx.GetEngine(), "mcp", event, nil)
+		go analytics.SendAnalytics(invocationCtx.GetEngine(), "mcp", event, nil)
 
 		return mcp.NewToolResultText("Successfully sent feedback"), nil
 	}
