@@ -169,17 +169,11 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		limitToFiles := []types.FilePath{path1, path2}
 
-		analysisOptions := AnalysisOptions{
-			bundleHash:   bundleHash,
-			shardKey:     shardKey,
-			limitToFiles: limitToFiles,
-			severity:     0,
-		}
-		sarifResponse, callStatus, err := s.RunAnalysis(context.Background(), analysisOptions, workDir)
+		sarifResponse, callStatus, err := s.AnalyzeLegacy(context.Background(), bundleHash, shardKey, limitToFiles, 0)
 		if err != nil {
 			return false
 		}
-		if callStatus.message == "COMPLETE" {
+		if callStatus.Message == "COMPLETE" {
 			// Convert SARIF response to issues to test the conversion logic
 			converter := SarifConverter{sarif: sarifResponse, hoverVerbosity: c.HoverVerbosity(), logger: c.Logger()}
 			issues, convErr := converter.toIssues(workDir)
@@ -276,3 +270,4 @@ func TestGetCodeApiUrl(t *testing.T) {
 		assert.Equal(t, c.SnykCodeApi(), url)
 	})
 }
+

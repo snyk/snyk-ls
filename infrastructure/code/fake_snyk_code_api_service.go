@@ -240,14 +240,16 @@ func (f *FakeSnykCodeClient) ExtendBundle(ctx context.Context, bundleHash string
 }
 
 var successfulResult = AnalysisStatus{
-	message:    "COMPLETE",
-	percentage: 100,
+	Message:    "COMPLETE",
+	Percentage: 100,
 }
 
-func (f *FakeSnykCodeClient) RunAnalysis(
+func (f *FakeSnykCodeClient) AnalyzeLegacy(
 	_ context.Context,
-	options AnalysisOptions,
-	_ types.FilePath,
+	bundleHash string,
+	shardKey string,
+	limitToFiles []types.FilePath,
+	severity int,
 ) (codeClientSarif.SarifResponse, AnalysisStatus, error) {
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.currentConcurrentScans++
@@ -262,12 +264,18 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 
 	FakeSnykCodeApiServiceMutex.Lock()
 	f.currentConcurrentScans--
-	params := []any{options.bundleHash, options.limitToFiles, options.severity}
+	params := []any{bundleHash, limitToFiles, severity}
 	f.addCall(params, RunAnalysisOperation)
 	FakeSnykCodeApiServiceMutex.Unlock()
 
 	FakeSnykCodeApiServiceMutex.Lock()
-	f.Options[options.bundleHash] = options
+	options := AnalysisOptions{
+		bundleHash:   bundleHash,
+		shardKey:     shardKey,
+		limitToFiles: limitToFiles,
+		severity:     severity,
+	}
+	f.Options[bundleHash] = options
 	FakeSnykCodeApiServiceMutex.Unlock()
 
 	// Create a fake SARIF response with complete status and 100% progress
@@ -277,7 +285,7 @@ func (f *FakeSnykCodeClient) RunAnalysis(
 		Type:     "sarif",
 	}
 
-	f.C.Logger().Trace().Str("method", "RunAnalysis").Interface(
+	f.C.Logger().Trace().Str("method", "AnalyzeLegacy").Interface(
 		"fakeSarifResponse",
 		fakeSarifResponse,
 	).Msg("fake backend call received & answered")

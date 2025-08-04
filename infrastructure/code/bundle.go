@@ -72,12 +72,6 @@ func (b *Bundle) extendBundle(ctx context.Context, uploadBatch *UploadBatch) err
 	return err
 }
 
-func (b *Bundle) FetchDiagnosticsData(ctx context.Context, t *progress.Tracker) ([]types.Issue, error) {
-	defer b.logger.Debug().Str("method", "FetchDiagnosticsData").Msg("done.")
-	b.logger.Debug().Str("method", "FetchDiagnosticsData").Msg("started.")
-	return b.retrieveAnalysis(ctx, t)
-}
-
 func getIssueLangAndRuleId(issue types.Issue) (string, string, bool) {
 	logger := config.CurrentConfig().Logger().With().Str("method", "getIssueLangAndRuleId").Logger()
 	issueData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)

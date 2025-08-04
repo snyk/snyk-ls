@@ -24,13 +24,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type AnalysisOptions struct {
-	bundleHash   string
-	shardKey     string
-	limitToFiles []types.FilePath
-	severity     int
-}
-
 type SnykCodeClient interface {
 	GetFilters(ctx context.Context) (
 		filters FiltersResponse,

@@ -363,7 +363,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	testTracker := progress.NewTestTracker(channel, cancelChannel)
 
 	scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), fakeCodeScanner)
-	issues, _ := scanner.UploadAndAnalyzeWithIgnores(context.Background(), workDir, sliceToChannel(files), map[types.FilePath]bool{}, testTracker)
+	issues, _ := scanner.UploadAndAnalyze(context.Background(), workDir, sliceToChannel(files), map[types.FilePath]bool{}, testTracker)
 
 	assert.True(t, fakeCodeScanner.UploadAndAnalyzeWasCalled)
 	assert.False(t, issues[0].GetIsIgnored())

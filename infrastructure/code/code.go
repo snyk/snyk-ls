@@ -19,6 +19,7 @@ package code
 import (
 	"bytes"
 	"context"
+	"github.com/snyk/code-client-go/sarif"
 	"os"
 	"sync"
 	"time"
@@ -256,12 +257,8 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 	}
 
 	codeConsistentIgnoresEnabled := sc.C.Engine().GetConfiguration().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	results, err = sc.UploadAndAnalyze(ctx, folderPath, files, filesToBeScanned, codeConsistentIgnoresEnabled, t)
 
-	if codeConsistentIgnoresEnabled {
-		results, err = sc.UploadAndAnalyzeWithIgnores(ctx, folderPath, files, filesToBeScanned, t)
-	} else {
-		results, err = sc.UploadAndAnalyze(ctx, files, folderPath, filesToBeScanned, t)
-	}
 	return results, err
 }
 
@@ -363,77 +360,14 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.
 	return false
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, files <-chan string, path types.FilePath, changedFiles map[types.FilePath]bool, t *progress.Tracker) (issues []types.Issue, err error) {
-	if ctx.Err() != nil {
-		progress.Cancel(t.GetToken())
-		sc.C.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
-		return issues, nil
-	}
-
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
-	defer sc.BundleUploader.instrumentor.Finish(span)
-
-	requestId := span.GetTraceId() // use span trace id as code-request-id
-	sc.C.Logger().Info().Str("requestId", requestId).Msg("Starting Code analysis.")
-
-	bundle, err := sc.createBundle(span.Context(), requestId, path, files, changedFiles, t)
-
-	errorReporterOptions := codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: string(path)}
-
-	if err != nil {
-		if isNoFilesError(err) {
-			return issues, nil
-		}
-		if ctx.Err() == nil { // Only report errors that are not intentional cancellations
-			msg := "error creating bundle..."
-			sc.errorReporter.CaptureError(errors.Wrap(err, msg), errorReporterOptions)
-			return issues, err
-		} else {
-			progress.Cancel(t.GetToken())
-			sc.C.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
-			return issues, nil
-		}
-	}
-
-	uploadedBundle, err := sc.BundleUploader.Upload(span.Context(), bundle, t)
-	if err != nil {
-		if ctx.Err() == nil { // Only handle errors that are not intentional cancellations
-			msg := "error uploading files..."
-			sc.errorReporter.CaptureError(errors.Wrap(err, msg), errorReporterOptions)
-			return issues, err
-		} else {
-			sc.C.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
-			progress.Cancel(t.GetToken())
-			return issues, nil
-		}
-	}
-
-	if uploadedBundle.BundleHash == "" {
-		sc.C.Logger().Debug().Msg("empty bundle, no Snyk Code analysis")
-		return issues, nil
-	}
-
-	sc.bundleHashesMutex.Lock()
-	sc.bundleHashes[path] = uploadedBundle.BundleHash
-	sc.bundleHashesMutex.Unlock()
-
-	issues, err = uploadedBundle.FetchDiagnosticsData(span.Context(), t)
-	if ctx.Err() != nil || t.IsCanceled() {
-		progress.Cancel(t.GetToken())
-		sc.C.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
-		return []types.Issue{}, nil
-	}
-	return issues, err
-}
-
-func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path types.FilePath, files <-chan string, changedFiles map[types.FilePath]bool, t *progress.Tracker) (issues []types.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, files <-chan string, changedFiles map[types.FilePath]bool, codeConsistentIgnores bool, t *progress.Tracker) (issues []types.Issue, err error) {
 	if ctx.Err() != nil {
 		progress.Cancel(t.GetToken())
 		sc.C.Logger().Info().Msg("Canceling Code scanner received cancellation signal")
 		return issues, nil
 	}
 
-	logger := sc.C.Logger().With().Str("method", "code.UploadAndAnalyzeWithIgnores").Logger()
+	logger := sc.C.Logger().With().Str("method", "code.UploadAndAnalyze").Logger()
 	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
 	defer sc.BundleUploader.instrumentor.Finish(span)
 
@@ -452,12 +386,20 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path types.F
 		stringChangedFiles[string(k)] = v
 	}
 
-	sarif, bundleHash, err := sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, stringChangedFiles)
+	var sarifResponse *sarif.SarifResponse
+	var bundleHash string
+	if codeConsistentIgnores {
+		sarifResponse, bundleHash, err = sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, stringChangedFiles)
+	} else {
+		shardKey := getShardKey(path, sc.C.Token())
+		sarifResponse, bundleHash, err = sc.codeScanner.UploadAndAnalyzeLegacy(ctx, requestId, target, shardKey, files, stringChangedFiles)
+	}
+
 	if err != nil || ctx.Err() != nil {
 		return []types.Issue{}, err
 	}
 
-	if sarif == nil {
+	if sarifResponse == nil {
 		logger.Info().Str("requestId", requestId).Msg("Sarif is nil")
 		return []types.Issue{}, nil
 	}
@@ -466,7 +408,7 @@ func (sc *Scanner) UploadAndAnalyzeWithIgnores(ctx context.Context, path types.F
 	sc.bundleHashes[path] = bundleHash
 	sc.bundleHashesMutex.Unlock()
 
-	converter := SarifConverter{sarif: *sarif, logger: sc.C.Logger(), hoverVerbosity: sc.C.HoverVerbosity()}
+	converter := SarifConverter{sarif: *sarifResponse, logger: sc.C.Logger(), hoverVerbosity: sc.C.HoverVerbosity()}
 	issues, err = converter.toIssues(path)
 	if err != nil {
 		return []types.Issue{}, err

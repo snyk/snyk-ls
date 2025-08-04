@@ -197,14 +197,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 		})
 
 		test := func() error {
-			analysisOptions := AnalysisOptions{
-				bundleHash:   bundleHash,
-				shardKey:     "shardKey",
-				limitToFiles: []types.FilePath{"path/to/file1.go"},
-				severity:     0,
-			}
-
-			sarifResponse, _, err := client.RunAnalysis(context.Background(), analysisOptions, "")
+			sarifResponse, _, err := client.AnalyzeLegacy(context.Background(), bundleHash, "shardKey", []types.FilePath{"path/to/file1.go"}, 0)
 
 			if err != nil {
 				return err
