@@ -18,6 +18,7 @@ package mcp_extension
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -208,4 +209,10 @@ func verifyCommandArgument(command any) bool {
 	binaryName := filepath.Base(cmdStr)
 	isMatch := re.MatchString(binaryName)
 	return isMatch
+}
+
+func IsJSON(s string) bool {
+	var js map[string]interface{}
+	return json.Unmarshal([]byte(s), &js) == nil
+
 }

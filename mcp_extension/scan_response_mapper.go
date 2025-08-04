@@ -47,6 +47,7 @@ type IssueData struct {
 	Column      int                    `json:"column,omitempty"`
 	Message     string                 `json:"message,omitempty"`
 	LearnURL    string                 `json:"learnUrl,omitempty"`
+	FingerPrint string                 `json:"fingerPrint,omitempty"`
 }
 
 const (
@@ -65,7 +66,7 @@ type EnhancedScanResult struct {
 // mapScanResponse maps the scan output to an enhanced format for LLMs
 func mapScanResponse(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, workDir string, learnService learn.Service) string {
 	mapperFunc, ok := outputMapperMap[toolDef.OutputMapper]
-	if !ok {
+	if !ok || !IsJSON(output) {
 		return output
 	}
 
@@ -149,6 +150,7 @@ func convertIssueToData(issue types.Issue) IssueData {
 			data.RuleID = ad.RuleId
 			data.CWEs = ad.CWE
 			data.Dataflow = ad.DataFlow
+			data.FingerPrint = issue.GetFingerprint()
 		}
 	}
 

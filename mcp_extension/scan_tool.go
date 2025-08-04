@@ -197,14 +197,14 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return nil, err
 		}
 
-		output = m.enhanceOutput(&logger, toolDef, output, err == nil, params, workingDir)
+		output = m.enhanceOutput(&logger, toolDef, output, err == nil, workingDir)
 
 		return mcp.NewToolResultText(output), nil
 	}
 }
 
 // enhanceOutput enhances the scan output with structured issue data
-func (m *McpLLMBinding) enhanceOutput(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, params map[string]convertedToolParameter, workDir string) string {
+func (m *McpLLMBinding) enhanceOutput(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, workDir string) string {
 	return mapScanResponse(logger, toolDef, output, success, workDir, m.learnService)
 }
 
