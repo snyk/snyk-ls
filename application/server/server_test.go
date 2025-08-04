@@ -1172,29 +1172,36 @@ func Test_handleProtocolVersion(t *testing.T) {
 			reqProtocolVersion,
 		)
 
-		// Wait for notification and verify download URL
-		select {
-		case mrq := <-notificationReceived:
-			require.Contains(t, mrq.Message, "does not match")
+		// Wait for notification
+		var mrq *types.ShowMessageRequest
+		require.Eventually(t, func() bool {
+			select {
+			case receivedNotification := <-notificationReceived:
+				mrq = &receivedNotification
+				return true
+			default:
+				return false
+			}
+		}, 10*time.Second, 10*time.Millisecond, "no message sent via notifier")
+		require.NotNil(t, mrq, "expected message sent via notifier")
 
-			// Find the "Download manually in browser" action
-			var downloadAction *types.CommandData
-			for _, actionKey := range mrq.Actions.Keys() {
-				if actionData, ok := mrq.Actions.Get(actionKey); ok {
-					if actionData.Title == "Download manually in browser" {
-						downloadAction = &actionData
-						break
-					}
+		require.Contains(t, mrq.Message, "does not match")
+
+		// Find the "Download manually in browser" action
+		var downloadAction *types.CommandData
+		for _, actionKey := range mrq.Actions.Keys() {
+			if actionData, ok := mrq.Actions.Get(actionKey); ok {
+				if actionData.Title == "Download manually in browser" {
+					downloadAction = &actionData
+					break
 				}
 			}
-
-			require.NotNil(t, downloadAction, "\"Download manually in browser\" action not found")
-			require.Equal(t, types.OpenBrowserCommand, downloadAction.CommandId)
-			require.Len(t, downloadAction.Arguments, 1, "Expected exactly one argument (download URL)")
-			assert.Contains(t, downloadAction.Arguments[0].(string), "downloads.snyk.io/cli/v1.1296.2/", "Should be CLI download URL with version v1.1296.2 for protocol 18")
-		case <-time.After(10 * time.Second):
-			t.Fatal("No notification received within timeout")
 		}
+
+		require.NotNil(t, downloadAction, "\"Download manually in browser\" action not found")
+		require.Equal(t, types.OpenBrowserCommand, downloadAction.CommandId)
+		require.Len(t, downloadAction.Arguments, 1, "Expected exactly one argument (download URL)")
+		assert.Contains(t, downloadAction.Arguments[0].(string), "downloads.snyk.io/cli/v1.1296.2/", "Should be CLI download URL with version v1.1296.2 for protocol 18")
 	})
 
 	t.Run("required == current", func(t *testing.T) {
