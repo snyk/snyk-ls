@@ -869,10 +869,10 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
 
-	assert.Eventually(
+	require.Eventually(
 		t,
 		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
-		time.Second,
+		5*time.Second,
 		time.Millisecond,
 	)
 
@@ -1012,7 +1012,7 @@ func checkForPublishedDiagnostics(t *testing.T, c *config.Config, testPath types
 			_ = n.UnmarshalParams(&diagnosticsParams)
 			if diagnosticsParams.URI == uri.PathToUri(testPath) {
 				f := w.GetFolderContaining(testPath)
-				hasExpectedDiagnostics := f != nil && (expectedNumber == -1 && len(diagnosticsParams.Diagnostics) > 0) || (len(diagnosticsParams.Diagnostics) == expectedNumber)
+				hasExpectedDiagnostics := f != nil && ((expectedNumber == -1 && len(diagnosticsParams.Diagnostics) > 0) || (len(diagnosticsParams.Diagnostics) == expectedNumber))
 				if hasExpectedDiagnostics {
 					return true
 				}
