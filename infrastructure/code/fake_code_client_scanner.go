@@ -35,6 +35,11 @@ type FakeCodeScannerClient struct {
 	rootPath                  types.FilePath
 }
 
+func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(ctx context.Context, requestId string, target scan.Target, shardKey string, files <-chan string, changedFiles map[string]bool) (*codeClientSarif.SarifResponse, string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func getSarifResponseJson2(filePath string) string {
 	filePath = strings.ReplaceAll(filePath, `\`, `\\`)
 	return fmt.Sprintf(`{

@@ -144,6 +144,11 @@ type FakeSnykCodeClient struct {
 	FeedbackSent           string
 }
 
+func (f *FakeSnykCodeClient) RunAnalysis(ctx context.Context, options AnalysisOptions, baseDir types.FilePath) (codeClientSarif.SarifResponse, AnalysisStatus, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (f *FakeSnykCodeClient) addCall(params []any, op string) {
 	if f.Calls == nil {
 		f.Calls = make(map[string][][]any)
@@ -240,8 +245,8 @@ func (f *FakeSnykCodeClient) ExtendBundle(ctx context.Context, bundleHash string
 }
 
 var successfulResult = AnalysisStatus{
-	Message:    "COMPLETE",
-	Percentage: 100,
+	message:    "COMPLETE",
+	percentage: 100,
 }
 
 func (f *FakeSnykCodeClient) AnalyzeLegacy(
