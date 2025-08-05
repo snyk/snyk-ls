@@ -129,7 +129,30 @@ jobs:
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
           sudo apt-get install -y xsel xclip wl-clipboard
 
-          make clean test
+          make clean test &
+          make_id=$!
+          max_mem_usage=0
+          while kill -0 $make_id 2>/dev/null; do
+            echo "--- $(date) ---"
+            free -h
+
+            # Calculate current memory usage (RAM + swap in KiB)
+            current_mem=$(free | awk 'NR==2{ram_used=$3} NR==3{swap_used=$3} END{print ram_used+swap_used}')
+            if [ "$current_mem" -gt "$max_mem_usage" ]; then
+              max_mem_usage=$current_mem
+            fi
+            echo "Maximum memory usage so far: ${max_mem_usage} KiB ($(( (max_mem_usage + 524288) / 1048576 )) GiB rounded)"
+
+            sleep 5
+          done
+          echo "!!! DONE !!!"
+          echo "Maximum memory usage: ${max_mem_usage} KiB ($(( (max_mem_usage + 524288) / 1048576 )) GiB rounded)"
+          wait $make_id
+          exit_code=$?
+          echo "exit code: $exit_code"
+
+          echo "!!! EXITING !!!"
+          exit $exit_code
 
       - name: Run integration tests with Pact
         if: matrix.os == 'macos-latest'
