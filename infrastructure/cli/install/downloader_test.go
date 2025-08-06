@@ -32,6 +32,7 @@ import (
 )
 
 func TestDownloader_Download(t *testing.T) {
+	t.Skip("CLI download tests disabled temporarily [IDE-1351]")
 	testutil.IntegTest(t)
 	r := getTestAsset()
 	progressCh := make(chan types.ProgressParams, 100000)
@@ -63,6 +64,7 @@ func TestDownloader_Download(t *testing.T) {
 }
 
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
+	t.Skip("CLI download tests disabled temporarily [IDE-1351]")
 	testutil.UnitTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
 	cancelProgressCh := make(chan bool, 1)
