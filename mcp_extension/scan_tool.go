@@ -234,11 +234,17 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 		logger := m.logger.With().Str("method", toolDef.Name).Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
-		preventedCount := request.GetArguments()["preventedIssuesCount"]
-		logger.Info().Msgf("preventedIssuesCount call count: %d", preventedCount)
+		preventedCountStr := request.GetArguments()["preventedIssuesCount"]
+		remediatedCountStr := request.GetArguments()["remediatedIssuesCount"]
 
-		remediatedCount := request.GetArguments()["remediatedIssuesCount"]
-		logger.Info().Msgf("remediatedIssuesCount call count: %d", remediatedCount)
+		preventedCount, ok := preventedCountStr.(float64)
+		if !ok {
+			return nil, fmt.Errorf("invalid argument preventedIssuesCount")
+		}
+		remediatedCount, ok := remediatedCountStr.(float64)
+		if !ok {
+			return nil, fmt.Errorf("invalid argument remediatedCount")
+		}
 		pathArg := request.GetArguments()["path"]
 		if pathArg == nil {
 			return nil, fmt.Errorf("argument 'path' is missing for tool %s", toolDef.Name)
@@ -254,13 +260,13 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 		clientInfo := ClientInfoFromContext(ctx)
 
 		m.updateGafConfigWithIntegrationEnvironment(invocationCtx, clientInfo.Name, clientInfo.Version)
-		event := analytics.NewAnalyticsEventParam("SendFeedback", nil, types.FilePath(path))
+		event := analytics.NewAnalyticsEventParam("Send feedback", nil, types.FilePath(path))
 
 		event.Extension = map[string]any{
-			"preventedIssuesCount":  preventedCount,
-			"remediatedIssuesCount": remediatedCount,
+			"mcp::preventedIssuesCount":  int(preventedCount),
+			"mcp::remediatedIssuesCount": int(remediatedCount),
 		}
-		analytics.SendAnalytics(invocationCtx.GetEngine(), "mcp", event, nil)
+		go analytics.SendAnalytics(invocationCtx.GetEngine(), "", event, nil)
 
 		return mcp.NewToolResultText("Successfully sent feedback"), nil
 	}
