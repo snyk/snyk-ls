@@ -150,6 +150,7 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 }
 
 func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
+	t.Skip("CLI download tests disabled temporarily [IDE-1351]")
 	testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
 

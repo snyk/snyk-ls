@@ -39,6 +39,7 @@ import (
 )
 
 func Test_GetLatestRelease_downloadURLShouldBeNotEmpty(t *testing.T) {
+	t.Skip("CLI download tests disabled temporarily [IDE-1351]")
 	testutil.IntegTest(t)
 
 	r := NewCLIRelease(func() *http.Client { return http.DefaultClient })

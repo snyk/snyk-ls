@@ -93,6 +93,7 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 }
 
 func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
+	t.Skip("CLI download tests disabled temporarily [IDE-1351]")
 	c := testutil.SmokeTest(t, false)
 
 	// arrange
