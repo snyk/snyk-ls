@@ -40,6 +40,7 @@ func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.L
 		switch {
 		case strings.Contains(strings.ToLower(sdk.Type), "java"):
 			env["JAVA_HOME"] = path
+			pathExt = filepath.Dir(path)
 		case strings.Contains(strings.ToLower(sdk.Type), "python"):
 			pathExt = filepath.Dir(path)
 			additionalParameters = append(additionalParameters, "--command="+path)

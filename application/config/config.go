@@ -176,6 +176,7 @@ type Config struct {
 	defaultDirs                      []string
 	automaticAuthentication          bool
 	tokenChangeChannels              []chan string
+	prepareDefaultEnvChannel         chan bool
 	filterSeverity                   types.SeverityFilter
 	issueViewOptions                 types.IssueViewOptions
 	trustedFolders                   []types.FilePath
@@ -335,12 +336,8 @@ func getNewScrubbingLogger(c *Config) *zerolog.Logger {
 	return &logger
 }
 
-func (c *Config) AddBinaryLocationsToPath(searchDirectories []string) {
-	c.m.Lock()
+func (c *Config) addBinaryLocationsToPath(searchDirectories []string) {
 	c.defaultDirs = searchDirectories
-	c.m.Unlock()
-	c.determineJavaHome()
-	c.mavenDefaults()
 }
 
 func (c *Config) determineDeviceId() string {
@@ -499,6 +496,10 @@ func (c *Config) TokenChangesChannel() <-chan string {
 	channel := make(chan string, 1)
 	c.tokenChangeChannels = append(c.tokenChangeChannels, channel)
 	return channel
+}
+
+func (c *Config) PrepareDefaultEnvChannel() <-chan bool {
+	return c.prepareDefaultEnvChannel
 }
 
 func (c *Config) SetCliSettings(settings *CliSettings) {
@@ -890,14 +891,33 @@ func (c *Config) SetAutomaticScanning(value bool) {
 }
 
 func (c *Config) addDefaults() {
-	if //goland:noinspection GoBoolExpressions
-	runtime.GOOS != windows {
-		envvars.UpdatePath("/usr/local/bin", false)
-		envvars.UpdatePath("/bin", false)
-		envvars.UpdatePath(xdg.Home+"/bin", false)
-	}
-	c.determineJavaHome()
-	c.mavenDefaults()
+	go func() {
+		envvars.LoadConfiguredEnvironment(nil, "")
+		//goland:noinspection GoBoolExpressions
+		if runtime.GOOS == "windows" {
+			c.defaultDirs = []string{
+				"C:\\Program Files",
+				"C:\\Program Files (x86)",
+			}
+		} else {
+			envvars.UpdatePath("/usr/local/bin", false)
+			envvars.UpdatePath("/bin", false)
+			envvars.UpdatePath(xdg.Home+"/bin", false)
+			c.defaultDirs =
+				[]string{
+					filepath.Join(xdg.Home, ".sdkman"),
+					"/usr/lib",
+					"/usr/java",
+					"/usr/local/bin",
+					"/opt/homebrew/bin",
+					"/opt",
+					"/Library",
+				}
+		}
+		c.determineJavaHome()
+		c.mavenDefaults()
+		c.prepareDefaultEnvChannel <- true
+	}()
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {
