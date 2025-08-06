@@ -263,9 +263,7 @@ func newConfig(engine workflow.Engine) *Config {
 		c.engine = engine
 	}
 	gafConfig := c.engine.GetConfiguration()
-	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue interface{}) (interface{}, error) {
-		return true, nil
-	})
+	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
 	gafConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	gafConfig.Set("configfile", c.configFile)
 	c.deviceId = c.determineDeviceId()

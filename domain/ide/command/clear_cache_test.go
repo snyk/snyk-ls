@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,7 +48,7 @@ func Test_ClearCache_DeleteAll_NoError(t *testing.T) {
 	clearCacheCommand := setupClearCacheCommand(t, "", "", c)
 
 	// Execute the command
-	_, err := clearCacheCommand.Execute(context.Background())
+	_, err := clearCacheCommand.Execute(t.Context())
 
 	// Assert
 	assert.NoError(t, err)

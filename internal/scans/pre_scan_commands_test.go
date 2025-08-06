@@ -17,7 +17,6 @@
 package scans
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -38,7 +37,7 @@ func TestPreScanCommand_ExecutePreScanCommand(t *testing.T) {
 	require.NoError(t, err)
 	cut := NewPreScanCommand(conf, types.FilePath(dir), "/bin/ls", &logger)
 
-	err = cut.ExecutePreScanCommand(context.Background())
+	err = cut.ExecutePreScanCommand(t.Context())
 
 	require.NoError(t, err)
 }

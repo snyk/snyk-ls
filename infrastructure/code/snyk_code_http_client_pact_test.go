@@ -17,7 +17,6 @@
 package code
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -81,7 +80,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 		test := func() error {
 			files := make(map[types.FilePath]string)
 			files[path1] = util.Hash([]byte(content))
-			bundleHash, missingFiles, err := client.CreateBundle(context.Background(), files)
+			bundleHash, missingFiles, err := client.CreateBundle(t.Context(), files)
 
 			if err != nil {
 				return err
@@ -122,7 +121,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 		test := func() error {
 			files := make(map[types.FilePath]string)
 			files[path1] = util.Hash([]byte(content))
-			_, _, err := client.CreateBundle(context.Background(), files)
+			_, _, err := client.CreateBundle(t.Context(), files)
 
 			if err != nil {
 				return nil
@@ -158,7 +157,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 			filesExtend := createTestExtendMap()
 			var removedFiles []types.FilePath
 
-			extendedBundleHash, missingFiles, err := client.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
+			extendedBundleHash, missingFiles, err := client.ExtendBundle(t.Context(), bundleHash, filesExtend, removedFiles)
 
 			if err != nil {
 				return err
@@ -204,7 +203,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 				severity:     0,
 			}
 
-			issues, _, err := client.RunAnalysis(context.Background(), analysisOptions, "")
+			issues, _, err := client.RunAnalysis(t.Context(), analysisOptions, "")
 
 			if err != nil {
 				return err
@@ -243,7 +242,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 		})
 
 		test := func() error {
-			if _, err := client.GetFilters(context.Background()); err != nil {
+			if _, err := client.GetFilters(t.Context()); err != nil {
 				return err
 			}
 
@@ -320,7 +319,7 @@ func TestSnykCodeBackendServicePact_LocalCodeEngine(t *testing.T) {
 	})
 
 	test := func() error {
-		if _, err := client.GetFilters(context.Background()); err != nil {
+		if _, err := client.GetFilters(t.Context()); err != nil {
 			return err
 		}
 		return nil
