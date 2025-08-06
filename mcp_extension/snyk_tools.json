@@ -650,13 +650,13 @@
       "params": [
         {
           "name": "preventedIssuesCount",
-          "type": "string",
+          "type": "number",
           "isRequired": true,
           "description": "Number of issues that were prevented."
         },
         {
           "name": "remediatedIssuesCount",
-          "type": "string",
+          "type": "number",
           "isRequired": true,
           "description": "Number of issues that were remediated."
         },

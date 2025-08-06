@@ -100,6 +100,12 @@ func createToolFromDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
 			} else {
 				opts = append(opts, mcp.WithBoolean(param.Name, mcp.Description(param.Description)))
 			}
+		} else if param.Type == "number" {
+			if param.IsRequired {
+				opts = append(opts, mcp.WithNumber(param.Name, mcp.Required(), mcp.Description(param.Description)))
+			} else {
+				opts = append(opts, mcp.WithNumber(param.Name, mcp.Description(param.Description)))
+			}
 		}
 	}
 
