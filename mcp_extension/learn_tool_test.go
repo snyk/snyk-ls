@@ -17,7 +17,6 @@
 package mcp_extension
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -76,7 +75,7 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 			"ecosystem": "javascript",
 		})
 
-		result, err := handler(context.Background(), request)
+		result, err := handler(t.Context(), request)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -126,7 +125,7 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 			"ecosystem": "javascript",
 		})
 
-		result, err := handler(context.Background(), request)
+		result, err := handler(t.Context(), request)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -175,7 +174,7 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 			"ecosystem": "javascript",
 		})
 
-		result, err := handler(context.Background(), request)
+		result, err := handler(t.Context(), request)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -225,7 +224,7 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 			"issueType": "sca",
 		})
 
-		result, err := handler(context.Background(), request)
+		result, err := handler(t.Context(), request)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -267,7 +266,7 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 			"issueType": "sca",
 		})
 
-		result, err := handler(context.Background(), request)
+		result, err := handler(t.Context(), request)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -312,7 +311,7 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 			"cwes":      "CWE-89,CWE-601",
 		})
 
-		result, err := handler(context.Background(), request)
+		result, err := handler(t.Context(), request)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -351,7 +350,7 @@ func TestSnykOpenLearnLessonHandler(t *testing.T) {
 			"ecosystem": "javascript",
 		})
 
-		result, err := handler(context.Background(), request)
+		result, err := handler(t.Context(), request)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -420,7 +419,7 @@ func testBasicLearnLessonHandler(t *testing.T, args map[string]interface{}, test
 	handler := mcpBinding.snykOpenLearnLessonHandler(nil, toolDef)
 
 	request := createMockRequest(args)
-	result, err := handler(context.Background(), request)
+	result, err := handler(t.Context(), request)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)

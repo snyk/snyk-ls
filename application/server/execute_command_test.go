@@ -90,8 +90,8 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	c.Workspace().AddFolder(dontClear)
 
 	// prepare pre-existent diagnostics for folder
-	folder.ScanFolder(context.Background())
-	dontClear.ScanFolder(context.Background())
+	folder.ScanFolder(t.Context())
+	dontClear.ScanFolder(t.Context())
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -304,7 +304,7 @@ func Test_ExecuteCommand_CancelRequest(t *testing.T) {
 
 	var cmdDone atomic.Bool
 	go func() {
-		cmdResponse, err := loc.Client.Call(context.Background(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		cmdResponse, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command: testCmd.Command().CommandId,
 		})
 		assert.NoError(t, err)
@@ -320,7 +320,7 @@ func Test_ExecuteCommand_CancelRequest(t *testing.T) {
 
 	// Command ID should always be 1 (as a number!), as it is the first command we run on the fake test server.
 	cancelParams := sglsp.CancelParams{ID: sglsp.ID{Num: 1, IsString: false}}
-	err := loc.Client.Notify(context.Background(), "$/cancelRequest", cancelParams)
+	err := loc.Client.Notify(t.Context(), "$/cancelRequest", cancelParams)
 	require.NoError(t, err, "Failed to send $/cancelRequest notification")
 
 	assert.Eventually(t, func() bool {

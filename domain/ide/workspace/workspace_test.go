@@ -17,7 +17,6 @@
 package workspace
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -69,7 +68,7 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	untrustedFolder := NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator)
 	w.AddFolder(untrustedFolder)
 
-	w.TrustFoldersAndScan(context.Background(), []types.Folder{trustedFolder})
+	w.TrustFoldersAndScan(t.Context(), []types.Folder{trustedFolder})
 
 	assert.Contains(t, c.TrustedFolders(), trustedFolder.path)
 	assert.NotContains(t, c.TrustedFolders(), untrustedFolder.path)

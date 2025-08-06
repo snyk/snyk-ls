@@ -17,7 +17,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -90,9 +89,9 @@ func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenS
 	lspClient := srv.Client
 	jsonRpcRecorder.ClearCallbacks()
 
-	_, err := lspClient.Call(context.Background(), "initialize", clientParams)
+	_, err := lspClient.Call(t.Context(), "initialize", clientParams)
 	require.NoError(t, err)
-	_, err = lspClient.Call(context.Background(), "initialized", nil)
+	_, err = lspClient.Call(t.Context(), "initialized", nil)
 	require.NoError(t, err)
 
 	assert.Eventuallyf(t, func() bool {

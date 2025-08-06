@@ -27,10 +27,15 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - name: Determine Go version
+        run: |
+          sed -En 's/^go[[:space:]]+([[:digit:].]+)$/GO_VERSION=\1/p' go.mod >> $GITHUB_ENV
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "^1.23.0"
+          go-version: ${{ env.GO_VERSION }}
+          cache: "true"
 
       - name: Lint source code
         run: |
@@ -46,10 +51,15 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - name: Determine Go version
+        run: |
+          sed -En 's/^go[[:space:]]+([[:digit:].]+)$/GO_VERSION=\1/p' go.mod >> $GITHUB_ENV
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "^1.23.0"
+          go-version: ${{ env.GO_VERSION }}
+          cache: "true"
 
       - name: Set up Snyk CLI
         uses: snyk/actions/setup@master
@@ -95,10 +105,15 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - name: Determine Go version
+        run: |
+          sed -En 's/^go[[:space:]]+([[:digit:].]+)$/GO_VERSION=\1/p' go.mod >> $GITHUB_ENV
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "^1.23.6"
+          go-version: ${{ env.GO_VERSION }}
+          cache: "true"
 
       - name: Cache Pact CLI tools
         if: matrix.os != 'windows-latest'
@@ -216,10 +231,15 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
 
+      - name: Determine Go version
+        run: |
+          sed -En 's/^go[[:space:]]+([[:digit:].]+)$/GO_VERSION=\1/p' go.mod >> $GITHUB_ENV
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "^1.23.6"
+          go-version: ${{ env.GO_VERSION }}
+          cache: "true"
 
       - name: update licenses
         run: |
@@ -250,7 +270,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "^1.23.6"
+          go-version: ${{ env.GO_VERSION }}
+          cache: "true"
 
       - name: Create License Report
         id: create_license_report
