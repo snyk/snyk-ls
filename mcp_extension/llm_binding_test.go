@@ -16,7 +16,6 @@
 package mcp_extension
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -174,7 +173,7 @@ func TestStarted(t *testing.T) {
 func TestShutdown(t *testing.T) {
 	t.Run("handles shutdown with no SSE server", func(t *testing.T) {
 		binding := NewMcpLLMBinding()
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Should not panic or error when no SSE server exists
 		binding.Shutdown(ctx)
@@ -188,7 +187,7 @@ func TestShutdown(t *testing.T) {
 		mcpServer := server.NewMCPServer("test", "1.0.0")
 		binding.sseServer = server.NewSSEServer(mcpServer)
 
-		ctx := context.Background()
+		ctx := t.Context()
 		binding.Shutdown(ctx)
 
 		// Verify the shutdown was attempted
