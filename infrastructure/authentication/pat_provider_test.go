@@ -17,7 +17,6 @@
 package authentication
 
 import (
-	"context"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -56,7 +55,7 @@ func TestPatAuthenticationProvider_AuthURL(t *testing.T) {
 				authURL: tt.expectedUrl,
 				logger:  &zerolog.Logger{},
 			}
-			assert.Equalf(t, tt.expectedUrl, p.AuthURL(context.Background()), "AuthURL(context.Background())")
+			assert.Equalf(t, tt.expectedUrl, p.AuthURL(t.Context()), "AuthURL(context.Background())")
 		})
 	}
 }
@@ -80,7 +79,7 @@ func TestPatAuthenticationProvider_Authenticate(t *testing.T) {
 		logger:          &zerolog.Logger{},
 	}
 
-	got, err := p.Authenticate(context.Background())
+	got, err := p.Authenticate(t.Context())
 	assert.NoError(t, err)
 	assert.Equal(t, "", got, "Authenticate() returns blank token string")
 	assert.Equal(t, expectedUrl, urlPassedToBrowserFunction, "Authenticate() calls browser function")
@@ -101,7 +100,7 @@ func TestPatAuthenticationProvider_ClearAuthentication(t *testing.T) {
 	assert.NotEmpty(t, p.config.Get(configuration.AUTHENTICATION_TOKEN))
 	assert.NotEmpty(t, p.config.Get(configuration.AUTHENTICATION_BEARER_TOKEN))
 
-	err := p.ClearAuthentication(context.Background())
+	err := p.ClearAuthentication(t.Context())
 	assert.NoError(t, err)
 	assert.Empty(t, p.config.Get(auth.CONFIG_KEY_OAUTH_TOKEN))
 	assert.Empty(t, p.config.Get(configuration.AUTHENTICATION_TOKEN))
@@ -123,10 +122,10 @@ func TestPatAuthenticationProvider_setAuthUrl(t *testing.T) {
 	p := &PatAuthenticationProvider{
 		logger: &zerolog.Logger{},
 	}
-	assert.Empty(t, p.AuthURL(context.Background()))
+	assert.Empty(t, p.AuthURL(t.Context()))
 
 	p.setAuthUrl("https://test.snyk.test")
-	assert.Equal(t, "https://test.snyk.test", p.AuthURL(context.Background()))
+	assert.Equal(t, "https://test.snyk.test", p.AuthURL(t.Context()))
 }
 
 func Test_newPatAuthenticationProvider(t *testing.T) {
@@ -145,5 +144,5 @@ func Test_newPatAuthenticationProvider(t *testing.T) {
 
 	assert.Equal(t, p.config, mockConfiguration)
 	assert.Equal(t, testUrl, urlPassedToBrowserFunction)
-	assert.Empty(t, p.AuthURL(context.Background()))
+	assert.Empty(t, p.AuthURL(t.Context()))
 }
