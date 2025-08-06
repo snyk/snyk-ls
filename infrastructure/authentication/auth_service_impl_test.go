@@ -53,7 +53,7 @@ func runAuthEventTest(t *testing.T, c *config.Config, status analytics.Status) e
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, status == analytics.Success).(*fakeOauthAuthenticator)
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-
+	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
 		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
 		mock.MatchedBy(func(i interface{}) bool {
