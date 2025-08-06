@@ -113,7 +113,9 @@ func PayloadForAnalyticsEventParam(engine workflow.Engine, deviceId string, para
 	ic.SetType("analytics")
 	ic.SetInteractionId(iid)
 	ic.SetStage("dev")
-	ic.AddExtension("device_id", deviceId)
+	if len(deviceId) > 0 {
+		ic.AddExtension("device_id", deviceId)
+	}
 	for s, a := range param.Extension {
 		ic.AddExtension(s, a)
 	}
