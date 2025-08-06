@@ -24,10 +24,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -112,6 +114,8 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykOpenLearnLessonHandler(invocationCtx, toolDef))
 		case SnykSendFeedback:
 			m.mcpServer.AddTool(tool, m.snykSendFeedback(invocationCtx, toolDef))
+		case SnykAuthStatus:
+			m.mcpServer.AddTool(tool, m.snykAuthStatusHandler(invocationCtx, toolDef))
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -219,10 +223,15 @@ func (m *McpLLMBinding) enhanceOutput(logger *zerolog.Logger, toolDef SnykMcpToo
 	return mapScanResponse(logger, toolDef, output, success, workDir, m.learnService)
 }
 
-func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "snykLogoutHandler").Logger()
-		logger.Debug().Str("toolName", "snyk_logout").Msg("Received call for tool")
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+
+		if os.Getenv("SNYK_TOKEN") != "" {
+			return mcp.NewToolResultText("SNYK_TOKEN env var is set, skipping logout"), nil
+		}
+
 		// Special handling for logout which needs multiple commands
 		params := []string{m.cliPath, "config", "unset", "INTERNAL_OAUTH_TOKEN_STORAGE"}
 		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
@@ -231,6 +240,25 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
 
 		return mcp.NewToolResultText("Successfully logged out"), nil
+	}
+}
+
+func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := m.logger.With().Str("method", "snykAuthStatusHandler").Logger()
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+		params := []string{m.cliPath, "whoami", "--experimental"}
+		output, _ := m.runSnyk(ctx, invocationCtx, "", params)
+
+		output = strings.TrimSpace(output)
+		apiUrl := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.API_URL)
+		org := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.ORGANIZATION)
+
+		if strings.Contains(strings.ToLower(output), "error") {
+			return mcp.NewToolResultText(fmt.Sprintf("%s\nUsing API Endpoint: %s", output, apiUrl)), nil
+		}
+
+		return mcp.NewToolResultText(fmt.Sprintf("User: %s Using API Endpoint: %s and Org: %s", output, apiUrl, org)), nil
 	}
 }
 

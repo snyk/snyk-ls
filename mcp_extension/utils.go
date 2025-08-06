@@ -218,6 +218,7 @@ func verifyCommandArgument(command any) bool {
 }
 
 func IsJSON(s string) bool {
-	var js map[string]interface{}
-	return json.Unmarshal([]byte(s), &js) == nil
+	var js interface{}
+	err := json.Unmarshal([]byte(s), &js)
+	return err == nil
 }
