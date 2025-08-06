@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -171,6 +172,10 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 		if len(toolDef.Command) == 0 {
 			return nil, fmt.Errorf("empty command in tool definition for %s", toolDef.Name)
+		}
+
+		if toolDef.Name == SnykAuth && os.Getenv("SNYK_TOKEN") != "" {
+			return mcp.NewToolResultText("SNYK_TOKEN env var is set, assuming the token is valid"), nil
 		}
 
 		requestArgs := request.GetArguments()
