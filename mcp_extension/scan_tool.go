@@ -132,7 +132,14 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	}
 
 	m.updateGafConfigWithIntegrationEnvironment(invocationCtx, clientInfo.Name, clientInfo.Version)
-	command.Env = m.expandedEnv(invocationCtx, clientInfo.Name, clientInfo.Version)
+
+	integrationVersion := "unknown"
+	runtimeInfo := invocationCtx.GetRuntimeInfo()
+	if runtimeInfo != nil {
+		integrationVersion = runtimeInfo.GetVersion()
+	}
+
+	command.Env = m.expandedEnv(integrationVersion, clientInfo.Name, clientInfo.Version)
 
 	logger.Debug().Strs("args", command.Args).Str("workingDir", command.Dir).Msg("Running Command with")
 	logger.Trace().Strs("env", command.Env).Msg("Environment")

@@ -252,7 +252,7 @@ func (m *McpLLMBinding) updateGafConfigWithIntegrationEnvironment(invocationCtx 
 	getConfiguration.Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, environmentVersion)
 }
 
-func (m *McpLLMBinding) expandedEnv(invocationCtx workflow.InvocationContext, environmentName, environmentVersion string) []string {
+func (m *McpLLMBinding) expandedEnv(integrationVersion, environmentName, environmentVersion string) []string {
 	environ := os.Environ()
 	var expandedEnv = []string{}
 	for _, v := range environ {
@@ -265,12 +265,6 @@ func (m *McpLLMBinding) expandedEnv(invocationCtx workflow.InvocationContext, en
 		expandedEnv = append(expandedEnv, v)
 	}
 	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_NAME), "MCP"))
-
-	integrationVersion := "unknown"
-	runtimeInfo := invocationCtx.GetRuntimeInfo()
-	if runtimeInfo != nil {
-		integrationVersion = runtimeInfo.GetVersion()
-	}
 
 	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_VERSION), integrationVersion))
 	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT), environmentName))
