@@ -17,7 +17,6 @@
 package workspace
 
 import (
-	"context"
 	"errors"
 	"path/filepath"
 	"sync"
@@ -66,7 +65,7 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 
 	assert.Equal(t, 0, hoverRecorder.Calls())
 }
@@ -86,8 +85,8 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.ScanFolder(context.Background())
-	f.ProcessResults(context.Background(), data)
+	f.ScanFolder(t.Context())
+	f.ProcessResults(t.Context(), data)
 
 	assert.Equal(t, 2, f.documentDiagnosticCache.Size())
 	assert.NotNil(t, GetValueFromMap(f.documentDiagnosticCache, path1))
@@ -110,7 +109,7 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 
 	assert.Equal(t, 1, len(f.Issues()))
 	assert.Len(t, f.IssuesForFile(filePath), 2)
@@ -133,7 +132,7 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 
 	assert.Len(t, f.Issues(), 3)
 	assert.Len(t, f.IssuesForFile(path1), 1)
@@ -156,7 +155,7 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 
 	assert.Len(t, f.Issues(), 1)
 	issuesForFile := f.IssuesForFile(path1)
@@ -189,7 +188,7 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 
 	assert.Len(t, f.Issues(), 2)
 	issuesForFile := f.IssuesForFile(path1)
@@ -218,7 +217,7 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 
 	mtx := &sync.Mutex{}
 	var diagnostics []types.Diagnostic
@@ -274,7 +273,7 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 	config.CurrentConfig().Engine().SetConfiguration(mockConfiguration)
 	mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true)
 
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 
 	mtx := &sync.Mutex{}
 	var diagnostics []types.Diagnostic
@@ -318,7 +317,7 @@ func Test_Clear(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 	mtx := &sync.Mutex{}
 	clearDiagnosticNotifications := 0
 
@@ -439,7 +438,7 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 	}
 
 	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	c.SetSeverityFilter(util.Ptr(types.NewSeverityFilter(true, true, false, false)))
 
@@ -494,7 +493,7 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 	}
 
 	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ctrl := gomock.NewController(t)
 	mockConfiguration := mocks.NewMockConfiguration(ctrl)
@@ -532,7 +531,7 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 	const expectedIssuesCountAfterRemoval = 1
 
 	// Act
@@ -566,7 +565,7 @@ func Test_processResults_ShouldSendSuccess(t *testing.T) {
 		SendAnalytics:     true,
 	}
 	// Act
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 
 	// Assert
 	assert.Len(t, scanNotifier.SuccessCalls(), 1)
@@ -589,7 +588,7 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 		SendAnalytics:     true,
 		Err:               errors.New("test error"),
 	} // Act
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 
 	// Assert
 	assert.Empty(t, scanNotifier.SuccessCalls())
@@ -655,7 +654,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Act
-	f.ProcessResults(context.Background(), data)
+	f.ProcessResults(t.Context(), data)
 	maxWaitTime := 10 * time.Second
 
 	select {
@@ -690,7 +689,7 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 			require.Contains(t, payload, "scan_type")
 		})
 
-	ctx := context2.NewContextWithScanSource(context2.NewContextWithDeltaScanType(context.Background(), context2.WorkingDirectory), context2.LLM)
+	ctx := context2.NewContextWithScanSource(context2.NewContextWithDeltaScanType(t.Context(), context2.WorkingDirectory), context2.LLM)
 
 	// Act
 	f.ProcessResults(ctx, scanData)
@@ -724,7 +723,7 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 		Times(1)
 
 	// Act
-	f.ProcessResults(context.Background(), scanData)
+	f.ProcessResults(t.Context(), scanData)
 
 	// Assert
 	require.NotEmpty(t, scanData.GetSeverityIssueCounts())

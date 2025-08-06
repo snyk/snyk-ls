@@ -115,7 +115,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	}
 
 	params := types.DidChangeConfigurationParams{Settings: types.Settings{}}
-	_, err = loc.Client.Call(context.Background(), "workspace/didChangeConfiguration", params)
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
 	}
@@ -149,7 +149,7 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 
 	params := types.DidChangeConfigurationParams{Settings: types.Settings{}}
 	var updated = true
-	err := loc.Client.CallResult(context.Background(), "workspace/didChangeConfiguration", params, &updated)
+	err := loc.Client.CallResult(t.Context(), "workspace/didChangeConfiguration", params, &updated)
 	if err != nil {
 		t.Fatal(err, "error calling server")
 	}

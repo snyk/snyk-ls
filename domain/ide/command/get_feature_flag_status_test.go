@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,7 +42,7 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	featureFlagStatusCmd := setupFeatureFlagCommand(t, c, fakeApiClient)
 
 	// Execute the command
-	result, err := featureFlagStatusCmd.Execute(context.Background())
+	result, err := featureFlagStatusCmd.Execute(t.Context())
 
 	// Assert
 	assert.NoError(t, err)

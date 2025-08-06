@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -48,7 +47,7 @@ func Test_getActiveUser_Execute_User_found(t *testing.T) {
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any())
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return(expectedUserData, nil)
 
-	actualUser, err := cmd.Execute(context.Background())
+	actualUser, err := cmd.Execute(t.Context())
 
 	assert.NoErrorf(t, err, "cmd.Execute() error = %v", err)
 	assert.Equal(t, expectedUser, actualUser)
@@ -82,7 +81,7 @@ func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any())
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return([]workflow.Data{}, nil)
 
-	actualUser, err := cmd.Execute(context.Background())
+	actualUser, err := cmd.Execute(t.Context())
 
 	assert.Errorf(t, err, "cmd.Execute() error = %v", err)
 	assert.Empty(t, actualUser)
@@ -98,7 +97,7 @@ func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
 	testError := errors.New("test error")
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return([]workflow.Data{}, testError)
 
-	actualUser, err := cmd.Execute(context.Background())
+	actualUser, err := cmd.Execute(t.Context())
 
 	assert.Errorf(t, err, "cmd.Execute() error = %v", err)
 	assert.Empty(t, actualUser)

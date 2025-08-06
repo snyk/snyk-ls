@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,7 +32,7 @@ func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 		},
 	}
 
-	_, err := codeFixFeedbackCmd.Execute(context.Background())
+	_, err := codeFixFeedbackCmd.Execute(t.Context())
 
 	assert.NoError(t, err)
 }
