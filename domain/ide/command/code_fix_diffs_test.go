@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"runtime"
 	"testing"
 
@@ -78,7 +77,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 			Arguments: []any{issue.ID},
 		}
 
-		suggestions, err := cut.Execute(context.Background())
+		suggestions, err := cut.Execute(t.Context())
 
 		// Code fix diffs command doesn't return suggestions anymore
 		// TODO: handle getting the suggestions
@@ -92,7 +91,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 			Arguments: []any{},
 		}
 
-		suggestions, err := cut.Execute(context.Background())
+		suggestions, err := cut.Execute(t.Context())
 
 		require.Emptyf(t, suggestions, "suggestions should be empty")
 		require.Error(t, err)

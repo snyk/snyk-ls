@@ -17,7 +17,6 @@
 package storage
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -122,7 +121,7 @@ func Test_ParallelFileLocking(t *testing.T) {
 			go func(count int) {
 				cut, _ := NewStorageWithCallbacks(WithStorageFile(file))
 
-				lockErr := cut.Lock(context.Background(), time.Millisecond)
+				lockErr := cut.Lock(t.Context(), time.Millisecond)
 				require.NoError(t, lockErr)
 				defer func() {
 					unlockErr := cut.Unlock()
