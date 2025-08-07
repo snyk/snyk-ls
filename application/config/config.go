@@ -1235,7 +1235,7 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	var folderConfig *types.FolderConfig
 	var err error
-	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, nil)
+	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
 	if err != nil {
 		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
