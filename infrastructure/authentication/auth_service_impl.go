@@ -133,7 +133,7 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 	event.Extension = map[string]any{
 		"auth::auth-type": string(a.c.AuthenticationMethod()),
 	}
-	analytics2.SendAnalytics(a.c, event, nil)
+	analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), event, nil)
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {

@@ -679,6 +679,7 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 
 	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
+	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
 		Times(1).
 		Do(func(id workflow.Identifier, data []workflow.Data, config configuration.Configuration) {
@@ -719,6 +720,7 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
+	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
 		Times(1)
 

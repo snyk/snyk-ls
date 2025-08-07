@@ -431,5 +431,5 @@ func sendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, n
 		"config::" + field + "::oldValue": oldValue,
 		"config::" + field + "::newValue": newValue,
 	}
-	analytics.SendAnalytics(c, event, nil)
+	analytics.SendAnalytics(c.Engine(), c.DeviceID(), event, nil)
 }

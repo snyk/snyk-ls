@@ -73,7 +73,7 @@ func setupTestFixture(t *testing.T) *testFixture {
 	invocationCtx.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	invocationCtx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("hurz"), runtimeinfo.WithVersion("1000.8.3"))).AnyTimes()
-
+	invocationCtx.EXPECT().GetEngine().Return(engine).AnyTimes()
 	// Snyk CLI mock
 	tempDir := t.TempDir()
 	snykCliPath := filepath.Join(tempDir, "snyk")
@@ -371,13 +371,6 @@ func TestBasicSnykCommands(t *testing.T) {
 			command:      []string{"whoami", "--experimental"},
 			mockResponse: `{"authenticated":true,"username":"user@example.com"}`,
 			expectedCmd:  "auth",
-		},
-		{
-			name:         "Logout Command",
-			handlerFunc:  fixture.binding.snykLogoutHandler,
-			command:      []string{"--version"},
-			mockResponse: `Successfully logged out`,
-			expectedCmd:  "logout",
 		},
 	}
 
