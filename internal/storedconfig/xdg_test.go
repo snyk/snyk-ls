@@ -22,8 +22,10 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func TestConfigFile(t *testing.T) {
@@ -37,8 +39,9 @@ func TestConfigFile(t *testing.T) {
 
 func Test_folderConfigFromFallbackStorage_never_nil_and_added_to_config(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	logger := zerolog.New(zerolog.NewTestWriter(t))
 
-	folderConfig, err := folderConfigFromStorage(conf, "testPath", nil)
+	folderConfig, err := folderConfigFromStorage(conf, "testPath", &logger)
 
 	require.NoError(t, err)
 	require.NotNil(t, folderConfig)
