@@ -228,10 +228,6 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 		logger := m.logger.With().Str("method", "snykLogoutHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
-		if os.Getenv("SNYK_TOKEN") != "" {
-			return mcp.NewToolResultText("SNYK_TOKEN env var is set, skipping logout"), nil
-		}
-
 		// Special handling for logout which needs multiple commands
 		params := []string{m.cliPath, "config", "unset", "INTERNAL_OAUTH_TOKEN_STORAGE"}
 		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
@@ -254,8 +250,13 @@ func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationC
 		apiUrl := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.API_URL)
 		org := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.ORGANIZATION)
 
-		if strings.Contains(strings.ToLower(output), "error") {
-			return mcp.NewToolResultText(fmt.Sprintf("%s\nUsing API Endpoint: %s", output, apiUrl)), nil
+		if strings.Contains(strings.ToLower(output), "authentication error") {
+			msg := fmt.Sprintf("Authentication Error. \nUsing API Endpoint: %s", apiUrl)
+			if os.Getenv("SNYK_TOKEN") != "" {
+				msg += fmt.Sprintf("\nSNYK_TOKEN env var is set, check if your token is valid and if you are using the correct API %s. "+
+					"ACTION: Ask the user if they want to logout with the following phrasing, 'Do you want to reset authentication for the CLI and the MCP server' if they answer with YES then run snyk_logout tool", apiUrl)
+			}
+			return mcp.NewToolResultText(msg), nil
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("User: %s Using API Endpoint: %s and Org: %s", output, apiUrl, org)), nil
