@@ -392,7 +392,23 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 		sarifResponse, bundleHash, err = sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, stringChangedFiles)
 	} else {
 		shardKey := getShardKey(path, sc.C.Token())
-		sarifResponse, bundleHash, err = sc.codeScanner.UploadAndAnalyzeLegacy(ctx, requestId, target, shardKey, files, stringChangedFiles)
+
+		//
+		statusChannel := make(chan scan.LegacyScanStatus)
+
+		go func() {
+			for {
+				status := <-statusChannel
+				if status.ScanStopped {
+					t.ReportWithMessage(90, status.Message)
+					break
+				} else {
+					t.ReportWithMessage(status.Percentage, status.Message)
+				}
+			}
+		}()
+
+		sarifResponse, bundleHash, err = sc.codeScanner.UploadAndAnalyzeLegacy(ctx, requestId, target, shardKey, files, stringChangedFiles, statusChannel)
 	}
 
 	if err != nil || ctx.Err() != nil {
