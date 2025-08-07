@@ -140,7 +140,7 @@ func LocalRepoHasChanges(conf configuration.Configuration, logger *zerolog.Logge
 		return false, err
 	}
 
-	branchName := GetBaseBranchName(conf, repoPath)
+	branchName := GetBaseBranchName(conf, repoPath, logger)
 
 	currentRepoBranch, err := currentRepo.Head()
 	if err != nil {

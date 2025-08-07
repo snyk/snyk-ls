@@ -24,8 +24,10 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storage"
@@ -68,9 +70,11 @@ func Test_GetOrCreateFolderConfig_shouldIntegrateGitBranchInformation(t *testing
 
 	conf, _ := SetupConfigurationWithStorage(t)
 
-	actual, err := GetOrCreateFolderConfig(conf, repo, nil)
-
+	// Act
+	actual, err := GetOrCreateFolderConfig(conf, repo, &logger)
 	require.NoError(t, err)
+
+	// Verify we got branches
 	require.Greater(t, len(actual.LocalBranches), 0)
 }
 
@@ -96,213 +100,97 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 		},
 	}
 
-	nop := zerolog.Nop()
-	err := UpdateFolderConfig(conf, expected, &nop)
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	err := UpdateFolderConfig(conf, expected, &logger)
 	require.NoError(t, err)
-	actual, err := GetOrCreateFolderConfig(conf, path, nil)
+
+	// Act
+	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
 	require.NoError(t, err)
+
+	// Verify the stored config is what we tried to write.
 	require.Equal(t, expected, actual)
 }
 
 func Test_GetOrCreateFolderConfig_shouldReturnLocalBranchesEvenWithoutBaseBranch(t *testing.T) {
-	// Create a temporary directory for the test repo
+	// Create a temporary test Git repository with an initial commit and branches
+	branches := []string{"feature-branch", "develop"}
 	tempDir := t.TempDir()
+	initializeTestGitRepo(t, tempDir, branches)
 
-	// Initialize a new git repo
-	cmd := exec.Command("git", "init")
-	cmd.Dir = tempDir
-	err := cmd.Run()
-	require.NoError(t, err)
+	conf, _ := SetupConfigurationWithStorage(t)
 
-	// Configure git user for commits (required on Windows and CI)
-	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = tempDir
-	err = cmd.Run()
-	require.NoError(t, err)
-
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = tempDir
-	err = cmd.Run()
-	require.NoError(t, err)
-
-	// Create and commit a file
-	testFile := filepath.Join(tempDir, "test.txt")
-	err = os.WriteFile(testFile, []byte("test content"), 0644)
-	require.NoError(t, err)
-
-	cmd = exec.Command("git", "add", ".")
-	cmd.Dir = tempDir
-	err = cmd.Run()
-	require.NoError(t, err)
-
-	cmd = exec.Command("git", "commit", "-m", "initial commit")
-	cmd.Dir = tempDir
-	err = cmd.Run()
-	require.NoError(t, err)
-
-	// Create branches that are neither main nor master
-	cmd = exec.Command("git", "checkout", "-b", "feature-branch")
-	cmd.Dir = tempDir
-	err = cmd.Run()
-	require.NoError(t, err)
-
-	cmd = exec.Command("git", "checkout", "-b", "develop")
-	cmd.Dir = tempDir
-	err = cmd.Run()
-	require.NoError(t, err)
-
-	// Delete main and master branches if they exist
-	cmd = exec.Command("git", "branch", "-D", "main")
-	cmd.Dir = tempDir
-	_ = cmd.Run() // Ignore error if branch doesn't exist
-
-	cmd = exec.Command("git", "branch", "-D", "master")
-	cmd.Dir = tempDir
-	_ = cmd.Run() // Ignore error if branch doesn't exist
+	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	// Test GetOrCreateFolderConfig
-	conf, _ := SetupConfigurationWithStorage(t)
-	logger := zerolog.Nop()
-
 	folderConfig, err := GetOrCreateFolderConfig(conf, types.FilePath(tempDir), &logger)
 
 	// Should not return an error
 	require.NoError(t, err)
 	require.NotNil(t, folderConfig)
 
-	// Should have local branches from git
-	require.NotEmpty(t, folderConfig.LocalBranches)
-	require.Contains(t, folderConfig.LocalBranches, "feature-branch")
-	require.Contains(t, folderConfig.LocalBranches, "develop")
+	// Should have local branches from Git
+	assert.ElementsMatch(t, branches, folderConfig.LocalBranches)
 
 	// Base branch should be empty since we couldn't determine it
-	require.Empty(t, folderConfig.BaseBranch)
+	assert.Empty(t, folderConfig.BaseBranch)
 }
 
-func Test_mergeFolderConfigs(t *testing.T) {
-	t.Run("different folder paths should return first", func(t *testing.T) {
-		first := &types.FolderConfig{
-			FolderPath:           "/path1",
-			AdditionalParameters: []string{"--param1=value1"},
-			LocalBranches:        []string{"branch1"},
-			BaseBranch:           "main",
-		}
+func Test_GetOrCreateFolderConfig_GitLocalBranchesTakePriorityOverStoredConfig(t *testing.T) {
+	// Create a temporary test Git repository with an initial commit and branches
+	tempDir := t.TempDir()
+	gitBranches := []string{"main", "git-feature", "git-develop"}
+	initializeTestGitRepo(t, tempDir, gitBranches)
 
-		second := &types.FolderConfig{
-			FolderPath:           "/path2",
-			AdditionalParameters: []string{"--param2=value2"},
-			LocalBranches:        []string{"branch2"},
-			BaseBranch:           "develop",
-		}
+	// Create a stored config with outdated branch info
+	conf, _ := SetupConfigurationWithStorage(t)
+	storedConfig := &types.FolderConfig{
+		FolderPath:    types.FilePath(tempDir),
+		LocalBranches: []string{"old-main", "old-feature"},
+		BaseBranch:    "old-main",
+	}
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	err := UpdateFolderConfig(conf, storedConfig, &logger)
+	require.NoError(t, err)
 
-		result := mergeFolderConfigs(first, second)
+	// Act
+	folderConfig, err := GetOrCreateFolderConfig(conf, types.FilePath(tempDir), &logger)
+	require.NoError(t, err)
+	require.NotNil(t, folderConfig)
 
-		require.Equal(t, first, result)
-		require.Equal(t, 1, len(result.AdditionalParameters))
-		require.Equal(t, "--param1=value1", result.AdditionalParameters[0])
-		require.Equal(t, 1, len(result.LocalBranches))
-		require.Equal(t, "main", result.BaseBranch)
-	})
-	t.Run("same folder paths with complete merging", func(t *testing.T) {
-		scanCommandConfig1 := types.ScanCommandConfig{
-			PreScanCommand: "/cmd1",
-		}
+	// Git local branches should take priority - we should get fresh branches from Git
+	assert.ElementsMatch(t, gitBranches, folderConfig.LocalBranches)
+}
 
-		scanCommandConfig2 := types.ScanCommandConfig{
-			PreScanCommand: "/cmd2",
-		}
+func Test_GetOrCreateFolderConfig_StoredConfigBaseBranchNotOverwrittenByGit(t *testing.T) {
+	// Create a temporary test Git repository with an initial commit and main branch
+	tempDir := t.TempDir()
+	initializeTestGitRepo(t, tempDir, []string{"main"})
 
-		first := &types.FolderConfig{
-			FolderPath:           "/path1",
-			AdditionalParameters: []string{"--param1=value1"},
-			LocalBranches:        nil,
-			BaseBranch:           "",
-			ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
-				product.ProductOpenSource: scanCommandConfig1,
-			},
-			ReferenceFolderPath: "",
-		}
+	// Set a specific default branch in Git config
+	cmd := exec.Command("git", "config", "init.defaultBranch", "git-default-branch")
+	cmd.Dir = tempDir
+	err := cmd.Run()
+	require.NoError(t, err)
 
-		second := &types.FolderConfig{
-			FolderPath:           "/path1",
-			AdditionalParameters: []string{"--param2=value2"},
-			LocalBranches:        []string{"branch2"},
-			BaseBranch:           "develop",
-			ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
-				product.ProductOpenSource: scanCommandConfig2,
-			},
-			ReferenceFolderPath: "/ref/path",
-		}
+	// Create stored config with a different base branch than Git default
+	conf, _ := SetupConfigurationWithStorage(t)
+	storedBaseBranch := "some-stored-base-branch"
+	storedConfig := &types.FolderConfig{
+		FolderPath: types.FilePath(tempDir),
+		BaseBranch: storedBaseBranch,
+	}
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	err = UpdateFolderConfig(conf, storedConfig, &logger)
+	require.NoError(t, err)
 
-		result := mergeFolderConfigs(first, second)
+	// Act
+	folderConfig, err := GetOrCreateFolderConfig(conf, types.FilePath(tempDir), &logger)
+	require.NoError(t, err)
+	require.NotNil(t, folderConfig)
 
-		// Check that it's still the first object (modified)
-		require.Equal(t, first, result)
-
-		// Check additional parameters are merged
-		require.Equal(t, 2, len(result.AdditionalParameters))
-		require.Contains(t, result.AdditionalParameters, "--param1=value1")
-		require.Contains(t, result.AdditionalParameters, "--param2=value2")
-
-		// Check other fields are taken from second
-		require.Equal(t, second.LocalBranches, result.LocalBranches)
-		require.Equal(t, second.BaseBranch, result.BaseBranch)
-		require.Equal(t, second.ScanCommandConfig, result.ScanCommandConfig)
-		require.Equal(t, second.ReferenceFolderPath, result.ReferenceFolderPath)
-	})
-	t.Run("parameter deduplication", func(t *testing.T) {
-		first := &types.FolderConfig{
-			FolderPath:           "/path1",
-			AdditionalParameters: []string{"--param1=value1", "--param2=valueA"},
-		}
-
-		second := &types.FolderConfig{
-			FolderPath:           "/path1",
-			AdditionalParameters: []string{"--param2=valueB", "--param3=value3"},
-		}
-
-		result := mergeFolderConfigs(first, second)
-
-		// Should have 3 parameters (param2 from second should be ignored)
-		require.Equal(t, 3, len(result.AdditionalParameters))
-		require.Contains(t, result.AdditionalParameters, "--param1=value1")
-		require.Contains(t, result.AdditionalParameters, "--param2=valueA") // first takes precedence
-		require.Contains(t, result.AdditionalParameters, "--param3=value3")
-	})
-	t.Run("partial merging", func(t *testing.T) {
-		scanCommandConfig1 := types.ScanCommandConfig{
-			PreScanCommand: "/cmd1",
-		}
-
-		first := &types.FolderConfig{
-			FolderPath:           "/path1",
-			AdditionalParameters: []string{"--param1=value1"},
-			LocalBranches:        []string{"branch1"},
-			BaseBranch:           "main",
-			ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
-				product.ProductOpenSource: scanCommandConfig1,
-			},
-			ReferenceFolderPath: "/ref/path1",
-		}
-
-		second := &types.FolderConfig{
-			FolderPath:           "/path1",
-			AdditionalParameters: []string{"--param2=value2"},
-			LocalBranches:        nil, // nil, should not replace
-			BaseBranch:           "",  // empty, should not replace
-			ScanCommandConfig:    nil, // nil, should not replace
-			ReferenceFolderPath:  "",  // empty, should not replace
-		}
-
-		result := mergeFolderConfigs(first, second)
-
-		// Check that fields from second didn't overwrite first when they were nil/empty
-		require.Equal(t, 2, len(result.AdditionalParameters)) // Additional params still merge
-		require.Equal(t, first.LocalBranches, result.LocalBranches)
-		require.Equal(t, first.BaseBranch, result.BaseBranch)
-		require.Equal(t, first.ScanCommandConfig, result.ScanCommandConfig)
-		require.Equal(t, first.ReferenceFolderPath, result.ReferenceFolderPath)
-	})
+	// Stored config base branch should be preserved, not overwritten by Git default
+	assert.Equal(t, storedBaseBranch, folderConfig.BaseBranch)
 }
 
 func SetupConfigurationWithStorage(t *testing.T) (configuration.Configuration, string) {
