@@ -17,15 +17,11 @@
 package di
 
 import (
-	"path/filepath"
-	"runtime"
 	"sync"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/types"
-
-	"github.com/adrg/xdg"
 
 	codeClient "github.com/snyk/code-client-go"
 	codeClientHTTP "github.com/snyk/code-client-go/http"
@@ -98,25 +94,6 @@ func initDomain(c *config.Config) {
 }
 
 func initInfrastructure(c *config.Config) {
-	//goland:noinspection GoBoolExpressions
-	if runtime.GOOS == "windows" {
-		go c.AddBinaryLocationsToPath([]string{
-			"C:\\Program Files",
-			"C:\\Program Files (x86)",
-		})
-	} else {
-		go c.AddBinaryLocationsToPath(
-			[]string{
-				filepath.Join(xdg.Home, ".sdkman"),
-				"/usr/lib",
-				"/usr/java",
-				"/usr/local/bin",
-				"/opt/homebrew/bin",
-				"/opt",
-				"/Library",
-			})
-	}
-
 	engine := c.Engine()
 	gafConfiguration := engine.GetConfiguration()
 	// init NetworkAccess

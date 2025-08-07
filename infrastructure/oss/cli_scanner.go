@@ -276,6 +276,8 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
+	<-cliScanner.config.PrepareDefaultEnvChannel()
+
 	cmd := cliScanner.cli.ExpandParametersFromConfig([]string{
 		cliScanner.config.CliSettings().Path(),
 		"test",
