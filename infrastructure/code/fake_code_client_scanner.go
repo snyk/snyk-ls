@@ -35,11 +35,6 @@ type FakeCodeScannerClient struct {
 	rootPath                  types.FilePath
 }
 
-func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(ctx context.Context, requestId string, target scan.Target, shardKey string, files <-chan string, changedFiles map[string]bool, status chan scan.LegacyScanStatus) (*codeClientSarif.SarifResponse, string, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func getSarifResponseJson2(filePath string) string {
 	filePath = strings.ReplaceAll(filePath, `\`, `\\`)
 	return fmt.Sprintf(`{
@@ -392,9 +387,13 @@ func getSarifResponseJson2(filePath string) string {
 `, filePath, filePath, filePath, filePath, filePath)
 }
 
-func (f *FakeCodeScannerClient) UploadAndAnalyze(_ context.Context, _ string, _ scan.Target,
+func (f *FakeCodeScannerClient) UploadAndAnalyze(
+	_ context.Context,
+	_ string,
+	_ scan.Target,
 	files <-chan string,
-	_ map[string]bool) (*codeClientSarif.SarifResponse, string, error) {
+	_ map[string]bool
+) (*codeClientSarif.SarifResponse, string, error) {
 	var analysisResponse codeClientSarif.SarifResponse
 	responseJson := getSarifResponseJson2(filepath.Base(<-files))
 	err := json.Unmarshal([]byte(responseJson), &analysisResponse)
@@ -411,3 +410,16 @@ func (f *FakeCodeScannerClient) Upload(
 ) (bundle.Bundle, error) {
 	panic("Not implemented")
 }
+
+func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(
+	ctx context.Context,
+	requestId string,
+	target scan.Target,
+	shardKey string,
+	files <-chan string,
+	changedFiles map[string]bool,
+	status chan scan.LegacyScanStatus
+) (*codeClientSarif.SarifResponse, string, error) {
+	return f.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)
+}
+
