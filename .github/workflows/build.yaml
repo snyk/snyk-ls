@@ -18,8 +18,8 @@ on:
   pull_request:
 
 jobs:
-  lint:
-    name: lint
+  lint-and-generate:
+    name: lint and generate
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
@@ -37,13 +37,21 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: "true"
 
+      - name: Install tools
+        run: make tools
+
+      - name: Run go generate commands
+        run: make generate
+
+      - name: Verify generated files match committed versions
+        run: git status --porcelain=v1 | tee /dev/stderr | wc -l | grep -qE '^ *0 *$'
+
       - name: Lint source code
-        run: |
-          make tools lint
+        run: make lint
 
   unit-tests:
     name: unit tests
-    needs: [lint]
+    needs: [lint-and-generate]
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
@@ -94,7 +102,7 @@ jobs:
 
   integration-tests:
     name: integration-tests
-    needs: [lint]
+    needs: [lint-and-generate]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -175,7 +183,7 @@ jobs:
 
   proxy-test:
     name: proxy-test
-    needs: [lint]
+    needs: [lint-and-generate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -188,7 +196,7 @@ jobs:
 
   race-tests:
     name: race-test
-    needs: [lint]
+    needs: [lint-and-generate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -256,7 +264,7 @@ jobs:
           push: true
   test-release:
     name: test-release
-    needs: [lint, unit-tests]
+    needs: [lint-and-generate, unit-tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
