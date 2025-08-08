@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	learn "github.com/snyk/snyk-ls/infrastructure/learn"
 	types "github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -35,10 +36,10 @@ func (m *MockService) EXPECT() *MockServiceMockRecorder {
 }
 
 // GetAllLessons mocks base method.
-func (m *MockService) GetAllLessons() ([]Lesson, error) {
+func (m *MockService) GetAllLessons() ([]learn.Lesson, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAllLessons")
-	ret0, _ := ret[0].([]Lesson)
+	ret0, _ := ret[0].([]learn.Lesson)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -50,10 +51,10 @@ func (mr *MockServiceMockRecorder) GetAllLessons() *gomock.Call {
 }
 
 // GetLesson mocks base method.
-func (m *MockService) GetLesson(ecosystem, rule string, cwes, cves []string, issueType types.IssueType) (*Lesson, error) {
+func (m *MockService) GetLesson(ecosystem, rule string, cwes, cves []string, issueType types.IssueType) (*learn.Lesson, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLesson", ecosystem, rule, cwes, cves, issueType)
-	ret0, _ := ret[0].(*Lesson)
+	ret0, _ := ret[0].(*learn.Lesson)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

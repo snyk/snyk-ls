@@ -38,7 +38,7 @@ TIMEOUT := "-timeout=45m"
 
 ## tools: Install required tooling.
 .PHONY: tools
-tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact $(TOOLS_BIN)/mockgen
+tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
 	@echo "Please make sure to install NPM locally to be able to run analytics verification Ampli."
 
 $(TOOLS_BIN)/go-licenses:
@@ -50,10 +50,6 @@ $(TOOLS_BIN)/golangci-lint:
 
 $(TOOLS_BIN)/pact/bin/pact:
 	cd $(TOOLS_BIN); curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/v$(PACT_V)/install.sh | PACT_CLI_VERSION=v$(PACT_V) bash
-
-$(TOOLS_BIN)/mockgen:
-	@echo "==> Installing mockgen"
-	@GOBIN=$(TOOLS_BIN) go install github.com/golang/mock/mockgen@v1.6.0
 
 ## clean: Delete the build directory
 .PHONY: clean

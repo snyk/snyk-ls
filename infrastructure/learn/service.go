@@ -31,7 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-//go:generate $GOPATH/bin/mockgen -source=service.go -destination=mock_learn/service_mock.go -package=mock_learn -self_package=github.com/snyk/snyk-ls/infrastructure/learn
+//go:generate go run github.com/golang/mock/mockgen -source=service.go -destination=mock_learn/service_mock.go -package=mock_learn -imports=learn=github.com/snyk/snyk-ls/infrastructure/learn
 
 type Service interface {
 	LearnEndpoint() (learnEndpoint string, err error)
