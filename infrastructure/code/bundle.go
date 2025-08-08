@@ -18,10 +18,7 @@ package code
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog"
 
@@ -29,7 +26,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -90,75 +86,4 @@ func getIssueLangAndRuleId(issue types.Issue) (string, string, bool) {
 
 	logger.Trace().Str("file", string(issue.GetAffectedFilePath())).Int("line", issue.GetRange().Start.Line).Msg("Issue data does not contain RuleID")
 	return "", "", false
-}
-
-func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]types.Issue, error) {
-	logger := b.logger.With().Str("method", "retrieveAnalysis").Str("requestId", b.requestId).Logger()
-
-	if b.BundleHash == "" {
-		logger.Warn().Str("rootPath", string(b.rootPath)).Msg("bundle hash is empty")
-		return []types.Issue{}, nil
-	}
-
-	method := "code.retrieveAnalysis"
-	s := b.instrumentor.StartSpan(ctx, method)
-	defer b.instrumentor.Finish(s)
-
-	t.ReportWithMessage(40, string("Snyk Code analysis for "+b.rootPath+", Retrieving results..."))
-
-	c := b.issueEnhancer.c
-	analysisOptions := AnalysisOptions{
-		bundleHash:   b.BundleHash,
-		shardKey:     getShardKey(b.rootPath, c.Token()),
-		limitToFiles: b.limitToFiles,
-		severity:     0,
-	}
-
-	start := time.Now()
-	for {
-		if ctx.Err() != nil || t.IsCanceled() { // Cancellation requested
-			progress.Cancel(t.GetToken())
-			return []types.Issue{}, nil
-		}
-		sarifResponse, status, err := b.SnykCode.RunAnalysis(s.Context(), analysisOptions, b.rootPath)
-
-		if err != nil {
-			logger.Error().Err(err).
-				Int("fileCount", len(b.UploadBatches)).
-				Msg("error retrieving diagnostics...")
-			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: string(b.rootPath)})
-			t.ReportWithMessage(90, fmt.Sprintf("Analysis failed: %v", err))
-			return []types.Issue{}, err
-		}
-
-		if status.message == completeStatus {
-			logger.Trace().Msg("sending diagnostics...")
-			t.ReportWithMessage(90, "Analysis complete.")
-
-			// Convert SARIF response to issues
-			converter := SarifConverter{sarif: sarifResponse, hoverVerbosity: c.HoverVerbosity(), logger: b.logger}
-			issues, err := converter.toIssues(b.rootPath)
-			if err != nil {
-				logger.Error().Err(err).Msg("error converting SARIF to issues")
-				b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: string(b.rootPath)})
-				return []types.Issue{}, err
-			}
-
-			b.issueEnhancer.addIssueActions(ctx, issues)
-
-			return issues, nil
-		} else if status.message == "ANALYZING" {
-			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
-		}
-
-		if time.Since(start) > c.SnykCodeAnalysisTimeout() {
-			err := errors.New("analysis call timed out")
-			b.logger.Error().Err(err).Msg("timeout...")
-			b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: string(b.rootPath)})
-			t.ReportWithMessage(90, "Snyk Code Analysis timed out")
-			return []types.Issue{}, err
-		}
-		time.Sleep(1 * time.Second)
-		t.Report(status.percentage)
-	}
 }

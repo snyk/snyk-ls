@@ -19,11 +19,12 @@ package code
 import (
 	"bytes"
 	"context"
-	"github.com/snyk/code-client-go/sarif"
 	"os"
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/snyk/code-client-go/sarif"
 
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
@@ -393,18 +394,12 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 	} else {
 		shardKey := getShardKey(path, sc.C.Token())
 
-		//
+		// We listen for updates from the codeScanner on a channel. The codeScanner will close the channel
 		statusChannel := make(chan scan.LegacyScanStatus)
 
 		go func() {
-			for {
-				status := <-statusChannel
-				if status.ScanStopped {
-					t.ReportWithMessage(90, status.Message)
-					break
-				} else {
-					t.ReportWithMessage(status.Percentage, status.Message)
-				}
+			for status := range statusChannel {
+				t.ReportWithMessage(status.Percentage, status.Message)
 			}
 		}()
 
