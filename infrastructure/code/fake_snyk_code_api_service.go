@@ -17,20 +17,15 @@
 package code
 
 import (
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
-
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -90,8 +85,6 @@ var (
 		Title:   "FakeAction",
 		Command: &FakeCommand,
 	}
-
-	FakeFilters = []string{".cjs", ".ejs", ".es", ".es6", ".htm", ".html", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue", ".java", ".erb", ".haml", ".rb", ".rhtml", ".slim", ".kt", ".swift", ".cls", ".config", ".pom", ".wxs", ".xml", ".xsd", ".aspx", ".cs", ".py", ".go", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".php", ".phtml"}
 )
 
 func TempWorkdirWithIssues(t *testing.T) (types.FilePath, types.FilePath) {
@@ -119,92 +112,4 @@ func TempWorkdirWithIssues(t *testing.T) (types.FilePath, types.FilePath) {
 	}
 	FakeIssue.AffectedFilePath = types.FilePath(filePath)
 	return types.FilePath(filePath), types.FilePath(folderPath)
-}
-
-type FakeSnykCodeClient struct {
-	Calls                  map[string][][]any
-	HasCreatedNewBundle    bool
-	HasExtendedBundle      bool
-	ExtendBundleFiles      map[types.FilePath]BundleFile
-	TotalBundleCount       int
-	ExtendedBundleCount    int
-	AnalysisDuration       time.Duration
-	FailOnCreateBundle     bool
-	ConfigFiles            []string
-	currentConcurrentScans int
-	maxConcurrentScans     int
-	NoFixSuggestions       bool
-	UnifiedDiffSuggestions []AutofixUnifiedDiffSuggestion
-	Options                map[string]AnalysisOptions
-	C                      *config.Config
-	FeedbackSent           string
-}
-
-func (f *FakeSnykCodeClient) RunAnalysis(ctx context.Context, options AnalysisOptions, baseDir types.FilePath) (codeClientSarif.SarifResponse, AnalysisStatus, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (f *FakeSnykCodeClient) addCall(params []any, op string) {
-	if f.Calls == nil {
-		f.Calls = make(map[string][][]any)
-	}
-	calls := f.Calls[op]
-	var opParams []any
-	opParams = append(opParams, params...)
-	f.Calls[op] = append(calls, opParams)
-}
-
-func (f *FakeSnykCodeClient) WasCalled(op string) bool {
-	FakeSnykCodeApiServiceMutex.Lock()
-	defer FakeSnykCodeApiServiceMutex.Unlock()
-	_, called := f.Calls[op]
-	return called
-}
-
-func (f *FakeSnykCodeClient) GetCallParams(callNo int, op string) []any {
-	FakeSnykCodeApiServiceMutex.Lock()
-	defer FakeSnykCodeApiServiceMutex.Unlock()
-	calls := f.Calls[op]
-	if calls == nil {
-		return nil
-	}
-	params := calls[callNo]
-	if params == nil {
-		return nil
-	}
-	return params
-}
-
-func (f *FakeSnykCodeClient) Clear() {
-	FakeSnykCodeApiServiceMutex.Lock()
-	defer FakeSnykCodeApiServiceMutex.Unlock()
-	f.ExtendedBundleCount = 0
-	f.TotalBundleCount = 0
-	f.HasExtendedBundle = false
-}
-
-func (f *FakeSnykCodeClient) GetAllCalls(op string) [][]any {
-	FakeSnykCodeApiServiceMutex.Lock()
-	defer FakeSnykCodeApiServiceMutex.Unlock()
-	calls := f.Calls[op]
-	if calls == nil {
-		return nil
-	}
-	return calls
-}
-
-func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (
-	filters FiltersResponse,
-	err error,
-) {
-	FakeSnykCodeApiServiceMutex.Lock()
-	defer FakeSnykCodeApiServiceMutex.Unlock()
-	params := []any{filters.ConfigFiles,
-		filters.Extensions,
-		err}
-	f.addCall(params, GetFiltersOperation)
-	return FiltersResponse{ConfigFiles: f.ConfigFiles,
-		Extensions: FakeFilters,
-	}, nil
 }

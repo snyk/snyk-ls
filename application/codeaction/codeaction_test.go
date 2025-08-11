@@ -91,7 +91,6 @@ func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 }
 
 func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
-	c := testutil.UnitTest(t)
 	// It doesn't seem like there's a difference between returning a nil and returning an empty array. If this assumption
 	// is proved to be false, this test can be changed.
 	// Arrange
@@ -99,9 +98,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	var issues []types.Issue
 	providerMock := mock_snyk.NewMockIssueProvider(ctrl)
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return(issues)
-	fakeClient := &code.FakeSnykCodeClient{C: c}
-	snykCodeClient := fakeClient
-	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier())
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: documentUriExample,
@@ -216,9 +213,7 @@ func setupService(t *testing.T) *codeaction.CodeActionsService {
 	t.Helper()
 	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return([]types.Issue{}).AnyTimes()
-	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
-	snykCodeClient := fakeClient
-	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier())
 	return service
 }
 
@@ -231,9 +226,7 @@ func setupWithSingleIssue(t *testing.T, issue types.Issue) (*codeaction.CodeActi
 	issues := []types.Issue{issue}
 	providerMock.EXPECT().IssuesForRange(path, converter.FromRange(r)).Return(issues).AnyTimes()
 	fileWatcher := watcher.NewFileWatcher()
-	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
-	snykCodeClient := fakeClient
-	service := codeaction.NewService(config.CurrentConfig(), providerMock, fileWatcher, notification.NewMockNotifier(), snykCodeClient)
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, fileWatcher, notification.NewMockNotifier())
 
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{

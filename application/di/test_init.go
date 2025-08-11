@@ -73,8 +73,7 @@ func TestInit(t *testing.T) {
 		cliInitializer,
 		authInitializer,
 	)
-	fakeClient := &code.FakeSnykCodeClient{C: c}
-	snykCodeClient = fakeClient
+
 	codeInstrumentor = code.NewCodeInstrumentor()
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
 	// mock Learn Service
@@ -100,10 +99,5 @@ func TestInit(t *testing.T) {
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
-	t.Cleanup(
-		func() {
-			fakeClient.Clear()
-		},
-	)
+	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier)
 }

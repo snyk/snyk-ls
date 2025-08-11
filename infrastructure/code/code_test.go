@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
@@ -46,7 +45,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/internal/vcs"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
@@ -100,11 +98,10 @@ func sliceToChannel(slice []string) <-chan string {
 	return ch
 }
 
-func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
+func setupTestScanner(t *testing.T) *Scanner {
 	t.Helper()
 	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
-	snykCodeMock := &FakeSnykCodeClient{C: c}
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	engineConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
@@ -118,7 +115,7 @@ func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 
-	return snykCodeMock, scanner
+	return scanner
 }
 
 func TestUploadAndAnalyze(t *testing.T) {
@@ -131,30 +128,10 @@ func TestUploadAndAnalyze(t *testing.T) {
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
-	t.Run(
-		"should create bundle when hash empty", func(t *testing.T) {
-			snykCodeMock := &FakeSnykCodeClient{C: c}
-			s := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
-			baseDir, firstDoc, _, content1, _ := setupDocs(t)
-			fullPath := uri.PathFromUri(firstDoc.URI)
-			docs := sliceToChannel([]string{string(fullPath)})
-
-			_, _ = s.UploadAndAnalyze(context.Background(), baseDir, docs, map[types.FilePath]bool{}, false, testTracker)
-
-			// verify that create bundle has been called on backend service
-			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-			assert.NotNil(t, params)
-			assert.Equal(t, 1, len(params))
-			files := params[0].(map[types.FilePath]string)
-			relPath, err := ToRelativeUnixPath(baseDir, fullPath)
-			assert.Nil(t, err)
-			assert.Equal(t, files[relPath], util.Hash(content1))
-		},
-	)
 
 	t.Run(
 		"should retrieve from backend", func(t *testing.T) {
-			snykCodeMock := &FakeSnykCodeClient{C: c}
+
 			scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 			filePath, path := TempWorkdirWithIssues(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(string(path))
@@ -172,17 +149,10 @@ func TestUploadAndAnalyze(t *testing.T) {
 			// Some code actions are added by the scanner (e.g. Autofix, Snyk Learn)
 			assert.GreaterOrEqual(t, len(issues[0].GetCodeActions()), len(FakeIssue.CodeActions))
 
-			// verify that extend bundle has been called on backend service with additional file
-			params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
-			assert.NotNil(t, params)
-			assert.Equal(t, 3, len(params))
-			assert.Equal(t, 0, params[2])
-
 			// verify that bundle hash has been saved
 			scanner.bundleHashesMutex.RLock()
 			defer scanner.bundleHashesMutex.RUnlock()
 			assert.Equal(t, 1, len(scanner.bundleHashes))
-			assert.Equal(t, snykCodeMock.Options[scanner.bundleHashes[path]].bundleHash, scanner.bundleHashes[path])
 		},
 	)
 }
@@ -195,7 +165,6 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	testutil.UnitTest(t)
-	snykCodeMock := &FakeSnykCodeClient{C: c}
 	filePath, workDir := TempWorkdirWithIssues(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(string(workDir))
 	files := []string{string(filePath)}
@@ -221,63 +190,13 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	scanner.bundleHashesMutex.RLock()
 	defer scanner.bundleHashesMutex.RUnlock()
 	assert.Equal(t, 1, len(scanner.bundleHashes))
-	assert.Equal(t, snykCodeMock.Options[scanner.bundleHashes[workDir]].bundleHash, scanner.bundleHashes[workDir])
 }
 
 func Test_Scan(t *testing.T) {
-	t.Run("Should update changed files", func(t *testing.T) {
-		testutil.UnitTest(t)
-		// Arrange
-		snykCodeMock, scanner := setupTestScanner(t)
-		wg := sync.WaitGroup{}
-		changedFilesRelPaths := []types.FilePath{ // File paths relative to the repo base
-			"file0.go",
-			"file1.go",
-			"file2.go",
-			"someDir/nested.go",
-		}
-		fileCount := len(changedFilesRelPaths)
-		tempDir := t.TempDir()
-		var changedFilesAbsPaths []types.FilePath
-		for _, file := range changedFilesRelPaths {
-			fullPath := filepath.Join(tempDir, string(file))
-			err := os.MkdirAll(filepath.Dir(fullPath), 0755)
-			assert.Nil(t, err)
-			err = os.WriteFile(fullPath, []byte("func main() {}"), 0644)
-			assert.Nil(t, err)
-			changedFilesAbsPaths = append(changedFilesAbsPaths, types.FilePath(fullPath))
-		}
-
-		// Act
-		for _, fileName := range changedFilesAbsPaths {
-			wg.Add(1)
-			go func(fileName types.FilePath) {
-				t.Log("Running scan for file " + fileName)
-				_, _ = scanner.Scan(context.Background(), fileName, types.FilePath(tempDir), nil)
-				t.Log("Finished scan for file " + fileName)
-				wg.Done()
-			}(fileName)
-		}
-		wg.Wait()
-
-		// Assert
-		allCalls := snykCodeMock.GetAllCalls(RunAnalysisOperation)
-		communicatedChangedFiles := make([]types.FilePath, 0)
-		for _, call := range allCalls {
-			params := call[1].([]types.FilePath)
-			communicatedChangedFiles = append(communicatedChangedFiles, params...)
-		}
-
-		assert.Equal(t, fileCount, len(communicatedChangedFiles))
-		for _, file := range changedFilesRelPaths {
-			assert.Contains(t, communicatedChangedFiles, file)
-		}
-	})
-
 	t.Run("Should reset changed files after successful scan", func(t *testing.T) {
 		testutil.UnitTest(t)
 		// Arrange
-		_, scanner := setupTestScanner(t)
+		scanner := setupTestScanner(t)
 		wg := sync.WaitGroup{}
 		tempDir := types.FilePath(t.TempDir())
 
@@ -295,85 +214,14 @@ func Test_Scan(t *testing.T) {
 		assert.Equal(t, 0, len(scanner.changedPaths[tempDir]))
 	})
 
-	t.Run("Should not mark folders as changed files", func(t *testing.T) {
-		testutil.UnitTest(t)
-		// Arrange
-		snykCodeMock, scanner := setupTestScanner(t)
-
-		tempDir, _, _ := setupIgnoreWorkspace(t)
-
-		// Act
-		_, _ = scanner.Scan(context.Background(), tempDir, tempDir, nil)
-
-		// Assert
-		params := snykCodeMock.GetCallParams(0, RunAnalysisOperation)
-		assert.NotNil(t, params)
-		assert.Equal(t, 0, len(params[1].([]types.FilePath)))
-	})
-
-	t.Run("Scans run sequentially for the same folder", func(t *testing.T) {
-		// Arrange
-		testutil.UnitTest(t)
-		tempDir, _, _ := setupIgnoreWorkspace(t)
-		fakeClient, scanner := setupTestScanner(t)
-		fakeClient.AnalysisDuration = time.Second
-		wg := sync.WaitGroup{}
-
-		// Act
-		for i := 0; i < 5; i++ {
-			wg.Add(1)
-			go func() {
-				_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
-				wg.Done()
-			}()
-		}
-		wg.Wait()
-
-		// Assert
-		assert.Equal(t, 1, fakeClient.maxConcurrentScans)
-	})
-
-	t.Run("Scans run in parallel for different folders", func(t *testing.T) {
-		// Arrange
-		testutil.UnitTest(t)
-		tempDir, _, _ := setupIgnoreWorkspace(t)
-		tempDir2, _, _ := setupIgnoreWorkspace(t)
-		fakeClient, scanner := setupTestScanner(t)
-		fakeClient.AnalysisDuration = time.Second
-		wg := sync.WaitGroup{}
-
-		// Act
-		for i := 0; i < 5; i++ {
-			wg.Add(1)
-			go func() {
-				_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
-				wg.Done()
-			}()
-		}
-		for i := 0; i < 5; i++ {
-			wg.Add(1)
-			go func() {
-				_, _ = scanner.Scan(context.Background(), "", tempDir2, nil)
-				wg.Done()
-			}()
-		}
-		wg.Wait()
-
-		// Assert
-		assert.Equal(t, 2, fakeClient.maxConcurrentScans)
-	})
-
 	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		snykCodeMock := &FakeSnykCodeClient{C: c}
+
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
 		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
-
-		params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
-		assert.Nil(t, params)
 	})
 
 	testCases := []struct {
@@ -395,7 +243,6 @@ func Test_Scan(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testutil.UnitTest(t)
-			snykCodeMock := &FakeSnykCodeClient{C: c}
 			snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
 			ctrl := gomock.NewController(t)
 			mockConfiguration := mocks.NewMockConfiguration(ctrl)
@@ -411,9 +258,9 @@ func Test_Scan(t *testing.T) {
 			scanner := New(c, performance.NewInstrumentor(), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
-			_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
-
-			assert.Equal(t, tc.createBundleCalled, snykCodeMock.WasCalled(CreateBundleOperation))
+			issues, err := scanner.Scan(context.Background(), "", tempDir, nil)
+			assert.Nil(t, err)
+			assert.NotNil(t, issues)
 		})
 	}
 }
@@ -590,10 +437,6 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 
 		autofixSetupAndCleanup(t, c)
 		getCodeSettings().isAutofixEnabled.Set(true)
-
-		snykCodeMock := &FakeSnykCodeClient{C: c}
-		snykCodeMock.NoFixSuggestions = true
-
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 		filePath, path := TempWorkdirWithIssues(t)
 		t.Cleanup(
@@ -665,7 +508,7 @@ func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
 
 func TestScanner_getFilesToBeScanned(t *testing.T) {
 	config.CurrentConfig().SetSnykCodeEnabled(true)
-	_, scanner := setupTestScanner(t)
+	scanner := setupTestScanner(t)
 	tempDir := types.FilePath(t.TempDir())
 	scanner.changedPaths = make(map[types.FilePath]map[types.FilePath]bool)
 	scanner.changedPaths[tempDir] = make(map[types.FilePath]bool)

@@ -57,7 +57,6 @@ import (
 )
 
 var snykApiClient snyk_api.SnykApiClient
-var snykCodeClient code.SnykCodeClient
 var snykCodeScanner *code.Scanner
 var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner types.ProductScanner
@@ -143,8 +142,6 @@ func initInfrastructure(c *config.Config) {
 	codeInstrumentor = code.NewCodeInstrumentor()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
-	snykCodeClient = code.NewSnykCodeHTTPClient(c, codeInstrumentor, codeErrorReporter, authorizedClient)
-
 	httpClient := codeClientHTTP.NewHTTPClient(
 		authorizedClient,
 		codeClientHTTP.WithLogger(engine.GetLogger()),
@@ -177,7 +174,7 @@ func initApplication(c *config.Config) {
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator) // don't use getters or it'll deadlock
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
+	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier)
 	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeScanner, snykCli))
 }
 

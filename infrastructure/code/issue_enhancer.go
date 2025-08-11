@@ -37,7 +37,6 @@ import (
 const ShowInDetailPanelIdeCommand = "showInDetailPanel"
 
 type IssueEnhancer struct {
-	SnykCode      SnykCodeClient
 	instrumentor  performance.Instrumentor
 	errorReporter codeClientObservability.ErrorReporter
 	notifier      notification.Notifier

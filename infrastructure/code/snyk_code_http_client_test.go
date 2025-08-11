@@ -17,101 +17,13 @@
 package code
 
 import (
-	"context"
-	"net/http"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
-
-const (
-	path1   = "Test.js"
-	path2   = "Test2.js"
-	content = `require('./mongoose-db');
-require('./typeorm-db')
-
-var express = require('express');
-var http = require('http');
-var app = express();
-http.createServer(app).listen(app.get('port'), function () {
-  console.log('Express server listening on port ' + app.get('port'));
-});
-`
-	content2 = `require('./mongoose-db');
-require('./typeorm-db')
-
-var express2 = require('express');
-var http = require('http');
-var app = express();
-http.createServer(app).listen(app.get('port'), function () {
-  console.log('Express server listening on port ' + app.get('port'));
-});
-`
-)
-
-func clientFunc() *http.Client {
-	return config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient()
-}
-
-func createTestExtendMap() map[types.FilePath]BundleFile {
-	filesExtend := map[types.FilePath]BundleFile{}
-
-	filesExtend[path1] = BundleFile{
-		Hash:    util.Hash([]byte(content)),
-		Content: content,
-	}
-	filesExtend[path2] = BundleFile{
-		Hash:    util.Hash([]byte(content2)),
-		Content: content2,
-	}
-	return filesExtend
-}
-
-// dummyTransport is a transport struct that always returns the response code specified in the constructor
-type dummyTransport struct {
-	responseCode int
-	status       string
-	calls        int
-}
-
-func (d *dummyTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
-	d.calls++
-	return &http.Response{
-		StatusCode: d.responseCode,
-		Status:     d.status,
-	}, nil
-}
-
-func TestSnykCodeBackendService_doCall_shouldRetry(t *testing.T) {
-	c := testutil.UnitTest(t)
-	d := &dummyTransport{responseCode: 502, status: "502 Bad Gateway"}
-	dummyClientFunc := func() *http.Client {
-		return &http.Client{
-			Transport: d,
-		}
-	}
-	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
-	_, _, err := s.doCall(context.Background(), "GET", "https://httpstat.us/500", nil)
-	assert.Error(t, err)
-	assert.Equal(t, 3, d.calls)
-}
-
-func TestSnykCodeBackendService_doCall_rejected(t *testing.T) {
-	c := testutil.UnitTest(t)
-	dummyClientFunc := func() *http.Client {
-		return &http.Client{}
-	}
-
-	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), dummyClientFunc)
-	_, _, err := s.doCall(context.Background(), "GET", "https://127.0.0.1", nil)
-	assert.Error(t, err)
-}
 
 func TestGetCodeApiUrl(t *testing.T) {
 	t.Run("Snykgov instances code api url generation", func(t *testing.T) {
