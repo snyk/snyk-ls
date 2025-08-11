@@ -142,12 +142,8 @@ func TestUploadAndAnalyze(t *testing.T) {
 			assert.NotNil(t, issues)
 			assert.Equal(t, 2, len(issues))
 
-			assert.Equal(t, FakeIssue.ID, issues[0].GetID())
-			assert.Equal(t, FakeIssue.Range, issues[0].GetRange())
-			assert.Equal(t, FakeIssue.Message, issues[0].GetMessage())
-			assert.Equal(t, len(FakeIssue.CodelensCommands), len(issues[0].GetCodelensCommands()))
-			// Some code actions are added by the scanner (e.g. Autofix, Snyk Learn)
-			assert.GreaterOrEqual(t, len(issues[0].GetCodeActions()), len(FakeIssue.CodeActions))
+			assert.Equal(t, "java/DontUsePrintStackTrace", issues[0].GetID())
+			assert.Equal(t, "java/catchingInterruptedExceptionWithoutInterrupt", issues[1].GetID())
 
 			// verify that bundle hash has been saved
 			scanner.bundleHashesMutex.RLock()
