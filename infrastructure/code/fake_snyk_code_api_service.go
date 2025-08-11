@@ -18,8 +18,6 @@ package code
 
 import (
 	"context"
-	"fmt"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +26,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
@@ -37,7 +34,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const (
@@ -211,88 +207,4 @@ func (f *FakeSnykCodeClient) GetFilters(_ context.Context) (
 	return FiltersResponse{ConfigFiles: f.ConfigFiles,
 		Extensions: FakeFilters,
 	}, nil
-}
-
-func (f *FakeSnykCodeClient) CreateBundle(_ context.Context,
-	files map[types.FilePath]string,
-) (bundleHash string, missingFiles []types.FilePath, err error) {
-	if f.FailOnCreateBundle {
-		return "", nil, errors.New("Mock Code client failed intentionally on CreateBundle")
-	}
-
-	FakeSnykCodeApiServiceMutex.Lock()
-	defer FakeSnykCodeApiServiceMutex.Unlock()
-	f.TotalBundleCount++
-	f.HasCreatedNewBundle = true
-	params := []any{files}
-	f.addCall(params, CreateBundleOperation)
-	for filePath := range files {
-		missingFiles = append(missingFiles, filePath)
-	}
-	return util.Hash([]byte(fmt.Sprint(rand.Int()))), missingFiles, nil
-}
-
-func (f *FakeSnykCodeClient) ExtendBundle(ctx context.Context, bundleHash string, files map[types.FilePath]BundleFile, removedFiles []types.FilePath) (string, []types.FilePath, error) {
-	FakeSnykCodeApiServiceMutex.Lock()
-	defer FakeSnykCodeApiServiceMutex.Unlock()
-	f.HasExtendedBundle = true
-	f.TotalBundleCount++
-	f.ExtendedBundleCount++
-	f.ExtendBundleFiles = files
-	params := []any{bundleHash, files, removedFiles}
-	f.addCall(params, ExtendBundleWithSourceOperation)
-	return util.Hash([]byte(fmt.Sprint(rand.Int()))), nil, nil
-}
-
-var successfulResult = AnalysisStatus{
-	message:    "COMPLETE",
-	percentage: 100,
-}
-
-func (f *FakeSnykCodeClient) AnalyzeLegacy(
-	_ context.Context,
-	bundleHash string,
-	shardKey string,
-	limitToFiles []types.FilePath,
-	severity int,
-) (codeClientSarif.SarifResponse, AnalysisStatus, error) {
-	FakeSnykCodeApiServiceMutex.Lock()
-	f.currentConcurrentScans++
-	if f.currentConcurrentScans > f.maxConcurrentScans {
-		f.maxConcurrentScans = f.currentConcurrentScans
-	}
-	if f.Options == nil {
-		f.Options = make(map[string]AnalysisOptions)
-	}
-	FakeSnykCodeApiServiceMutex.Unlock()
-	<-time.After(f.AnalysisDuration)
-
-	FakeSnykCodeApiServiceMutex.Lock()
-	f.currentConcurrentScans--
-	params := []any{bundleHash, limitToFiles, severity}
-	f.addCall(params, RunAnalysisOperation)
-	FakeSnykCodeApiServiceMutex.Unlock()
-
-	FakeSnykCodeApiServiceMutex.Lock()
-	options := AnalysisOptions{
-		bundleHash:   bundleHash,
-		shardKey:     shardKey,
-		limitToFiles: limitToFiles,
-		severity:     severity,
-	}
-	f.Options[bundleHash] = options
-	FakeSnykCodeApiServiceMutex.Unlock()
-
-	// Create a fake SARIF response with complete status and 100% progress
-	fakeSarifResponse := codeClientSarif.SarifResponse{
-		Status:   "COMPLETE",
-		Progress: 1.0,
-		Type:     "sarif",
-	}
-
-	f.C.Logger().Trace().Str("method", "AnalyzeLegacy").Interface(
-		"fakeSarifResponse",
-		fakeSarifResponse,
-	).Msg("fake backend call received & answered")
-	return fakeSarifResponse, successfulResult, nil
 }

@@ -18,17 +18,11 @@ package code
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -63,33 +57,6 @@ http.createServer(app).listen(app.get('port'), function () {
 
 func clientFunc() *http.Client {
 	return config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient()
-}
-
-func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
-	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
-	files := map[types.FilePath]string{}
-	randomAddition := fmt.Sprintf("\n public void random() { System.out.println(\"%d\") }", time.Now().UnixMicro())
-	files[path1] = util.Hash([]byte(content + randomAddition))
-	bundleHash, missingFiles, _ := s.CreateBundle(context.Background(), files)
-	assert.NotNil(t, bundleHash)
-	assert.NotEqual(t, "", bundleHash)
-	assert.Equal(t, 1, len(missingFiles))
-}
-
-func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
-	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
-	var removedFiles []types.FilePath
-	files := map[types.FilePath]string{}
-	files[path1] = util.Hash([]byte(content))
-	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
-	filesExtend := createTestExtendMap()
-
-	bundleHash, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
-
-	assert.Equal(t, 0, len(missingFiles))
-	assert.NotEmpty(t, bundleHash)
 }
 
 func createTestExtendMap() map[types.FilePath]BundleFile {
@@ -145,51 +112,6 @@ func TestSnykCodeBackendService_doCall_rejected(t *testing.T) {
 	_, _, err := s.doCall(context.Background(), "GET", "https://127.0.0.1", nil)
 	assert.Error(t, err)
 }
-
-func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
-
-	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
-	shardKey := util.Hash([]byte("/"))
-	var removedFiles []types.FilePath
-	files := map[types.FilePath]string{}
-	bytes := []byte(content)
-	files[path1] = util.Hash(bytes)
-	workDir := types.FilePath(t.TempDir())
-	err := os.WriteFile(filepath.Join(string(workDir), path1), bytes, 0660)
-	require.NoError(t, err)
-	err = os.WriteFile(filepath.Join(string(workDir), path2), bytes, 0660)
-	require.NoError(t, err)
-	bundleHash, _, _ := s.CreateBundle(context.Background(), files)
-	filesExtend := createTestExtendMap()
-	bundleHash, missingFiles, _ := s.ExtendBundle(context.Background(), bundleHash, filesExtend, removedFiles)
-	assert.Len(t, missingFiles, 0, "all files should be uploaded now")
-
-	assert.Eventually(t, func() bool {
-		limitToFiles := []types.FilePath{path1, path2}
-
-		sarifResponse, callStatus, err := s.AnalyzeLegacy(context.Background(), bundleHash, shardKey, limitToFiles, 0)
-		if err != nil {
-			return false
-		}
-		if callStatus.Message == "COMPLETE" {
-			// Convert SARIF response to issues to test the conversion logic
-			converter := SarifConverter{sarif: sarifResponse, hoverVerbosity: c.HoverVerbosity(), logger: c.Logger()}
-			issues, convErr := converter.toIssues(workDir)
-			if convErr != nil {
-				t.Logf("Error converting SARIF to issues: %v", convErr)
-				return false
-			}
-			assert.Greater(t, len(issues), 0)
-			return true
-		}
-		return false
-	}, 120*time.Second, 2*time.Second)
-}
-
-// todo analysis test limit files
-// todo analysis test severities
 
 func TestGetCodeApiUrl(t *testing.T) {
 	t.Run("Snykgov instances code api url generation", func(t *testing.T) {
@@ -270,7 +192,3 @@ func TestGetCodeApiUrl(t *testing.T) {
 		assert.Equal(t, c.SnykCodeApi(), url)
 	})
 }
-
-
-
-

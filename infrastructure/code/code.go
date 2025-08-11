@@ -17,14 +17,12 @@
 package code
 
 import (
-	"bytes"
 	"context"
-	"os"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
@@ -49,7 +47,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type ScanStatus struct {
@@ -72,7 +69,6 @@ func NewScanStatus() *ScanStatus {
 }
 
 type Scanner struct {
-	BundleUploader    *BundleUploader
 	SnykApiClient     snyk_api.SnykApiClient
 	errorReporter     codeClientObservability.ErrorReporter
 	bundleHashesMutex sync.RWMutex
@@ -93,6 +89,7 @@ type Scanner struct {
 	// the cache in workspace/folder should just delegate to this cache
 	issueCache          *imcache.Cache[types.FilePath, []types.Issue]
 	cacheRemovalHandler func(path types.FilePath)
+	instrumentor        performance.Instrumentor
 	C                   *config.Config
 }
 
@@ -111,19 +108,19 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(bundleUploader *BundleUploader, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner) *Scanner {
 	sc := &Scanner{
-		BundleUploader: bundleUploader,
-		SnykApiClient:  apiClient,
-		errorReporter:  reporter,
-		runningScans:   map[types.FilePath]*ScanStatus{},
-		changedPaths:   map[types.FilePath]map[types.FilePath]bool{},
-		fileFilters:    xsync.NewMapOf[*utils.FileFilter](),
-		learnService:   learnService,
-		notifier:       notifier,
-		bundleHashes:   map[types.FilePath]string{},
-		codeScanner:    codeScanner,
-		C:              bundleUploader.c,
+		SnykApiClient: apiClient,
+		errorReporter: reporter,
+		runningScans:  map[types.FilePath]*ScanStatus{},
+		changedPaths:  map[types.FilePath]map[types.FilePath]bool{},
+		fileFilters:   xsync.NewMapOf[*utils.FileFilter](),
+		learnService:  learnService,
+		notifier:      notifier,
+		bundleHashes:  map[types.FilePath]string{},
+		codeScanner:   codeScanner,
+		instrumentor:  instrumentor,
+		C:             c,
 	}
 	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
 		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
@@ -224,8 +221,8 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 }
 
 func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
-	defer sc.BundleUploader.instrumentor.Finish(span)
+	span := sc.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
+	defer sc.instrumentor.Finish(span)
 	ctx, cancel := context.WithCancel(span.Context())
 	defer cancel()
 
@@ -368,9 +365,11 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 		return issues, nil
 	}
 
-	logger := sc.C.Logger().With().Str("method", "code.UploadAndAnalyze").Logger()
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.uploadAndAnalyze")
-	defer sc.BundleUploader.instrumentor.Finish(span)
+	method := "code.UploadAndAnalyze"
+
+	logger := sc.C.Logger().With().Str("method", method).Logger()
+	span := sc.instrumentor.StartSpan(ctx, method)
+	defer sc.instrumentor.Finish(span)
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 	logger.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
@@ -413,6 +412,15 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 	if sarifResponse == nil {
 		logger.Info().Str("requestId", requestId).Msg("Sarif is nil")
 		return []types.Issue{}, nil
+	} else {
+		logger.Debug().
+			Str("method", method).
+			Str("status", sarifResponse.Status).
+			Float64("progress", sarifResponse.Progress).
+			Int("fetchingCodeTime", sarifResponse.Timing.FetchingCode).
+			Int("analysisTime", sarifResponse.Timing.Analysis).
+			Int("filesAnalyzed", len(sarifResponse.Coverage)).
+			Msg("Received response summary")
 	}
 
 	sc.bundleHashesMutex.Lock()
@@ -425,8 +433,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 		return []types.Issue{}, err
 	}
 	issueEnhancer := newIssueEnhancer(
-		sc.BundleUploader.SnykCode,
-		sc.BundleUploader.instrumentor,
+		sc.instrumentor,
 		sc.errorReporter,
 		sc.notifier,
 		sc.learnService,
@@ -447,99 +454,6 @@ func isNoFilesError(err error) bool {
 	var myErr noFilesError
 	ok := errors.As(err, &myErr)
 	return ok
-}
-
-//nolint:gocyclo // we will address cyclomatic complexity, but that's going to be done when we move this to code-client-go
-func (sc *Scanner) createBundle(ctx context.Context, requestId string, rootPath types.FilePath, filePaths <-chan string, changedFiles map[types.FilePath]bool, t *progress.Tracker) (Bundle, error) {
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, "code.createBundle")
-	defer sc.BundleUploader.instrumentor.Finish(span)
-
-	t.ReportWithMessage(15, "creating file bundle")
-
-	var limitToFiles []types.FilePath
-	fileHashes := make(map[types.FilePath]string)
-	bundleFiles := make(map[types.FilePath]BundleFile)
-	noFiles := true
-	for absoluteFilePath := range filePaths {
-		if ctx.Err() != nil || t.IsCanceled() {
-			progress.Cancel(t.GetToken())
-			sc.C.Logger().Info().Msg("Canceling Code scan - Code scanner received cancellation signal")
-			return Bundle{}, ctx.Err()
-		}
-		noFiles = false
-		supported, err := sc.BundleUploader.isSupported(span.Context(), absoluteFilePath)
-		if err != nil {
-			return Bundle{}, err
-		}
-		if !supported {
-			continue
-		}
-		fileInfo, err := os.Stat(absoluteFilePath)
-		if err != nil {
-			sc.C.Logger().Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not open file")
-			continue
-		}
-
-		if fileInfo.Size() == 0 || fileInfo.Size() > maxFileSize {
-			continue
-		}
-
-		fileContent, err := os.ReadFile(absoluteFilePath)
-		if err != nil {
-			sc.C.Logger().Error().Err(err).Str("filePath", absoluteFilePath).Msg("could not load content of file")
-			continue
-		}
-
-		utf8FileContent, err := util.ConvertToUTF8(bytes.NewReader(fileContent))
-		if err != nil || !utf8.Valid(utf8FileContent) {
-			continue
-		}
-
-		relativePath, err := ToRelativeUnixPath(rootPath, types.FilePath(absoluteFilePath))
-		if err != nil {
-			sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: string(rootPath)})
-		}
-		relativePath = EncodePath(relativePath)
-
-		// TODO: Check if we need to calculate hash for createBundle and if we can't calculate when triggering uploadBatch.
-		bundleFile := sc.getFileFrom(absoluteFilePath, utf8FileContent)
-		bundleFiles[relativePath] = bundleFile
-		fileHashes[relativePath] = bundleFile.Hash
-
-		if changedFiles[types.FilePath(absoluteFilePath)] {
-			limitToFiles = append(limitToFiles, relativePath)
-		}
-	}
-
-	if noFiles {
-		return Bundle{}, noFilesError{}
-	}
-
-	b := Bundle{
-		SnykCode:      sc.BundleUploader.SnykCode,
-		Files:         bundleFiles,
-		instrumentor:  sc.BundleUploader.instrumentor,
-		requestId:     requestId,
-		rootPath:      rootPath,
-		errorReporter: sc.errorReporter,
-		limitToFiles:  limitToFiles,
-		issueEnhancer: newIssueEnhancer(
-			sc.BundleUploader.SnykCode,
-			sc.BundleUploader.instrumentor,
-			sc.errorReporter,
-			sc.notifier,
-			sc.learnService,
-			requestId,
-			rootPath,
-			sc.C,
-		),
-		logger: sc.C.Logger(),
-	}
-	var err error
-	if len(fileHashes) > 0 {
-		b.BundleHash, b.missingFiles, err = sc.BundleUploader.SnykCode.CreateBundle(span.Context(), fileHashes)
-	}
-	return b, err
 }
 
 type UploadStatus struct {

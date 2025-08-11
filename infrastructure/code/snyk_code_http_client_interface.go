@@ -18,31 +18,10 @@ package code
 
 import (
 	"context"
-
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
-
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type SnykCodeClient interface {
 	GetFilters(ctx context.Context) (
 		filters FiltersResponse,
 		err error)
-
-	CreateBundle(
-		ctx context.Context,
-		files map[types.FilePath]string,
-	) (newBundleHash string, missingFiles []types.FilePath, err error)
-
-	ExtendBundle(ctx context.Context, bundleHash string, files map[types.FilePath]BundleFile, removedFiles []types.FilePath) (newBundleHash string, missingFiles []types.FilePath, err error)
-
-	RunAnalysis(
-		ctx context.Context,
-		options AnalysisOptions,
-		baseDir types.FilePath,
-	) (
-		codeClientSarif.SarifResponse,
-		AnalysisStatus,
-		error,
-	)
 }

@@ -58,7 +58,6 @@ import (
 
 var snykApiClient snyk_api.SnykApiClient
 var snykCodeClient code.SnykCodeClient
-var snykCodeBundleUploader *code.BundleUploader
 var snykCodeScanner *code.Scanner
 var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner types.ProductScanner
@@ -145,7 +144,6 @@ func initInfrastructure(c *config.Config) {
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
 	snykCodeClient = code.NewSnykCodeHTTPClient(c, codeInstrumentor, codeErrorReporter, authorizedClient)
-	snykCodeBundleUploader = code.NewBundler(c, snykCodeClient, codeInstrumentor)
 
 	httpClient := codeClientHTTP.NewHTTPClient(
 		authorizedClient,
@@ -166,7 +164,7 @@ func initInfrastructure(c *config.Config) {
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
+	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(

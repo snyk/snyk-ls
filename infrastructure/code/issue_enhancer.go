@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 
 	"github.com/snyk/snyk-ls/internal/types"
 
@@ -37,7 +38,7 @@ const ShowInDetailPanelIdeCommand = "showInDetailPanel"
 
 type IssueEnhancer struct {
 	SnykCode      SnykCodeClient
-	instrumentor  codeClientObservability.Instrumentor
+	instrumentor  performance.Instrumentor
 	errorReporter codeClientObservability.ErrorReporter
 	notifier      notification.Notifier
 	learnService  learn.Service
@@ -46,9 +47,8 @@ type IssueEnhancer struct {
 	c             *config.Config
 }
 
-func newIssueEnhancer(SnykCode SnykCodeClient, instrumentor codeClientObservability.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, c *config.Config) IssueEnhancer {
+func newIssueEnhancer(instrumentor performance.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, c *config.Config) IssueEnhancer {
 	return IssueEnhancer{
-		SnykCode:      SnykCode,
 		instrumentor:  instrumentor,
 		errorReporter: errorReporter,
 		notifier:      notifier,

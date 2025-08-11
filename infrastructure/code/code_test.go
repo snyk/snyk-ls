@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -29,6 +28,7 @@ import (
 	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -88,155 +88,6 @@ func setupTestData() (issue *snyk.Issue, expectedURI string, expectedTitle strin
 	return
 }
 
-func TestCreateBundle(t *testing.T) {
-	c := testutil.UnitTest(t)
-	t.Run("when < maxFileSize creates bundle", func(t *testing.T) {
-		fileSize := maxFileSize - 10
-		snykCodeMock, bundle := retrieveBundle(t, fileSize)
-		bundleFiles := bundle.Files
-		assert.Len(t, bundleFiles, 1, "bundle should have 1 bundle files")
-		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 1, "bundle should called createBundle once")
-	},
-	)
-
-	t.Run("when too big ignores file", func(t *testing.T) {
-		fileSize := maxFileSize + 1
-		snykCodeMock, bundle := retrieveBundle(t, fileSize)
-		bundleFiles := bundle.Files
-		assert.Len(t, bundleFiles, 0, "bundle should not have bundle files")
-		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
-	},
-	)
-
-	t.Run("when empty file ignores file", func(t *testing.T) {
-		channel := make(chan types.ProgressParams, 10000)
-		cancelChannel := make(chan bool, 1)
-		testTracker := progress.NewTestTracker(channel, cancelChannel)
-
-		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
-		fd, err := os.Create(file)
-		t.Cleanup(
-			func() {
-				_ = fd.Close()
-			},
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-		bundle, err := c.createBundle(context.Background(), "testRequestId", types.FilePath(dir), sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		bundleFiles := bundle.Files
-		assert.Len(t, bundleFiles, 0, "bundle should not have bundle files")
-		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
-	},
-	)
-
-	t.Run("when unsupported ignores file", func(t *testing.T) {
-		channel := make(chan types.ProgressParams, 10000)
-		cancelChannel := make(chan bool, 1)
-		testTracker := progress.NewTestTracker(channel, cancelChannel)
-		snykCodeMock, dir, c, file := setupCreateBundleTest(t, "unsupported")
-		fd, err := os.Create(file)
-		t.Cleanup(
-			func() {
-				_ = fd.Close()
-			},
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-		bundle, err := c.createBundle(context.Background(), "testRequestId", types.FilePath(dir), sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
-		bundleFiles := bundle.Files
-		if err != nil {
-			t.Fatal(err)
-		}
-		assert.Len(t, bundleFiles, 0, "bundle should not have bundle files")
-		assert.Len(t, snykCodeMock.GetAllCalls(CreateBundleOperation), 0, "bundle shouldn't have called createBundle")
-	},
-	)
-
-	t.Run("includes config files", func(t *testing.T) {
-		channel := make(chan types.ProgressParams, 10000)
-		cancelChannel := make(chan bool, 1)
-		testTracker := progress.NewTestTracker(channel, cancelChannel)
-
-		configFile := ".test"
-		snykCodeMock := &FakeSnykCodeClient{
-			ConfigFiles: []string{configFile},
-		}
-		scanner := New(
-			NewBundler(c, snykCodeMock, NewCodeInstrumentor()),
-			&snyk_api.FakeApiClient{CodeEnabled: true},
-			newTestCodeErrorReporter(),
-			nil,
-			notification.NewNotifier(),
-			&FakeCodeScannerClient{},
-		)
-		tempDir := types.FilePath(t.TempDir())
-		file := filepath.Join(string(tempDir), configFile)
-		err := os.WriteFile(file, []byte("some content so the file won't be skipped"), 0600)
-		assert.Nil(t, err)
-
-		bundle, err := scanner.createBundle(context.Background(), "testRequestId", tempDir, sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
-		assert.Nil(t, err)
-		relativePath, _ := ToRelativeUnixPath(tempDir, types.FilePath(file))
-		assert.Contains(t, bundle.Files, relativePath)
-	})
-
-	t.Run("url-encodes files", func(t *testing.T) {
-		channel := make(chan types.ProgressParams, 10000)
-		cancelChannel := make(chan bool, 1)
-		testTracker := progress.NewTestTracker(channel, cancelChannel)
-
-		// Arrange
-		filesRelPaths := []types.FilePath{
-			"path/to/file1.java",
-			"path/with spaces/file2.java",
-		}
-		expectedPaths := []types.FilePath{
-			"path/to/file1.java",
-			"path/with%20spaces/file2.java",
-		}
-
-		_, scanner := setupTestScanner(t)
-		tempDir := types.FilePath(t.TempDir())
-		var filesFullPaths []string
-		for _, fileRelPath := range filesRelPaths {
-			file := filepath.Join(string(tempDir), string(fileRelPath))
-			filesFullPaths = append(filesFullPaths, file)
-			_ = os.MkdirAll(filepath.Dir(file), 0700)
-			err := os.WriteFile(file, []byte("some content so the file won't be skipped"), 0600)
-			assert.Nil(t, err)
-		}
-
-		bundle, err := scanner.createBundle(context.Background(), "testRequestId", tempDir, sliceToChannel(filesFullPaths), map[types.FilePath]bool{}, testTracker)
-
-		// Assert
-		assert.Nil(t, err)
-		for _, expectedPath := range expectedPaths {
-			assert.Contains(t, bundle.Files, expectedPath)
-		}
-	})
-}
-
-func retrieveBundle(t *testing.T, fileSize int) (*FakeSnykCodeClient, Bundle) {
-	t.Helper()
-	channel := make(chan types.ProgressParams, 10000)
-	cancelChannel := make(chan bool, 1)
-	testTracker := progress.NewTestTracker(channel, cancelChannel)
-
-	snykCodeMock, dir, c, file := setupCreateBundleTest(t, "java")
-	data := strings.Repeat("a", fileSize)
-	err := os.WriteFile(file, []byte(data), 0600)
-	assert.NoError(t, err)
-	bundle, err := c.createBundle(context.Background(), "testRequestId", types.FilePath(dir), sliceToChannel([]string{file}), map[types.FilePath]bool{}, testTracker)
-	assert.NoError(t, err)
-	return snykCodeMock, bundle
-}
-
 func sliceToChannel(slice []string) <-chan string {
 	ch := make(chan string)
 	go func() {
@@ -247,15 +98,6 @@ func sliceToChannel(slice []string) <-chan string {
 	}()
 
 	return ch
-}
-
-func setupCreateBundleTest(t *testing.T, extension string) (*FakeSnykCodeClient, string, *Scanner, string) {
-	t.Helper()
-	testutil.UnitTest(t)
-	dir := t.TempDir()
-	snykCodeMock, c := setupTestScanner(t)
-	file := filepath.Join(dir, "file."+extension)
-	return snykCodeMock, dir, c, file
 }
 
 func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
@@ -274,7 +116,7 @@ func setupTestScanner(t *testing.T) (*FakeSnykCodeClient, *Scanner) {
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
-	scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 
 	return snykCodeMock, scanner
 }
@@ -292,12 +134,12 @@ func TestUploadAndAnalyze(t *testing.T) {
 	t.Run(
 		"should create bundle when hash empty", func(t *testing.T) {
 			snykCodeMock := &FakeSnykCodeClient{C: c}
-			s := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+			s := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 			baseDir, firstDoc, _, content1, _ := setupDocs(t)
 			fullPath := uri.PathFromUri(firstDoc.URI)
 			docs := sliceToChannel([]string{string(fullPath)})
 
-			_, _ = s.UploadAndAnalyze(context.Background(), docs, baseDir, map[types.FilePath]bool{}, testTracker)
+			_, _ = s.UploadAndAnalyze(context.Background(), baseDir, docs, map[types.FilePath]bool{}, false, testTracker)
 
 			// verify that create bundle has been called on backend service
 			params := snykCodeMock.GetCallParams(0, CreateBundleOperation)
@@ -313,12 +155,12 @@ func TestUploadAndAnalyze(t *testing.T) {
 	t.Run(
 		"should retrieve from backend", func(t *testing.T) {
 			snykCodeMock := &FakeSnykCodeClient{C: c}
-			scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+			scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 			filePath, path := TempWorkdirWithIssues(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(string(path))
 			files := []string{string(filePath)}
 
-			issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), path, map[types.FilePath]bool{}, testTracker)
+			issues, _ := scanner.UploadAndAnalyze(context.Background(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 1, len(issues))
@@ -362,8 +204,8 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	cancelChannel := make(chan bool, 1)
 	testTracker := progress.NewTestTracker(channel, cancelChannel)
 
-	scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), fakeCodeScanner)
-	issues, _ := scanner.UploadAndAnalyze(context.Background(), workDir, sliceToChannel(files), map[types.FilePath]bool{}, testTracker)
+	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), fakeCodeScanner)
+	issues, _ := scanner.UploadAndAnalyze(context.Background(), workDir, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
 
 	assert.True(t, fakeCodeScanner.UploadAndAnalyzeWasCalled)
 	assert.False(t, issues[0].GetIsIgnored())
@@ -524,7 +366,7 @@ func Test_Scan(t *testing.T) {
 	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		snykCodeMock := &FakeSnykCodeClient{C: c}
-		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
@@ -566,7 +408,7 @@ func Test_Scan(t *testing.T) {
 				GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(&learn.Lesson{}, nil).AnyTimes()
 
-			scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+			scanner := New(c, performance.NewInstrumentor(), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
 			_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
@@ -723,9 +565,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
 
 		autofixSetupAndCleanup(t, c)
-
-		snykCodeMock := &FakeSnykCodeClient{C: c}
-		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 		filePath, path := TempWorkdirWithIssues(t)
 		t.Cleanup(
 			func() {
@@ -735,7 +575,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		files := []string{string(filePath)}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[types.FilePath]bool{}, testTracker)
+		issues, _ := scanner.UploadAndAnalyze(context.Background(), "", sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
 		// Default is to have 1 fake action from analysis + 0 from autofix
 		assert.Len(t, issues[0].GetCodeActions(), 1)
@@ -754,7 +594,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		snykCodeMock := &FakeSnykCodeClient{C: c}
 		snykCodeMock.NoFixSuggestions = true
 
-		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 		filePath, path := TempWorkdirWithIssues(t)
 		t.Cleanup(
 			func() {
@@ -764,7 +604,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		files := []string{string(filePath)}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), "", map[types.FilePath]bool{}, testTracker)
+		issues, _ := scanner.UploadAndAnalyze(context.Background(), "", sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
 		// Default is to have 1 fake action from analysis + 0 from autofix
 		assert.Len(t, issues[0].GetCodeActions(), 1)
@@ -774,8 +614,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	t.Run("should run autofix after analysis when is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		issueEnhancer := IssueEnhancer{
-			SnykCode:     &FakeSnykCodeClient{C: c},
-			instrumentor: NewCodeInstrumentor(),
+			instrumentor: performance.NewInstrumentor(),
 			c:            c,
 		}
 		channel := make(chan types.ProgressParams, 10000)
@@ -784,13 +623,12 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		autofixSetupAndCleanup(t, c)
 		getCodeSettings().isAutofixEnabled.Set(true)
 
-		snykCodeMock := &FakeSnykCodeClient{C: c}
-		scanner := New(NewBundler(c, snykCodeMock, NewCodeInstrumentor()), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 		filePath, path := TempWorkdirWithIssues(t)
 		files := []string{string(filePath)}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(context.Background(), sliceToChannel(files), path, map[types.FilePath]bool{}, testTracker)
+		issues, _ := scanner.UploadAndAnalyze(context.Background(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
 		assert.Len(t, issues[0].GetCodeActions(), 2)
 
@@ -807,8 +645,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
 	c := testutil.UnitTest(t)
 	issueEnhancer := IssueEnhancer{
-		SnykCode:     &FakeSnykCodeClient{C: c},
-		instrumentor: NewCodeInstrumentor(),
+		instrumentor: performance.NewInstrumentor(),
 		c:            c,
 	}
 

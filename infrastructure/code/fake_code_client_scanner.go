@@ -392,7 +392,7 @@ func (f *FakeCodeScannerClient) UploadAndAnalyze(
 	_ string,
 	_ scan.Target,
 	files <-chan string,
-	_ map[string]bool
+	_ map[string]bool,
 ) (*codeClientSarif.SarifResponse, string, error) {
 	var analysisResponse codeClientSarif.SarifResponse
 	responseJson := getSarifResponseJson2(filepath.Base(<-files))
@@ -401,13 +401,7 @@ func (f *FakeCodeScannerClient) UploadAndAnalyze(
 	return &analysisResponse, "", err
 }
 
-func (f *FakeCodeScannerClient) Upload(
-	ctx context.Context,
-	requestId string,
-	target scan.Target,
-	files <-chan string,
-	changedFiles map[string]bool,
-) (bundle.Bundle, error) {
+func (f *FakeCodeScannerClient) Upload(context.Context, string, scan.Target, <-chan string, map[string]bool) (bundle.Bundle, error) {
 	panic("Not implemented")
 }
 
@@ -415,11 +409,10 @@ func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(
 	ctx context.Context,
 	requestId string,
 	target scan.Target,
-	shardKey string,
+	_ string,
 	files <-chan string,
 	changedFiles map[string]bool,
-	status chan scan.LegacyScanStatus
+	_ chan<- scan.LegacyScanStatus,
 ) (*codeClientSarif.SarifResponse, string, error) {
 	return f.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)
 }
-

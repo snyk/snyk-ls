@@ -23,18 +23,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"net/url"
 	"regexp"
-	"strconv"
 	"time"
 
-	"github.com/rs/zerolog"
-
 	codeClientObservability "github.com/snyk/code-client-go/observability"
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
-
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/types"
 
@@ -119,35 +113,6 @@ func (s *SnykCodeHTTPClient) GetFilters(ctx context.Context) (
 	}
 	s.c.Logger().Debug().Str("method", method).Msg("API: Finished getting filters")
 	return filters, nil
-}
-
-func (s *SnykCodeHTTPClient) CreateBundle(
-	ctx context.Context,
-	filesToFilehashes map[types.FilePath]string,
-) (string, []types.FilePath, error) {
-	method := "code.CreateBundle"
-	s.c.Logger().Debug().Str("method", method).Msg("API: Creating bundle for " + strconv.Itoa(len(filesToFilehashes)) + " files")
-
-	span := s.instrumentor.StartSpan(ctx, method)
-	defer s.instrumentor.Finish(span)
-
-	requestBody, err := json.Marshal(filesToFilehashes)
-	if err != nil {
-		return "", nil, err
-	}
-
-	body, _, err := s.doCall(span.Context(), "POST", "/bundle", requestBody)
-	if err != nil {
-		return "", nil, err
-	}
-
-	var bundle bundleResponse
-	err = json.Unmarshal(body, &bundle)
-	if err != nil {
-		return "", nil, err
-	}
-	s.c.Logger().Debug().Str("method", method).Msg("API: Create done")
-	return bundle.BundleHash, bundle.MissingFiles, nil
 }
 
 func (s *SnykCodeHTTPClient) doCall(ctx context.Context, method string, path string, requestBody []byte) ([]byte, int, error) {
@@ -312,114 +277,9 @@ var retryErrorCodes = map[int]bool{
 	http.StatusInternalServerError: true,
 }
 
-func (s *SnykCodeHTTPClient) ExtendBundle(ctx context.Context, bundleHash string, files map[types.FilePath]BundleFile, removedFiles []types.FilePath) (string, []types.FilePath, error) {
-	method := "code.ExtendBundle"
-	span := s.instrumentor.StartSpan(ctx, method)
-	defer s.instrumentor.Finish(span)
-	requestId, err := performance2.GetTraceId(span.Context())
-	logger := s.c.Logger().With().Str("method", method).Str("requestId", requestId).Logger()
-	if err != nil {
-		logger.Err(err).Msg("failed to get request id")
-	}
-
-	logger.Debug().Msg("API: Extending bundle for " + strconv.Itoa(len(files)) + " files")
-	defer logger.Debug().Msg("API: Extend done")
-
-	requestBody, err := json.Marshal(extendBundleRequest{
-		Files:        files,
-		RemovedFiles: removedFiles,
-	})
-	if err != nil {
-		return "", nil, err
-	}
-
-	responseBody, httpStatus, err := s.doCall(span.Context(), "PUT", "/bundle/"+bundleHash, requestBody)
-	if httpStatus == http.StatusBadRequest {
-		logger.Err(err).Msg("got an HTTP 400 Bad Request, dumping bundle infos for analysis")
-		logger.Error().Any("fileHashes", files).Send()
-		logger.Error().Any("removedFiles", removedFiles).Send()
-	}
-	if err != nil {
-		return "", nil, err
-	}
-	var bundleResp bundleResponse
-	err = json.Unmarshal(responseBody, &bundleResp)
-	return bundleResp.BundleHash, bundleResp.MissingFiles, err
-}
-
 type AnalysisStatus struct {
 	message    string
 	percentage int
-}
-
-func (s *SnykCodeHTTPClient) RunAnalysis(
-	ctx context.Context,
-	options AnalysisOptions,
-	baseDir types.FilePath,
-) (codeClientSarif.SarifResponse, AnalysisStatus, error) {
-	method := "code.RunAnalysis"
-	span := s.instrumentor.StartSpan(ctx, method)
-	defer s.instrumentor.Finish(span)
-
-	requestId, err := performance2.GetTraceId(span.Context())
-	if err != nil {
-		s.c.Logger().Err(err).Str("method", method).Msg(failedToObtainRequestIdString + err.Error())
-		return codeClientSarif.SarifResponse{}, AnalysisStatus{}, err
-	}
-	s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis for bundle")
-	defer s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Msg("API: Retrieving analysis done")
-
-	requestBody, err := s.analysisRequestBody(&options)
-	if err != nil {
-		s.c.Logger().Err(err).Str("method", method).Str("requestBody", string(requestBody)).Msg("error creating request body")
-		return codeClientSarif.SarifResponse{}, AnalysisStatus{}, err
-	}
-
-	responseBody, _, err := s.doCall(span.Context(), "POST", "/analysis", requestBody)
-	failed := AnalysisStatus{message: "FAILED"}
-	if err != nil {
-		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error response from analysis")
-		return codeClientSarif.SarifResponse{}, failed, err
-	}
-
-	var response codeClientSarif.SarifResponse
-	err = json.Unmarshal(responseBody, &response)
-	if err != nil {
-		s.c.Logger().Err(err).Str("method", method).Str("responseBody", string(responseBody)).Msg("error unmarshalling")
-		return codeClientSarif.SarifResponse{}, failed, err
-	} else {
-		logSarifResponse(method, response, s.c.Logger())
-	}
-
-	s.c.Logger().Debug().Str("method", method).Str("requestId", requestId).Float64("progress",
-		response.Progress).Msgf("Status: %s", response.Status)
-
-	if response.Status == failed.message {
-		s.c.Logger().Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("analysis failed")
-		return codeClientSarif.SarifResponse{}, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
-	}
-
-	if response.Status == "" {
-		s.c.Logger().Err(err).Str("method", method).Str("responseStatus", response.Status).Msg("unknown response status (empty)")
-		return codeClientSarif.SarifResponse{}, failed, SnykAnalysisFailedError{Msg: string(responseBody)}
-	}
-	status := AnalysisStatus{message: response.Status, percentage: int(math.RoundToEven(response.Progress * 100))}
-	if response.Status != completeStatus {
-		return codeClientSarif.SarifResponse{}, status, nil
-	}
-
-	return response, status, nil
-}
-
-func logSarifResponse(method string, sarifResponse codeClientSarif.SarifResponse, logger *zerolog.Logger) {
-	logger.Debug().
-		Str("method", method).
-		Str("status", sarifResponse.Status).
-		Float64("progress", sarifResponse.Progress).
-		Int("fetchingCodeTime", sarifResponse.Timing.FetchingCode).
-		Int("analysisTime", sarifResponse.Timing.Analysis).
-		Int("filesAnalyzed", len(sarifResponse.Coverage)).
-		Msg("Received response summary")
 }
 
 func (s *SnykCodeHTTPClient) analysisRequestBody(options *AnalysisOptions) ([]byte, error) {

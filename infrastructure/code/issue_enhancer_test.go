@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -64,7 +65,7 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 	fakeSnykCode := FakeSnykCodeClient{C: c}
 	issueEnhancer := IssueEnhancer{
 		SnykCode:     &fakeSnykCode,
-		instrumentor: NewCodeInstrumentor(),
+		instrumentor: performance.NewInstrumentor(),
 		rootPath:     "/Users/user/workspace/blah",
 		c:            c,
 	}
@@ -94,7 +95,7 @@ func Test_addIssueActions(t *testing.T) {
 	issueEnhancer := IssueEnhancer{
 		SnykCode:     &fakeSnykCode,
 		notifier:     mockNotifier,
-		instrumentor: NewCodeInstrumentor(),
+		instrumentor: performance.NewInstrumentor(),
 		c:            c,
 	}
 
