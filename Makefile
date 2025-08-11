@@ -99,7 +99,7 @@ instance-test:
 
 ## generate: Regenerate generated files (e.g. mocks).
 .PHONY: generate
-generate: tools
+generate:
 	@echo "==> Generating generated files..."
 	@go generate ./...
 
