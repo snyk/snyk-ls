@@ -276,7 +276,8 @@ func getSarifResponseJson2(filePath string) string {
                   "label": true,
                   "type": "commonlyFixed"
                 }
-              ]
+              ],
+							"isAutofixable": true
             }
           },
           {
@@ -362,7 +363,8 @@ func getSarifResponseJson2(filePath string) string {
                   "label": true,
                   "type": "fixExamples"
                 }
-              ]
+              ],
+							"isAutofixable": true
             }
           }
         ],

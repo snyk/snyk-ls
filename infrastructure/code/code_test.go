@@ -140,7 +140,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			issues, _ := scanner.UploadAndAnalyze(context.Background(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
 			assert.NotNil(t, issues)
-			assert.Equal(t, 1, len(issues))
+			assert.Equal(t, 2, len(issues))
 
 			assert.Equal(t, FakeIssue.ID, issues[0].GetID())
 			assert.Equal(t, FakeIssue.Range, issues[0].GetRange())
@@ -424,33 +424,8 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		// execute
 		issues, _ := scanner.UploadAndAnalyze(context.Background(), "", sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
-		// Default is to have 1 fake action from analysis + 0 from autofix
-		assert.Len(t, issues[0].GetCodeActions(), 1)
-	},
-	)
-
-	t.Run("should not provide autofix code action when autofix enabled but issue not fixable", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		channel := make(chan types.ProgressParams, 10000)
-		cancelChannel := make(chan bool, 1)
-		testTracker := progress.NewTestTracker(channel, cancelChannel)
-
-		autofixSetupAndCleanup(t, c)
-		getCodeSettings().isAutofixEnabled.Set(true)
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
-		filePath, path := TempWorkdirWithIssues(t)
-		t.Cleanup(
-			func() {
-				_ = os.RemoveAll(string(path))
-			},
-		)
-		files := []string{string(filePath)}
-
-		// execute
-		issues, _ := scanner.UploadAndAnalyze(context.Background(), "", sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
-
-		// Default is to have 1 fake action from analysis + 0 from autofix
-		assert.Len(t, issues[0].GetCodeActions(), 1)
+		// Default is to have 0 actions from analysis + 0 from autofix
+		assert.Len(t, issues[0].GetCodeActions(), 0)
 	},
 	)
 
@@ -473,10 +448,12 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		// execute
 		issues, _ := scanner.UploadAndAnalyze(context.Background(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
-		assert.Len(t, issues[0].GetCodeActions(), 2)
+		// Only one of the returned issues is Autofix eligible; see getSarifResponseJson2 in fake_code_client_scanner.go.
+		assert.Len(t, issues[0].GetCodeActions(), 1)
+		assert.Len(t, issues[1].GetCodeActions(), 0)
 
 		expectedCodeAction := issueEnhancer.createShowDocumentCodeAction(issues[0])
-		action := issues[0].GetCodeActions()[1]
+		action := issues[0].GetCodeActions()[0]
 		assert.Equal(t, action.GetTitle(), expectedCodeAction.GetTitle())
 		assert.Equal(t, action.GetTitle(), expectedCodeAction.GetCommand().Title)
 		assert.Equal(t, action.GetCommand().CommandId, expectedCodeAction.GetCommand().CommandId)
