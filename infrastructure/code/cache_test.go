@@ -22,6 +22,7 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -60,15 +61,15 @@ func TestScanner_Cache(t *testing.T) {
 			[]types.Issue{&snyk.Issue{ID: "issue2", AdditionalData: snyk.CodeIssueData{Key: uuid.New().String()}}},
 			imcache.WithDefaultExpiration(),
 		)
-		filePath, folderPath := TempWorkdirWithIssues(t)
+		assert.Equal(t, 1, len(scanner.Issues()))
 
 		// now scan
+		filePath, folderPath := TempWorkdirWithIssues(t)
 		_, err := scanner.Scan(t.Context(), filePath, folderPath, nil)
 		require.NoError(t, err)
 
 		// new issue from scan should have been added
-		issue := scanner.Issue(FakeIssue.AdditionalData.GetKey())
-		require.NotNil(t, issue)
+		assert.Equal(t, 2, len(scanner.Issues()))
 	})
 	t.Run("should removeFromCache previous scan results for files to be scanned from cache", func(t *testing.T) {
 		scanner := setupTestScanner(t)
