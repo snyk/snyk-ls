@@ -352,7 +352,7 @@ func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVers
 		openBrowserCommandData := types.CommandData{
 			Title:     "Download manually in browser",
 			CommandId: types.OpenBrowserCommand,
-			Arguments: []any{getDownloadURL(c)},
+			Arguments: []any{getDownloadURL(c, clientProtocolVersion)},
 		}
 
 		actions.Add(types.MessageAction(openBrowserCommandData.Title), openBrowserCommandData)
@@ -369,15 +369,15 @@ func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVers
 	}
 }
 
-func getDownloadURL(c *config.Config) (u string) {
+func getDownloadURL(c *config.Config, protocolVersion string) (u string) {
 	gafConfig := c.Engine().GetConfiguration()
 
 	runsEmbeddedFromCLI := gafConfig.Get(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION
 
 	if runsEmbeddedFromCLI {
-		return install.GetCLIDownloadURL(c, install.DefaultBaseURL, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient())
+		return install.GetCLIDownloadURLForProtocol(c, install.DefaultBaseURL, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient(), protocolVersion)
 	} else {
-		return install.GetLSDownloadURL(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient())
+		return install.GetLSDownloadURLForProtocol(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient(), protocolVersion)
 	}
 }
 

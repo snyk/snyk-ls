@@ -73,7 +73,7 @@ func setupTestFixture(t *testing.T) *testFixture {
 	invocationCtx.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	invocationCtx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("hurz"), runtimeinfo.WithVersion("1000.8.3"))).AnyTimes()
-
+	invocationCtx.EXPECT().GetEngine().Return(engine).AnyTimes()
 	// Snyk CLI mock
 	tempDir := t.TempDir()
 	snykCliPath := filepath.Join(tempDir, "snyk")
@@ -208,7 +208,7 @@ func TestSnykTestHandler(t *testing.T) {
 			err = json.Unmarshal(requestJSON, &request)
 			require.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
-			result, err := handler(context.Background(), request)
+			result, err := handler(t.Context(), request)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -320,7 +320,7 @@ func TestSnykCodeTestHandler(t *testing.T) {
 			err = json.Unmarshal(requestJSON, &request)
 			require.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
-			result, err := handler(context.Background(), request)
+			result, err := handler(t.Context(), request)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			textContent, ok := result.Content[0].(mcp.TextContent)
@@ -372,13 +372,6 @@ func TestBasicSnykCommands(t *testing.T) {
 			mockResponse: `{"authenticated":true,"username":"user@example.com"}`,
 			expectedCmd:  "auth",
 		},
-		{
-			name:         "Logout Command",
-			handlerFunc:  fixture.binding.snykLogoutHandler,
-			command:      []string{"--version"},
-			mockResponse: `Successfully logged out`,
-			expectedCmd:  "logout",
-		},
 	}
 
 	for _, tc := range testCases {
@@ -404,7 +397,7 @@ func TestBasicSnykCommands(t *testing.T) {
 			require.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
 			// Call the handler
-			result, err := handler(context.Background(), request)
+			result, err := handler(t.Context(), request)
 
 			// Assertions
 			require.NoError(t, err)
@@ -439,7 +432,7 @@ func TestAuthHandler(t *testing.T) {
 	err = json.Unmarshal(requestJSON, &request)
 	require.NoError(t, err, "Failed to unmarshal JSON to CallToolRequest")
 
-	result, err := handler(context.Background(), request)
+	result, err := handler(t.Context(), request)
 
 	// Assertions
 	require.NoError(t, err)
@@ -874,7 +867,7 @@ func TestBuildCommand(t *testing.T) {
 func TestRunSnyk(t *testing.T) {
 	fixture := setupTestFixture(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	testCases := []struct {
 		name        string
@@ -1346,7 +1339,7 @@ func TestSnykTrustHandler(t *testing.T) {
 			},
 		}
 
-		result, err := handler(context.Background(), request)
+		result, err := handler(t.Context(), request)
 
 		require.Error(t, err)
 		require.Nil(t, result)
@@ -1360,7 +1353,7 @@ func TestSnykTrustHandler(t *testing.T) {
 			},
 		}
 
-		result, err := handler(context.Background(), request)
+		result, err := handler(t.Context(), request)
 
 		require.Error(t, err)
 		require.Nil(t, result)

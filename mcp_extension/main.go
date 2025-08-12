@@ -103,13 +103,11 @@ func getCliPath(ctx workflow.InvocationContext) (string, error) {
 		logger.Err(err).Msg("Failed to get executable path")
 		return "", err
 	}
-	resolvedPath, err := filepath.EvalSymlinks(exePath)
 
+	resolvedPath, err := filepath.EvalSymlinks(exePath)
 	if err != nil {
 		logger.Err(err).Msg("Failed to eval symlink from path")
-		return "", err
-	} else {
-		// Set Cli path to current process path
-		return resolvedPath, nil
+		resolvedPath = exePath
 	}
+	return resolvedPath, nil
 }

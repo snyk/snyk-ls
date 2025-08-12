@@ -21,13 +21,14 @@ BUILD_DIR := build
 DEV_GOARCH := $(shell go env GOARCH)
 DEV_GOOS := $(shell go env GOOS)
 GOPATH := $(shell go env GOPATH)
+GOROOT := $(shell go env GOROOT)
 VERSION := $(shell git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
 COMMIT := $(shell git show -s --format=%h)
 LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true' -X 'github.com/snyk/snyk-ls/application/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
 
 TOOLS_BIN := $(shell pwd)/.bin
 
-OVERRIDE_GOCI_LINT_V := v1.64.5
+OVERRIDE_GOCI_LINT_V := v1.64.8
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
@@ -159,14 +160,14 @@ license-update: $(TOOLS_BIN)/go-licenses
 	@mkdir -p 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill'
 	@mv 'licenses/github.com/brianblakely/nodep-date-input-polyfill/LICENSE' 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill/LICENSE'
 	@rm -rf 'licenses'
-	@$(TOOLS_BIN)/go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
+	@GOROOT=$(GOROOT) $(TOOLS_BIN)/go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
 	@mkdir -p 'licenses/github.com/brianblakely/nodep-date-input-polyfill'
 	@mv 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill/LICENSE' 'licenses/github.com/brianblakely/nodep-date-input-polyfill/LICENSE'
 	@rm -rf 'licenses_temp'
 
 .PHONY: licenses
 licenses: $(TOOLS_BIN)/go-licenses
-	@$(TOOLS_BIN)/go-licenses report . --ignore github.com/snyk/snyk-ls
+	@GOROOT=$(GOROOT) $(TOOLS_BIN)/go-licenses report . --ignore github.com/snyk/snyk-ls
 
 help: Makefile
 	@echo "Usage: make <command>"

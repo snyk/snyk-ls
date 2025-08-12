@@ -18,6 +18,7 @@ package analytics
 
 import (
 	"encoding/json"
+	"os"
 	"sync"
 	"time"
 
@@ -40,7 +41,18 @@ func NewAnalyticsEventParam(interactionType string, err error, path types.FilePa
 	if err != nil {
 		status = string(analytics.Failure)
 	}
-	targetId, _ := instrumentation.GetTargetId(string(path), instrumentation.AutoDetectedTargetId)
+
+	var targetId string
+	// If we have a file path, we use that to determine the target ID. For analytics such as authentication events, which
+	// are not associated with a file, we use the binary name as the target ID (with a fallback if that fails).
+	if path != "" {
+		targetId, _ = instrumentation.GetTargetId(string(path), instrumentation.AutoDetectedTargetId)
+	} else {
+		targetId, _ = instrumentation.GetTargetId(os.Args[0], instrumentation.FilesystemTargetId)
+		if targetId == "" {
+			targetId = "pkg:filesystem/dummy/dummy"
+		}
+	}
 
 	return types.AnalyticsEventParam{
 		InteractionType: interactionType,
@@ -51,14 +63,14 @@ func NewAnalyticsEventParam(interactionType string, err error, path types.FilePa
 	}
 }
 
-func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
-	logger := c.Logger().With().Str("method", "analytics.sendAnalyticsToAPI").Logger()
+func SendAnalyticsToAPI(engine workflow.Engine, deviceId string, payload []byte) error {
+	logger := engine.GetLogger().With().Str("method", "analytics.sendAnalyticsToAPI").Logger()
 
 	var eventsParam types.AnalyticsEventParam
 	err := json.Unmarshal(payload, &eventsParam)
 	var inputData workflow.Data
 	if err == nil && eventsParam.TimestampMs > 0 {
-		ic := PayloadForAnalyticsEventParam(c, eventsParam)
+		ic := PayloadForAnalyticsEventParam(engine, deviceId, eventsParam)
 		instrumentationObject, icErr := analytics.GetV2InstrumentationObject(ic)
 		if icErr != nil {
 			return err
@@ -83,8 +95,6 @@ func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 			payload,
 		)
 	}
-
-	engine := c.Engine()
 	configuration := engine.GetConfiguration().Clone()
 	configuration.Set(configuration2.FLAG_EXPERIMENTAL, true)
 	analyticsMu.Lock()
@@ -102,7 +112,7 @@ func SendAnalyticsToAPI(c *config.Config, payload []byte) error {
 	return nil
 }
 
-func PayloadForAnalyticsEventParam(c *config.Config, param types.AnalyticsEventParam) analytics.InstrumentationCollector {
+func PayloadForAnalyticsEventParam(engine workflow.Engine, deviceId string, param types.AnalyticsEventParam) analytics.InstrumentationCollector {
 	ic := analytics.NewInstrumentationCollector()
 	// Add to the interaction attribute in the analytics event
 	if param.InteractionUUID == "" {
@@ -115,11 +125,13 @@ func PayloadForAnalyticsEventParam(c *config.Config, param types.AnalyticsEventP
 	ic.SetType("analytics")
 	ic.SetInteractionId(iid)
 	ic.SetStage("dev")
-	ic.AddExtension("device_id", c.DeviceID())
+	if len(deviceId) > 0 {
+		ic.AddExtension("device_id", deviceId)
+	}
 	for s, a := range param.Extension {
 		ic.AddExtension(s, a)
 	}
-	ua := util.GetUserAgent(c.Engine().GetConfiguration(), config.Version)
+	ua := util.GetUserAgent(engine.GetConfiguration(), config.Version)
 	ic.SetUserAgent(ua)
 
 	ic.SetTimestamp(time.UnixMilli(param.TimestampMs))
@@ -130,9 +142,9 @@ func PayloadForAnalyticsEventParam(c *config.Config, param types.AnalyticsEventP
 	return ic
 }
 
-func SendAnalytics(c *config.Config, event types.AnalyticsEventParam, err error) {
-	logger := c.Logger().With().Str("method", "analytics.SendAnalytics").Logger()
-	ic := PayloadForAnalyticsEventParam(c, event)
+func SendAnalytics(engine workflow.Engine, deviceId string, event types.AnalyticsEventParam, err error) {
+	logger := engine.GetLogger().With().Str("method", "analytics.SendAnalytics").Logger()
+	ic := PayloadForAnalyticsEventParam(engine, deviceId, event)
 
 	if err != nil {
 		ic.AddError(err)
@@ -150,7 +162,7 @@ func SendAnalytics(c *config.Config, event types.AnalyticsEventParam, err error)
 		return
 	}
 
-	err = SendAnalyticsToAPI(c, bytes)
+	err = SendAnalyticsToAPI(engine, deviceId, bytes)
 	if err != nil {
 		logger.Err(err).Msg("Failed to send analytics")
 	}

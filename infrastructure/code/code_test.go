@@ -17,7 +17,6 @@
 package code
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -137,7 +136,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			defer func(path string) { _ = os.RemoveAll(path) }(string(path))
 			files := []string{string(filePath)}
 
-			issues, _ := scanner.UploadAndAnalyze(context.Background(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+			issues, _ := scanner.UploadAndAnalyze(t.Context(), sliceToChannel(files), path, map[types.FilePath]bool{}, false, testTracker)
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 2, len(issues))
@@ -170,7 +169,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	testTracker := progress.NewTestTracker(channel, cancelChannel)
 
 	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), fakeCodeScanner)
-	issues, _ := scanner.UploadAndAnalyze(context.Background(), workDir, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
+	issues, _ := scanner.UploadAndAnalyze(t.Context(), workDir, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
 
 	assert.True(t, fakeCodeScanner.UploadAndAnalyzeWasCalled)
 	assert.False(t, issues[0].GetIsIgnored())
@@ -200,7 +199,7 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func(i int) {
-				_, _ = scanner.Scan(context.Background(), types.FilePath("file"+strconv.Itoa(i)+".go"), tempDir, nil)
+				_, _ = scanner.Scan(t.Context(), types.FilePath("file"+strconv.Itoa(i)+".go"), tempDir, nil)
 				wg.Done()
 			}(i)
 		}
@@ -217,7 +216,7 @@ func Test_Scan(t *testing.T) {
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
-		_, _ = scanner.Scan(context.Background(), "", tempDir, nil)
+		_, _ = scanner.Scan(t.Context(), "", tempDir, nil)
 	})
 
 	testCases := []struct {
@@ -254,7 +253,7 @@ func Test_Scan(t *testing.T) {
 			scanner := New(c, performance.NewInstrumentor(), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
-			issues, err := scanner.Scan(context.Background(), "", tempDir, nil)
+			issues, err := scanner.Scan(t.Context(), "", tempDir, nil)
 			assert.Nil(t, err)
 			assert.NotNil(t, issues)
 		})
@@ -418,7 +417,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		files := []string{string(filePath)}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(context.Background(), "", sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+		issues, _ := scanner.UploadAndAnalyze(t.Context(), "", sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
 		// Default is to have 0 actions from analysis + 0 from autofix
 		assert.Len(t, issues[0].GetCodeActions(), 0)
@@ -442,7 +441,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		files := []string{string(filePath)}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(context.Background(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+		issues, _ := scanner.UploadAndAnalyze(t.Context(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
 		// Only one of the returned issues is Autofix eligible; see getSarifResponseJson2 in fake_code_client_scanner.go.
 		assert.Len(t, issues[0].GetCodeActions(), 1)

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/snyk/code-client-go/observability"
 )
 
 const traceIdKey = "trace_id"
@@ -84,7 +85,7 @@ func (n *NoopSpan) GetTraceId() string {
 }
 
 func (n *NoopSpan) getTraceIDFromContext(ctx context.Context) (string, bool) {
-	t, ok := ctx.Value(TraceIdContextKey(traceIdKey)).(string)
+	t, ok := ctx.Value(observability.TraceIdContextKey(traceIdKey)).(string)
 	return t, ok
 }
 func (n *NoopSpan) Context() context.Context {

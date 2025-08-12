@@ -281,9 +281,14 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, initializatio
 }
 
 func updateOrganization(c *config.Config, settings types.Settings) {
-	org := strings.TrimSpace(settings.Organization)
-	if org != "" {
-		c.SetOrganization(org)
+	newOrg := strings.TrimSpace(settings.Organization)
+	if newOrg != "" {
+		oldOrgId := c.Organization()
+		c.SetOrganization(newOrg)
+		newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
+		if oldOrgId != newOrgId {
+			go sendConfigChangedAnalyticsEvent(c, "organization", oldOrgId, newOrgId, "")
+		}
 	}
 }
 
@@ -423,9 +428,8 @@ func sendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, n
 	event := analytics.NewAnalyticsEventParam("Config changed", nil, path)
 
 	event.Extension = map[string]any{
-		"configuration": field,
-		"oldValue":      oldValue,
-		"newValue":      newValue,
+		"config::" + field + "::oldValue": oldValue,
+		"config::" + field + "::newValue": newValue,
 	}
-	analytics.SendAnalytics(c, event, nil)
+	analytics.SendAnalytics(c.Engine(), c.DeviceID(), event, nil)
 }

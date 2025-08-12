@@ -51,7 +51,7 @@ func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 		if !ok {
 			return nil, fmt.Errorf("error converting argument to string. %v", arg)
 		}
-		err := analytics.SendAnalyticsToAPI(c, []byte(payload))
+		err := analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), []byte(payload))
 		if err != nil {
 			logger.Err(err).Msg("error sending analytics to API")
 			return nil, err

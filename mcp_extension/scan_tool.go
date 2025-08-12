@@ -22,15 +22,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
-
-	"github.com/rs/zerolog"
-
-	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
 
@@ -44,6 +49,7 @@ const (
 	SnykLogout          = "snyk_logout"
 	SnykTrust           = "snyk_trust"
 	SnykOpenLearnLesson = "snyk_open_learn_lesson"
+	SnykSendFeedback    = "snyk_send_feedback"
 )
 
 type SnykMcpToolsDefinition struct {
@@ -106,6 +112,10 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykTrustHandler(invocationCtx, toolDef))
 		case SnykOpenLearnLesson:
 			m.mcpServer.AddTool(tool, m.snykOpenLearnLessonHandler(invocationCtx, toolDef))
+		case SnykSendFeedback:
+			m.mcpServer.AddTool(tool, m.snykSendFeedback(invocationCtx, toolDef))
+		case SnykAuthStatus:
+			m.mcpServer.AddTool(tool, m.snykAuthStatusHandler(invocationCtx, toolDef))
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -125,12 +135,17 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	if workingDir != "" {
 		command.Dir = workingDir
 	}
+
+	m.updateGafConfigWithIntegrationEnvironment(invocationCtx, clientInfo.Name, clientInfo.Version)
+
+	integrationVersion := "unknown"
 	runtimeInfo := invocationCtx.GetRuntimeInfo()
 	if runtimeInfo != nil {
-		command.Env = m.expandedEnv(runtimeInfo.GetVersion(), clientInfo.Name, clientInfo.Version)
-	} else {
-		command.Env = m.expandedEnv("unknown", clientInfo.Name, clientInfo.Version)
+		integrationVersion = runtimeInfo.GetVersion()
 	}
+
+	command.Env = m.expandedEnv(integrationVersion, clientInfo.Name, clientInfo.Version)
+
 	logger.Debug().Strs("args", command.Args).Str("workingDir", command.Dir).Msg("Running Command with")
 	logger.Trace().Strs("env", command.Env).Msg("Environment")
 
@@ -163,6 +178,10 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return nil, fmt.Errorf("empty command in tool definition for %s", toolDef.Name)
 		}
 
+		if toolDef.Name == SnykAuth && os.Getenv("SNYK_TOKEN") != "" {
+			return mcp.NewToolResultText("SNYK_TOKEN env var is set, assuming the token is valid"), nil
+		}
+
 		requestArgs := request.GetArguments()
 		params, workingDir, err := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
 		if err != nil {
@@ -193,21 +212,22 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return nil, err
 		}
 
-		output = m.enhanceOutput(&logger, toolDef, output, err == nil, params, workingDir)
+		output = m.enhanceOutput(&logger, toolDef, output, err == nil, workingDir)
 
 		return mcp.NewToolResultText(output), nil
 	}
 }
 
 // enhanceOutput enhances the scan output with structured issue data
-func (m *McpLLMBinding) enhanceOutput(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, params map[string]convertedToolParameter, workDir string) string {
+func (m *McpLLMBinding) enhanceOutput(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, workDir string) string {
 	return mapScanResponse(logger, toolDef, output, success, workDir, m.learnService)
 }
 
-func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, _ SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "snykLogoutHandler").Logger()
-		logger.Debug().Str("toolName", "snyk_logout").Msg("Received call for tool")
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+
 		// Special handling for logout which needs multiple commands
 		params := []string{m.cliPath, "config", "unset", "INTERNAL_OAUTH_TOKEN_STORAGE"}
 		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
@@ -216,6 +236,73 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
 
 		return mcp.NewToolResultText("Successfully logged out"), nil
+	}
+}
+
+func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := m.logger.With().Str("method", "snykAuthStatusHandler").Logger()
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+		params := []string{m.cliPath, "whoami", "--experimental"}
+		output, _ := m.runSnyk(ctx, invocationCtx, "", params)
+
+		output = strings.TrimSpace(output)
+		apiUrl := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.API_URL)
+		org := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.ORGANIZATION)
+
+		if strings.Contains(strings.ToLower(output), "authentication error") {
+			msg := fmt.Sprintf("Authentication Error. \nUsing API Endpoint: %s", apiUrl)
+			if os.Getenv("SNYK_TOKEN") != "" {
+				msg += fmt.Sprintf("\nSNYK_TOKEN env var is set, check if your token is valid and if you are using the correct API %s. "+
+					"ACTION: Ask the user if they want to logout with the following phrasing, 'Do you want to reset authentication for the CLI and the MCP server' if they answer with YES then run snyk_logout tool", apiUrl)
+			}
+			return mcp.NewToolResultText(msg), nil
+		}
+
+		return mcp.NewToolResultText(fmt.Sprintf("User: %s Using API Endpoint: %s and Org: %s", output, apiUrl, org)), nil
+	}
+}
+
+func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) server.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := m.logger.With().Str("method", toolDef.Name).Logger()
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+
+		preventedCountStr := request.GetArguments()["preventedIssuesCount"]
+		remediatedCountStr := request.GetArguments()["remediatedIssuesCount"]
+
+		preventedCount, ok := preventedCountStr.(float64)
+		if !ok {
+			return nil, fmt.Errorf("invalid argument preventedIssuesCount")
+		}
+		remediatedCount, ok := remediatedCountStr.(float64)
+		if !ok {
+			return nil, fmt.Errorf("invalid argument remediatedCount")
+		}
+		pathArg := request.GetArguments()["path"]
+		if pathArg == nil {
+			return nil, fmt.Errorf("argument 'path' is missing for tool %s", toolDef.Name)
+		}
+		path, ok := pathArg.(string)
+		if !ok {
+			return nil, fmt.Errorf("argument 'path' is not a string for tool %s", toolDef.Name)
+		}
+		if path == "" {
+			return nil, fmt.Errorf("empty path given to tool %s", toolDef.Name)
+		}
+
+		clientInfo := ClientInfoFromContext(ctx)
+
+		m.updateGafConfigWithIntegrationEnvironment(invocationCtx, clientInfo.Name, clientInfo.Version)
+		event := analytics.NewAnalyticsEventParam("Send feedback", nil, types.FilePath(path))
+
+		event.Extension = map[string]any{
+			"mcp::preventedIssuesCount":  int(preventedCount),
+			"mcp::remediatedIssuesCount": int(remediatedCount),
+		}
+		go analytics.SendAnalytics(invocationCtx.GetEngine(), "", event, nil)
+
+		return mcp.NewToolResultText("Successfully sent feedback"), nil
 	}
 }
 
@@ -239,6 +326,12 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 		}
 		if folderPath == "" {
 			return nil, fmt.Errorf("empty path given to tool %s", toolDef.Name)
+		}
+
+		if m.folderTrust.IsFolderTrusted(folderPath) {
+			msg := fmt.Sprintf("Folder '%s' is already trusted", folderPath)
+			logger.Info().Msg(msg)
+			return mcp.NewToolResultText(msg), nil
 		}
 
 		return m.folderTrust.HandleTrust(ctx, folderPath, logger)

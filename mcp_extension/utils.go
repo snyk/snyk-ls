@@ -18,6 +18,7 @@ package mcp_extension
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -98,6 +99,12 @@ func createToolFromDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
 				opts = append(opts, mcp.WithBoolean(param.Name, mcp.Required(), mcp.Description(param.Description)))
 			} else {
 				opts = append(opts, mcp.WithBoolean(param.Name, mcp.Description(param.Description)))
+			}
+		} else if param.Type == "number" {
+			if param.IsRequired {
+				opts = append(opts, mcp.WithNumber(param.Name, mcp.Required(), mcp.Description(param.Description)))
+			} else {
+				opts = append(opts, mcp.WithNumber(param.Name, mcp.Description(param.Description)))
 			}
 		}
 	}
@@ -208,4 +215,10 @@ func verifyCommandArgument(command any) bool {
 	binaryName := filepath.Base(cmdStr)
 	isMatch := re.MatchString(binaryName)
 	return isMatch
+}
+
+func IsJSON(s string) bool {
+	var js interface{}
+	err := json.Unmarshal([]byte(s), &js)
+	return err == nil
 }

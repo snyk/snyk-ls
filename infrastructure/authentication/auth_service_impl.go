@@ -21,18 +21,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/instrumentation"
-
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/analytics"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"golang.org/x/oauth2"
 
@@ -131,20 +127,13 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 }
 
 func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
-	id, err2 := instrumentation.GetTargetId(os.Args[0], instrumentation.FilesystemTargetId)
-	if err2 != nil {
-		id = "pkg:filesystem/dummy/dummy"
+	event := analytics2.NewAnalyticsEventParam("authenticated", nil, "")
+	// Add the authentication details in the extension fields. We only send the method name; we must not include any
+	// authentication tokens.
+	event.Extension = map[string]any{
+		"auth::auth-type": string(a.c.AuthenticationMethod()),
 	}
-	event := types.AnalyticsEventParam{
-		InteractionType: "authenticated",
-		Extension:       map[string]any{"auth::auth-type": string(a.c.AuthenticationMethod())},
-		Category:        []string{},
-		Status:          string(analytics.Success),
-		TargetId:        id,
-		TimestampMs:     time.Now().UnixMilli(),
-	}
-
-	analytics2.SendAnalytics(a.c, event, nil)
+	analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), event, nil)
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {

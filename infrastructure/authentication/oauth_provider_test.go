@@ -137,7 +137,7 @@ func TestAuthenticateUsesAuthenticator(t *testing.T) {
 
 	provider := newOAuthProvider(config, authenticator, config2.CurrentConfig().Logger())
 
-	authToken, err := provider.Authenticate(context.Background())
+	authToken, err := provider.Authenticate(t.Context())
 
 	assert.NoError(t, err)
 	assert.Len(t, authenticator.GetAllCalls("CancelableAuthenticate"), 1)
@@ -149,7 +149,7 @@ func TestAuthURL_ShouldReturnURL(t *testing.T) {
 	authenticator := NewFakeOauthAuthenticator(time.Now().Add(10*time.Second), true, config, true).(*fakeOauthAuthenticator)
 	provider := newOAuthProvider(config, authenticator, config2.CurrentConfig().Logger())
 	provider.setAuthUrl("https://auth.fake.snyk.io")
-	url := provider.AuthURL(context.Background())
+	url := provider.AuthURL(t.Context())
 
 	assert.NotEmpty(t, url)
 	_, err := url2.Parse(url)

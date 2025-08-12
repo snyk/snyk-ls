@@ -17,7 +17,6 @@
 package code
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -76,7 +75,7 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 	expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
 
 	t.Run("returns CommandData with correct URI and range", func(t *testing.T) {
-		commandDataFunc := issueEnhancer.autofixShowDetailsFunc(context.Background(), issue)
+		commandDataFunc := issueEnhancer.autofixShowDetailsFunc(t.Context(), issue)
 		commandData := commandDataFunc()
 
 		assert.Equal(t, types.NavigateToRangeCommand, commandData.Title)
@@ -127,7 +126,7 @@ func Test_addIssueActions(t *testing.T) {
 		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(false, true)
 
-		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
+		issueEnhancer.addIssueActions(t.Context(), fakeIssues)
 
 		issueData, ok := fakeIssues[0].GetAdditionalData().(snyk.CodeIssueData)
 		require.True(t, ok)
@@ -141,7 +140,7 @@ func Test_addIssueActions(t *testing.T) {
 		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(false, false)
 
-		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
+		issueEnhancer.addIssueActions(t.Context(), fakeIssues)
 
 		issueData, ok := fakeIssues[0].GetAdditionalData().(snyk.CodeIssueData)
 		require.True(t, ok)
@@ -155,7 +154,7 @@ func Test_addIssueActions(t *testing.T) {
 		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(true, true)
 
-		issueEnhancer.addIssueActions(context.Background(), fakeIssues)
+		issueEnhancer.addIssueActions(t.Context(), fakeIssues)
 
 		issueData, ok := fakeIssues[0].GetAdditionalData().(snyk.CodeIssueData)
 		require.True(t, ok)

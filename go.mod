@@ -1,6 +1,8 @@
 module github.com/snyk/snyk-ls
 
-go 1.23.8
+go 1.24
+
+toolchain go1.24.5
 
 require (
 	github.com/adrg/strutil v0.3.1
@@ -27,7 +29,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/code-client-go v1.23.1-0.20250811105807-67d185f51348
-	github.com/snyk/go-application-framework v0.0.0-20250723073111-4b6d93af5064
+	github.com/snyk/go-application-framework v0.0.0-20250806121453-f52d07f97ed7
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
@@ -39,7 +41,6 @@ require (
 	golang.org/x/net v0.38.0
 	golang.org/x/oauth2 v0.27.0
 	golang.org/x/sync v0.13.0
-	gopkg.in/ini.v1 v1.67.0
 )
 
 require (
