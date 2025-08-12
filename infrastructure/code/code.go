@@ -449,14 +449,3 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 type noFilesError struct{}
 
 func (e noFilesError) Error() string { return "no files to scan" }
-
-func isNoFilesError(err error) bool {
-	var myErr noFilesError
-	ok := errors.As(err, &myErr)
-	return ok
-}
-
-type UploadStatus struct {
-	UploadedFiles int
-	TotalFiles    int
-}
