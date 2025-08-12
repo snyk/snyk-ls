@@ -136,7 +136,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			defer func(path string) { _ = os.RemoveAll(path) }(string(path))
 			files := []string{string(filePath)}
 
-			issues, _ := scanner.UploadAndAnalyze(t.Context(), sliceToChannel(files), path, map[types.FilePath]bool{}, false, testTracker)
+			issues, _ := scanner.UploadAndAnalyze(t.Context(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 2, len(issues))

@@ -51,8 +51,8 @@ func (a AutofixUnifiedDiffSuggestion) GetUnifiedDiffForFile(filePath string) str
 func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, filePath types.FilePath, issue types.Issue) (unifiedDiffSuggestions []llm.AutofixUnifiedDiffSuggestion, err error) {
 	method := "GetAutofixDiffs"
 	logger := sc.C.Logger().With().Str("method", method).Logger()
-	span := sc.instrumentor.StartSpan(ctx, method)
-	defer sc.instrumentor.Finish(span)
+	span := sc.Instrumentor.StartSpan(ctx, method)
+	defer sc.Instrumentor.Finish(span)
 
 	sc.bundleHashesMutex.RLock()
 	bundleHash, found := sc.bundleHashes[baseDir]

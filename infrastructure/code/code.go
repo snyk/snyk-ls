@@ -89,7 +89,7 @@ type Scanner struct {
 	// the cache in workspace/folder should just delegate to this cache
 	issueCache          *imcache.Cache[types.FilePath, []types.Issue]
 	cacheRemovalHandler func(path types.FilePath)
-	instrumentor        performance.Instrumentor
+	Instrumentor        performance.Instrumentor
 	C                   *config.Config
 }
 
@@ -119,7 +119,7 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		notifier:      notifier,
 		bundleHashes:  map[types.FilePath]string{},
 		codeScanner:   codeScanner,
-		instrumentor:  instrumentor,
+		Instrumentor:  instrumentor,
 		C:             c,
 	}
 	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
@@ -221,8 +221,8 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 }
 
 func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {
-	span := sc.instrumentor.StartSpan(ctx, "code.ScanWorkspace")
-	defer sc.instrumentor.Finish(span)
+	span := sc.Instrumentor.StartSpan(ctx, "code.ScanWorkspace")
+	defer sc.Instrumentor.Finish(span)
 	ctx, cancel := context.WithCancel(span.Context())
 	defer cancel()
 
@@ -368,8 +368,8 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 	method := "code.UploadAndAnalyze"
 
 	logger := sc.C.Logger().With().Str("method", method).Logger()
-	span := sc.instrumentor.StartSpan(ctx, method)
-	defer sc.instrumentor.Finish(span)
+	span := sc.Instrumentor.StartSpan(ctx, method)
+	defer sc.Instrumentor.Finish(span)
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 	logger.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
@@ -433,7 +433,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 		return []types.Issue{}, err
 	}
 	issueEnhancer := newIssueEnhancer(
-		sc.instrumentor,
+		sc.Instrumentor,
 		sc.errorReporter,
 		sc.notifier,
 		sc.learnService,
