@@ -27,7 +27,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -43,33 +42,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/vcs"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
-
-// can we replace them with more succinct higher level integration tests?[keeping them for sanity for the time being]
-func setupDocs(t *testing.T) (types.FilePath, lsp.TextDocumentItem, lsp.TextDocumentItem, []byte, []byte) {
-	t.Helper()
-	path := t.TempDir()
-
-	content1 := []byte("test1")
-	_ = os.WriteFile(path+string(os.PathSeparator)+"test1.java", content1, 0660)
-
-	content2 := []byte("test2")
-	_ = os.WriteFile(path+string(os.PathSeparator)+"test2.java", content2, 0660)
-
-	firstDoc := lsp.TextDocumentItem{
-		URI: uri.PathToUri(types.FilePath(filepath.Join(path, "test1.java"))),
-	}
-
-	secondDoc := lsp.TextDocumentItem{
-		URI: uri.PathToUri(types.FilePath(filepath.Join(path, "test2.java"))),
-	}
-	return types.FilePath(path), firstDoc, secondDoc, content1, content2
-}
 
 func setupTestData() (issue *snyk.Issue, expectedURI string, expectedTitle string) {
 	issue = &snyk.Issue{
@@ -130,7 +107,6 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 	t.Run(
 		"should retrieve from backend", func(t *testing.T) {
-
 			scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 			filePath, path := TempWorkdirWithIssues(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(string(path))

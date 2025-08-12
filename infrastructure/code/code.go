@@ -20,10 +20,7 @@ import (
 	"context"
 	"sync"
 	"time"
-
-	"github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/snyk-ls/internal/observability/performance"
-
+	
 	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
@@ -32,6 +29,7 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
+	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
@@ -43,6 +41,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -445,7 +444,3 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 
 	return issues, nil
 }
-
-type noFilesError struct{}
-
-func (e noFilesError) Error() string { return "no files to scan" }
