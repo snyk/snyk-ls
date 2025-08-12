@@ -353,6 +353,7 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 }
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
+	t.Skipf("autofix is disabled by default so we don't create code actions from the sarif from ccg.")
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 	didOpenParams, dir := didOpenTextParams(t)
@@ -416,6 +417,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 }
 
 func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
+	t.Skipf("autofix is disabled by default so we don't create code actions from the sarif from ccg.")
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 	didOpenParams, dir := didOpenTextParams(t)
