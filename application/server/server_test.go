@@ -846,7 +846,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 		di.ScanPersister(), di.ScanStateAggregator())
 	c.Workspace().AddFolder(folder)
 
-	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	_, err = loc.Client.Call(ctx, textDocumentDidOpenOperation, didOpenParams)
 
 	if err != nil {
 		t.Fatal(err)
@@ -873,7 +873,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 
 	require.Eventually(
 		t,
-		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 0, jsonRPCRecorder),
 		5*time.Second,
 		time.Millisecond,
 	)
@@ -895,7 +895,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 2, jsonRPCRecorder),
 		5*time.Second,
 		time.Millisecond,
 	)
