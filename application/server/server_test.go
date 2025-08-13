@@ -24,16 +24,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
-	"github.com/snyk/snyk-ls/internal/util"
-
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
-	"github.com/snyk/snyk-ls/internal/testsupport"
-
+	
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
@@ -43,6 +34,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -50,6 +43,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
@@ -57,9 +52,12 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const maxIntegTestDuration = 45 * time.Minute
