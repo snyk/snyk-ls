@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-	
+
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
