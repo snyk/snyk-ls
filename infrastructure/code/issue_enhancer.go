@@ -34,6 +34,7 @@ import (
 )
 
 const ShowInDetailPanelIdeCommand = "showInDetailPanel"
+const FixIssuePrefix = "⚡ Fix this issue: "
 
 type IssueEnhancer struct {
 	instrumentor  performance.Instrumentor
@@ -90,7 +91,7 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []types.Issu
 				return
 			}
 			issues[i].SetCodelensCommands(append(issues[i].GetCodelensCommands(), types.CommandData{
-				Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
+				Title:     FixIssuePrefix + issueTitle(issues[i]),
 				CommandId: types.NavigateToRangeCommand,
 				Arguments: []any{uri, issues[i].GetRange()},
 			}))
@@ -115,7 +116,7 @@ func (b *IssueEnhancer) createShowDocumentCodeAction(issue types.Issue) (codeAct
 		return nil
 	}
 
-	title := fmt.Sprintf("⚡ Fix this issue: %s (Snyk)", issueTitle(issue))
+	title := FixIssuePrefix + issueTitle(issue) + " (Snyk)"
 
 	codeAction = &snyk.CodeAction{
 		Title: title,

@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -353,12 +355,17 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 }
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
-	t.Skipf("autofix is disabled by default so we don't create code actions from the sarif from ccg.")
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
+	// Because the scan results are being provided by code.getSarifResponseJson2, we need to enable autofix so that issues
+	// get enhanced with commands (see code.addIssueActions).
+	c.Engine().GetConfiguration().Set(
+		code_workflow.ConfigurationSastSettings,
+		&sast_contract.SastResponse{SastEnabled: true, AutofixEnabled: true},
+	)
 
 	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(dir),
@@ -412,17 +419,22 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.NotNil(t, lenses)
-	assert.Len(t, lenses, 2)
-	assert.Equal(t, lenses[0].Command.Command, code.FakeCommand.CommandId)
+	assert.Len(t, lenses, 1)
+	assert.Equal(t, lenses[0].Command.Title, code.FixIssuePrefix+code.DontUsePrintStackTrace)
 }
 
 func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
-	t.Skipf("autofix is disabled by default so we don't create code actions from the sarif from ccg.")
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
+	// Because the scan results are being provided by code.getSarifResponseJson2, we need to enable autofix so that issues
+	// get enhanced with commands (see code.addIssueActions).
+	c.Engine().GetConfiguration().Set(
+		code_workflow.ConfigurationSastSettings,
+		&sast_contract.SastResponse{SastEnabled: true, AutofixEnabled: true},
+	)
 
 	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(dir),
