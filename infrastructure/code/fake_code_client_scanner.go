@@ -419,7 +419,8 @@ func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(
 	_ string,
 	files <-chan string,
 	changedFiles map[string]bool,
-	_ chan<- scan.LegacyScanStatus,
+	statusChannel chan<- scan.LegacyScanStatus,
 ) (*codeClientSarif.SarifResponse, string, error) {
+	defer close(statusChannel)
 	return f.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)
 }

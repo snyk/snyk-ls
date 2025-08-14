@@ -416,7 +416,8 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		files := []string{string(filePath)}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(t.Context(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+		issues, err := scanner.UploadAndAnalyze(t.Context(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+		require.NoError(t, err)
 
 		// Only one of the returned issues is Autofix eligible; see getSarifResponseJson2 in fake_code_client_scanner.go.
 		assert.Len(t, issues[0].GetCodeActions(), 1)
