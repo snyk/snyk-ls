@@ -336,7 +336,7 @@ func Test_IsEnabled(t *testing.T) {
 	scanner := &Scanner{errorReporter: newTestCodeErrorReporter(), C: c}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
-			config.CurrentConfig().SetSnykCodeEnabled(true)
+			c.SetSnykCodeEnabled(true)
 			enabled := scanner.IsEnabled()
 			assert.True(t, enabled)
 		},
