@@ -5,13 +5,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/testutil"
 
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func Test_ExtensionEntryPoint(t *testing.T) {
+	c := testutil.UnitTest(t)
 	expectedLoglevel := "trace"
 	expectedLogPath := t.TempDir()
 
@@ -36,7 +37,6 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Empty(t, data)
 
-	c := config.CurrentConfig()
 	assert.Equal(t, expectedLoglevel, c.LogLevel())
 	assert.Equal(t, expectedLogPath, c.LogPath())
 	assert.Equal(t, configCacheTTL, c.Engine().GetConfiguration().GetDuration(configuration.CONFIG_CACHE_TTL))
