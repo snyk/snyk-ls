@@ -76,7 +76,16 @@ func (c ExtensionExecutor) doExecute(_ context.Context, cmd []string, workingDir
 	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, string(workingDir))
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
-	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
+
+	// Take environment snapshot and acquire mutex before env mutations
+	Mutex.Lock()
+	envSnapshot := TakeEnvSnapshot()
+	defer func() {
+		RestoreEnvSnapshot(envSnapshot)
+		Mutex.Unlock()
+	}()
+
+	envvars.LoadConfigFiles(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
 
 	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
 	if len(data) > 0 {

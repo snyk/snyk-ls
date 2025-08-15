@@ -17,6 +17,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/spf13/pflag"
@@ -86,4 +88,52 @@ func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {
 	// Compare
 	assert.NotNil(t, err)
 	assert.Equal(t, expectedPayload, actualData)
+}
+
+func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
+	c := testutil.UnitTest(t)
+	originalPath := "original:existing"
+	t.Setenv("PATH", originalPath)
+	t.Setenv("TEST_VAR", "overrideable_value")
+
+	// Create a temporary directory with a config file
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, ".snyk.env")
+	configContent := []byte("PATH=config:file\nTEST_VAR=test_value\n")
+	err := os.WriteFile(configFile, configContent, 0660)
+	assert.NoError(t, err)
+
+	// Prepare a workflow that can verify environment loading
+	workflowId := workflow.NewWorkflowIdentifier("legacycli")
+	engine := app.CreateAppEngine()
+	actualEnvVar := ""
+	actualPath := ""
+
+	_, err = engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		// Capture environment state during workflow execution
+		actualEnvVar = os.Getenv("TEST_VAR")
+		actualPath = os.Getenv("PATH")
+		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
+		return []workflow.Data{data}, nil
+	})
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	config.CurrentConfig().SetEngine(engine)
+	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
+
+	// Execute the extension executor which should loads config files
+	executorUnderTest := NewExtensionExecutor(c)
+	_, err = executorUnderTest.Execute(t.Context(), []string{"snyk", "test"}, types.FilePath(tempDir))
+	assert.NoError(t, err)
+
+	// Verify environment variable was loaded from config file
+	assert.Equal(t, "test_value", actualEnvVar)
+
+	// Verify PATH was prepended (config path should come first)
+	expectedPath := "config:file:" + originalPath // "config:file:original:existing"
+	assert.Equal(t, expectedPath, actualPath,
+		"PATH should be config path prepended to original path")
 }

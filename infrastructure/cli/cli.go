@@ -99,7 +99,7 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 
 	cloneConfig := c.c.Engine().GetConfiguration().Clone()
 	cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
-	envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
+	envvars.LoadConfigFiles(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
 	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
 
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)

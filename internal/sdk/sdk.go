@@ -35,17 +35,18 @@ func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.L
 	for i := 0; i < len(sdks); i++ {
 		sdk := sdks[i]
 		path := sdk.Path
-		pathExt := filepath.Join(path, "bin")
 		env := gotenv.Env{}
+		var pathExt string
 		switch {
 		case strings.Contains(strings.ToLower(sdk.Type), "java"):
 			env["JAVA_HOME"] = path
-			pathExt = filepath.Dir(path)
+			pathExt = filepath.Join(path, "bin")
 		case strings.Contains(strings.ToLower(sdk.Type), "python"):
 			pathExt = filepath.Dir(path)
 			additionalParameters = append(additionalParameters, "--command="+path)
 		case strings.Contains(strings.ToLower(sdk.Type), "go"):
 			env["GOROOT"] = path
+			pathExt = filepath.Join(path, "bin")
 		}
 
 		envvars.UpdatePath(pathExt, true)

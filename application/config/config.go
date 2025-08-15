@@ -17,6 +17,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -245,6 +246,7 @@ func newConfig(engine workflow.Engine) *Config {
 	c := &Config{}
 	c.logger = getNewScrubbingLogger(c)
 	c.cliSettings = NewCliSettings(c)
+	c.prepareDefaultEnvChannel = make(chan bool, 1)
 	c.automaticAuthentication = true
 	c.configFile = ""
 	c.format = FormatMd
@@ -498,8 +500,15 @@ func (c *Config) TokenChangesChannel() <-chan string {
 	return channel
 }
 
-func (c *Config) PrepareDefaultEnvChannel() <-chan bool {
-	return c.prepareDefaultEnvChannel
+// WaitForDefaultEnv blocks until the default environment has been prepared
+// or until the provided context is canceled. Returns the context error if it is done.
+func (c *Config) WaitForDefaultEnv(ctx context.Context) error {
+	select {
+	case <-c.prepareDefaultEnvChannel:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (c *Config) SetCliSettings(settings *CliSettings) {
@@ -892,7 +901,7 @@ func (c *Config) SetAutomaticScanning(value bool) {
 
 func (c *Config) addDefaults() {
 	go func() {
-		envvars.LoadConfiguredEnvironment(nil, "")
+		envvars.LoadShellEnvironment()
 		//goland:noinspection GoBoolExpressions
 		if runtime.GOOS == "windows" {
 			c.defaultDirs = []string{
@@ -916,7 +925,7 @@ func (c *Config) addDefaults() {
 		}
 		c.determineJavaHome()
 		c.mavenDefaults()
-		c.prepareDefaultEnvChannel <- true
+		close(c.prepareDefaultEnvChannel)
 	}()
 }
 
