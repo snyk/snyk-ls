@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -113,7 +112,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	s := &scanner.TestScanner{}
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 	// explicitly enable folder trust which is disabled by default in tests
-	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+	c.SetTrustedFolderFeatureEnabled(true)
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -132,7 +131,7 @@ func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) 
 	s := &scanner.TestScanner{}
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 	// explicitly enable folder trust which is disabled by default in tests
-	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+	c.SetTrustedFolderFeatureEnabled(true)
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand, Arguments: []any{"LLM"}}
 	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
