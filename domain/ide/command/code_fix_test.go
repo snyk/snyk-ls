@@ -53,7 +53,8 @@ func setupClientCapability(config *config.Config) {
 	config.SetClientCapabilities(clientCapabilties)
 }
 
-func setupCommand(mockNotifier *notification.MockNotifier) *fixCodeIssue {
+func setupCommand(t *testing.T, c *config.Config, mockNotifier *notification.MockNotifier) *fixCodeIssue {
+	t.Helper()
 	cmdData := types.CommandData{
 		CommandId: types.CodeFixCommand,
 		Arguments: sampleArgs,
@@ -61,7 +62,7 @@ func setupCommand(mockNotifier *notification.MockNotifier) *fixCodeIssue {
 	cmd := &fixCodeIssue{
 		command:  cmdData,
 		notifier: mockNotifier,
-		logger:   config.CurrentConfig().Logger(),
+		logger:   c.Logger(),
 	}
 	return cmd
 }
@@ -122,7 +123,7 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	cmd := setupCommand(mockNotifier)
+	cmd := setupCommand(t, c, mockNotifier)
 
 	filePath := sampleArgs[1].(string)
 	path := types.FilePath(filePath)
@@ -162,7 +163,7 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	setupClientCapability(c)
 
 	mockNotifier := notification.NewMockNotifier()
-	cmd := setupCommand(mockNotifier)
+	cmd := setupCommand(t, c, mockNotifier)
 
 	filePath := sampleArgs[1].(string)
 	path := types.FilePath(filePath)
@@ -206,7 +207,7 @@ func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
 	setupClientCapability(c)
 
 	mockNotifier := notification.NewMockNotifier()
-	cmd := setupCommand(mockNotifier)
+	cmd := setupCommand(t, c, mockNotifier)
 
 	issueProviderMock := mock_snyk.NewMockIssueProvider(ctrl)
 	issueProviderMock.EXPECT().Issues().Return(snyk.IssuesByFile{})
