@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -60,10 +61,8 @@ func Test_getShardKey(t *testing.T) {
 
 func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 	c := config.CurrentConfig()
-	fakeSnykCode := FakeSnykCodeClient{C: c}
 	issueEnhancer := IssueEnhancer{
-		SnykCode:     &fakeSnykCode,
-		instrumentor: NewCodeInstrumentor(),
+		instrumentor: performance.NewInstrumentor(),
 		rootPath:     "/Users/user/workspace/blah",
 		c:            c,
 	}
@@ -88,12 +87,10 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 
 func Test_addIssueActions(t *testing.T) {
 	c := config.CurrentConfig()
-	fakeSnykCode := FakeSnykCodeClient{C: c}
 	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
-		SnykCode:     &fakeSnykCode,
 		notifier:     mockNotifier,
-		instrumentor: NewCodeInstrumentor(),
+		instrumentor: performance.NewInstrumentor(),
 		c:            c,
 	}
 

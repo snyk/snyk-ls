@@ -35,6 +35,11 @@ type FakeCodeScannerClient struct {
 	rootPath                  types.FilePath
 }
 
+const (
+	DontUsePrintStackTrace                       string = "DontUsePrintStackTrace"
+	CatchingInterruptedExceptionWithoutInterrupt string = "catchingInterruptedExceptionWithoutInterrupt"
+)
+
 func getSarifResponseJson2(filePath string) string {
 	filePath = strings.ReplaceAll(filePath, `\`, `\\`)
 	return fmt.Sprintf(`{
@@ -70,10 +75,10 @@ func getSarifResponseJson2(filePath string) string {
             "version": "1.0.0",
             "rules": [
               {
-                "id": "java/DontUsePrintStackTrace",
-                "name": "DontUsePrintStackTrace",
+                "id": "java/%[1]s",
+                "name": "%[1]s",
                 "shortDescription": {
-                  "text": "DontUsePrintStackTrace"
+                  "text": "%[1]s"
                 },
                 "defaultConfiguration": {
                   "level": "note"
@@ -126,10 +131,10 @@ func getSarifResponseJson2(filePath string) string {
                 }
               },
               {
-                "id": "java/catchingInterruptedExceptionWithoutInterrupt",
-                "name": "catchingInterruptedExceptionWithoutInterrupt",
+                "id": "java/%[2]s",
+                "name": "%[2]s",
                 "shortDescription": {
-                  "text": "catchingInterruptedExceptionWithoutInterrupt"
+                  "text": "%[2]s"
                 },
                 "defaultConfiguration": {
                   "level": "warning"
@@ -185,7 +190,7 @@ func getSarifResponseJson2(filePath string) string {
         },
         "results": [
           {
-            "ruleId": "java/DontUsePrintStackTrace",
+            "ruleId": "java/%[1]s",
             "ruleIndex": 0,
             "level": "note",
             "message": {
@@ -201,7 +206,7 @@ func getSarifResponseJson2(filePath string) string {
               {
                 "physicalLocation": {
                   "artifactLocation": {
-                    "uri": "%s",
+                    "uri": "%[3]s",
                     "uriBaseId": "dummy"
                   },
                   "region": {
@@ -227,7 +232,7 @@ func getSarifResponseJson2(filePath string) string {
                           "id": 0,
                           "physicalLocation": {
                             "artifactLocation": {
-                              "uri": "%s",
+                              "uri": "%[3]s",
                               "uriBaseId": "dummy"
                             },
                             "region": {
@@ -244,7 +249,7 @@ func getSarifResponseJson2(filePath string) string {
                           "id": 1,
                           "physicalLocation": {
                             "artifactLocation": {
-																"uri": "%s",
+																"uri": "%[3]s",
                               "uriBaseId": "dummy"
                             },
                             "region": {
@@ -276,11 +281,12 @@ func getSarifResponseJson2(filePath string) string {
                   "label": true,
                   "type": "commonlyFixed"
                 }
-              ]
+              ],
+							"isAutofixable": true
             }
           },
           {
-            "ruleId": "java/catchingInterruptedExceptionWithoutInterrupt",
+            "ruleId": "java/%[2]s",
             "ruleIndex": 1,
             "level": "warning",
             "message": {
@@ -308,7 +314,7 @@ func getSarifResponseJson2(filePath string) string {
               {
                 "physicalLocation": {
                   "artifactLocation": {
-                    "uri": "%s",
+                    "uri": "%[3]s",
                     "uriBaseId": "dummy"
                   },
                   "region": {
@@ -334,7 +340,7 @@ func getSarifResponseJson2(filePath string) string {
                           "id": 0,
                           "physicalLocation": {
                             "artifactLocation": {
-                              "uri": "%s",
+                              "uri": "%[3]s",
                               "uriBaseId": "dummy"
                             },
                             "region": {
@@ -362,7 +368,8 @@ func getSarifResponseJson2(filePath string) string {
                   "label": true,
                   "type": "fixExamples"
                 }
-              ]
+              ],
+							"isAutofixable": true
             }
           }
         ],
@@ -384,12 +391,16 @@ func getSarifResponseJson2(filePath string) string {
     ]
   }
 }
-`, filePath, filePath, filePath, filePath, filePath)
+`, DontUsePrintStackTrace, CatchingInterruptedExceptionWithoutInterrupt, filePath)
 }
 
-func (f *FakeCodeScannerClient) UploadAndAnalyze(_ context.Context, _ string, _ scan.Target,
+func (f *FakeCodeScannerClient) UploadAndAnalyze(
+	_ context.Context,
+	_ string,
+	_ scan.Target,
 	files <-chan string,
-	_ map[string]bool) (*codeClientSarif.SarifResponse, string, error) {
+	_ map[string]bool,
+) (*codeClientSarif.SarifResponse, string, error) {
 	var analysisResponse codeClientSarif.SarifResponse
 	responseJson := getSarifResponseJson2(filepath.Base(<-files))
 	err := json.Unmarshal([]byte(responseJson), &analysisResponse)
@@ -397,12 +408,19 @@ func (f *FakeCodeScannerClient) UploadAndAnalyze(_ context.Context, _ string, _ 
 	return &analysisResponse, "", err
 }
 
-func (f *FakeCodeScannerClient) Upload(
+func (f *FakeCodeScannerClient) Upload(context.Context, string, scan.Target, <-chan string, map[string]bool) (bundle.Bundle, error) {
+	panic("Not implemented")
+}
+
+func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(
 	ctx context.Context,
 	requestId string,
 	target scan.Target,
+	_ string,
 	files <-chan string,
 	changedFiles map[string]bool,
-) (bundle.Bundle, error) {
-	panic("Not implemented")
+	statusChannel chan<- scan.LegacyScanStatus,
+) (*codeClientSarif.SarifResponse, string, error) {
+	defer close(statusChannel)
+	return f.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)
 }

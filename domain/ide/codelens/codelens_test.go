@@ -47,7 +47,12 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	c := testutil.IntegTest(t)
 	di.TestInit(t) // IntegTest doesn't automatically inits DI
 	testutil.OnlyEnableCode()
-	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
+	// Because the scan results are being provided by code.getSarifResponseJson2, we need to enable autofix so that issues
+	// get enhanced with commands (see code.addIssueActions).
+	c.Engine().GetConfiguration().Set(
+		code_workflow.ConfigurationSastSettings,
+		&sast_contract.SastResponse{SastEnabled: true, AutofixEnabled: true},
+	)
 	// this is using the real progress channel, so we need to listen to it
 	dummyProgressListeners(t)
 
@@ -64,9 +69,8 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	lenses := GetFor(filePath)
 
 	assert.NotNil(t, lenses)
-	assert.Equal(t, 2, len(lenses))
-	assert.Equal(t, code.FakeCommand.CommandId, lenses[0].Command.Command)
-	assert.Equal(t, code.FakeFixCommand.CommandId, lenses[1].Command.Command)
+	assert.Equal(t, 1, len(lenses))
+	assert.Equal(t, lenses[0].Command.Title, code.FixIssuePrefix+code.DontUsePrintStackTrace)
 }
 
 func dummyProgressListeners(t *testing.T) {
