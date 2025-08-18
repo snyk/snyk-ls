@@ -272,8 +272,9 @@ main {
   border-radius: 2rem;
   margin: 0 0 0.8rem 0; /* space above the field */
   line-height: 1;
-  background: #d92c2c; /* red background */
-  color: #ffffff;      /* white text */
+  background: transparent; /* transparent background */
+  border: 1px solid #d92c2c; /* red outline */
+  color: #d92c2c;           /* red text */
 }
 
 .example {
