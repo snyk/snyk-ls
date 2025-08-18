@@ -175,10 +175,14 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		ignoreReason = ignoreDetails.Reason
 	}
 
-	orgSlug := renderer.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION_SLUG)
-	linkToPendingIgnore, err := url.Parse(renderer.c.SnykUI() + "/org/" + orgSlug + "/ignore-requests")
-	if err != nil {
-		renderer.c.Logger().Error().Msgf("Failed to parse UI URL: %s", err)
+	appLink := renderer.c.SnykUI()
+	if isPending {
+		orgSlug := renderer.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION_SLUG)
+		linkToPendingIgnore, err := url.Parse(renderer.c.SnykUI() + "/org/" + orgSlug + "/ignore-requests")
+		if err != nil {
+			renderer.c.Logger().Error().Msgf("Failed to parse UI URL: %s", err)
+		}
+		appLink = linkToPendingIgnore.String()
 	}
 
 	data := map[string]any{
@@ -202,7 +206,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"ExampleCommitFixes":   exampleCommits,
 		"CommitFixes":          commitFixes,
 		"PriorityScore":        additionalData.PriorityScore,
-		"SnykWebUrl":           linkToPendingIgnore.String(),
+		"SnykWebUrl":           appLink,
 		"LessonUrl":            issue.GetLessonUrl(),
 		"LessonIcon":           html.LessonIcon(),
 		"IgnoreLineAction":     getLineToIgnoreAction(issue),
