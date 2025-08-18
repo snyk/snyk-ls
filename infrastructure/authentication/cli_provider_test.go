@@ -114,7 +114,7 @@ func TestBuildCLICmd(t *testing.T) {
 		c := testutil.UnitTest(t)
 		ctx := t.Context()
 		provider := &CliAuthenticationProvider{c: c}
-		config.CurrentConfig().SetCliSettings(&config.CliSettings{
+		c.SetCliSettings(&config.CliSettings{
 			Insecure: true,
 			C:        c,
 		})
@@ -128,7 +128,7 @@ func TestBuildCLICmd(t *testing.T) {
 		c := testutil.UnitTest(t)
 		ctx := t.Context()
 		provider := &CliAuthenticationProvider{c: c}
-		config.CurrentConfig().UpdateApiEndpoints("https://api.eu.snyk.io")
+		c.UpdateApiEndpoints("https://api.eu.snyk.io")
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 
