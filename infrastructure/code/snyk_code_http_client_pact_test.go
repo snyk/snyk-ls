@@ -26,11 +26,10 @@ import (
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
-	"github.com/snyk/snyk-ls/internal/testsupport"
-	"github.com/snyk/snyk-ls/internal/types"
-
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -51,10 +50,10 @@ var client *SnykCodeHTTPClient
 //nolint:gocyclo // TODO: address tech debt
 func TestSnykCodeBackendServicePact(t *testing.T) {
 	testsupport.NotOnWindows(t, "we don't have a pact cli")
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
-	setupPact(t)
-	config.CurrentConfig().UpdateApiEndpoints("http://localhost")
+	setupPact(t, c)
+	c.UpdateApiEndpoints("http://localhost")
 	defer pact.Teardown()
 
 	defer func() {
@@ -255,7 +254,7 @@ func TestSnykCodeBackendServicePact(t *testing.T) {
 	})
 }
 
-func setupPact(t *testing.T) {
+func setupPact(t *testing.T, c *config.Config) {
 	t.Helper()
 	pact = dsl.Pact{
 		Consumer: consumer,
@@ -267,7 +266,6 @@ func setupPact(t *testing.T) {
 	pact.Setup(true)
 
 	t.Setenv("DEEPROXY_API_URL", fmt.Sprintf("http://localhost:%d", pact.Server.Port))
-	c := config.CurrentConfig()
 	c.SetOrganization(orgUUID)
 
 	client = NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(),
@@ -294,11 +292,11 @@ func getSnykRequestIdMatcher() dsl.Matcher {
 
 func TestSnykCodeBackendServicePact_LocalCodeEngine(t *testing.T) {
 	testsupport.NotOnWindows(t, "we don't have a pact cli")
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
-	setupPact(t)
-	config.CurrentConfig().SetSnykCodeApi(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
-	config.CurrentConfig().SetOrganization(orgUUID)
+	setupPact(t, c)
+	c.SetSnykCodeApi(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
+	c.SetOrganization(orgUUID)
 	defer pact.Teardown()
 
 	pact.AddInteraction().UponReceiving("Get filters").WithRequest(dsl.Request{

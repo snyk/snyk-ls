@@ -200,7 +200,7 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	c := testutil.UnitTest(t)
 
 	severityFilter := types.NewSeverityFilter(true, false, true, false)
-	config.CurrentConfig().SetSeverityFilter(&severityFilter)
+	c.SetSeverityFilter(&severityFilter)
 
 	f := NewMockFolder(c, notification.NewNotifier())
 
@@ -250,7 +250,7 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 	c := testutil.UnitTest(t)
 
 	issueViewOptions := types.NewIssueViewOptions(false, true)
-	config.CurrentConfig().SetIssueViewOptions(&issueViewOptions)
+	c.SetIssueViewOptions(&issueViewOptions)
 
 	f := NewMockFolder(c, notification.NewNotifier())
 
@@ -270,7 +270,7 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 
 	ctrl := gomock.NewController(t)
 	mockConfiguration := mocks.NewMockConfiguration(ctrl)
-	config.CurrentConfig().Engine().SetConfiguration(mockConfiguration)
+	c.Engine().SetConfiguration(mockConfiguration)
 	mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true)
 
 	f.ProcessResults(t.Context(), data)
@@ -353,15 +353,15 @@ func Test_Clear(t *testing.T) {
 
 func Test_IsTrusted_shouldReturnFalseByDefault(t *testing.T) {
 	c := testutil.UnitTest(t)
-	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
+	c.SetTrustedFolderFeatureEnabled(true)
 	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
 	assert.False(t, f.IsTrusted())
 }
 
 func Test_IsTrusted_shouldReturnTrueForPathContainedInTrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
-	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	config.CurrentConfig().SetTrustedFolders([]types.FilePath{"dummy"})
+	c.SetTrustedFolderFeatureEnabled(true)
+	c.SetTrustedFolders([]types.FilePath{"dummy"})
 	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
 	assert.True(t, f.IsTrusted())
 }
@@ -369,16 +369,16 @@ func Test_IsTrusted_shouldReturnTrueForPathContainedInTrustedFolders(t *testing.
 func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders_Linux(t *testing.T) {
 	c := testutil.IntegTest(t)
 	testsupport.NotOnWindows(t, "Unix/macOS file paths are incompatible with Windows")
-	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	config.CurrentConfig().SetTrustedFolders([]types.FilePath{"/dummy"})
+	c.SetTrustedFolderFeatureEnabled(true)
+	c.SetTrustedFolders([]types.FilePath{"/dummy"})
 	f := NewFolder(c, "/dummy/dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
 	assert.True(t, f.IsTrusted())
 }
 
 func Test_IsTrusted_shouldReturnFalseForDifferentFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
-	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	config.CurrentConfig().SetTrustedFolders([]types.FilePath{"/dummy"})
+	c.SetTrustedFolderFeatureEnabled(true)
+	c.SetTrustedFolders([]types.FilePath{"/dummy"})
 	f := NewFolder(c, "/UntrustedPath", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
 	assert.False(t, f.IsTrusted())
 }
@@ -386,8 +386,8 @@ func Test_IsTrusted_shouldReturnFalseForDifferentFolder(t *testing.T) {
 func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders(t *testing.T) {
 	c := testutil.IntegTest(t)
 	testsupport.OnlyOnWindows(t, "Windows specific test")
-	config.CurrentConfig().SetTrustedFolderFeatureEnabled(true)
-	config.CurrentConfig().SetTrustedFolders([]types.FilePath{"c:\\dummy"})
+	c.SetTrustedFolderFeatureEnabled(true)
+	c.SetTrustedFolders([]types.FilePath{"c:\\dummy"})
 	f := NewFolder(c, "c:\\dummy\\dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
 	assert.True(t, f.IsTrusted())
 }

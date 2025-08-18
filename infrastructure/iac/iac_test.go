@@ -55,7 +55,7 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 func Test_toHover_asHTML(t *testing.T) {
 	c := testutil.UnitTest(t)
 	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor())
-	config.CurrentConfig().SetFormat(config.FormatHtml)
+	c.SetFormat(config.FormatHtml)
 
 	h := scanner.getExtendedMessage(sampleIssue())
 
@@ -69,7 +69,7 @@ func Test_toHover_asHTML(t *testing.T) {
 func Test_toHover_asMD(t *testing.T) {
 	c := testutil.UnitTest(t)
 	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor())
-	config.CurrentConfig().SetFormat(config.FormatMd)
+	c.SetFormat(config.FormatMd)
 
 	h := scanner.getExtendedMessage(sampleIssue())
 
