@@ -173,8 +173,7 @@ type Config struct {
 	token                            string
 	deviceId                         string
 	clientCapabilities               types.ClientCapabilities
-	path                             string
-	defaultDirs                      []string
+	binarySearchPaths                []string
 	automaticAuthentication          bool
 	tokenChangeChannels              []chan string
 	prepareDefaultEnvChannel         chan bool
@@ -233,20 +232,28 @@ func IsDevelopment() bool {
 	return parseBool
 }
 
-func New() *Config {
-	return newConfig(nil)
+func New(opts ...ConfigOption) *Config {
+	return newConfig(nil, opts...)
 }
 
-func NewFromExtension(engine workflow.Engine) *Config {
-	return newConfig(engine)
+func NewFromExtension(engine workflow.Engine, opts ...ConfigOption) *Config {
+	return newConfig(engine, opts...)
 }
 
 // New creates a configuration object with default values
-func newConfig(engine workflow.Engine) *Config {
+func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c := &Config{}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
 	c.logger = getNewScrubbingLogger(c)
 	c.cliSettings = NewCliSettings(c)
 	c.prepareDefaultEnvChannel = make(chan bool, 1)
+	if c.binarySearchPaths == nil {
+		c.binarySearchPaths = getDefaultBinarySearchPaths()
+	}
 	c.automaticAuthentication = true
 	c.configFile = ""
 	c.format = FormatMd
@@ -336,10 +343,6 @@ func getNewScrubbingLogger(c *Config) *zerolog.Logger {
 	writer := c.getConsoleWriter(c.scrubbingWriter)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
 	return &logger
-}
-
-func (c *Config) addBinaryLocationsToPath(searchDirectories []string) {
-	c.defaultDirs = searchDirectories
 }
 
 func (c *Config) determineDeviceId() string {
@@ -875,12 +878,6 @@ func (c *Config) SetClientCapabilities(capabilities types.ClientCapabilities) {
 	c.clientCapabilities = capabilities
 }
 
-func (c *Config) Path() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.path
-}
-
 func (c *Config) AutomaticAuthentication() bool {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -903,25 +900,10 @@ func (c *Config) addDefaults() {
 	go func() {
 		envvars.LoadShellEnvironment()
 		//goland:noinspection GoBoolExpressions
-		if runtime.GOOS == "windows" {
-			c.defaultDirs = []string{
-				"C:\\Program Files",
-				"C:\\Program Files (x86)",
-			}
-		} else {
+		if runtime.GOOS != "windows" {
 			envvars.UpdatePath("/usr/local/bin", false)
 			envvars.UpdatePath("/bin", false)
 			envvars.UpdatePath(xdg.Home+"/bin", false)
-			c.defaultDirs =
-				[]string{
-					filepath.Join(xdg.Home, ".sdkman"),
-					"/usr/lib",
-					"/usr/java",
-					"/usr/local/bin",
-					"/opt/homebrew/bin",
-					"/opt",
-					"/Library",
-				}
 		}
 		c.determineJavaHome()
 		c.mavenDefaults()

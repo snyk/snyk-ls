@@ -1091,8 +1091,8 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 //goland:noinspection ALL
 func Test_MonitorClientProcess(t *testing.T) {
-	c := testutil.IntegTest(t)
 	testsupport.NotOnWindows(t, "sleep doesn't exist on windows")
+	c := testutil.IntegTest(t)
 	// start process that just sleeps
 	pidChan := make(chan int)
 	go func() {

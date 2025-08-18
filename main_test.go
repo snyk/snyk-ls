@@ -33,6 +33,7 @@ import (
 func Test_shouldSetLogLevelViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-l", "debug"}
 	_, _ = parseFlags(args, config.New())
+	// No WaitForDefaultEnv needed - test does not use environment
 	assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
 }
 
@@ -48,24 +49,28 @@ func Test_shouldSetLogFileViaFlag(t *testing.T) {
 	})
 
 	_, _ = parseFlags(args, config.New())
+	// No WaitForDefaultEnv needed - test does not use environment
 	assert.Equal(t, config.CurrentConfig().LogPath(), "a.txt")
 }
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-o", config.FormatHtml}
 	_, _ = parseFlags(args, config.New())
+	// No WaitForDefaultEnv needed - test does not use environment
 	assert.Equal(t, config.FormatHtml, config.CurrentConfig().Format())
 }
 
 func Test_shouldDisplayLicenseInformationWithFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-licenses"}
 	output, _ := parseFlags(args, config.New())
+	// No WaitForDefaultEnv needed - test does not use environment
 	assert.True(t, strings.Contains(output, "License information"))
 }
 
 func Test_shouldReturnErrorWithVersionStringOnFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-v"}
 	output, err := parseFlags(args, config.New())
+	// No WaitForDefaultEnv needed - test does not use environment
 	assert.Error(t, err)
 	assert.Empty(t, output)
 	assert.Equal(t, config.Version, err.Error())

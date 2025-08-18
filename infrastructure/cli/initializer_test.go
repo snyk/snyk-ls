@@ -45,7 +45,17 @@ func SetupInitializerWithInstaller(t *testing.T, installer install.Installer) *I
 	return NewInitializer(error_reporting.NewTestErrorReporter(),
 		installer,
 		notification.NewNotifier(),
-		dummyCli)
+		getDummyCLI(t))
+}
+
+var dummyCLI *TestExecutor
+
+func getDummyCLI(t *testing.T) *TestExecutor {
+	t.Helper()
+	if dummyCLI == nil {
+		dummyCLI = NewTestExecutorWithResponse("0.0.0test")
+	}
+	return dummyCLI
 }
 
 func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
@@ -249,5 +259,3 @@ func createDummyCliBinaryWithCreatedDate(t *testing.T, c *config.Config, binaryC
 }
 
 var fiveDaysAgo = time.Now().Add(-time.Hour * 24 * 5)
-
-var dummyCli = NewTestExecutorWithResponse("0.0.0test")
