@@ -206,6 +206,8 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 }
 
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
+	a.c.Engine().GetConfiguration().ClearCache()
+
 	err := a.authProvider.ClearAuthentication(ctx)
 	if err != nil {
 		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
