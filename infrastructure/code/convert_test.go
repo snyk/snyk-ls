@@ -628,7 +628,8 @@ func getSarifResponseJson(filePath types.FilePath) string {
 }
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
-	filePath, issues, resp := setupConversionTests(t, true)
+	c := testutil.UnitTest(t)
+	filePath, issues, resp := setupConversionTests(t, c, true)
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
 	references := referencesForSampleSarifResponse()
 
@@ -715,7 +716,7 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 
 func Test_getFormattedMessage(t *testing.T) {
 	c := testutil.UnitTest(t)
-	p, _, sarifResponse := setupConversionTests(t, true)
+	p, _, sarifResponse := setupConversionTests(t, c, true)
 	run := sarifResponse.Sarif.Runs[0]
 	testResult := run.Results[0]
 
@@ -726,10 +727,8 @@ func Test_getFormattedMessage(t *testing.T) {
 	assert.Contains(t, msg, "Data Flow")
 }
 
-func setupConversionTests(t *testing.T, activateSnykCodeSecurity bool) (path string, issues []types.Issue, response codeClientSarif.SarifResponse) {
+func setupConversionTests(t *testing.T, c *config.Config, activateSnykCodeSecurity bool) (path string, issues []types.Issue, response codeClientSarif.SarifResponse) {
 	t.Helper()
-	testutil.UnitTest(t)
-	c := config.CurrentConfig()
 	c.EnableSnykCodeSecurity(activateSnykCodeSecurity)
 	temp := types.FilePath(t.TempDir())
 	path = filepath.Join(string(temp), "File With Spaces.java")
@@ -761,12 +760,11 @@ func setupConversionTests(t *testing.T, activateSnykCodeSecurity bool) (path str
 }
 
 func TestSnykCodeBackendService_analysisRequestBodyIsCorrect(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// prepare
-	config.SetCurrentConfig(config.New())
 	org := "00000000-0000-0000-0000-000000000023"
-	config.CurrentConfig().SetOrganization(org)
+	c.SetOrganization(org)
 
 	analysisOpts := &AnalysisOptions{
 		bundleHash: "test-hash",
@@ -1064,6 +1062,7 @@ func Test_ParseDateFromString(t *testing.T) {
 }
 
 func TestCreateAutofixWorkspaceEdit(t *testing.T) {
+	testutil.UnitTest(t)
 	testDataDirPath := "testdata/convert_test/TestCreateAutofixWorkspaceEdit"
 
 	tests := []struct {

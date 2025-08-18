@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -87,9 +86,10 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 }
 
 func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
+	c := testutil.UnitTest(t)
 	r := getTestAsset()
 
-	lockFileName, err := config.CurrentConfig().CLIDownloadLockFileName()
+	lockFileName, err := c.CLIDownloadLockFileName()
 	require.NoError(t, err)
 	file, err := os.Create(lockFileName)
 	if err != nil {
