@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
@@ -233,7 +233,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 func (renderer *HtmlRenderer) updateFeatureFlags() {
 	conf := renderer.c.Engine().GetConfiguration()
 	logger := renderer.c.Logger().With().Str("method", "updateFeatureFlags").Logger()
-	renderer.iawEnabled = conf.GetBool(configuration.FF_IAW_ENABLED)
+	renderer.iawEnabled = conf.GetBool(ignore_workflow.ConfigIgnoreApprovalEnabled)
 	renderer.inlineIgnoresEnabled = false
 	if renderer.c.IntegrationName() == "VS_CODE" {
 		ffInlineIgnores := "snykCodeInlineIgnore"

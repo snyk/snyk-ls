@@ -204,6 +204,64 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	// assert Footer buttons are not present when issue is ignored
 	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
 }
+func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	dataFlow := getDataFlowElements()
+	fixes := getFixes()
+	repoCount := 54387
+	issue := &snyk.Issue{
+		ID:        "java/DontUsePrintStackTrace",
+		Severity:  2,
+		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
+		CWEs:      []string{"CWE-123", "CWE-456"},
+		IsIgnored: false,
+		IgnoreDetails: &types.IgnoreDetails{
+			Category:   "wont-fix",
+			Reason:     getIgnoreReason("long"),
+			Expiration: "",
+			IgnoredOn:  time.Now(),
+			IgnoredBy:  "John Smith",
+			Status:     codeClientSarif.UnderReview,
+		},
+		AdditionalData: snyk.CodeIssueData{
+			Title:              "Allocation of Resources Without Limits or Throttling",
+			DataFlow:           dataFlow,
+			ExampleCommitFixes: fixes,
+			RepoDatasetSize:    repoCount,
+			IsSecurityType:     true,
+			Text:               getVulnerabilityOverviewText(),
+			PriorityScore:      0,
+		},
+	}
+
+	// Create a fake API client with the feature flag disabled
+	apiClient := &snyk_api.FakeApiClient{
+		CodeEnabled: true,
+	}
+	// Set the response for the FeatureFlagStatus method
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+
+	// invoke method under test
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	assert.NoError(t, err)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	// assert Header section
+	assert.Contains(t, codePanelHtml, "Priority score: 0")
+	assert.NotContains(t, codePanelHtml, `href="https://when-no-lesson-data-element-not-in-the-template"`)
+
+	// assert Ignore Details section - Elements should be present
+	assert.Contains(t, codePanelHtml, `class="sn-status-message mod-warning"`)
+	assert.Contains(t, codePanelHtml, `class="sn-ignore-badge"`)
+	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
+	assert.Contains(t, codePanelHtml, `PENDING IGNORE`)
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">Ignored permanently</td>`)
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`) // Because category is "wont-fix"
+
+	// assert Footer buttons are not present when issue is ignored
+	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
+}
 
 func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	c := testutil.UnitTest(t)
