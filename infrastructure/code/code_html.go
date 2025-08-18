@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
@@ -173,6 +175,17 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		ignoreReason = ignoreDetails.Reason
 	}
 
+	appLink := renderer.c.SnykUI()
+	if isPending {
+		orgSlug := renderer.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION_SLUG)
+		pendingIgnoreURL, err := url.JoinPath(renderer.c.SnykUI(), "org", orgSlug, "ignore-requests")
+		if err != nil {
+			renderer.c.Logger().Error().Err(err).Msg("Failed to construct pending ignore link")
+		} else {
+			appLink = pendingIgnoreURL
+		}
+	}
+
 	data := map[string]any{
 		"IssueTitle":           additionalData.Title,
 		"IssueMessage":         additionalData.Message,
@@ -194,7 +207,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"ExampleCommitFixes":   exampleCommits,
 		"CommitFixes":          commitFixes,
 		"PriorityScore":        additionalData.PriorityScore,
-		"SnykWebUrl":           renderer.c.SnykUI(),
+		"SnykWebUrl":           appLink,
 		"LessonUrl":            issue.GetLessonUrl(),
 		"LessonIcon":           html.LessonIcon(),
 		"IgnoreLineAction":     getLineToIgnoreAction(issue),
@@ -233,7 +246,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 func (renderer *HtmlRenderer) updateFeatureFlags() {
 	conf := renderer.c.Engine().GetConfiguration()
 	logger := renderer.c.Logger().With().Str("method", "updateFeatureFlags").Logger()
-	renderer.iawEnabled = conf.GetBool(configuration.FF_IAW_ENABLED)
+	renderer.iawEnabled = conf.GetBool(ignore_workflow.ConfigIgnoreApprovalEnabled)
 	renderer.inlineIgnoresEnabled = false
 	if renderer.c.IntegrationName() == "VS_CODE" {
 		ffInlineIgnores := "snykCodeInlineIgnore"
