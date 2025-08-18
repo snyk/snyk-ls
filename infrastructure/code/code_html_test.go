@@ -18,6 +18,7 @@ package code
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"testing"
 	"time"
@@ -259,6 +260,8 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">Ignored permanently</td>`)
 	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`) // Because category is "wont-fix"
 
+	link := path.Join(c.SnykUI(), "org", c.Organization(), "ignore-requests")
+	assert.Containsf(t, codePanelHtml, link, "expected link to be present: %s", link)
 	// assert Footer buttons are not present when issue is ignored
 	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
 }

@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -194,7 +195,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"ExampleCommitFixes":   exampleCommits,
 		"CommitFixes":          commitFixes,
 		"PriorityScore":        additionalData.PriorityScore,
-		"SnykWebUrl":           renderer.c.SnykUI(),
+		"SnykWebUrl":           path.Join(renderer.c.SnykUI(), "org", renderer.c.Organization(), "ignore-requests"),
 		"LessonUrl":            issue.GetLessonUrl(),
 		"LessonIcon":           html.LessonIcon(),
 		"IgnoreLineAction":     getLineToIgnoreAction(issue),
