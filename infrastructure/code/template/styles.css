@@ -266,6 +266,16 @@ main {
   color: var(--warning-text);
 }
 
+/* Error badge shown above the ignore reason field */
+.sn-error-badge {
+  padding: .4rem .8rem;
+  border-radius: 2rem;
+  margin: 0 0 0.8rem 0; /* space above the field */
+  line-height: 1;
+  background: #d92c2c; /* red background */
+  color: #ffffff;      /* white text */
+}
+
 .example {
   background-color: var(--code-background-color);
   border: 1px solid var(--input-border);

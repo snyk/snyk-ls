@@ -424,6 +424,50 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, "--default-font: \"SF Pro Text\", \"Segoe UI\", \"Ubuntu\", Geneva, Verdana, Tahoma, sans-serif;\n")
 }
+
+func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	issue := &snyk.Issue{
+		ID:             "java/DontUsePrintStackTrace",
+		Severity:       2,
+		AdditionalData: snyk.CodeIssueData{},
+	}
+
+	apiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	assert.NoError(t, err)
+	// Enable IAW so the ignore form is rendered
+	htmlRenderer.iawEnabled = true
+
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	// Form and error badge should be present in the HTML
+	assert.Contains(t, codePanelHtml, `id="ignore-form-container"`)
+	assert.Contains(t, codePanelHtml, `id="ignore-reason-error"`)
+}
+
+func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	issue := &snyk.Issue{
+		ID:             "java/DontUsePrintStackTrace",
+		Severity:       2,
+		AdditionalData: snyk.CodeIssueData{HasAIFix: true},
+	}
+
+	apiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+
+	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	assert.NoError(t, err)
+	htmlRenderer.iawEnabled = true
+
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	assert.Contains(t, codePanelHtml, ".sn-error-badge")
+}
 func getDataFlowElements() []snyk.DataFlowElement {
 	return []snyk.DataFlowElement{
 		{
