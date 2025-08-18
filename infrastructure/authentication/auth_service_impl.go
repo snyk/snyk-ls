@@ -414,7 +414,7 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 	}
 
 	// Check whether we have a valid token for the current auth method
-	if c.NonEmptyToken() && !c.AuthenticationMethodMatchesToken() {
+	if c.NonEmptyToken() && !c.AuthenticationMethodMatchesCredentials() {
 		a.logout(context.Background())
 		if authMethodChanged {
 			logger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
