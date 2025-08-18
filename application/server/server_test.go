@@ -34,8 +34,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -358,12 +356,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
-	// Because the scan results are being provided by code.getSarifResponseJson2, we need to enable autofix so that issues
-	// get enhanced with commands (see code.addIssueActions).
-	c.Engine().GetConfiguration().Set(
-		code_workflow.ConfigurationSastSettings,
-		&sast_contract.SastResponse{SastEnabled: true, AutofixEnabled: true},
-	)
+	testutil.EnableSastAndAutoFix(c)
 
 	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(dir),
@@ -427,12 +420,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
-	// Because the scan results are being provided by code.getSarifResponseJson2, we need to enable autofix so that issues
-	// get enhanced with commands (see code.addIssueActions).
-	c.Engine().GetConfiguration().Set(
-		code_workflow.ConfigurationSastSettings,
-		&sast_contract.SastResponse{SastEnabled: true, AutofixEnabled: true},
-	)
+	testutil.EnableSastAndAutoFix(c)
 
 	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(dir),

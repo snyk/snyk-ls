@@ -175,3 +175,12 @@ func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configu
 	c.SetEngine(mockEngine)
 	return mockEngine, engineConfig
 }
+
+// Enables SAST and AutoFix. Used in tests where scan results are provided by code.getSarifResponseJson2, and so we need
+// enable AutoFix in order for the issues to get enhanced with commands (see code.addIssueActions).
+func EnableSastAndAutoFix(c *config.Config) {
+	c.Engine().GetConfiguration().Set(
+		code_workflow.ConfigurationSastSettings,
+		&sast_contract.SastResponse{SastEnabled: true, AutofixEnabled: true},
+	)
+}

@@ -51,8 +51,8 @@ func (a AutofixUnifiedDiffSuggestion) GetUnifiedDiffForFile(filePath string) str
 func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, filePath types.FilePath, issue types.Issue) (unifiedDiffSuggestions []llm.AutofixUnifiedDiffSuggestion, err error) {
 	method := "GetAutofixDiffs"
 	logger := sc.C.Logger().With().Str("method", method).Logger()
-	span := sc.Instrumentor.StartSpan(ctx, method)
-	defer sc.Instrumentor.Finish(span)
+	span := sc.instrumentor.StartSpan(ctx, method)
+	defer sc.instrumentor.Finish(span)
 
 	sc.bundleHashesMutex.RLock()
 	bundleHash, found := sc.bundleHashes[baseDir]
@@ -97,7 +97,7 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 				return nil, hostErr
 			}
 
-			_, ruleId, ok := getIssueLangAndRuleId(issue)
+			_, ruleId, ok := getIssueLangAndRuleId(sc.C, issue)
 			if !ok {
 				return nil, SnykAutofixFailedError{Msg: "Issue's ruleID does not follow <lang>/<ruleKey> format"}
 			}
@@ -140,8 +140,8 @@ func toEncodedNormalizedPath(rootPath types.FilePath, filePath types.FilePath) (
 	return encodedRelativePath, nil
 }
 
-func getIssueLangAndRuleId(issue types.Issue) (string, string, bool) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "getIssueLangAndRuleId").Logger()
+func getIssueLangAndRuleId(c *config.Config, issue types.Issue) (string, string, bool) {
+	logger := c.Logger().With().Str("method", "getIssueLangAndRuleId").Logger()
 	issueData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 	if !ok {
 		logger.Trace().Str("file", string(issue.GetAffectedFilePath())).Int("line", issue.GetRange().Start.Line).Msg("Can't access issue data")

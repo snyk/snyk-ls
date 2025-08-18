@@ -62,6 +62,7 @@ func TestScanner_Cache(t *testing.T) {
 			imcache.WithDefaultExpiration(),
 		)
 		assert.Equal(t, 1, len(scanner.Issues()))
+		assert.Equal(t, "issue2", scanner.Issues()["file2.java"][0].GetID())
 
 		// now scan
 		filePath, folderPath := TempWorkdirWithIssues(t)
@@ -70,6 +71,15 @@ func TestScanner_Cache(t *testing.T) {
 
 		// new issue from scan should have been added
 		assert.Equal(t, 2, len(scanner.Issues()))
+		issues := scanner.Issues()
+		// Because the issue from the scan is from a temp file, we do not know the FilePath, so we iterate over the map.
+		for k, v := range issues {
+			if k == "file2.java" {
+				assert.Equal(t, "issue2", v[0].GetID())
+			} else {
+				assert.Contains(t, v[0].GetID(), DontUsePrintStackTrace)
+			}
+		}
 	})
 	t.Run("should removeFromCache previous scan results for files to be scanned from cache", func(t *testing.T) {
 		scanner := setupTestScanner(t)
