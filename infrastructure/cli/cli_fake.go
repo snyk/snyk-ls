@@ -39,12 +39,12 @@ type TestExecutor struct {
 	logger          *zerolog.Logger
 }
 
-func NewTestExecutor() *TestExecutor {
-	return &TestExecutor{ExecuteResponse: []byte("{}"), logger: config.CurrentConfig().Logger()}
+func NewTestExecutor(c *config.Config) *TestExecutor {
+	return &TestExecutor{ExecuteResponse: []byte("{}"), logger: c.Logger()}
 }
 
-func NewTestExecutorWithResponse(executeResponse string) *TestExecutor {
-	return &TestExecutor{ExecuteResponse: []byte(executeResponse), logger: config.CurrentConfig().Logger()}
+func NewTestExecutorWithResponse(c *config.Config, executeResponse string) *TestExecutor {
+	return &TestExecutor{ExecuteResponse: []byte(executeResponse), logger: c.Logger()}
 }
 
 func NewTestExecutorWithResponseFromFile(executeResponsePath string, logger *zerolog.Logger) *TestExecutor {
