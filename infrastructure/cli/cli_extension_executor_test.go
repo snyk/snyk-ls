@@ -19,9 +19,6 @@ package cli
 import (
 	"testing"
 
-	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/types"
-
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
@@ -29,7 +26,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
@@ -59,7 +57,7 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	err = engine.Init()
 	assert.Nil(t, err)
 
-	config.CurrentConfig().SetEngine(engine)
+	c.SetEngine(engine)
 
 	// Run
 	executorUnderTest := NewExtensionExecutor(c)
@@ -77,7 +75,7 @@ func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {
 
 	// Prepare
 	engine := app.CreateAppEngine()
-	config.CurrentConfig().SetEngine(engine)
+	c.SetEngine(engine)
 	cmd := []string{"snyk", "test"}
 	expectedPayload := []byte{}
 

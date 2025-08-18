@@ -501,8 +501,8 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, expectedOrgId, config.CurrentConfig().Organization())
-	assert.Equal(t, "xxx", config.CurrentConfig().Token())
+	assert.Equal(t, expectedOrgId, c.Organization())
+	assert.Equal(t, "xxx", c.Token())
 }
 
 func Test_initialize_integrationInInitializationOptions_readFromInitializationOptions(t *testing.T) {
@@ -534,9 +534,8 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 	}
 
 	// Assert
-	currentConfig := config.CurrentConfig()
-	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
-	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
+	assert.Equal(t, expectedIntegrationName, c.IntegrationName())
+	assert.Equal(t, expectedIntegrationVersion, c.IntegrationVersion())
 }
 
 func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
@@ -569,10 +568,9 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 	}
 
 	// Assert
-	currentConfig := config.CurrentConfig()
-	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
-	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
-	assert.Equal(t, expectedIdeVersion, currentConfig.IdeVersion())
+	assert.Equal(t, expectedIntegrationName, c.IntegrationName())
+	assert.Equal(t, expectedIntegrationVersion, c.IntegrationVersion())
+	assert.Equal(t, expectedIdeVersion, c.IdeVersion())
 }
 
 func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
@@ -592,9 +590,8 @@ func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
 	}
 
 	// Assert
-	currentConfig := config.CurrentConfig()
-	assert.Equal(t, expectedIntegrationName, currentConfig.IntegrationName())
-	assert.Equal(t, expectedIntegrationVersion, currentConfig.IntegrationVersion())
+	assert.Equal(t, expectedIntegrationName, c.IntegrationName())
+	assert.Equal(t, expectedIntegrationVersion, c.IntegrationVersion())
 }
 
 func Test_initialize_shouldOfferAllCommands(t *testing.T) {
@@ -638,7 +635,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		_, err := loc.Client.Call(ctx, "initialize", params)
 
 		assert.Nil(t, err)
-		assert.True(t, config.CurrentConfig().AutomaticAuthentication())
+		assert.True(t, c.AutomaticAuthentication())
 	})
 
 	t.Run("Parses true value", func(t *testing.T) {
@@ -651,7 +648,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		_, err := loc.Client.Call(ctx, "initialize", params)
 
 		assert.Nil(t, err)
-		assert.True(t, config.CurrentConfig().AutomaticAuthentication())
+		assert.True(t, c.AutomaticAuthentication())
 	})
 
 	t.Run("Parses false value", func(t *testing.T) {
@@ -664,7 +661,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(ctx, "initialize", params)
 		assert.Nil(t, err)
-		assert.False(t, config.CurrentConfig().AutomaticAuthentication())
+		assert.False(t, c.AutomaticAuthentication())
 	})
 }
 
@@ -759,7 +756,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	c.SetLSPInitialized(true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
-	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
+	fileUri := sendFileSavedMessage(t, c, filePath, fileDir, loc)
 
 	// wait for publish
 	assert.Eventually(
@@ -814,7 +811,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 
 	snykFilePath, folderPath := createTemporaryDirectoryWithSnykFile(t)
 
-	sendFileSavedMessage(t, snykFilePath, folderPath, loc)
+	sendFileSavedMessage(t, c, snykFilePath, folderPath, loc)
 
 	// Wait for $/snyk.scan notification
 	assert.Eventually(
@@ -867,7 +864,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	c.SetLSPInitialized(true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
-	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
+	fileUri := sendFileSavedMessage(t, c, filePath, fileDir, loc)
 
 	require.Eventually(
 		t,
@@ -910,7 +907,7 @@ func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	c.SetAutomaticScanning(false)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
-	fileUri := sendFileSavedMessage(t, filePath, fileDir, loc)
+	fileUri := sendFileSavedMessage(t, c, filePath, fileDir, loc)
 
 	assert.Never(
 		t,
@@ -920,9 +917,8 @@ func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	)
 }
 
-func sendFileSavedMessage(t *testing.T, filePath types.FilePath, fileDir types.FilePath, loc server.Local) sglsp.DocumentURI {
+func sendFileSavedMessage(t *testing.T, c *config.Config, filePath types.FilePath, fileDir types.FilePath, loc server.Local) sglsp.DocumentURI {
 	t.Helper()
-	c := config.CurrentConfig()
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
 	}

@@ -41,16 +41,9 @@ import (
 
 func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	c := testutil.UnitTest(t)
+	gafConfig := c.Engine().GetConfiguration()
 
-	err := runAuthEventTest(t, c, analytics.Success)
-
-	assert.NoError(t, err)
-}
-
-func runAuthEventTest(t *testing.T, c *config.Config, status analytics.Status) error {
-	t.Helper()
-	gafConfig := configuration.New()
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, status == analytics.Success).(*fakeOauthAuthenticator)
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
@@ -65,7 +58,7 @@ func runAuthEventTest(t *testing.T, c *config.Config, status analytics.Status) e
 
 			require.Contains(t, payload, "authenticated")
 			require.Contains(t, payload, "auth")
-			require.Contains(t, payload, status)
+			require.Contains(t, payload, analytics.Success)
 			return true
 		}),
 		gomock.Any(),
@@ -75,7 +68,8 @@ func runAuthEventTest(t *testing.T, c *config.Config, status analytics.Status) e
 	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
 	_, err := service.Authenticate(t.Context())
-	return err
+
+	assert.NoError(t, err)
 }
 
 func Test_AuthURL(t *testing.T) {
@@ -104,7 +98,7 @@ func Test_UpdateCredentials(t *testing.T) {
 
 		service.UpdateCredentials("new-token", false, false)
 
-		assert.Equal(t, "new-token", config.CurrentConfig().Token())
+		assert.Equal(t, "new-token", c.Token())
 	})
 
 	t.Run("OAuth Authentication Authentication", func(t *testing.T) {
@@ -122,7 +116,7 @@ func Test_UpdateCredentials(t *testing.T) {
 
 		service.UpdateCredentials(token, false, false)
 
-		assert.Equal(t, token, config.CurrentConfig().Token())
+		assert.Equal(t, token, c.Token())
 	})
 
 	t.Run("Send notification with no URL", func(t *testing.T) {
