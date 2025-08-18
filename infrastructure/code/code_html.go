@@ -22,13 +22,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"path"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
@@ -174,6 +175,12 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		ignoreReason = ignoreDetails.Reason
 	}
 
+	orgSlug := renderer.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION_SLUG)
+	linkToPendingIgnore, err := url.Parse(renderer.c.SnykUI() + "/org/" + orgSlug + "/ignore-requests")
+	if err != nil {
+		renderer.c.Logger().Error().Msgf("Failed to parse UI URL: %s", err)
+	}
+
 	data := map[string]any{
 		"IssueTitle":           additionalData.Title,
 		"IssueMessage":         additionalData.Message,
@@ -195,7 +202,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"ExampleCommitFixes":   exampleCommits,
 		"CommitFixes":          commitFixes,
 		"PriorityScore":        additionalData.PriorityScore,
-		"SnykWebUrl":           path.Join(renderer.c.SnykUI(), "org", renderer.c.Organization(), "ignore-requests"),
+		"SnykWebUrl":           linkToPendingIgnore.String(),
 		"LessonUrl":            issue.GetLessonUrl(),
 		"LessonIcon":           html.LessonIcon(),
 		"IgnoreLineAction":     getLineToIgnoreAction(issue),

@@ -274,7 +274,6 @@ main {
   line-height: 1;
   background: transparent; /* transparent background */
   border: 1px solid #d92c2c; /* red outline */
-  color: #d92c2c;           /* red text */
 }
 
 .example {
