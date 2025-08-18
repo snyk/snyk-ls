@@ -46,6 +46,7 @@
   /* New variables - March 2025 */
   --dimmed-text-color: var(--vscode-editorCodeLens-foreground);
   --warning-background: var(--vscode-activityWarningBadge-background);
+  --error-border: var(--vscode-inputValidation-errorBorder);
   --warning-text: var(--vscode-activityWarningBadge-foreground);
   font-size: 10px;
 }
@@ -272,8 +273,7 @@ main {
   border-radius: 2rem;
   margin: 0 0 0.8rem 0; /* space above the field */
   line-height: 1;
-  background: transparent; /* transparent background */
-  border: 1px solid #d92c2c; /* red outline */
+  border: 1px solid var(--error-border, #d92c2c); /* red outline */
 }
 
 .example {
