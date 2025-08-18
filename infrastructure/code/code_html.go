@@ -178,11 +178,12 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	appLink := renderer.c.SnykUI()
 	if isPending {
 		orgSlug := renderer.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION_SLUG)
-		linkToPendingIgnore, err := url.Parse(renderer.c.SnykUI() + "/org/" + orgSlug + "/ignore-requests")
+		pendingIgnoreURL, err := url.JoinPath(renderer.c.SnykUI(), "org", orgSlug, "ignore-requests")
 		if err != nil {
-			renderer.c.Logger().Error().Msgf("Failed to parse UI URL: %s", err)
+			renderer.c.Logger().Error().Err(err).Msg("Failed to construct pending ignore link")
+		} else {
+			appLink = pendingIgnoreURL
 		}
-		appLink = linkToPendingIgnore.String()
 	}
 
 	data := map[string]any{
