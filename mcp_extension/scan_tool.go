@@ -231,9 +231,9 @@ func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "snykAuthHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-		conf := invocationCtx.GetConfiguration()
-
+		conf := invocationCtx.GetConfiguration().Clone()
 		conf.Set("auth-type", auth.AUTH_TYPE_OAUTH)
+
 		_, err := invocationCtx.GetEngine().InvokeWithConfig(localworkflows.WORKFLOWID_AUTH, conf)
 		if err != nil {
 			logger.Error().Err(err).Msg("Error logging in")
