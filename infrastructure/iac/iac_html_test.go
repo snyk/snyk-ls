@@ -94,8 +94,7 @@ func createIacIssueSample() snyk.Issue {
 }
 
 func TestHtmlRenderer_GetDetailsHtml_PathEncoded(t *testing.T) {
-	testutil.UnitTest(t)
-	c := config.New()
+	c := testutil.UnitTest(t)
 
 	renderer, err := NewHtmlRenderer(c)
 	assert.NoError(t, err)
