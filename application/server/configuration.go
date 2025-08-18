@@ -108,6 +108,8 @@ func UpdateSettings(c *config.Config, settings types.Settings) {
 }
 
 func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
+	c.Engine().GetConfiguration().ClearCache()
+
 	emptySettings := types.Settings{}
 	if reflect.DeepEqual(settings, emptySettings) {
 		return
