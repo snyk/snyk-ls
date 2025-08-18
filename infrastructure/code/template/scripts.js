@@ -234,9 +234,7 @@ if (ignoreFormContainer !== null && ignoreFormContainer !== void 0 && ignoreCrea
     ignoreReasonInput.addEventListener('input', function() {
       var val = (ignoreReasonInput.value || '').trim();
       if (val && ignoreReasonError && ignoreReasonError.className.indexOf('hidden') === -1) {
-        if (ignoreReasonError.className.indexOf('hidden') === -1) {
-          ignoreReasonError.className += ' hidden';
-        }
+        ignoreReasonError.className += ' hidden';
       }
     });
   }
