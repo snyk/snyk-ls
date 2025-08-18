@@ -37,7 +37,7 @@ func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 			autoAuthentication: false,
 		},
 		{
-			name:               "Does not authenticate when auto-auth is enabled",
+			name:               "Authenticates when auto-auth is enabled",
 			autoAuthentication: true,
 		},
 	}
