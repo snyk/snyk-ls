@@ -208,14 +208,6 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path types.FileP
 
 	cmd := commandFunc([]string{string(workDir)}, map[string]bool{"": true}, workDir, folderConfig)
 
-	// Take environment snapshot and acquire mutex before CLI execution
-	cli.Mutex.Lock()
-	envSnapshot := cli.TakeEnvSnapshot()
-	defer func() {
-		cli.RestoreEnvSnapshot(envSnapshot)
-		cli.Mutex.Unlock()
-	}()
-
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
