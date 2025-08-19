@@ -182,7 +182,7 @@ func TestCLIScanner_WaitsForEnvReadinessBeforeBuildingCommand(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Create a scanner with a fake executor
-	cliExecutor := cli.NewTestExecutorWithResponse("{}")
+	cliExecutor := cli.NewTestExecutorWithResponse(c, "{}")
 	instrumentor := performance.NewInstrumentor()
 	errorReporter := error_reporting.NewTestErrorReporter()
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
