@@ -32,8 +32,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var pathListSep = string(os.PathListSeparator)
-
 func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	c := testutil.UnitTest(t)
 

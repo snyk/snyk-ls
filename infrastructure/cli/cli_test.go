@@ -31,6 +31,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+var pathListSep = string(os.PathListSeparator)
+
 func Test_ExpandParametersFromConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
 	testOrg, err := uuid.NewUUID()
@@ -53,14 +55,15 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 
 func Test_GetCommand_LoadsConfigFiles(t *testing.T) {
 	c := testutil.UnitTest(t)
-	originalPath := "original:path"
-	t.Setenv("PATH", originalPath)
+	originalPathValue := "original_path" + pathListSep + "in_both_path"
+	t.Setenv("PATH", originalPathValue)
 	t.Setenv("TEST_VAR", "overrideable_value")
 
 	// Create a temporary directory with a config file
 	tempDir := t.TempDir()
 	configFile := filepath.Join(tempDir, ".snyk.env")
-	configContent := []byte("PATH=config:path\nTEST_VAR=test_value\n")
+	configPathValue := "config" + pathListSep + "in_both_path"
+	configContent := []byte("PATH=" + configPathValue + "\nTEST_VAR=test_value\n")
 	err := os.WriteFile(configFile, configContent, 0660)
 	assert.NoError(t, err)
 
@@ -85,7 +88,7 @@ func Test_GetCommand_LoadsConfigFiles(t *testing.T) {
 
 	// Verify PATH was prepended (config path should come first)
 	currentPath := os.Getenv("PATH")
-	expectedPath := "config:path:original" // "path" is deduplicated, only "original" remains from original PATH
+	expectedPath := "config" + pathListSep + "in_both_path" + pathListSep + "original_path" // "in_both_path" is deduplicated, only "original_path" remains from original PATH
 	assert.Equal(t, expectedPath, currentPath,
 		"PATH should be config path prepended with deduplication applied")
 }
