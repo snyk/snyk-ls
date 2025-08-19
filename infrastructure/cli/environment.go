@@ -17,7 +17,6 @@
 package cli
 
 import (
-	"os"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -29,9 +28,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 )
-
-// Env holds key/value pair of environment variables
-type Env map[string]string
 
 var (
 	ApiEnvVar                           = strings.ToUpper(configuration.API_URL)
@@ -106,41 +102,4 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []stri
 	}
 
 	return updatedEnv
-}
-
-// TakeEnvSnapshot captures the current environment state including all environment variables
-// and PATH. Returns a snapshot that can be used with RestoreEnvSnapshot to restore the state.
-func TakeEnvSnapshot() Env {
-	snapshot := make(Env)
-
-	// Capture all current environment variables
-	for _, env := range os.Environ() {
-		parts := strings.SplitN(env, "=", 2)
-		if len(parts) == 2 {
-			snapshot[parts[0]] = parts[1]
-		}
-	}
-
-	return snapshot
-}
-
-// RestoreEnvSnapshot restores the environment to the state captured in the snapshot.
-// This clears any environment variables not present in the snapshot and sets all
-// variables from the snapshot to their captured values.
-func RestoreEnvSnapshot(snapshot Env) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "RestoreEnvSnapshot").Logger()
-	logger.Debug().Msg("restoring environment snapshot")
-
-	// Clear current environment
-	os.Clearenv()
-
-	// Restore all variables from snapshot
-	for key, value := range snapshot {
-		err := os.Setenv(key, value)
-		if err != nil {
-			logger.Warn().Err(err).Str("key", key).Msg("failed to restore environment variable")
-		}
-	}
-
-	logger.Debug().Msg("environment snapshot restored")
 }

@@ -207,7 +207,6 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path types.FileP
 	cliScanner.mutex.Unlock()
 
 	cmd := commandFunc([]string{string(workDir)}, map[string]bool{"": true}, workDir, folderConfig)
-
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {

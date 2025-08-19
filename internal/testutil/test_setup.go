@@ -131,7 +131,7 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 		t.SkipNow()
 	}
 
-	c := config.New()
+	c := config.New(config.WithBinarySearchPaths([]string{}))
 	err := c.WaitForDefaultEnv(t.Context())
 	if err != nil {
 		t.Fatal(err)

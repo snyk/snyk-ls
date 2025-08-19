@@ -18,7 +18,6 @@ package cli
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
@@ -125,36 +124,4 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
 		assert.Contains(t, updatedEnv, OAuthEnabledEnvVar+"=1")
 	})
-}
-
-func TestEnvSnapshotAndRestore_RestoresPathAndVars(t *testing.T) {
-	testutil.UnitTest(t)
-
-	// Set up initial environment state
-	t.Setenv("TEST_VAR", "original_value")
-	t.Setenv("STATIC_VAR", "static_value")
-	t.Setenv("PATH", "/original/path")
-
-	// Take snapshot
-	snapshot := TakeEnvSnapshot()
-
-	// Modify environment
-	t.Setenv("TEST_VAR", "modified_value")
-	t.Setenv("NEW_VAR", "new_value")
-	t.Setenv("PATH", "/modified/path")
-
-	// Verify modifications took effect
-	require.Equal(t, "modified_value", os.Getenv("TEST_VAR"))
-	require.Equal(t, "static_value", os.Getenv("STATIC_VAR"))
-	require.Equal(t, "new_value", os.Getenv("NEW_VAR"))
-	require.Equal(t, "/modified/path", os.Getenv("PATH"))
-
-	// Restore snapshot
-	RestoreEnvSnapshot(snapshot)
-
-	// Verify restoration
-	assert.Equal(t, "original_value", os.Getenv("TEST_VAR"))
-	assert.Equal(t, "static_value", os.Getenv("STATIC_VAR"))
-	assert.Equal(t, "", os.Getenv("NEW_VAR")) // Should be cleared
-	assert.Equal(t, "/original/path", os.Getenv("PATH"))
 }
