@@ -25,6 +25,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -32,15 +33,18 @@ import (
 
 func Test_shouldSetLogLevelViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-l", "debug"}
-	_, _ = parseFlags(args, config.New())
-	// No WaitForDefaultEnv needed - test does not use environment
+	c := config.New(config.WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	_, _ = parseFlags(args, c)
 	assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
 }
 
 func Test_shouldSetLogFileViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-f", "a.txt"}
+	c := config.New(config.WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 	t.Cleanup(func() {
-		config.CurrentConfig().DisableLoggingToFile()
+		c.DisableLoggingToFile()
 
 		err := os.Remove("a.txt")
 		if err != nil {
@@ -48,44 +52,46 @@ func Test_shouldSetLogFileViaFlag(t *testing.T) {
 		}
 	})
 
-	_, _ = parseFlags(args, config.New())
-	// No WaitForDefaultEnv needed - test does not use environment
-	assert.Equal(t, config.CurrentConfig().LogPath(), "a.txt")
+	_, _ = parseFlags(args, c)
+	assert.Equal(t, c.LogPath(), "a.txt")
 }
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-o", config.FormatHtml}
-	_, _ = parseFlags(args, config.New())
-	// No WaitForDefaultEnv needed - test does not use environment
-	assert.Equal(t, config.FormatHtml, config.CurrentConfig().Format())
+	c := config.New(config.WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	_, _ = parseFlags(args, c)
+	assert.Equal(t, config.FormatHtml, c.Format())
 }
 
 func Test_shouldDisplayLicenseInformationWithFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-licenses"}
-	output, _ := parseFlags(args, config.New())
-	// No WaitForDefaultEnv needed - test does not use environment
+	c := config.New(config.WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	output, _ := parseFlags(args, c)
 	assert.True(t, strings.Contains(output, "License information"))
 }
 
 func Test_shouldReturnErrorWithVersionStringOnFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-v"}
-	output, err := parseFlags(args, config.New())
-	// No WaitForDefaultEnv needed - test does not use environment
+	c := config.New(config.WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	output, err := parseFlags(args, c)
 	assert.Error(t, err)
 	assert.Empty(t, output)
 	assert.Equal(t, config.Version, err.Error())
 }
 
 func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	args := []string{"snyk-ls"}
-	_, _ = parseFlags(args, config.New())
+	_, _ = parseFlags(args, c)
 
-	assert.False(t, config.CurrentConfig().IsErrorReportingEnabled())
+	assert.False(t, c.IsErrorReportingEnabled())
 
 	args = []string{"snyk-ls", "-reportErrors"}
-	_, _ = parseFlags(args, config.New())
-	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
+	_, _ = parseFlags(args, c)
+	assert.True(t, c.IsErrorReportingEnabled())
 }
 
 func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
@@ -101,7 +107,7 @@ func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 	c.Logger().Error().Msg("test")
 
 	assert.Eventuallyf(t, func() bool {
-		bytes, err := os.ReadFile(config.CurrentConfig().LogPath())
+		bytes, err := os.ReadFile(c.LogPath())
 		if err != nil {
 			return false
 		}
