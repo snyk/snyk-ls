@@ -116,8 +116,11 @@ func Test_FindBinaries(t *testing.T) {
 		t.Setenv("JAVA_HOME", "")
 		t.Setenv("PATH", "")
 
-		javaHome := t.TempDir()
-		err := os.MkdirAll(javaHome, 0770)
+		javaHome, err := filepath.EvalSymlinks(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = os.MkdirAll(javaHome, 0770)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,12 +143,13 @@ func Test_FindBinaries(t *testing.T) {
 		nop := zerolog.Nop()
 		c := &Config{binarySearchPaths: []string{filepath.Dir(javaHome)}, logger: &nop}
 
-		java := c.findBinary(getJavaBinaryName())
+		c.determineJavaHome()
 
-		assert.Equal(t, file.Name(), java)
+		assert.Equal(t, javaHome, os.Getenv("JAVA_HOME"))
+		assert.Contains(t, os.Getenv("PATH"), binDir)
 	})
 
-	t.Run("search for maven in default places", func(t *testing.T) {
+	t.Run("search for maven in binary search paths", func(t *testing.T) {
 		t.Setenv("MAVEN_HOME", "")
 		t.Setenv("PATH", "")
 
@@ -167,8 +171,10 @@ func Test_FindBinaries(t *testing.T) {
 		}
 		defer func(file *os.File) { _ = file.Close() }(file)
 
-		c := New(WithBinarySearchPaths([]string{dir}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		nop := zerolog.Nop()
+		c := &Config{binarySearchPaths: []string{dir}, logger: &nop}
+
+		c.mavenDefaults()
 
 		assert.Contains(t, os.Getenv("PATH"), binDir)
 	})
