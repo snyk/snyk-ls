@@ -22,17 +22,16 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
-
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestIsLocalEngine(t *testing.T) {
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
 	apiClient := &snyk_api.FakeApiClient{
 		CodeEnabled: true,
 		ApiError:    nil,
@@ -76,8 +75,8 @@ func TestIsLocalEngine(t *testing.T) {
 		mockedSastResponse.SastEnabled = true
 		mockedSastResponse.LocalCodeEngine.Enabled = true
 		scanner.updateCodeApiLocalEngine(mockedSastResponse)
-		assert.Equal(t, mockedSastResponse.LocalCodeEngine.Url, config.CurrentConfig().SnykCodeApi())
-		additionalAuthUrls := config.CurrentConfig().Engine().GetConfiguration().GetStringSlice(configuration.
+		assert.Equal(t, mockedSastResponse.LocalCodeEngine.Url, c.SnykCodeApi())
+		additionalAuthUrls := c.Engine().GetConfiguration().GetStringSlice(configuration.
 			AUTHENTICATION_ADDITIONAL_URLS)
 		assert.True(t, slices.Contains(additionalAuthUrls, mockedSastResponse.LocalCodeEngine.Url))
 	})
