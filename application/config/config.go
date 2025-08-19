@@ -1073,7 +1073,7 @@ func (c *Config) Logger() *zerolog.Logger {
 	return c.logger
 }
 
-func (c *Config) AuthenticationMethodMatchesToken() bool {
+func (c *Config) AuthenticationMethodMatchesCredentials() bool {
 	token := c.Token()
 	method := c.authenticationMethod
 
