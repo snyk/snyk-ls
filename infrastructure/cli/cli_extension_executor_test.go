@@ -121,7 +121,7 @@ func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
 	err = engine.Init()
 	assert.NoError(t, err)
 
-	config.CurrentConfig().SetEngine(engine)
+	c.SetEngine(engine)
 	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
 
 	// Execute the extension executor which should loads config files

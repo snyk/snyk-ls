@@ -4,15 +4,17 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_ExtensionEntryPoint(t *testing.T) {
-	c := testutil.UnitTest(t)
+	testutil.UnitTest(t)
 	expectedLoglevel := "trace"
 	expectedLogPath := t.TempDir()
 
@@ -36,6 +38,10 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 	data, err := engine.InvokeWithConfig(WORKFLOWID_LS, engineConfig)
 	assert.Nil(t, err)
 	assert.Empty(t, data)
+
+	// lsWorkflow overrides the Config.
+	c := config.CurrentConfig()
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 
 	assert.Equal(t, expectedLoglevel, c.LogLevel())
 	assert.Equal(t, expectedLogPath, c.LogPath())
