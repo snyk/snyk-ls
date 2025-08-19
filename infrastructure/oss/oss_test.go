@@ -204,7 +204,7 @@ func Test_introducingPackageAndVersionJava(t *testing.T) {
 
 func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	c := testutil.UnitTest(t)
-	cliMock := cli.NewTestExecutor()
+	cliMock := cli.NewTestExecutor(c)
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -233,7 +233,7 @@ func mavenTestIssue() ossIssue {
 
 func TestUnmarshalOssJsonSingle(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -251,7 +251,7 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 
 func TestUnmarshalOssJsonArray(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -269,7 +269,7 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 
 func TestUnmarshalOssErroneousJson(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -321,7 +321,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	concurrentScanRequests := 10
 	workingDir, _ := os.Getwd()
 	folderPath := workingDir
-	fakeCli := cli.NewTestExecutor()
+	fakeCli := cli.NewTestExecutor(c)
 	fakeCli.ExecuteDuration = time.Second
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier())
 	wg := sync.WaitGroup{}
@@ -364,7 +364,7 @@ func sampleIssue() ossIssue {
 func Test_prepareScanCommand(t *testing.T) {
 	t.Run("Expands parameters", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
 
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"--all-projects", "-d"},
@@ -385,7 +385,7 @@ func Test_prepareScanCommand(t *testing.T) {
 
 	t.Run("does not use --all-projects if --file is given", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
 
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"--file=asdf", "-d"},
@@ -402,7 +402,7 @@ func Test_prepareScanCommand(t *testing.T) {
 
 	t.Run("Uses --all-projects by default", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
 
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"-d"},
@@ -445,7 +445,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 
 	// Arrange
 	c.SetSnykOssEnabled(false)
-	fakeCli := cli.NewTestExecutor()
+	fakeCli := cli.NewTestExecutor(c)
 	fakeCli.ExecuteDuration = time.Millisecond
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
 
@@ -467,7 +467,7 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Arrange
-	fakeCli := cli.NewTestExecutor()
+	fakeCli := cli.NewTestExecutor(c)
 	fakeCli.ExecuteDuration = time.Millisecond
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
 
@@ -493,7 +493,7 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	c := testutil.UnitTest(t)
 
 	// Arrange
-	fakeCli := cli.NewTestExecutor()
+	fakeCli := cli.NewTestExecutor(c)
 	fakeCli.ExecuteDuration = time.Millisecond
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
 

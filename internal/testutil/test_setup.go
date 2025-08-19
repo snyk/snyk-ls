@@ -62,7 +62,7 @@ func UnitTest(t *testing.T) *config.Config {
 	setMCPServerURL(t, c)
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
-	CLIDownloadLockFileCleanUp(t)
+	CLIDownloadLockFileCleanUp(t, c)
 	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
 		Enabled: false,
 	},
@@ -88,10 +88,10 @@ func cleanupFakeCliFile(c *config.Config) {
 	}
 }
 
-func CLIDownloadLockFileCleanUp(t *testing.T) {
+func CLIDownloadLockFileCleanUp(t *testing.T, c *config.Config) {
 	t.Helper()
 	// remove lock file before test and after test
-	lockFileName, _ := config.CurrentConfig().CLIDownloadLockFileName()
+	lockFileName, _ := c.CLIDownloadLockFileName()
 	file, _ := os.Open(lockFileName)
 	_ = file.Close()
 	_ = os.Remove(lockFileName)
@@ -138,7 +138,7 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 	redirectConfigAndDataHome(t, c)
 
 	config.SetCurrentConfig(c)
-	CLIDownloadLockFileCleanUp(t)
+	CLIDownloadLockFileCleanUp(t, c)
 	t.Cleanup(func() {
 		cleanupFakeCliFile(c)
 	})
@@ -163,10 +163,11 @@ func redirectConfigAndDataHome(t *testing.T, c *config.Config) {
 	conf.SetStorage(s)
 }
 
-func OnlyEnableCode() {
-	config.CurrentConfig().SetSnykIacEnabled(false)
-	config.CurrentConfig().SetSnykOssEnabled(false)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+func OnlyEnableCode(t *testing.T, c *config.Config) {
+	t.Helper()
+	c.SetSnykIacEnabled(false)
+	c.SetSnykOssEnabled(false)
+	c.SetSnykCodeEnabled(true)
 }
 
 func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {

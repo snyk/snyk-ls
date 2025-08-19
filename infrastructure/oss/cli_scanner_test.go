@@ -182,7 +182,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup test CLI executor
-	cliExecutor := cli.NewTestExecutorWithResponse("{}")
+	cliExecutor := cli.NewTestExecutorWithResponse(c, "{}")
 
 	// Setup the scanner with necessary dependencies
 	instrumentor := performance.NewInstrumentor()
