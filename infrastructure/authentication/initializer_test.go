@@ -19,35 +19,46 @@ package authentication
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	errorreporting "github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
-	t.Run("Does not authenticate when auto-auth is disabled", getAutoAuthenticationTest(false))
-	t.Run("Authenticates when auto-auth is enabled", getAutoAuthenticationTest(true))
-}
+	testCases := []struct {
+		name               string
+		autoAuthentication bool
+	}{
+		{
+			name:               "Does not authenticate when auto-auth is disabled",
+			autoAuthentication: false,
+		},
+		{
+			name:               "Authenticates when auto-auth is enabled",
+			autoAuthentication: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			// Arrange
+			c.SetToken("")
+			c.SetAutomaticAuthentication(tc.autoAuthentication)
 
-func getAutoAuthenticationTest(autoAuthentication bool) func(t *testing.T) {
-	return func(t *testing.T) {
-		// Arrange
-		t.Helper()
-		c := config.CurrentConfig()
-		c.SetToken("")
-		c.SetAutomaticAuthentication(autoAuthentication)
+			provider := NewFakeCliAuthenticationProvider(c)
+			notifier := notification.NewNotifier()
+			authenticator := NewAuthenticationService(c, provider, errorreporting.NewTestErrorReporter(), notifier)
+			initializer := NewInitializer(c, authenticator, errorreporting.NewTestErrorReporter(), notifier)
 
-		provider := NewFakeCliAuthenticationProvider(c)
-		notifier := notification.NewNotifier()
-		authenticator := NewAuthenticationService(c, provider, errorreporting.NewTestErrorReporter(), notifier)
-		initializer := NewInitializer(c, authenticator, errorreporting.NewTestErrorReporter(), notifier)
+			// Act
+			err := initializer.Init()
+			require.NoError(t, err)
 
-		// Act
-		err := initializer.Init()
-		require.NoError(t, err)
-
-		require.True(t, provider.IsAuthenticated == autoAuthentication)
+			// Verify
+			assert.Equal(t, tc.autoAuthentication, provider.IsAuthenticated)
+		})
 	}
 }

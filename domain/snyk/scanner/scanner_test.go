@@ -43,10 +43,10 @@ import (
 )
 
 func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
 	disabledScanner := NewTestProductScanner(product.ProductOpenSource, false)
-	scanner, _ := setupScanner(enabledScanner, disabledScanner)
+	scanner, _ := setupScanner(t, c, enabledScanner, disabledScanner)
 
 	scanner.Scan(t.Context(), "", types.NoopResultProcessor, "")
 
@@ -60,11 +60,11 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	)
 }
 
-func setupScanner(testProductScanners ...types.ProductScanner) (
+func setupScanner(t *testing.T, c *config.Config, testProductScanners ...types.ProductScanner) (
 	sc Scanner,
 	scanNotifier ScanNotifier,
 ) {
-	c := config.CurrentConfig()
+	t.Helper()
 	scanNotifier = NewMockScanNotifier()
 	notifier := notification.NewNotifier()
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
@@ -79,11 +79,12 @@ func setupScanner(testProductScanners ...types.ProductScanner) (
 }
 
 func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
+	c := testutil.UnitTest(t)
 	// Arrange
 	productScanner := NewTestProductScanner(product.ProductOpenSource, true)
-	scanner, _ := setupScanner(productScanner)
-	config.CurrentConfig().SetToken("")
-	emptyToken := !config.CurrentConfig().NonEmptyToken()
+	scanner, _ := setupScanner(t, c, productScanner)
+	c.SetToken("")
+	emptyToken := !c.NonEmptyToken()
 
 	// Act
 	scanner.Scan(t.Context(), "", types.NoopResultProcessor, "")
@@ -94,11 +95,12 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 }
 
 func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
+	c := testutil.UnitTest(t)
 	// Arrange
-	config.CurrentConfig().SetToken("")
+	c.SetToken("")
 	productScanner := NewTestProductScanner(product.ProductOpenSource, true)
 	productScanner.SetScanDuration(2 * time.Second)
-	scanner, _ := setupScanner(productScanner)
+	scanner, _ := setupScanner(t, c, productScanner)
 	done := make(chan bool)
 
 	// Act
@@ -107,7 +109,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 		done <- true
 	}()
 	time.Sleep(500 * time.Millisecond) // Wait for the product scanner to start running
-	config.CurrentConfig().SetToken(uuid.New().String())
+	c.SetToken(uuid.New().String())
 
 	// Assert
 	// Need to wait for the scan to be done before checking whether the product scanner was used
@@ -120,7 +122,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
 	enabledScanner := NewTestProductScanner(product.ProductCode, true)
-	sc, scanNotifier := setupScanner(enabledScanner)
+	sc, scanNotifier := setupScanner(t, c, enabledScanner)
 	mockScanNotifier := scanNotifier.(*MockScanNotifier)
 
 	sc.Scan(t.Context(), "", types.NoopResultProcessor, "")
@@ -134,7 +136,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	c.SetSnykOssEnabled(true)
 	p := product.ProductOpenSource
 	enabledScanner := NewTestProductScanner(p, true)
-	sc, _ := setupScanner(enabledScanner)
+	sc, _ := setupScanner(t, c, enabledScanner)
 	delegatingScanner, ok := sc.(*DelegatingConcurrentScanner)
 	require.True(t, ok)
 	workDir := types.FilePath(t.TempDir())

@@ -32,7 +32,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	config2 "github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -132,10 +132,11 @@ func TestOAuth2Provider_AuthenticationMethod(t *testing.T) {
 }
 
 func TestAuthenticateUsesAuthenticator(t *testing.T) {
-	config := configuration.New()
+	c := testutil.UnitTest(t)
+	config := c.Engine().GetConfiguration()
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, config, true).(*fakeOauthAuthenticator)
 
-	provider := newOAuthProvider(config, authenticator, config2.CurrentConfig().Logger())
+	provider := newOAuthProvider(config, authenticator, c.Logger())
 
 	authToken, err := provider.Authenticate(t.Context())
 
@@ -145,9 +146,10 @@ func TestAuthenticateUsesAuthenticator(t *testing.T) {
 }
 
 func TestAuthURL_ShouldReturnURL(t *testing.T) {
-	config := configuration.New()
+	c := testutil.UnitTest(t)
+	config := c.Engine().GetConfiguration()
 	authenticator := NewFakeOauthAuthenticator(time.Now().Add(10*time.Second), true, config, true).(*fakeOauthAuthenticator)
-	provider := newOAuthProvider(config, authenticator, config2.CurrentConfig().Logger())
+	provider := newOAuthProvider(config, authenticator, c.Logger())
 	provider.setAuthUrl("https://auth.fake.snyk.io")
 	url := provider.AuthURL(t.Context())
 

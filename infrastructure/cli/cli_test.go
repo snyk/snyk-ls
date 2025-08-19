@@ -30,12 +30,12 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
 	testOrg, err := uuid.NewUUID()
 	assert.NoError(t, err)
-	config.CurrentConfig().SetOrganization(testOrg.String())
+	c.SetOrganization(testOrg.String())
 	settings := config.CliSettings{
 		Insecure: true,
 		C:        c,
 	}
-	config.CurrentConfig().SetCliSettings(&settings)
+	c.SetCliSettings(&settings)
 	var cmd = []string{"a", "b"}
 
 	cmd = (&SnykCli{}).ExpandParametersFromConfig(cmd)
