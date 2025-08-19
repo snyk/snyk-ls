@@ -93,6 +93,8 @@ func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.
 }
 
 func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx context.Context) *exec.Cmd {
+	_ = c.c.WaitForDefaultEnv(ctx) // TODO - Handle the error.
+
 	if c.c.Logger().GetLevel() < zerolog.InfoLevel {
 		cmd = append(cmd, "-d")
 	}

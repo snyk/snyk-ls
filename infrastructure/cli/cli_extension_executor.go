@@ -67,12 +67,17 @@ func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir
 	return output, err
 }
 
-func (c ExtensionExecutor) doExecute(_ context.Context, cmd []string, workingDir types.FilePath) ([]byte, error) {
-	engine := config.CurrentConfig().Engine()
+func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingDir types.FilePath) ([]byte, error) {
+	err := c.c.WaitForDefaultEnv(ctx)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	engine := c.c.Engine()
 	engine.GetConfiguration().Set(configuration.TIMEOUT, c.cliTimeout.Seconds())
 
 	legacyCLI := workflow.NewWorkflowIdentifier("legacycli")
-	legacyCLIConfig := config.CurrentConfig().Engine().GetConfiguration().Clone()
+	legacyCLIConfig := engine.GetConfiguration().Clone()
 	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, string(workingDir))
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
