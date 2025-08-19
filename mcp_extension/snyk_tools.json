@@ -8,14 +8,7 @@
       ],
       "ignoreTrust": true,
       "standardParams": [],
-      "params": [
-        {
-          "name": "debug",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Enables debug logging for the authentication process. Useful for troubleshooting connection or authentication issues."
-        }
-      ]
+      "params": []
     },
     {
       "name": "snyk_sca_scan",

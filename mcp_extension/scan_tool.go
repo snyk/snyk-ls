@@ -182,10 +182,6 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return nil, fmt.Errorf("empty command in tool definition for %s", toolDef.Name)
 		}
 
-		if toolDef.Name == SnykAuth && os.Getenv("SNYK_TOKEN") != "" {
-			return mcp.NewToolResultText("SNYK_TOKEN env var is set, assuming the token is valid"), nil
-		}
-
 		requestArgs := request.GetArguments()
 		params, workingDir, err := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
 		if err != nil {
@@ -231,6 +227,12 @@ func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "snykAuthHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+
+		if os.Getenv("SNYK_TOKEN") != "" {
+			logger.Error().Msg("Auth tool can't be called if SNYK_TOKEN env var is set")
+			return mcp.NewToolResultText("SNYK_TOKEN env var is set, validity must be checked with snyk_auth_status IF NOT ALREADY DONE"), nil
+		}
+
 		conf := invocationCtx.GetConfiguration().Clone()
 		conf.Set("auth-type", auth.AUTH_TYPE_OAUTH)
 
