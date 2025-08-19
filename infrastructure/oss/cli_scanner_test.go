@@ -205,7 +205,9 @@ func TestCLIScanner_WaitsForEnvReadinessBeforeBuildingCommand(t *testing.T) {
 
 	// Start building the command in a separate goroutine; it should block waiting on readiness
 	started := make(chan bool, 1)
+	t.Cleanup(func() { close(started) })
 	unblocked := make(chan bool, 1)
+	t.Cleanup(func() { close(unblocked) })
 	var builtCmd []string
 	go func() {
 		started <- true

@@ -86,14 +86,20 @@ func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.
 	}
 	defer c.semaphore.Release(1)
 
-	command := c.getCommand(cmd, workingDir, ctx)
+	command, err := c.getCommand(cmd, workingDir, ctx)
+	if err != nil {
+		return nil, err
+	}
 	command.Stderr = c.c.Logger()
 	output, err := command.Output()
 	return output, err
 }
 
-func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx context.Context) *exec.Cmd {
-	_ = c.c.WaitForDefaultEnv(ctx) // TODO - Handle the error.
+func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx context.Context) (*exec.Cmd, error) {
+	err := c.c.WaitForDefaultEnv(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	if c.c.Logger().GetLevel() < zerolog.InfoLevel {
 		cmd = append(cmd, "-d")
@@ -110,7 +116,7 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Args", command.Args).Send()
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Dir", command.Dir).Send()
-	return command
+	return command, nil
 }
 
 func expandParametersFromConfig(base []string) []string {

@@ -76,9 +76,10 @@ func Test_GetCommand_LoadsConfigFiles(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
 
 	// Call getCommand which should loads config files
-	cmd := cli.getCommand([]string{"test", "command"}, types.FilePath(tempDir), t.Context())
+	cmd, err := cli.getCommand([]string{"test", "command"}, types.FilePath(tempDir), t.Context())
 
 	// Verify the command was created
+	assert.NoError(t, err)
 	assert.NotNil(t, cmd)
 	assert.Equal(t, "test", cmd.Args[0])
 	assert.Equal(t, "command", cmd.Args[1])

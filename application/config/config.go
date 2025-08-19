@@ -898,6 +898,7 @@ func (c *Config) SetAutomaticScanning(value bool) {
 
 func (c *Config) addDefaults() {
 	go func() {
+		defer func() { close(c.prepareDefaultEnvChannel) }()
 		envvars.LoadShellEnvironment()
 		//goland:noinspection GoBoolExpressions
 		if runtime.GOOS != "windows" {
@@ -907,7 +908,6 @@ func (c *Config) addDefaults() {
 		}
 		c.determineJavaHome()
 		c.mavenDefaults()
-		close(c.prepareDefaultEnvChannel)
 	}()
 }
 
