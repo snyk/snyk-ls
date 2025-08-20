@@ -19,7 +19,7 @@ Add the following configuration to the user's MCP settings file (`.cursor/mcp.js
 ```json
 {
   "mcpServers": {
-    "Snyk Security": {
+    "Snyk": {
       "command": "npx",
       "args": ["-y", "snyk@latest", "mcp", "-t", "stdio"],
     }
