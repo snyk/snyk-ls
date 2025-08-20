@@ -71,22 +71,18 @@ func Test_GetCommand_LoadsConfigFiles(t *testing.T) {
 	configPathValue := "config" + pathListSep + "in_both_path"
 	configContent := []byte("PATH=" + configPathValue + "\nTEST_VAR=test_value\n")
 	err := os.WriteFile(configFile, configContent, 0660)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Set up CLI with custom config files
 	cli := &SnykCli{c: c}
-	cloneConfig := c.Engine().GetConfiguration().Clone()
-	cloneConfig.Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
-
-	// Mock the engine configuration to return our custom config files
 	c.Engine().GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
 
 	// Call getCommand which should loads config files
 	cmd, err := cli.getCommand([]string{"test", "command"}, types.FilePath(tempDir), t.Context())
 
 	// Verify the command was created
-	assert.NoError(t, err)
-	assert.NotNil(t, cmd)
+	require.NoError(t, err)
+	require.NotNil(t, cmd)
 	assert.Equal(t, "test", cmd.Args[0])
 	assert.Equal(t, "command", cmd.Args[1])
 
