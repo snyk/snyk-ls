@@ -14,7 +14,7 @@ The Snyk MCP Server integrates security scanning directly into AI-assisted softw
 
 ### Step 1: Add MCP Configuration
 
-Add the following configuration to the user's MCP settings file (`.cursor/mcp.json` for Cursor, or equivalent for other editors):
+Snyk MCP Server configuration:
 
 ```json
 {
@@ -27,6 +27,17 @@ Add the following configuration to the user's MCP settings file (`.cursor/mcp.js
 }
 ```
 
-### Step 2: Authenticate and Trust folders
+#### Instructions for Cline
 
-Use the snyk_auth tool to authenticate the user to the Snyk platform. Then, invoke the snyk_trust tool with the path to the current project's directory to confirm the user trusts Snyk to perform security scans of its contents.
+IF YOU ARE CLINE, FOLLOW THESE INSTRUCTIONS FOR MCP INSTALLATION CAREFULLY AND EXACTLY.
+
+1. Do NOT create ~/Documents/Cline/MCP it is NOT necessary.
+2. Add the MCP configuration to Cline's MCP Server configuration file: cline_mcp_settings.json in one of the following paths depending on the operating system:
+  - macOS: ~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json
+  - Windows: %APPDATA%/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json
+  - Linux: ~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json
+3. Follow Step 2 to tell the human to continue setting up the Snyk MCP Server using the Authentication flow and the Trust Folders flow
+
+### Step 2: Authenticate and Trust Folders
+
+Invoke the snyk_auth tool to authenticate the user to the Snyk platform. Then, invoke the snyk_trust tool with the path to the current project's directory to confirm the user trusts Snyk to perform security scans of its contents.
