@@ -19,10 +19,15 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"sync"
 	"testing"
+	"time"
+	"unsafe"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -137,4 +142,83 @@ func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
 	expectedPath := configPathValue + pathListSep + originalPathValue
 	assert.Equal(t, expectedPath, actualPath,
 		"PATH should be config path prepended to original path")
+}
+
+func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Create a test-controlled environment readiness channel
+	testPrepareDefaultEnvChannel := make(chan bool)
+	testPrepareDefaultEnvChannelClose := sync.OnceFunc(func() { close(testPrepareDefaultEnvChannel) })
+	t.Cleanup(testPrepareDefaultEnvChannelClose)
+
+	// Replace the ready channel with our test channel to simulate "not ready" state
+	configValue := reflect.ValueOf(c).Elem()
+	channelField := configValue.FieldByName("prepareDefaultEnvChannel")
+	channelField = reflect.NewAt(channelField.Type(), unsafe.Pointer(channelField.UnsafeAddr())).Elem()
+	channelField.Set(reflect.ValueOf(testPrepareDefaultEnvChannel))
+
+	// Set up workflow engine for extension executor
+	workflowId := workflow.NewWorkflowIdentifier("legacycli")
+	engine := app.CreateAppEngine()
+	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
+		return []workflow.Data{data}, nil
+	})
+	require.NoError(t, err)
+
+	err = engine.Init()
+	require.NoError(t, err)
+	c.SetEngine(engine)
+
+	executor := NewExtensionExecutor(c)
+
+	// Start execution in a separate goroutine; it should block waiting on readiness
+	started := make(chan bool, 1)
+	t.Cleanup(func() { close(started) })
+	unblocked := make(chan bool, 1)
+	t.Cleanup(func() { close(unblocked) })
+	var result []byte
+	var execErr error
+	go func() {
+		started <- true
+		result, execErr = executor.Execute(t.Context(), []string{"snyk", "test"}, types.FilePath(t.TempDir()))
+		unblocked <- true
+	}()
+
+	// Wait until goroutine starts
+	require.Eventually(t, func() bool {
+		select {
+		case <-started:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
+
+	// Verify it's blocked - should not complete for a reasonable time
+	require.Never(t, func() bool {
+		select {
+		case <-unblocked:
+			return true
+		default:
+			return false
+		}
+	}, 100*time.Millisecond, 10*time.Millisecond, "Execute should block until environment is ready")
+
+	// Now close the test channel to signal readiness
+	testPrepareDefaultEnvChannelClose()
+
+	// Verify it unblocks and completes
+	require.Eventually(t, func() bool {
+		select {
+		case <-unblocked:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond, "Execute should complete after environment becomes ready")
+
+	require.NoError(t, execErr)
+	assert.NotNil(t, result)
 }

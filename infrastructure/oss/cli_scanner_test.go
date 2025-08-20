@@ -22,7 +22,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -176,67 +175,6 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			assert.Equal(t, expected, actual)
 		})
 	}
-}
-
-func TestCLIScanner_WaitsForEnvReadinessBeforeBuildingCommand(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	// Create a scanner with a fake executor
-	cliExecutor := cli.NewTestExecutorWithResponse(c, "{}")
-	instrumentor := performance.NewInstrumentor()
-	errorReporter := error_reporting.NewTestErrorReporter()
-	learnMock := mock_learn.NewMockService(gomock.NewController(t))
-	notifier := notification.NewMockNotifier()
-
-	scanner := &CLIScanner{
-		config:            c,
-		cli:               cliExecutor,
-		instrumentor:      instrumentor,
-		errorReporter:     errorReporter,
-		learnService:      learnMock,
-		notifier:          notifier,
-		mutex:             &sync.RWMutex{},
-		inlineValueMutex:  &sync.RWMutex{},
-		packageScanMutex:  &sync.Mutex{},
-		runningScans:      make(map[types.FilePath]*scans.ScanProgress),
-		supportedFiles:    make(map[string]bool),
-		packageIssueCache: make(map[string][]types.Issue),
-	}
-
-	// Start building the command in a separate goroutine; it should block waiting on readiness
-	started := make(chan bool, 1)
-	t.Cleanup(func() { close(started) })
-	unblocked := make(chan bool, 1)
-	t.Cleanup(func() { close(unblocked) })
-	var builtCmd []string
-	go func() {
-		started <- true
-		builtCmd = scanner.prepareScanCommand([]string{}, map[string]bool{}, types.FilePath(t.TempDir()), nil)
-		unblocked <- true
-	}()
-
-	// Wait until goroutine starts
-	require.Eventually(t, func() bool {
-		select {
-		case <-started:
-			return true
-		default:
-			return false
-		}
-	}, time.Second, 10*time.Millisecond)
-
-	require.Eventually(t, func() bool {
-		select {
-		case <-unblocked:
-			return true
-		default:
-			return false
-		}
-	}, 5*time.Second, 10*time.Millisecond)
-
-	require.NotNil(t, builtCmd)
-	assert.Contains(t, builtCmd, "--json")
-	assert.Contains(t, builtCmd, "--all-projects")
 }
 
 func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
