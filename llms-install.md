@@ -29,4 +29,4 @@ Add the following configuration to the user's MCP settings file (`.cursor/mcp.js
 
 ### Step 2: Authenticate and Trust folders
 
-Use the `snyk_auth` tool to authenticate the user to the Snyk platform, and then invoke the `snyk_trust` tool to confirm the user trusts Snyk to perform security scans of the contents of the current project's directory.
+Use the snyk_auth tool to authenticate the user to the Snyk platform. Then, invoke the snyk_trust tool with the path to the current project's directory to confirm the user trusts Snyk to perform security scans of its contents.
