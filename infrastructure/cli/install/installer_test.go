@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -56,8 +55,8 @@ func TestInstaller_Find(t *testing.T) {
 }
 
 func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
+	c := testutil.IntegTest(t)
 	// Arrange
-	testutil.IntegTest(t)
 	file, err := os.CreateTemp(t.TempDir(), "snyk-win.exe")
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +72,7 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 	t.Setenv("PATH", "")
 	t.Setenv("SNYK_TOKEN", "")
 	t.Setenv("SNYK_CLI_PATH", "")
-	config.CurrentConfig().CliSettings().SetPath(cliPath)
+	c.CliSettings().SetPath(cliPath)
 	installer := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 
 	// Act
@@ -87,9 +86,10 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 }
 
 func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
+	c := testutil.UnitTest(t)
 	r := getTestAsset()
 
-	lockFileName, err := config.CurrentConfig().CLIDownloadLockFileName()
+	lockFileName, err := c.CLIDownloadLockFileName()
 	require.NoError(t, err)
 	file, err := os.Create(lockFileName)
 	if err != nil {
@@ -104,13 +104,13 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 }
 
 func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// prepare
 	i := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 
 	temp := t.TempDir()
 	fakeCliFile := testsupport.CreateTempFile(t, temp)
-	config.CurrentConfig().CliSettings().SetPath(fakeCliFile.Name())
+	c.CliSettings().SetPath(fakeCliFile.Name())
 
 	checksum, err := getChecksum(fakeCliFile.Name())
 	if err != nil {
@@ -149,7 +149,7 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 }
 
 func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
-	testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
 
 	// prepare
@@ -161,7 +161,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	_ = fakeCliFile.Close()
 	cliDiscovery := Discovery{}
 	cliFilePath := path.Join(cliDir, cliDiscovery.ExecutableName(false))
-	config.CurrentConfig().CliSettings().SetPath(cliFilePath)
+	c.CliSettings().SetPath(cliFilePath)
 
 	err := os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
 	if err != nil {

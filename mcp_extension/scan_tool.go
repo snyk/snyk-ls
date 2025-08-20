@@ -29,7 +29,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -114,6 +116,8 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykOpenLearnLessonHandler(invocationCtx, toolDef))
 		case SnykSendFeedback:
 			m.mcpServer.AddTool(tool, m.snykSendFeedback(invocationCtx, toolDef))
+		case SnykAuth:
+			m.mcpServer.AddTool(tool, m.snykAuthHandler(invocationCtx, toolDef))
 		case SnykAuthStatus:
 			m.mcpServer.AddTool(tool, m.snykAuthStatusHandler(invocationCtx, toolDef))
 		default:
@@ -178,10 +182,6 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return nil, fmt.Errorf("empty command in tool definition for %s", toolDef.Name)
 		}
 
-		if toolDef.Name == SnykAuth && os.Getenv("SNYK_TOKEN") != "" {
-			return mcp.NewToolResultText("SNYK_TOKEN env var is set, assuming the token is valid"), nil
-		}
-
 		requestArgs := request.GetArguments()
 		params, workingDir, err := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
 		if err != nil {
@@ -223,17 +223,36 @@ func (m *McpLLMBinding) enhanceOutput(logger *zerolog.Logger, toolDef SnykMcpToo
 	return mapScanResponse(logger, toolDef, output, success, workDir, m.learnService)
 }
 
+func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) server.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := m.logger.With().Str("method", "snykAuthHandler").Logger()
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+
+		if os.Getenv("SNYK_TOKEN") != "" {
+			logger.Error().Msg("Auth tool can't be called if SNYK_TOKEN env var is set")
+			return mcp.NewToolResultText("SNYK_TOKEN env var is set, validity must be checked with snyk_auth_status IF NOT ALREADY DONE"), nil
+		}
+
+		conf := invocationCtx.GetConfiguration().Clone()
+		conf.Set("auth-type", auth.AUTH_TYPE_OAUTH)
+
+		_, err := invocationCtx.GetEngine().InvokeWithConfig(localworkflows.WORKFLOWID_AUTH, conf)
+		if err != nil {
+			logger.Error().Err(err).Msg("Error logging in")
+			return mcp.NewToolResultText(fmt.Sprintf("Error logging in: %s", err.Error())), nil
+		}
+		return mcp.NewToolResultText("Successfully logged in"), nil
+	}
+}
+
 func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "snykLogoutHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-
-		// Special handling for logout which needs multiple commands
-		params := []string{m.cliPath, "config", "unset", "INTERNAL_OAUTH_TOKEN_STORAGE"}
-		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
-
-		params = []string{m.cliPath, "config", "unset", "token"}
-		_, _ = m.runSnyk(ctx, invocationCtx, "", params)
+		config := invocationCtx.GetConfiguration()
+		config.ClearCache()
+		config.Unset(configuration.AUTHENTICATION_TOKEN)
+		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 
 		return mcp.NewToolResultText("Successfully logged out"), nil
 	}

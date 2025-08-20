@@ -30,9 +30,9 @@ import (
 
 func Test_updatePathWithDefaults(t *testing.T) {
 	t.Run("initialize path from environment", func(t *testing.T) {
-		pathFromEnv := os.Getenv("PATH")
+		t.Setenv("PATH", "ORIGINAL_PATH")
 		c := New()
-		assert.Contains(t, c.Path(), pathFromEnv)
+		assert.Contains(t, c.Path(), "ORIGINAL_PATH")
 	})
 
 	t.Run("automatically add /usr/local/bin on linux and macOS", func(t *testing.T) {

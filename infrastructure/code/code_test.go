@@ -676,7 +676,7 @@ func Test_IsEnabled(t *testing.T) {
 	scanner := &Scanner{errorReporter: newTestCodeErrorReporter(), C: c}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
-			config.CurrentConfig().SetSnykCodeEnabled(true)
+			c.SetSnykCodeEnabled(true)
 			enabled := scanner.IsEnabled()
 			assert.True(t, enabled)
 		},
@@ -826,7 +826,8 @@ func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
 }
 
 func TestScanner_getFilesToBeScanned(t *testing.T) {
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
 	_, scanner := setupTestScanner(t)
 	tempDir := types.FilePath(t.TempDir())
 	scanner.changedPaths = make(map[types.FilePath]map[types.FilePath]bool)
@@ -867,6 +868,7 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 }
 
 func TestNormalizeBranchName(t *testing.T) {
+	testutil.UnitTest(t)
 	branchName := " feat/new -$#@$#@$#@$@#"
 	expectedBranchName := "featnew_-"
 

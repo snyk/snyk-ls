@@ -405,7 +405,7 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 
 	// Config should be initialized with an empty token, but using the Token authentication type.
 	c := New()
-	assert.False(t, c.AuthenticationMethodMatchesToken())
+	assert.False(t, c.AuthenticationMethodMatchesCredentials())
 
 	for _, method := range append(slices.Collect(maps.Keys(tokenMap)), types.FakeAuthentication) {
 		c.SetAuthenticationMethod(method)
@@ -415,9 +415,9 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 			shouldMatch := method == tokenType || method == types.FakeAuthentication
 			t.Run(fmt.Sprintf("method: %s, token type: %s -> %t", method, tokenType, shouldMatch), func(t *testing.T) {
 				if shouldMatch {
-					assert.True(t, c.AuthenticationMethodMatchesToken())
+					assert.True(t, c.AuthenticationMethodMatchesCredentials())
 				} else {
-					assert.False(t, c.AuthenticationMethodMatchesToken())
+					assert.False(t, c.AuthenticationMethodMatchesCredentials())
 				}
 			})
 		}

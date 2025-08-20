@@ -25,14 +25,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestDownloader_Download(t *testing.T) {
-	testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 	r := getTestAsset()
 	progressCh := make(chan types.ProgressParams, 100000)
 	cancelProgressCh := make(chan bool, 1)
@@ -42,7 +41,7 @@ func TestDownloader_Download(t *testing.T) {
 	}
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
-	config.CurrentConfig().CliSettings().SetPath(destination)
+	c.CliSettings().SetPath(destination)
 	lockFileName, err := d.lockFileName()
 	require.NoError(t, err)
 	// remove any existing lockfile
@@ -63,7 +62,7 @@ func TestDownloader_Download(t *testing.T) {
 }
 
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
 	cancelProgressCh := make(chan bool, 1)
 	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh)
@@ -83,7 +82,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	assert.Error(t, err)
 
 	// make sure cancellation cleanup works
-	lockFileName, err := config.CurrentConfig().CLIDownloadLockFileName()
+	lockFileName, err := c.CLIDownloadLockFileName()
 	require.NoError(t, err)
 	_, err = os.Stat(lockFileName)
 	assert.Error(t, err)

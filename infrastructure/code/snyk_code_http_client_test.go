@@ -60,13 +60,15 @@ http.createServer(app).listen(app.get('port'), function () {
 `
 )
 
-func clientFunc() *http.Client {
-	return config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient()
+func getClientFunc(c *config.Config) func() *http.Client {
+	return func() *http.Client {
+		return c.Engine().GetNetworkAccess().GetHttpClient()
+	}
 }
 
 func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
-	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
+	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), getClientFunc(c))
 	files := map[types.FilePath]string{}
 	randomAddition := fmt.Sprintf("\n public void random() { System.out.println(\"%d\") }", time.Now().UnixMicro())
 	files[path1] = util.Hash([]byte(content + randomAddition))
@@ -78,7 +80,7 @@ func TestSnykCodeBackendService_CreateBundle(t *testing.T) {
 
 func TestSnykCodeBackendService_ExtendBundle(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
-	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
+	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), getClientFunc(c))
 	var removedFiles []types.FilePath
 	files := map[types.FilePath]string{}
 	files[path1] = util.Hash([]byte(content))
@@ -147,9 +149,9 @@ func TestSnykCodeBackendService_doCall_rejected(t *testing.T) {
 
 func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
-	config.CurrentConfig().SetSnykCodeEnabled(true)
+	c.SetSnykCodeEnabled(true)
 
-	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), clientFunc)
+	s := NewSnykCodeHTTPClient(c, NewCodeInstrumentor(), newTestCodeErrorReporter(), getClientFunc(c))
 	shardKey := util.Hash([]byte("/"))
 	var removedFiles []types.FilePath
 	files := map[types.FilePath]string{}
@@ -190,6 +192,8 @@ func TestSnykCodeBackendService_RunAnalysisSmoke(t *testing.T) {
 // todo analysis test severities
 
 func TestGetCodeApiUrl(t *testing.T) {
+	c := testutil.UnitTest(t)
+
 	t.Run("Snykgov instances code api url generation", func(t *testing.T) {
 		t.Setenv("DEEPROXY_API_URL", "")
 
@@ -211,7 +215,6 @@ func TestGetCodeApiUrl(t *testing.T) {
 			}
 
 			for _, input := range inputList {
-				c := config.CurrentConfig()
 				random, _ := uuid.NewRandom()
 				orgUUID := random.String()
 
@@ -251,7 +254,6 @@ func TestGetCodeApiUrl(t *testing.T) {
 			expected := "https://deeproxy." + instance + ".io"
 
 			for _, input := range inputList {
-				c := config.CurrentConfig()
 				c.UpdateApiEndpoints(input)
 
 				actual, err := GetCodeApiUrl(c)
@@ -262,8 +264,6 @@ func TestGetCodeApiUrl(t *testing.T) {
 	})
 
 	t.Run("Default deeprox url for code api", func(t *testing.T) {
-		c := config.CurrentConfig()
-
 		url, _ := GetCodeApiUrl(c)
 		assert.Equal(t, c.SnykCodeApi(), url)
 	})

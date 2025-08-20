@@ -25,15 +25,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds legacy token to env", func(t *testing.T) {
-		testutil.UnitTest(t)
-		c := config.CurrentConfig()
+		c := testutil.UnitTest(t)
 		c.SetAuthenticationMethod(types.TokenAuthentication)
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
@@ -43,13 +41,12 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	})
 
 	t.Run("Adds values to env", func(t *testing.T) {
+		c := testutil.UnitTest(t)
 		const expectedIntegrationName = "ECLIPSE"
 		const expectedIntegrationVersion = "20230606.182718"
 		const expectedIdeVersion = "4.27.0"
 		const expectedIdeName = "Eclipse"
 
-		testutil.UnitTest(t)
-		c := config.CurrentConfig()
 		c.SetAuthenticationMethod(types.OAuthAuthentication)
 		c.SetOrganization("testOrg")
 		c.UpdateApiEndpoints("https://api.eu.snyk.io")
@@ -80,8 +77,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		assert.NotContains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
 	})
 	t.Run("Removes existing snyk token env variables", func(t *testing.T) {
-		testutil.UnitTest(t)
-		c := config.CurrentConfig()
+		c := testutil.UnitTest(t)
 		c.SetToken("{\"access_token\": \"testToken\"}")
 		c.SetAuthenticationMethod(types.OAuthAuthentication)
 		tokenVar := TokenEnvVar + "={asdf}"
@@ -95,8 +91,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		assert.NotContains(t, updatedEnv, tokenVar)
 	})
 	t.Run("Removes existing authentication env variables", func(t *testing.T) {
-		testutil.UnitTest(t)
-		c := config.CurrentConfig()
+		c := testutil.UnitTest(t)
 		c.SetToken("testToken")
 		oauthVar := SnykOauthTokenEnvVar + "={asdf}"
 		inputEnv := []string{oauthVar}
@@ -107,8 +102,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		assert.NotContains(t, updatedEnv, oauthVar)
 	})
 	t.Run("Adds Snyk Token to env", func(t *testing.T) {
-		testutil.UnitTest(t)
-		c := config.CurrentConfig()
+		c := testutil.UnitTest(t)
 		c.SetToken("testToken")
 		c.SetAuthenticationMethod(types.TokenAuthentication)
 
@@ -119,8 +113,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	})
 
 	t.Run("Adds OAuth Token to env", func(t *testing.T) {
-		testutil.UnitTest(t)
-		c := config.CurrentConfig()
+		c := testutil.UnitTest(t)
 		c.SetAuthenticationMethod(types.OAuthAuthentication)
 		c.SetToken("{\"access_token\": \"testToken\"}")
 

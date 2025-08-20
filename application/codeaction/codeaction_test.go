@@ -51,7 +51,7 @@ var exampleRange = sglsp.Range{
 const documentUriExample = sglsp.DocumentURI("file:///path/to/file")
 
 func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	expectedIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
@@ -60,7 +60,7 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, _ := setupWithSingleIssue(t, expectedIssue)
+	service, codeActionsParam, _ := setupWithSingleIssue(t, c, expectedIssue)
 
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
@@ -71,7 +71,7 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 }
 
 func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	fakeIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
@@ -80,7 +80,7 @@ func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, w := setupWithSingleIssue(t, fakeIssue)
+	service, codeActionsParam, w := setupWithSingleIssue(t, c, fakeIssue)
 	w.SetFileAsChanged(codeActionsParam.TextDocument.URI) // File is dirty until it is saved
 
 	// Act
@@ -101,7 +101,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return(issues)
 	fakeClient := &code.FakeSnykCodeClient{C: c}
 	snykCodeClient := fakeClient
-	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
+	service := codeaction.NewService(c, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: documentUriExample,
@@ -118,7 +118,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// Arrange
 
 	var mockTextEdit = types.TextEdit{
@@ -145,7 +145,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, _ := setupWithSingleIssue(t, expectedIssue)
+	service, codeActionsParam, _ := setupWithSingleIssue(t, c, expectedIssue)
 
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
@@ -161,9 +161,9 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
-	testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// Arrange
-	service := setupService(t)
+	service := setupService(t, c)
 
 	id := types.CodeActionData(uuid.New())
 	ca := types.LSPCodeAction{
@@ -182,8 +182,8 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_KeyAndCommandIsNull_ReturnsError(t *testing.T) {
-	testutil.UnitTest(t)
-	service := setupService(t)
+	c := testutil.UnitTest(t)
+	service := setupService(t, c)
 
 	ca := types.LSPCodeAction{
 		Title:   "Made up CA",
@@ -197,8 +197,8 @@ func Test_ResolveCodeAction_KeyAndCommandIsNull_ReturnsError(t *testing.T) {
 	assert.True(t, codeaction.IsMissingKeyError(err))
 }
 func Test_ResolveCodeAction_KeyIsNull_ReturnsCodeAction(t *testing.T) {
-	testutil.UnitTest(t)
-	service := setupService(t)
+	c := testutil.UnitTest(t)
+	service := setupService(t, c)
 
 	expected := types.LSPCodeAction{
 		Title:   "Made up CA",
@@ -212,17 +212,17 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsCodeAction(t *testing.T) {
 	assert.Equal(t, expected.Command.Command, actual.Command.Command)
 }
 
-func setupService(t *testing.T) *codeaction.CodeActionsService {
+func setupService(t *testing.T, c *config.Config) *codeaction.CodeActionsService {
 	t.Helper()
 	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return([]types.Issue{}).AnyTimes()
-	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
+	fakeClient := &code.FakeSnykCodeClient{C: c}
 	snykCodeClient := fakeClient
-	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
+	service := codeaction.NewService(c, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
 	return service
 }
 
-func setupWithSingleIssue(t *testing.T, issue types.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
+func setupWithSingleIssue(t *testing.T, c *config.Config, issue types.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
 	t.Helper()
 	r := exampleRange
 	uriPath := documentUriExample
@@ -231,9 +231,9 @@ func setupWithSingleIssue(t *testing.T, issue types.Issue) (*codeaction.CodeActi
 	issues := []types.Issue{issue}
 	providerMock.EXPECT().IssuesForRange(path, converter.FromRange(r)).Return(issues).AnyTimes()
 	fileWatcher := watcher.NewFileWatcher()
-	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
+	fakeClient := &code.FakeSnykCodeClient{C: c}
 	snykCodeClient := fakeClient
-	service := codeaction.NewService(config.CurrentConfig(), providerMock, fileWatcher, notification.NewMockNotifier(), snykCodeClient)
+	service := codeaction.NewService(c, providerMock, fileWatcher, notification.NewMockNotifier(), snykCodeClient)
 
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
