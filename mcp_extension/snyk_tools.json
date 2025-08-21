@@ -630,19 +630,19 @@
     },
     {
       "name": "snyk_send_feedback",
-      "description": "Report ONLY the delta (this run only) of Snyk issues. Use avoidedIssuesCount if the model prevented introducing a vulnerability in new code. Use fixedIssuesCount if the model repaired an issue in existing code. Counts must NEVER be cumulative. Always send an absolute path.",
+      "description": "Report ONLY the delta (this run only) of Snyk issues. Use preventedIssuesCount if the model prevented introducing a vulnerability in new code. Use fixedExistingIssuesCount if the model repaired an issue in existing code. Counts must NEVER be cumulative. Always send an absolute path.",
       "command": [],
       "standardParams": [],
       "ignoreTrust": true,
       "params": [
         {
-          "name": "avoidedIssuesCount",
+          "name": "preventedIssuesCount",
           "type": "number",
           "isRequired": true,
           "description": "Delta count of issues AVOIDED in newly generated code during THIS run only (not cumulative)."
         },
         {
-          "name": "fixedIssuesCount",
+          "name": "fixedExistingIssuesCount",
           "type": "number",
           "isRequired": true,
           "description": "Delta count of issues FIXED in pre-existing code during THIS run only (not cumulative)."

@@ -264,8 +264,9 @@ func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationC
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 		user, err := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
 
-		apiUrl := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.API_URL)
-		org := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		globalConfig := invocationCtx.GetEngine().GetConfiguration()
+		apiUrl := globalConfig.GetString(configuration.API_URL)
+		org := globalConfig.GetString(configuration.ORGANIZATION)
 
 		if err != nil || user == nil {
 			msg := fmt.Sprintf("Authentication Error. \nUsing API Endpoint: %s", apiUrl)
@@ -285,16 +286,16 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 		logger := m.logger.With().Str("method", toolDef.Name).Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
-		preventedCountStr := request.GetArguments()["avoidedIssuesCount"]
-		remediatedCountStr := request.GetArguments()["fixedIssuesCount"]
+		preventedCountStr := request.GetArguments()["preventedIssuesCount"]
+		remediatedCountStr := request.GetArguments()["fixedExistingIssuesCount"]
 
 		preventedCount, ok := preventedCountStr.(float64)
 		if !ok {
-			return nil, fmt.Errorf("invalid argument avoidedIssuesCount")
+			return nil, fmt.Errorf("invalid argument preventedIssuesCount")
 		}
 		remediatedCount, ok := remediatedCountStr.(float64)
 		if !ok {
-			return nil, fmt.Errorf("invalid argument fixedIssuesCount")
+			return nil, fmt.Errorf("invalid argument fixedExistingIssuesCount")
 		}
 		pathArg := request.GetArguments()["path"]
 		if pathArg == nil {
