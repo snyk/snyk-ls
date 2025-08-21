@@ -204,6 +204,7 @@ type Config struct {
 	mcpBaseURL                       *url.URL
 	isLSPInitialized                 bool
 	snykAgentFixEnabled              bool
+	cachedOriginalPath               string
 }
 
 func CurrentConfig() *Config {
@@ -501,6 +502,16 @@ func (c *Config) TokenChangesChannel() <-chan string {
 	channel := make(chan string, 1)
 	c.tokenChangeChannels = append(c.tokenChangeChannels, channel)
 	return channel
+}
+
+// IsDefaultEnvReady whether the default environment has been prepared or not.
+func (c *Config) IsDefaultEnvReady() bool {
+	select {
+	case <-c.prepareDefaultEnvChannel:
+		return true
+	default:
+		return false
+	}
 }
 
 // WaitForDefaultEnv blocks until the default environment has been prepared
@@ -899,9 +910,6 @@ func (c *Config) SetAutomaticScanning(value bool) {
 func (c *Config) addDefaults() {
 	go func() {
 		defer func() { close(c.prepareDefaultEnvChannel) }()
-		currentEnv := envvars.GetCurrentEnvironment()
-		newEnv := envvars.ReadShellEnvironment(currentEnv)
-		envvars.SetEnvironmentDifferences(currentEnv, newEnv)
 		//goland:noinspection GoBoolExpressions
 		if runtime.GOOS != "windows" {
 			envvars.UpdatePath("/usr/local/bin", false)
@@ -910,7 +918,20 @@ func (c *Config) addDefaults() {
 		}
 		c.determineJavaHome()
 		c.mavenDefaults()
+		c.setCachedOriginalPath()
 	}()
+}
+
+func (c *Config) GetCachedOriginalPath() string {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.cachedOriginalPath
+}
+
+func (c *Config) setCachedOriginalPath() {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.cachedOriginalPath = os.Getenv("PATH")
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {

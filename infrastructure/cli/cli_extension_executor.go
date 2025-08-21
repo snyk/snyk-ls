@@ -81,10 +81,7 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, string(workingDir))
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
-
-	currentEnv := envvars.GetCurrentEnvironment()
-	newEnv := envvars.ReadConfigFiles(currentEnv, legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
-	envvars.SetEnvironmentDifferences(currentEnv, newEnv)
+	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
 
 	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
 	if len(data) > 0 {

@@ -37,8 +37,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var cachedOriginalPath = ""
-
 func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.DidChangeConfigurationParams) (bool, error) {
 		// we don't log the received config, as it could contain credentials that are not yet filtered.
@@ -321,22 +319,21 @@ func updateSnykCodeSecurity(c *config.Config, settings types.Settings) {
 	}
 }
 
-// TODO store in config, move parsing to CLI
+// TODO stop using os env, move parsing to CLI
 func updatePathFromSettings(c *config.Config, settings types.Settings) {
-	// when changing the path from settings, we cache the original path first, to be able to restore it later
-	if len(cachedOriginalPath) == 0 {
-		cachedOriginalPath = os.Getenv("PATH")
-	}
-
 	if len(settings.Path) > 0 {
+		// If the user has a path set in their settings, we must wait for the default env to load fully first to prevent race conditions.
+		_ = c.WaitForDefaultEnv(context.Background())
 		_ = os.Unsetenv("Path") // unset the path first to work around issues on Windows OS, where PATH can be Path
-		err := os.Setenv("PATH", settings.Path+string(os.PathListSeparator)+cachedOriginalPath)
+		err := os.Setenv("PATH", settings.Path+string(os.PathListSeparator)+c.GetCachedOriginalPath())
 		c.Logger().Debug().Str("method", "updatePathFromSettings").Msgf("added configured path to PATH Environment Variable '%s'", os.Getenv("PATH"))
 		if err != nil {
 			c.Logger().Err(err).Str("method", "updatePathFromSettings").Msgf("couldn't add path %s", settings.Path)
 		}
-	} else {
-		_ = os.Setenv("PATH", cachedOriginalPath)
+	} else if c.IsDefaultEnvReady() {
+		// If the default env is ready, then we know any further wipes of the PATH need to reset the PATH.
+		// If it isn't ready, then we are still initialising and the goroutine will be taking care of setting the default env still.
+		_ = os.Setenv("PATH", c.GetCachedOriginalPath())
 		c.Logger().Debug().Str("method", "updatePathFromSettings").Msgf("restore initial path '%s'", os.Getenv("PATH"))
 	}
 }

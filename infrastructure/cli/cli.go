@@ -19,6 +19,7 @@ package cli
 import (
 	"context"
 	"math"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -30,7 +31,6 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
-	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -107,11 +107,8 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 
 	cloneConfig := c.c.Engine().GetConfiguration().Clone()
 	cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
-
-	currentEnv := envvars.GetCurrentEnvironment()
-	overriddenEnvMap := envvars.ReadConfigFiles(currentEnv, cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
-	overriddenEnvSlice := utils.ToSlice(overriddenEnvMap, "=")
-	cliEnv := AppendCliEnvironmentVariables(overriddenEnvSlice, c.c.NonEmptyToken())
+	envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
+	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
 
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 	command.Dir = string(workingDir)
