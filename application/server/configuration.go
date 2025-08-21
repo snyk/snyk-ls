@@ -332,7 +332,7 @@ func updatePathFromSettings(c *config.Config, settings types.Settings) {
 		}
 	} else if c.IsDefaultEnvReady() {
 		// If the default env is ready, then we know any further wipes of the PATH need to reset the PATH.
-		// If it isn't ready, then we are still initialising and the goroutine will be taking care of setting the default env still.
+		// If it isn't ready, then we are still initializing and the goroutine will be taking care of setting the default env still.
 		_ = os.Setenv("PATH", c.GetCachedOriginalPath())
 		c.Logger().Debug().Str("method", "updatePathFromSettings").Msgf("restore initial path '%s'", os.Getenv("PATH"))
 	}
