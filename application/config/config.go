@@ -899,7 +899,9 @@ func (c *Config) SetAutomaticScanning(value bool) {
 func (c *Config) addDefaults() {
 	go func() {
 		defer func() { close(c.prepareDefaultEnvChannel) }()
-		envvars.LoadShellEnvironment()
+		currentEnv := envvars.GetCurrentEnvironment()
+		newEnv := envvars.ReadShellEnvironment(currentEnv)
+		envvars.SetEnvironmentDifferences(currentEnv, newEnv)
 		//goland:noinspection GoBoolExpressions
 		if runtime.GOOS != "windows" {
 			envvars.UpdatePath("/usr/local/bin", false)

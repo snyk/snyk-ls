@@ -59,7 +59,7 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	assert.Contains(t, cmd, "--org="+testOrg.String())
 }
 
-func Test_GetCommand_LoadsConfigFiles(t *testing.T) {
+func Test_GetCommand_UsesConfigFiles(t *testing.T) {
 	c := testutil.UnitTest(t)
 	originalPathValue := "original_path" + pathListSep + "in_both_path"
 	t.Setenv("PATH", originalPathValue)
@@ -77,7 +77,7 @@ func Test_GetCommand_LoadsConfigFiles(t *testing.T) {
 	cli := &SnykCli{c: c}
 	c.Engine().GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
 
-	// Call getCommand which should loads config files
+	// Call getCommand which should load config files and prepare an isolated environment
 	cmd, err := cli.getCommand([]string{"test", "command"}, types.FilePath(tempDir), t.Context())
 
 	// Verify the command was created
@@ -86,14 +86,12 @@ func Test_GetCommand_LoadsConfigFiles(t *testing.T) {
 	assert.Equal(t, "test", cmd.Args[0])
 	assert.Equal(t, "command", cmd.Args[1])
 
-	// Verify environment variable was loaded from config file
-	assert.Equal(t, "test_value", os.Getenv("TEST_VAR"))
+	// Verify environment variables were loaded from config file and correctly merged into cmd.Env
+	assert.Contains(t, cmd.Env, "TEST_VAR=test_value")
 
 	// Verify PATH was prepended (config path should come first)
-	currentPath := os.Getenv("PATH")
 	expectedPath := "config" + pathListSep + "in_both_path" + pathListSep + "original_path" // "in_both_path" is deduplicated, only "original_path" remains from original PATH
-	assert.Equal(t, expectedPath, currentPath,
-		"PATH should be config path prepended with deduplication applied")
+	assert.Contains(t, cmd.Env, "PATH="+expectedPath)
 }
 
 func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
