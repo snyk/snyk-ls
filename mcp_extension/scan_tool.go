@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -32,6 +31,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -262,14 +262,12 @@ func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationC
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "snykAuthStatusHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-		params := []string{m.cliPath, "whoami", "--experimental"}
-		output, _ := m.runSnyk(ctx, invocationCtx, "", params)
+		user, err := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
 
-		output = strings.TrimSpace(output)
 		apiUrl := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.API_URL)
 		org := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.ORGANIZATION)
 
-		if strings.Contains(strings.ToLower(output), "authentication error") {
+		if err != nil || user == nil {
 			msg := fmt.Sprintf("Authentication Error. \nUsing API Endpoint: %s", apiUrl)
 			if os.Getenv("SNYK_TOKEN") != "" {
 				msg += fmt.Sprintf("\nSNYK_TOKEN env var is set, check if your token is valid and if you are using the correct API %s. "+
@@ -278,7 +276,7 @@ func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationC
 			return mcp.NewToolResultText(msg), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("User: %s Using API Endpoint: %s and Org: %s", output, apiUrl, org)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("User: %s Using API Endpoint: %s and Org: %s", user.UserName, apiUrl, org)), nil
 	}
 }
 
@@ -287,16 +285,16 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 		logger := m.logger.With().Str("method", toolDef.Name).Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
-		preventedCountStr := request.GetArguments()["preventedIssuesCount"]
-		remediatedCountStr := request.GetArguments()["remediatedIssuesCount"]
+		preventedCountStr := request.GetArguments()["avoidedIssuesCount"]
+		remediatedCountStr := request.GetArguments()["fixedIssuesCount"]
 
 		preventedCount, ok := preventedCountStr.(float64)
 		if !ok {
-			return nil, fmt.Errorf("invalid argument preventedIssuesCount")
+			return nil, fmt.Errorf("invalid argument avoidedIssuesCount")
 		}
 		remediatedCount, ok := remediatedCountStr.(float64)
 		if !ok {
-			return nil, fmt.Errorf("invalid argument remediatedCount")
+			return nil, fmt.Errorf("invalid argument fixedIssuesCount")
 		}
 		pathArg := request.GetArguments()["path"]
 		if pathArg == nil {

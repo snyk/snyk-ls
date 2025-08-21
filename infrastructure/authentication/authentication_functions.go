@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
@@ -57,15 +59,19 @@ func GetActiveUser() (*ActiveUser, error) {
 	if c.Token() == "" {
 		return nil, errors.New("no credentials found")
 	}
-	globalConf := c.Engine().GetConfiguration()
+	return CallWhoAmI(c.Logger(), c.Engine())
+}
+
+func CallWhoAmI(logger *zerolog.Logger, engine workflow.Engine) (*ActiveUser, error) {
+	globalConf := engine.GetConfiguration()
 	conf := globalConf.Clone()
-	c.Logger().Trace().Str("method", "getActiveUser").
+	logger.Trace().Str("method", "getActiveUser").
 		Str("configInstance", fmt.Sprintf("%p", globalConf)).
 		Str("configClone", fmt.Sprintf("%p", conf)).
 		Msg("invoking whoami workflow")
 	conf.Set(configuration.FLAG_EXPERIMENTAL, true)
 	conf.Set("json", true)
-	result, err := c.Engine().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, conf)
+	result, err := engine.InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, conf)
 
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to invoke whoami workflow")

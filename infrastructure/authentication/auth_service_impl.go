@@ -396,23 +396,24 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 	}
 
 	// always set the provider even if the authentication method didn't change, to make sure that the provider is initialized with current config
-	var p AuthenticationProvider
-	switch c.AuthenticationMethod() {
-	default:
-		p = Default(c, a)
-		a.setProvider(p)
-	case types.TokenAuthentication:
-		p = Token(c, a.errorReporter)
-		a.setProvider(p)
-	case types.PatAuthentication:
-		p = Pat(c, a)
-		a.setProvider(p)
-	case types.FakeAuthentication:
-		a.setProvider(NewFakeCliAuthenticationProvider(c))
-	case "":
-		// don't do anything
+	if authMethodChanged {
+		var p AuthenticationProvider
+		switch c.AuthenticationMethod() {
+		default:
+			p = Default(c, a)
+			a.setProvider(p)
+		case types.TokenAuthentication:
+			p = Token(c, a.errorReporter)
+			a.setProvider(p)
+		case types.PatAuthentication:
+			p = Pat(c, a)
+			a.setProvider(p)
+		case types.FakeAuthentication:
+			a.setProvider(NewFakeCliAuthenticationProvider(c))
+		case "":
+			// don't do anything
+		}
 	}
-
 	// Check whether we have a valid token for the current auth method
 	if c.NonEmptyToken() && !c.AuthenticationMethodMatchesCredentials() {
 		a.logout(context.Background())
