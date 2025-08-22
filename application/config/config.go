@@ -17,6 +17,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -172,10 +173,10 @@ type Config struct {
 	token                            string
 	deviceId                         string
 	clientCapabilities               types.ClientCapabilities
-	path                             string
-	defaultDirs                      []string
+	binarySearchPaths                []string
 	automaticAuthentication          bool
 	tokenChangeChannels              []chan string
+	prepareDefaultEnvChannel         chan bool
 	filterSeverity                   types.SeverityFilter
 	issueViewOptions                 types.IssueViewOptions
 	trustedFolders                   []types.FilePath
@@ -203,6 +204,8 @@ type Config struct {
 	mcpBaseURL                       *url.URL
 	isLSPInitialized                 bool
 	snykAgentFixEnabled              bool
+	cachedOriginalPath               string
+	userSettingsPath                 string
 }
 
 func CurrentConfig() *Config {
@@ -231,19 +234,28 @@ func IsDevelopment() bool {
 	return parseBool
 }
 
-func New() *Config {
-	return newConfig(nil)
+func New(opts ...ConfigOption) *Config {
+	return newConfig(nil, opts...)
 }
 
-func NewFromExtension(engine workflow.Engine) *Config {
-	return newConfig(engine)
+func NewFromExtension(engine workflow.Engine, opts ...ConfigOption) *Config {
+	return newConfig(engine, opts...)
 }
 
 // New creates a configuration object with default values
-func newConfig(engine workflow.Engine) *Config {
+func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c := &Config{}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
 	c.logger = getNewScrubbingLogger(c)
 	c.cliSettings = NewCliSettings(c)
+	c.prepareDefaultEnvChannel = make(chan bool, 1)
+	if c.binarySearchPaths == nil {
+		c.binarySearchPaths = getDefaultBinarySearchPaths()
+	}
 	c.automaticAuthentication = true
 	c.configFile = ""
 	c.format = FormatMd
@@ -333,14 +345,6 @@ func getNewScrubbingLogger(c *Config) *zerolog.Logger {
 	writer := c.getConsoleWriter(c.scrubbingWriter)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
 	return &logger
-}
-
-func (c *Config) AddBinaryLocationsToPath(searchDirectories []string) {
-	c.m.Lock()
-	c.defaultDirs = searchDirectories
-	c.m.Unlock()
-	c.determineJavaHome()
-	c.mavenDefaults()
 }
 
 func (c *Config) determineDeviceId() string {
@@ -499,6 +503,27 @@ func (c *Config) TokenChangesChannel() <-chan string {
 	channel := make(chan string, 1)
 	c.tokenChangeChannels = append(c.tokenChangeChannels, channel)
 	return channel
+}
+
+// IsDefaultEnvReady whether the default environment has been prepared or not.
+func (c *Config) IsDefaultEnvReady() bool {
+	select {
+	case <-c.prepareDefaultEnvChannel:
+		return true
+	default:
+		return false
+	}
+}
+
+// WaitForDefaultEnv blocks until the default environment has been prepared
+// or until the provided context is canceled. Returns the context error if it is done.
+func (c *Config) WaitForDefaultEnv(ctx context.Context) error {
+	select {
+	case <-c.prepareDefaultEnvChannel:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (c *Config) SetCliSettings(settings *CliSettings) {
@@ -865,12 +890,6 @@ func (c *Config) SetClientCapabilities(capabilities types.ClientCapabilities) {
 	c.clientCapabilities = capabilities
 }
 
-func (c *Config) Path() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.path
-}
-
 func (c *Config) AutomaticAuthentication() bool {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -890,14 +909,42 @@ func (c *Config) SetAutomaticScanning(value bool) {
 }
 
 func (c *Config) addDefaults() {
-	if //goland:noinspection GoBoolExpressions
-	runtime.GOOS != windows {
-		envvars.UpdatePath("/usr/local/bin", false)
-		envvars.UpdatePath("/bin", false)
-		envvars.UpdatePath(xdg.Home+"/bin", false)
-	}
-	c.determineJavaHome()
-	c.mavenDefaults()
+	go func() {
+		defer close(c.prepareDefaultEnvChannel)
+		//goland:noinspection GoBoolExpressions
+		if runtime.GOOS != "windows" {
+			envvars.UpdatePath("/usr/local/bin", false)
+			envvars.UpdatePath("/bin", false)
+			envvars.UpdatePath(xdg.Home+"/bin", false)
+		}
+		c.determineJavaHome()
+		c.mavenDefaults()
+		c.setCachedOriginalPath()
+	}()
+}
+
+func (c *Config) GetCachedOriginalPath() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.cachedOriginalPath
+}
+
+func (c *Config) setCachedOriginalPath() {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.cachedOriginalPath = os.Getenv("PATH")
+}
+
+func (c *Config) GetUserSettingsPath() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.userSettingsPath
+}
+
+func (c *Config) SetUserSettingsPath(userSettingsPath string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.userSettingsPath = userSettingsPath
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {

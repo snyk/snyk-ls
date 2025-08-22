@@ -53,7 +53,11 @@ func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
 
 func UnitTest(t *testing.T) *config.Config {
 	t.Helper()
-	c := config.New()
+	c := config.New(config.WithBinarySearchPaths([]string{}))
+	err := c.WaitForDefaultEnv(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
 	// we don't want server logging in test runs
 	c.ConfigureLogging(nil)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
@@ -127,7 +131,11 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 		t.SkipNow()
 	}
 
-	c := config.New()
+	c := config.New(config.WithBinarySearchPaths([]string{}))
+	err := c.WaitForDefaultEnv(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
 	c.ConfigureLogging(nil)
 	c.SetToken(testsupport.GetEnvironmentToken(useConsistentIgnores))
 	c.SetAuthenticationMethod(types.TokenAuthentication)

@@ -25,6 +25,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/adrg/xdg"
+
 	"github.com/snyk/go-application-framework/pkg/envvars"
 )
 
@@ -35,7 +37,7 @@ func (c *Config) determineJavaHome() {
 		envvars.UpdatePath(javaHome+string(os.PathSeparator)+"bin", false)
 		return
 	}
-	foundPath := c.FindBinaryInDirs(getJavaBinaryName())
+	foundPath := c.findBinaryInDirs(getJavaBinaryName())
 	if foundPath == "" {
 		return
 	}
@@ -116,15 +118,15 @@ func (c *Config) findBinary(binaryName string) string {
 	if path != "" {
 		return path
 	}
-	foundPath := c.FindBinaryInDirs(binaryName)
+	foundPath := c.findBinaryInDirs(binaryName)
 	c.Logger().Debug().Str("method", "findBinary").Msgf("found: %s", foundPath)
 	return foundPath
 }
 
-func (c *Config) FindBinaryInDirs(binaryName string) (foundPath string) {
-	method := "FindBinaryInDirs"
+func (c *Config) findBinaryInDirs(binaryName string) (foundPath string) {
+	method := "findBinaryInDirs"
 	var foundFilePaths []string
-	for _, dir := range c.defaultDirs {
+	for _, dir := range c.binarySearchPaths {
 		_, err := os.Stat(dir)
 		if err != nil {
 			continue
@@ -136,12 +138,33 @@ func (c *Config) FindBinaryInDirs(binaryName string) (foundPath string) {
 			}
 			return err
 		})
-		count := len(foundFilePaths)
-		if count > 0 {
-			// take newest, as the dirwalk is lexical
-			foundPath = foundFilePaths[count-1]
-			c.Logger().Debug().Str("method", method).Msgf("using '%s' in '%s'", binaryName, foundPath)
-		}
+	}
+	count := len(foundFilePaths)
+	if count > 0 {
+		// take newest, as the dirwalk is lexical
+		foundPath = foundFilePaths[count-1]
+		c.Logger().Debug().Str("method", method).Msgf("using '%s' in '%s'", binaryName, foundPath)
 	}
 	return foundPath
+}
+
+// getDefaultBinarySearchPaths returns the default system binary search paths based on the OS.
+func getDefaultBinarySearchPaths() []string {
+	//goland:noinspection GoBoolExpressions
+	if runtime.GOOS == "windows" {
+		return []string{
+			"C:\\Program Files",
+			"C:\\Program Files (x86)",
+		}
+	} else {
+		return []string{
+			filepath.Join(xdg.Home, ".sdkman"),
+			"/usr/lib",
+			"/usr/java",
+			"/usr/local/bin",
+			"/opt/homebrew/bin",
+			"/opt",
+			"/Library",
+		}
+	}
 }
