@@ -45,7 +45,7 @@ func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.
 		emptySettings := types.Settings{}
 		if !reflect.DeepEqual(params.Settings, emptySettings) {
 			// client used settings push
-			UpdateSettings(ctx, c, params.Settings)
+			UpdateSettings(c, params.Settings)
 			return true, nil
 		}
 
@@ -72,7 +72,7 @@ func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.
 		}
 
 		if !reflect.DeepEqual(fetchedSettings[0], emptySettings) {
-			UpdateSettings(ctx, c, fetchedSettings[0])
+			UpdateSettings(c, fetchedSettings[0])
 			return true, nil
 		}
 
@@ -80,17 +80,17 @@ func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.
 	})
 }
 
-func InitializeSettings(ctx context.Context, c *config.Config, settings types.Settings) {
-	writeSettings(ctx, c, settings, true)
+func InitializeSettings(c *config.Config, settings types.Settings) {
+	writeSettings(c, settings, true)
 	updateAutoAuthentication(c, settings)
 	updateDeviceInformation(c, settings)
 	updateAutoScan(c, settings)
 	c.SetClientProtocolVersion(settings.RequiredProtocolVersion)
 }
 
-func UpdateSettings(ctx context.Context, c *config.Config, settings types.Settings) {
+func UpdateSettings(c *config.Config, settings types.Settings) {
 	previouslyEnabledProducts := c.DisplayableIssueTypes()
-	writeSettings(ctx, c, settings, false)
+	writeSettings(c, settings, false)
 
 	// If a product was removed, clear all issues for this product
 	ws := c.Workspace()
@@ -104,7 +104,7 @@ func UpdateSettings(ctx context.Context, c *config.Config, settings types.Settin
 	}
 }
 
-func writeSettings(ctx context.Context, c *config.Config, settings types.Settings, initialize bool) {
+func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	c.Engine().GetConfiguration().ClearCache()
 
 	emptySettings := types.Settings{}
@@ -119,7 +119,7 @@ func writeSettings(ctx context.Context, c *config.Config, settings types.Setting
 	updateToken(settings.Token)                 // Must be called before the Authentication method is set, as the latter checks the token.
 	updateAuthenticationMethod(c, settings)
 	updateEnvironment(c, settings)
-	updatePathFromSettings(ctx, c, settings, initialize)
+	updatePathFromSettings(c, settings, initialize)
 	updateErrorReporting(c, settings)
 	updateOrganization(c, settings)
 	manageBinariesAutomatically(c, settings)
@@ -319,38 +319,27 @@ func updateSnykCodeSecurity(c *config.Config, settings types.Settings) {
 }
 
 // TODO stop using os env, move parsing to CLI
-func updatePathFromSettings(ctx context.Context, c *config.Config, settings types.Settings, initialize bool) {
+func updatePathFromSettings(c *config.Config, settings types.Settings, initialize bool) {
 	logger := c.Logger().With().Str("method", "updatePathFromSettings").Logger()
 
 	// Although we will update the PATH now, we also need to store the value, so that on scans we can ensure it is prepended
 	// in front of everything else that is added.
 	c.SetUserSettingsPath(settings.Path)
 
-	if initialize {
-		// If we are initializing then we don't need to do anything else, as PATH is in a clean state with no prior
-		// settings.Path entries, and the first scan will prepend the set this setting.Path entry for us.
+	if initialize || !c.IsDefaultEnvReady() {
+		// If we are initializing then we don't actually need to do anything else, as PATH is in a clean state with no prior
+		// settings.Path entries, and the first scan will prepend the most recent setting.Path entry for us.
 		return
 	}
 
 	var newPath string
 	if len(settings.Path) > 0 {
-		// If the user has a path set in their settings, we must wait for the default env to load fully first to prevent race conditions.
-		err := c.WaitForDefaultEnv(ctx)
-		if err != nil {
-			logger.Err(err).Msgf("couldn't wait to add path %s", settings.Path)
-			return
-		}
 		_ = os.Unsetenv("Path") // unset the path first to work around issues on Windows OS, where PATH can be Path
 		logger.Debug().Msg("adding configured path to PATH")
 		newPath = settings.Path + string(os.PathListSeparator) + c.GetCachedOriginalPath()
-	} else if c.IsDefaultEnvReady() {
-		// If the default env is ready, then we know any further wipes of the PATH need to reset the PATH.
+	} else {
 		logger.Debug().Msg("restoring initial path")
 		newPath = c.GetCachedOriginalPath()
-	} else {
-		// Default environment isn't ready, so we are still initializing, we didn't have anything to add,
-		// so let it do its thing and we do nothing.
-		return
 	}
 
 	err := os.Setenv("PATH", newPath)

@@ -233,7 +233,7 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 
 		c.SetStorage(storage)
 
-		InitializeSettings(ctx, c, params.InitializationOptions)
+		InitializeSettings(c, params.InitializationOptions)
 
 		startClientMonitor(params, logger)
 

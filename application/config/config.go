@@ -910,7 +910,7 @@ func (c *Config) SetAutomaticScanning(value bool) {
 
 func (c *Config) addDefaults() {
 	go func() {
-		defer func() { close(c.prepareDefaultEnvChannel) }()
+		defer close(c.prepareDefaultEnvChannel)
 		//goland:noinspection GoBoolExpressions
 		if runtime.GOOS != "windows" {
 			envvars.UpdatePath("/usr/local/bin", false)
