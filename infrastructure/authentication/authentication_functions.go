@@ -65,7 +65,7 @@ func GetActiveUser() (*ActiveUser, error) {
 func CallWhoAmI(logger *zerolog.Logger, engine workflow.Engine) (*ActiveUser, error) {
 	globalConf := engine.GetConfiguration()
 	conf := globalConf.Clone()
-	logger.Trace().Str("method", "getActiveUser").
+	logger.Trace().Str("method", "CallWhoAmI").
 		Str("configInstance", fmt.Sprintf("%p", globalConf)).
 		Str("configClone", fmt.Sprintf("%p", conf)).
 		Msg("invoking whoami workflow")
