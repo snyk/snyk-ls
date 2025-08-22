@@ -205,6 +205,7 @@ type Config struct {
 	isLSPInitialized                 bool
 	snykAgentFixEnabled              bool
 	cachedOriginalPath               string
+	userSettingsPath                 string
 }
 
 func CurrentConfig() *Config {
@@ -923,8 +924,8 @@ func (c *Config) addDefaults() {
 }
 
 func (c *Config) GetCachedOriginalPath() string {
-	c.m.Lock()
-	defer c.m.Unlock()
+	c.m.RLock()
+	defer c.m.RUnlock()
 	return c.cachedOriginalPath
 }
 
@@ -932,6 +933,18 @@ func (c *Config) setCachedOriginalPath() {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.cachedOriginalPath = os.Getenv("PATH")
+}
+
+func (c *Config) GetUserSettingsPath() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.userSettingsPath
+}
+
+func (c *Config) SetUserSettingsPath(userSettingsPath string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.userSettingsPath = userSettingsPath
 }
 
 func (c *Config) SetIntegrationName(integrationName string) {

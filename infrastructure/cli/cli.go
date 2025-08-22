@@ -108,6 +108,7 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 	cloneConfig := c.c.Engine().GetConfiguration().Clone()
 	cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
 	envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
+	envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritise the user specified PATH over their SHELL's
 	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
 
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)

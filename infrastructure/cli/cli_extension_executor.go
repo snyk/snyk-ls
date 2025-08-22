@@ -82,6 +82,7 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
 	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
+	envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritise the user specified PATH over their SHELL's
 
 	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
 	if len(data) > 0 {

@@ -119,7 +119,7 @@ func writeSettings(ctx context.Context, c *config.Config, settings types.Setting
 	updateToken(settings.Token)                 // Must be called before the Authentication method is set, as the latter checks the token.
 	updateAuthenticationMethod(c, settings)
 	updateEnvironment(c, settings)
-	updatePathFromSettings(ctx, c, settings)
+	updatePathFromSettings(ctx, c, settings, initialize)
 	updateErrorReporting(c, settings)
 	updateOrganization(c, settings)
 	manageBinariesAutomatically(c, settings)
@@ -319,8 +319,18 @@ func updateSnykCodeSecurity(c *config.Config, settings types.Settings) {
 }
 
 // TODO stop using os env, move parsing to CLI
-func updatePathFromSettings(ctx context.Context, c *config.Config, settings types.Settings) {
+func updatePathFromSettings(ctx context.Context, c *config.Config, settings types.Settings, initialize bool) {
 	logger := c.Logger().With().Str("method", "updatePathFromSettings").Logger()
+
+	// Although we will update the PATH now, we also need to store the value, so that on scans we can ensure it is prepended
+	// in front of everything else that is added.
+	c.SetUserSettingsPath(settings.Path)
+
+	if initialize {
+		// If we are initializing then we don't need to do anything else, as PATH is in a clean state with no prior
+		// settings.Path entries, and the first scan will prepend the set this setting.Path entry for us.
+		return
+	}
 
 	var newPath string
 	if len(settings.Path) > 0 {
