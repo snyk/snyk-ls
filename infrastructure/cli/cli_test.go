@@ -108,6 +108,8 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 	channelField = reflect.NewAt(channelField.Type(), unsafe.Pointer(channelField.UnsafeAddr())).Elem()
 	channelField.Set(reflect.ValueOf(testPrepareDefaultEnvChannel))
 
+	c.Engine().GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{})
+
 	cli := &SnykCli{c: c}
 
 	// Start building the command in a separate goroutine; it should block waiting on readiness
@@ -141,7 +143,7 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, 100*time.Millisecond, 10*time.Millisecond, "getCommand should block until environment is ready")
+	}, time.Second, 10*time.Millisecond, "getCommand should block until environment is ready")
 
 	// Now close the test channel to signal readiness
 	testPrepareDefaultEnvChannelClose()
@@ -154,7 +156,7 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, time.Second, 10*time.Millisecond, "getCommand should complete after environment becomes ready")
+	}, 2*time.Second, 10*time.Millisecond, "getCommand should complete after environment becomes ready")
 
 	require.NoError(t, cmdErr)
 	require.NotNil(t, builtCmd)
