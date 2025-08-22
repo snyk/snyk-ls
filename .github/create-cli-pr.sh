@@ -23,7 +23,7 @@ pushd "$CLI_DIR/cliv2"
   LS_COMMIT_HASH=$(grep snyk-ls go.mod| cut -d "-" -f 4)
 popd
 
-WHAT_CHANGED=$(git log --stat "$LS_COMMIT_HASH"...HEAD)
+WHAT_CHANGED=$(git log --name-status "$LS_COMMIT_HASH"...HEAD)
 BODY=$(printf "## Changes since last integration of Language Server\n\n\`\`\`\n%s\n\`\`\`" "$WHAT_CHANGED")
 BRANCH=chore/automatic-upgrade-of-ls
 
