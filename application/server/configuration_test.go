@@ -219,7 +219,7 @@ func Test_UpdateSettings(t *testing.T) {
 		err = initTestRepo(t, tempDir2)
 		assert.NoError(t, err)
 
-		UpdateSettings(c, settings)
+		UpdateSettings(t.Context(), c, settings)
 
 		assert.Equal(t, false, c.IsSnykCodeEnabled())
 		assert.Equal(t, false, c.IsSnykOssEnabled())
@@ -261,7 +261,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("hover defaults are set", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		UpdateSettings(c, types.Settings{})
+		UpdateSettings(t.Context(), c, types.Settings{})
 
 		assert.Equal(t, 3, c.HoverVerbosity())
 		assert.Equal(t, c.Format(), config.FormatMd)
@@ -270,7 +270,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("empty snyk code api is ignored and default is used", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{})
+		UpdateSettings(t.Context(), c, types.Settings{})
 
 		assert.Equal(t, config.DefaultDeeproxyApiUrl, c.SnykCodeApi())
 	})
@@ -279,7 +279,7 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		c.SetOrganization(expectedOrgId)
 
-		UpdateSettings(c, types.Settings{Organization: " "})
+		UpdateSettings(t.Context(), c, types.Settings{Organization: " "})
 
 		assert.Equal(t, expectedOrgId, c.Organization())
 	})
@@ -287,7 +287,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("incomplete env vars", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{AdditionalEnv: "a="})
+		UpdateSettings(t.Context(), c, types.Settings{AdditionalEnv: "a="})
 
 		assert.Empty(t, os.Getenv("a"))
 	})
@@ -296,7 +296,7 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		varCount := len(os.Environ())
 
-		UpdateSettings(c, types.Settings{AdditionalEnv: " "})
+		UpdateSettings(t.Context(), c, types.Settings{AdditionalEnv: " "})
 
 		assert.Equal(t, varCount, len(os.Environ()))
 	})
@@ -304,7 +304,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("broken env variables", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{AdditionalEnv: "a=; b"})
+		UpdateSettings(t.Context(), c, types.Settings{AdditionalEnv: "a=; b"})
 
 		assert.Empty(t, os.Getenv("a"))
 		assert.Empty(t, os.Getenv("b"))
@@ -313,7 +313,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("trusted folders", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
+		UpdateSettings(t.Context(), c, types.Settings{TrustedFolders: []string{"/a/b", "/b/c"}})
 
 		assert.Contains(t, c.TrustedFolders(), types.FilePath("/a/b"))
 		assert.Contains(t, c.TrustedFolders(), types.FilePath("/b/c"))
@@ -322,14 +322,14 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("manage binaries automatically", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("true", func(t *testing.T) {
-			UpdateSettings(c, types.Settings{
+			UpdateSettings(t.Context(), c, types.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
 			assert.True(t, c.ManageBinariesAutomatically())
 		})
 		t.Run("false", func(t *testing.T) {
-			UpdateSettings(c, types.Settings{
+			UpdateSettings(t.Context(), c, types.Settings{
 				ManageBinariesAutomatically: "false",
 			})
 
@@ -337,11 +337,11 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 
 		t.Run("invalid value does not update", func(t *testing.T) {
-			UpdateSettings(c, types.Settings{
+			UpdateSettings(t.Context(), c, types.Settings{
 				ManageBinariesAutomatically: "true",
 			})
 
-			UpdateSettings(c, types.Settings{
+			UpdateSettings(t.Context(), c, types.Settings{
 				ManageBinariesAutomatically: "dog",
 			})
 
@@ -352,27 +352,27 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{ActivateSnykCodeSecurity: "true"})
+		UpdateSettings(t.Context(), c, types.Settings{ActivateSnykCodeSecurity: "true"})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{})
+		UpdateSettings(t.Context(), c, types.Settings{})
 
 		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
 
 		c.EnableSnykCodeSecurity(true)
 
-		UpdateSettings(c, types.Settings{})
+		UpdateSettings(t.Context(), c, types.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCode sets SnykCodeSecurity", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{
+		UpdateSettings(t.Context(), c, types.Settings{
 			ActivateSnykCode: "true",
 		})
 
@@ -384,22 +384,22 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(true, false, true, false)
-			UpdateSettings(c, types.Settings{FilterSeverity: &mixedSeverityFilter})
+			UpdateSettings(t.Context(), c, types.Settings{FilterSeverity: &mixedSeverityFilter})
 
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
 			emptyLikeSeverityFilter := types.NewSeverityFilter(false, false, false, false)
-			UpdateSettings(c, types.Settings{FilterSeverity: &emptyLikeSeverityFilter})
+			UpdateSettings(t.Context(), c, types.Settings{FilterSeverity: &emptyLikeSeverityFilter})
 
 			assert.Equal(t, emptyLikeSeverityFilter, c.FilterSeverity())
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(false, false, true, false)
-			UpdateSettings(c, types.Settings{FilterSeverity: &mixedSeverityFilter})
+			UpdateSettings(t.Context(), c, types.Settings{FilterSeverity: &mixedSeverityFilter})
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 
-			UpdateSettings(c, types.Settings{})
+			UpdateSettings(t.Context(), c, types.Settings{})
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 	})
@@ -408,22 +408,22 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
-			UpdateSettings(c, types.Settings{IssueViewOptions: &mixedIssueViewOptions})
+			UpdateSettings(t.Context(), c, types.Settings{IssueViewOptions: &mixedIssueViewOptions})
 
 			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
 			emptyLikeIssueViewOptions := types.NewIssueViewOptions(false, false)
-			UpdateSettings(c, types.Settings{IssueViewOptions: &emptyLikeIssueViewOptions})
+			UpdateSettings(t.Context(), c, types.Settings{IssueViewOptions: &emptyLikeIssueViewOptions})
 
 			assert.Equal(t, emptyLikeIssueViewOptions, c.IssueViewOptions())
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
 			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
-			UpdateSettings(c, types.Settings{IssueViewOptions: &mixedIssueViewOptions})
+			UpdateSettings(t.Context(), c, types.Settings{IssueViewOptions: &mixedIssueViewOptions})
 			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 
-			UpdateSettings(c, types.Settings{})
+			UpdateSettings(t.Context(), c, types.Settings{})
 			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 		})
 	})
@@ -454,7 +454,7 @@ func Test_InitializeSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		deviceId := "test-device-id"
 
-		InitializeSettings(c, types.Settings{DeviceId: deviceId})
+		InitializeSettings(t.Context(), c, types.Settings{DeviceId: deviceId})
 
 		assert.Equal(t, deviceId, c.DeviceID())
 	})
@@ -463,7 +463,7 @@ func Test_InitializeSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		deviceId := c.DeviceID()
 
-		InitializeSettings(c, types.Settings{})
+		InitializeSettings(t.Context(), c, types.Settings{})
 
 		assert.Equal(t, deviceId, c.DeviceID())
 	})
@@ -471,20 +471,20 @@ func Test_InitializeSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		InitializeSettings(c, types.Settings{ActivateSnykCodeSecurity: "true"})
+		InitializeSettings(t.Context(), c, types.Settings{ActivateSnykCodeSecurity: "true"})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		InitializeSettings(c, types.Settings{})
+		InitializeSettings(t.Context(), c, types.Settings{})
 
 		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
 
 		c.EnableSnykCodeSecurity(true)
 
-		InitializeSettings(c, types.Settings{})
+		InitializeSettings(t.Context(), c, types.Settings{})
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
@@ -500,16 +500,16 @@ func Test_InitializeSettings(t *testing.T) {
 		t.Setenv(caseSensitivePathKey, "something_meaningful")
 
 		// update path to hold a custom value
-		UpdateSettings(c, types.Settings{Path: first})
+		UpdateSettings(t.Context(), c, types.Settings{Path: first})
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), first+string(os.PathListSeparator)))
 
 		// update path to hold another value
-		UpdateSettings(c, types.Settings{Path: second})
+		UpdateSettings(t.Context(), c, types.Settings{Path: second})
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), second+string(os.PathListSeparator)))
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), first))
 
 		// reset path with non-empty settings
-		UpdateSettings(c, types.Settings{Path: "", AuthenticationMethod: "token"})
+		UpdateSettings(t.Context(), c, types.Settings{Path: "", AuthenticationMethod: "token"})
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), second))
 
 		assert.True(t, keyFoundInEnv(upperCasePathKey))

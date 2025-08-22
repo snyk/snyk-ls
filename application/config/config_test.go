@@ -43,7 +43,6 @@ func TestSetToken(t *testing.T) {
 		token := uuid.New().String()
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		SetCurrentConfig(c)
 		c.SetToken(token)
 		assert.Equal(t, c.Token(), token)
 		assert.NotEqual(t, c.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), token)
@@ -52,7 +51,6 @@ func TestSetToken(t *testing.T) {
 	t.Run("OAuth Token authentication", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		SetCurrentConfig(c)
 		c.authenticationMethod = types.OAuthAuthentication
 		marshal, err := json.Marshal(oauth2.Token{AccessToken: t.Name()})
 		assert.NoError(t, err)
