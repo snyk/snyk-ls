@@ -233,8 +233,8 @@ func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext
 			return mcp.NewToolResultText("SNYK_TOKEN env var is set, validity must be checked with snyk_auth_status IF NOT ALREADY DONE"), nil
 		}
 
-		conf := invocationCtx.GetConfiguration().Clone()
-		conf.Set("auth-type", auth.AUTH_TYPE_OAUTH)
+		conf := invocationCtx.GetConfiguration()
+		conf.Set(localworkflows.AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
 
 		_, err := invocationCtx.GetEngine().InvokeWithConfig(localworkflows.WORKFLOWID_AUTH, conf)
 		if err != nil {
