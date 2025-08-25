@@ -233,8 +233,8 @@ func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext
 			return mcp.NewToolResultText("SNYK_TOKEN env var is set, validity must be checked with snyk_auth_status IF NOT ALREADY DONE"), nil
 		}
 
-		conf := invocationCtx.GetConfiguration().Clone()
-		conf.Set("auth-type", auth.AUTH_TYPE_OAUTH)
+		conf := invocationCtx.GetConfiguration()
+		conf.Set(localworkflows.AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
 
 		_, err := invocationCtx.GetEngine().InvokeWithConfig(localworkflows.WORKFLOWID_AUTH, conf)
 		if err != nil {
@@ -249,10 +249,12 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "snykLogoutHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-		config := invocationCtx.GetConfiguration()
-		config.ClearCache()
-		config.Unset(configuration.AUTHENTICATION_TOKEN)
-		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+		configs := []configuration.Configuration{invocationCtx.GetConfiguration(), invocationCtx.GetEngine().GetConfiguration()}
+		for _, config := range configs {
+			config.ClearCache()
+			config.Unset(configuration.AUTHENTICATION_TOKEN)
+			config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+		}
 
 		return mcp.NewToolResultText("Successfully logged out"), nil
 	}
