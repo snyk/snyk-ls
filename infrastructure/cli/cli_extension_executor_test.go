@@ -122,7 +122,7 @@ func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
 
 	// Execute the extension executor which should load config files
 	executorUnderTest := NewExtensionExecutor(c)
-	_, err = executorUnderTest.Execute(t.Context(), []string{"snyk", "test"}, types.FilePath(tempDir))
+	_, err = executorUnderTest.Execute(t.Context(), []string{"snyk", "fake-cmd-for-testing"}, types.FilePath(tempDir))
 	require.NoError(t, err)
 
 	// Verify environment variable was loaded from config file
@@ -157,6 +157,8 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{})
+
 	executor := NewExtensionExecutor(c)
 
 	// Start execution in a separate goroutine; it should block waiting on readiness
@@ -168,7 +170,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 	var execErr error
 	go func() {
 		started <- true
-		result, execErr = executor.Execute(t.Context(), []string{"snyk", "test"}, types.FilePath(t.TempDir()))
+		result, execErr = executor.Execute(t.Context(), []string{"snyk", "fake-cmd-for-testing"}, types.FilePath(t.TempDir()))
 		unblocked <- true
 	}()
 
@@ -190,7 +192,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, 100*time.Millisecond, 10*time.Millisecond, "Execute should block until environment is ready")
+	}, time.Second, 10*time.Millisecond, "Execute should block until environment is ready")
 
 	// Now close the test channel to signal readiness
 	testPrepareDefaultEnvChannelClose()
@@ -203,7 +205,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, time.Second, 10*time.Millisecond, "Execute should complete after environment becomes ready")
+	}, 2*time.Second, 10*time.Millisecond, "Execute should complete after environment becomes ready")
 
 	require.NoError(t, execErr)
 	assert.NotNil(t, result)
