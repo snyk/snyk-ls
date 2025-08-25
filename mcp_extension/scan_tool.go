@@ -249,10 +249,12 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "snykLogoutHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-		config := invocationCtx.GetConfiguration()
-		config.ClearCache()
-		config.Unset(configuration.AUTHENTICATION_TOKEN)
-		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+		configs := []configuration.Configuration{invocationCtx.GetConfiguration(), invocationCtx.GetEngine().GetConfiguration()}
+		for _, config := range configs {
+			config.ClearCache()
+			config.Unset(configuration.AUTHENTICATION_TOKEN)
+			config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+		}
 
 		return mcp.NewToolResultText("Successfully logged out"), nil
 	}
