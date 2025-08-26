@@ -91,7 +91,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 
 	var updatedIssues []types.Issue
 	if len(quickFixGroupables) != 0 {
-		updatedIssues = c.updateIssuesWithQuickFix(quickFixGroupables, filteredIssues)
+		updatedIssues = c.UpdateIssuesWithQuickFix(quickFixGroupables, filteredIssues)
 	} else {
 		updatedIssues = filteredIssues
 	}
@@ -101,9 +101,14 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	return actions
 }
 
-func (c *CodeActionsService) updateIssuesWithQuickFix(quickFixGroupables []types.Groupable, issues []types.Issue) []types.Issue {
+func (c *CodeActionsService) UpdateIssuesWithQuickFix(quickFixGroupables []types.Groupable, issues []types.Issue) []types.Issue {
 	// we only allow one quickfix, so it needs to be grouped
 	quickFix := c.getQuickFixAction(quickFixGroupables)
+	if quickFix == nil {
+		// If no quickfix action found, return issues unchanged
+		return issues
+	}
+
 	fixable := len(quickFixGroupables)
 	unfixable := len(issues) - fixable
 	// update title with number of issues

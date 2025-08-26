@@ -51,7 +51,7 @@ var exampleRange = sglsp.Range{
 const documentUriExample = sglsp.DocumentURI("file:///path/to/file")
 
 func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
-	c := testutil.UnitTest(t)
+	testutil.UnitTest(t)
 	expectedIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
@@ -60,7 +60,7 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, _ := setupWithSingleIssue(t, c, expectedIssue)
+	service, codeActionsParam, _ := setupWithSingleIssue(t, expectedIssue)
 
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
@@ -71,7 +71,7 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 }
 
 func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
-	c := testutil.UnitTest(t)
+	testutil.UnitTest(t)
 	fakeIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
@@ -80,7 +80,7 @@ func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, w := setupWithSingleIssue(t, c, fakeIssue)
+	service, codeActionsParam, w := setupWithSingleIssue(t, fakeIssue)
 	w.SetFileAsChanged(codeActionsParam.TextDocument.URI) // File is dirty until it is saved
 
 	// Act
@@ -101,7 +101,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return(issues)
 	fakeClient := &code.FakeSnykCodeClient{C: c}
 	snykCodeClient := fakeClient
-	service := codeaction.NewService(c, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: documentUriExample,
@@ -118,7 +118,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
-	c := testutil.UnitTest(t)
+	testutil.UnitTest(t)
 	// Arrange
 
 	var mockTextEdit = types.TextEdit{
@@ -145,7 +145,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, _ := setupWithSingleIssue(t, c, expectedIssue)
+	service, codeActionsParam, _ := setupWithSingleIssue(t, expectedIssue)
 
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
@@ -161,9 +161,9 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
-	c := testutil.UnitTest(t)
+	testutil.UnitTest(t)
 	// Arrange
-	service := setupService(t, c)
+	service := setupService(t)
 
 	id := types.CodeActionData(uuid.New())
 	ca := types.LSPCodeAction{
@@ -182,8 +182,8 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_KeyAndCommandIsNull_ReturnsError(t *testing.T) {
-	c := testutil.UnitTest(t)
-	service := setupService(t, c)
+	testutil.UnitTest(t)
+	service := setupService(t)
 
 	ca := types.LSPCodeAction{
 		Title:   "Made up CA",
@@ -197,8 +197,8 @@ func Test_ResolveCodeAction_KeyAndCommandIsNull_ReturnsError(t *testing.T) {
 	assert.True(t, codeaction.IsMissingKeyError(err))
 }
 func Test_ResolveCodeAction_KeyIsNull_ReturnsCodeAction(t *testing.T) {
-	c := testutil.UnitTest(t)
-	service := setupService(t, c)
+	testutil.UnitTest(t)
+	service := setupService(t)
 
 	expected := types.LSPCodeAction{
 		Title:   "Made up CA",
@@ -212,17 +212,72 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsCodeAction(t *testing.T) {
 	assert.Equal(t, expected.Command.Command, actual.Command.Command)
 }
 
-func setupService(t *testing.T, c *config.Config) *codeaction.CodeActionsService {
+func Test_UpdateIssuesWithQuickFix_TitleConcatenationIssue_WhenCalledMultipleTimes(t *testing.T) {
+	service := setupService(t)
+
+	quickFix := &snyk.CodeAction{Title: "Upgrade to logback-core:1.3.15"}
+
+	quickFixGroupables := []types.Groupable{quickFix}
+
+	issues := []types.Issue{
+		&snyk.Issue{},
+		&snyk.Issue{},
+		&snyk.Issue{},
+		&snyk.Issue{},
+		&snyk.Issue{},
+	}
+
+		// First call to UpdateIssuesWithQuickFix
+	service.UpdateIssuesWithQuickFix(quickFixGroupables, issues)
+
+	// Check the title directly on the quickfix action
+	expectedAfterFirstCall := "Upgrade to logback-core:1.3.15 and fix 1 issue (4 unfixable)"
+	assert.Equal(t, expectedAfterFirstCall, quickFix.GetTitle())
+
+		// Second call - this should demonstrate the concatenation issue
+	// The title will now include the previous "and fix X issue" text
+	service.UpdateIssuesWithQuickFix(quickFixGroupables, issues)
+
+	// The title should NOT be concatenated - this test will fail if the bug exists
+	// The title should remain the same as after the first call
+	expectedAfterSecondCall := "Upgrade to logback-core:1.3.15 and fix 1 issue (4 unfixable)"
+	assert.Equal(t, expectedAfterSecondCall, quickFix.GetTitle(),
+		"Title should not be concatenated on second call. Expected: %s, Got: %s",
+		expectedAfterSecondCall, quickFix.GetTitle())
+
+		// Third call - title should still not be concatenated
+	service.UpdateIssuesWithQuickFix(quickFixGroupables, issues)
+
+	// The title should NOT be concatenated three times - this test will fail if the bug exists
+	expectedAfterThirdCall := "Upgrade to logback-core:1.3.15 and fix 1 issue (4 unfixable)"
+	assert.Equal(t, expectedAfterThirdCall, quickFix.GetTitle(),
+		"Title should not be concatenated on third call. Expected: %s, Got: %s",
+		expectedAfterThirdCall, quickFix.GetTitle())
+
+	// This test will fail if the concatenation bug exists
+	// Each call to UpdateIssuesWithQuickFix should use the original title, not append to existing
+	t.Logf("Title after 1st call: %s", expectedAfterFirstCall)
+	t.Logf("Title after 2nd call: %s", quickFix.GetTitle())
+	t.Logf("Title after 3rd call: %s", quickFix.GetTitle())
+
+	// Additional assertion: verify that titles are not growing
+	originalTitleLength := len("Upgrade to logback-core:1.3.15")
+	assert.False(t, len(quickFix.GetTitle()) > originalTitleLength + 50,
+		"Title should not grow significantly. Original length: %d, Current length: %d",
+		originalTitleLength, len(quickFix.GetTitle()))
+}
+
+func setupService(t *testing.T) *codeaction.CodeActionsService {
 	t.Helper()
 	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return([]types.Issue{}).AnyTimes()
-	fakeClient := &code.FakeSnykCodeClient{C: c}
+	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
 	snykCodeClient := fakeClient
-	service := codeaction.NewService(c, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), snykCodeClient)
 	return service
 }
 
-func setupWithSingleIssue(t *testing.T, c *config.Config, issue types.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
+func setupWithSingleIssue(t *testing.T, issue types.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
 	t.Helper()
 	r := exampleRange
 	uriPath := documentUriExample
@@ -231,9 +286,9 @@ func setupWithSingleIssue(t *testing.T, c *config.Config, issue types.Issue) (*c
 	issues := []types.Issue{issue}
 	providerMock.EXPECT().IssuesForRange(path, converter.FromRange(r)).Return(issues).AnyTimes()
 	fileWatcher := watcher.NewFileWatcher()
-	fakeClient := &code.FakeSnykCodeClient{C: c}
+	fakeClient := &code.FakeSnykCodeClient{C: config.CurrentConfig()}
 	snykCodeClient := fakeClient
-	service := codeaction.NewService(c, providerMock, fileWatcher, notification.NewMockNotifier(), snykCodeClient)
+	service := codeaction.NewService(config.CurrentConfig(), providerMock, fileWatcher, notification.NewMockNotifier(), snykCodeClient)
 
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
