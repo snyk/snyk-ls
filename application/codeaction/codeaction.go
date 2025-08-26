@@ -3,6 +3,7 @@ package codeaction
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -109,20 +110,17 @@ func (c *CodeActionsService) UpdateIssuesWithQuickFix(quickFixGroupables []types
 		return issues
 	}
 
+	// Extract the original title to avoid concatenation issues
+	originalTitle := c.extractOriginalTitle(quickFix.GetTitle())
+
 	fixable := len(quickFixGroupables)
 	unfixable := len(issues) - fixable
-	// update title with number of issues
-	plural := ""
-	if fixable > 1 {
-		plural = "s"
-	}
-	unfixableSuffix := ""
-	if unfixable > 0 {
-		unfixableSuffix = fmt.Sprintf(" (%d unfixable)", unfixable)
-	}
-	quickFix.SetTitle(fmt.Sprintf("%s and fix %d issue%s%s", quickFix.GetTitle(), fixable, plural, unfixableSuffix))
 
-	var updatedIssues []types.Issue
+	// Format the complete title using the original title, not concatenating to existing
+	completeTitle := c.formatQuickFixTitle(originalTitle, fixable, unfixable)
+	quickFix.SetTitle(completeTitle)
+
+	updatedIssues := make([]types.Issue, 0, len(issues))
 	for _, issue := range issues {
 		groupedActions := append([]types.CodeAction{}, quickFix)
 
@@ -221,4 +219,30 @@ func IsMissingKeyError(err error) bool {
 	var missingKeyErr missingKeyError
 	ok := errors.As(err, &missingKeyErr)
 	return ok
+}
+
+func (c *CodeActionsService) extractOriginalTitle(title string) string {
+	const titleSuffix = " and fix "
+	if !strings.Contains(title, titleSuffix) {
+		return title
+	}
+
+	if idx := strings.LastIndex(title, titleSuffix); idx != -1 {
+		return title[:idx]
+	}
+	return title
+}
+
+func (c *CodeActionsService) formatQuickFixTitle(originalTitle string, fixable, unfixable int) string {
+	plural := ""
+	if fixable > 1 {
+		plural = "s"
+	}
+
+	unfixableSuffix := ""
+	if unfixable > 0 {
+		unfixableSuffix = fmt.Sprintf(" (%d unfixable)", unfixable)
+	}
+
+	return fmt.Sprintf("%s and fix %d issue%s%s", originalTitle, fixable, plural, unfixableSuffix)
 }
