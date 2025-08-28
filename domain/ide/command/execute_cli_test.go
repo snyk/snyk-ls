@@ -32,7 +32,7 @@ func Test_executeCLI_callsCli(t *testing.T) {
 	expected := `{ "outputKey": "outputValue" }`
 	dir := t.TempDir()
 
-	cli := cli2.NewTestExecutorWithResponse(expected)
+	cli := cli2.NewTestExecutorWithResponse(c, expected)
 
 	args := []any{dir, "iac", "test", "--json"}
 	cut := executeCLICommand{

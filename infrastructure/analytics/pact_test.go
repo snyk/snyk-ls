@@ -11,15 +11,13 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/utils"
 
-	"github.com/snyk/snyk-ls/internal/testsupport"
-
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -41,7 +39,7 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 	pact.Setup(true)
 	base := fmt.Sprintf("http://localhost:%d", pact.Server.Port)
 	orgUUID := "54125374-3f93-402e-b693-e0724794d71f"
-	expectedBody := testGetAnalyticsV2Payload(t)
+	expectedBody := testGetAnalyticsV2Payload(t, c)
 	v2InstrumentationData := utils.ValueOf(json.Marshal(expectedBody))
 
 	var test = func() (err error) {
@@ -95,7 +93,7 @@ func TestAnalyticsPluginInstalled(t *testing.T) {
 	pact.Setup(true)
 	base := fmt.Sprintf("http://localhost:%d", pact.Server.Port)
 	orgUUID := "54125374-3f93-402e-b693-e0724794d71f"
-	v2Object, expectedOutputData := testGetAnalyticsEventParam(t)
+	v2Object, expectedOutputData := testGetAnalyticsEventParam(t, c)
 	inputData := utils.ValueOf(json.Marshal(v2Object))
 
 	var test = func() (err error) {
@@ -132,7 +130,7 @@ func TestAnalyticsPluginInstalled(t *testing.T) {
 	}
 }
 
-func testGetAnalyticsEventParam(t *testing.T) (types.AnalyticsEventParam, any) {
+func testGetAnalyticsEventParam(t *testing.T, c *config.Config) (types.AnalyticsEventParam, any) {
 	t.Helper()
 
 	now := time.Now()
@@ -145,7 +143,7 @@ func testGetAnalyticsEventParam(t *testing.T) (types.AnalyticsEventParam, any) {
 		InteractionUUID: uuid.NewString(),
 	}
 
-	ic := testPopulateICWithStdValues(t, event.InteractionUUID)
+	ic := testPopulateICWithStdValues(t, c, event.InteractionUUID)
 	ic.SetInteractionType(event.InteractionType)
 	ic.SetCategory(event.Category)
 	ic.SetTimestamp(now)
@@ -155,9 +153,9 @@ func testGetAnalyticsEventParam(t *testing.T) (types.AnalyticsEventParam, any) {
 	return event, v2InstrumentationObject
 }
 
-func testGetAnalyticsV2Payload(t *testing.T) any {
+func testGetAnalyticsV2Payload(t *testing.T, c *config.Config) any {
 	t.Helper()
-	ic := testPopulateICWithStdValues(t, "00000000-0000-0000-0000-000000000000")
+	ic := testPopulateICWithStdValues(t, c, "00000000-0000-0000-0000-000000000000")
 
 	summary := createTestSummary()
 	ic.SetTestSummary(summary)
@@ -170,12 +168,9 @@ func testGetAnalyticsV2Payload(t *testing.T) any {
 	return actualV2InstrumentationObject
 }
 
-func testPopulateICWithStdValues(t *testing.T, interactionUUID string) analytics.InstrumentationCollector {
+func testPopulateICWithStdValues(t *testing.T, c *config.Config, interactionUUID string) analytics.InstrumentationCollector {
 	t.Helper()
-	gafConfig := configuration.NewWithOpts(
-		configuration.WithAutomaticEnv(),
-	)
-	conf := config.CurrentConfig()
+	gafConfig := c.Engine().GetConfiguration()
 	ic := analytics.NewInstrumentationCollector()
 
 	ua := networking.UserAgent(networking.UaWithConfig(gafConfig), networking.UaWithApplication("snyk-ls", config.Version))
@@ -188,7 +183,7 @@ func testPopulateICWithStdValues(t *testing.T, interactionUUID string) analytics
 	ic.SetStatus("success") //or get result status from scan
 	ic.SetInteractionId(iid)
 	ic.SetTargetId("pkg:github/package-url/purl-spec@244fd47e07d1004f0aed9c")
-	ic.AddExtension("device_id", conf.DeviceID())
+	ic.AddExtension("device_id", c.DeviceID())
 	ic.SetType("analytics")
 	return ic
 }

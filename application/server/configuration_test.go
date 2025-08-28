@@ -33,12 +33,10 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	"github.com/snyk/snyk-ls/internal/types"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var sampleSettings = types.Settings{
@@ -93,9 +91,9 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.Equal(t, "b", os.Getenv("a"))
 	assert.Equal(t, "d", os.Getenv("c"))
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
-	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
-	assert.Equal(t, "token", config.CurrentConfig().Token())
-	assert.Equal(t, sampleSettings.SnykCodeApi, config.CurrentConfig().SnykCodeApi())
+	assert.True(t, c.IsErrorReportingEnabled())
+	assert.Equal(t, "token", c.Token())
+	assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
 	assert.Equal(t, sampleSettings.EnableSnykLearnCodeActions, strconv.FormatBool(c.IsSnykLearnCodeActionsEnabled()))
 }
 
@@ -130,9 +128,9 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
 	assert.Equal(t, sampleSettings.Endpoint, c.SnykApi())
 	assert.Equal(t, c.SnykApi(), conf.GetString(configuration.API_URL))
-	assert.True(t, config.CurrentConfig().IsErrorReportingEnabled())
-	assert.Equal(t, "token", config.CurrentConfig().Token())
-	assert.Equal(t, sampleSettings.SnykCodeApi, config.CurrentConfig().SnykCodeApi())
+	assert.True(t, c.IsErrorReportingEnabled())
+	assert.Equal(t, "token", c.Token())
+	assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
 	assert.Equal(t, sampleSettings.EnableSnykLearnCodeActions, strconv.FormatBool(c.IsSnykLearnCodeActionsEnabled()))
 }
 
@@ -328,14 +326,14 @@ func Test_UpdateSettings(t *testing.T) {
 				ManageBinariesAutomatically: "true",
 			})
 
-			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
+			assert.True(t, c.ManageBinariesAutomatically())
 		})
 		t.Run("false", func(t *testing.T) {
 			UpdateSettings(c, types.Settings{
 				ManageBinariesAutomatically: "false",
 			})
 
-			assert.False(t, config.CurrentConfig().ManageBinariesAutomatically())
+			assert.False(t, c.ManageBinariesAutomatically())
 		})
 
 		t.Run("invalid value does not update", func(t *testing.T) {
@@ -347,7 +345,7 @@ func Test_UpdateSettings(t *testing.T) {
 				ManageBinariesAutomatically: "dog",
 			})
 
-			assert.True(t, config.CurrentConfig().ManageBinariesAutomatically())
+			assert.True(t, c.ManageBinariesAutomatically())
 		})
 	})
 

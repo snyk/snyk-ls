@@ -22,14 +22,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_GetLearnEndpoint(t *testing.T) {
-	testutil.UnitTest(t)
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
 	c.UpdateApiEndpoints("https://api.snyk.io")
 	gafConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()

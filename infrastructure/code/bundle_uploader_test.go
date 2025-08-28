@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -32,9 +31,8 @@ import (
 )
 
 func Test_Bundler_Upload(t *testing.T) {
+	c := testutil.UnitTest(t)
 	temporaryDir := t.TempDir()
-
-	c := config.CurrentConfig()
 	t.Run("adds files to bundle", func(t *testing.T) {
 		snykCodeService := &FakeSnykCodeClient{C: c}
 		var bundleUploader = BundleUploader{SnykCode: snykCodeService, instrumentor: NewCodeInstrumentor(), c: c}

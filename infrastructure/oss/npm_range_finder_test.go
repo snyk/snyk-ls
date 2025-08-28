@@ -25,11 +25,13 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestNpmRangeFinder_Find(t *testing.T) {
-	config.CurrentConfig().SetFormat(config.FormatHtml)
+	c := testutil.UnitTest(t)
+	c.SetFormat(config.FormatHtml)
 
 	var issue = ossIssue{
 		Id:             "testIssue",
@@ -72,7 +74,8 @@ func executeFinding(t *testing.T, issue ossIssue, npmRangeFinder NpmRangeFinder,
 }
 
 func TestNpmRangeFinder_Find_Scoped_Packages(t *testing.T) {
-	config.CurrentConfig().SetFormat(config.FormatHtml)
+	c := testutil.UnitTest(t)
+	c.SetFormat(config.FormatHtml)
 
 	var issue = ossIssue{
 		Id:             "testIssue",

@@ -22,16 +22,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 func TestIsSastEnabled(t *testing.T) {
+	c := testutil.UnitTest(t)
 	apiClient := &snyk_api.FakeApiClient{
 		CodeEnabled: false,
 		ApiError:    nil,
@@ -61,7 +62,7 @@ func TestIsSastEnabled(t *testing.T) {
 	})
 
 	t.Run("should return true if Snyk Code is enabled", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
+		c.SetSnykCodeEnabled(true)
 		mockedSastResponse.SastEnabled = true
 		enabled := scanner.isSastEnabled(mockedSastResponse)
 
@@ -69,7 +70,7 @@ func TestIsSastEnabled(t *testing.T) {
 	})
 
 	t.Run("should return false if Snyk Code is enabled and API's SAST is disabled", func(t *testing.T) {
-		config.CurrentConfig().SetSnykCodeEnabled(true)
+		c.SetSnykCodeEnabled(true)
 		mockedSastResponse.SastEnabled = false
 		enabled := scanner.isSastEnabled(mockedSastResponse)
 
@@ -80,7 +81,7 @@ func TestIsSastEnabled(t *testing.T) {
 		func(t *testing.T) {
 			mockedSastResponse.SastEnabled = false
 
-			config.CurrentConfig().SetSnykCodeEnabled(true)
+			c.SetSnykCodeEnabled(true)
 			notifier := notification.NewNotifier()
 			// overwrite notifiedScanner, as we want our separate notifier
 			notifiedScanner := &Scanner{

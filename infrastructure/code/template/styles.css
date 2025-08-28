@@ -46,6 +46,7 @@
   /* New variables - March 2025 */
   --dimmed-text-color: var(--vscode-editorCodeLens-foreground);
   --warning-background: var(--vscode-activityWarningBadge-background);
+  --error-border: var(--vscode-inputValidation-errorBorder);
   --warning-text: var(--vscode-activityWarningBadge-foreground);
   font-size: 10px;
 }
@@ -264,6 +265,15 @@ main {
   line-height: 1;
   background: var(--warning-background);
   color: var(--warning-text);
+}
+
+/* Error badge shown above the ignore reason field */
+.sn-error-badge {
+  padding: .4rem .8rem;
+  border-radius: 2rem;
+  margin: 0 0 0.8rem 0; /* space above the field */
+  line-height: 1;
+  border: 1px solid var(--error-border, #d92c2c); /* red outline */
 }
 
 .example {
