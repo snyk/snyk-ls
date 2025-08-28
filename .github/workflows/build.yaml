@@ -18,8 +18,8 @@ on:
   pull_request:
 
 jobs:
-  lint-and-generate:
-    name: lint and generate
+  lint:
+    name: lint
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
@@ -51,7 +51,7 @@ jobs:
 
   unit-tests:
     name: unit tests
-    needs: [lint-and-generate]
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
@@ -102,7 +102,7 @@ jobs:
 
   integration-tests:
     name: integration-tests
-    needs: [lint-and-generate]
+    needs: [lint]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -183,7 +183,7 @@ jobs:
 
   proxy-test:
     name: proxy-test
-    needs: [lint-and-generate]
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -196,7 +196,7 @@ jobs:
 
   race-tests:
     name: race-test
-    needs: [lint-and-generate]
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -264,7 +264,7 @@ jobs:
           push: true
   test-release:
     name: test-release
-    needs: [lint-and-generate, unit-tests]
+    needs: [lint, unit-tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
