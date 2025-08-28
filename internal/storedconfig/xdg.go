@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
@@ -33,6 +34,14 @@ const (
 	fileNameBase  = "ls-config"
 	ConfigMainKey = "INTERNAL_LS_CONFIG"
 )
+
+// normalizePath ensures all folder paths end with a trailing slash
+func normalizePath(path types.FilePath) types.FilePath {
+	if !strings.HasSuffix(string(path), "/") {
+		return types.FilePath(string(path) + "/")
+	}
+	return path
+}
 
 type StoredConfig struct {
 	FolderConfigs map[types.FilePath]*types.FolderConfig `json:"folderConfigs"`
@@ -50,15 +59,18 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 		return nil, err
 	}
 
-	if sc.FolderConfigs[path] == nil {
+	// Normalize the path to ensure consistency
+	normalizedPath := normalizePath(path)
+
+	if sc.FolderConfigs[normalizedPath] == nil {
 		folderConfig := &types.FolderConfig{}
-		sc.FolderConfigs[path] = folderConfig
+		sc.FolderConfigs[normalizedPath] = folderConfig
 	}
 
-	// Always override the stored folder path value, just in case it was wrong.
-	sc.FolderConfigs[path].FolderPath = path
+	// Always override the stored folder path value with the normalized version
+	sc.FolderConfigs[normalizedPath].FolderPath = normalizedPath
 
-	return sc.FolderConfigs[path], nil
+	return sc.FolderConfigs[normalizedPath], nil
 }
 
 func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (*StoredConfig, error) {
@@ -108,7 +120,14 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 	if err != nil {
 		return err
 	}
-	sc.FolderConfigs[folderConfig.FolderPath] = folderConfig
+
+	// Normalize the folder path to always end with trailing slash
+	normalizedPath := normalizePath(folderConfig.FolderPath)
+
+	// Update the folder path to the normalized version
+	folderConfig.FolderPath = normalizedPath
+
+	sc.FolderConfigs[normalizedPath] = folderConfig
 	err = Save(conf, sc)
 	if err != nil {
 		return err

@@ -30,7 +30,14 @@ import (
 func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
 	l := logger.With().Str("method", "GetOrCreateFolderConfig").Logger()
 
-	folderConfig, err := folderConfigFromStorage(conf, path, &l)
+	// Normalize path to always end with trailing slash
+	normalizedPath := path
+	if !strings.HasSuffix(string(path), "/") {
+		normalizedPath = types.FilePath(string(path) + "/")
+	}
+
+	folderConfig, err := folderConfigFromStorage(conf, normalizedPath, &l)
+
 	if err != nil {
 		return nil, err
 	}
