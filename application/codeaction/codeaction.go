@@ -3,7 +3,6 @@ package codeaction
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -110,8 +109,12 @@ func (c *CodeActionsService) UpdateIssuesWithQuickFix(quickFixGroupables []types
 		return issues
 	}
 
-	// Extract the original title to avoid concatenation issues
-	originalTitle := c.extractOriginalTitle(quickFix.GetTitle())
+	// Get the original title from the action to avoid concatenation issues
+	originalTitle := quickFix.GetOriginalTitle()
+	if originalTitle == "" {
+		// Fallback to current title if OriginalTitle wasn't set
+		originalTitle = quickFix.GetTitle()
+	}
 
 	fixable := len(quickFixGroupables)
 	unfixable := len(issues) - fixable
@@ -219,18 +222,6 @@ func IsMissingKeyError(err error) bool {
 	var missingKeyErr missingKeyError
 	ok := errors.As(err, &missingKeyErr)
 	return ok
-}
-
-func (c *CodeActionsService) extractOriginalTitle(title string) string {
-	const titleSuffix = " and fix "
-	if !strings.Contains(title, titleSuffix) {
-		return title
-	}
-
-	if idx := strings.LastIndex(title, titleSuffix); idx != -1 {
-		return title[:idx]
-	}
-	return title
 }
 
 func (c *CodeActionsService) formatQuickFixTitle(originalTitle string, fixable, unfixable int) string {

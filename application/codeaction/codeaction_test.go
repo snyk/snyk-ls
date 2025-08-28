@@ -55,8 +55,9 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 	expectedIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
-				Title:   "Fix this",
-				Command: &code.FakeCommand,
+				Title:         "Fix this",
+				OriginalTitle: "Fix this",
+				Command:       &code.FakeCommand,
 			},
 		},
 	}
@@ -75,8 +76,9 @@ func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 	fakeIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
-				Title:   "Fix this",
-				Command: &code.FakeCommand,
+				Title:         "Fix this",
+				OriginalTitle: "Fix this",
+				Command:       &code.FakeCommand,
 			},
 		},
 	}
@@ -139,9 +141,10 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 	expectedIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
-				Title:        "Fix this",
-				DeferredEdit: &deferredEdit,
-				Uuid:         &id,
+				Title:         "Fix this",
+				OriginalTitle: "Fix this",
+				DeferredEdit:  &deferredEdit,
+				Uuid:          &id,
 			},
 		},
 	}
@@ -216,7 +219,10 @@ func Test_UpdateIssuesWithQuickFix_TitleConcatenationIssue_WhenCalledMultipleTim
 	c := testutil.UnitTest(t)
 	service := setupService(t, c)
 
-	quickFix := &snyk.CodeAction{Title: "Upgrade to logback-core:1.3.15"}
+	quickFix := &snyk.CodeAction{
+		Title:         "Upgrade to logback-core:1.3.15",
+		OriginalTitle: "Upgrade to logback-core:1.3.15",
+	}
 
 	quickFixGroupables := []types.Groupable{quickFix}
 
