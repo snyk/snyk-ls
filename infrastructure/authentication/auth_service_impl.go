@@ -206,6 +206,8 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 }
 
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
+	a.c.Engine().GetConfiguration().ClearCache()
+
 	err := a.authProvider.ClearAuthentication(ctx)
 	if err != nil {
 		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
@@ -393,6 +395,7 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 		authMethodChanged = true
 	}
 
+	// always set the provider even if the authentication method didn't change, to make sure that the provider is initialized with current config
 	if authMethodChanged {
 		var p AuthenticationProvider
 		switch c.AuthenticationMethod() {
@@ -411,9 +414,8 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 			// don't do anything
 		}
 	}
-
 	// Check whether we have a valid token for the current auth method
-	if c.NonEmptyToken() && !c.AuthenticationMethodMatchesToken() {
+	if c.NonEmptyToken() && !c.AuthenticationMethodMatchesCredentials() {
 		a.logout(context.Background())
 		if authMethodChanged {
 			logger.Info().Msg("detected auth provider change, logging out and sending re-auth message")

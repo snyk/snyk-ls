@@ -207,15 +207,37 @@ if (ignoreFormContainer !== null && ignoreFormContainer !== void 0 && ignoreCrea
   // Submit button
   var ignoreFormSubmitButton = document.getElementById('ignore-form-submit');
   ignoreFormSubmitButton.addEventListener('click', function() {
+    var ignoreReasonError = document.getElementById('ignore-reason-error');
+    var ignoreReasonElem = document.getElementById('ignore-form-ignore-reason');
+    var reasonVal = (ignoreReasonElem.value || '').trim();
+    if (!reasonVal) {
+      // Show error badge and prevent submission
+      if (ignoreReasonError && ignoreReasonError.className.indexOf('hidden') !== -1) {
+        ignoreReasonError.className = ignoreReasonError.className.replace(/(?:^|\s)hidden(?!\S)/g, '');
+      }
+      return; // do not submit
+    }
     var ignoreType = document.getElementById('ignore-form-type').value;
     var ignoreExpirationType = document.getElementById('ignore-form-expiration-type').value;
     var ignoreExpirationDate = '';
     if (ignoreExpirationType === 'custom-expiration-date') {
       ignoreExpirationDate = new Date(document.getElementById('ignore-form-expiration-date').value).toISOString().split('T')[0];
     }
-    var ignoreReason = document.getElementById('ignore-form-ignore-reason').value;
+    var ignoreReason = reasonVal;
     ${ideSubmitIgnoreRequest}
   });
+
+  // Hide error when user starts typing a non-empty reason
+  var ignoreReasonInput = document.getElementById('ignore-form-ignore-reason');
+  var ignoreReasonError = document.getElementById('ignore-reason-error');
+  if (ignoreReasonInput) {
+    ignoreReasonInput.addEventListener('input', function() {
+      var val = (ignoreReasonInput.value || '').trim();
+      if (val && ignoreReasonError && ignoreReasonError.className.indexOf('hidden') === -1) {
+        ignoreReasonError.className += ' hidden';
+      }
+    });
+  }
 
   // Hide the expiration date field when "Do not expire"
   var ignoreFormExpirationType = document.getElementById('ignore-form-expiration-type');

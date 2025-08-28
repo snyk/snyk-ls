@@ -22,10 +22,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestGetCodeApiUrl(t *testing.T) {
+	c := testutil.UnitTest(t)
+
 	t.Run("Snykgov instances code api url generation", func(t *testing.T) {
 		t.Setenv("DEEPROXY_API_URL", "")
 
@@ -47,7 +49,6 @@ func TestGetCodeApiUrl(t *testing.T) {
 			}
 
 			for _, input := range inputList {
-				c := config.CurrentConfig()
 				random, _ := uuid.NewRandom()
 				orgUUID := random.String()
 
@@ -87,7 +88,6 @@ func TestGetCodeApiUrl(t *testing.T) {
 			expected := "https://deeproxy." + instance + ".io"
 
 			for _, input := range inputList {
-				c := config.CurrentConfig()
 				c.UpdateApiEndpoints(input)
 
 				actual, err := GetCodeApiUrl(c)
@@ -98,8 +98,6 @@ func TestGetCodeApiUrl(t *testing.T) {
 	})
 
 	t.Run("Default deeprox url for code api", func(t *testing.T) {
-		c := config.CurrentConfig()
-
 		url, _ := GetCodeApiUrl(c)
 		assert.Equal(t, c.SnykCodeApi(), url)
 	})

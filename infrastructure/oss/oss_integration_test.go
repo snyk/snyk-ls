@@ -22,8 +22,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -41,9 +42,8 @@ import (
 // This is an integration test that downloads and installs the CLI if necessary
 // it uses real CLI output for verification of functionality
 func Test_Scan(t *testing.T) {
-	testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, false)
 	testutil.CreateDummyProgressListener(t)
-	c := config.CurrentConfig()
 	c.SetFormat(config.FormatHtml)
 	ctx := t.Context()
 	di.Init()

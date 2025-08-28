@@ -86,13 +86,21 @@ func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.
 	}
 	defer c.semaphore.Release(1)
 
-	command := c.getCommand(cmd, workingDir, ctx)
+	command, err := c.getCommand(cmd, workingDir, ctx)
+	if err != nil {
+		return nil, err
+	}
 	command.Stderr = c.c.Logger()
 	output, err := command.Output()
 	return output, err
 }
 
-func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx context.Context) *exec.Cmd {
+func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx context.Context) (*exec.Cmd, error) {
+	err := c.c.WaitForDefaultEnv(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	if c.c.Logger().GetLevel() < zerolog.InfoLevel {
 		cmd = append(cmd, "-d")
 	}
@@ -100,6 +108,7 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 	cloneConfig := c.c.Engine().GetConfiguration().Clone()
 	cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
 	envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
+	envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
 	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
 
 	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
@@ -108,7 +117,7 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Args", command.Args).Send()
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Dir", command.Dir).Send()
-	return command
+	return command, nil
 }
 
 func expandParametersFromConfig(base []string) []string {

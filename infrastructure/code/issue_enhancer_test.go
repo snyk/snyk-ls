@@ -23,16 +23,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_getShardKey(t *testing.T) {
+	testutil.UnitTest(t)
 	const testToken = "TEST"
 	t.Run("should return root path hash", func(t *testing.T) {
 		// Case 1: rootPath exists
@@ -60,7 +61,7 @@ func Test_getShardKey(t *testing.T) {
 }
 
 func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
 	issueEnhancer := IssueEnhancer{
 		instrumentor: performance.NewInstrumentor(),
 		rootPath:     "/Users/user/workspace/blah",
@@ -86,7 +87,8 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 }
 
 func Test_addIssueActions(t *testing.T) {
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
+
 	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
 		notifier:     mockNotifier,
@@ -165,6 +167,7 @@ func Test_addIssueActions(t *testing.T) {
 }
 
 func Test_ideSnykURI(t *testing.T) {
+	testutil.UnitTest(t)
 	t.Run("generates correct URI", func(t *testing.T) {
 		issue, ideAction, expectedURI := setupAiFixTestData()
 		actualURI, err := SnykMagnetUri(issue, ideAction)
@@ -181,6 +184,7 @@ func Test_ideSnykURI(t *testing.T) {
 }
 
 func TestIssueId(t *testing.T) {
+	testutil.UnitTest(t)
 	testCases := []struct {
 		name     string
 		issue    *snyk.Issue

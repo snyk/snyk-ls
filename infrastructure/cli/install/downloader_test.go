@@ -62,7 +62,7 @@ func TestDownloader_Download(t *testing.T) {
 }
 
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
 	cancelProgressCh := make(chan bool, 1)
 	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh)
