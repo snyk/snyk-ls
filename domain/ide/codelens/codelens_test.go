@@ -19,8 +19,6 @@ package codelens
 import (
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
@@ -47,7 +45,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	c := testutil.IntegTest(t)
 	di.TestInit(t) // IntegTest doesn't automatically inits DI
 	testutil.OnlyEnableCode(t, c)
-	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
+	testutil.EnableSastAndAutoFix(c)
 	// this is using the real progress channel, so we need to listen to it
 	dummyProgressListeners(t)
 
@@ -64,9 +62,8 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	lenses := GetFor(filePath)
 
 	assert.NotNil(t, lenses)
-	assert.Equal(t, 2, len(lenses))
-	assert.Equal(t, code.FakeCommand.CommandId, lenses[0].Command.Command)
-	assert.Equal(t, code.FakeFixCommand.CommandId, lenses[1].Command.Command)
+	assert.Equal(t, 1, len(lenses))
+	assert.Equal(t, lenses[0].Command.Title, code.FixIssuePrefix+code.DontUsePrintStackTrace)
 }
 
 func dummyProgressListeners(t *testing.T) {

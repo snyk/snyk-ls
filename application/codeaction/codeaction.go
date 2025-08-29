@@ -14,7 +14,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/code"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -30,12 +29,11 @@ type CodeActionsService struct {
 
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
-	actionsCache  map[uuid.UUID]cachedAction
-	c             *config.Config
-	logger        zerolog.Logger
-	fileWatcher   dirtyFilesWatcher
-	notifier      noti.Notifier
-	codeApiClient code.SnykCodeClient
+	actionsCache map[uuid.UUID]cachedAction
+	c            *config.Config
+	logger       zerolog.Logger
+	fileWatcher  dirtyFilesWatcher
+	notifier     noti.Notifier
 }
 
 type cachedAction struct {
@@ -43,7 +41,7 @@ type cachedAction struct {
 	action types.CodeAction
 }
 
-func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, codeApiClient code.SnykCodeClient) *CodeActionsService {
+func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier) *CodeActionsService {
 	return &CodeActionsService{
 		IssuesProvider: provider,
 		actionsCache:   make(map[uuid.UUID]cachedAction),
@@ -51,7 +49,6 @@ func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirty
 		logger:         c.Logger().With().Str("service", "CodeActionsService").Logger(),
 		fileWatcher:    fileWatcher,
 		notifier:       notifier,
-		codeApiClient:  codeApiClient,
 	}
 }
 

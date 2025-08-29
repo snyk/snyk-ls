@@ -759,46 +759,6 @@ func setupConversionTests(t *testing.T, c *config.Config, activateSnykCodeSecuri
 	return path, issues, analysisResponse
 }
 
-func TestSnykCodeBackendService_analysisRequestBodyIsCorrect(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	// prepare
-	org := "00000000-0000-0000-0000-000000000023"
-	c.SetOrganization(org)
-
-	analysisOpts := &AnalysisOptions{
-		bundleHash: "test-hash",
-		shardKey:   "test-key",
-		severity:   0,
-	}
-
-	expectedRequest := AnalysisRequest{
-		Key: AnalysisRequestKey{
-			Type:         "file",
-			Hash:         analysisOpts.bundleHash,
-			LimitToFiles: analysisOpts.limitToFiles,
-			Shard:        analysisOpts.shardKey,
-		},
-		Legacy:          false,
-		AnalysisContext: newCodeRequestContext(),
-	}
-
-	// act
-	bytes, err := (&SnykCodeHTTPClient{}).analysisRequestBody(analysisOpts)
-	if err != nil {
-		assert.Fail(t, "Couldn't obtain analysis request body")
-	}
-
-	// assert
-	var actualRequest AnalysisRequest
-	err = json.Unmarshal(bytes, &actualRequest)
-	if err != nil {
-		assert.Fail(t, "Couldn't unmarshal analysis request body")
-	}
-
-	assert.Equal(t, expectedRequest, actualRequest)
-}
-
 func Test_LineChangeChar(t *testing.T) {
 	e := exampleCommit{}
 	assert.Equal(t, " ", e.lineChangeChar("none"))

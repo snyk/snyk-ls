@@ -25,13 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/snyk-ls/internal/util"
-
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
-	"github.com/snyk/snyk-ls/internal/testsupport"
-
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
@@ -48,6 +41,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
@@ -55,9 +50,12 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const maxIntegTestDuration = 45 * time.Minute
@@ -358,6 +356,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
+	testutil.EnableSastAndAutoFix(c)
 
 	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(dir),
@@ -411,8 +410,8 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.NotNil(t, lenses)
-	assert.Len(t, lenses, 2)
-	assert.Equal(t, lenses[0].Command.Command, code.FakeCommand.CommandId)
+	assert.Len(t, lenses, 1)
+	assert.Equal(t, lenses[0].Command.Title, code.FixIssuePrefix+code.DontUsePrintStackTrace)
 }
 
 func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
@@ -421,6 +420,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
+	testutil.EnableSastAndAutoFix(c)
 
 	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(dir),
@@ -841,7 +841,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 		di.ScanPersister(), di.ScanStateAggregator())
 	c.Workspace().AddFolder(folder)
 
-	_, err = loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+	_, err = loc.Client.Call(ctx, textDocumentDidOpenOperation, didOpenParams)
 
 	if err != nil {
 		t.Fatal(err)
@@ -868,7 +868,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 
 	require.Eventually(
 		t,
-		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 0, jsonRPCRecorder),
 		5*time.Second,
 		time.Millisecond,
 	)
@@ -890,7 +890,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 
 	assert.Eventually(
 		t,
-		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 1, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, c, uri.PathFromUri(fileUri), 2, jsonRPCRecorder),
 		5*time.Second,
 		time.Millisecond,
 	)
