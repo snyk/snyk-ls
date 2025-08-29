@@ -111,10 +111,6 @@ func (c *CodeActionsService) UpdateIssuesWithQuickFix(quickFixGroupables []types
 
 	// Get the original title from the action to avoid concatenation issues
 	originalTitle := quickFix.GetOriginalTitle()
-	if originalTitle == "" {
-		// Fallback to current title if OriginalTitle wasn't set
-		originalTitle = quickFix.GetTitle()
-	}
 
 	fixable := len(quickFixGroupables)
 	unfixable := len(issues) - fixable

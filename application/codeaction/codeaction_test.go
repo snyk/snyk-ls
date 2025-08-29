@@ -259,10 +259,6 @@ func Test_UpdateIssuesWithQuickFix_TitleConcatenationIssue_WhenCalledMultipleTim
 		"Title should not be concatenated on third call. Expected: %s, Got: %s",
 		expectedAfterThirdCall, quickFix.GetTitle())
 
-	t.Logf("Title after 1st call: %s", expectedAfterFirstCall)
-	t.Logf("Title after 2nd call: %s", quickFix.GetTitle())
-	t.Logf("Title after 3rd call: %s", quickFix.GetTitle())
-
 	// Additional assertion: verify that titles are not growing
 	originalTitleLength := len("Upgrade to logback-core:1.3.15")
 	assert.False(t, len(quickFix.GetTitle()) > originalTitleLength+50,
