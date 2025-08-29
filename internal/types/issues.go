@@ -64,6 +64,7 @@ const (
 type CodeAction interface {
 	Groupable
 	GetTitle() string
+	GetOriginalTitle() string
 	GetIsPreferred() *bool
 	GetEdit() *WorkspaceEdit
 	GetDeferredEdit() *func() *WorkspaceEdit

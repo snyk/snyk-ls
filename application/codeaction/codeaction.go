@@ -91,7 +91,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 
 	var updatedIssues []types.Issue
 	if len(quickFixGroupables) != 0 {
-		updatedIssues = c.updateIssuesWithQuickFix(quickFixGroupables, filteredIssues)
+		updatedIssues = c.UpdateIssuesWithQuickFix(quickFixGroupables, filteredIssues)
 	} else {
 		updatedIssues = filteredIssues
 	}
@@ -101,23 +101,25 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	return actions
 }
 
-func (c *CodeActionsService) updateIssuesWithQuickFix(quickFixGroupables []types.Groupable, issues []types.Issue) []types.Issue {
+func (c *CodeActionsService) UpdateIssuesWithQuickFix(quickFixGroupables []types.Groupable, issues []types.Issue) []types.Issue {
 	// we only allow one quickfix, so it needs to be grouped
 	quickFix := c.getQuickFixAction(quickFixGroupables)
+	if quickFix == nil {
+		// If no quickfix action found, return issues unchanged
+		return issues
+	}
+
+	// Get the original title from the action to avoid concatenation issues
+	originalTitle := quickFix.GetOriginalTitle()
+
 	fixable := len(quickFixGroupables)
 	unfixable := len(issues) - fixable
-	// update title with number of issues
-	plural := ""
-	if fixable > 1 {
-		plural = "s"
-	}
-	unfixableSuffix := ""
-	if unfixable > 0 {
-		unfixableSuffix = fmt.Sprintf(" (%d unfixable)", unfixable)
-	}
-	quickFix.SetTitle(fmt.Sprintf("%s and fix %d issue%s%s", quickFix.GetTitle(), fixable, plural, unfixableSuffix))
 
-	var updatedIssues []types.Issue
+	// Format the complete title using the original title, not concatenating to existing
+	completeTitle := c.formatQuickFixTitle(originalTitle, fixable, unfixable)
+	quickFix.SetTitle(completeTitle)
+
+	updatedIssues := make([]types.Issue, 0, len(issues))
 	for _, issue := range issues {
 		groupedActions := append([]types.CodeAction{}, quickFix)
 
@@ -216,4 +218,18 @@ func IsMissingKeyError(err error) bool {
 	var missingKeyErr missingKeyError
 	ok := errors.As(err, &missingKeyErr)
 	return ok
+}
+
+func (c *CodeActionsService) formatQuickFixTitle(originalTitle string, fixable, unfixable int) string {
+	plural := ""
+	if fixable > 1 {
+		plural = "s"
+	}
+
+	unfixableSuffix := ""
+	if unfixable > 0 {
+		unfixableSuffix = fmt.Sprintf(" (%d unfixable)", unfixable)
+	}
+
+	return fmt.Sprintf("%s and fix %d issue%s%s", originalTitle, fixable, plural, unfixableSuffix)
 }

@@ -120,7 +120,8 @@ func (b *IssueEnhancer) createShowDocumentCodeAction(issue types.Issue) (codeAct
 	title := fmt.Sprintf("⚡ Fix this issue: %s (Snyk)", issueTitle(issue))
 
 	codeAction = &snyk.CodeAction{
-		Title: title,
+		Title:         title,
+		OriginalTitle: title,
 		Command: &types.CommandData{
 			Title:     title,
 			CommandId: types.NavigateToRangeCommand,
@@ -163,7 +164,8 @@ func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue types.Issue) (ca typ
 
 	if lesson != nil && lesson.Url != "" {
 		ca = &snyk.CodeAction{
-			Title: title,
+			Title:         title,
+			OriginalTitle: title,
 			Command: &types.CommandData{
 				Title:     title,
 				CommandId: types.OpenBrowserCommand,

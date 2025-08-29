@@ -91,7 +91,8 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 		if lesson != nil && lesson.Url != "" {
 			title := fmt.Sprintf("Learn more about %s (Snyk)", i.Title)
 			action = &snyk.CodeAction{
-				Title: title,
+				Title:         title,
+				OriginalTitle: title,
 				Command: &types.CommandData{
 					Title:     title,
 					CommandId: types.OpenBrowserCommand,
