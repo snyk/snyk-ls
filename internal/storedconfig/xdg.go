@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const (
@@ -50,15 +51,16 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 		return nil, err
 	}
 
-	if sc.FolderConfigs[path] == nil {
+	normalizedPath := util.GenerateFolderConfigKey(path)
+
+	if sc.FolderConfigs[normalizedPath] == nil {
 		folderConfig := &types.FolderConfig{}
-		sc.FolderConfigs[path] = folderConfig
+		sc.FolderConfigs[normalizedPath] = folderConfig
 	}
 
-	// Always override the stored folder path value, just in case it was wrong.
-	sc.FolderConfigs[path].FolderPath = path
+	sc.FolderConfigs[normalizedPath].FolderPath = path
 
-	return sc.FolderConfigs[path], nil
+	return sc.FolderConfigs[normalizedPath], nil
 }
 
 func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (*StoredConfig, error) {
@@ -73,6 +75,17 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (
 			logger.Err(err).Msg("Failed to unmarshal stored config")
 			sc = createNewStoredConfig(conf)
 			return sc, nil
+		}
+		// Normalize existing keys loaded from storage to ensure consistency
+		if sc != nil && sc.FolderConfigs != nil {
+			normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.FolderConfigs))
+			for k, v := range sc.FolderConfigs {
+				nk := util.GenerateFolderConfigKey(k)
+				normalized[nk] = v
+			}
+			sc.FolderConfigs = normalized
+			// Best-effort save so subsequent reads are consistent
+			_ = Save(conf, sc)
 		}
 	}
 	return sc, nil
@@ -108,7 +121,11 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 	if err != nil {
 		return err
 	}
-	sc.FolderConfigs[folderConfig.FolderPath] = folderConfig
+
+	// Generate normalized key for consistent cross-platform storage
+	normalizedPath := util.GenerateFolderConfigKey(folderConfig.FolderPath)
+
+	sc.FolderConfigs[normalizedPath] = folderConfig
 	err = Save(conf, sc)
 	if err != nil {
 		return err
