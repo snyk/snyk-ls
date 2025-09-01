@@ -35,8 +35,6 @@ const (
 	ConfigMainKey = "INTERNAL_LS_CONFIG"
 )
 
-
-
 type StoredConfig struct {
 	FolderConfigs map[types.FilePath]*types.FolderConfig `json:"folderConfigs"`
 }
@@ -53,7 +51,6 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 		return nil, err
 	}
 
-	// Normalize the path to ensure consistency
 	normalizedPath := util.NormalizePath(path)
 
 	if sc.FolderConfigs[normalizedPath] == nil {
@@ -61,8 +58,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 		sc.FolderConfigs[normalizedPath] = folderConfig
 	}
 
-	// Always override the stored folder path value with the normalized version
-	sc.FolderConfigs[normalizedPath].FolderPath = normalizedPath
+	sc.FolderConfigs[normalizedPath].FolderPath = path
 
 	return sc.FolderConfigs[normalizedPath], nil
 }
@@ -79,6 +75,17 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (
 			logger.Err(err).Msg("Failed to unmarshal stored config")
 			sc = createNewStoredConfig(conf)
 			return sc, nil
+		}
+		// Normalize existing keys loaded from storage to ensure consistency
+		if sc != nil && sc.FolderConfigs != nil {
+			normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.FolderConfigs))
+			for k, v := range sc.FolderConfigs {
+				nk := util.NormalizePath(k)
+				normalized[nk] = v
+			}
+			sc.FolderConfigs = normalized
+			// Best-effort save so subsequent reads are consistent
+			_ = Save(conf, sc)
 		}
 	}
 	return sc, nil
@@ -115,11 +122,8 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 		return err
 	}
 
-	// Normalize the folder path to always end with trailing slash
+	// Normalize the folder path for consistent cross-platform keys
 	normalizedPath := util.NormalizePath(folderConfig.FolderPath)
-
-	// Update the folder path to the normalized version
-	folderConfig.FolderPath = normalizedPath
 
 	sc.FolderConfigs[normalizedPath] = folderConfig
 	err = Save(conf, sc)

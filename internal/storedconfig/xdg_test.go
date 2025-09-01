@@ -23,9 +23,11 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
