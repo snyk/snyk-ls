@@ -24,17 +24,15 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // GetOrCreateFolderConfig gets folder config from storage and merges it with Git data
 func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
 	l := logger.With().Str("method", "GetOrCreateFolderConfig").Logger()
 
-	// Normalize path to always end with trailing slash
-	normalizedPath := path
-	if !strings.HasSuffix(string(path), "/") {
-		normalizedPath = types.FilePath(string(path) + "/")
-	}
+	// Normalize path for consistent cross-platform keys
+	normalizedPath := util.NormalizePath(path)
 
 	folderConfig, err := folderConfigFromStorage(conf, normalizedPath, &l)
 

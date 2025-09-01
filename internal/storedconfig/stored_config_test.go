@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.T) {
@@ -50,12 +51,12 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 	require.NoError(t, err)
 
 	// verify
-	require.Equal(t, path, actual.FolderPath)
+	require.Equal(t, util.NormalizePath(path), actual.FolderPath)
 	scJson := conf.GetString(ConfigMainKey)
 	var sc StoredConfig
 	err = json.Unmarshal([]byte(scJson), &sc)
 	require.NoError(t, err)
-	require.Equal(t, actual, sc.FolderConfigs[path])
+	require.Equal(t, actual, sc.FolderConfigs[util.NormalizePath(path)])
 
 	bytes, err := os.ReadFile(storageFile)
 	require.NoError(t, err)

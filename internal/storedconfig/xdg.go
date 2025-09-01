@@ -20,13 +20,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const (
@@ -35,13 +35,7 @@ const (
 	ConfigMainKey = "INTERNAL_LS_CONFIG"
 )
 
-// normalizePath ensures all folder paths end with a trailing slash
-func normalizePath(path types.FilePath) types.FilePath {
-	if !strings.HasSuffix(string(path), "/") {
-		return types.FilePath(string(path) + "/")
-	}
-	return path
-}
+
 
 type StoredConfig struct {
 	FolderConfigs map[types.FilePath]*types.FolderConfig `json:"folderConfigs"`
@@ -60,7 +54,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 	}
 
 	// Normalize the path to ensure consistency
-	normalizedPath := normalizePath(path)
+	normalizedPath := util.NormalizePath(path)
 
 	if sc.FolderConfigs[normalizedPath] == nil {
 		folderConfig := &types.FolderConfig{}
@@ -122,7 +116,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 	}
 
 	// Normalize the folder path to always end with trailing slash
-	normalizedPath := normalizePath(folderConfig.FolderPath)
+	normalizedPath := util.NormalizePath(folderConfig.FolderPath)
 
 	// Update the folder path to the normalized version
 	folderConfig.FolderPath = normalizedPath
