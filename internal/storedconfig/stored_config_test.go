@@ -56,7 +56,7 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 	var sc StoredConfig
 	err = json.Unmarshal([]byte(scJson), &sc)
 	require.NoError(t, err)
-	require.Equal(t, actual, sc.FolderConfigs[util.NormalizePath(path)])
+	require.Equal(t, actual, sc.FolderConfigs[util.GenerateFolderConfigKey(path)])
 
 	bytes, err := os.ReadFile(storageFile)
 	require.NoError(t, err)

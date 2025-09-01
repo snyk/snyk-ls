@@ -52,5 +52,5 @@ func Test_folderConfigFromFallbackStorage_never_nil_and_added_to_config(t *testi
 
 	storedConfig := conf.Get(ConfigMainKey).(StoredConfig)
 	require.NotNil(t, storedConfig)
-	require.Equal(t, folderConfig, storedConfig.FolderConfigs[util.NormalizePath(types.FilePath("testPath"))])
+	require.Equal(t, folderConfig, storedConfig.FolderConfigs[util.GenerateFolderConfigKey(types.FilePath("testPath"))])
 }

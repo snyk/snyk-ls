@@ -8,7 +8,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func TestNormalizePath(t *testing.T) {
+func TestGenerateFolderConfigKey(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    types.FilePath
@@ -73,7 +73,7 @@ func TestNormalizePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := NormalizePath(tt.input)
+			result := GenerateFolderConfigKey(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

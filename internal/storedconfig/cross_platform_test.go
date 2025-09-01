@@ -59,6 +59,10 @@ func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 			name:      "Path with whitespace",
 			inputPath: "  /Users/foo/project  ",
 		},
+		{
+			name:      "Unix path with Windows separators",
+			inputPath: `\Users\foo\project`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -77,7 +81,7 @@ func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 			// Verify the config is stored with the normalized path as key
 			sc, err := GetStoredConfig(conf, &logger)
 			require.NoError(t, err)
-			normalizedKey := util.NormalizePath(tt.inputPath)
+			normalizedKey := util.GenerateFolderConfigKey(tt.inputPath)
 			require.NotNil(t, sc.FolderConfigs[normalizedKey])
 			require.Equal(t, folderConfig, sc.FolderConfigs[normalizedKey])
 		})

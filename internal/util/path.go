@@ -6,8 +6,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// NormalizePath converts to forward slashes, trims whitespace, and removes trailing slashes (except root)
-func NormalizePath(p types.FilePath) types.FilePath {
+// GenerateFolderConfigKey creates a normalized key for folder config storage
+// This ensures consistent cross-platform map keys while preserving original paths
+func GenerateFolderConfigKey(p types.FilePath) types.FilePath {
 	s := strings.TrimSpace(string(p))
 	if s == "" {
 		return ""
