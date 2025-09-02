@@ -15,9 +15,9 @@ func GenerateFolderConfigKey(p types.FilePath) types.FilePath {
 	}
 	// Convert all backslashes to forward slashes for cross-platform consistency
 	s = strings.ReplaceAll(s, "\\", "/")
-	// Remove trailing slashes for non-root paths
-	if s != "/" {
-		s = strings.TrimRight(s, "/")
+	// Add trailing slash if missing
+	if s != "" && s != "/" && !strings.HasSuffix(s, "/") {
+		s = s + "/"
 	}
 	return types.FilePath(s)
 }
