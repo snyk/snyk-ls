@@ -27,41 +27,44 @@ import (
 )
 
 func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
+	// Create one temporary directory for testing
+	tempDir := t.TempDir()
+
 	tests := []struct {
 		name      string
 		inputPath types.FilePath
 	}{
 		{
 			name:      "Unix path without trailing slash",
-			inputPath: "/Users/foo/project",
+			inputPath: types.FilePath(tempDir),
 		},
 		{
 			name:      "Unix path with trailing slash",
-			inputPath: "/Users/foo/project/",
+			inputPath: types.FilePath(tempDir + "/"),
 		},
 		{
 			name:      "Windows path without trailing slash",
-			inputPath: `C:\Users\foo\project`,
+			inputPath: types.FilePath(tempDir),
 		},
 		{
 			name:      "Windows path with trailing slash",
-			inputPath: `C:\Users\foo\project\`,
+			inputPath: types.FilePath(tempDir + "/"),
 		},
 		{
 			name:      "Mixed separators without trailing slash",
-			inputPath: `C:/Users/foo/project`,
+			inputPath: types.FilePath(tempDir),
 		},
 		{
 			name:      "Mixed separators with trailing slash",
-			inputPath: `C:/Users/foo/project/`,
+			inputPath: types.FilePath(tempDir + "/"),
 		},
 		{
 			name:      "Path with whitespace",
-			inputPath: "  /Users/foo/project  ",
+			inputPath: types.FilePath("  " + tempDir + "  "),
 		},
 		{
 			name:      "Unix path with Windows separators",
-			inputPath: `\Users\foo\project`,
+			inputPath: types.FilePath(tempDir),
 		},
 	}
 

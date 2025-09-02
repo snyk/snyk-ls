@@ -37,7 +37,7 @@ import (
 
 func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.T) {
 	conf, storageFile := SetupConfigurationWithStorage(t)
-	path := types.FilePath("/testPath")
+	path := types.FilePath(t.TempDir())
 	dir, err := os.UserHomeDir()
 	require.NoError(t, err)
 
@@ -81,7 +81,7 @@ func Test_GetOrCreateFolderConfig_shouldIntegrateGitBranchInformation(t *testing
 
 func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T) {
 	conf, _ := SetupConfigurationWithStorage(t)
-	path := types.FilePath("/testPath")
+	path := types.FilePath(t.TempDir())
 	scanCommandConfig := types.ScanCommandConfig{
 		PreScanCommand:              "/a",
 		PreScanOnlyReferenceFolder:  false,
