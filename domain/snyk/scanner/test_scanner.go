@@ -63,7 +63,7 @@ func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResu
 	data := types.ScanData{
 		Product:           product.ProductOpenSource,
 		Issues:            s.Issues,
-		DurationMs:        1234,
+		Duration:          1234,
 		TimestampFinished: time.Now().UTC(),
 		UpdateGlobalCache: true,
 		SendAnalytics:     s.SendAnalytics,

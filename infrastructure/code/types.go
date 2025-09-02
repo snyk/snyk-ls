@@ -90,7 +90,9 @@ type AutofixRequest struct {
 	IdeExtensionDetails AutofixIdeExtensionDetails `json:"ideExtensionDetails"`
 }
 
-// Should implement `error` interface
+var _ error = (*SnykAutofixFailedError)(nil)
+
+// SnykAutofixFailedError implements the `error` interface
 type SnykAutofixFailedError struct {
 	Msg string
 }

@@ -24,3 +24,15 @@ func IsChannelClosed[T any](ch <-chan T) bool {
 		return false
 	}
 }
+
+// DrainChannel drains all pending messages from a channel without blocking
+func DrainChannel[T any](ch <-chan T) {
+	for {
+		select {
+		case <-ch:
+			continue
+		default:
+			return
+		}
+	}
+}

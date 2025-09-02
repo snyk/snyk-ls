@@ -177,9 +177,10 @@ func (i *ossIssue) getQuickfixEdit(affectedFilePath types.FilePath) string {
 		logger.Warn().Msg("proposed upgrade version is the same version as the current, not adding quickfix")
 		return ""
 	}
-	if i.PackageManager == "npm" || i.PackageManager == "yarn" || i.PackageManager == "yarn-workspace" {
+	switch i.PackageManager {
+	case "npm", "yarn", "yarn-workspace":
 		return fmt.Sprintf("\"%s\": \"%s\"", depName, depVersion)
-	} else if i.PackageManager == "maven" {
+	case "maven":
 		depNameSplit := strings.Split(depName, ":")
 		depName = depNameSplit[len(depNameSplit)-1]
 		// TODO: remove once https://snyksec.atlassian.net/browse/OSM-1775 is fixed
@@ -187,12 +188,11 @@ func (i *ossIssue) getQuickfixEdit(affectedFilePath types.FilePath) string {
 			return fmt.Sprintf("%s:%s", depName, depVersion)
 		}
 		return depVersion
-	} else if i.PackageManager == "gradle" {
+	case "gradle":
 		depNameSplit := strings.Split(depName, ":")
 		depName = depNameSplit[len(depNameSplit)-1]
 		return fmt.Sprintf("%s:%s", depName, depVersion)
-	}
-	if i.PackageManager == "gomodules" {
+	case "gomodules":
 		return fmt.Sprintf("v%s", depVersion)
 	}
 

@@ -46,6 +46,7 @@ func IntegTest(t *testing.T) *config.Config {
 }
 
 // TODO: remove useConsistentIgnores once we have fully rolled out the feature
+
 func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
 	t.Helper()
 	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, useConsistentIgnores)
@@ -185,7 +186,7 @@ func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configu
 	return mockEngine, engineConfig
 }
 
-// Enables SAST and AutoFix. Used in tests where scan results are provided by code.getSarifResponseJson2, and so we need
+// EnableSastAndAutoFix Used in tests where scan results are provided by code.getSarifResponseJson2, and so we need
 // enable AutoFix in order for the issues to get enhanced with commands (see code.addIssueActions).
 func EnableSastAndAutoFix(c *config.Config) {
 	c.Engine().GetConfiguration().Set(

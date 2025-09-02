@@ -62,7 +62,7 @@ func GetCodeApiUrl(c *config.Config) (string, error) {
 	u.Host = codeApiRegex.ReplaceAllString(u.Host, "api.")
 
 	if c.Organization() == "" {
-		return "", errors.New("Organization is required in a fedramp environment")
+		return "", errors.New("organization is required in a fedramp environment")
 	}
 
 	u.Path = "/hidden/orgs/" + c.Organization() + "/code"

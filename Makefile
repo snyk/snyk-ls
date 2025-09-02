@@ -28,7 +28,8 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 
 TOOLS_BIN := $(shell pwd)/.bin
 
-OVERRIDE_GOCI_LINT_V := v1.64.8
+GOCI_LINT_V := v2.3.0
+GOCI_LINT_TARGETS := $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/.golangci-lint_$(GOCI_LINT_V)
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
@@ -38,15 +39,17 @@ TIMEOUT := "-timeout=45m"
 
 ## tools: Install required tooling.
 .PHONY: tools
-tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
+tools: $(TOOLS_BIN)/go-licenses $(GOCI_LINT_TARGETS) $(TOOLS_BIN)/pact/bin/pact
 	@echo "Please make sure to install NPM locally to be able to run analytics verification Ampli."
 
 $(TOOLS_BIN)/go-licenses:
 	@echo "==> Installing go-licenses"
 	@GOBIN=$(TOOLS_BIN) go install github.com/google/go-licenses@$(GOLICENSES_V)
 
-$(TOOLS_BIN)/golangci-lint:
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(OVERRIDE_GOCI_LINT_V)/install.sh | sh -s -- -b $(TOOLS_BIN)/ $(OVERRIDE_GOCI_LINT_V)
+$(GOCI_LINT_TARGETS):
+	@rm -f $(TOOLS_BIN)/.golangci-lint_*
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOCI_LINT_V)/install.sh | sh -s -- -b $(TOOLS_BIN)/ $(GOCI_LINT_V)
+	@touch $(TOOLS_BIN)/.golangci-lint_$(GOCI_LINT_V)
 
 $(TOOLS_BIN)/pact/bin/pact:
 	cd $(TOOLS_BIN); curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/v$(PACT_V)/install.sh | PACT_CLI_VERSION=v$(PACT_V) bash
@@ -56,18 +59,20 @@ $(TOOLS_BIN)/pact/bin/pact:
 clean:
 	@echo "==> Removing '$(BUILD_DIR)' directory..."
 	@rm -rf $(BUILD_DIR)
+	@echo "==> Removing tools bin directory..."
+	@rm -rf $(TOOLS_BIN)
 
 ## lint: Lint code with golangci-lint.
 .PHONY: lint
-lint: $(TOOLS_BIN)/golangci-lint
+lint: $(GOCI_LINT_TARGETS)
 	@echo "==> Linting code with 'golangci-lint'..."
-	@$(TOOLS_BIN)/golangci-lint run ./...
+	@$(TOOLS_BIN)/golangci-lint run --timeout=10m ./...
 
 ## lint: Lint code with golangci-lint.
 .PHONY: lint-fix
-lint-fix: $(TOOLS_BIN)/golangci-lint
+lint-fix: $(GOCI_LINT_TARGETS)
 	@echo "==> Linting and fixing code with 'golangci-lint'..."
-	@$(TOOLS_BIN)/golangci-lint run --fix ./...
+	@$(TOOLS_BIN)/golangci-lint run --timeout=10m --fix ./...
 
 
 

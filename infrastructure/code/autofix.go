@@ -75,7 +75,7 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 	for {
 		select {
 		case <-timeoutTimer.C:
-			const msg = "Timeout waiting for code fix diffs."
+			const msg = "timeout waiting for code fix diffs"
 			logger.Error().Msg(msg)
 			return nil, errors.New(msg)
 		case <-ticker.C:

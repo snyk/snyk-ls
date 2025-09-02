@@ -125,7 +125,7 @@ func (m *McpLLMBinding) snykOpenLearnLessonHandler(_ workflow.InvocationContext,
 
 		lessonURL, err := buildLessonURL(targetLesson.Url)
 		if err != nil {
-			err = fmt.Errorf("Failed to parse lesson URL, error: %w", err)
+			err = fmt.Errorf("failed to parse lesson URL: %w", err)
 			logger.Err(err).Str("url", targetLesson.Url).Send()
 			return mcp.NewToolResultText(err.Error()), nil
 		}

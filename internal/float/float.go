@@ -18,6 +18,7 @@ package float
 
 import "math"
 
+// ToFixed rounds a float64 to a specified number of decimal places.
 // The following code should work for a lot of simple use cases with relatively small numbers and small precision inputs. However, it may not work for some uses cases because of numbers overflowing out of the range of float64 numbers, as well as IEEE-754 rounding errors.
 // Source: https://stackoverflow.com/a/29786394/1713082
 func ToFixed(num float64, precision int) float64 {

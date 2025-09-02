@@ -54,11 +54,9 @@ func Test_Tracker_Begin(t *testing.T) {
 						}
 					}
 				default:
-					break
+					return false
 				}
-				break //nolint:staticcheck // we want to do this until a message is seen
 			}
-			return false
 		},
 		5*time.Second,
 		10*time.Millisecond,
@@ -85,11 +83,9 @@ func Test_Tracker_End(t *testing.T) {
 						}
 					}
 				default:
-					break
+					return false
 				}
-				break //nolint:staticcheck // we want to do this until a message is seen
 			}
-			return false
 		},
 		5*time.Second,
 		10*time.Millisecond,

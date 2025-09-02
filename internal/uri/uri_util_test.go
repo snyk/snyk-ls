@@ -24,7 +24,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sourcegraph/go-lsp"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
@@ -36,7 +35,7 @@ var dir, _ = os.Getwd()
 func TestPathFromUri(t *testing.T) {
 	testPath := filepath.Join(dir, "asdf")
 	u := PathToUri(types.FilePath(testPath))
-	u = lsp.DocumentURI(strings.Replace(string(u), "file://", "file:", 1))
+	u = sglsp.DocumentURI(strings.Replace(string(u), "file://", "file:", 1))
 	assert.Equal(t, filepath.Clean(testPath), string(PathFromUri(u))) // Eclipse case
 }
 
@@ -44,7 +43,7 @@ func TestPathFromUri_UNC(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skipf("testing windows UNC file paths")
 	}
-	uri := lsp.DocumentURI("file://host/folder/subfolder/subsubfolder")
+	uri := sglsp.DocumentURI("file://host/folder/subfolder/subsubfolder")
 	res := PathFromUri(uri)
 	assert.Equal(t, "\\\\host\\folder\\subfolder\\subsubfolder", string(res))
 }
@@ -220,11 +219,12 @@ func TestUri_IsDotSnykFile(t *testing.T) {
 func TestIsCaseInsensitivePath(t *testing.T) {
 	tempDir := t.TempDir()
 	result := isCaseInsensitivePath(tempDir)
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		assert.True(t, result, "Windows filesystems should always be detected as case-insensitive")
-	} else if runtime.GOOS == "darwin" {
+	case "darwin":
 		t.Log("macOS filesystem detected as case-", map[bool]string{true: "insensitive", false: "sensitive"}[result])
-	} else {
+	default:
 		assert.False(t, result, "Linux and other Unix filesystems should typically be case-sensitive")
 	}
 	nonExistentPath := filepath.Join(tempDir, "non_existent_dir")

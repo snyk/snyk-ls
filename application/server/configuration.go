@@ -149,10 +149,7 @@ func updateHoverVerbosity(c *config.Config, settings types.Settings) {
 }
 
 func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings) {
-	enable := false
-	if settings.EnableSnykOpenBrowserActions == "true" {
-		enable = true
-	}
+	enable := settings.EnableSnykOpenBrowserActions == "true"
 
 	c.SetSnykOpenBrowserActionsEnabled(enable)
 }
@@ -217,37 +214,25 @@ func updateDeviceInformation(c *config.Config, settings types.Settings) {
 
 func updateAutoScan(c *config.Config, settings types.Settings) {
 	// Auto scan true by default unless the AutoScan value in the settings is not missing & false
-	autoScan := true
-	if settings.ScanningMode == "manual" {
-		autoScan = false
-	}
+	autoScan := settings.ScanningMode != "manual"
 
 	c.SetAutomaticScanning(autoScan)
 }
 
 func updateSnykLearnCodeActions(c *config.Config, settings types.Settings) {
-	enable := true
-	if settings.EnableSnykLearnCodeActions == "false" {
-		enable = false
-	}
+	enable := settings.EnableSnykLearnCodeActions != "false"
 
 	c.SetSnykLearnCodeActionsEnabled(enable)
 }
 
 func updateSnykOSSQuickFixCodeActions(c *config.Config, settings types.Settings) {
-	enable := true
-	if settings.EnableSnykOSSQuickFixCodeActions == "false" {
-		enable = false
-	}
+	enable := settings.EnableSnykOSSQuickFixCodeActions != "false"
 
 	c.SetSnykOSSQuickFixCodeActionsEnabled(enable)
 }
 
 func updateDeltaFindings(c *config.Config, settings types.Settings) {
-	enable := true
-	if settings.EnableDeltaFindings == "" || settings.EnableDeltaFindings == "false" {
-		enable = false
-	}
+	enable := settings.EnableDeltaFindings != "" && settings.EnableDeltaFindings != "false"
 
 	oldValue := c.IsDeltaFindingsEnabled()
 

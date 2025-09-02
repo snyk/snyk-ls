@@ -390,10 +390,7 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 
 	logger.Debug().Msg("configuring providers")
 
-	authMethodChanged := false
-	if a.provider() == nil || a.provider().AuthenticationMethod() != c.AuthenticationMethod() {
-		authMethodChanged = true
-	}
+	authMethodChanged := a.provider() == nil || a.provider().AuthenticationMethod() != c.AuthenticationMethod()
 
 	// always set the provider even if the authentication method didn't change, to make sure that the provider is initialized with current config
 	if authMethodChanged {

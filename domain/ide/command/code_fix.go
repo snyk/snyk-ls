@@ -46,17 +46,17 @@ func (cmd *fixCodeIssue) Command() types.CommandData {
 func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 	if !config.CurrentConfig().ClientCapabilities().Workspace.ApplyEdit {
 		cmd.logger.Error().Msg("Client doesn't support 'workspace/applyEdit' capability, skipping fix attempt.")
-		return nil, errors.New("Client doesn't support 'workspace/applyEdit' capability.")
+		return nil, errors.New("client doesn't support 'workspace/applyEdit' capability")
 	}
 
 	args := cmd.command.Arguments
 	uuidArg, ok := args[0].(string)
 	if !ok {
-		return nil, errors.New("code action id (first parameter) is not a string.")
+		return nil, errors.New("code action id (first parameter) is not a string")
 	}
 	codeActionId, err := uuid.Parse(uuidArg)
 	if err != nil {
-		return nil, errors.Join(err, fmt.Errorf("Failed to parse code action id."))
+		return nil, errors.Join(err, fmt.Errorf("failed to parse code action id"))
 	}
 
 	issueMap := cmd.issueProvider.Issues()
@@ -90,7 +90,7 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 		}
 	}
 
-	return nil, errors.New("Failed to find autofix code action.")
+	return nil, errors.New("failed to find autofix code action")
 }
 
 type RangeDto = map[string]interface{}

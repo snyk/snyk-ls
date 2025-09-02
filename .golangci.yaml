@@ -1,88 +1,80 @@
+version: '2'
 run:
   build-tags:
     - integration
   concurrency: 4
   issues-exit-code: 1
   tests: true
-  timeout: 5m
-
-linters-settings:
-  errcheck:
-    check-blank: true
-    check-type-assertions: true
-  exhaustive:
-    default-signifies-exhaustive: true
-  goconst:
-    ignore-calls: false
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-  gocyclo:
-    min-complexity: 15
-  gofumpt:
-    module-path: github.com/snyk/snyk-ls
-    extra-rules: true
-  goimports:
-    local-prefixes: github.com/snyk/snyk-ls
-  gosimple:
-    checks: ['all']
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-  lll:
-    line-length: 160
-  misspell:
-    locale: US
-  nolintlint:
-    allow-unused: false
-    require-explanation: true
-    require-specific: true
-  prealloc:
-    simple: true
-    range-loops: true
-    for-loops: true
-  promlinter:
-    strict: true
-  revive:
-    rules:
-      - name: blank-imports
-        disabled: true
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: dot-imports
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: exported
-      - name: if-return
-      - name: increment-decrement
-      - name: var-naming
-      - name: var-declaration
-        disabled: true
-      - name: package-comments
-      - name: range
-      - name: receiver-naming
-      - name: time-naming
-      - name: unexported-return
-      - name: indent-error-flow
-      - name: errorf
-      - name: empty-block
-      - name: superfluous-else
-      - name: unused-parameter
-      - name: unreachable-code
-      - name: redefines-builtin-id
-  staticcheck:
-    checks: ['all']
-  stylecheck:
-    checks: ['all']
-    http-status-code-whitelist: []
-
 linters:
+  settings:
+    errcheck:
+      check-blank: true
+      check-type-assertions: true
+    exhaustive:
+      default-signifies-exhaustive: true
+    goconst:
+      ignore-calls: false
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    gocyclo:
+      min-complexity: 15
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    lll:
+      line-length: 160
+    misspell:
+      locale: US
+    nolintlint:
+      allow-unused: false
+      require-explanation: true
+      require-specific: true
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: true
+    promlinter:
+      strict: true
+    revive:
+      rules:
+        - name: blank-imports
+          disabled: true
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+          disabled: true
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
+    staticcheck:
+      checks:
+        - all
+        - -ST1000 # Disable package comment enforcement
+        - -ST1003 # Disable naming convention checks (e.g. myId -> myID)
+      http-status-code-whitelist: [] # Flag ALL hard-coded HTTP status codes
   enable:
     - asasalint
     - asciicheck
@@ -108,10 +100,6 @@ linters:
     - gocyclo
     # TODO(godot): revisit
     #- godot
-    # TODO(gofumpt): revisit
-    #- gofumpt
-    # TODO(goimports): revisit
-    - goimports
     - goprintffuncname
     # TODO(gosec): revisit; consequences of revoking non-owner file permissions?
     #- gosec
@@ -140,8 +128,7 @@ linters:
     # - revive
     - rowserrcheck
     - sqlclosecheck
-    # TODO(stylecheck): revisit in a followup; some breaking API changes
-    #- stylecheck
+    - staticcheck
     # NOTE: removed tagliatelle as it conflicts too much with existing API wireformats
     # TODO(testpackage): improve open vs closed-box testing in a followup
     #- testpackage
@@ -156,32 +143,49 @@ linters:
     - whitespace
     # TODO(wrapcheck): wrap errors in a followup
     #- wrapcheck
-
-issues:
-  exclude-dirs:
-    - "docs"
-    - "licenses"
-    - "pact"
-    - "ampli"
-    - ".bin"
-    - ".github"
-    - ".vscode"
-    - "build"
-
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - bodyclose
-        - forcetypeassert
-        - goconst
-        - ireturn
-    - path: test/
-      linters:
-        - testpackage
-    - path: \.go
-      # TODO: remove this soon; unchecked errors are BAD
-      linters:
-        - errcheck
-  include:
-    - EXC0012
-    - EXC0014
+  exclusions:
+    paths:
+      - docs
+      - licenses
+      - pact
+      - ampli
+      - .bin
+      - .github
+      - .vscode
+      - build
+    rules:
+      - path: _test\.go
+        linters:
+          - bodyclose
+          - forcetypeassert
+          - goconst
+          - ireturn
+      - path: test/
+        linters:
+          - testpackage
+      - path: \.go
+        # TODO: remove this soon; unchecked errors are BAD
+        linters:
+          - errcheck
+formatters:
+  enable:
+    - goimports
+    # TODO(gofumpt): revisit
+    #- gofumpt
+  settings:
+    gofumpt:
+      module-path: github.com/snyk/snyk-ls
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/snyk/snyk-ls
+  exclusions:
+    paths:
+      - docs
+      - licenses
+      - pact
+      - ampli
+      - .bin
+      - .github
+      - .vscode
+      - build

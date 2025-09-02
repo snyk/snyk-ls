@@ -27,7 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// A Sentry implementation of our error reporter that respects user preferences regarding tracking
+// GDPRAwareSentryErrorReporter is a Sentry implementation of our error reporter that respects user preferences regarding tracking.
 type GDPRAwareSentryErrorReporter struct {
 	notifier notification.Notifier
 	c        *config.Config

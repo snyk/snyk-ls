@@ -109,11 +109,12 @@ func (m *McpLLMBinding) Start(invocationContext workflow.InvocationContext) erro
 	}
 
 	transportType := invocationContext.GetConfiguration().GetString("transport")
-	if transportType == StdioTransportType {
+	switch transportType {
+	case StdioTransportType:
 		return m.HandleStdioServer()
-	} else if transportType == SseTransportType {
+	case SseTransportType:
 		return m.HandleSseServer()
-	} else {
+	default:
 		return fmt.Errorf("invalid transport type: %s", transportType)
 	}
 }
