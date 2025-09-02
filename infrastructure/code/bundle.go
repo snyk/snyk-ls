@@ -137,14 +137,15 @@ func (b *Bundle) retrieveAnalysis(ctx context.Context, t *progress.Tracker) ([]t
 			return []types.Issue{}, err
 		}
 
-		if status.message == completeStatus {
+		switch status.message {
+		case completeStatus:
 			logger.Trace().Msg("sending diagnostics...")
 			t.ReportWithMessage(90, "Analysis complete.")
 
 			b.issueEnhancer.addIssueActions(ctx, issues)
 
 			return issues, nil
-		} else if status.message == "ANALYZING" {
+		case "ANALYZING":
 			logger.Trace().Msg("\"Analyzing\" message received, sending In-Progress message to client")
 		}
 

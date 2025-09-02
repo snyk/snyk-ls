@@ -56,7 +56,7 @@ func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
 
 	sastResponse, ok := response.(*sast_contract.SastResponse)
 	if !ok {
-		return nil, errors.New("Failed to parse the sast settings")
+		return nil, errors.New("failed to parse the sast settings")
 	}
 
 	return sastResponse, nil

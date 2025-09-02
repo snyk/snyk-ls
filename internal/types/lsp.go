@@ -390,11 +390,9 @@ type TextDocumentClientCapabilities struct {
 	} `json:"inlineValue,omitempty"`
 }
 
-/**
- * A parameter literal used in inline value requests.
- *
- * @since 3.17.0
- */
+// InlineValueParams is a parameter literal used in inline value requests.
+//
+// @since 3.17.0
 type InlineValueParams struct {
 	/**
 	 * The text document.
@@ -427,11 +425,9 @@ type InlineValueContext struct {
 	StoppedLocation sglsp.Range `json:"stoppedLocation"`
 }
 
-/**
- * Provide inline value as text.
- *
- * @since 3.17.0
- */
+// InlineValue provides inline value as text.
+//
+// @since 3.17.0
 type InlineValue struct {
 	/**
 	 * The document range for which the inline value applies.
@@ -636,9 +632,7 @@ type ConfigurationItem struct {
 	Section string `json:"section,omitempty"`
 }
 
-/**
- * The parameters of a configuration request.
- */
+// ConfigurationParams represents the parameters of a configuration request.
 type ConfigurationParams struct {
 	Items []ConfigurationItem `json:"items"`
 }
@@ -777,82 +771,64 @@ type CodeActionContext struct {
 
 type CodeActionKind string
 
-/**
- * Empty kind.
- */
+// Empty represents an empty CodeActionKind.
 const Empty CodeActionKind = ""
 
-/**
- * Base kind for quickfix actions 'quickfix'.
- */
+// QuickFix is the base kind for quickfix actions 'quickfix'.
 const QuickFix CodeActionKind = "quickfix"
 
-/**
- * Base kind for refactoring actions 'refactor'.
- */
+// Refactor is the base kind for refactoring actions 'refactor'.
 const Refactor CodeActionKind = "refactor"
 
-/**
- * Base kind for refactoring extraction actions: 'refactor.extract'.
- *
- * Example extract actions:
- *
- * - Extract method
- * - Extract function
- * - Extract variable
- * - Extract interface from class
- * - ...
- */
+// RefactorExtract is the base kind for refactoring extraction actions: 'refactor.extract'.
+//
+// Example extract actions:
+//
+// - Extract method
+// - Extract function
+// - Extract variable
+// - Extract interface from class
+// - ...
 const RefactorExtract CodeActionKind = "refactor.extract"
 
-/**
- * Base kind for refactoring inline actions: 'refactor.inline'.
- *
- * Example inline actions:
- *
- * - Inline function
- * - Inline variable
- * - Inline constant
- * - ...
- */
+// RefactorInline is the base kind for refactoring inline actions: 'refactor.inline'.
+//
+// Example inline actions:
+//
+// - Inline function
+// - Inline variable
+// - Inline constant
+// - ...
 const RefactorInline CodeActionKind = "refactor.inline"
 
-/**
- * Base kind for refactoring rewrite actions: 'refactor.rewrite'.
- *
- * Example rewrite actions:
- *
- * - Convert JavaScript function to class
- * - Add or remove parameter
- * - Encapsulate field
- * - Make method static
- * - Move method to base class
- * - ...
- */
+// RefactorRewrite is the base kind for refactoring rewrite actions: 'refactor.rewrite'.
+//
+// Example rewrite actions:
+//
+// - Convert JavaScript function to class
+// - Add or remove parameter
+// - Encapsulate field
+// - Make method static
+// - Move method to base class
+// - ...
 const RefactorRewrite CodeActionKind = "refactor.rewrite"
 
-/**
- * Base kind for source actions: `source`.
- *
- * Source code actions apply to the entire file.
- */
+// Source is the base kind for source actions: `source`.
+//
+// Source code actions apply to the entire file.
 const Source CodeActionKind = "source"
 
-/**
- * Base kind for an organize imports source action
- * `source.organizeImports`.
- */
+// SourceOrganizeImports is the base kind for an organize imports source action
+// `source.organizeImports`.
 const SourceOrganizeImports CodeActionKind = "source.organizeImports"
 
-/**
- * Base kind for a "fix all" source action `source.fixAll`.
- *
- * ""Fix all"" actions automatically fix errors that have a clear fix that
- * do not require user input. They should not suppress errors or perform
- * unsafe fixes such as generating new types or classes.
- *
- * @since 3.17.0
- */
+// SourceFixAll is the base kind for a "fix all" source action `source.fixAll`.
+//
+// "Fix all" actions automatically fix errors that have a clear fix that
+// do not require user input. They should not suppress errors or perform
+// unsafe fixes such as generating new types or classes.
+//
+// @since 3.17.0
 const SourceFixAll CodeActionKind = "source.fixAll"
 
 type CodeActionParams struct {
@@ -870,19 +846,17 @@ type CodeActionParams struct {
 	Context CodeActionContext `json:"context"`
 }
 
-/**
- * A CodeAction represents a change that can be performed in code, e.g. to fix a problem or
- * to refactor code.
- *
- * A CodeAction can be of these forms:
- * 1. Has Edit but No Command - A simple edit that will be applied when the action is invoked
- * 2. Has Command but No Edit - A command that will be executed when the action is invoked
- * 3. Has both Edit and Command - A command that will be executed after the edit will be applied
- * 4. Has neither Edit nor Command - A deferred code action that would be resolved after codeAction/resolve is received.
- *
- * A deferred code action would have both Edit & Command omitted, and when invoked by the user, the server would send
- * a new CodeAction with the Edit and/or Command fields populated.
- */
+// LSPCodeAction represents a change that can be performed in code, e.g. to fix a problem or
+// to refactor code.
+//
+// A CodeAction can be of these forms:
+// 1. Has Edit but No Command - A simple edit that will be applied when the action is invoked
+// 2. Has Command but No Edit - A command that will be executed when the action is invoked
+// 3. Has both Edit and Command - A command that will be executed after the edit will be applied
+// 4. Has neither Edit nor Command - A deferred code action that would be resolved after codeAction/resolve is received.
+//
+// A deferred code action would have both Edit & Command omitted, and when invoked by the user, the server would send
+// a new CodeAction with the Edit and/or Command fields populated.
 type LSPCodeAction struct {
 	/**
 	 * A short, human-readable, title for this code action.
@@ -958,11 +932,9 @@ type CodeActionData uuid.UUID
 
 type CodeActionTriggerKind float64
 
-/**
- * Params to show a document.
- *
- * @since 3.16.0
- */
+// ShowDocumentParams are the parameters to show a document.
+//
+// @since 3.16.0
 type ShowDocumentParams struct {
 	/**
 	 * The document uri to show.
@@ -1124,7 +1096,7 @@ type IgnoreDetails struct {
 	Status     codeClientSarif.SuppresionStatus `json:"status"`
 }
 
-// Snyk Open Source
+// OssIssueData contains data for Snyk Open Source issues.
 type OssIssueData struct {
 	Key               string         `json:"key,omitempty"`
 	RuleId            string         `json:"ruleId"`

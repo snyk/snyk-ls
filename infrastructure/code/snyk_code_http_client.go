@@ -449,7 +449,7 @@ func (s *SnykCodeHTTPClient) checkResponseCode(statusCode int) error {
 	if statusCode >= 200 && statusCode <= 400 {
 		return nil
 	}
-	return fmt.Errorf("Unexpected response code: %d", statusCode)
+	return fmt.Errorf("unexpected response code: %d", statusCode)
 }
 
 func GetCodeApiUrl(c *config.Config) (string, error) {
@@ -464,7 +464,7 @@ func GetCodeApiUrl(c *config.Config) (string, error) {
 	u.Host = codeApiRegex.ReplaceAllString(u.Host, "api.")
 
 	if c.Organization() == "" {
-		return "", errors.New("Organization is required in a fedramp environment")
+		return "", errors.New("organization is required in a fedramp environment")
 	}
 
 	u.Path = "/hidden/orgs/" + c.Organization() + "/code"

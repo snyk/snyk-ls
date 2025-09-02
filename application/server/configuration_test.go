@@ -256,7 +256,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.NotEmpty(t, folderConfig2.BaseBranch)
 		assert.Empty(t, folderConfig2.AdditionalParameters)
 
-		assert.Eventually(t, func() bool { return "a fancy token" == c.Token() }, time.Second*5, time.Millisecond)
+		assert.Eventually(t, func() bool { return c.Token() == "a fancy token" }, time.Second*5, time.Millisecond)
 	})
 
 	t.Run("hover defaults are set", func(t *testing.T) {

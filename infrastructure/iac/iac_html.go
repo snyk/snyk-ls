@@ -76,7 +76,7 @@ func getScripts() template.JS {
 	return template.JS(scripts)
 }
 
-// Function to get the rendered HTML with issue details and CSS
+// GetDetailsHtml returns the rendered HTML with issue details and CSS
 func (service *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	var htmlTemplate bytes.Buffer
 
