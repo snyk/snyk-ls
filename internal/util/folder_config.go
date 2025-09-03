@@ -1,27 +1,31 @@
 package util
 
 import (
+	"fmt"
+
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// ValidateReferenceFolderPath validates a reference folder path for security
 func ValidateReferenceFolderPath(path types.FilePath) error {
 	options := PathValidationOptions{
-		AllowEmpty:      true,
-		RequireAbsolute: true,
-		RequireExists:   true,
-		PathType:        PathTypeDirectory,
+		AllowEmpty:    true,
+		RequireExists: true,
+		PathType:      PathTypeDirectory,
 	}
-	return ValidatePath(path, options)
+	if err := ValidatePath(path, options); err != nil {
+		return fmt.Errorf("reference folder path validation failed: %w", err)
+	}
+	return nil
 }
 
-// ValidateFolderPath validates a folder path for security
 func ValidateFolderPath(path types.FilePath) error {
 	options := PathValidationOptions{
-		AllowEmpty:      false,
-		RequireAbsolute: true,
-		RequireExists:   true,
-		PathType:        PathTypeDirectory,
+		AllowEmpty:    false,
+		RequireExists: true,
+		PathType:      PathTypeDirectory,
 	}
-	return ValidatePath(path, options)
+	if err := ValidatePath(path, options); err != nil {
+		return fmt.Errorf("folder path validation failed: %w", err)
+	}
+	return nil
 }

@@ -46,7 +46,6 @@ func ConfigFile(ideName string) (string, error) {
 }
 
 func folderConfigFromStorage(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
-	// Validate the folder path for security
 	if err := util.ValidateFolderPath(path); err != nil {
 		logger.Error().Err(err).Str("path", string(path)).Msg("invalid folder path")
 		return nil, err
@@ -64,7 +63,9 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 		sc.FolderConfigs[normalizedPath] = folderConfig
 	}
 
-	sc.FolderConfigs[normalizedPath].FolderPath = path
+	// Normalize the folder path for consistent storage
+	normalizedFolderPath := util.GenerateFolderConfigKey(path)
+	sc.FolderConfigs[normalizedPath].FolderPath = normalizedFolderPath
 
 	return sc.FolderConfigs[normalizedPath], nil
 }
@@ -123,7 +124,6 @@ func UpdateFolderConfigs(conf configuration.Configuration, folderConfigs []types
 }
 
 func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig, logger *zerolog.Logger) error {
-	// Validate the folder path for security
 	if err := util.ValidateFolderPath(folderConfig.FolderPath); err != nil {
 		logger.Error().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("invalid folder path")
 		return err
@@ -142,10 +142,17 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 		return err
 	}
 
+	// Normalize paths for consistent storage
+	normalizedFolderConfig := *folderConfig
+	normalizedFolderConfig.FolderPath = util.GenerateFolderConfigKey(folderConfig.FolderPath)
+	if folderConfig.ReferenceFolderPath != "" {
+		normalizedFolderConfig.ReferenceFolderPath = util.GenerateFolderConfigKey(folderConfig.ReferenceFolderPath)
+	}
+
 	// Generate normalized key for consistent cross-platform storage
 	normalizedPath := util.GenerateFolderConfigKey(folderConfig.FolderPath)
 
-	sc.FolderConfigs[normalizedPath] = folderConfig
+	sc.FolderConfigs[normalizedPath] = &normalizedFolderConfig
 	err = Save(conf, sc)
 	if err != nil {
 		return err
