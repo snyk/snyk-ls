@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -39,20 +40,12 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	server := mock_types.NewMockServer(ctrl)
 	server.EXPECT().Callback(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	instrumentor := code.NewCodeInstrumentor()
-	snykCodeClient := &code.FakeSnykCodeClient{
-		UnifiedDiffSuggestions: []code.AutofixUnifiedDiffSuggestion{
-			{
-				FixId:               uuid.NewString(),
-				UnifiedDiffsPerFile: nil,
-			},
-		},
-	}
+	instrumentor := performance.NewInstrumentor()
 	snykApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
 	codeScanner := &code.Scanner{
-		BundleUploader: code.NewBundler(c, snykCodeClient, instrumentor),
-		SnykApiClient:  snykApiClient,
-		C:              c,
+		SnykApiClient: snykApiClient,
+		Instrumentor:  instrumentor,
+		C:             c,
 	}
 	cut := codeFixDiffs{
 		notifier:      notification.NewMockNotifier(),

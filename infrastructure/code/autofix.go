@@ -20,11 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/llm"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -48,8 +51,8 @@ func (a AutofixUnifiedDiffSuggestion) GetUnifiedDiffForFile(filePath string) str
 func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, filePath types.FilePath, issue types.Issue) (unifiedDiffSuggestions []llm.AutofixUnifiedDiffSuggestion, err error) {
 	method := "GetAutofixDiffs"
 	logger := sc.C.Logger().With().Str("method", method).Logger()
-	span := sc.BundleUploader.instrumentor.StartSpan(ctx, method)
-	defer sc.BundleUploader.instrumentor.Finish(span)
+	span := sc.Instrumentor.StartSpan(ctx, method)
+	defer sc.Instrumentor.Finish(span)
 
 	sc.bundleHashesMutex.RLock()
 	bundleHash, found := sc.bundleHashes[baseDir]
@@ -94,7 +97,7 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 				return nil, hostErr
 			}
 
-			_, ruleId, ok := getIssueLangAndRuleId(issue)
+			_, ruleId, ok := getIssueLangAndRuleId(sc.C, issue)
 			if !ok {
 				return nil, SnykAutofixFailedError{Msg: "Issue's ruleID does not follow <lang>/<ruleKey> format"}
 			}
@@ -135,4 +138,24 @@ func toEncodedNormalizedPath(rootPath types.FilePath, filePath types.FilePath) (
 
 	encodedRelativePath := EncodePath(relativePath)
 	return encodedRelativePath, nil
+}
+
+func getIssueLangAndRuleId(c *config.Config, issue types.Issue) (string, string, bool) {
+	logger := c.Logger().With().Str("method", "getIssueLangAndRuleId").Logger()
+	issueData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
+	if !ok {
+		logger.Trace().Str("file", string(issue.GetAffectedFilePath())).Int("line", issue.GetRange().Start.Line).Msg("Can't access issue data")
+		return "", "", false
+	}
+	// NOTE(alex.gronskiy): we tend to receive either `<lang>/<ruleID>` or `<lang>/<ruleID>/test` (the
+	// latter is returned when a file is considered a "test" one, using complex heuristics on Suggest).
+	// For our purposes, we need to know language and rule ID regardless whether this is test file or not.
+	ruleIdSplit := strings.Split(issueData.RuleId, "/")
+	if len(ruleIdSplit) == 2 || len(ruleIdSplit) == 3 {
+		// 0: lang, 1: ruleId
+		return ruleIdSplit[0], ruleIdSplit[1], true
+	}
+
+	logger.Trace().Str("file", string(issue.GetAffectedFilePath())).Int("line", issue.GetRange().Start.Line).Msg("Issue data does not contain RuleID")
+	return "", "", false
 }
