@@ -26,6 +26,7 @@ const (
 	ProductOpenSource           Product = "Snyk Open Source"
 	ProductCode                 Product = "Snyk Code"
 	ProductInfrastructureAsCode Product = "Snyk IaC"
+	ProductContainer            Product = "Snyk Container"
 	ProductUnknown              Product = ""
 )
 
@@ -33,6 +34,7 @@ const (
 	FilterableIssueTypeOpenSource           FilterableIssueType = "Open Source"
 	FilterableIssueTypeCodeSecurity         FilterableIssueType = "Code Security"
 	FilterableIssueTypeInfrastructureAsCode FilterableIssueType = "Infrastructure As Code"
+	FilterableIssueTypeContainer            FilterableIssueType = "Container"
 )
 
 func (p Product) ToProductCodename() string {
@@ -43,6 +45,8 @@ func (p Product) ToProductCodename() string {
 		return "code"
 	case ProductInfrastructureAsCode:
 		return "iac"
+	case ProductContainer:
+		return "container"
 	default:
 		return ""
 	}
@@ -56,6 +60,8 @@ func (p Product) ToFilterableIssueType() []FilterableIssueType {
 		return []FilterableIssueType{FilterableIssueTypeCodeSecurity}
 	case ProductInfrastructureAsCode:
 		return []FilterableIssueType{FilterableIssueTypeInfrastructureAsCode}
+	case ProductContainer:
+		return []FilterableIssueType{FilterableIssueTypeContainer}
 	default:
 		return []FilterableIssueType{}
 	}
@@ -69,6 +75,8 @@ func (f FilterableIssueType) ToProduct() Product {
 		return ProductCode
 	case FilterableIssueTypeInfrastructureAsCode:
 		return ProductInfrastructureAsCode
+	case FilterableIssueTypeContainer:
+		return ProductContainer
 	default:
 		return ProductUnknown
 	}
@@ -82,6 +90,8 @@ func ToProduct(productName string) Product {
 		return ProductCode
 	case "iac":
 		return ProductInfrastructureAsCode
+	case "container":
+		return ProductContainer
 	default:
 		return ProductUnknown
 	}
