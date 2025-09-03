@@ -106,6 +106,7 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	c.SetSnykOpenBrowserActionsEnabled(true)
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(true)
+	c.SetSnykContainerEnabled(true)
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
@@ -120,13 +121,15 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	agg.SetScanState(folderPath, product.ProductOpenSource, true, doneState)
 	agg.SetScanState(folderPath, product.ProductCode, true, doneState)
 	agg.SetScanState(folderPath, product.ProductInfrastructureAsCode, true, doneState)
+	agg.SetScanState(folderPath, product.ProductContainer, true, doneState)
 
 	agg.SetScanState(folderPath, product.ProductOpenSource, false, doneState)
 	agg.SetScanState(folderPath, product.ProductCode, false, doneState)
 	agg.SetScanState(folderPath, product.ProductInfrastructureAsCode, false, doneState)
+	agg.SetScanState(folderPath, product.ProductContainer, false, doneState)
 
-	// Emitter called 3 times total
-	assert.Equal(t, 7, emitter.Calls)
+	// Emitter called 9 times total (1 init + 8 SetScanState calls)
+	assert.Equal(t, 9, emitter.Calls)
 
 	assert.True(t, agg.allScansSucceeded(true))
 	assert.True(t, agg.allScansSucceeded(false))
@@ -248,6 +251,7 @@ func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
 	c.SetSnykOpenBrowserActionsEnabled(true)
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(false)
+	c.SetSnykContainerEnabled(false)
 
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"

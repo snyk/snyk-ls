@@ -624,6 +624,7 @@ type Settings struct {
 	ActivateSnykOpenSource              string               `json:"activateSnykOpenSource,omitempty"`
 	ActivateSnykCode                    string               `json:"activateSnykCode,omitempty"`
 	ActivateSnykIac                     string               `json:"activateSnykIac,omitempty"`
+	ActivateSnykContainer               string               `json:"activateSnykContainer,omitempty"`
 	Insecure                            string               `json:"insecure,omitempty"`
 	Endpoint                            string               `json:"endpoint,omitempty"`
 	CliBaseDownloadURL                  string               `json:"cliBaseDownloadURL,omitempty"`

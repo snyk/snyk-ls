@@ -750,6 +750,12 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 			analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
 		}
 	}
+	parseBool, err = strconv.ParseBool(settings.ActivateSnykContainer)
+	if err != nil {
+		c.Logger().Debug().Msg("couldn't parse container setting")
+	} else {
+		c.SetSnykContainerEnabled(parseBool)
+	}
 }
 
 func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, triggerSource analytics.TriggerSource) {
