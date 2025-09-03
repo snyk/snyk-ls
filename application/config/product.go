@@ -26,6 +26,8 @@ func (c *Config) IsProductEnabled(p product.Product) bool {
 		return c.IsSnykOssEnabled()
 	case product.ProductInfrastructureAsCode:
 		return c.IsSnykIacEnabled()
+	case product.ProductContainer:
+		return c.IsSnykContainerEnabled()
 	default:
 		return false
 	}
@@ -38,6 +40,7 @@ func (c *Config) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
 	// Handle backwards compatibility.
 	enabled[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabled() || c.IsSnykCodeSecurityEnabled()
 	enabled[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabled()
+	enabled[product.FilterableIssueTypeContainer] = c.IsSnykContainerEnabled()
 
 	return enabled
 }
