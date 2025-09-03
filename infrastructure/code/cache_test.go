@@ -22,6 +22,7 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -30,7 +31,7 @@ import (
 
 func TestScanner_Cache(t *testing.T) {
 	t.Run("should add issues to the cache", func(t *testing.T) {
-		_, scanner := setupTestScanner(t)
+		scanner := setupTestScanner(t)
 		scanner.addToCache([]types.Issue{&snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java"}})
 		scanner.addToCache([]types.Issue{&snyk.Issue{ID: "issue2", AffectedFilePath: "file2.java"}})
 
@@ -40,7 +41,7 @@ func TestScanner_Cache(t *testing.T) {
 		require.True(t, added)
 	})
 	t.Run("should automatically expire entries after a time", func(t *testing.T) {
-		_, scanner := setupTestScanner(t)
+		scanner := setupTestScanner(t)
 		scanner.issueCache = imcache.New[types.FilePath, []types.Issue](
 			imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Microsecond),
 		)
@@ -52,7 +53,7 @@ func TestScanner_Cache(t *testing.T) {
 		require.False(t, found)
 	})
 	t.Run("should add scan results to cache", func(t *testing.T) {
-		_, scanner := setupTestScanner(t)
+		scanner := setupTestScanner(t)
 		// preload cache with one issue
 		scanner.issueCache.RemoveAll()
 		scanner.issueCache.Set(
@@ -60,18 +61,28 @@ func TestScanner_Cache(t *testing.T) {
 			[]types.Issue{&snyk.Issue{ID: "issue2", AdditionalData: snyk.CodeIssueData{Key: uuid.New().String()}}},
 			imcache.WithDefaultExpiration(),
 		)
-		filePath, folderPath := TempWorkdirWithIssues(t)
+		assert.Equal(t, 1, len(scanner.Issues()))
+		assert.Equal(t, "issue2", scanner.Issues()["file2.java"][0].GetID())
 
 		// now scan
+		filePath, folderPath := TempWorkdirWithIssues(t)
 		_, err := scanner.Scan(t.Context(), filePath, folderPath, nil)
 		require.NoError(t, err)
 
 		// new issue from scan should have been added
-		issue := scanner.Issue(FakeIssue.AdditionalData.GetKey())
-		require.NotNil(t, issue)
+		assert.Equal(t, 2, len(scanner.Issues()))
+		issues := scanner.Issues()
+		// Because the issue from the scan is from a temp file, we do not know the FilePath, so we iterate over the map.
+		for k, v := range issues {
+			if k == "file2.java" {
+				assert.Equal(t, "issue2", v[0].GetID())
+			} else {
+				assert.Contains(t, v[0].GetID(), DontUsePrintStackTrace)
+			}
+		}
 	})
 	t.Run("should removeFromCache previous scan results for files to be scanned from cache", func(t *testing.T) {
-		_, scanner := setupTestScanner(t)
+		scanner := setupTestScanner(t)
 		evictionChan := make(chan types.FilePath)
 		scanner.issueCache = imcache.New[types.FilePath, []types.Issue](imcache.WithEvictionCallbackOption(func(key types.FilePath, value []types.Issue, reason imcache.EvictionReason) {
 			go func() {
@@ -102,7 +113,7 @@ func TestScanner_Cache(t *testing.T) {
 		// BL should work like this
 		// cache is initialized with an eviction handler
 		// eviction handler should call a function that iterates over additional handlers
-		_, scanner := setupTestScanner(t)
+		scanner := setupTestScanner(t)
 		evictionChan := make(chan types.FilePath)
 		testEvictionHandler := func(path types.FilePath) {
 			go func() { evictionChan <- path }()
@@ -129,7 +140,7 @@ func TestScanner_Cache(t *testing.T) {
 		}
 	})
 	t.Run("clear issues should evict all issues", func(t *testing.T) {
-		_, scanner := setupTestScanner(t)
+		scanner := setupTestScanner(t)
 		evictionChan := make(chan types.FilePath)
 		testEvictionHandler := func(path types.FilePath) {
 			go func() { evictionChan <- path }()
@@ -155,7 +166,7 @@ func TestScanner_Cache(t *testing.T) {
 		}
 	})
 	t.Run("should de-duplicate issues", func(t *testing.T) {
-		_, scanner := setupTestScanner(t)
+		scanner := setupTestScanner(t)
 		scanner.issueCache.RemoveAll()
 		issue1 := &snyk.Issue{ID: "issue1", AffectedFilePath: "file2.java", AdditionalData: snyk.CodeIssueData{Key: "1"}}
 		issue2 := &snyk.Issue{ID: "issue2", AffectedFilePath: "file2.java", AdditionalData: snyk.CodeIssueData{Key: "2"}}
@@ -172,7 +183,7 @@ func TestScanner_Cache(t *testing.T) {
 
 func TestScanner_IssueProvider(t *testing.T) {
 	t.Run("should find issue by key", func(t *testing.T) {
-		_, scanner := setupTestScanner(t)
+		scanner := setupTestScanner(t)
 		issue := &snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java", AdditionalData: &snyk.CodeIssueData{Key: "key"}}
 		scanner.addToCache([]types.Issue{issue})
 
@@ -181,7 +192,7 @@ func TestScanner_IssueProvider(t *testing.T) {
 	})
 
 	t.Run("should find issue by path and range", func(t *testing.T) {
-		_, scanner := setupTestScanner(t)
+		scanner := setupTestScanner(t)
 		issue := &snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java", AdditionalData: &snyk.CodeIssueData{Key: "key"}}
 		scanner.addToCache([]types.Issue{issue})
 
@@ -190,7 +201,7 @@ func TestScanner_IssueProvider(t *testing.T) {
 		require.Contains(t, foundIssues, issue)
 	})
 	t.Run("should not find issue by path when range does not overlap", func(t *testing.T) {
-		_, scanner := setupTestScanner(t)
+		scanner := setupTestScanner(t)
 		issue := &snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java", AdditionalData: &snyk.CodeIssueData{Key: "key"}}
 		scanner.addToCache([]types.Issue{issue})
 

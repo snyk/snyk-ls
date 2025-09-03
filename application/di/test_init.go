@@ -74,10 +74,8 @@ func TestInit(t *testing.T) {
 		cliInitializer,
 		authInitializer,
 	)
-	fakeClient := &code.FakeSnykCodeClient{C: c}
-	snykCodeClient = fakeClient
+
 	codeInstrumentor = code.NewCodeInstrumentor()
-	snykCodeBundleUploader = code.NewBundler(c, snykCodeClient, codeInstrumentor)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
 	// mock Learn Service
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
@@ -92,7 +90,7 @@ func TestInit(t *testing.T) {
 	scanPersister = persistence.NopScanPersister{}
 	scanStateAggregator = scanstates.NewNoopStateAggregator()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
+	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
@@ -102,10 +100,5 @@ func TestInit(t *testing.T) {
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
-	t.Cleanup(
-		func() {
-			fakeClient.Clear()
-		},
-	)
+	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier)
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/code"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -30,12 +29,11 @@ type CodeActionsService struct {
 
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
-	actionsCache  map[uuid.UUID]cachedAction
-	c             *config.Config
-	logger        zerolog.Logger
-	fileWatcher   dirtyFilesWatcher
-	notifier      noti.Notifier
-	codeApiClient code.SnykCodeClient
+	actionsCache map[uuid.UUID]cachedAction
+	c            *config.Config
+	logger       zerolog.Logger
+	fileWatcher  dirtyFilesWatcher
+	notifier     noti.Notifier
 }
 
 type cachedAction struct {
@@ -43,7 +41,7 @@ type cachedAction struct {
 	action types.CodeAction
 }
 
-func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, codeApiClient code.SnykCodeClient) *CodeActionsService {
+func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier) *CodeActionsService {
 	return &CodeActionsService{
 		IssuesProvider: provider,
 		actionsCache:   make(map[uuid.UUID]cachedAction),
@@ -51,7 +49,6 @@ func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirty
 		logger:         c.Logger().With().Str("service", "CodeActionsService").Logger(),
 		fileWatcher:    fileWatcher,
 		notifier:       notifier,
-		codeApiClient:  codeApiClient,
 	}
 }
 
@@ -91,7 +88,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 
 	var updatedIssues []types.Issue
 	if len(quickFixGroupables) != 0 {
-		updatedIssues = c.updateIssuesWithQuickFix(quickFixGroupables, filteredIssues)
+		updatedIssues = c.UpdateIssuesWithQuickFix(quickFixGroupables, filteredIssues)
 	} else {
 		updatedIssues = filteredIssues
 	}
@@ -101,23 +98,25 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	return actions
 }
 
-func (c *CodeActionsService) updateIssuesWithQuickFix(quickFixGroupables []types.Groupable, issues []types.Issue) []types.Issue {
+func (c *CodeActionsService) UpdateIssuesWithQuickFix(quickFixGroupables []types.Groupable, issues []types.Issue) []types.Issue {
 	// we only allow one quickfix, so it needs to be grouped
 	quickFix := c.getQuickFixAction(quickFixGroupables)
+	if quickFix == nil {
+		// If no quickfix action found, return issues unchanged
+		return issues
+	}
+
+	// Get the original title from the action to avoid concatenation issues
+	originalTitle := quickFix.GetOriginalTitle()
+
 	fixable := len(quickFixGroupables)
 	unfixable := len(issues) - fixable
-	// update title with number of issues
-	plural := ""
-	if fixable > 1 {
-		plural = "s"
-	}
-	unfixableSuffix := ""
-	if unfixable > 0 {
-		unfixableSuffix = fmt.Sprintf(" (%d unfixable)", unfixable)
-	}
-	quickFix.SetTitle(fmt.Sprintf("%s and fix %d issue%s%s", quickFix.GetTitle(), fixable, plural, unfixableSuffix))
 
-	var updatedIssues []types.Issue
+	// Format the complete title using the original title, not concatenating to existing
+	completeTitle := c.formatQuickFixTitle(originalTitle, fixable, unfixable)
+	quickFix.SetTitle(completeTitle)
+
+	updatedIssues := make([]types.Issue, 0, len(issues))
 	for _, issue := range issues {
 		groupedActions := append([]types.CodeAction{}, quickFix)
 
@@ -216,4 +215,18 @@ func IsMissingKeyError(err error) bool {
 	var missingKeyErr missingKeyError
 	ok := errors.As(err, &missingKeyErr)
 	return ok
+}
+
+func (c *CodeActionsService) formatQuickFixTitle(originalTitle string, fixable, unfixable int) string {
+	plural := ""
+	if fixable > 1 {
+		plural = "s"
+	}
+
+	unfixableSuffix := ""
+	if unfixable > 0 {
+		unfixableSuffix = fmt.Sprintf(" (%d unfixable)", unfixable)
+	}
+
+	return fmt.Sprintf("%s and fix %d issue%s%s", originalTitle, fixable, plural, unfixableSuffix)
 }

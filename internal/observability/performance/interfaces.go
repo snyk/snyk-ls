@@ -16,7 +16,9 @@
 
 package performance
 
-import "context"
+import (
+	"context"
+)
 
 type Instrumentor interface {
 	StartSpan(ctx context.Context, operation string) Span
