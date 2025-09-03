@@ -1,6 +1,7 @@
 package util
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,7 +36,7 @@ func TestGenerateFolderConfigKey(t *testing.T) {
 		{
 			name:     "Windows path with trailing backslash",
 			input:    types.FilePath(tempDir + "\\"),
-			expected: types.FilePath(tempDir + "/"),
+			expected: types.FilePath(tempDir + "\\"),
 		},
 		{
 			name:     "Windows path with trailing forward slash",
@@ -68,13 +69,30 @@ func TestGenerateFolderConfigKey(t *testing.T) {
 			expected: "/",
 		},
 		{
-			name:     "Root path Windows",
-			input:    `C:\`,
-			expected: "C:/",
+			name:  "Root path Windows",
+			input: `C:\`,
+			expected: func() types.FilePath {
+				// On Windows, C:\ should be accepted and normalized
+				// On non-Windows, it should be rejected as not absolute
+				if runtime.GOOS == "windows" {
+					return types.FilePath(`C:\`)
+				}
+				return types.FilePath("") // Rejected on non-Windows systems
+			}(),
 		},
 		{
 			name:     "Invalid path with path traversal",
 			input:    "/Users/foo/../malicious",
+			expected: "",
+		},
+		{
+			name:     "Invalid path with obfuscated traversal",
+			input:    "/Users/foo/./../malicious",
+			expected: "",
+		},
+		{
+			name:     "Invalid path with encoded traversal",
+			input:    "/Users/foo%2e%2e/malicious",
 			expected: "",
 		},
 		{

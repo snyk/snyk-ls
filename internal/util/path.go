@@ -25,9 +25,19 @@ func validateDangerousCharacters(input, context string) error {
 
 // validatePathTraversal checks for path traversal attempts
 func validatePathTraversal(input, context string) error {
+	// Check for explicit path traversal patterns
 	if strings.Contains(input, "..") {
 		return fmt.Errorf("path traversal detected in %s", context)
 	}
+
+	// Check for URL-encoded traversal patterns
+	encodedPatterns := []string{"%2e%2e", "%2E%2E"}
+	for _, pattern := range encodedPatterns {
+		if strings.Contains(input, pattern) {
+			return fmt.Errorf("encoded path traversal detected in %s", context)
+		}
+	}
+
 	return nil
 }
 
@@ -39,13 +49,14 @@ func validateAbsolutePath(input, context string) error {
 	return nil
 }
 
-// validatePathExists checks if a path exists and is a directory
-func validatePathExists(input, context string) error {
-	if _, err := os.Stat(input); err != nil {
+// validatePathExistsAsDirectory checks if a path exists and is a directory
+func validatePathExistsAsDirectory(input, context string) error {
+	info, err := os.Stat(input)
+	if err != nil {
 		return fmt.Errorf("%s does not exist or is not accessible: %w", context, err)
 	}
 
-	if info, err := os.Stat(input); err == nil && !info.IsDir() {
+	if !info.IsDir() {
 		return fmt.Errorf("%s must be a directory", context)
 	}
 	return nil
@@ -53,11 +64,12 @@ func validatePathExists(input, context string) error {
 
 // validatePathExistsAsFile checks if a path exists and is a file
 func validatePathExistsAsFile(input, context string) error {
-	if _, err := os.Stat(input); err != nil {
+	info, err := os.Stat(input)
+	if err != nil {
 		return fmt.Errorf("%s does not exist or is not accessible: %w", context, err)
 	}
 
-	if info, err := os.Stat(input); err == nil && info.IsDir() {
+	if info.IsDir() {
 		return fmt.Errorf("%s must be a file", context)
 	}
 	return nil
@@ -73,13 +85,6 @@ func validatePathExistsAsAny(input, context string) error {
 
 // ValidatePath validates any path for security with customizable requirements
 func ValidatePath(path types.FilePath, options PathValidationOptions) error {
-	if path == "" {
-		if options.AllowEmpty {
-			return nil
-		}
-		return errors.New("path cannot be empty")
-	}
-
 	pathStr := strings.TrimSpace(string(path))
 	if pathStr == "" {
 		if options.AllowEmpty {
@@ -88,20 +93,18 @@ func ValidatePath(path types.FilePath, options PathValidationOptions) error {
 		return errors.New("path cannot be empty")
 	}
 
-	// 1. Check for path traversal
+	// 1. Check for dangerous characters
+	if err := validateDangerousCharacters(pathStr, "path"); err != nil {
+		return err
+	}
+
+	// 2. Check for path traversal
 	if err := validatePathTraversal(pathStr, "path"); err != nil {
 		return err
 	}
 
-	// 2. Validate absolute path if required
-	if options.RequireAbsolute {
-		if err := validateAbsolutePath(pathStr, "path"); err != nil {
-			return err
-		}
-	}
-
-	// 3. Check for dangerous characters
-	if err := validateDangerousCharacters(pathStr, "path"); err != nil {
+	// 3. Validate absolute path (always required)
+	if err := validateAbsolutePath(pathStr, "path"); err != nil {
 		return err
 	}
 
@@ -119,7 +122,7 @@ func ValidatePath(path types.FilePath, options PathValidationOptions) error {
 func validatePathExistence(pathStr string, pathType PathType) error {
 	switch pathType {
 	case PathTypeDirectory:
-		return validatePathExists(pathStr, "path")
+		return validatePathExistsAsDirectory(pathStr, "path")
 	case PathTypeFile:
 		return validatePathExistsAsFile(pathStr, "path")
 	case PathTypeAny:
@@ -131,10 +134,9 @@ func validatePathExistence(pathStr string, pathType PathType) error {
 
 // PathValidationOptions defines validation requirements for paths
 type PathValidationOptions struct {
-	AllowEmpty      bool
-	RequireAbsolute bool
-	RequireExists   bool
-	PathType        PathType
+	AllowEmpty    bool
+	RequireExists bool
+	PathType      PathType
 }
 
 // PathType defines what type of filesystem object is expected
@@ -147,9 +149,8 @@ const (
 )
 
 // GenerateFolderConfigKey creates a normalized key for folder config storage
-// This ensures consistent cross-platform map keys while preserving original paths
 func GenerateFolderConfigKey(p types.FilePath) types.FilePath {
-	// For empty paths, return empty string (this is allowed for config keys)
+	// Empty paths can occur during data migration from old storage formats
 	if p == "" {
 		return ""
 	}
@@ -159,32 +160,29 @@ func GenerateFolderConfigKey(p types.FilePath) types.FilePath {
 		return ""
 	}
 
-	// Use ValidatePath for comprehensive validation, but with custom absolute path logic
-	// to handle cross-platform Windows drive letters
+	// Use ValidatePath for comprehensive validation
 	options := PathValidationOptions{
-		AllowEmpty:      true,
-		RequireAbsolute: false, // We'll handle absolute path validation manually
-		RequireExists:   false, // Don't check existence for key generation
-		PathType:        PathTypeAny,
+		AllowEmpty:    true,
+		RequireExists: false, // Don't check existence for key generation
+		PathType:      PathTypeAny,
 	}
 
-	// Check for dangerous characters and path traversal
+	// Check for dangerous characters, path traversal, and absolute paths
 	if err := ValidatePath(p, options); err != nil {
 		return ""
 	}
 
-	// Convert all backslashes to forward slashes for cross-platform consistency
-	s = strings.ReplaceAll(s, "\\", "/")
-
-	// Check for absolute paths: Unix paths starting with / or Windows drive letters
-	if !strings.HasPrefix(s, "/") && !strings.Contains(s, ":") {
-		// Return empty string to prevent storage of relative paths
-		return ""
-	}
+	// Normalize the path using filepath.Clean()
+	s = filepath.Clean(s)
 
 	// Add trailing slash if missing
-	if s != "" && s != "/" && !strings.HasSuffix(s, "/") {
-		s = s + "/"
+	if s != "" && s != "/" && !strings.HasSuffix(s, "/") && !strings.HasSuffix(s, "\\") {
+		// Use the same separator as the path (forward slash for Unix, backslash for Windows)
+		if strings.Contains(s, "\\") {
+			s = s + "\\"
+		} else {
+			s = s + "/"
+		}
 	}
 	return types.FilePath(s)
 }

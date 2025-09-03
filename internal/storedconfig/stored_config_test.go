@@ -50,13 +50,20 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 	err = UpdateFolderConfig(conf, actual, &nop)
 	require.NoError(t, err)
 
-	// verify
-	require.Equal(t, path, actual.FolderPath)
+	// verify - expect normalized paths
+	expectedPath := util.GenerateFolderConfigKey(path)
+	expectedReferencePath := util.GenerateFolderConfigKey(types.FilePath(dir))
+
+	// Get the updated config from storage to verify normalization was applied
+	updatedConfig, err := GetOrCreateFolderConfig(conf, path, &nop)
+	require.NoError(t, err)
+	require.Equal(t, expectedPath, updatedConfig.FolderPath)
+	require.Equal(t, expectedReferencePath, updatedConfig.ReferenceFolderPath)
 	scJson := conf.GetString(ConfigMainKey)
 	var sc StoredConfig
 	err = json.Unmarshal([]byte(scJson), &sc)
 	require.NoError(t, err)
-	require.Equal(t, actual, sc.FolderConfigs[util.GenerateFolderConfigKey(path)])
+	require.Equal(t, updatedConfig, sc.FolderConfigs[util.GenerateFolderConfigKey(path)])
 
 	bytes, err := os.ReadFile(storageFile)
 	require.NoError(t, err)
@@ -88,13 +95,12 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 		PostScanCommand:             "/b",
 		PostScanOnlyReferenceFolder: false,
 	}
+	referenceDir := t.TempDir()
 	expected := &types.FolderConfig{
-		FolderPath: path,
-		ReferenceFolderPath: types.FilePath(
-			t.TempDir(),
-		),
+		FolderPath:           util.GenerateFolderConfigKey(path),
+		ReferenceFolderPath:  util.GenerateFolderConfigKey(types.FilePath(referenceDir)),
 		AdditionalParameters: []string{"--additional-param=asdf", "--additional-param2=add"},
-		LocalBranches:        []string{"main", "master"},
+		LocalBranches:        []string{"main", "dev"},
 		BaseBranch:           "main",
 		ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
 			product.ProductOpenSource: scanCommandConfig,
@@ -102,7 +108,18 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 	}
 
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-	err := UpdateFolderConfig(conf, expected, &logger)
+	// Create config with original paths for UpdateFolderConfig
+	configToUpdate := &types.FolderConfig{
+		FolderPath:           path,
+		ReferenceFolderPath:  types.FilePath(referenceDir),
+		AdditionalParameters: []string{"--additional-param=asdf", "--additional-param2=add"},
+		LocalBranches:        []string{"main", "dev"},
+		BaseBranch:           "main",
+		ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
+			product.ProductOpenSource: scanCommandConfig,
+		},
+	}
+	err := UpdateFolderConfig(conf, configToUpdate, &logger)
 	require.NoError(t, err)
 
 	// Act
