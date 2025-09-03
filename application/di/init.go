@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/container"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
@@ -55,6 +56,7 @@ import (
 var snykApiClient snyk_api.SnykApiClient
 var snykCodeScanner *code.Scanner
 var infrastructureAsCodeScanner *iac.Scanner
+var containerScanner types.ProductScanner
 var openSourceScanner types.ProductScanner
 var scanInitializer initialize.Initializer
 var authenticationService authentication.AuthenticationService
@@ -88,7 +90,7 @@ func Init() {
 
 func initDomain(c *config.Config) {
 	hoverService = hover.NewDefaultService(c)
-	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, containerScanner, openSourceScanner)
 }
 
 func initInfrastructure(c *config.Config) {
@@ -136,6 +138,7 @@ func initInfrastructure(c *config.Config) {
 	)
 
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
+	containerScanner = container.New(c, instrumentor, errorReporter, networkAccess)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
 	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
