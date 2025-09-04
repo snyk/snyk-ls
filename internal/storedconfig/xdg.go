@@ -46,7 +46,7 @@ func ConfigFile(ideName string) (string, error) {
 }
 
 func folderConfigFromStorage(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
-	if err := util.ValidateFolderPath(path); err != nil {
+	if err := util.ValidateFolderPathLenient(path); err != nil {
 		logger.Error().Err(err).Str("path", string(path)).Msg("invalid folder path")
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func UpdateFolderConfigs(conf configuration.Configuration, folderConfigs []types
 }
 
 func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig, logger *zerolog.Logger) error {
-	if err := util.ValidateFolderPath(folderConfig.FolderPath); err != nil {
+	if err := util.ValidateFolderPathLenient(folderConfig.FolderPath); err != nil {
 		logger.Error().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("invalid folder path")
 		return err
 	}
