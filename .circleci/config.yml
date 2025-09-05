@@ -7,7 +7,7 @@ jobs:
   security-scans:
     resource_class: small
     docker:
-      - image: cimg/go:1.21
+      - image: cimg/go:1.24
     steps:
       - checkout
       - prodsec/security_scans:
@@ -27,7 +27,7 @@ workflows:
           filters:
             branches:
               ignore:
-                - main  
-          
+                - main
+
       - security-scans:
           context: devex_ide
