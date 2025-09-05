@@ -92,7 +92,7 @@ jobs:
           git checkout -b "$BRANCH_NAME"
 
           # Commit changes
-          git add docs/cli-ide-and-ci-cd-integrations/snyk-ide-plugins-and-extensions/compatibility-matrix.md
+          git add docs/developer-tools/snyk-ide-plugins-and-extensions/compatibility-matrix.md
 
           # Check if there are changes to commit
           if git diff --staged --quiet; then
