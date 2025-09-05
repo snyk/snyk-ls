@@ -49,11 +49,12 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// TODO this is becoming a hot mess we need to unify integ. test strategies
+// TODO - this is becoming a hot mess we need to unify integ. test strategies
+
 func TestInit(t *testing.T) {
+	t.Helper()
 	initMutex.Lock()
 	defer initMutex.Unlock()
-	t.Helper()
 	c := config.CurrentConfig()
 	// we want to isolate CLI fake installs
 	c.CliSettings().SetPath(filepath.Join(t.TempDir(), "fake-cli"))
@@ -79,7 +80,7 @@ func TestInit(t *testing.T) {
 	// mock Learn Service
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.EXPECT().GetAllLessons().Return([]learn.Lesson{{}}, nil).AnyTimes()
-	learnMock.EXPECT().MaintainCache().AnyTimes()
+	learnMock.EXPECT().MaintainCacheFunc().AnyTimes()
 	learnMock.
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
