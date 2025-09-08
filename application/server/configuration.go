@@ -23,10 +23,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rs/zerolog"
-
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
@@ -36,8 +35,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
-
-var cachedOriginalPath = ""
 
 func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.DidChangeConfigurationParams) (bool, error) {
@@ -122,7 +119,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateToken(settings.Token)                 // Must be called before the Authentication method is set, as the latter checks the token.
 	updateAuthenticationMethod(c, settings)
 	updateEnvironment(c, settings)
-	updatePathFromSettings(c, settings)
+	updatePathFromSettings(c, settings, initialize)
 	updateErrorReporting(c, settings)
 	updateOrganization(c, settings)
 	manageBinariesAutomatically(c, settings)
@@ -321,24 +318,35 @@ func updateSnykCodeSecurity(c *config.Config, settings types.Settings) {
 	}
 }
 
-// TODO store in config, move parsing to CLI
-func updatePathFromSettings(c *config.Config, settings types.Settings) {
-	// when changing the path from settings, we cache the original path first, to be able to restore it later
-	if len(cachedOriginalPath) == 0 {
-		cachedOriginalPath = os.Getenv("PATH")
+// TODO stop using os env, move parsing to CLI
+func updatePathFromSettings(c *config.Config, settings types.Settings, initialize bool) {
+	logger := c.Logger().With().Str("method", "updatePathFromSettings").Logger()
+
+	// Although we will update the PATH now, we also need to store the value, so that on scans we can ensure it is prepended
+	// in front of everything else that is added.
+	c.SetUserSettingsPath(settings.Path)
+
+	if initialize || !c.IsDefaultEnvReady() {
+		// If we are initializing then we don't actually need to do anything else, as PATH is in a clean state with no prior
+		// settings.Path entries, and the first scan will prepend the most recent setting.Path entry for us.
+		return
 	}
 
+	var newPath string
 	if len(settings.Path) > 0 {
 		_ = os.Unsetenv("Path") // unset the path first to work around issues on Windows OS, where PATH can be Path
-		err := os.Setenv("PATH", settings.Path+string(os.PathListSeparator)+cachedOriginalPath)
-		c.Logger().Debug().Str("method", "updatePathFromSettings").Msgf("added configured path to PATH Environment Variable '%s'", os.Getenv("PATH"))
-		if err != nil {
-			c.Logger().Err(err).Str("method", "updatePathFromSettings").Msgf("couldn't add path %s", settings.Path)
-		}
+		logger.Debug().Msg("adding configured path to PATH")
+		newPath = settings.Path + string(os.PathListSeparator) + c.GetCachedOriginalPath()
 	} else {
-		_ = os.Setenv("PATH", cachedOriginalPath)
-		c.Logger().Debug().Str("method", "updatePathFromSettings").Msgf("restore initial path '%s'", os.Getenv("PATH"))
+		logger.Debug().Msg("restoring initial path")
+		newPath = c.GetCachedOriginalPath()
 	}
+
+	err := os.Setenv("PATH", newPath)
+	if err != nil {
+		logger.Err(err).Msgf("couldn't add path %s", settings.Path)
+	}
+	logger.Debug().Msgf("new PATH is '%s'", os.Getenv("PATH"))
 }
 
 // TODO store in config, move parsing to CLI

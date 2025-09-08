@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2025 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +14,14 @@
  * limitations under the License.
  */
 
-package code
+package config
 
-import (
-	"testing"
+// ConfigOption is a function that configures a Config instance
+type ConfigOption func(*Config)
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/snyk-ls/internal/types"
-)
-
-func Test_getSize(t *testing.T) {
-	t.Run("returns overhead", func(t *testing.T) {
-		bundle := NewUploadBatch()
-		bundle.documents = map[types.FilePath]BundleFile{
-			"uri": {},
-		}
-
-		size := bundle.getSize()
-
-		assert.Equal(t, 12, size)
-	})
-
-	t.Run("when empty bundle should return 0", func(t *testing.T) {
-		bundle := NewUploadBatch()
-
-		size := bundle.getSize()
-
-		assert.Equal(t, 0, size)
-	})
+// WithBinarySearchPaths sets custom binary search paths
+func WithBinarySearchPaths(paths []string) ConfigOption {
+	return func(c *Config) {
+		c.binarySearchPaths = paths
+	}
 }

@@ -40,6 +40,9 @@ type CodeAction struct {
 	// Title is a short, human-readable, title for this code action.
 	Title string
 
+	// OriginalTitle stores the original title before any modifications (e.g., grouping)
+	OriginalTitle string
+
 	IsPreferred *bool
 
 	// Edit is an optional WorkspaceEdit literal that can be executed by the client.
@@ -81,6 +84,10 @@ func (c *CodeAction) SetTitle(title string) {
 
 func (c *CodeAction) GetTitle() string {
 	return c.Title
+}
+
+func (c *CodeAction) GetOriginalTitle() string {
+	return c.OriginalTitle
 }
 
 func (c *CodeAction) GetIsPreferred() *bool {
@@ -125,9 +132,10 @@ func NewCodeAction(title string, edit *types.WorkspaceEdit, command *types.Comma
 	}
 
 	action := CodeAction{
-		Title:   title,
-		Edit:    edit,
-		Command: command,
+		Title:         title,
+		OriginalTitle: title,
+		Edit:          edit,
+		Command:       command,
 	}
 	return &action, nil
 }
@@ -149,6 +157,7 @@ func NewDeferredCodeAction(
 	}
 	action := CodeAction{
 		Title:           title,
+		OriginalTitle:   title,
 		DeferredEdit:    deferredEdit,
 		DeferredCommand: deferredCommand,
 		Uuid:            &id,

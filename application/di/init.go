@@ -17,15 +17,11 @@
 package di
 
 import (
-	"path/filepath"
-	"runtime"
 	"sync"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/types"
-
-	"github.com/adrg/xdg"
 
 	codeClient "github.com/snyk/code-client-go"
 	codeClientHTTP "github.com/snyk/code-client-go/http"
@@ -57,8 +53,6 @@ import (
 )
 
 var snykApiClient snyk_api.SnykApiClient
-var snykCodeClient code.SnykCodeClient
-var snykCodeBundleUploader *code.BundleUploader
 var snykCodeScanner *code.Scanner
 var infrastructureAsCodeScanner *iac.Scanner
 var openSourceScanner types.ProductScanner
@@ -98,25 +92,6 @@ func initDomain(c *config.Config) {
 }
 
 func initInfrastructure(c *config.Config) {
-	//goland:noinspection GoBoolExpressions
-	if runtime.GOOS == "windows" {
-		go c.AddBinaryLocationsToPath([]string{
-			"C:\\Program Files",
-			"C:\\Program Files (x86)",
-		})
-	} else {
-		go c.AddBinaryLocationsToPath(
-			[]string{
-				filepath.Join(xdg.Home, ".sdkman"),
-				"/usr/lib",
-				"/usr/java",
-				"/usr/local/bin",
-				"/opt/homebrew/bin",
-				"/opt",
-				"/Library",
-			})
-	}
-
 	engine := c.Engine()
 	gafConfiguration := engine.GetConfiguration()
 	// init NetworkAccess
@@ -144,9 +119,6 @@ func initInfrastructure(c *config.Config) {
 	codeInstrumentor = code.NewCodeInstrumentor()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
-	snykCodeClient = code.NewSnykCodeHTTPClient(c, codeInstrumentor, codeErrorReporter, authorizedClient)
-	snykCodeBundleUploader = code.NewBundler(c, snykCodeClient, codeInstrumentor)
-
 	httpClient := codeClientHTTP.NewHTTPClient(
 		authorizedClient,
 		codeClientHTTP.WithLogger(engine.GetLogger()),
@@ -166,7 +138,7 @@ func initInfrastructure(c *config.Config) {
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
-	snykCodeScanner = code.New(snykCodeBundleUploader, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
+	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
@@ -179,7 +151,7 @@ func initApplication(c *config.Config) {
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator) // don't use getters or it'll deadlock
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, snykCodeClient)
+	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier)
 	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeScanner, snykCli))
 }
 

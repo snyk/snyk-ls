@@ -24,20 +24,20 @@ import (
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
-	"github.com/snyk/snyk-ls/internal/types"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const ShowInDetailPanelIdeCommand = "showInDetailPanel"
+const FixIssuePrefix = "⚡ Fix this issue: "
 
 type IssueEnhancer struct {
-	SnykCode      SnykCodeClient
-	instrumentor  codeClientObservability.Instrumentor
+	instrumentor  performance.Instrumentor
 	errorReporter codeClientObservability.ErrorReporter
 	notifier      notification.Notifier
 	learnService  learn.Service
@@ -46,9 +46,8 @@ type IssueEnhancer struct {
 	c             *config.Config
 }
 
-func newIssueEnhancer(SnykCode SnykCodeClient, instrumentor codeClientObservability.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, c *config.Config) IssueEnhancer {
+func newIssueEnhancer(instrumentor performance.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, c *config.Config) IssueEnhancer {
 	return IssueEnhancer{
-		SnykCode:      SnykCode,
 		instrumentor:  instrumentor,
 		errorReporter: errorReporter,
 		notifier:      notifier,
@@ -92,7 +91,7 @@ func (b *IssueEnhancer) addIssueActions(ctx context.Context, issues []types.Issu
 				return
 			}
 			issues[i].SetCodelensCommands(append(issues[i].GetCodelensCommands(), types.CommandData{
-				Title:     "⚡ Fix this issue: " + issueTitle(issues[i]),
+				Title:     FixIssuePrefix + issueTitle(issues[i]),
 				CommandId: types.NavigateToRangeCommand,
 				Arguments: []any{uri, issues[i].GetRange()},
 			}))
@@ -117,10 +116,11 @@ func (b *IssueEnhancer) createShowDocumentCodeAction(issue types.Issue) (codeAct
 		return nil
 	}
 
-	title := fmt.Sprintf("⚡ Fix this issue: %s (Snyk)", issueTitle(issue))
+	title := FixIssuePrefix + issueTitle(issue) + " (Snyk)"
 
 	codeAction = &snyk.CodeAction{
-		Title: title,
+		Title:         title,
+		OriginalTitle: title,
 		Command: &types.CommandData{
 			Title:     title,
 			CommandId: types.NavigateToRangeCommand,
@@ -163,7 +163,8 @@ func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue types.Issue) (ca typ
 
 	if lesson != nil && lesson.Url != "" {
 		ca = &snyk.CodeAction{
-			Title: title,
+			Title:         title,
+			OriginalTitle: title,
 			Command: &types.CommandData{
 				Title:     title,
 				CommandId: types.OpenBrowserCommand,

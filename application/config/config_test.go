@@ -41,30 +41,31 @@ import (
 func TestSetToken(t *testing.T) {
 	t.Run("Legacy Token authentication", func(t *testing.T) {
 		token := uuid.New().String()
-		config := New()
-		SetCurrentConfig(config)
-		config.SetToken(token)
-		assert.Equal(t, config.Token(), token)
-		assert.NotEqual(t, config.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), token)
-		assert.Equal(t, config.Engine().GetConfiguration().Get(configuration.AUTHENTICATION_TOKEN), token)
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		c.SetToken(token)
+		assert.Equal(t, c.Token(), token)
+		assert.NotEqual(t, c.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), token)
+		assert.Equal(t, c.Engine().GetConfiguration().Get(configuration.AUTHENTICATION_TOKEN), token)
 	})
 	t.Run("OAuth Token authentication", func(t *testing.T) {
-		config := New()
-		SetCurrentConfig(config)
-		config.authenticationMethod = types.OAuthAuthentication
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		c.authenticationMethod = types.OAuthAuthentication
 		marshal, err := json.Marshal(oauth2.Token{AccessToken: t.Name()})
 		assert.NoError(t, err)
 		oauthString := string(marshal)
 
-		config.SetToken(oauthString)
+		c.SetToken(oauthString)
 
-		assert.Equal(t, oauthString, config.Token())
-		assert.Equal(t, oauthString, config.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN))
+		assert.Equal(t, oauthString, c.Token())
+		assert.Equal(t, oauthString, c.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN))
 	})
 }
 
 func TestConfigDefaults(t *testing.T) {
-	c := New()
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 
 	assert.True(t, c.IsErrorReportingEnabled(), "Error Reporting should be enabled by default")
 	assert.False(t, c.IsSnykAdvisorEnabled(), "Advisor should be disabled by default")
@@ -82,7 +83,8 @@ func TestConfigDefaults(t *testing.T) {
 
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {
 	// Arrange
-	c := New()
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 	tokenChangedChannel := c.TokenChangesChannel()
 
 	// Act
@@ -100,7 +102,8 @@ func Test_TokenChanged_ChannelsInformed(t *testing.T) {
 
 func Test_TokenChangedToSameToken_ChannelsNotInformed(t *testing.T) {
 	// Arrange
-	c := New()
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 	tokenChangedChannel := c.TokenChangesChannel()
 	token := c.Token()
 
@@ -119,14 +122,16 @@ func Test_TokenChangedToSameToken_ChannelsNotInformed(t *testing.T) {
 func Test_SnykCodeAnalysisTimeoutReturnsTimeoutFromEnvironment(t *testing.T) {
 	t.Setenv(snykCodeTimeoutKey, "1s")
 	duration, _ := time.ParseDuration("1s")
-	c := CurrentConfig()
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 
 	assert.Equal(t, duration, c.snykCodeAnalysisTimeoutFromEnv())
 }
 
 func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T) {
 	t.Setenv(snykCodeTimeoutKey, "")
-	c := CurrentConfig()
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 
 	assert.Equal(t, 12*time.Hour, c.snykCodeAnalysisTimeoutFromEnv())
 }
@@ -171,13 +176,15 @@ func TestSnykCodeApi(t *testing.T) {
 
 func Test_SetSeverityFilter(t *testing.T) {
 	t.Run("Saves filter", func(t *testing.T) {
-		c := New()
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		c.SetSeverityFilter(util.Ptr(types.NewSeverityFilter(true, true, false, false)))
 		assert.Equal(t, types.NewSeverityFilter(true, true, false, false), c.FilterSeverity())
 	})
 
 	t.Run("Returns correctly", func(t *testing.T) {
-		c := New()
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		lowExcludedFilter := types.NewSeverityFilter(true, true, false, false)
 
 		modified := c.SetSeverityFilter(&lowExcludedFilter)
@@ -190,13 +197,15 @@ func Test_SetSeverityFilter(t *testing.T) {
 
 func Test_SetIssueViewOptions(t *testing.T) {
 	t.Run("Saves filter", func(t *testing.T) {
-		c := New()
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(false, true)))
 		assert.Equal(t, types.NewIssueViewOptions(false, true), c.IssueViewOptions())
 	})
 
 	t.Run("Returns correctly", func(t *testing.T) {
-		c := New()
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		ignoredOnlyFilter := types.NewIssueViewOptions(false, true)
 
 		modified := c.SetIssueViewOptions(&ignoredOnlyFilter)
@@ -208,7 +217,8 @@ func Test_SetIssueViewOptions(t *testing.T) {
 }
 
 func Test_ManageBinariesAutomatically(t *testing.T) {
-	c := New()
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 
 	// case: standalone, manage true
 	c.SetManageBinariesAutomatically(true)
@@ -229,19 +239,22 @@ func Test_ManageBinariesAutomatically(t *testing.T) {
 
 func Test_IsFedramp(t *testing.T) {
 	t.Run("short hostname", func(t *testing.T) {
-		c := New()
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		c.UpdateApiEndpoints("https://api.snyk.io")
 		assert.False(t, c.IsFedramp())
 	})
 
 	t.Run("fedramp hostname", func(t *testing.T) {
-		c := New()
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		c.UpdateApiEndpoints("https://api.fedramp.snykgov.io")
 		assert.True(t, c.IsFedramp())
 	})
 
 	t.Run("non-fedramp hostname", func(t *testing.T) {
-		c := New()
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		c.UpdateApiEndpoints("https://api.fedddddddddramp.snykgov.io")
 		assert.True(t, c.IsFedramp())
 	})
@@ -249,32 +262,37 @@ func Test_IsFedramp(t *testing.T) {
 
 func Test_IsAnalyticsPermitted(t *testing.T) {
 	t.Run("Analytics not permitted for EU app", func(t *testing.T) {
-		c := New()
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		assert.True(t, c.UpdateApiEndpoints("https://app.eu.snyk.io/api"))
 		assert.False(t, c.IsAnalyticsPermitted())
 	})
 
 	t.Run("Analytics not permitted for EU api", func(t *testing.T) {
-		c := New()
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		assert.True(t, c.UpdateApiEndpoints("https://api.eu.snyk.io"))
 		assert.False(t, c.IsAnalyticsPermitted())
 	})
 
 	t.Run("Analytics permitted hostname", func(t *testing.T) {
-		c := New()
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		assert.True(t, c.UpdateApiEndpoints("https://app.snyk.io/api"))
 		assert.True(t, c.IsAnalyticsPermitted())
 	})
 
 	t.Run("Analytics permitted US hostname", func(t *testing.T) {
-		c := New()
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		assert.True(t, c.UpdateApiEndpoints("https://app.us.snyk.io/api"))
 		assert.True(t, c.IsAnalyticsPermitted())
 	})
 }
 
 func TestSnykUiEndpoint(t *testing.T) {
-	c := New()
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 	t.Run("Default Api Endpoint with /api prefix", func(t *testing.T) {
 		uiEndpoint := c.SnykUI()
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
@@ -333,7 +351,8 @@ func TestSnykUiEndpoint(t *testing.T) {
 
 func TestConfig_shouldUpdateOAuth2Token(t *testing.T) {
 	// add test cases
-	c := New()
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 
 	token := oauth2.Token{
 		AccessToken:  "a",
@@ -404,7 +423,8 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 	}
 
 	// Config should be initialized with an empty token, but using the Token authentication type.
-	c := New()
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 	assert.False(t, c.AuthenticationMethodMatchesCredentials())
 
 	for _, method := range append(slices.Collect(maps.Keys(tokenMap)), types.FakeAuthentication) {

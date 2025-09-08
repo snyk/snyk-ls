@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -36,6 +35,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/mcp_extension/trust"
@@ -233,8 +233,8 @@ func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext
 			return mcp.NewToolResultText("SNYK_TOKEN env var is set, validity must be checked with snyk_auth_status IF NOT ALREADY DONE"), nil
 		}
 
-		conf := invocationCtx.GetConfiguration().Clone()
-		conf.Set("auth-type", auth.AUTH_TYPE_OAUTH)
+		conf := invocationCtx.GetConfiguration()
+		conf.Set(localworkflows.AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
 
 		_, err := invocationCtx.GetEngine().InvokeWithConfig(localworkflows.WORKFLOWID_AUTH, conf)
 		if err != nil {
@@ -249,10 +249,12 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "snykLogoutHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-		config := invocationCtx.GetConfiguration()
-		config.ClearCache()
-		config.Unset(configuration.AUTHENTICATION_TOKEN)
-		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+		configs := []configuration.Configuration{invocationCtx.GetConfiguration(), invocationCtx.GetEngine().GetConfiguration()}
+		for _, config := range configs {
+			config.ClearCache()
+			config.Unset(configuration.AUTHENTICATION_TOKEN)
+			config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+		}
 
 		return mcp.NewToolResultText("Successfully logged out"), nil
 	}
@@ -262,14 +264,13 @@ func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationC
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logger := m.logger.With().Str("method", "snykAuthStatusHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-		params := []string{m.cliPath, "whoami", "--experimental"}
-		output, _ := m.runSnyk(ctx, invocationCtx, "", params)
+		user, err := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
 
-		output = strings.TrimSpace(output)
-		apiUrl := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.API_URL)
-		org := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		globalConfig := invocationCtx.GetEngine().GetConfiguration()
+		apiUrl := globalConfig.GetString(configuration.API_URL)
+		org := globalConfig.GetString(configuration.ORGANIZATION)
 
-		if strings.Contains(strings.ToLower(output), "authentication error") {
+		if err != nil || user == nil {
 			msg := fmt.Sprintf("Authentication Error. \nUsing API Endpoint: %s", apiUrl)
 			if os.Getenv("SNYK_TOKEN") != "" {
 				msg += fmt.Sprintf("\nSNYK_TOKEN env var is set, check if your token is valid and if you are using the correct API %s. "+
@@ -278,7 +279,7 @@ func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationC
 			return mcp.NewToolResultText(msg), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("User: %s Using API Endpoint: %s and Org: %s", output, apiUrl, org)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("User: %s Using API Endpoint: %s and Org: %s", user.UserName, apiUrl, org)), nil
 	}
 }
 
@@ -288,7 +289,7 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
 		preventedCountStr := request.GetArguments()["preventedIssuesCount"]
-		remediatedCountStr := request.GetArguments()["remediatedIssuesCount"]
+		remediatedCountStr := request.GetArguments()["fixedExistingIssuesCount"]
 
 		preventedCount, ok := preventedCountStr.(float64)
 		if !ok {
@@ -296,7 +297,7 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 		}
 		remediatedCount, ok := remediatedCountStr.(float64)
 		if !ok {
-			return nil, fmt.Errorf("invalid argument remediatedCount")
+			return nil, fmt.Errorf("invalid argument fixedExistingIssuesCount")
 		}
 		pathArg := request.GetArguments()["path"]
 		if pathArg == nil {
