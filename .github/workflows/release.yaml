@@ -36,8 +36,10 @@ jobs:
         with:
           fetch-depth: 0 # does an unshallow checkout with tags & branches
 
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
 
       - name: Setup tools (`make tools`)
         uses: ./.github/actions/setup-tools

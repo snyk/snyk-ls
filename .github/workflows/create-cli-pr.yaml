@@ -14,8 +14,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
 
       - uses: webfactory/ssh-agent@v0.9.0
         with:
