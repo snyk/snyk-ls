@@ -1124,7 +1124,37 @@ type IgnoreDetails struct {
 	Status     codeClientSarif.SuppresionStatus `json:"status"`
 }
 
-// Snyk Open Source
+// CvssSource represents CVSS scoring information from various sources
+type CvssSource struct {
+	Type             string  `json:"type"`
+	Vector           string  `json:"vector"`
+	Assigner         string  `json:"assigner"`
+	Severity         string  `json:"severity"`
+	BaseScore        float64 `json:"baseScore"`
+	CvssVersion      string  `json:"cvssVersion"`
+	ModificationTime string  `json:"modificationTime"`
+}
+
+// GetCvssCalculatorUrl returns the appropriate CVSS calculator URL based on cvssSources
+func GetCvssCalculatorUrl(cvssSources []CvssSource) string {
+	if len(cvssSources) == 0 {
+		return ""
+	}
+
+	// Loop through sources to find the appropriate CVSS version
+	for _, source := range cvssSources {
+		switch source.CvssVersion {
+		case "3.1":
+			return "https://www.first.org/cvss/calculator/3.1#" + source.Vector
+		case "4.0":
+			return "https://www.first.org/cvss/calculator/4.0#" + source.Vector
+		}
+	}
+
+	// Default to CVSS 4.0 if no recognized version found
+	return "https://www.first.org/cvss/calculator/4.0#" + cvssSources[0].Vector
+}
+
 type OssIssueData struct {
 	Key               string         `json:"key,omitempty"`
 	RuleId            string         `json:"ruleId"`
@@ -1139,6 +1169,7 @@ type OssIssueData struct {
 	Exploit           string         `json:"exploit,omitempty"`
 	CVSSv3            string         `json:"CVSSv3,omitempty"`
 	CvssScore         string         `json:"cvssScore,omitempty"`
+	CvssSources       []CvssSource   `json:"cvssSources,omitempty"`
 	FixedIn           []string       `json:"fixedIn,omitempty"`
 	From              []string       `json:"from"`
 	UpgradePath       []any          `json:"upgradePath"`

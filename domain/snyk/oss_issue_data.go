@@ -41,6 +41,7 @@ type OssIssueData struct {
 	IsUpgradable       bool               `json:"isUpgradable,omitempty"`
 	CVSSv3             string             `json:"CVSSv3,omitempty"`
 	CvssScore          float64            `json:"cvssScore,omitempty"`
+	CvssSources        []types.CvssSource `json:"cvssSources,omitempty"`
 	Exploit            string             `json:"exploit,omitempty"`
 	IsPatchable        bool               `json:"isPatchable"`
 	ProjectName        string             `json:"projectName"`

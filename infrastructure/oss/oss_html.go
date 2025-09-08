@@ -89,6 +89,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"CWEs":               additionalData.Identifiers.CWE,
 		"CVSSv3":             template.URL(additionalData.CVSSv3),
 		"CvssScore":          fmt.Sprintf("%.1f", additionalData.CvssScore),
+		"CvssSources":        additionalData.CvssSources,
+		"CvssCalculatorUrl":  types.GetCvssCalculatorUrl(additionalData.CvssSources),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
 		"IntroducedThroughs": getIntroducedThroughs(additionalData, renderer.c.SnykUI()),
 		"LessonUrl":          additionalData.Lesson,
