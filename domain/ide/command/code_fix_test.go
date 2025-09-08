@@ -113,7 +113,7 @@ func Test_fixCodeIssue_ErrorsWhenNoCapability(t *testing.T) {
 	_, err := cmd.Execute(t.Context())
 
 	assert.Error(t, err)
-	assert.ErrorContains(t, err, "Client doesn't support 'workspace/applyEdit' capability.")
+	assert.ErrorContains(t, err, "client doesn't support 'workspace/applyEdit' capability")
 }
 
 func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
@@ -219,7 +219,7 @@ func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
 
 	// assert
 	assert.Error(t, err)
-	assert.ErrorContains(t, err, "Failed to find autofix code action.")
+	assert.ErrorContains(t, err, "failed to find autofix code action")
 	assert.Nil(t, res)
 
 	var expectedMsg []any
