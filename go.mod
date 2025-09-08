@@ -135,6 +135,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
+tool github.com/golang/mock/mockgen
+
 //replace github.com/snyk/go-application-framework => ../go-application-framework
 
 //replace github.com/snyk/code-client-go => ../code-client-go

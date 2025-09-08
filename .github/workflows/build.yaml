@@ -37,9 +37,17 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: "true"
 
+      - name: Install tools
+        run: make tools
+
+      - name: Run go generate commands
+        run: make generate
+
+      - name: Verify generated files match committed versions
+        run: git status --porcelain=v1 | tee /dev/stderr | wc -l | grep -qE '^ *0 *$'
+
       - name: Lint source code
-        run: |
-          make tools lint
+        run: make lint
 
   unit-tests:
     name: unit tests
