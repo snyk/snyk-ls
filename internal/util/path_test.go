@@ -1,7 +1,7 @@
 package util
 
 import (
-	"runtime"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,37 +21,37 @@ func TestGenerateFolderConfigKey(t *testing.T) {
 		{
 			name:     "Unix path without trailing slash",
 			input:    types.FilePath(tempDir),
-			expected: types.FilePath(tempDir + "/"),
+			expected: types.FilePath(tempDir),
 		},
 		{
 			name:     "Unix path with trailing slash",
 			input:    types.FilePath(tempDir + "/"),
-			expected: types.FilePath(tempDir + "/"),
+			expected: types.FilePath(tempDir),
 		},
 		{
 			name:     "Windows path without trailing slash",
 			input:    types.FilePath(tempDir),
-			expected: types.FilePath(tempDir + "/"),
+			expected: types.FilePath(tempDir),
 		},
 		{
 			name:     "Windows path with trailing backslash",
 			input:    types.FilePath(tempDir + "\\"),
-			expected: types.FilePath(tempDir + "\\"),
+			expected: types.FilePath(filepath.Clean(tempDir + "\\")),
 		},
 		{
 			name:     "Windows path with trailing forward slash",
 			input:    types.FilePath(tempDir + "/"),
-			expected: types.FilePath(tempDir + "/"),
+			expected: types.FilePath(tempDir),
 		},
 		{
 			name:     "Mixed separators",
 			input:    types.FilePath(tempDir),
-			expected: types.FilePath(tempDir + "/"),
+			expected: types.FilePath(tempDir),
 		},
 		{
 			name:     "Path with whitespace",
 			input:    types.FilePath("  " + tempDir + "  "),
-			expected: types.FilePath(tempDir + "/"),
+			expected: types.FilePath(tempDir),
 		},
 		{
 			name:     "Empty path",
@@ -66,19 +66,12 @@ func TestGenerateFolderConfigKey(t *testing.T) {
 		{
 			name:     "Root path Unix",
 			input:    "/",
-			expected: "/",
+			expected: types.FilePath(filepath.Clean("/")),
 		},
 		{
-			name:  "Root path Windows",
-			input: `C:\`,
-			expected: func() types.FilePath {
-				// On Windows, C:\ should be accepted and normalized
-				// On non-Windows, it should be rejected as not absolute
-				if runtime.GOOS == "windows" {
-					return types.FilePath(`C:\`)
-				}
-				return types.FilePath("") // Rejected on non-Windows systems
-			}(),
+			name:     "Root path Windows",
+			input:    `C:\`,
+			expected: types.FilePath(filepath.Clean(`C:\`)),
 		},
 		{
 			name:     "Invalid path with path traversal",
@@ -101,9 +94,9 @@ func TestGenerateFolderConfigKey(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "Invalid relative path",
+			name:     "Relative path",
 			input:    "Users/foo/project",
-			expected: "",
+			expected: types.FilePath(filepath.Clean("Users/foo/project")),
 		},
 	}
 

@@ -17,7 +17,7 @@
 package storedconfig
 
 import (
-	"runtime"
+	"path/filepath"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -59,7 +59,7 @@ func Test_GetOrCreateFolderConfig_PathNormalization(t *testing.T) {
 			// Assert
 			require.NoError(t, err)
 			require.NotNil(t, folderConfig)
-			// Expect the normalized path (with trailing slash and trimmed whitespace)
+			// Expect the normalized path (with trimmed whitespace)
 			expectedPath := util.GenerateFolderConfigKey(tt.inputPath)
 			require.Equal(t, expectedPath, folderConfig.FolderPath)
 
@@ -73,14 +73,6 @@ func Test_GetOrCreateFolderConfig_PathNormalization(t *testing.T) {
 	}
 }
 
-// windowsPathExpected returns the expected result for Windows paths based on the current platform
-func windowsPathExpected(windowsResult string) types.FilePath {
-	if runtime.GOOS == "windows" {
-		return types.FilePath(windowsResult)
-	}
-	return "" // Rejected on non-Windows systems
-}
-
 func Test_GenerateFolderConfigKey_PathNormalization(t *testing.T) {
 	// Test path normalization behavior without requiring paths to exist
 	tests := []struct {
@@ -91,44 +83,44 @@ func Test_GenerateFolderConfigKey_PathNormalization(t *testing.T) {
 		{
 			name:     "Unix path without trailing slash",
 			input:    "/Users/test/project",
-			expected: "/Users/test/project/",
+			expected: types.FilePath(filepath.Clean("/Users/test/project")),
 		},
 		{
 			name:     "Unix path with trailing slash",
 			input:    "/Users/test/project/",
-			expected: "/Users/test/project/",
+			expected: types.FilePath(filepath.Clean("/Users/test/project/")),
 		},
 		{
 			name:     "Path with whitespace",
 			input:    "  /Users/test/project  ",
-			expected: "/Users/test/project/",
+			expected: types.FilePath(filepath.Clean("/Users/test/project")),
 		},
 		{
 			name:     "Root path Unix",
 			input:    "/",
-			expected: "/",
+			expected: types.FilePath(filepath.Clean("/")),
 		},
 		{
 			name:     "Windows path with backslashes",
 			input:    "C:\\Users\\test\\project",
-			expected: windowsPathExpected("C:\\Users\\test\\project\\"),
+			expected: types.FilePath(filepath.Clean("C:\\Users\\test\\project")),
 		},
 		{
 			name:     "Windows path with mixed separators",
 			input:    "C:\\Users/test\\project/",
-			expected: windowsPathExpected("C:\\Users/test\\project/"),
+			expected: types.FilePath(filepath.Clean("C:\\Users/test\\project/")),
 		},
 		{
 			name:     "Root path Windows",
 			input:    "C:\\",
-			expected: windowsPathExpected("C:\\"),
+			expected: types.FilePath(filepath.Clean("C:\\")),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := util.GenerateFolderConfigKey(tt.input)
-			require.Equal(t, tt.expected, result, "Path normalization should preserve original separators and add trailing slash")
+			require.Equal(t, tt.expected, result, "Path normalization should preserve original separators without adding trailing slash")
 		})
 	}
 }

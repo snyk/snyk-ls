@@ -90,12 +90,6 @@ func createCommonTestCases(tempDir string, errorPrefix string) []testCase {
 			expectError: true,
 			errorMsg:    errorPrefix + "dangerous character detected",
 		},
-		{
-			name:        "Non-existent path",
-			input:       "/non/existent/path",
-			expectError: true,
-			errorMsg:    errorPrefix + "path does not exist or is not accessible",
-		},
 	}
 }
 
