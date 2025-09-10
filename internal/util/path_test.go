@@ -9,7 +9,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func TestGenerateFolderConfigKey(t *testing.T) {
+func TestPathKey(t *testing.T) {
 	// Create one temporary directory for valid test cases
 	tempDir := t.TempDir()
 
@@ -102,7 +102,7 @@ func TestGenerateFolderConfigKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GenerateFolderConfigKey(tt.input)
+			result := PathKey(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -219,8 +219,7 @@ func TestValidatePathStrict(t *testing.T) {
 
 	runValidationTest(t, ValidatePathStrict, testCases)
 }
-
-func Test_GenerateFolderConfigKey_PathNormalization(t *testing.T) {
+func Test_PathKey_PathNormalization(t *testing.T) {
 	// Test path normalization behavior without requiring paths to exist
 	tests := []struct {
 		name     string
@@ -266,7 +265,7 @@ func Test_GenerateFolderConfigKey_PathNormalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GenerateFolderConfigKey(tt.input)
+			result := PathKey(tt.input)
 			assert.Equal(t, tt.expected, result, "Path normalization should preserve original separators without adding trailing slash")
 		})
 	}

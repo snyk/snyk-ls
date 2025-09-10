@@ -56,7 +56,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 		return nil, err
 	}
 
-	normalizedPath := util.GenerateFolderConfigKey(path)
+	normalizedPath := util.PathKey(path)
 
 	if sc.FolderConfigs[normalizedPath] == nil {
 		folderConfig := &types.FolderConfig{}
@@ -86,7 +86,7 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (
 		if sc != nil && sc.FolderConfigs != nil {
 			normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.FolderConfigs))
 			for k, v := range sc.FolderConfigs {
-				nk := util.GenerateFolderConfigKey(k)
+				nk := util.PathKey(k)
 				normalized[nk] = v
 			}
 			sc.FolderConfigs = normalized
@@ -143,13 +143,13 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 
 	// Normalize paths for consistent storage
 	normalizedFolderConfig := *folderConfig
-	normalizedFolderConfig.FolderPath = util.GenerateFolderConfigKey(folderConfig.FolderPath)
+	normalizedFolderConfig.FolderPath = util.PathKey(folderConfig.FolderPath)
 	if folderConfig.ReferenceFolderPath != "" {
-		normalizedFolderConfig.ReferenceFolderPath = util.GenerateFolderConfigKey(folderConfig.ReferenceFolderPath)
+		normalizedFolderConfig.ReferenceFolderPath = util.PathKey(folderConfig.ReferenceFolderPath)
 	}
 
 	// Generate normalized key for consistent cross-platform storage
-	normalizedPath := util.GenerateFolderConfigKey(folderConfig.FolderPath)
+	normalizedPath := util.PathKey(folderConfig.FolderPath)
 
 	sc.FolderConfigs[normalizedPath] = &normalizedFolderConfig
 	err = Save(conf, sc)

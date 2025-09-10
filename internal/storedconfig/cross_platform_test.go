@@ -32,7 +32,7 @@ func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 
 	// Calculate the expected normalized path for the base case
 	basePath := types.FilePath(tempDir)
-	expectedNormalizedPath := util.GenerateFolderConfigKey(basePath)
+	expectedNormalizedPath := util.PathKey(basePath)
 
 	tests := []struct {
 		name      string
@@ -77,7 +77,7 @@ func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 			require.NotNil(t, folderConfig)
 
 			// Calculate the expected normalized path for this specific input
-			expectedPath := util.GenerateFolderConfigKey(tt.inputPath)
+			expectedPath := util.PathKey(tt.inputPath)
 			require.Equal(t, expectedPath, folderConfig.FolderPath)
 
 			// For paths that should normalize to the same result as the base case, verify they do
@@ -89,7 +89,7 @@ func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 			// Verify the config is stored with the normalized path as key
 			sc, err := GetStoredConfig(conf, &logger)
 			require.NoError(t, err)
-			normalizedKey := util.GenerateFolderConfigKey(tt.inputPath)
+			normalizedKey := util.PathKey(tt.inputPath)
 			require.NotNil(t, sc.FolderConfigs[normalizedKey])
 			require.Equal(t, folderConfig, sc.FolderConfigs[normalizedKey])
 		})

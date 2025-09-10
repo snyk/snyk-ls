@@ -98,8 +98,8 @@ type PathValidationOptions struct {
 	RequireExists bool
 }
 
-// GenerateFolderConfigKey creates a normalized key for folder config storage
-func GenerateFolderConfigKey(p types.FilePath) types.FilePath {
+// PathKey creates a normalized key for path storage
+func PathKey(p types.FilePath) types.FilePath {
 	// Empty paths can occur during data migration from old storage formats
 	if p == "" {
 		return ""
