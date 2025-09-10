@@ -33,7 +33,7 @@ GOCI_LINT_TARGETS := $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/.golangci-lint_$(GO
 
 GOLICENSES_V := v1.6.0
 
-PACT_CLI_V := 2.4.2
+PACT_CLI_V := v2.4.2
 PACT_CLI_TARGETS := $(TOOLS_BIN)/pact/bin/pact $(TOOLS_BIN)/.pact_$(PACT_CLI_V)
 
 NOCACHE := "-count=1"
@@ -59,7 +59,7 @@ $(GOCI_LINT_TARGETS): $(TOOLS_BIN)
 
 $(PACT_CLI_TARGETS): $(TOOLS_BIN)
 	@rm -f $(TOOLS_BIN)/.pact_*
-	@cd $(TOOLS_BIN) && curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | PACT_CLI_VERSION=$(PACT_CLI_V) bash; cd ../
+	@cd $(TOOLS_BIN) && curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | PACT_CLI_VERSION=$(PACT_CLI_V) bash && cd ../
 	@touch $(TOOLS_BIN)/.pact_$(PACT_CLI_V)
 
 ## clean: Delete the build and tools directories.
