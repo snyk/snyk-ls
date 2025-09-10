@@ -151,6 +151,13 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 		From:        []string{"1", "2", "3", "4"},
 		CVSSv3:      "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
 		CvssScore:   5.0,
+		CvssSources: []types.CvssSource{
+			{
+				Type:        "primary",
+				CvssVersion: "3.1",
+				Vector:      "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+			},
+		},
 	}
 
 	issue2 := snyk.OssIssueData{
@@ -206,7 +213,9 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "<li>list</li>"))
 	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this issue type"))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "...and"))
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, "https://www.first.org/cvss/calculator/3.1#CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P"))
+	// Test that the computed CVSS calculator URL is present
+	expectedUrl := types.GetCvssCalculatorUrl(issueAdditionalData.CvssSources)
+	assert.True(t, strings.Contains(issueDetailsPanelHtml, expectedUrl))
 }
 
 func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {

@@ -60,6 +60,7 @@ type ossIssue struct {
 	IsUpgradable         bool               `json:"isUpgradable,omitempty"`
 	CVSSv3               string             `json:"CVSSv3,omitempty"`
 	CvssScore            float64            `json:"cvssScore,omitempty"`
+	CvssSources          []types.CvssSource `json:"cvssSources,omitempty"`
 	Exploit              string             `json:"exploit,omitempty"`
 	IsPatchable          bool               `json:"isPatchable"`
 	License              string             `json:"license,omitempty"`
@@ -155,6 +156,7 @@ func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []sny
 	additionalData.IsUpgradable = i.IsUpgradable
 	additionalData.CVSSv3 = i.CVSSv3
 	additionalData.CvssScore = i.CvssScore
+	additionalData.CvssSources = i.CvssSources
 	additionalData.Exploit = i.Exploit
 	additionalData.IsPatchable = i.IsPatchable
 	additionalData.ProjectName = scanResult.ProjectName

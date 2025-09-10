@@ -1,0 +1,16 @@
+name: 'Setup tools (`make tools`)'
+description: 'Cache and install tools from Makefile'
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache tools
+      id: cache-tools
+      uses: actions/cache@v4
+      with:
+        path: .bin
+        key: ${{ runner.os }}-tools-${{ hashFiles('Makefile') }}
+
+    - name: Install tools (`make tools`)
+      shell: bash
+      if: steps.cache-tools.outputs.cache-hit != 'true'
+      run: make tools

@@ -225,6 +225,7 @@ func getOssIssue(issue types.Issue) types.ScanIssue {
 			IsUpgradable:      matchingIssue.IsUpgradable,
 			ProjectName:       matchingIssue.ProjectName,
 			DisplayTargetFile: matchingIssue.DisplayTargetFile,
+			CvssSources:       additionalData.CvssSources,
 		}
 	}
 
@@ -255,6 +256,7 @@ func getOssIssue(issue types.Issue) types.ScanIssue {
 			Exploit:           additionalData.Exploit,
 			CVSSv3:            additionalData.CVSSv3,
 			CvssScore:         strconv.FormatFloat(additionalData.CvssScore, 'f', 2, 64), // convert float64 to string with 2 decimal places
+			CvssSources:       additionalData.CvssSources,
 			FixedIn:           additionalData.FixedIn,
 			From:              additionalData.From,
 			UpgradePath:       additionalData.UpgradePath,
