@@ -146,43 +146,43 @@ func createCommonTestCases(tempDir string, errorPrefix string) []testCase {
 			name:        "Relative path not allowed",
 			input:       "Users/foo/project",
 			expectError: true,
-			errorMsg:    errorPrefix + "path must be absolute",
+			errorMsg:    "path must be absolute, got: 'Users/foo/project'",
 		},
 		{
 			name:        "Command injection semicolon",
 			input:       "/Users/foo; rm -rf /",
 			expectError: true,
-			errorMsg:    errorPrefix + "dangerous character detected",
+			errorMsg:    "dangerous character detected in",
 		},
 		{
 			name:        "Command injection ampersand",
 			input:       "/Users/foo & echo pwned",
 			expectError: true,
-			errorMsg:    errorPrefix + "dangerous character detected",
+			errorMsg:    "dangerous character detected in",
 		},
 		{
 			name:        "Command injection backtick",
 			input:       "/Users/foo `whoami`",
 			expectError: true,
-			errorMsg:    errorPrefix + "dangerous character detected",
+			errorMsg:    "dangerous character detected in",
 		},
 		{
 			name:        "Command injection dollar",
 			input:       "/Users/foo $(whoami)",
 			expectError: true,
-			errorMsg:    errorPrefix + "dangerous character detected",
+			errorMsg:    "dangerous character detected in",
 		},
 		{
 			name:        "Command injection double quote",
 			input:       "/Users/foo\" && rm -rf /",
 			expectError: true,
-			errorMsg:    errorPrefix + "dangerous character detected",
+			errorMsg:    "dangerous character detected in",
 		},
 		{
 			name:        "Command injection single quote",
 			input:       "/Users/foo' && rm -rf /",
 			expectError: true,
-			errorMsg:    errorPrefix + "dangerous character detected",
+			errorMsg:    "dangerous character detected in",
 		},
 	}
 }
@@ -214,7 +214,7 @@ func TestValidatePathStrict(t *testing.T) {
 		name:        "Empty path not allowed",
 		input:       "",
 		expectError: true,
-		errorMsg:    "path validation failed: path cannot be empty",
+		errorMsg:    "path cannot be empty, got: ''",
 	})
 
 	runValidationTest(t, ValidatePathStrict, testCases)

@@ -1,7 +1,6 @@
 package util
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,27 +13,27 @@ import (
 var dangerousChars = []string{";", "&", "|", "`", "$", "\"", "'", "\n", "\r", "\t"}
 
 // validateDangerousCharacters checks for dangerous characters in a string
-func validateDangerousCharacters(input, context string) error {
+func validateDangerousCharacters(input string) error {
 	for _, char := range dangerousChars {
 		if strings.Contains(input, char) {
-			return fmt.Errorf("dangerous character detected in %s: %s", context, char)
+			return fmt.Errorf("dangerous character detected in '%s': %s", input, char)
 		}
 	}
 	return nil
 }
 
 // validatePathTraversal checks for path traversal attempts
-func validatePathTraversal(input, context string) error {
+func validatePathTraversal(input string) error {
 	// Check for explicit path traversal patterns
 	if strings.Contains(input, "..") {
-		return fmt.Errorf("path traversal detected in %s", context)
+		return fmt.Errorf("path traversal detected in '%s'", input)
 	}
 
 	// Check for URL-encoded traversal patterns
 	encodedPatterns := []string{"%2e%2e", "%2E%2E"}
 	for _, pattern := range encodedPatterns {
 		if strings.Contains(input, pattern) {
-			return fmt.Errorf("encoded path traversal detected in %s", context)
+			return fmt.Errorf("encoded path traversal detected in '%s'", input)
 		}
 	}
 
@@ -42,22 +41,22 @@ func validatePathTraversal(input, context string) error {
 }
 
 // validateAbsolutePath checks if a path is absolute
-func validateAbsolutePath(input, context string) error {
+func validateAbsolutePath(input string) error {
 	if !filepath.IsAbs(input) {
-		return fmt.Errorf("%s must be absolute", context)
+		return fmt.Errorf("path must be absolute, got: '%s'", input)
 	}
 	return nil
 }
 
 // validatePathExistsAsDirectory checks if a path exists and is a directory
-func validatePathExistsAsDirectory(input, context string) error {
+func validatePathExistsAsDirectory(input string) error {
 	info, err := os.Stat(input)
 	if err != nil {
-		return fmt.Errorf("%s does not exist or is not accessible: %w", context, err)
+		return fmt.Errorf("path does not exist or is not accessible: '%s': %w", input, err)
 	}
 
 	if !info.IsDir() {
-		return fmt.Errorf("%s must be a directory", context)
+		return fmt.Errorf("path must be a directory: '%s'", input)
 	}
 	return nil
 }
@@ -69,22 +68,22 @@ func ValidatePath(path types.FilePath, options PathValidationOptions) error {
 		if options.AllowEmpty {
 			return nil
 		}
-		return errors.New("path cannot be empty")
+		return fmt.Errorf("path cannot be empty, got: '%s'", string(path))
 	}
 
 	// 1. Check for dangerous characters
-	if err := validateDangerousCharacters(pathStr, "path"); err != nil {
+	if err := validateDangerousCharacters(pathStr); err != nil {
 		return err
 	}
 
 	// 2. Validate absolute path (always required)
-	if err := validateAbsolutePath(pathStr, "path"); err != nil {
+	if err := validateAbsolutePath(pathStr); err != nil {
 		return err
 	}
 
 	// 3. Validate path exists if required
 	if options.RequireExists {
-		if err := validatePathExistsAsDirectory(pathStr, "path"); err != nil {
+		if err := validatePathExistsAsDirectory(pathStr); err != nil {
 			return err
 		}
 	}
@@ -112,11 +111,11 @@ func PathKey(p types.FilePath) types.FilePath {
 
 	// Basic validation for folder config keys - only check for dangerous characters and path traversal
 	// Don't enforce absolute path requirements since these are just storage keys
-	if err := validateDangerousCharacters(s, "path"); err != nil {
+	if err := validateDangerousCharacters(s); err != nil {
 		return ""
 	}
 
-	if err := validatePathTraversal(s, "path"); err != nil {
+	if err := validatePathTraversal(s); err != nil {
 		return ""
 	}
 
@@ -132,7 +131,7 @@ func ValidatePathLenient(path types.FilePath) error {
 		RequireExists: false,
 	}
 	if err := ValidatePath(path, options); err != nil {
-		return fmt.Errorf("path validation failed: %w", err)
+		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
 	}
 	return nil
 }
@@ -143,7 +142,7 @@ func ValidatePathStrict(path types.FilePath) error {
 		RequireExists: true,
 	}
 	if err := ValidatePath(path, options); err != nil {
-		return fmt.Errorf("path validation failed: %w", err)
+		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
 	}
 	return nil
 }
@@ -159,7 +158,7 @@ func ValidatePathForStorage(path types.FilePath) error {
 		RequireExists: false, // Don't require the path to exist
 	}
 	if err := ValidatePath(path, options); err != nil {
-		return fmt.Errorf("path validation failed: %w", err)
+		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
 	}
 	return nil
 }

@@ -128,9 +128,9 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 		return err
 	}
 
-	// Validate the reference folder path for security if provided
+	// Validate the reference folder path for security and existence if provided
 	if folderConfig.ReferenceFolderPath != "" {
-		if err := util.ValidatePathLenient(folderConfig.ReferenceFolderPath); err != nil {
+		if err := util.ValidatePathStrict(folderConfig.ReferenceFolderPath); err != nil {
 			logger.Error().Err(err).Str("referencePath", string(folderConfig.ReferenceFolderPath)).Msg("invalid reference folder path")
 			return err
 		}
