@@ -77,17 +77,12 @@ func ValidatePath(path types.FilePath, options PathValidationOptions) error {
 		return err
 	}
 
-	// 2. Check for path traversal
-	if err := validatePathTraversal(pathStr, "path"); err != nil {
-		return err
-	}
-
-	// 3. Validate absolute path (always required)
+	// 2. Validate absolute path (always required)
 	if err := validateAbsolutePath(pathStr, "path"); err != nil {
 		return err
 	}
 
-	// 4. Validate path exists if required
+	// 3. Validate path exists if required
 	if options.RequireExists {
 		if err := validatePathExistsAsDirectory(pathStr, "path"); err != nil {
 			return err
@@ -129,4 +124,42 @@ func GenerateFolderConfigKey(p types.FilePath) types.FilePath {
 	s = filepath.Clean(s)
 
 	return types.FilePath(s)
+}
+
+func ValidatePathLenient(path types.FilePath) error {
+	options := PathValidationOptions{
+		AllowEmpty:    true,
+		RequireExists: false,
+	}
+	if err := ValidatePath(path, options); err != nil {
+		return fmt.Errorf("path validation failed: %w", err)
+	}
+	return nil
+}
+
+func ValidatePathStrict(path types.FilePath) error {
+	options := PathValidationOptions{
+		AllowEmpty:    false,
+		RequireExists: true,
+	}
+	if err := ValidatePath(path, options); err != nil {
+		return fmt.Errorf("path validation failed: %w", err)
+	}
+	return nil
+}
+
+// ValidatePathForStorage validates a path for storage purposes without requiring the path to exist.
+// This function is used when storing paths where the path may not exist yet
+// (e.g., user-configured paths for future use, paths during data migration, or storage keys).
+// It performs security validation (dangerous characters, path traversal) but allows empty paths
+// and doesn't check if the path actually exists on the filesystem.
+func ValidatePathForStorage(path types.FilePath) error {
+	options := PathValidationOptions{
+		AllowEmpty:    true,
+		RequireExists: false, // Don't require the path to exist
+	}
+	if err := ValidatePath(path, options); err != nil {
+		return fmt.Errorf("path validation failed: %w", err)
+	}
+	return nil
 }

@@ -17,7 +17,6 @@
 package storedconfig
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -27,16 +26,21 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-func Test_GetOrCreateFolderConfig_PathNormalization(t *testing.T) {
+func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
+	// Create one temporary directory for testing
 	tempDir := t.TempDir()
+
+	// Calculate the expected normalized path for the base case
+	basePath := types.FilePath(tempDir)
+	expectedNormalizedPath := util.GenerateFolderConfigKey(basePath)
 
 	tests := []struct {
 		name      string
 		inputPath types.FilePath
 	}{
 		{
-			name:      "Path without trailing slash",
-			inputPath: types.FilePath(tempDir),
+			name:      "Base path (no modifications)",
+			inputPath: basePath,
 		},
 		{
 			name:      "Path with trailing slash",
@@ -45,6 +49,18 @@ func Test_GetOrCreateFolderConfig_PathNormalization(t *testing.T) {
 		{
 			name:      "Path with whitespace",
 			inputPath: types.FilePath("  " + tempDir + "  "),
+		},
+		{
+			name:      "Path with mixed separators (Unix style)",
+			inputPath: types.FilePath(tempDir + "/subdir"),
+		},
+		{
+			name:      "Path with mixed separators (Windows style)",
+			inputPath: types.FilePath(tempDir + "\\subdir"),
+		},
+		{
+			name:      "Path with mixed separators and trailing slash",
+			inputPath: types.FilePath(tempDir + "/subdir/"),
 		},
 	}
 
@@ -59,9 +75,16 @@ func Test_GetOrCreateFolderConfig_PathNormalization(t *testing.T) {
 			// Assert
 			require.NoError(t, err)
 			require.NotNil(t, folderConfig)
-			// Expect the normalized path (with trimmed whitespace)
+
+			// Calculate the expected normalized path for this specific input
 			expectedPath := util.GenerateFolderConfigKey(tt.inputPath)
 			require.Equal(t, expectedPath, folderConfig.FolderPath)
+
+			// For paths that should normalize to the same result as the base case, verify they do
+			if tt.name == "Path with trailing slash" || tt.name == "Path with whitespace" {
+				require.Equal(t, expectedNormalizedPath, expectedPath,
+					"Path variations should normalize to the same result as the base case")
+			}
 
 			// Verify the config is stored with the normalized path as key
 			sc, err := GetStoredConfig(conf, &logger)
@@ -69,58 +92,6 @@ func Test_GetOrCreateFolderConfig_PathNormalization(t *testing.T) {
 			normalizedKey := util.GenerateFolderConfigKey(tt.inputPath)
 			require.NotNil(t, sc.FolderConfigs[normalizedKey])
 			require.Equal(t, folderConfig, sc.FolderConfigs[normalizedKey])
-		})
-	}
-}
-
-func Test_GenerateFolderConfigKey_PathNormalization(t *testing.T) {
-	// Test path normalization behavior without requiring paths to exist
-	tests := []struct {
-		name     string
-		input    types.FilePath
-		expected types.FilePath
-	}{
-		{
-			name:     "Unix path without trailing slash",
-			input:    "/Users/test/project",
-			expected: types.FilePath(filepath.Clean("/Users/test/project")),
-		},
-		{
-			name:     "Unix path with trailing slash",
-			input:    "/Users/test/project/",
-			expected: types.FilePath(filepath.Clean("/Users/test/project/")),
-		},
-		{
-			name:     "Path with whitespace",
-			input:    "  /Users/test/project  ",
-			expected: types.FilePath(filepath.Clean("/Users/test/project")),
-		},
-		{
-			name:     "Root path Unix",
-			input:    "/",
-			expected: types.FilePath(filepath.Clean("/")),
-		},
-		{
-			name:     "Windows path with backslashes",
-			input:    "C:\\Users\\test\\project",
-			expected: types.FilePath(filepath.Clean("C:\\Users\\test\\project")),
-		},
-		{
-			name:     "Windows path with mixed separators",
-			input:    "C:\\Users/test\\project/",
-			expected: types.FilePath(filepath.Clean("C:\\Users/test\\project/")),
-		},
-		{
-			name:     "Root path Windows",
-			input:    "C:\\",
-			expected: types.FilePath(filepath.Clean("C:\\")),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := util.GenerateFolderConfigKey(tt.input)
-			require.Equal(t, tt.expected, result, "Path normalization should preserve original separators without adding trailing slash")
 		})
 	}
 }

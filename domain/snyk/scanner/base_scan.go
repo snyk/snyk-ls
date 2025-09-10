@@ -36,13 +36,13 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 		return errors.New("folder config is required")
 	}
 
-	if err := util.ValidateFolderPath(folderConfig.FolderPath); err != nil {
+	if err := util.ValidatePathStrict(folderConfig.FolderPath); err != nil {
 		logger.Error().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("invalid folder path")
 		return err
 	}
 
 	if folderConfig.ReferenceFolderPath != "" {
-		if err := util.ValidateReferenceFolderPath(folderConfig.ReferenceFolderPath); err != nil {
+		if err := util.ValidatePathLenient(folderConfig.ReferenceFolderPath); err != nil {
 			logger.Error().Err(err).Str("referencePath", string(folderConfig.ReferenceFolderPath)).Msg("invalid reference folder path")
 			return err
 		}
