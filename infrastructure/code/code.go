@@ -400,7 +400,8 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 			}
 		}()
 
-		sarifResponse, bundleHash, err = sc.codeScanner.UploadAndAnalyzeLegacy(ctx, requestId, target, shardKey, files, stringChangedFiles, statusChannel)
+		analysisContext := context.WithValue(ctx, scan.InitiatorKey, "IDE")
+		sarifResponse, bundleHash, err = sc.codeScanner.UploadAndAnalyzeLegacy(analysisContext, requestId, target, shardKey, files, stringChangedFiles, statusChannel)
 	}
 
 	if err != nil || ctx.Err() != nil {
