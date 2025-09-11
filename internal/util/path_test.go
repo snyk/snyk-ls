@@ -19,34 +19,19 @@ func TestPathKey(t *testing.T) {
 		expected types.FilePath
 	}{
 		{
-			name:     "Unix path without trailing slash",
+			name:     "Path without trailing slash",
 			input:    types.FilePath(tempDir),
 			expected: types.FilePath(tempDir),
 		},
 		{
-			name:     "Unix path with trailing slash",
+			name:     "Path with trailing slash",
 			input:    types.FilePath(tempDir + "/"),
 			expected: types.FilePath(tempDir),
 		},
 		{
-			name:     "Windows path without trailing slash",
-			input:    types.FilePath(tempDir),
-			expected: types.FilePath(tempDir),
-		},
-		{
-			name:     "Windows path with trailing backslash",
+			name:     "Windows path with backslashes",
 			input:    types.FilePath(tempDir + "\\"),
 			expected: types.FilePath(filepath.Clean(tempDir + "\\")),
-		},
-		{
-			name:     "Windows path with trailing forward slash",
-			input:    types.FilePath(tempDir + "/"),
-			expected: types.FilePath(tempDir),
-		},
-		{
-			name:     "Mixed separators",
-			input:    types.FilePath(tempDir),
-			expected: types.FilePath(tempDir),
 		},
 		{
 			name:     "Path with whitespace",
@@ -74,19 +59,14 @@ func TestPathKey(t *testing.T) {
 			expected: types.FilePath(filepath.Clean(`C:\`)),
 		},
 		{
-			name:     "Invalid path with path traversal",
-			input:    "/Users/foo/../malicious",
-			expected: "",
+			name:     "Path with parent directory normalized",
+			input:    "/Users/foo/../bar",
+			expected: types.FilePath(filepath.Clean("/Users/foo/../bar")),
 		},
 		{
-			name:     "Invalid path with obfuscated traversal",
-			input:    "/Users/foo/./../malicious",
-			expected: "",
-		},
-		{
-			name:     "Invalid path with encoded traversal",
-			input:    "/Users/foo%2e%2e/malicious",
-			expected: "",
+			name:     "Path with current and parent directory normalized",
+			input:    "/Users/foo/./../bar",
+			expected: types.FilePath(filepath.Clean("/Users/foo/./../bar")),
 		},
 		{
 			name:     "Invalid path with command injection",
@@ -135,18 +115,12 @@ func runValidationTest(t *testing.T, validator func(types.FilePath) error, testC
 }
 
 // createCommonTestCases creates the shared test cases for both validation functions
-func createCommonTestCases(tempDir string, errorPrefix string) []testCase {
+func createCommonTestCases(tempDir string) []testCase {
 	return []testCase{
 		{
-			name:        "Valid absolute path",
+			name:        "Valid path",
 			input:       types.FilePath(tempDir),
 			expectError: false,
-		},
-		{
-			name:        "Relative path not allowed",
-			input:       "Users/foo/project",
-			expectError: true,
-			errorMsg:    "path must be absolute, got: 'Users/foo/project'",
 		},
 		{
 			name:        "Command injection semicolon",
@@ -191,7 +165,7 @@ func TestValidatePathLenient(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Create common test cases with path validation error prefix
-	testCases := createCommonTestCases(tempDir, "path validation failed: ")
+	testCases := createCommonTestCases(tempDir)
 
 	// Add lenient path specific test case
 	testCases = append(testCases, testCase{
@@ -207,7 +181,7 @@ func TestValidatePathStrict(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Create common test cases with path validation error prefix
-	testCases := createCommonTestCases(tempDir, "path validation failed: ")
+	testCases := createCommonTestCases(tempDir)
 
 	// Add strict path specific test case
 	testCases = append(testCases, testCase{
@@ -267,6 +241,63 @@ func Test_PathKey_PathNormalization(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := PathKey(tt.input)
 			assert.Equal(t, tt.expected, result, "Path normalization should preserve original separators without adding trailing slash")
+		})
+	}
+}
+
+func TestValidatePathWithExistenceTypes(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tests := []struct {
+		name      string
+		path      types.FilePath
+		existence ExistenceType
+		expectErr bool
+	}{
+		{
+			name:      "Directory exists as directory",
+			path:      types.FilePath(tempDir),
+			existence: ExistAsDirectory,
+			expectErr: false,
+		},
+		{
+			name:      "Directory exists as file or directory",
+			path:      types.FilePath(tempDir),
+			existence: ExistAsFileOrDirectory,
+			expectErr: false,
+		},
+		{
+			name:      "Directory fails as file",
+			path:      types.FilePath(tempDir),
+			existence: ExistAsFile,
+			expectErr: true,
+		},
+		{
+			name:      "Non-existent path fails as directory",
+			path:      "/non/existent/path",
+			existence: ExistAsDirectory,
+			expectErr: true,
+		},
+		{
+			name:      "Non-existent path passes as does not exist",
+			path:      "/non/existent/path",
+			existence: DoesNotExist,
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			options := PathValidationOptions{
+				AllowEmpty: false,
+				Existence:  tt.existence,
+			}
+			err := ValidatePath(tt.path, options)
+			if tt.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

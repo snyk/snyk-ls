@@ -141,15 +141,15 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 		return err
 	}
 
+	// Generate normalized key for consistent cross-platform storage
+	normalizedPath := util.PathKey(folderConfig.FolderPath)
+
 	// Normalize paths for consistent storage
 	normalizedFolderConfig := *folderConfig
-	normalizedFolderConfig.FolderPath = util.PathKey(folderConfig.FolderPath)
+	normalizedFolderConfig.FolderPath = normalizedPath
 	if folderConfig.ReferenceFolderPath != "" {
 		normalizedFolderConfig.ReferenceFolderPath = util.PathKey(folderConfig.ReferenceFolderPath)
 	}
-
-	// Generate normalized key for consistent cross-platform storage
-	normalizedPath := util.PathKey(folderConfig.FolderPath)
 
 	sc.FolderConfigs[normalizedPath] = &normalizedFolderConfig
 	err = Save(conf, sc)

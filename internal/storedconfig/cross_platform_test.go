@@ -35,32 +35,39 @@ func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 	expectedNormalizedPath := util.PathKey(basePath)
 
 	tests := []struct {
-		name      string
-		inputPath types.FilePath
+		name                string
+		inputPath           types.FilePath
+		shouldMatchBasePath bool
 	}{
 		{
-			name:      "Base path (no modifications)",
-			inputPath: basePath,
+			name:                "Base path (no modifications)",
+			inputPath:           basePath,
+			shouldMatchBasePath: true,
 		},
 		{
-			name:      "Path with trailing slash",
-			inputPath: types.FilePath(tempDir + "/"),
+			name:                "Path with trailing slash",
+			inputPath:           types.FilePath(tempDir + "/"),
+			shouldMatchBasePath: true,
 		},
 		{
-			name:      "Path with whitespace",
-			inputPath: types.FilePath("  " + tempDir + "  "),
+			name:                "Path with whitespace",
+			inputPath:           types.FilePath("  " + tempDir + "  "),
+			shouldMatchBasePath: true,
 		},
 		{
-			name:      "Path with mixed separators (Unix style)",
-			inputPath: types.FilePath(tempDir + "/subdir"),
+			name:                "Path with mixed separators (Unix style)",
+			inputPath:           types.FilePath(tempDir + "/subdir"),
+			shouldMatchBasePath: false,
 		},
 		{
-			name:      "Path with mixed separators (Windows style)",
-			inputPath: types.FilePath(tempDir + "\\subdir"),
+			name:                "Path with mixed separators (Windows style)",
+			inputPath:           types.FilePath(tempDir + "\\subdir"),
+			shouldMatchBasePath: false,
 		},
 		{
-			name:      "Path with mixed separators and trailing slash",
-			inputPath: types.FilePath(tempDir + "/subdir/"),
+			name:                "Path with mixed separators and trailing slash",
+			inputPath:           types.FilePath(tempDir + "/subdir/"),
+			shouldMatchBasePath: false,
 		},
 	}
 
@@ -81,7 +88,7 @@ func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 			require.Equal(t, expectedPath, folderConfig.FolderPath)
 
 			// For paths that should normalize to the same result as the base case, verify they do
-			if tt.name == "Path with trailing slash" || tt.name == "Path with whitespace" {
+			if tt.shouldMatchBasePath {
 				require.Equal(t, expectedNormalizedPath, expectedPath,
 					"Path variations should normalize to the same result as the base case")
 			}

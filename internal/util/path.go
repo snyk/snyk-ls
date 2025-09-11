@@ -9,57 +9,24 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// ExistenceType defines what type of existence validation to perform
+type ExistenceType int
+
+const (
+	DoesNotExist ExistenceType = iota
+	ExistAsFileOrDirectory
+	ExistAsDirectory
+	ExistAsFile
+)
+
+// PathValidationOptions defines validation requirements for paths
+type PathValidationOptions struct {
+	AllowEmpty bool
+	Existence  ExistenceType
+}
+
 // Common dangerous characters that could be used for injection attacks
-var dangerousChars = []string{";", "&", "|", "`", "$", "\"", "'", "\n", "\r", "\t"}
-
-// validateDangerousCharacters checks for dangerous characters in a string
-func validateDangerousCharacters(input string) error {
-	for _, char := range dangerousChars {
-		if strings.Contains(input, char) {
-			return fmt.Errorf("dangerous character detected in '%s': %s", input, char)
-		}
-	}
-	return nil
-}
-
-// validatePathTraversal checks for path traversal attempts
-func validatePathTraversal(input string) error {
-	// Check for explicit path traversal patterns
-	if strings.Contains(input, "..") {
-		return fmt.Errorf("path traversal detected in '%s'", input)
-	}
-
-	// Check for URL-encoded traversal patterns
-	encodedPatterns := []string{"%2e%2e", "%2E%2E"}
-	for _, pattern := range encodedPatterns {
-		if strings.Contains(input, pattern) {
-			return fmt.Errorf("encoded path traversal detected in '%s'", input)
-		}
-	}
-
-	return nil
-}
-
-// validateAbsolutePath checks if a path is absolute
-func validateAbsolutePath(input string) error {
-	if !filepath.IsAbs(input) {
-		return fmt.Errorf("path must be absolute, got: '%s'", input)
-	}
-	return nil
-}
-
-// validatePathExistsAsDirectory checks if a path exists and is a directory
-func validatePathExistsAsDirectory(input string) error {
-	info, err := os.Stat(input)
-	if err != nil {
-		return fmt.Errorf("path does not exist or is not accessible: '%s': %w", input, err)
-	}
-
-	if !info.IsDir() {
-		return fmt.Errorf("path must be a directory: '%s'", input)
-	}
-	return nil
-}
+var dangerousChars = []string{";", "&", "|", "`", "$", "\"", "'", "\n", "\r", "\t", "*"}
 
 // ValidatePath validates any path for security with customizable requirements
 func ValidatePath(path types.FilePath, options PathValidationOptions) error {
@@ -76,25 +43,52 @@ func ValidatePath(path types.FilePath, options PathValidationOptions) error {
 		return err
 	}
 
-	// 2. Validate absolute path (always required)
-	if err := validateAbsolutePath(pathStr); err != nil {
+	// 2. Validate path existence based on requirements
+	if err := validatePathExistence(pathStr, options.Existence); err != nil {
 		return err
-	}
-
-	// 3. Validate path exists if required
-	if options.RequireExists {
-		if err := validatePathExistsAsDirectory(pathStr); err != nil {
-			return err
-		}
 	}
 
 	return nil
 }
 
-// PathValidationOptions defines validation requirements for paths
-type PathValidationOptions struct {
-	AllowEmpty    bool
-	RequireExists bool
+// ValidatePathLenient validates a path with lenient requirements (allows empty, no existence check)
+func ValidatePathLenient(path types.FilePath) error {
+	options := PathValidationOptions{
+		AllowEmpty: true,
+		Existence:  DoesNotExist,
+	}
+	if err := ValidatePath(path, options); err != nil {
+		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
+	}
+	return nil
+}
+
+// ValidatePathStrict validates a path with strict requirements (no empty, must be directory)
+func ValidatePathStrict(path types.FilePath) error {
+	options := PathValidationOptions{
+		AllowEmpty: false,
+		Existence:  ExistAsDirectory,
+	}
+	if err := ValidatePath(path, options); err != nil {
+		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
+	}
+	return nil
+}
+
+// ValidatePathForStorage validates a path for storage purposes without requiring the path to exist.
+// This function is used when storing paths where the path may not exist yet
+// (e.g., user-configured paths for future use, paths during data migration, or storage keys).
+// It performs security validation (dangerous characters, path traversal) but allows empty paths
+// and doesn't check if the path actually exists on the filesystem.
+func ValidatePathForStorage(path types.FilePath) error {
+	options := PathValidationOptions{
+		AllowEmpty: true,
+		Existence:  DoesNotExist, // Don't require the path to exist
+	}
+	if err := ValidatePath(path, options); err != nil {
+		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
+	}
+	return nil
 }
 
 // PathKey creates a normalized key for path storage
@@ -115,50 +109,68 @@ func PathKey(p types.FilePath) types.FilePath {
 		return ""
 	}
 
-	if err := validatePathTraversal(s); err != nil {
-		return ""
-	}
-
 	// Normalize the path using filepath.Clean()
 	s = filepath.Clean(s)
 
 	return types.FilePath(s)
 }
 
-func ValidatePathLenient(path types.FilePath) error {
-	options := PathValidationOptions{
-		AllowEmpty:    true,
-		RequireExists: false,
-	}
-	if err := ValidatePath(path, options); err != nil {
-		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
-	}
-	return nil
-}
-
-func ValidatePathStrict(path types.FilePath) error {
-	options := PathValidationOptions{
-		AllowEmpty:    false,
-		RequireExists: true,
-	}
-	if err := ValidatePath(path, options); err != nil {
-		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
+// validateDangerousCharacters checks for dangerous characters in a string
+func validateDangerousCharacters(input string) error {
+	for _, char := range dangerousChars {
+		if strings.Contains(input, char) {
+			return fmt.Errorf("dangerous character detected in '%s': %s", input, char)
+		}
 	}
 	return nil
 }
 
-// ValidatePathForStorage validates a path for storage purposes without requiring the path to exist.
-// This function is used when storing paths where the path may not exist yet
-// (e.g., user-configured paths for future use, paths during data migration, or storage keys).
-// It performs security validation (dangerous characters, path traversal) but allows empty paths
-// and doesn't check if the path actually exists on the filesystem.
-func ValidatePathForStorage(path types.FilePath) error {
-	options := PathValidationOptions{
-		AllowEmpty:    true,
-		RequireExists: false, // Don't require the path to exist
+// validatePathExistence checks path existence based on the specified type
+func validatePathExistence(input string, existence ExistenceType) error {
+	switch existence {
+	case DoesNotExist:
+		// No validation needed - path can exist or not
+		return nil
+	case ExistAsFileOrDirectory:
+		return validatePathExists(input)
+	case ExistAsDirectory:
+		return validatePathExistsAsDirectory(input)
+	case ExistAsFile:
+		return validatePathExistsAsFile(input)
+	default:
+		return fmt.Errorf("unknown existence type: %v", existence)
 	}
-	if err := ValidatePath(path, options); err != nil {
-		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
+}
+
+// validatePathExists checks if a path exists (file or directory)
+func validatePathExists(input string) error {
+	_, err := os.Stat(input)
+	if err != nil {
+		return fmt.Errorf("path does not exist or is not accessible: '%s': %w", input, err)
+	}
+	return nil
+}
+
+// validatePathExistsAsDirectory checks if a path exists and is a directory
+func validatePathExistsAsDirectory(input string) error {
+	info, err := os.Stat(input)
+	if err != nil {
+		return fmt.Errorf("path does not exist or is not accessible: '%s': %w", input, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("path exists but is not a directory: '%s'", input)
+	}
+	return nil
+}
+
+// validatePathExistsAsFile checks if a path exists and is a file
+func validatePathExistsAsFile(input string) error {
+	info, err := os.Stat(input)
+	if err != nil {
+		return fmt.Errorf("path does not exist or is not accessible: '%s': %w", input, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("path exists but is a directory, not a file: '%s'", input)
 	}
 	return nil
 }
