@@ -279,9 +279,9 @@ func TestValidatePathWithExistenceTypes(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			name:      "Non-existent path passes as does not exist",
+			name:      "Non-existent path passes with no check",
 			path:      "/non/existent/path",
-			existence: DoesNotExist,
+			existence: NoCheck,
 			expectErr: false,
 		},
 	}

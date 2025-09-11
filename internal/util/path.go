@@ -13,7 +13,7 @@ import (
 type ExistenceType int
 
 const (
-	DoesNotExist ExistenceType = iota
+	NoCheck ExistenceType = iota
 	ExistAsFileOrDirectory
 	ExistAsDirectory
 	ExistAsFile
@@ -55,7 +55,7 @@ func ValidatePath(path types.FilePath, options PathValidationOptions) error {
 func ValidatePathLenient(path types.FilePath) error {
 	options := PathValidationOptions{
 		AllowEmpty: true,
-		Existence:  DoesNotExist,
+		Existence:  NoCheck,
 	}
 	if err := ValidatePath(path, options); err != nil {
 		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
@@ -83,7 +83,7 @@ func ValidatePathStrict(path types.FilePath) error {
 func ValidatePathForStorage(path types.FilePath) error {
 	options := PathValidationOptions{
 		AllowEmpty: true,
-		Existence:  DoesNotExist, // Don't require the path to exist
+		Existence:  NoCheck, // No existence validation needed
 	}
 	if err := ValidatePath(path, options); err != nil {
 		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
@@ -103,8 +103,6 @@ func PathKey(p types.FilePath) types.FilePath {
 		return ""
 	}
 
-	// Basic validation for folder config keys - only check for dangerous characters and path traversal
-	// Don't enforce absolute path requirements since these are just storage keys
 	if err := validateDangerousCharacters(s); err != nil {
 		return ""
 	}
@@ -128,7 +126,7 @@ func validateDangerousCharacters(input string) error {
 // validatePathExistence checks path existence based on the specified type
 func validatePathExistence(input string, existence ExistenceType) error {
 	switch existence {
-	case DoesNotExist:
+	case NoCheck:
 		// No validation needed - path can exist or not
 		return nil
 	case ExistAsFileOrDirectory:
