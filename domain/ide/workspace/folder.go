@@ -430,7 +430,7 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 		Status:          string(gafanalytics.Success),
 		TargetId:        targetId,
 		TimestampMs:     data.TimestampFinished.UnixMilli(),
-		DurationMs:      int64(data.DurationMs),
+		DurationMs:      int64(data.Duration),
 		Extension:       extension,
 	}
 

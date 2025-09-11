@@ -7,6 +7,7 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // Notifier should be passed as a dependency to the types that call "notification.x" functions.
@@ -73,15 +74,7 @@ func (n *notifierImpl) Receive() (payload any, stop bool) {
 
 func (n *notifierImpl) CreateListener(callback func(params any)) {
 	// cleanup stopchannel before starting
-	for {
-		select {
-		case <-n.stopChannel:
-			continue
-		default:
-			break
-		}
-		break
-	}
+	util.DrainChannel(n.stopChannel)
 	go func() {
 		for {
 			payload, stop := n.Receive()

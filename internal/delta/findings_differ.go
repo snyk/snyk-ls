@@ -29,7 +29,7 @@ func NewFindingsDiffer() *FindingsDiffer {
 	return &FindingsDiffer{}
 }
 
-func (_ FindingsDiffer) Diff(baseIssueList, currentIssueList []Identifiable) []Identifiable {
+func (FindingsDiffer) Diff(baseIssueList, currentIssueList []Identifiable) []Identifiable {
 	var deltaResults []Identifiable
 
 	if len(currentIssueList) == 0 || len(baseIssueList) == 0 {

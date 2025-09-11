@@ -57,12 +57,12 @@ const (
 	WorkingDirectory DeltaScanType = "WorkingDirectory"
 )
 
-// NewContext returns a new Context that carries value u.
+// NewContextWithDeltaScanType returns a new Context that carries the delta scan type.
 func NewContextWithDeltaScanType(ctx context.Context, dType DeltaScanType) context.Context {
 	return context.WithValue(ctx, deltaScanTypeKey, dType)
 }
 
-// FromContext returns the User value stored in ctx, if any.
+// DeltaScanTypeFromContext returns the delta scan type value stored in ctx, if any.
 func DeltaScanTypeFromContext(ctx context.Context) (DeltaScanType, bool) {
 	d, ok := ctx.Value(deltaScanTypeKey).(DeltaScanType)
 	return d, ok

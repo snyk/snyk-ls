@@ -78,7 +78,7 @@ jobs:
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
           sudo apt-get install -y xsel xclip wl-clipboard
 
-          make clean test
+          make clean-build test
 
   integration-tests:
     name: integration-tests
@@ -117,9 +117,9 @@ jobs:
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
           sudo apt-get install -y xsel xclip wl-clipboard
 
-          make clean test
+          make clean-build test
 
-      - name: Run integration tests with Pact
+      - name: Run integration & smoke tests with Pact
         if: matrix.os == 'macos-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -133,9 +133,9 @@ jobs:
           export DISPLAY=:99
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
 
-          make clean test
+          make clean-build test
 
-      - name: Run integration tests without Pact
+      - name: Run integration & smoke tests without Pact
         if: matrix.os == 'windows-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -143,7 +143,7 @@ jobs:
           INTEG_TESTS: "true"
           SMOKE_TESTS: "true"
         run: |
-          make clean test
+          make clean-build test
 
 
   proxy-test:
@@ -157,7 +157,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
-          make clean proxy-test
+          make clean-build proxy-test
 
   race-tests:
     name: race-test
@@ -185,7 +185,7 @@ jobs:
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
           sudo apt-get install -y xsel xclip wl-clipboard
 
-          make clean race-test
+          make clean-build race-test
 
   update-licenses:
     name: update licenses

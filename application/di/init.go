@@ -47,7 +47,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
-	domainNotify "github.com/snyk/snyk-ls/internal/notification"
 	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 )
@@ -99,7 +98,7 @@ func initInfrastructure(c *config.Config) {
 	authorizedClient := networkAccess.GetHttpClient
 	unauthorizedHttpClient := networkAccess.GetUnauthorizedHttpClient
 
-	notifier = domainNotify.NewNotifier()
+	notifier = notification.NewNotifier()
 	errorReporter = sentry.NewSentryErrorReporter(c, notifier)
 	installer = install.NewInstaller(errorReporter, unauthorizedHttpClient)
 	learnService = learn.New(gafConfiguration, c.Logger(), unauthorizedHttpClient)
