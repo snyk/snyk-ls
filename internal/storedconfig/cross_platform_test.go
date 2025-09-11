@@ -27,41 +27,47 @@ import (
 )
 
 func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
+	// Create one temporary directory for testing
+	tempDir := t.TempDir()
+
+	// Calculate the expected normalized path for the base case
+	basePath := types.FilePath(tempDir)
+	expectedNormalizedPath := util.PathKey(basePath)
+
 	tests := []struct {
-		name      string
-		inputPath types.FilePath
+		name                string
+		inputPath           types.FilePath
+		shouldMatchBasePath bool
 	}{
 		{
-			name:      "Unix path without trailing slash",
-			inputPath: "/Users/foo/project",
+			name:                "Base path (no modifications)",
+			inputPath:           basePath,
+			shouldMatchBasePath: true,
 		},
 		{
-			name:      "Unix path with trailing slash",
-			inputPath: "/Users/foo/project/",
+			name:                "Path with trailing slash",
+			inputPath:           types.FilePath(tempDir + "/"),
+			shouldMatchBasePath: true,
 		},
 		{
-			name:      "Windows path without trailing slash",
-			inputPath: `C:\Users\foo\project`,
+			name:                "Path with whitespace",
+			inputPath:           types.FilePath("  " + tempDir + "  "),
+			shouldMatchBasePath: true,
 		},
 		{
-			name:      "Windows path with trailing slash",
-			inputPath: `C:\Users\foo\project\`,
+			name:                "Path with mixed separators (Unix style)",
+			inputPath:           types.FilePath(tempDir + "/subdir"),
+			shouldMatchBasePath: false,
 		},
 		{
-			name:      "Mixed separators without trailing slash",
-			inputPath: `C:/Users/foo/project`,
+			name:                "Path with mixed separators (Windows style)",
+			inputPath:           types.FilePath(tempDir + "\\subdir"),
+			shouldMatchBasePath: false,
 		},
 		{
-			name:      "Mixed separators with trailing slash",
-			inputPath: `C:/Users/foo/project/`,
-		},
-		{
-			name:      "Path with whitespace",
-			inputPath: "  /Users/foo/project  ",
-		},
-		{
-			name:      "Unix path with Windows separators",
-			inputPath: `\Users\foo\project`,
+			name:                "Path with mixed separators and trailing slash",
+			inputPath:           types.FilePath(tempDir + "/subdir/"),
+			shouldMatchBasePath: false,
 		},
 	}
 
@@ -76,12 +82,21 @@ func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 			// Assert
 			require.NoError(t, err)
 			require.NotNil(t, folderConfig)
-			require.Equal(t, tt.inputPath, folderConfig.FolderPath)
+
+			// Calculate the expected normalized path for this specific input
+			expectedPath := util.PathKey(tt.inputPath)
+			require.Equal(t, expectedPath, folderConfig.FolderPath)
+
+			// For paths that should normalize to the same result as the base case, verify they do
+			if tt.shouldMatchBasePath {
+				require.Equal(t, expectedNormalizedPath, expectedPath,
+					"Path variations should normalize to the same result as the base case")
+			}
 
 			// Verify the config is stored with the normalized path as key
 			sc, err := GetStoredConfig(conf, &logger)
 			require.NoError(t, err)
-			normalizedKey := util.GenerateFolderConfigKey(tt.inputPath)
+			normalizedKey := util.PathKey(tt.inputPath)
 			require.NotNil(t, sc.FolderConfigs[normalizedKey])
 			require.Equal(t, folderConfig, sc.FolderConfigs[normalizedKey])
 		})

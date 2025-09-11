@@ -510,7 +510,9 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
 			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
 
-			if folderConfig.FolderPath == cloneTargetDir {
+			// Normalize both paths for comparison since folder config paths are now normalized
+			normalizedCloneTargetDir := util.PathKey(cloneTargetDir)
+			if folderConfig.FolderPath == normalizedCloneTargetDir {
 				foundFolderConfig = true
 				break
 			}
