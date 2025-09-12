@@ -222,7 +222,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"FileIcon":             html.FileIcon(),
 		"FolderPath":           string(folderPath),
 		"FilePath":             string(issue.GetAffectedFilePath()),
-		"IssueId":              issue.GetAdditionalData().GetKey(),
+		"IssueId":              getIssueId(issue),
 		"Styles":               template.CSS(panelStylesTemplate),
 		"Scripts":              template.JS(customScripts),
 		"Nonce":                nonce,
@@ -285,6 +285,19 @@ func parseCategory(category string) string {
 		return result
 	}
 	return category
+}
+
+func getIssueId(issue types.Issue) string {
+	if issue.GetAdditionalData() == nil {
+		return issue.GetID()
+	}
+
+	codeIssueData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
+	if ok && codeIssueData.GetKey() != "" {
+		return codeIssueData.GetKey()
+	}
+
+	return issue.GetID()
 }
 
 func parseStatus(status codeClientSarif.SuppresionStatus) string {

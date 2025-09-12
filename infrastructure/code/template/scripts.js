@@ -47,7 +47,20 @@ function generateAIFix() {
   var filePath = generateAIFixButton.getAttribute('file-path');
   var generateFixQueryString = folderPath + '@|@' + filePath + '@|@' + issueId;
 
-  ${ideGenerateAIFix}
+  // Default implementation - call the language server command with the issue ID
+  if (typeof vscode !== 'undefined' && vscode.commands) {
+    vscode.commands.executeCommand('snyk.code.fixDiffs', issueId);
+  } else {
+    // Fallback for other IDEs or when vscode is not available
+    console.log('AI Fix requested for issue:', issueId);
+    // Try to call the command through the parent window if available
+    if (window.parent && window.parent.postMessage) {
+      window.parent.postMessage({
+        command: 'snyk.code.fixDiffs',
+        arguments: [issueId]
+      }, '*');
+    }
+  }
 }
 function applyFix() {
   if (!suggestion) return;
@@ -58,7 +71,21 @@ function applyFix() {
   var fixId = diffSuggestion.fixId;
   lastAppliedFix = diffSelectedIndex;
   applyFixButton.disabled = true;
-  ${ideApplyAIFix}
+
+  // Default implementation - call the language server command with the fix ID
+  if (typeof vscode !== 'undefined' && vscode.commands) {
+    vscode.commands.executeCommand('snyk.code.fixApplyEdit', fixId);
+  } else {
+    // Fallback for other IDEs or when vscode is not available
+    console.log('Apply Fix requested for fixId:', fixId);
+    // Try to call the command through the parent window if available
+    if (window.parent && window.parent.postMessage) {
+      window.parent.postMessage({
+        command: 'snyk.code.fixApplyEdit',
+        arguments: [fixId]
+      }, '*');
+    }
+  }
 }
 var fixWrapperElem = document.getElementById('fix-wrapper');
 var fixSectionElem = document.getElementById('fixes-section');
