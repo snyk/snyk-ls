@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils/ldx_sync"
 
 	"github.com/snyk/snyk-ls/application/entrypoint"
 	"github.com/snyk/snyk-ls/application/server"
@@ -79,14 +80,19 @@ func lsWorkflow(
 
 	logger := invocation.GetEnhancedLogger()
 	extensionConfig := invocation.GetConfiguration()
+	engine := invocation.GetEngine()
 
 	logger.Info().Msgf("LS Version: %s", config.Version)
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	defaultConfig := invocation.GetEngine().GetConfiguration()
+	defaultConfig := engine.GetConfiguration()
 	defaultConfig.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
 	defaultConfig.Set(configuration.CONFIG_CACHE_TTL, configCacheTTL)
 	defaultConfig.Set(configuration.CONFIG_CACHE_DISABLED, false)
+
+	//add default func for ldx-sync org here.
+	defaultConfig.AddDefaultValue(configuration.ORGANIZATION, ldx_sync.DefaultFuncOrganizationLdx(engine, extensionConfig, logger, nil))
+	defaultConfig.AddDefaultValue(ldx_sync.LDX_SYNC_CONFIG, ldx_sync.DefaultFuncLdxSyncConfig(engine, extensionConfig, logger, nil))
 
 	c := config.NewFromExtension(invocation.GetEngine())
 	c.SetConfigFile(extensionConfig.GetString("configfile"))
