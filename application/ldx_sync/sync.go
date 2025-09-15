@@ -20,7 +20,6 @@ import (
 	"reflect"
 
 	ldx_sync_config "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils/ldx_sync"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -31,7 +30,7 @@ func SyncConfiguration(c *config.Config) {
 	c.Logger().Debug().Msg("Syncing LDX-Sync configuration")
 
 	// Get the LDX-Sync configuration from the engine
-	ldxConfig := c.Engine().GetConfiguration().Get(ldx_sync.LDX_SYNC_CONFIG)
+	ldxConfig := c.Engine().GetConfiguration().Get(ldx_sync_config.LDX_SYNC_CONFIG)
 	if ldxConfig == nil {
 		c.Logger().Debug().Msg("No LDX-Sync configuration available")
 		return
