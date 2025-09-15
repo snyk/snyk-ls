@@ -31,7 +31,7 @@ type ScanData struct {
 	Product           product.Product
 	Issues            []Issue
 	Err               error
-	DurationMs        time.Duration
+	Duration          time.Duration
 	TimestampFinished time.Time
 	Path              FilePath
 	IsDeltaScan       bool

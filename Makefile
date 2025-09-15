@@ -28,9 +28,13 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 
 TOOLS_BIN := $(shell pwd)/.bin
 
-OVERRIDE_GOCI_LINT_V := v1.64.8
+GOCI_LINT_V := v2.3.0
+GOCI_LINT_TARGETS := $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/.golangci-lint_$(GOCI_LINT_V)
+
 GOLICENSES_V := v1.6.0
-PACT_V := 2.4.2
+
+PACT_CLI_V := v2.4.2
+PACT_CLI_TARGETS := $(TOOLS_BIN)/pact/bin/pact $(TOOLS_BIN)/.pact_$(PACT_CLI_V)
 
 NOCACHE := "-count=1"
 TIMEOUT := "-timeout=45m"
@@ -38,48 +42,63 @@ TIMEOUT := "-timeout=45m"
 
 ## tools: Install required tooling.
 .PHONY: tools
-tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
+tools: $(TOOLS_BIN)/go-licenses $(GOCI_LINT_TARGETS) $(PACT_CLI_TARGETS)
 	@echo "Please make sure to install NPM locally to be able to run analytics verification Ampli."
 
-$(TOOLS_BIN)/go-licenses:
+$(TOOLS_BIN):
+	@mkdir -p $(TOOLS_BIN)
+
+$(TOOLS_BIN)/go-licenses: $(TOOLS_BIN)
 	@echo "==> Installing go-licenses"
 	@GOBIN=$(TOOLS_BIN) go install github.com/google/go-licenses@$(GOLICENSES_V)
 
-$(TOOLS_BIN)/golangci-lint:
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(OVERRIDE_GOCI_LINT_V)/install.sh | sh -s -- -b $(TOOLS_BIN)/ $(OVERRIDE_GOCI_LINT_V)
+$(GOCI_LINT_TARGETS): $(TOOLS_BIN)
+	@rm -f $(TOOLS_BIN)/.golangci-lint_*
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOCI_LINT_V)/install.sh | sh -s -- -b $(TOOLS_BIN)/ $(GOCI_LINT_V)
+	@touch $(TOOLS_BIN)/.golangci-lint_$(GOCI_LINT_V)
 
-$(TOOLS_BIN)/pact/bin/pact:
-	cd $(TOOLS_BIN); curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/v$(PACT_V)/install.sh | PACT_CLI_VERSION=v$(PACT_V) bash
+$(PACT_CLI_TARGETS): $(TOOLS_BIN)
+	@rm -f $(TOOLS_BIN)/.pact_*
+	@cd $(TOOLS_BIN) && curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | PACT_CLI_VERSION=$(PACT_CLI_V) bash && cd ../
+	@touch $(TOOLS_BIN)/.pact_$(PACT_CLI_V)
 
-## clean: Delete the build directory
+## clean: Delete the build and tools directories.
 .PHONY: clean
-clean:
+clean: clean-build clean-tools
+
+## clean-tools: Delete only the tools directory.
+.PHONY: clean-tools
+clean-tools:
+	@echo "==> Removing tools bin directory..."
+	@rm -rf $(TOOLS_BIN)
+
+## clean-build: Delete only the build directory.
+.PHONY: clean-build
+clean-build:
 	@echo "==> Removing '$(BUILD_DIR)' directory..."
 	@rm -rf $(BUILD_DIR)
 
 ## lint: Lint code with golangci-lint.
 .PHONY: lint
-lint: $(TOOLS_BIN)/golangci-lint
+lint: $(GOCI_LINT_TARGETS)
 	@echo "==> Linting code with 'golangci-lint'..."
-	@$(TOOLS_BIN)/golangci-lint run ./...
+	@$(TOOLS_BIN)/golangci-lint run --timeout=10m ./...
 
 ## lint: Lint code with golangci-lint.
 .PHONY: lint-fix
-lint-fix: $(TOOLS_BIN)/golangci-lint
+lint-fix: $(GOCI_LINT_TARGETS)
 	@echo "==> Linting and fixing code with 'golangci-lint'..."
-	@$(TOOLS_BIN)/golangci-lint run --fix ./...
-
-
+	@$(TOOLS_BIN)/golangci-lint run --timeout=10m --fix ./...
 
 ## test: Run all tests.
 .PHONY: test
-test:
+test: $(PACT_CLI_TARGETS)
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
 	@go test $(NOCACHE) $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
 
 .PHONY: race-test
-race-test:
+race-test: $(PACT_CLI_TARGETS)
 	@echo "==> Running integration tests with race-detector..."
 	@mkdir -p $(BUILD_DIR)
 	@export INTEG_TESTS=true
@@ -92,6 +111,7 @@ proxy-test:
 	@docker build -t "snyk-ls:$(VERSION)" -f .github/docker-based-tests/Dockerfile .
 	@docker run --rm --cap-add=NET_ADMIN --name "snyk-ls" --env "SNYK_TOKEN=$(SNYK_TOKEN)" snyk-ls:$(VERSION) make instance-test
 
+.PHONY: instance-test
 instance-test:
 	@echo "==> Running instance tests"
 	@export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
@@ -120,7 +140,7 @@ endif
 ## build-debug: Build binary for debugging
 .PHONY: build-debug
 build-debug:
-	@make clean
+	@make clean-build
 	@echo "==> Building binary..."
 	@echo "    running go build with debug flags"
 
@@ -165,6 +185,7 @@ license-update: $(TOOLS_BIN)/go-licenses
 licenses: $(TOOLS_BIN)/go-licenses
 	@GOROOT=$(GOROOT) $(TOOLS_BIN)/go-licenses report . --ignore github.com/snyk/snyk-ls
 
+.PHONY: help
 help: Makefile
 	@echo "Usage: make <command>"
 	@echo ""
