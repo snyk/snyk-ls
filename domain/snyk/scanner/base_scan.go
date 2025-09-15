@@ -24,6 +24,7 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
@@ -33,6 +34,18 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	logger := sc.c.Logger().With().Str("method", "scanBaseBranch").Logger()
 	if folderConfig == nil {
 		return errors.New("folder config is required")
+	}
+
+	if err := util.ValidatePathStrict(folderConfig.FolderPath); err != nil {
+		logger.Error().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("invalid folder path")
+		return err
+	}
+
+	if folderConfig.ReferenceFolderPath != "" {
+		if err := util.ValidatePathLenient(folderConfig.ReferenceFolderPath); err != nil {
+			logger.Error().Err(err).Str("referencePath", string(folderConfig.ReferenceFolderPath)).Msg("invalid reference folder path")
+			return err
+		}
 	}
 
 	folderPath := folderConfig.FolderPath

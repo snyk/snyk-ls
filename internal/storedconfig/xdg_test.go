@@ -45,12 +45,15 @@ func Test_folderConfigFromFallbackStorage_never_nil_and_added_to_config(t *testi
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
-	folderConfig, err := folderConfigFromStorage(conf, "testPath", &logger)
+	tempDir := t.TempDir()
+	path := types.FilePath(tempDir)
+
+	folderConfig, err := folderConfigFromStorage(conf, path, &logger)
 
 	require.NoError(t, err)
 	require.NotNil(t, folderConfig)
 
 	storedConfig := conf.Get(ConfigMainKey).(StoredConfig)
 	require.NotNil(t, storedConfig)
-	require.Equal(t, folderConfig, storedConfig.FolderConfigs[util.GenerateFolderConfigKey(types.FilePath("testPath"))])
+	require.Equal(t, folderConfig, storedConfig.FolderConfigs[util.PathKey(path)])
 }
