@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/code-client-go/scan"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
@@ -345,10 +346,10 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 
 func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(ctx context.Context, logger zerolog.Logger) (context.Context, zerolog.Logger) {
 	// by default, scan source is IDE
-	scanSource, ok := ctx2.ScanSourceFromContext(ctx)
+	scanSource, ok := scan.ScanSourceFromContext(ctx)
 	if !ok {
-		scanSource = ctx2.IDE
-		ctx = ctx2.NewContextWithScanSource(ctx, scanSource)
+		scanSource = scan.IDE
+		ctx = scan.NewContextWithScanSource(ctx, scanSource)
 	}
 
 	logger = logger.With().Any("scanSource", scanSource).Logger()

@@ -18,30 +18,8 @@ package context
 
 import "context"
 
-type ScanSource string
-
-func (s ScanSource) String() string {
-	return string(s)
-}
-
-const (
-	LLM ScanSource = "LLM"
-	IDE ScanSource = "IDE"
-)
-
-type scanSourceKeyType int
-
-var scanSourceKey scanSourceKeyType
-
-func NewContextWithScanSource(ctx context.Context, source ScanSource) context.Context {
-	return context.WithValue(ctx, scanSourceKey, source)
-}
-
-func ScanSourceFromContext(ctx context.Context) (ScanSource, bool) {
-	s, ok := ctx.Value(scanSourceKey).(ScanSource)
-	return s, ok
-}
-
+// DeltaScanType codifies the type of delta scan being performed.
+// For scan sources, see scan.ScanSource in code-client-go.
 type DeltaScanType string
 
 func (d DeltaScanType) String() string {

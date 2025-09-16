@@ -23,13 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-	context2 "github.com/snyk/snyk-ls/internal/context"
-	"github.com/snyk/snyk-ls/internal/testsupport"
-
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
@@ -37,20 +30,26 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/code-client-go/scan"
+
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/internal/types"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
-	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -690,7 +689,7 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 			require.Contains(t, payload, "scan_type")
 		})
 
-	ctx := context2.NewContextWithScanSource(context2.NewContextWithDeltaScanType(t.Context(), context2.WorkingDirectory), context2.LLM)
+	ctx := scan.NewContextWithScanSource(context.NewContextWithDeltaScanType(t.Context(), context.WorkingDirectory), scan.LLM)
 
 	// Act
 	f.ProcessResults(ctx, scanData)
@@ -738,11 +737,11 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	time.Sleep(time.Second)
 }
 
-func NewMockFolder(c *config.Config, notifier noti.Notifier) *Folder {
+func NewMockFolder(c *config.Config, notifier notification.Notifier) *Folder {
 	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator())
 }
 
-func NewMockFolderWithScanNotifier(c *config.Config, notifier noti.Notifier) (*Folder, *scanner.MockScanNotifier) {
+func NewMockFolderWithScanNotifier(c *config.Config, notifier notification.Notifier) (*Folder, *scanner.MockScanNotifier) {
 	scanNotifier := scanner.NewMockScanNotifier()
 	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanNotifier, notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator()), scanNotifier
 }
