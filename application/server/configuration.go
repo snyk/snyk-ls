@@ -26,6 +26,7 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog"
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
@@ -161,6 +162,8 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), settings.FolderConfigs, logger)
 	if err != nil {
 		c.Logger().Err(err).Msg("couldn't update folder configs")
+		notifier := di.Notifier()
+		notifier.SendShowMessage(sglsp.MTError, err.Error())
 	}
 }
 
