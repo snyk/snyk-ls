@@ -23,8 +23,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -33,14 +32,13 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	context2 "github.com/snyk/snyk-ls/internal/context"
-
 	"github.com/snyk/snyk-ls/internal/delta"
-
-	"github.com/puzpuzpuz/xsync/v3"
-
 	"github.com/snyk/snyk-ls/internal/types"
 
+	"github.com/snyk/code-client-go/scan"
+
 	gafanalytics "github.com/snyk/go-application-framework/pkg/analytics"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 
@@ -414,7 +412,7 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 
 	extension := map[string]any{"is_delta_scan": data.IsDeltaScan}
 
-	scanSource, ok := context2.ScanSourceFromContext(ctx)
+	scanSource, ok := scan.ScanSourceFromContext(ctx)
 	if ok {
 		extension["scan_source"] = scanSource.String()
 	}

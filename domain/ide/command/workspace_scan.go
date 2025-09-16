@@ -20,8 +20,9 @@ import (
 	"context"
 
 	"github.com/snyk/snyk-ls/application/config"
-	context2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
+
+	"github.com/snyk/code-client-go/scan"
 )
 
 type workspaceScanCommand struct {
@@ -58,10 +59,10 @@ func (cmd *workspaceScanCommand) enrichContextWithScanSource(ctx context.Context
 		return ctx
 	}
 
-	if sc != context2.IDE.String() && sc != context2.LLM.String() {
+	if sc != scan.IDE.String() && sc != scan.LLM.String() {
 		return ctx
 	}
 
-	scanSource := context2.ScanSource(sc)
-	return context2.NewContextWithScanSource(ctx, scanSource)
+	scanSource := scan.ScanSource(sc)
+	return scan.NewContextWithScanSource(ctx, scanSource)
 }
