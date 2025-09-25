@@ -193,6 +193,11 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return mcp.NewToolResultText(trustErr), nil
 		}
 
+		user, err := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
+		if err != nil || user.UserName == "" {
+			return mcp.NewToolResultText("User not authenticated. Please run 'snyk_auth' first"), nil
+		}
+
 		if cmd, ok := params["command"]; ok && !verifyCommandArgument(cmd.value) {
 			return mcp.NewToolResultText("Error: The provided binary name is invalid. Only use the `command` argument for python scanning and provide absolute path of python binary path."), nil
 		}
