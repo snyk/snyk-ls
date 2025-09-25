@@ -59,6 +59,7 @@ type SnykMcpToolsDefinition struct {
 	Command        []string               `json:"command"`
 	StandardParams []string               `json:"standardParams"`
 	IgnoreTrust    bool                   `json:"ignoreTrust"`
+	IgnoreAuth     bool                   `json:"ignoreAuth"`
 	OutputMapper   string                 `json:"outputMapper"`
 	Params         []SnykMcpToolParameter `json:"params"`
 }
@@ -192,9 +193,11 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			return mcp.NewToolResultText(trustErr), nil
 		}
 
-		user, err := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
-		if err != nil || user.UserName == "" {
-			return mcp.NewToolResultText("User not authenticated. Please run 'snyk_auth' first"), nil
+		if !toolDef.IgnoreAuth {
+			user, err := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
+			if err != nil || user.UserName == "" {
+				return mcp.NewToolResultText("User not authenticated. Please run 'snyk_auth' first"), nil
+			}
 		}
 
 		if cmd, ok := params["command"]; ok && !verifyCommandArgument(cmd.value) {

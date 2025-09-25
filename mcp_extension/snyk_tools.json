@@ -7,6 +7,7 @@
         "auth"
       ],
       "ignoreTrust": true,
+      "ignoreAuth": true,
       "standardParams": [],
       "params": []
     },
@@ -531,6 +532,7 @@
         "version"
       ],
       "ignoreTrust": true,
+      "ignoreAuth": true,
       "standardParams": [],
       "params": []
     },
@@ -539,6 +541,7 @@
       "description": "Logs the Snyk MCP out of the current Snyk account by clearing the locally stored authentication token. \nWhen to use: When needing to switch Snyk accounts, or to ensure a clean state by removing existing authentication from the local machine.",
       "command": [],
       "ignoreTrust": true,
+      "ignoreAuth": true,
       "standardParams": [],
       "params": []
     },
@@ -577,6 +580,7 @@
           "name": "path",
           "type": "string",
           "isRequired": true,
+          "ignoreAuth": true,
           "description": "Path to the project folder to trust (default is the absolute path of the current directory, formatted according to the operating system's conventions)."
         }
       ]
