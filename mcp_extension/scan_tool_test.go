@@ -38,6 +38,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 
 	"github.com/snyk/snyk-ls/infrastructure/learn"
