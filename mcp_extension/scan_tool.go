@@ -118,8 +118,6 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykSendFeedback(invocationCtx, toolDef))
 		case SnykAuth:
 			m.mcpServer.AddTool(tool, m.snykAuthHandler(invocationCtx, toolDef))
-		case SnykAuthStatus:
-			m.mcpServer.AddTool(tool, m.snykAuthStatusHandler(invocationCtx, toolDef))
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -228,19 +226,27 @@ func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext
 		logger := m.logger.With().Str("method", "snykAuthHandler").Logger()
 		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
 
-		if os.Getenv("SNYK_TOKEN") != "" {
-			logger.Error().Msg("Auth tool can't be called if SNYK_TOKEN env var is set")
-			return mcp.NewToolResultText("SNYK_TOKEN env var is set, validity must be checked with snyk_auth_status IF NOT ALREADY DONE"), nil
+		engine := invocationCtx.GetEngine()
+		globalConfig := engine.GetConfiguration()
+		apiUrl := globalConfig.GetString(configuration.API_URL)
+
+		user, err := authentication.CallWhoAmI(&logger, engine)
+		if err == nil && user.UserName != "" {
+			msg := getAuthMsg(globalConfig, user.UserName)
+			return mcp.NewToolResultText(msg), nil
 		}
+
+		if err != nil && os.Getenv("SNYK_TOKEN") != "" {
+			logger.Error().Msg("Auth tool can't be called if SNYK_TOKEN env var is set")
+			return mcp.NewToolResultText("Authentication aborted. Auth tool can't be called if SNYK_TOKEN env var is set"), nil
+		}
+
+		logger.Info().Msgf("Starting authentication process. API Endpoint: %s", apiUrl)
 
 		conf := invocationCtx.GetConfiguration()
 		conf.Set(localworkflows.AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
 
-		_, err := invocationCtx.GetEngine().InvokeWithConfig(localworkflows.WORKFLOWID_AUTH, conf)
-		if err != nil {
-			logger.Error().Err(err).Msg("Error logging in")
-			return mcp.NewToolResultText(fmt.Sprintf("Error logging in: %s", err.Error())), nil
-		}
+		_, err = engine.InvokeWithConfig(localworkflows.WORKFLOWID_AUTH, conf)
 		return mcp.NewToolResultText("Successfully logged in"), nil
 	}
 }
@@ -257,29 +263,6 @@ func (m *McpLLMBinding) snykLogoutHandler(invocationCtx workflow.InvocationConte
 		}
 
 		return mcp.NewToolResultText("Successfully logged out"), nil
-	}
-}
-
-func (m *McpLLMBinding) snykAuthStatusHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		logger := m.logger.With().Str("method", "snykAuthStatusHandler").Logger()
-		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
-		user, err := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
-
-		globalConfig := invocationCtx.GetEngine().GetConfiguration()
-		apiUrl := globalConfig.GetString(configuration.API_URL)
-		org := globalConfig.GetString(configuration.ORGANIZATION)
-
-		if err != nil || user == nil {
-			msg := fmt.Sprintf("Authentication Error. \nUsing API Endpoint: %s", apiUrl)
-			if os.Getenv("SNYK_TOKEN") != "" {
-				msg += fmt.Sprintf("\nSNYK_TOKEN env var is set, check if your token is valid and if you are using the correct API %s. "+
-					"ACTION: Ask the user if they want to logout with the following phrasing, 'Do you want to reset authentication for the CLI and the MCP server' if they answer with YES then run snyk_logout tool", apiUrl)
-			}
-			return mcp.NewToolResultText(msg), nil
-		}
-
-		return mcp.NewToolResultText(fmt.Sprintf("User: %s Using API Endpoint: %s and Org: %s", user.UserName, apiUrl, org)), nil
 	}
 }
 
@@ -309,6 +292,10 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 		}
 		if path == "" {
 			return nil, fmt.Errorf("empty path given to tool %s", toolDef.Name)
+		}
+
+		if preventedCount == 0 && remediatedCount == 0 {
+			return mcp.NewToolResultText("No issues to send feedback for"), nil
 		}
 
 		clientInfo := ClientInfoFromContext(ctx)
@@ -356,4 +343,11 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 
 		return m.folderTrust.HandleTrust(ctx, folderPath, logger)
 	}
+}
+
+func getAuthMsg(config configuration.Configuration, userName string) string {
+	apiUrl := config.GetString(configuration.API_URL)
+	org := config.GetString(configuration.ORGANIZATION)
+
+	return fmt.Sprintf("Already Authenticated. User: %s Using API Endpoint: %s and Org: %s", userName, apiUrl, org)
 }
