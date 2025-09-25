@@ -47,7 +47,6 @@ const (
 	SnykCodeTest        = "snyk_code_scan"
 	SnykVersion         = "snyk_version"
 	SnykAuth            = "snyk_auth"
-	SnykAuthStatus      = "snyk_auth_status"
 	SnykLogout          = "snyk_logout"
 	SnykTrust           = "snyk_trust"
 	SnykOpenLearnLesson = "snyk_open_learn_lesson"
@@ -252,6 +251,11 @@ func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext
 		conf.Set(localworkflows.AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
 
 		_, err = engine.InvokeWithConfig(localworkflows.WORKFLOWID_AUTH, conf)
+
+		if err != nil {
+			return mcp.NewToolResultText("Authentication failed"), nil
+		}
+
 		return mcp.NewToolResultText("Successfully logged in"), nil
 	}
 }

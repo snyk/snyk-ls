@@ -450,12 +450,11 @@ func TestGetSnykToolsConfig(t *testing.T) {
 	require.NotEmpty(t, config.Tools)
 
 	toolNames := map[string]bool{
-		SnykScaTest:    false,
-		SnykCodeTest:   false,
-		SnykVersion:    false,
-		SnykAuth:       false,
-		SnykAuthStatus: false,
-		SnykLogout:     false,
+		SnykScaTest:  false,
+		SnykCodeTest: false,
+		SnykVersion:  false,
+		SnykAuth:     false,
+		SnykLogout:   false,
 	}
 
 	for _, tool := range config.Tools {
