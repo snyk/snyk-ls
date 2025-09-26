@@ -31,11 +31,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
@@ -74,6 +78,9 @@ func setupTestFixture(t *testing.T) *testFixture {
 	invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	invocationCtx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("hurz"), runtimeinfo.WithVersion("1000.8.3"))).AnyTimes()
 	invocationCtx.EXPECT().GetEngine().Return(engine).AnyTimes()
+	engine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	_, expectedUserData := whoamiWorkflowResponse(t)
+	engine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return(expectedUserData, nil).AnyTimes()
 	// Snyk CLI mock
 	tempDir := t.TempDir()
 	snykCliPath := filepath.Join(tempDir, "snyk")
@@ -365,13 +372,6 @@ func TestBasicSnykCommands(t *testing.T) {
 			mockResponse: `{"client":{"version":"1.1192.0"}}`,
 			expectedCmd:  "version",
 		},
-		{
-			name:         "Auth Status Command",
-			handlerFunc:  fixture.binding.defaultHandler,
-			command:      []string{"whoami", "--experimental"},
-			mockResponse: `{"authenticated":true,"username":"user@example.com"}`,
-			expectedCmd:  "auth",
-		},
 	}
 
 	for _, tc := range testCases {
@@ -450,12 +450,11 @@ func TestGetSnykToolsConfig(t *testing.T) {
 	require.NotEmpty(t, config.Tools)
 
 	toolNames := map[string]bool{
-		SnykScaTest:    false,
-		SnykCodeTest:   false,
-		SnykVersion:    false,
-		SnykAuth:       false,
-		SnykAuthStatus: false,
-		SnykLogout:     false,
+		SnykScaTest:  false,
+		SnykCodeTest: false,
+		SnykVersion:  false,
+		SnykAuth:     false,
+		SnykLogout:   false,
 	}
 
 	for _, tool := range config.Tools {
@@ -1359,4 +1358,22 @@ func TestSnykTrustHandler(t *testing.T) {
 		require.Nil(t, result)
 		require.Contains(t, err.Error(), "empty path given to tool snyk_trust")
 	})
+}
+
+func whoamiWorkflowResponse(t *testing.T) (*authentication.ActiveUser, []workflow.Data) {
+	t.Helper()
+	expectedUser := authentication.ActiveUser{
+		Id:       "id",
+		UserName: "username",
+	}
+	expectedUserJSON, err := json.Marshal(expectedUser)
+	require.NoError(t, err)
+
+	expectedUserData := []workflow.Data{
+		workflow.NewData(
+			workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_WHOAMI, "payload"),
+			"application/json",
+			expectedUserJSON),
+	}
+	return &expectedUser, expectedUserData
 }
