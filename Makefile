@@ -48,16 +48,16 @@ tools: $(TOOLS_BIN)/go-licenses $(GOCI_LINT_TARGETS) $(PACT_CLI_TARGETS)
 $(TOOLS_BIN):
 	@mkdir -p $(TOOLS_BIN)
 
-$(TOOLS_BIN)/go-licenses: $(TOOLS_BIN)
+$(TOOLS_BIN)/go-licenses: | $(TOOLS_BIN)
 	@echo "==> Installing go-licenses"
 	@GOBIN=$(TOOLS_BIN) go install github.com/google/go-licenses@$(GOLICENSES_V)
 
-$(GOCI_LINT_TARGETS): $(TOOLS_BIN)
+$(GOCI_LINT_TARGETS): | $(TOOLS_BIN)
 	@rm -f $(TOOLS_BIN)/.golangci-lint_*
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOCI_LINT_V)/install.sh | sh -s -- -b $(TOOLS_BIN)/ $(GOCI_LINT_V)
 	@touch $(TOOLS_BIN)/.golangci-lint_$(GOCI_LINT_V)
 
-$(PACT_CLI_TARGETS): $(TOOLS_BIN)
+$(PACT_CLI_TARGETS): | $(TOOLS_BIN)
 	@rm -f $(TOOLS_BIN)/.pact_*
 	@cd $(TOOLS_BIN) && curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/master/install.sh | PACT_CLI_VERSION=$(PACT_CLI_V) bash && cd ../
 	@touch $(TOOLS_BIN)/.pact_$(PACT_CLI_V)
