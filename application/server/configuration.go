@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/application/ldx_sync"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -47,6 +48,10 @@ func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.
 		if !reflect.DeepEqual(params.Settings, emptySettings) {
 			// client used settings push
 			UpdateSettings(c, params.Settings)
+
+			// Sync LDX-Sync configuration after settings update
+			ldx_sync.SyncConfiguration(c)
+
 			return true, nil
 		}
 
@@ -87,6 +92,9 @@ func InitializeSettings(c *config.Config, settings types.Settings) {
 	updateDeviceInformation(c, settings)
 	updateAutoScan(c, settings)
 	c.SetClientProtocolVersion(settings.RequiredProtocolVersion)
+
+	// Sync LDX-Sync configuration during initialization
+	ldx_sync.SyncConfiguration(c)
 }
 
 func UpdateSettings(c *config.Config, settings types.Settings) {
@@ -117,7 +125,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
 	updateProductEnablement(c, settings)
 	updateCliConfig(c, settings)
 	updateApiEndpoints(c, settings, initialize) // Must be called before token is set, as it may trigger a logout which clears the token.
-	updateToken(settings.Token)                 // Must be called before the Authentication method is set, as the latter checks the token.
+	updateToken(c, settings.Token)              // Must be called before the Authentication method is set, as the latter checks the token.
 	updateAuthenticationMethod(c, settings)
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings, initialize)
@@ -174,6 +182,9 @@ func updateAuthenticationMethod(c *config.Config, settings types.Settings) {
 
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
 	di.AuthenticationService().ConfigureProviders(c)
+
+	// Sync LDX-Sync configuration when authentication method changes
+	ldx_sync.SyncConfiguration(c)
 }
 
 func updateRuntimeInfo(c *config.Config, settings types.Settings) {
@@ -260,9 +271,14 @@ func updateDeltaFindings(c *config.Config, settings types.Settings) {
 	}
 }
 
-func updateToken(token string) {
+func updateToken(c *config.Config, token string) {
 	// Token was sent from the client, no need to send notification
 	di.AuthenticationService().UpdateCredentials(token, false, false)
+
+	// Sync LDX-Sync configuration when token changes
+	if token != "" {
+		ldx_sync.SyncConfiguration(c)
+	}
 }
 
 func updateApiEndpoints(c *config.Config, settings types.Settings, initialization bool) {
@@ -280,6 +296,11 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, initializatio
 	if settings.SnykCodeApi != "" {
 		c.SetSnykCodeApi(settings.SnykCodeApi)
 	}
+
+	// Sync LDX-Sync configuration when API endpoints change
+	if endpointsUpdated {
+		ldx_sync.SyncConfiguration(c)
+	}
 }
 
 func updateOrganization(c *config.Config, settings types.Settings) {
@@ -290,6 +311,8 @@ func updateOrganization(c *config.Config, settings types.Settings) {
 		newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
 		if oldOrgId != newOrgId {
 			go sendConfigChangedAnalyticsEvent(c, "organization", oldOrgId, newOrgId, "")
+			// Sync LDX-Sync configuration when organization changes
+			ldx_sync.SyncConfiguration(c)
 		}
 	}
 }
