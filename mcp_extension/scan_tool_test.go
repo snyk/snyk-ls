@@ -28,10 +28,12 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -57,7 +59,34 @@ func SetupEngineMock(t *testing.T) (*mocks.MockEngine, configuration.Configurati
 	mockEngine := mocks.NewMockEngine(ctrl)
 	engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	payload := getMockWhoAmiResponse(t)
+	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return([]workflow.Data{payload}, nil).AnyTimes()
 	return mockEngine, engineConfig
+}
+
+func getMockWhoAmiResponse(t *testing.T) workflow.Data {
+	t.Helper()
+	type whoamiResponseType struct {
+		Id       string `json:"id"`
+		UserName string `json:"username"`
+		Email    string `json:"email"`
+		Name     string `json:"name"`
+	}
+	userData := whoamiResponseType{
+		Id:       uuid.NewString(),
+		UserName: "test-user",
+		Email:    "test@email.com",
+		Name:     "test user",
+	}
+
+	// parse response
+	userJSONBytes, err := json.Marshal(userData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_WHOAMI, "application/json")
+	payload := workflow.NewData(id, "application/json", userJSONBytes)
+	return payload
 }
 
 func setupTestFixture(t *testing.T) *testFixture {
@@ -450,12 +479,11 @@ func TestGetSnykToolsConfig(t *testing.T) {
 	require.NotEmpty(t, config.Tools)
 
 	toolNames := map[string]bool{
-		SnykScaTest:    false,
-		SnykCodeTest:   false,
-		SnykVersion:    false,
-		SnykAuth:       false,
-		SnykAuthStatus: false,
-		SnykLogout:     false,
+		SnykScaTest:  false,
+		SnykCodeTest: false,
+		SnykVersion:  false,
+		SnykAuth:     false,
+		SnykLogout:   false,
 	}
 
 	for _, tool := range config.Tools {

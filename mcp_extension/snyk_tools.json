@@ -12,7 +12,7 @@
     },
     {
       "name": "snyk_sca_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed for accurate dependency resolution.",
+      "description": "WE NEED TO USE THE ABSOLUTE PATH IN THE PATH ARGUMENT. Analyzes projects for open-source vulnerabilities and license compliance issues by inspecting manifest files (e.g., package.json, pom.xml, requirements.txt) to understand dependencies and then queries the Snyk vulnerability database. \nWhen to use: During local development by developers on their workstations before committing changes for immediate feedback. \nHow to use: Test locally: run tool with at least the path parameter. \nPrerequisites: Project's package manager (e.g., Gradle, Maven, npm) must be installed for accurate dependency resolution.",
       "command": [
         "test"
       ],
@@ -234,7 +234,7 @@
     },
     {
       "name": "snyk_code_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Performs Static Application Security Testing (SAST) directly from the Snyk MCP. It analyzes an application's source code with a SAST scan to identify security vulnerabilities and weaknesses without executing the code. \nWhen to use: During local development, developers can run it on their feature branches for immediate feedback, or after you generate new code files. \nHow to use: Test directory: run snyk_code_scan with parameter <path>, add parameters as needed.",
+      "description": "Performs Static Application Security Testing (SAST) directly from the Snyk MCP. It analyzes an application's source code with a SAST scan to identify security vulnerabilities and weaknesses without executing the code. \nWhen to use: During local development, developers can run it on their feature branches for immediate feedback, or after you generate new code files. \nHow to use: Test directory: run snyk_code_scan with parameter <path>, add parameters as needed.",
       "command": [
         "code",
         "test"
@@ -277,7 +277,7 @@
     },
     {
       "name": "snyk_container_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Scans container images for known vulnerabilities in OS packages and application dependencies.\nHow to use: Test image: <snyk_container_scan> `IMAGE`=`my-image:v1`. Test with Dockerfile for context: <snyk_container_scan> `IMAGE`=`my-image:v1` `file`=`absolute/path/to/Dockerfile`. Test and exclude base image vulns: <snyk_container_scan> `IMAGE`=`my-image:v1` `exclude_base_image_vulns`. Test OCI archive: <snyk_container_scan> `IMAGE`=`oci-archive:image.tar` `platform`=`linux/arm64`.",
+      "description": "Scans container images for known vulnerabilities in OS packages and application dependencies.\nHow to use: Test image: <snyk_container_scan> `IMAGE`=`my-image:v1`. Test with Dockerfile for context: <snyk_container_scan> `IMAGE`=`my-image:v1` `file`=`absolute/path/to/Dockerfile`. Test and exclude base image vulns: <snyk_container_scan> `IMAGE`=`my-image:v1` `exclude_base_image_vulns`. Test OCI archive: <snyk_container_scan> `IMAGE`=`oci-archive:image.tar` `platform`=`linux/arm64`.",
       "command": [
         "container",
         "test"
@@ -374,7 +374,7 @@
     },
     {
       "name": "snyk_iac_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Analyzes Infrastructure as Code (IaC) files for security misconfigurations. Supports Terraform (.tf, .tf.json, plan files), Kubernetes (YAML, JSON), AWS CloudFormation (YAML, JSON), Azure Resource Manager (ARM JSON), and Serverless Framework. \nWhen to use: Locally by developers while writing IaC. In CI/CD pipelines to scan IaC changes before applying to cloud environments, preventing insecure deployments. The `report` option sends results to Snyk UI for ongoing visibility. \nHow to use: Test directory: <snyk_iac_scan> `path`=`absolute/path/to/dir`. Test specific TF file: <snyk_iac_scan> `path`=`absolute/path/to/file.tf`. Test dir, report to UI: <snyk_iac_scan> `path`=`absolute/path/to/dir` `report` `org`=`my-org`. Test K8s configs, report to UI, high severity: <snyk_iac_scan> `path`=`./k8s/` `report` `target_name`=`prod-k8s` `severity_threshold`=`high`. Test with custom rules: `<snyk_iac_scan> `path`=`/absolute/path/to/infra/` `rules`=`rules.tar.gz`.",
+      "description": "Analyzes Infrastructure as Code (IaC) files for security misconfigurations. Supports Terraform (.tf, .tf.json, plan files), Kubernetes (YAML, JSON), AWS CloudFormation (YAML, JSON), Azure Resource Manager (ARM JSON), and Serverless Framework. \nWhen to use: Locally by developers while writing IaC. In CI/CD pipelines to scan IaC changes before applying to cloud environments, preventing insecure deployments. The `report` option sends results to Snyk UI for ongoing visibility. \nHow to use: Test directory: <snyk_iac_scan> `path`=`absolute/path/to/dir`. Test specific TF file: <snyk_iac_scan> `path`=`absolute/path/to/file.tf`. Test dir, report to UI: <snyk_iac_scan> `path`=`absolute/path/to/dir` `report` `org`=`my-org`. Test K8s configs, report to UI, high severity: <snyk_iac_scan> `path`=`./k8s/` `report` `target_name`=`prod-k8s` `severity_threshold`=`high`. Test with custom rules: `<snyk_iac_scan> `path`=`/absolute/path/to/infra/` `rules`=`rules.tar.gz`.",
       "command": [
         "iac",
         "test"
@@ -488,7 +488,7 @@
     },
     {
       "name": "snyk_sbom_scan",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Experimental command. Analyzes an existing SBOM file for known vulnerabilities in its open-source components. Requires components in SBOM to be identified using PackageURLs (purls). \nWhen to use: After SBOM generation (by Snyk or other tools) to assess components. In CI/CD to test generated/received SBOMs. For vulnerability scanning of third-party software when only an SBOM is available. \nHow to use: <snyk_sbom_scan> `file`=`/absolute/path/to/my_app.cdx.json`. \nInput Requirements: SBOMs in CycloneDX (JSON 1.4-1.6) or SPDX (JSON 2.3). Packages must have purls (types: apk, cargo, cocoapods, composer, deb, gem, generic, golang, hex, maven, npm, nuget, pub, pypi, rpm, swift). \nSecure SDLC Integration: Testing/Validation Phase: Scans inventoried components post-SBOM generation. Third-Party Risk Management: Assesses vulnerabilities from SBOMs of external software.",
+      "description": "Experimental command. Analyzes an existing SBOM file for known vulnerabilities in its open-source components. Requires components in SBOM to be identified using PackageURLs (purls). \nWhen to use: After SBOM generation (by Snyk or other tools) to assess components. In CI/CD to test generated/received SBOMs. For vulnerability scanning of third-party software when only an SBOM is available. \nHow to use: <snyk_sbom_scan> `file`=`/absolute/path/to/my_app.cdx.json`. \nInput Requirements: SBOMs in CycloneDX (JSON 1.4-1.6) or SPDX (JSON 2.3). Packages must have purls (types: apk, cargo, cocoapods, composer, deb, gem, generic, golang, hex, maven, npm, nuget, pub, pypi, rpm, swift). \nSecure SDLC Integration: Testing/Validation Phase: Scans inventoried components post-SBOM generation. Third-Party Risk Management: Assesses vulnerabilities from SBOMs of external software.",
       "command": [
         "sbom",
         "test"
@@ -535,14 +535,6 @@
       "params": []
     },
     {
-      "name": "snyk_auth_status",
-      "description": "Checks and displays the current Snyk authentication status, including the API token endpoint and the user you are authenticated as. \nWhen to use: To verify if the CLI is properly authenticated and to which user/organization context it is linked. This authentication check is generally only needed once per USER session.",
-      "command": [],
-      "ignoreTrust": true,
-      "standardParams": [],
-      "params": []
-    },
-    {
       "name": "snyk_logout",
       "description": "Logs the Snyk MCP out of the current Snyk account by clearing the locally stored authentication token. \nWhen to use: When needing to switch Snyk accounts, or to ensure a clean state by removing existing authentication from the local machine.",
       "command": [],
@@ -552,7 +544,7 @@
     },
     {
       "name": "snyk_aibom",
-      "description": "Before invoking this tool, snyk_auth_status should be called to check if authentication is needed. Generates an AI Bill of Materials (AIBOM) for Python software projects in CycloneDX v1.6 JSON format. This experimental feature analyzes local Python projects to identify AI models, datasets, tools, and other AI-related components. Requires an active internet connection and access to the experimental feature (available to customers on request). The command must be run from within a Python project directory and requires the CLI from the preview release channel. \nWhen to use: When you need to create an inventory of AI components in a Python project for compliance, security analysis, or documentation purposes.",
+      "description": "Generates an AI Bill of Materials (AIBOM) for Python software projects in CycloneDX v1.6 JSON format. This experimental feature analyzes local Python projects to identify AI models, datasets, tools, and other AI-related components. Requires an active internet connection and access to the experimental feature (available to customers on request). The command must be run from within a Python project directory and requires the CLI from the preview release channel. \nWhen to use: When you need to create an inventory of AI components in a Python project for compliance, security analysis, or documentation purposes.",
       "command": [
         "aibom"
       ],
