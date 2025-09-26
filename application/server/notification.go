@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func notifier(c *config.Config, srv types.Server, method string, params any) {
@@ -39,15 +40,7 @@ var progressStopChan = make(chan bool, 1000)
 
 func createProgressListener(progressChannel chan types.ProgressParams, server types.Server, logger *zerolog.Logger) {
 	// cleanup stopchannel before starting
-	for {
-		select {
-		case <-progressStopChan:
-			continue
-		default:
-			break
-		}
-		break
-	}
+	util.DrainChannel(progressStopChan)
 	logger.Debug().Msg("started progress listener")
 	defer logger.Debug().Msg("stopped progress listener")
 	for {

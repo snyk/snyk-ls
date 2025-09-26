@@ -53,7 +53,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	assert.Eventually(
 		t,
 		func() bool {
-			return 1 == enabledScanner.Scans() && 0 == disabledScanner.Scans()
+			return enabledScanner.Scans() == 1 && disabledScanner.Scans() == 0
 		},
 		1*time.Second,
 		10*time.Millisecond,
