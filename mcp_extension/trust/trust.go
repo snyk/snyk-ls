@@ -66,9 +66,8 @@ func NewFolderTrust(logger *zerolog.Logger, config configuration.Configuration) 
 			if f == "" {
 				continue
 			}
-			if !folderTrust.IsFolderTrusted(f) {
-				folderTrust.AddTrustedFolder(f)
-			}
+			// AddTrustedFolder checks if the folder is already trusted
+			folderTrust.AddTrustedFolder(f)
 		}
 	}
 
