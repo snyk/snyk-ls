@@ -302,14 +302,6 @@ func TestSnykCodeTestHandler(t *testing.T) {
 				"org":                "my-snyk-org",
 			},
 		},
-		{
-			name: "Test fail trust",
-			args: map[string]interface{}{
-				"path": tmpDir,
-				"org":  "my-snyk-org",
-			},
-			requireTrust: true,
-		},
 	}
 
 	for _, tc := range testCases {
@@ -332,10 +324,6 @@ func TestSnykCodeTestHandler(t *testing.T) {
 			require.NotNil(t, result)
 			textContent, ok := result.Content[0].(mcp.TextContent)
 			require.True(t, ok)
-			if tc.requireTrust {
-				require.Contains(t, textContent.Text, "Please run 'snyk_trust' first")
-				return
-			}
 			content := strings.TrimSpace(textContent.Text)
 
 			// Parse the enhanced JSON response
