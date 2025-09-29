@@ -240,6 +240,7 @@
         "code",
         "test"
       ],
+      "ignoreTrust": true,
       "outputMapper": "CodeOutputMapper",
       "standardParams": ["sarif"],
       "params": [
@@ -380,6 +381,7 @@
         "iac",
         "test"
       ],
+      "ignoreTrust": true,
       "standardParams": [],
       "params": [
         {
@@ -551,6 +553,7 @@
       "command": [
         "aibom"
       ],
+      "ignoreTrust": true,
       "standardParams": [
         "experimental"
       ],
