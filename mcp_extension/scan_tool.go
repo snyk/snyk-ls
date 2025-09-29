@@ -118,6 +118,8 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykSendFeedback(invocationCtx, toolDef))
 		case SnykAuth:
 			m.mcpServer.AddTool(tool, m.snykAuthHandler(invocationCtx, toolDef))
+		case SnykCodeTest:
+			m.mcpServer.AddTool(tool, m.snykCodeTestHandler(invocationCtx, toolDef))
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -260,6 +262,51 @@ func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext
 		}
 
 		return mcp.NewToolResultText("Successfully logged in"), nil
+	}
+}
+
+func (m *McpLLMBinding) snykCodeTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := m.logger.With().Str("method", "snykLogoutHandler").Logger()
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+
+		pathArg := request.GetArguments()["path"]
+		if pathArg == nil {
+			return nil, fmt.Errorf("argument 'path' is missing for tool %s", toolDef.Name)
+		}
+		path, ok := pathArg.(string)
+		if !ok {
+			return nil, fmt.Errorf("argument 'path' is not a string for tool %s", toolDef.Name)
+		}
+		if path == "" {
+			return nil, fmt.Errorf("empty path given to tool %s", toolDef.Name)
+		}
+
+		engine := invocationCtx.GetEngine()
+		conf := invocationCtx.GetConfiguration().Clone()
+		conf.Set(configuration.INPUT_DIRECTORY, path)
+		conf.Set("sarif", true)
+
+		severityThresholdArg := request.GetArguments()["severity_threshold"]
+		if severityThresholdArg != nil {
+			severityThreshold, exists := severityThresholdArg.(string)
+			if exists && len(severityThreshold) > 0 {
+				conf.Set("severity-threshold", true)
+			}
+		}
+
+		res1, err := engine.InvokeWithConfig(localworkflows.WORKFLOWID_CODE, conf)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run code test: %w", err)
+		}
+		res2, err := engine.InvokeWithInputAndConfig(localworkflows.WORKFLOWID_OUTPUT_WORKFLOW, res1, conf)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run code test: %w", err)
+		}
+		result := res2[0].GetPayload().([]byte)
+		output := m.enhanceOutput(&logger, toolDef, string(result), err == nil, path)
+
+		return mcp.NewToolResultText(output), nil
 	}
 }
 
