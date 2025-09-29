@@ -553,7 +553,6 @@
       "command": [
         "aibom"
       ],
-      "ignoreTrust": true,
       "standardParams": [
         "experimental"
       ],
