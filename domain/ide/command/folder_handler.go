@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
@@ -38,23 +39,32 @@ func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, noti
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
 	// send folder configs (they are queued until initialization is done)
-	go sendFolderConfigs(c, notifier)
+	go updateAndSendFolderConfigs(c, notifier)
 	HandleUntrustedFolders(ctx, c, srv)
 }
 
-func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
-	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
+func updateAndSendFolderConfigs(c *config.Config, notifier noti.Notifier) {
+	logger := c.Logger().With().Str("method", "updateAndSendFolderConfigs").Logger()
 	configuration := c.Engine().GetConfiguration()
 
 	var folderConfigs []types.FolderConfig
 	for _, folder := range c.Workspace().Folders() {
-		storedConfig, err2 := storedconfig.GetOrCreateFolderConfig(configuration, folder.Path(), &logger)
+		path := folder.Path()
+		storedConfig, err2 := storedconfig.GetOrCreateFolderConfig(configuration, path, &logger)
 		if err2 != nil {
 			logger.Err(err2).Msg("unable to load stored config")
 			return
 		}
+		newOrg, err := ldx_sync_config.ResolveOrganization(configuration, c.Engine(), &logger, string(path), storedConfig.Organization)
+		if err != nil {
+			logger.Err(err).Msg("unable to resolve organization")
+		} else {
+			storedConfig.Organization = newOrg
+		}
 		folderConfigs = append(folderConfigs, *storedConfig)
 	}
+
+	// TODO persist folder config
 
 	if folderConfigs == nil {
 		return
