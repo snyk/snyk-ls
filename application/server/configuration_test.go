@@ -231,7 +231,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, "d", os.Getenv("c"))
 		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), "addPath"+string(os.PathListSeparator)))
 		assert.True(t, c.IsErrorReportingEnabled())
-		assert.Equal(t, expectedOrgId, c.Organization())
+		assert.Empty(t, c.Organization())
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, settings.CliPath, c.CliSettings().Path())
 		assert.Equal(t, nonDefaultSeverityFilter, c.FilterSeverity())
@@ -251,10 +251,12 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.NotEmpty(t, folderConfig1.BaseBranch)
 		assert.Equal(t, settings.FolderConfigs[0].AdditionalParameters[0],
 			folderConfig1.AdditionalParameters[0])
+		assert.Equal(t, expectedOrgId, folderConfig1.Organization)
 
 		folderConfig2 := c.FolderConfig(types.FilePath(tempDir2))
 		assert.NotEmpty(t, folderConfig2.BaseBranch)
 		assert.Empty(t, folderConfig2.AdditionalParameters)
+		assert.Equal(t, expectedOrgId, folderConfig2.Organization)
 
 		assert.Eventually(t, func() bool { return "a fancy token" == c.Token() }, time.Second*5, time.Millisecond)
 	})

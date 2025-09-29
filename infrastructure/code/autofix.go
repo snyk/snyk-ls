@@ -92,7 +92,7 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 				return nil, traceErr
 			}
 
-			host, hostErr := GetCodeApiUrl(sc.C)
+			host, hostErr := GetCodeApiUrlForFolder(sc.C, baseDir)
 			if hostErr != nil {
 				return nil, hostErr
 			}

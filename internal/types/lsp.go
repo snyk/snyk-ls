@@ -555,6 +555,7 @@ type FolderConfig struct {
 	AdditionalParameters []string                              `json:"additionalParameters,omitempty"`
 	ReferenceFolderPath  FilePath                              `json:"referenceFolderPath,omitempty"`
 	ScanCommandConfig    map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
+	Organization         string                                `json:"preferredOrg,omitempty"`
 }
 
 type Pair struct {

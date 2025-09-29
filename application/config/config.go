@@ -837,10 +837,17 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	return snykCodeTimeout
 }
 
+// Deprecated: Organization is a legacy global configuration field.
+// Organization is now stored per folder in `types.FolderConfig.Organization`.
+// Prefer reading via `c.FolderOrganization(path)` or `c.FolderConfig(path).Organization`.
 func (c *Config) Organization() string {
 	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
 
+// Deprecated: SetOrganization sets a legacy global organization.
+// Organization is now stored per folder in `types.FolderConfig.Organization`.
+// Prefer persisting per-folder via storedconfig.UpdateFolderConfig or using
+// `updateOrganization()` path that writes to FolderConfig.
 func (c *Config) SetOrganization(organization string) {
 	c.engine.GetConfiguration().Set(configuration.ORGANIZATION, organization)
 }
@@ -1287,6 +1294,15 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
 	return folderConfig
+}
+
+// FolderOrganization returns the organization configured for a given folder path.
+func (c *Config) FolderOrganization(path types.FilePath) string {
+	fc := c.FolderConfig(path)
+	if fc == nil {
+		return ""
+	}
+	return fc.Organization
 }
 
 func (c *Config) HoverVerbosity() int {

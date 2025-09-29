@@ -25,9 +25,6 @@ import (
 func newCodeRequestContext() codeRequestContext {
 	unknown := "unknown"
 	orgId := unknown
-	if config.CurrentConfig().Organization() != "" {
-		orgId = config.CurrentConfig().Organization()
-	}
 
 	return codeRequestContext{
 		Initiator: "IDE",

@@ -73,13 +73,8 @@ func NewSnykApiClient(c *config.Config, client func() *http.Client) SnykApiClien
 	return &s
 }
 
-func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL {
-	organization := c.Organization()
-	if organization != "" {
-		q := u.Query()
-		q.Set("org", organization)
-		u.RawQuery = q.Encode()
-	}
+func (s *SnykApiClientImpl) addOrgToQuery(_ *config.Config, u *url.URL) *url.URL {
+	// Organization is now folder-scoped; feature flag requests remain user-scoped and do not include org.
 	return u
 }
 

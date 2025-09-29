@@ -501,7 +501,8 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, expectedOrgId, c.Organization())
+	// Global organization is cleared after migration to per-folder configuration
+	assert.Empty(t, c.Organization())
 	assert.Equal(t, "xxx", c.Token())
 }
 

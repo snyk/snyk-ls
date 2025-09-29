@@ -41,9 +41,8 @@ var pathListSep = string(os.PathListSeparator)
 
 func Test_ExpandParametersFromConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
-	testOrg, err := uuid.NewUUID()
+	_, err := uuid.NewUUID()
 	assert.NoError(t, err)
-	c.SetOrganization(testOrg.String())
 	settings := config.CliSettings{
 		Insecure: true,
 		C:        c,
@@ -56,7 +55,7 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	assert.Contains(t, cmd, "a")
 	assert.Contains(t, cmd, "b")
 	assert.Contains(t, cmd, "--insecure")
-	assert.Contains(t, cmd, "--org="+testOrg.String())
+	// --org is injected contextually in getCommand() based on working directory's folder config.
 }
 
 func Test_GetCommand_UsesConfigFiles(t *testing.T) {

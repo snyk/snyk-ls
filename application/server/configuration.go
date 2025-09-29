@@ -159,7 +159,17 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 }
 
 func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger) {
-	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), settings.FolderConfigs, logger)
+	// Merge existing stored Organization into incoming FolderConfigs when not provided,
+	// so we don't erase orgs that were set earlier in this update cycle (e.g., migration).
+	merged := make([]types.FolderConfig, 0, len(settings.FolderConfigs))
+	for _, fc := range settings.FolderConfigs {
+		current, err := storedconfig.GetOrCreateFolderConfig(c.Engine().GetConfiguration(), fc.FolderPath, c.Logger())
+		if err == nil && fc.Organization == "" {
+			fc.Organization = current.Organization
+		}
+		merged = append(merged, fc)
+	}
+	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), merged, logger)
 	if err != nil {
 		c.Logger().Err(err).Msg("couldn't update folder configs")
 		notifier := di.Notifier()
@@ -283,13 +293,44 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, initializatio
 }
 
 func updateOrganization(c *config.Config, settings types.Settings) {
-	newOrg := strings.TrimSpace(settings.Organization)
-	if newOrg != "" {
-		oldOrgId := c.Organization()
-		c.SetOrganization(newOrg)
-		newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
-		if oldOrgId != newOrgId {
-			go sendConfigChangedAnalyticsEvent(c, "organization", oldOrgId, newOrgId, "")
+	// Persist per-folder orgs using stored config.
+	updatedAny := false
+	for _, fc := range settings.FolderConfigs {
+		org := strings.TrimSpace(fc.Organization)
+		if org == "" {
+			continue
+		}
+		// Persist to stored folder config
+		current, err := storedconfig.GetOrCreateFolderConfig(c.Engine().GetConfiguration(), fc.FolderPath, c.Logger())
+		if err == nil {
+			if current.Organization != org {
+				current.Organization = org
+				_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), current, c.Logger())
+				updatedAny = true
+			}
+		}
+	}
+
+	// Legacy migration: if no folder configs provided orgs but legacy settings.Organization is set,
+	// copy it into all provided folder configs and then clear global org.
+	if !updatedAny {
+		newOrg := strings.TrimSpace(settings.Organization)
+		if newOrg != "" {
+			migrated := 0
+			for _, fc := range settings.FolderConfigs {
+				current, err := storedconfig.GetOrCreateFolderConfig(c.Engine().GetConfiguration(), fc.FolderPath, c.Logger())
+				if err == nil {
+					if current.Organization != newOrg {
+						current.Organization = newOrg
+						_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), current, c.Logger())
+						migrated++
+					}
+				}
+			}
+			if migrated > 0 {
+				// clear legacy global org after successful migration
+				c.SetOrganization("")
+			}
 		}
 	}
 }
