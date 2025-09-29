@@ -24,6 +24,7 @@ import (
 	"html/template"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -53,10 +54,25 @@ type FolderTrust struct {
 var SnykTrustPage string
 
 func NewFolderTrust(logger *zerolog.Logger, config configuration.Configuration) *FolderTrust {
-	return &FolderTrust{
+	folderTrust := &FolderTrust{
 		logger: logger,
 		config: config,
 	}
+
+	// Pre-populate trusted folders from TRUSTED_FOLDER environment variable if present.
+	if env := os.Getenv(TrustedFoldersConfigKey); env != "" {
+		for _, folder := range strings.Split(env, ";") {
+			f := strings.TrimSpace(folder)
+			if f == "" {
+				continue
+			}
+			if !folderTrust.IsFolderTrusted(f) {
+				folderTrust.AddTrustedFolder(f)
+			}
+		}
+	}
+
+	return folderTrust
 }
 
 func normalizePath(folder string) string {
