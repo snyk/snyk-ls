@@ -459,6 +459,13 @@ func (c *Config) SnykCodeApi() string {
 	return c.snykCodeApiUrl
 }
 
+func (c *Config) Endpoint() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.snykApiUrl
+}
+
 func (c *Config) SnykUI() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
