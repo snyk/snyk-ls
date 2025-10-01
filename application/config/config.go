@@ -159,6 +159,7 @@ type Config struct {
 	cliSettings                      *CliSettings
 	configFile                       string
 	format                           string
+	lastUsedOrganization             string
 	isErrorReportingEnabled          bool
 	isSnykCodeEnabled                bool
 	isSnykOssEnabled                 bool
@@ -711,6 +712,18 @@ func (c *Config) SetFormat(format string) {
 	c.format = format
 }
 
+func (c *Config) GetLastUsedOrganization() string {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.lastUsedOrganization
+}
+
+func (c *Config) SetLastUsedOrganization(lastUsedOrganization string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.lastUsedOrganization = lastUsedOrganization
+}
+
 func (c *Config) SetLogPath(logPath string) {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -837,14 +850,13 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	return snykCodeTimeout
 }
 
-// Deprecated: Organization is a legacy global configuration field.
 // Organization is now stored per folder in `types.FolderConfig.Organization`.
 // Prefer reading via `c.FolderOrganization(path)` or `c.FolderConfig(path).Organization`.
 func (c *Config) Organization() string {
 	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
 
-// Deprecated: SetOrganization sets a legacy global organization.
+// SetOrganization is only used by VSCode, as this is the only client in which we surface a "Global" Org.
 // Organization is now stored per folder in `types.FolderConfig.Organization`.
 // Prefer persisting per-folder via storedconfig.UpdateFolderConfig or using
 // `updateOrganization()` path that writes to FolderConfig.

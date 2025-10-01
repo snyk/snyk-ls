@@ -22,6 +22,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+	configuration2 "github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
@@ -38,9 +39,18 @@ const DontTrust = "Don't trust folders"
 func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
+	updateGlocalOrganization(c)
 	// send folder configs (they are queued until initialization is done)
 	go updateAndSendFolderConfigs(c, notifier)
 	HandleUntrustedFolders(ctx, c, srv)
+}
+
+func updateGlocalOrganization(c *config.Config) {
+	configuration := c.Engine().GetConfiguration()
+	if configuration.GetString(configuration2.ORGANIZATION) != "" {
+		c.SetLastUsedOrganization(configuration.GetString(configuration2.ORGANIZATION))
+		configuration.Set(configuration2.ORGANIZATION, "")
+	}
 }
 
 func updateAndSendFolderConfigs(c *config.Config, notifier noti.Notifier) {
@@ -49,22 +59,52 @@ func updateAndSendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 
 	var folderConfigs []types.FolderConfig
 	for _, folder := range c.Workspace().Folders() {
+		folderConfig := c.FolderConfig(folder.Path())
 		path := folder.Path()
 		storedConfig, err2 := storedconfig.GetOrCreateFolderConfig(configuration, path, &logger)
 		if err2 != nil {
 			logger.Err(err2).Msg("unable to load stored config")
 			return
 		}
-		newOrg, err := ldx_sync_config.ResolveOrganization(configuration, c.Engine(), &logger, string(path), storedConfig.Organization)
-		if err != nil {
-			logger.Err(err).Msg("unable to resolve organization")
+
+		// For configs that have been migrated, we use the org returned by LDX-Sync unless the user has set one.
+		if storedConfig.OrganizationMigrated {
+			// If the org is set by the user, we should keep it.
+			if folderConfig.Organization != storedConfig.Organization || storedConfig.UserSetOrganization {
+				storedConfig.Organization = folderConfig.Organization
+				storedConfig.UserSetOrganization = true
+			} else {
+				// If the org is not set by the user, we should resolve it.
+				setOrgFromLdxSync(c, storedConfig)
+			}
 		} else {
-			storedConfig.Organization = newOrg
+			// Migrate the folder config to contain the org
+			// If the folder config does not have an org, we should use the last used global org.
+			if storedConfig.Organization == "" {
+				storedConfig.Organization = c.GetLastUsedOrganization()
+			}
+
+			// Call LDX-Sync to resolve the org.
+			newOrgIsDefault := setOrgFromLdxSync(c, storedConfig)
+
+			// If LDX-Sync returns a different org, we should mark it as not set by the user.
+			if storedConfig.Organization != c.GetLastUsedOrganization() {
+				storedConfig.UserSetOrganization = false
+			} else {
+				// We are using the last used global org set by the user. We mark this as user set unless it matches the
+				// default org.
+				storedConfig.UserSetOrganization = !newOrgIsDefault
+			}
+
+			storedConfig.OrganizationMigrated = true
+		}
+
+		err := storedconfig.UpdateFolderConfig(configuration, storedConfig, &logger)
+		if err != nil {
+			logger.Err(err).Msg("unable to update stored config")
 		}
 		folderConfigs = append(folderConfigs, *storedConfig)
 	}
-
-	// TODO persist folder config
 
 	if folderConfigs == nil {
 		return
@@ -72,6 +112,21 @@ func updateAndSendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 
 	folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
 	notifier.Send(folderConfigsParam)
+}
+
+func setOrgFromLdxSync(c *config.Config, storedConfig *types.FolderConfig) (newOrgIsDefault bool) {
+	logger := c.Logger().With().Str("method", "updateAndSendFolderConfigs").Logger()
+	configuration := c.Engine().GetConfiguration()
+	path := storedConfig.FolderPath
+
+	newOrg, err := ldx_sync_config.ResolveOrganization(configuration, c.Engine(), &logger, string(path), storedConfig.Organization)
+	if err != nil {
+		logger.Err(err).Msg("unable to resolve organization")
+	} else {
+		storedConfig.Organization = newOrg.Id
+	}
+	newOrgIsDefaultPtr := newOrg.IsDefault
+	return newOrgIsDefaultPtr != nil && *newOrgIsDefaultPtr
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {

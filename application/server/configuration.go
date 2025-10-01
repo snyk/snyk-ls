@@ -293,44 +293,13 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, initializatio
 }
 
 func updateOrganization(c *config.Config, settings types.Settings) {
-	// Persist per-folder orgs using stored config.
-	updatedAny := false
-	for _, fc := range settings.FolderConfigs {
-		org := strings.TrimSpace(fc.Organization)
-		if org == "" {
-			continue
-		}
-		// Persist to stored folder config
-		current, err := storedconfig.GetOrCreateFolderConfig(c.Engine().GetConfiguration(), fc.FolderPath, c.Logger())
-		if err == nil {
-			if current.Organization != org {
-				current.Organization = org
-				_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), current, c.Logger())
-				updatedAny = true
-			}
-		}
-	}
-
-	// Legacy migration: if no folder configs provided orgs but legacy settings.Organization is set,
-	// copy it into all provided folder configs and then clear global org.
-	if !updatedAny {
-		newOrg := strings.TrimSpace(settings.Organization)
-		if newOrg != "" {
-			migrated := 0
-			for _, fc := range settings.FolderConfigs {
-				current, err := storedconfig.GetOrCreateFolderConfig(c.Engine().GetConfiguration(), fc.FolderPath, c.Logger())
-				if err == nil {
-					if current.Organization != newOrg {
-						current.Organization = newOrg
-						_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), current, c.Logger())
-						migrated++
-					}
-				}
-			}
-			if migrated > 0 {
-				// clear legacy global org after successful migration
-				c.SetOrganization("")
-			}
+	newOrg := strings.TrimSpace(settings.Organization)
+	if newOrg != "" {
+		oldOrgId := c.Organization()
+		c.SetOrganization(newOrg)
+		newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
+		if oldOrgId != newOrgId {
+			go sendConfigChangedAnalyticsEvent(c, "organization", oldOrgId, newOrgId, "")
 		}
 	}
 }

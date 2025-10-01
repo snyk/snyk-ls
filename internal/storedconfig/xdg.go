@@ -60,6 +60,12 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 
 	if sc.FolderConfigs[normalizedPath] == nil {
 		folderConfig := &types.FolderConfig{}
+
+		// Since this is a new folder config, we should set the OrganizationMigrated flag based on the integration name.
+		// This is because VSCode might have an Org set at the global level, in which case we want to migrate it to the
+		// folder level.
+		// TODO - should this be the case for all IDEs?
+		folderConfig.OrganizationMigrated = !(conf.GetString(configuration.INTEGRATION_NAME) == "VS_CODE")
 		sc.FolderConfigs[normalizedPath] = folderConfig
 	}
 
