@@ -235,7 +235,7 @@
     },
     {
       "name": "snyk_code_scan",
-      "description": "Performs Static Application Security Testing (SAST) directly from the Snyk MCP. It analyzes an application's source code with a SAST scan to identify security vulnerabilities and weaknesses without executing the code. \nWhen to use: During local development, developers can run it on their feature branches for immediate feedback, or after you generate new code files. \nHow to use: Test directory: run snyk_code_scan with parameter <path>, add parameters as needed.",
+      "description": "Performs Static Application Security Testing (SAST) directly from the Snyk MCP. It analyzes an application's source code with a SAST scan to identify security vulnerabilities and weaknesses without executing the code. \nWhen to use: During local development, developers can run it on their feature branches for immediate feedback, or after you generate new code files. \nHow to use: Test directory: run snyk_code_scan with parameter <path>, add parameters as needed. \nLanguages that Snyk supports: Apex, C/C++, Dart and Flutter, Elixir, Go, Groovy, Java and Kotlin, Javascript, .NET, PHP, Python, Ruby, Rust, Scala, Swift and Objective-C, Typescript, VB.NET",
       "command": [
         "code",
         "test"
