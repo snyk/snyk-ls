@@ -549,15 +549,15 @@ type ScanCommandConfig struct {
 // IDE sends this as part of the settings/initialization
 // LS sends this via the $/snyk.folderConfig notification
 type FolderConfig struct {
-	FolderPath           FilePath                              `json:"folderPath"`
-	BaseBranch           string                                `json:"baseBranch"`
-	LocalBranches        []string                              `json:"localBranches,omitempty"`
-	AdditionalParameters []string                              `json:"additionalParameters,omitempty"`
-	ReferenceFolderPath  FilePath                              `json:"referenceFolderPath,omitempty"`
-	ScanCommandConfig    map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
-	Organization         string                                `json:"preferredOrg,omitempty"`
-	OrganizationMigrated bool                                  `json:"-"`
-	UserSetOrganization  bool                                  `json:"-"`
+	FolderPath                  FilePath                              `json:"folderPath"`
+	BaseBranch                  string                                `json:"baseBranch"`
+	LocalBranches               []string                              `json:"localBranches,omitempty"`
+	AdditionalParameters        []string                              `json:"additionalParameters,omitempty"`
+	ReferenceFolderPath         FilePath                              `json:"referenceFolderPath,omitempty"`
+	ScanCommandConfig           map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
+	Organization                string                                `json:"preferredOrg,omitempty"`
+	OrgMigratedFromGlobalConfig bool                                  `json:"orgMigratedFromGlobalConfig,omitempty"`
+	OrgSetByUser                bool                                  `json:"orgSetByUser,omitempty"`
 }
 
 type Pair struct {
