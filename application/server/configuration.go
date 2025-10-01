@@ -116,8 +116,8 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool, t
 	updateIssueViewOptions(c, settings.IssueViewOptions, triggerSource)
 	updateProductEnablement(c, settings, triggerSource, sendAnalytics)
 	updateCliConfig(c, settings)
-	updateApiEndpoints(c, settings, initialize, triggerSource) // Must be called before token is set, as it may trigger a logout which clears the token.
-	updateToken(settings.Token)                                // Must be called before the Authentication method is set, as the latter checks the token.
+	updateApiEndpoints(c, settings, initialize, triggerSource, sendAnalytics) // Must be called before token is set, as it may trigger a logout which clears the token.
+	updateToken(settings.Token)                                               // Must be called before the Authentication method is set, as the latter checks the token.
 	updateAuthenticationMethod(c, settings, triggerSource)
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings, initialize)
@@ -300,9 +300,9 @@ func updateToken(token string) {
 	di.AuthenticationService().UpdateCredentials(token, false, false)
 }
 
-func updateApiEndpoints(c *config.Config, settings types.Settings, initialization bool, triggerSource string) {
+func updateApiEndpoints(c *config.Config, settings types.Settings, initialization bool, triggerSource string, sendAnalytics bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
-	// TODO: Add getter method for Endpoint to enable analytics
+	oldEndpoint := c.Endpoint()
 	endpointsUpdated := c.UpdateApiEndpoints(snykApiUrl)
 
 	if endpointsUpdated && !initialization {
@@ -310,6 +310,11 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, initializatio
 		authService.Logout(context.Background())
 		authService.ConfigureProviders(c)
 		c.Workspace().Clear()
+
+		// Send analytics for endpoint change
+		if sendAnalytics {
+			sendWorkspaceConfigChanged(c, "endpoint", oldEndpoint, snykApiUrl, triggerSource)
+		}
 	}
 
 	// a custom set snyk code api (e.g. for testing) always overwrites automatic config
