@@ -556,7 +556,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger)
+	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify the org was kept - with the current implementation, UpdateFolderConfigOrg is always called
 	// due to pointer comparison, but the org should remain the same since it's user-set
@@ -575,6 +575,15 @@ func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing
 
 	// Call updateFolderConfig
 	setup.callUpdateFolderConfig("")
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:   folderPath,
+				Organization: "",
+			},
+		},
+	}
+	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify: When both folder and global org are empty and LDX-Sync is called
 	updatedConfig := setup.getUpdatedConfig()
@@ -593,6 +602,15 @@ func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
 	// folderConfigsOrgSettingsEqual will return false, triggering UpdateFolderConfigOrg
 	setup.callUpdateFolderConfig("")
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:   folderPath,
+				Organization: "",
+			},
+		},
+	}
+	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify UpdateFolderConfigOrg was called and set the migration flag
 	updatedConfig := setup.getUpdatedConfig()
@@ -611,6 +629,15 @@ func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T
 	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
 	// folderConfigsOrgSettingsEqual will return false, triggering UpdateFolderConfigOrg
 	setup.callUpdateFolderConfig("initial-org")
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:   folderPath,
+				Organization: "initial-org",
+			},
+		},
+	}
+	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify UpdateFolderConfigOrg was called and set the migration flag
 	updatedConfig := setup.getUpdatedConfig()
@@ -626,6 +653,15 @@ func Test_updateFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *tes
 
 	// Call updateFolderConfig
 	setup.callUpdateFolderConfig("")
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:   folderPath,
+				Organization: "",
+			},
+		},
+	}
+	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify: should attempt to resolve from LDX-Sync because inheriting from blank global
 	updatedConfig := setup.getUpdatedConfig()

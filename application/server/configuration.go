@@ -120,7 +120,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool, t
 	updateCliConfig(c, settings)
 	updateApiEndpoints(c, settings, initialize, triggerSource, sendAnalytics) // Must be called before token is set, as it may trigger a logout which clears the token.
 	updateToken(settings.Token)                                               // Must be called before the Authentication method is set, as the latter checks the token.
-	updateAuthenticationMethod(c, settings, triggerSource)
+	updateAuthenticationMethod(c, settings, triggerSource, sendAnalytics)
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings, initialize)
 	updateErrorReporting(c, settings, triggerSource)
@@ -134,7 +134,7 @@ func writeSettings(c *config.Config, settings types.Settings, initialize bool, t
 	updateSnykOSSQuickFixCodeActions(c, settings, triggerSource)
 	updateSnykOpenBrowserCodeActions(c, settings, triggerSource)
 	updateDeltaFindings(c, settings, triggerSource)
-	updateFolderConfig(c, settings, c.Logger())
+	updateFolderConfig(c, settings, c.Logger(), triggerSource, sendAnalytics)
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
 }
@@ -163,6 +163,7 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings,
 
 func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger) {
 	notifier := di.Notifier()
+func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource string, sendAnalytics bool) {
 	var folderConfigs []types.FolderConfig
 	folderConfigsMayHaveChanged := false
 	for _, folderConfig := range settings.FolderConfigs {
@@ -274,7 +275,7 @@ func updateAuthenticationMethod(c *config.Config, settings types.Settings) {
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
 	di.AuthenticationService().ConfigureProviders(c)
 
-	if oldValue != settings.AuthenticationMethod {
+	if oldValue != settings.AuthenticationMethod && sendAnalytics {
 		sendWorkspaceConfigChanged(c, "authenticationMethod", oldValue, settings.AuthenticationMethod, triggerSource)
 	}
 }
@@ -415,54 +416,13 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, initializatio
 }
 
 func updateOrganization(c *config.Config, settings types.Settings, triggerSource string, sendAnalytics bool) {
-	// Persist per-folder orgs using stored config.
-	updatedAny := false
-	for _, fc := range settings.FolderConfigs {
-		org := strings.TrimSpace(fc.Organization)
-		if org == "" {
-			continue
-		}
-		// Persist to stored folder config
-		current, err := storedconfig.GetOrCreateFolderConfig(c.Engine().GetConfiguration(), fc.FolderPath, c.Logger())
-		if err == nil {
-			if current.Organization != org {
-				oldOrg := current.Organization
-				current.Organization = org
-				_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), current, c.Logger())
-				// Send analytics for organization change (only if user-triggered)
-				if sendAnalytics {
-					go sendConfigChangedAnalyticsEvent(c, "organization", oldOrg, org, fc.FolderPath, triggerSource)
-				}
-				updatedAny = true
-			}
-		}
-	}
-
-	// Legacy migration: if no folder configs provided orgs but legacy settings.Organization is set,
-	// copy it into all provided folder configs and then clear global org.
-	if !updatedAny {
-		newOrg := strings.TrimSpace(settings.Organization)
-		if newOrg != "" {
-			migrated := 0
-			for _, fc := range settings.FolderConfigs {
-				current, err := storedconfig.GetOrCreateFolderConfig(c.Engine().GetConfiguration(), fc.FolderPath, c.Logger())
-				if err == nil {
-					if current.Organization != newOrg {
-						oldOrg := current.Organization
-						current.Organization = newOrg
-						_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), current, c.Logger())
-						// Send analytics for organization change (only if user-triggered)
-						if sendAnalytics {
-							go sendConfigChangedAnalyticsEvent(c, "organization", oldOrg, newOrg, fc.FolderPath, triggerSource)
-						}
-						migrated++
-					}
-				}
-			}
-			if migrated > 0 {
-				// clear legacy global org after successful migration
-				c.SetOrganization("")
-			}
+	newOrg := strings.TrimSpace(settings.Organization)
+	if newOrg != "" {
+		oldOrgId := c.Organization()
+		c.SetOrganization(newOrg)
+		newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
+		if oldOrgId != newOrgId && sendAnalytics {
+			sendWorkspaceConfigChanged(c, "organization", oldOrgId, newOrgId, triggerSource)
 		}
 	}
 }
