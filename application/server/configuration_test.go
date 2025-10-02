@@ -35,6 +35,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -447,6 +448,208 @@ func initTestRepo(t *testing.T, tempDir string) error {
 	})
 	assert.NoError(t, err)
 	return err
+}
+
+// Test scenarios for updateFolderConfig with LDX-Sync integration
+func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	err := initTestRepo(t, string(folderPath))
+	assert.NoError(t, err)
+
+	// Setup stored config with user-set org
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		Organization:                "user-org-id",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	assert.NoError(t, err)
+
+	c.SetOrganization("global-org-id")
+
+	// Call updateFolderConfig with the folder config
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:   folderPath,
+				Organization: "user-org-id",
+			},
+		},
+	}
+	updateFolderConfig(c, settings, logger)
+
+	// Verify the org was kept and still marked as user-set
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
+	assert.NoError(t, err)
+	assert.Equal(t, "user-org-id", updatedConfig.Organization, "Organization should remain as user-set value")
+	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should remain true")
+}
+
+func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	err := initTestRepo(t, string(folderPath))
+	assert.NoError(t, err)
+
+	// Setup stored config with empty org
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		Organization:                "",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+	}
+	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	assert.NoError(t, err)
+
+	c.SetOrganization("")
+
+	// Call updateFolderConfig
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:   folderPath,
+				Organization: "",
+			},
+		},
+	}
+	updateFolderConfig(c, settings, logger)
+
+	// Verify: When both folder and global org are empty and LDX-Sync is called
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
+	assert.NoError(t, err)
+	// LDX-Sync will attempt to resolve the org
+	assert.False(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be false")
+}
+
+func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	err := initTestRepo(t, string(folderPath))
+	assert.NoError(t, err)
+
+	// Setup stored config without migration flag and empty org
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		Organization:                "",
+		OrgMigratedFromGlobalConfig: false,
+		OrgSetByUser:                false,
+	}
+	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	assert.NoError(t, err)
+
+	// Set global org
+	globalOrg := "global-org-id"
+	c.SetOrganization(globalOrg)
+
+	// Call updateFolderConfig
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:   folderPath,
+				Organization: "",
+			},
+		},
+	}
+	updateFolderConfig(c, settings, logger)
+
+	// Verify the org was set from global and migration flag is set
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
+	assert.NoError(t, err)
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+}
+
+func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	err := initTestRepo(t, string(folderPath))
+	assert.NoError(t, err)
+
+	// Setup stored config without migration
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		Organization:                "initial-org",
+		OrgMigratedFromGlobalConfig: false,
+		OrgSetByUser:                false,
+	}
+	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	assert.NoError(t, err)
+
+	c.SetOrganization("global-org-id")
+
+	// Call updateFolderConfig
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:   folderPath,
+				Organization: "initial-org",
+			},
+		},
+	}
+	updateFolderConfig(c, settings, logger)
+
+	// Verify migration flag is set
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
+	assert.NoError(t, err)
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+}
+
+func Test_updateFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	err := initTestRepo(t, string(folderPath))
+	assert.NoError(t, err)
+
+	// Setup: previously user-set, but now both folder and global are empty
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		Organization:                "",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true, // Was previously set by user
+	}
+	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	assert.NoError(t, err)
+
+	// Both folder and global org are empty
+	c.SetOrganization("")
+
+	// Call updateFolderConfig
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:   folderPath,
+				Organization: "",
+			},
+		},
+	}
+	updateFolderConfig(c, settings, logger)
+
+	// Verify: should attempt to resolve from LDX-Sync because inheriting from blank global
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
+	assert.NoError(t, err)
+	// When LDX-Sync is called, OrgSetByUser behavior depends on the result
+	assert.Empty(t, updatedConfig.Organization, "Organization should remain empty when inheriting from blank global")
 }
 
 func Test_InitializeSettings(t *testing.T) {
