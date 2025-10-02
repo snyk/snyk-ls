@@ -492,7 +492,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger)
+	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify the org was kept and still marked as user-set
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
@@ -533,7 +533,7 @@ func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger)
+	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify: When both folder and global org are empty and LDX-Sync is called
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
@@ -575,7 +575,7 @@ func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger)
+	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify the org was set from global and migration flag is set
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
@@ -615,7 +615,7 @@ func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger)
+	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify migration flag is set
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
@@ -656,7 +656,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *tes
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger)
+	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify: should attempt to resolve from LDX-Sync because inheriting from blank global
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
