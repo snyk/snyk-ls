@@ -576,7 +576,7 @@ func setClientInformation(c *config.Config, initParams types.InitializeParams) {
 		integrationName = initParams.InitializationOptions.IntegrationName
 		integrationVersion = initParams.InitializationOptions.IntegrationVersion
 	} else if clientInfoName != "" {
-		integrationName = strings.ToUpper(strings.Replace(clientInfoName, " ", "_", -1))
+		integrationName = strings.ToUpper(strings.ReplaceAll(clientInfoName, " ", "_"))
 	} else if integrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey); integrationNameEnvVar != "" {
 		integrationName = integrationNameEnvVar
 		integrationVersion = os.Getenv(cli.IntegrationVersionEnvVarKey)

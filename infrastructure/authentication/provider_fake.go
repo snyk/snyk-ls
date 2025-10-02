@@ -37,7 +37,7 @@ func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() Authentica
 		return func() (string, error) { return "fake auth successful", nil }
 	}
 	a.C.Logger().Debug().Msgf("Fake Authentication - failed.")
-	return func() (string, error) { return "", errors.New("Authentication failed. Please update your token.") }
+	return func() (string, error) { return "", errors.New("authentication failed; please update your token") }
 }
 
 func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, error) {

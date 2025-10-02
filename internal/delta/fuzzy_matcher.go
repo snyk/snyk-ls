@@ -79,7 +79,7 @@ func NewFuzzyMatcher() *FuzzyMatcher {
 	return &FuzzyMatcher{}
 }
 
-func (_ FuzzyMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]Identifiable, error) {
+func (FuzzyMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]Identifiable, error) {
 	if len(currentIssueList) == 0 || len(baseIssueList) == 0 {
 		return nil, errors.New("base or current issue list is empty")
 	}
