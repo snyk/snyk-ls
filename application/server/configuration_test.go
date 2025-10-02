@@ -29,6 +29,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -503,6 +504,9 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 
 //nolint:dupl // test cases check different combinations of supplied and derived org.
 func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing.T) {
+// setupFolderConfigTest is a helper function to reduce duplication in folder config tests
+func setupFolderConfigTest(t *testing.T) (*config.Config, types.FilePath, configuration.Configuration, *zerolog.Logger) {
+	t.Helper()
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
@@ -510,16 +514,23 @@ func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing
 	err := initTestRepo(t, string(folderPath))
 	assert.NoError(t, err)
 
-	// Setup stored config with empty org
 	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
+
+	return c, folderPath, engineConfig, logger
+}
+
+func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing.T) {
+	c, folderPath, engineConfig, logger := setupFolderConfigTest(t)
+
+	// Setup stored config with empty org
 	storedConfig := &types.FolderConfig{
 		FolderPath:                  folderPath,
 		Organization:                "",
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                false,
 	}
-	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	assert.NoError(t, err)
 
 	c.SetOrganization("")
@@ -585,23 +596,16 @@ func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 
 //nolint:dupl // test cases check different combinations of supplied and derived org.
 func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
-	di.TestInit(t)
-
-	folderPath := types.FilePath(t.TempDir())
-	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
+	c, folderPath, engineConfig, logger := setupFolderConfigTest(t)
 
 	// Setup stored config without migration
-	engineConfig := c.Engine().GetConfiguration()
-	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
 		FolderPath:                  folderPath,
 		Organization:                "initial-org",
 		OrgMigratedFromGlobalConfig: false,
 		OrgSetByUser:                false,
 	}
-	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	assert.NoError(t, err)
 
 	c.SetOrganization("global-org-id")
@@ -625,23 +629,16 @@ func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T
 
 //nolint:dupl // test cases check different combinations of supplied and derived org.
 func Test_updateFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *testing.T) {
-	c := testutil.UnitTest(t)
-	di.TestInit(t)
-
-	folderPath := types.FilePath(t.TempDir())
-	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
+	c, folderPath, engineConfig, logger := setupFolderConfigTest(t)
 
 	// Setup: previously user-set, but now both folder and global are empty
-	engineConfig := c.Engine().GetConfiguration()
-	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
 		FolderPath:                  folderPath,
 		Organization:                "",
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true, // Was previously set by user
 	}
-	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	assert.NoError(t, err)
 
 	// Both folder and global org are empty
