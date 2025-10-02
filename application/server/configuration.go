@@ -84,16 +84,16 @@ func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.
 }
 
 func InitializeSettings(c *config.Config, settings types.Settings) {
-	writeSettings(c, settings, true, "", false)
+	writeSettings(c, settings, true, "initialize")
 	updateAutoAuthentication(c, settings)
 	updateDeviceInformation(c, settings)
-	updateAutoScan(c, settings, "")
+	updateAutoScan(c, settings)
 	c.SetClientProtocolVersion(settings.RequiredProtocolVersion)
 }
 
-func UpdateSettings(c *config.Config, settings types.Settings, triggerSource string, sendAnalytics bool) {
+func UpdateSettings(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	previouslyEnabledProducts := c.DisplayableIssueTypes()
-	writeSettings(c, settings, false, triggerSource, sendAnalytics)
+	writeSettings(c, settings, false, triggerSource)
 
 	// If a product was removed, clear all issues for this product
 	ws := c.Workspace()
@@ -107,34 +107,38 @@ func UpdateSettings(c *config.Config, settings types.Settings, triggerSource str
 	}
 }
 
-func writeSettings(c *config.Config, settings types.Settings, initialize bool, triggerSource string, sendAnalytics bool) {
+func writeSettings(c *config.Config, settings types.Settings, initialize bool, triggerSource string) {
 	c.Engine().GetConfiguration().ClearCache()
 
 	emptySettings := types.Settings{}
 	if reflect.DeepEqual(settings, emptySettings) {
 		return
 	}
-	updateSeverityFilter(c, settings.FilterSeverity, triggerSource)
-	updateIssueViewOptions(c, settings.IssueViewOptions, triggerSource)
-	updateProductEnablement(c, settings, triggerSource, sendAnalytics)
+
+	// Functions that send analytics - pass initialize to control analytics sending
+	updateSeverityFilter(c, settings.FilterSeverity, triggerSource, initialize)
+	updateIssueViewOptions(c, settings.IssueViewOptions, triggerSource, initialize)
+	updateProductEnablement(c, settings, triggerSource, initialize)
+	updateApiEndpoints(c, settings, initialize, triggerSource, initialize) // Must be called before token is set, as it may trigger a logout which clears the token.
+	updateAuthenticationMethod(c, settings, triggerSource, initialize)
+	updateErrorReporting(c, settings, triggerSource, initialize)
+	updateOrganization(c, settings, triggerSource, initialize)
+	manageBinariesAutomatically(c, settings, triggerSource, initialize)
+	updateTrustedFolders(c, settings, triggerSource, initialize)
+	updateSnykLearnCodeActions(c, settings, triggerSource, initialize)
+	updateSnykOSSQuickFixCodeActions(c, settings, triggerSource, initialize)
+	updateDeltaFindings(c, settings, triggerSource, initialize)
+	updateFolderConfig(c, settings, c.Logger(), triggerSource, initialize)
+
+	// Functions that don't send analytics - no initialize parameter needed
 	updateCliConfig(c, settings)
-	updateApiEndpoints(c, settings, initialize, triggerSource, sendAnalytics) // Must be called before token is set, as it may trigger a logout which clears the token.
-	updateToken(settings.Token)                                               // Must be called before the Authentication method is set, as the latter checks the token.
-	updateAuthenticationMethod(c, settings, triggerSource, sendAnalytics)
+	updateToken(settings.Token) // Must be called before the Authentication method is set, as the latter checks the token.
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings, initialize)
-	updateErrorReporting(c, settings, triggerSource)
-	updateOrganization(c, settings, triggerSource, sendAnalytics)
-	manageBinariesAutomatically(c, settings, triggerSource)
-	updateTrustedFolders(c, settings, triggerSource)
 	updateSnykCodeSecurity(c, settings)
 	updateRuntimeInfo(c, settings)
-	updateAutoScan(c, settings, triggerSource)
-	updateSnykLearnCodeActions(c, settings, triggerSource)
-	updateSnykOSSQuickFixCodeActions(c, settings, triggerSource)
-	updateSnykOpenBrowserCodeActions(c, settings, triggerSource)
-	updateDeltaFindings(c, settings, triggerSource)
-	updateFolderConfig(c, settings, c.Logger(), triggerSource, sendAnalytics)
+	updateAutoScan(c, settings)
+	updateSnykOpenBrowserCodeActions(c, settings)
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
 }
@@ -151,7 +155,7 @@ func updateHoverVerbosity(c *config.Config, settings types.Settings) {
 	}
 }
 
-func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings, triggerSource string) {
+func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings) {
 	enable := false
 	if settings.EnableSnykOpenBrowserActions == "true" {
 		enable = true
@@ -164,6 +168,7 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings,
 func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger) {
 	notifier := di.Notifier()
 func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource string, sendAnalytics bool) {
+func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource string, initialize bool) {
 	var folderConfigs []types.FolderConfig
 	folderConfigsMayHaveChanged := false
 	for _, folderConfig := range settings.FolderConfigs {
@@ -275,8 +280,8 @@ func updateAuthenticationMethod(c *config.Config, settings types.Settings) {
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
 	di.AuthenticationService().ConfigureProviders(c)
 
-	if oldValue != settings.AuthenticationMethod && sendAnalytics {
-		sendWorkspaceConfigChanged(c, "authenticationMethod", oldValue, settings.AuthenticationMethod, triggerSource)
+	if oldValue != settings.AuthenticationMethod && !initialize {
+		sendWorkspaceConfigChanged(c, "authenticationMethod", oldValue, settings.AuthenticationMethod, triggerSource, initialize)
 	}
 }
 
@@ -287,13 +292,13 @@ func updateRuntimeInfo(c *config.Config, settings types.Settings) {
 	c.SetRuntimeName(settings.RuntimeName)
 }
 
-func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSource string) {
+func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	trustedFoldersFeatureEnabled, err := strconv.ParseBool(settings.EnableTrustedFoldersFeature)
 	if err == nil {
 		oldValue := c.IsTrustedFolderFeatureEnabled()
 		c.SetTrustedFolderFeatureEnabled(trustedFoldersFeatureEnabled)
 		if oldValue != trustedFoldersFeatureEnabled {
-			sendWorkspaceConfigChanged(c, "enableTrustedFoldersFeature", oldValue, trustedFoldersFeatureEnabled, triggerSource)
+			sendWorkspaceConfigChanged(c, "enableTrustedFoldersFeature", oldValue, trustedFoldersFeatureEnabled, triggerSource, initialize)
 		}
 	} else {
 		c.SetTrustedFolderFeatureEnabled(true)
@@ -308,7 +313,7 @@ func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSour
 		c.SetTrustedFolders(trustedFolders)
 
 		// Send analytics for trusted folders change
-		sendWorkspaceConfigChanged(c, "trustedFolders", oldFolders, trustedFolders, triggerSource)
+		sendWorkspaceConfigChanged(c, "trustedFolders", oldFolders, trustedFolders, triggerSource, initialize)
 	}
 }
 
@@ -330,7 +335,7 @@ func updateDeviceInformation(c *config.Config, settings types.Settings) {
 	}
 }
 
-func updateAutoScan(c *config.Config, settings types.Settings, triggerSource string) {
+func updateAutoScan(c *config.Config, settings types.Settings) {
 	// Auto scan true by default unless the AutoScan value in the settings is not missing & false
 	autoScan := true
 	if settings.ScanningMode == "manual" {
@@ -341,7 +346,7 @@ func updateAutoScan(c *config.Config, settings types.Settings, triggerSource str
 	c.SetAutomaticScanning(autoScan)
 }
 
-func updateSnykLearnCodeActions(c *config.Config, settings types.Settings, triggerSource string) {
+func updateSnykLearnCodeActions(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	enable := true
 	if settings.EnableSnykLearnCodeActions == "false" {
 		enable = false
@@ -351,11 +356,11 @@ func updateSnykLearnCodeActions(c *config.Config, settings types.Settings, trigg
 	c.SetSnykLearnCodeActionsEnabled(enable)
 
 	if oldValue != enable {
-		sendWorkspaceConfigChanged(c, "enableSnykLearnCodeActions", oldValue, enable, triggerSource)
+		sendWorkspaceConfigChanged(c, "enableSnykLearnCodeActions", oldValue, enable, triggerSource, initialize)
 	}
 }
 
-func updateSnykOSSQuickFixCodeActions(c *config.Config, settings types.Settings, triggerSource string) {
+func updateSnykOSSQuickFixCodeActions(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	enable := true
 	if settings.EnableSnykOSSQuickFixCodeActions == "false" {
 		enable = false
@@ -365,11 +370,11 @@ func updateSnykOSSQuickFixCodeActions(c *config.Config, settings types.Settings,
 	c.SetSnykOSSQuickFixCodeActionsEnabled(enable)
 
 	if oldValue != enable {
-		sendWorkspaceConfigChanged(c, "enableSnykOSSQuickFixCodeActions", oldValue, enable, triggerSource)
+		sendWorkspaceConfigChanged(c, "enableSnykOSSQuickFixCodeActions", oldValue, enable, triggerSource, initialize)
 	}
 }
 
-func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSource string) {
+func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	enable := true
 	if settings.EnableDeltaFindings == "" || settings.EnableDeltaFindings == "false" {
 		enable = false
@@ -379,7 +384,7 @@ func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSourc
 
 	modified := c.SetDeltaFindingsEnabled(enable)
 	if modified {
-		sendWorkspaceConfigChanged(c, "enableDeltaFindings", oldValue, enable, triggerSource)
+		sendWorkspaceConfigChanged(c, "enableDeltaFindings", oldValue, enable, triggerSource, initialize)
 	}
 }
 
@@ -388,20 +393,20 @@ func updateToken(token string) {
 	di.AuthenticationService().UpdateCredentials(token, false, false)
 }
 
-func updateApiEndpoints(c *config.Config, settings types.Settings, initialization bool, triggerSource string, sendAnalytics bool) {
+func updateApiEndpoints(c *config.Config, settings types.Settings, isInitialization bool, triggerSource string, initialize bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	oldEndpoint := c.Endpoint()
 	endpointsUpdated := c.UpdateApiEndpoints(snykApiUrl)
 
-	if endpointsUpdated && !initialization {
+	if endpointsUpdated && !isInitialization {
 		authService := di.AuthenticationService()
 		authService.Logout(context.Background())
 		authService.ConfigureProviders(c)
 		c.Workspace().Clear()
 
 		// Send analytics for endpoint change
-		if sendAnalytics {
-			sendWorkspaceConfigChanged(c, "endpoint", oldEndpoint, snykApiUrl, triggerSource)
+		if !initialize {
+			sendWorkspaceConfigChanged(c, "endpoint", oldEndpoint, snykApiUrl, triggerSource, initialize)
 		}
 	}
 
@@ -410,24 +415,24 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, initializatio
 		oldCodeApi := c.SnykCodeApi()
 		c.SetSnykCodeApi(settings.SnykCodeApi)
 		if oldCodeApi != settings.SnykCodeApi {
-			sendWorkspaceConfigChanged(c, "snykCodeApi", oldCodeApi, settings.SnykCodeApi, triggerSource)
+			sendWorkspaceConfigChanged(c, "snykCodeApi", oldCodeApi, settings.SnykCodeApi, triggerSource, initialize)
 		}
 	}
 }
 
-func updateOrganization(c *config.Config, settings types.Settings, triggerSource string, sendAnalytics bool) {
+func updateOrganization(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	newOrg := strings.TrimSpace(settings.Organization)
 	if newOrg != "" {
 		oldOrgId := c.Organization()
 		c.SetOrganization(newOrg)
 		newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
-		if oldOrgId != newOrgId && sendAnalytics {
-			sendWorkspaceConfigChanged(c, "organization", oldOrgId, newOrgId, triggerSource)
+		if oldOrgId != newOrgId && !initialize {
+			sendWorkspaceConfigChanged(c, "organization", oldOrgId, newOrgId, triggerSource, initialize)
 		}
 	}
 }
 
-func updateErrorReporting(c *config.Config, settings types.Settings, triggerSource string) {
+func updateErrorReporting(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
 	if err != nil {
 		c.Logger().Debug().Msgf("couldn't read send error reports %s", settings.SendErrorReports)
@@ -436,12 +441,12 @@ func updateErrorReporting(c *config.Config, settings types.Settings, triggerSour
 		c.SetErrorReportingEnabled(parseBool)
 
 		if oldValue != parseBool {
-			sendWorkspaceConfigChanged(c, "sendErrorReports", oldValue, parseBool, triggerSource)
+			sendWorkspaceConfigChanged(c, "sendErrorReports", oldValue, parseBool, triggerSource, initialize)
 		}
 	}
 }
 
-func manageBinariesAutomatically(c *config.Config, settings types.Settings, triggerSource string) {
+func manageBinariesAutomatically(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	parseBool, err := strconv.ParseBool(settings.ManageBinariesAutomatically)
 	if err != nil {
 		c.Logger().Debug().Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
@@ -450,7 +455,7 @@ func manageBinariesAutomatically(c *config.Config, settings types.Settings, trig
 		c.SetManageBinariesAutomatically(parseBool)
 
 		if oldValue != parseBool {
-			sendWorkspaceConfigChanged(c, "manageBinariesAutomatically", oldValue, parseBool, triggerSource)
+			sendWorkspaceConfigChanged(c, "manageBinariesAutomatically", oldValue, parseBool, triggerSource, initialize)
 		}
 	}
 }
@@ -525,7 +530,7 @@ func updateCliConfig(c *config.Config, settings types.Settings) {
 	currentConfig.SetCliSettings(cliSettings)
 }
 
-func updateProductEnablement(c *config.Config, settings types.Settings, triggerSource string, sendAnalytics bool) {
+func updateProductEnablement(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	// Snyk Code
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
 	if err != nil {
@@ -534,8 +539,8 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 		oldValue := c.IsSnykCodeEnabled()
 		c.SetSnykCodeEnabled(parseBool)
 		c.EnableSnykCodeSecurity(parseBool)
-		if oldValue != parseBool && sendAnalytics {
-			sendWorkspaceConfigChanged(c, "activateSnykCode", oldValue, parseBool, triggerSource)
+		if oldValue != parseBool && !initialize {
+			sendWorkspaceConfigChanged(c, "activateSnykCode", oldValue, parseBool, triggerSource, initialize)
 		}
 	}
 
@@ -546,8 +551,8 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 	} else {
 		oldValue := c.IsSnykOssEnabled()
 		c.SetSnykOssEnabled(parseBool)
-		if oldValue != parseBool && sendAnalytics {
-			sendWorkspaceConfigChanged(c, "activateSnykOpenSource", oldValue, parseBool, triggerSource)
+		if oldValue != parseBool && !initialize {
+			sendWorkspaceConfigChanged(c, "activateSnykOpenSource", oldValue, parseBool, triggerSource, initialize)
 		}
 	}
 
@@ -558,31 +563,31 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 	} else {
 		oldValue := c.IsSnykIacEnabled()
 		c.SetSnykIacEnabled(parseBool)
-		if oldValue != parseBool && sendAnalytics {
-			sendWorkspaceConfigChanged(c, "activateSnykIac", oldValue, parseBool, triggerSource)
+		if oldValue != parseBool && !initialize {
+			sendWorkspaceConfigChanged(c, "activateSnykIac", oldValue, parseBool, triggerSource, initialize)
 		}
 	}
 }
 
-func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, triggerSource string) {
+func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, triggerSource string, initialize bool) {
 	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options:")
 	modified := c.SetIssueViewOptions(s)
 
 	if modified {
-		sendWorkspaceConfigChanged(c, "", nil, nil, triggerSource)
+		sendWorkspaceConfigChanged(c, "", nil, nil, triggerSource, initialize)
 	}
 }
 
-func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSource string) {
+func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSource string, initialize bool) {
 	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter:")
 	modified := c.SetSeverityFilter(s)
 
 	if modified {
-		sendWorkspaceConfigChanged(c, "", nil, nil, triggerSource)
+		sendWorkspaceConfigChanged(c, "", nil, nil, triggerSource, initialize)
 	}
 }
 
-func sendWorkspaceConfigChanged(c *config.Config, configName string, oldVal any, newVal any, triggerSource string) {
+func sendWorkspaceConfigChanged(c *config.Config, configName string, oldVal any, newVal any, triggerSource string, initialize bool) {
 	ws := c.Workspace()
 	if ws == nil {
 		return
@@ -592,8 +597,10 @@ func sendWorkspaceConfigChanged(c *config.Config, configName string, oldVal any,
 	if len(configName) == 0 {
 		return
 	}
-	for _, folder := range ws.Folders() {
-		go sendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folder.Path(), triggerSource)
+	if !initialize {
+		for _, folder := range ws.Folders() {
+			go sendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folder.Path(), triggerSource)
+		}
 	}
 }
 
