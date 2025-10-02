@@ -175,8 +175,16 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			return
 		}
 
+		// Store the old organization before updating
+		oldOrg := storedConfig.Organization
+
 		// Folder config might be new or changed, so (re)resolve the org before saving it.
 		command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig)
+
+		// Send analytics for organization change if it changed and analytics are enabled
+		if !initialize && oldOrg != storedConfig.Organization {
+			go sendConfigChangedAnalyticsEvent(c, "organization", oldOrg, storedConfig.Organization, path, triggerSource)
+		}
 
 		folderConfigs = append(folderConfigs, *storedConfig)
 	}
@@ -189,7 +197,7 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 	}
 }
 
-func updateAuthenticationMethod(c *config.Config, settings types.Settings) {
+func updateAuthenticationMethod(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	if types.EmptyAuthenticationMethod == settings.AuthenticationMethod {
 		return
 	}
@@ -489,19 +497,21 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 
 func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, triggerSource string, initialize bool) {
 	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options:")
+	oldValue := c.IssueViewOptions()
 	modified := c.SetIssueViewOptions(s)
 
 	if modified {
-		sendWorkspaceConfigChanged(c, "", nil, nil, triggerSource, initialize)
+		sendWorkspaceConfigChanged(c, "issueViewOptions", oldValue, s, triggerSource, initialize)
 	}
 }
 
 func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSource string, initialize bool) {
 	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter:")
+	oldValue := c.FilterSeverity()
 	modified := c.SetSeverityFilter(s)
 
 	if modified {
-		sendWorkspaceConfigChanged(c, "", nil, nil, triggerSource, initialize)
+		sendWorkspaceConfigChanged(c, "filterSeverity", oldValue, s, triggerSource, initialize)
 	}
 }
 

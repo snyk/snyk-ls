@@ -502,8 +502,6 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should remain true")
 }
 
-//nolint:dupl // test cases check different combinations of supplied and derived org.
-func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing.T) {
 // setupFolderConfigTest is a helper function to reduce duplication in folder config tests
 func setupFolderConfigTest(t *testing.T) (*config.Config, types.FilePath, configuration.Configuration, *zerolog.Logger) {
 	t.Helper()
