@@ -74,10 +74,18 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	di.TestInit(t)
 	loc, _ := setupServer(t, c)
 
+	// Wait for default environment to be ready before testing PATH updates
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	err := c.WaitForDefaultEnv(ctx)
+	if err != nil {
+		t.Fatal(err, "error waiting for default environment")
+	}
+
 	t.Setenv("a", "")
 	t.Setenv("c", "")
 	params := types.DidChangeConfigurationParams{Settings: sampleSettings}
-	_, err := loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
+	_, err = loc.Client.Call(ctx, "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
 	}
@@ -512,7 +520,7 @@ func (s *folderConfigTestSetup) callUpdateFolderConfig(org string) {
 			},
 		},
 	}
-	updateFolderConfig(s.c, settings, s.logger)
+	updateFolderConfig(s.c, settings, s.logger, "test", true)
 }
 
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
@@ -568,33 +576,15 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 
 func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing.T) {
 	setup := setupFolderConfigTest(t)
-
-	// Setup stored config with empty org
-	setup.createStoredConfig("", true, false)
-	setup.c.SetOrganization("")
-// setupFolderConfigTest is a helper function to reduce duplication in folder config tests
-func setupFolderConfigTest(t *testing.T) (*config.Config, types.FilePath, configuration.Configuration, *zerolog.Logger) {
-	t.Helper()
-	c := testutil.UnitTest(t)
-	di.TestInit(t)
-
-	folderPath := types.FilePath(t.TempDir())
-	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
-
-	engineConfig := c.Engine().GetConfiguration()
-	logger := c.Logger()
-
-	return c, folderPath, engineConfig, logger
-}
-
-func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing.T) {
-	c, folderPath, engineConfig, logger := setupFolderConfigTest(t)
+	c := setup.c
+	folderPath := setup.folderPath
+	engineConfig := setup.engineConfig
+	logger := setup.logger
 
 	// Setup stored config with empty org
 	storedConfig := &types.FolderConfig{
 		FolderPath:                  folderPath,
-		Organization:                "",
+		PreferredOrg:                "",
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                false,
 	}
@@ -609,7 +599,7 @@ func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing
 		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath:   folderPath,
-				Organization: "",
+				PreferredOrg: "",
 			},
 		},
 	}
@@ -627,6 +617,7 @@ func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 	// Setup stored config without migration flag and empty org
 	setup.createStoredConfig("", false, false)
 	setup.c.SetOrganization("global-org-id")
+	folderPath := setup.folderPath
 
 	// Call updateFolderConfig
 	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
@@ -636,11 +627,11 @@ func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath:   folderPath,
-				Organization: "",
+				PreferredOrg: "",
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger, "test", true)
+	updateFolderConfig(setup.c, settings, setup.logger, "test", true)
 
 	// Verify UpdateFolderConfigOrg was called and set the migration flag
 	updatedConfig := setup.getUpdatedConfig()
@@ -649,21 +640,23 @@ func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 }
 
 func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T) {
-	setup := setupFolderConfigTest(t)
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	err := initTestRepo(t, string(folderPath))
+	assert.NoError(t, err)
 
 	// Setup stored config without migration
-	setup.createStoredConfig("initial-org", false, false)
-	setup.c.SetOrganization("global-org-id")
-	c, folderPath, engineConfig, logger := setupFolderConfigTest(t)
-
-	// Setup stored config without migration
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
 		FolderPath:                  folderPath,
-		Organization:                "initial-org",
+		PreferredOrg:                "initial-org",
 		OrgMigratedFromGlobalConfig: false,
 		OrgSetByUser:                false,
 	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	assert.NoError(t, err)
 
 	c.SetOrganization("global-org-id")
@@ -671,57 +664,60 @@ func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T
 	// Call updateFolderConfig
 	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
 	// folderConfigsOrgSettingsEqual will return false, triggering UpdateFolderConfigOrg
-	setup.callUpdateFolderConfig("initial-org")
 	settings := types.Settings{
 		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath:   folderPath,
-				Organization: "initial-org",
+				PreferredOrg: "initial-org",
 			},
 		},
 	}
 	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify UpdateFolderConfigOrg was called and set the migration flag
-	updatedConfig := setup.getUpdatedConfig()
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
+	assert.NoError(t, err)
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true after migration")
 }
 
 func Test_updateFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *testing.T) {
-	setup := setupFolderConfigTest(t)
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	err := initTestRepo(t, string(folderPath))
+	assert.NoError(t, err)
 
 	// Setup: previously user-set, but now both folder and global are empty
-	setup.createStoredConfig("", true, true) // Was previously set by user
-	setup.c.SetOrganization("")
-	c, folderPath, engineConfig, logger := setupFolderConfigTest(t)
-
-	// Setup: previously user-set, but now both folder and global are empty
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
 		FolderPath:                  folderPath,
-		Organization:                "",
+		PreferredOrg:                "",
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true, // Was previously set by user
 	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	assert.NoError(t, err)
 
-	// Both folder and global org are empty
+	// Both folder and global org are empty - this is the key difference from the first test
 	c.SetOrganization("")
 
-	// Call updateFolderConfig
-	setup.callUpdateFolderConfig("")
+	// Call updateFolderConfig with empty org settings
 	settings := types.Settings{
 		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath:   folderPath,
-				Organization: "",
+				PreferredOrg: "",
 			},
 		},
 	}
 	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify: should attempt to resolve from LDX-Sync because inheriting from blank global
-	updatedConfig := setup.getUpdatedConfig()
+	// This test specifically checks the case where both folder and global orgs are empty
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
+	assert.NoError(t, err)
 	// When LDX-Sync is called, OrgSetByUser behavior depends on the result
 	assert.Empty(t, updatedConfig.PreferredOrg, "PreferredOrg should remain empty when inheriting from blank global")
 }
@@ -762,7 +758,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger)
+	updateFolderConfig(c, settings, logger, "test", true)
 
 	// Verify config remains unchanged (UpdateFolderConfigOrg was skipped)
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
@@ -793,7 +789,7 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	}
 
 	// Should not panic and should handle nil gracefully
-	updateFolderConfig(c, settings, logger)
+	updateFolderConfig(c, settings, logger, "test", false)
 	// If we get here without panic, the nil check worked
 }
 
