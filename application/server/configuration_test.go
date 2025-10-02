@@ -572,6 +572,36 @@ func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing
 	// Setup stored config with empty org
 	setup.createStoredConfig("", true, false)
 	setup.c.SetOrganization("")
+// setupFolderConfigTest is a helper function to reduce duplication in folder config tests
+func setupFolderConfigTest(t *testing.T) (*config.Config, types.FilePath, configuration.Configuration, *zerolog.Logger) {
+	t.Helper()
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	err := initTestRepo(t, string(folderPath))
+	assert.NoError(t, err)
+
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+
+	return c, folderPath, engineConfig, logger
+}
+
+func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing.T) {
+	c, folderPath, engineConfig, logger := setupFolderConfigTest(t)
+
+	// Setup stored config with empty org
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		Organization:                "",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	assert.NoError(t, err)
+
+	c.SetOrganization("")
 
 	// Call updateFolderConfig
 	setup.callUpdateFolderConfig("")
@@ -624,6 +654,19 @@ func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T
 	// Setup stored config without migration
 	setup.createStoredConfig("initial-org", false, false)
 	setup.c.SetOrganization("global-org-id")
+	c, folderPath, engineConfig, logger := setupFolderConfigTest(t)
+
+	// Setup stored config without migration
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		Organization:                "initial-org",
+		OrgMigratedFromGlobalConfig: false,
+		OrgSetByUser:                false,
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	assert.NoError(t, err)
+
+	c.SetOrganization("global-org-id")
 
 	// Call updateFolderConfig
 	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
@@ -650,6 +693,20 @@ func Test_updateFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *tes
 	// Setup: previously user-set, but now both folder and global are empty
 	setup.createStoredConfig("", true, true) // Was previously set by user
 	setup.c.SetOrganization("")
+	c, folderPath, engineConfig, logger := setupFolderConfigTest(t)
+
+	// Setup: previously user-set, but now both folder and global are empty
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		Organization:                "",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true, // Was previously set by user
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	assert.NoError(t, err)
+
+	// Both folder and global org are empty
+	c.SetOrganization("")
 
 	// Call updateFolderConfig
 	setup.callUpdateFolderConfig("")
