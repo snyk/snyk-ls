@@ -171,7 +171,10 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		}
 
 		// Folder config might be new or changed, so (re)resolve the org before saving it.
-		command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig)
+		// We should also check that the folder's org is still valid if the globally set org has changed.
+		if !folderConfigsOrgSettingsEqual(folderConfig, storedConfig) || c.Organization() != settings.Organization {
+			command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig)
+		}
 
 		folderConfigs = append(folderConfigs, *storedConfig)
 	}
@@ -182,6 +185,12 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		notifier := di.Notifier()
 		notifier.SendShowMessage(sglsp.MTError, err.Error())
 	}
+}
+
+func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig *types.FolderConfig) bool {
+	return folderConfig.Organization == storedConfig.Organization &&
+		folderConfig.OrgSetByUser == storedConfig.OrgSetByUser &&
+		folderConfig.OrgMigratedFromGlobalConfig == storedConfig.OrgMigratedFromGlobalConfig
 }
 
 func updateAuthenticationMethod(c *config.Config, settings types.Settings) {

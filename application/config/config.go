@@ -1291,7 +1291,8 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	return folderConfig
 }
 
-// FolderOrganization returns the organization configured for a given folder path.
+// FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
+// the folder, it returns the global organization.
 func (c *Config) FolderOrganization(path types.FilePath) string {
 	fc := c.FolderConfig(path)
 	if fc == nil || fc.Organization == "" {

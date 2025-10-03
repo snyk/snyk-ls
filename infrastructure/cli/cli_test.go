@@ -55,7 +55,6 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	assert.Contains(t, cmd, "a")
 	assert.Contains(t, cmd, "b")
 	assert.Contains(t, cmd, "--insecure")
-	// --org is injected contextually in getCommand() based on working directory's folder config.
 }
 
 func Test_GetCommand_UsesConfigFiles(t *testing.T) {

@@ -50,7 +50,7 @@ func issueSeverity(snykSeverity string) types.Severity {
 	return sev
 }
 
-// GetCodeApiUrl returns the code API URL, using folder-specific organization when possible.
+// GetCodeApiUrl returns the code API URL.
 func GetCodeApiUrl(c *config.Config) (string, error) {
 	return GetCodeApiUrlForFolder(c, "")
 }

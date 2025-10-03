@@ -199,15 +199,13 @@ func migrateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, 
 	newOrgIsDefault := setOrgFromLdxSync(c, storedConfig)
 
 	// If LDX-Sync returns a different org, we should mark it as not set by the user.
-	if storedConfig.Organization != c.Organization() {
+	if storedConfig.Organization != c.Organization() || newOrgIsDefault {
 		storedConfig.OrgSetByUser = false
-	} else if !newOrgIsDefault {
+	} else {
 		// The folder is using same org as the global config. We mark this as user set unless it matches the
 		// default org.
 		storedConfig.Organization = ""
 		storedConfig.OrgSetByUser = true
-	} else {
-		storedConfig.OrgSetByUser = false
 	}
 
 	storedConfig.OrgMigratedFromGlobalConfig = true

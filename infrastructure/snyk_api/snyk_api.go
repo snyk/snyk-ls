@@ -73,11 +73,6 @@ func NewSnykApiClient(c *config.Config, client func() *http.Client) SnykApiClien
 	return &s
 }
 
-func (s *SnykApiClientImpl) addOrgToQuery(_ *config.Config, u *url.URL) *url.URL {
-	// Organization is now folder-scoped; feature flag requests remain user-scoped and do not include org.
-	return u
-}
-
 func (s *SnykApiClientImpl) normalizeAPIPathForV1(c *config.Config, path string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
@@ -103,7 +98,6 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 	if err != nil {
 		return FFResponse{}, err
 	}
-	u = s.addOrgToQuery(c, u)
 	logger.Debug().Str("path", path).Msg("API: Getting feature flag status")
 
 	err = s.getApiResponse(method, u.String(), &response)

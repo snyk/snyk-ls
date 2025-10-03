@@ -359,6 +359,6 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 
 func getAuthMsg(config configuration.Configuration, userName string) string {
 	apiUrl := config.GetString(configuration.API_URL)
-
-	return fmt.Sprintf("Already Authenticated. User: %s Using API Endpoint: %s", userName, apiUrl)
+	org := config.GetString(configuration.ORGANIZATION)
+	return fmt.Sprintf("Already Authenticated. User: %s Using API Endpoint: %s and Org: %s", userName, apiUrl, org)
 }
