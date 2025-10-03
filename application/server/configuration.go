@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -175,8 +176,9 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			return
 		}
 
-		// Store the old organization before updating
+		// Store the old organization and org_set_by_user before updating
 		oldOrg := storedConfig.Organization
+		oldOrgSetByUser := storedConfig.OrgSetByUser
 
 		// Folder config might be new or changed, so (re)resolve the org before saving it.
 		command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig)
@@ -184,6 +186,11 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		// Send analytics for organization change if it changed and analytics are enabled
 		if !initialize && oldOrg != storedConfig.Organization {
 			go sendConfigChangedAnalyticsEvent(c, "organization", oldOrg, storedConfig.Organization, path, triggerSource)
+		}
+
+		// Send analytics for org_set_by_user change if it changed and analytics are enabled
+		if !initialize && oldOrgSetByUser != storedConfig.OrgSetByUser {
+			go sendConfigChangedAnalyticsEvent(c, "org_set_by_user", oldOrgSetByUser, storedConfig.OrgSetByUser, path, triggerSource)
 		}
 
 		folderConfigs = append(folderConfigs, *storedConfig)
@@ -238,8 +245,10 @@ func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSour
 		}
 		c.SetTrustedFolders(trustedFolders)
 
-		// Send analytics for trusted folders change
-		sendWorkspaceConfigChanged(c, "trustedFolders", oldFolders, trustedFolders, triggerSource, initialize)
+		// Send analytics for trusted folders change if they actually changed
+		if !initialize && !slices.Equal(oldFolders, trustedFolders) {
+			sendWorkspaceConfigChanged(c, "trustedFolders", oldFolders, trustedFolders, triggerSource, initialize)
+		}
 	}
 }
 
@@ -330,8 +339,8 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, isInitializat
 		authService.ConfigureProviders(c)
 		c.Workspace().Clear()
 
-		// Send analytics for endpoint change
-		if !initialize {
+		// Send analytics for endpoint change if it actually changed
+		if !initialize && oldEndpoint != snykApiUrl {
 			sendWorkspaceConfigChanged(c, "endpoint", oldEndpoint, snykApiUrl, triggerSource, initialize)
 		}
 	}
