@@ -564,12 +564,10 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, trigger
 
 	// Send analytics for each individual field that changed
 	if !initialize {
-		if oldValue.OpenIssues != s.OpenIssues {
-			sendConfigChangedAnalytics(c, "issueViewOptions.openIssues", oldValue.OpenIssues, s.OpenIssues, triggerSource)
-		}
-		if oldValue.IgnoredIssues != s.IgnoredIssues {
-			sendConfigChangedAnalytics(c, "issueViewOptions.ignoredIssues", oldValue.IgnoredIssues, s.IgnoredIssues, triggerSource)
-		}
+		sendAnalyticsForFields(c, "issueViewOptions", &oldValue, s, triggerSource, map[string]func(*types.IssueViewOptions) bool{
+			"OpenIssues":    func(s *types.IssueViewOptions) bool { return s.OpenIssues },
+			"IgnoredIssues": func(s *types.IssueViewOptions) bool { return s.IgnoredIssues },
+		})
 	}
 }
 
@@ -587,18 +585,12 @@ func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSour
 
 	// Send analytics for each individual field that changed
 	if !initialize {
-		if oldValue.Critical != s.Critical {
-			sendConfigChangedAnalytics(c, "filterSeverity.critical", oldValue.Critical, s.Critical, triggerSource)
-		}
-		if oldValue.High != s.High {
-			sendConfigChangedAnalytics(c, "filterSeverity.high", oldValue.High, s.High, triggerSource)
-		}
-		if oldValue.Medium != s.Medium {
-			sendConfigChangedAnalytics(c, "filterSeverity.medium", oldValue.Medium, s.Medium, triggerSource)
-		}
-		if oldValue.Low != s.Low {
-			sendConfigChangedAnalytics(c, "filterSeverity.low", oldValue.Low, s.Low, triggerSource)
-		}
+		sendAnalyticsForFields(c, "filterSeverity", &oldValue, s, triggerSource, map[string]func(*types.SeverityFilter) bool{
+			"Critical": func(s *types.SeverityFilter) bool { return s.Critical },
+			"High":     func(s *types.SeverityFilter) bool { return s.High },
+			"Medium":   func(s *types.SeverityFilter) bool { return s.Medium },
+			"Low":      func(s *types.SeverityFilter) bool { return s.Low },
+		})
 	}
 }
 
@@ -620,6 +612,17 @@ func sendConfigChangedAnalytics(c *config.Config, configName string, oldVal any,
 
 	for _, folder := range ws.Folders() {
 		go sendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folder.Path(), triggerSource)
+	}
+}
+
+// sendAnalyticsForFields is a generic helper function that sends analytics for struct fields
+func sendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, newValue *T, triggerSource string, fieldMappings map[string]func(*T) bool) {
+	for fieldName, getter := range fieldMappings {
+		oldVal := getter(oldValue)
+		newVal := getter(newValue)
+		if oldVal != newVal {
+			sendConfigChangedAnalytics(c, prefix+fieldName, oldVal, newVal, triggerSource)
+		}
 	}
 }
 
@@ -650,14 +653,14 @@ func sendTrustedFoldersAnalytics(c *config.Config, oldFolders, newFolders []type
 	// Find added folders
 	for _, folder := range newFolders {
 		if !oldMap[folder] {
-			sendConfigChangedAnalytics(c, "trustedFolders.added", "", string(folder), triggerSource)
+			sendConfigChangedAnalytics(c, "trustedFoldersAdded", "", string(folder), triggerSource)
 		}
 	}
 
 	// Find removed folders
 	for _, folder := range oldFolders {
 		if !newMap[folder] {
-			sendConfigChangedAnalytics(c, "trustedFolders.removed", string(folder), "", triggerSource)
+			sendConfigChangedAnalytics(c, "trustedFoldersRemoved", string(folder), "", triggerSource)
 		}
 	}
 
@@ -665,6 +668,6 @@ func sendTrustedFoldersAnalytics(c *config.Config, oldFolders, newFolders []type
 	oldCount := len(oldFolders)
 	newCount := len(newFolders)
 	if oldCount != newCount {
-		sendConfigChangedAnalytics(c, "trustedFolders.count", oldCount, newCount, triggerSource)
+		sendConfigChangedAnalytics(c, "trustedFoldersCount", oldCount, newCount, triggerSource)
 	}
 }
