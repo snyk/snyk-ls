@@ -252,12 +252,6 @@
           "isPositional": true
         },
         {
-          "name": "org",
-          "type": "string",
-          "isRequired": false,
-          "description": "Specifies the Snyk Organization ID (or slug name) under which the test results should be associated. This can influence private test limits and ensures results are reported to the correct Snyk Organization. Default is from `snyk config` or Snyk account."
-        },
-        {
           "name": "severity_threshold",
           "type": "string",
           "isRequired": false,
@@ -268,12 +262,6 @@
           "type": "boolean",
           "isRequired": false,
           "description": "Include ignored vulnerabilities in the output."
-        },
-        {
-          "name": "debug",
-          "type": "boolean",
-          "isRequired": false,
-          "description": "Enables debug logging for the SAST scan, providing more detailed output for troubleshooting. Use as `-d`."
         }
       ]
     },
