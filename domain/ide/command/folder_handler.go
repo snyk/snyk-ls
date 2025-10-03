@@ -147,7 +147,6 @@ func GetTrustMessage(untrusted []types.Folder) string {
 func UpdateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
 	// For configs that have been migrated, we use the org returned by LDX-Sync unless the user has set one.
 	if storedConfig.OrgMigratedFromGlobalConfig {
-
 		if folderConfig == nil {
 			// Language server is initializing, or processing added/removed folders (workspace/didChangeWorkspaceFolders)
 			// We are only dealing with stored configs (new configs will not have been migrated yet).
@@ -155,26 +154,28 @@ func UpdateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 			// 1. The org is not set by the user
 			// 2. The org is now being inherited from a blank global org.
 			orgInheritingFromBlankGlobal := storedConfig.Organization == "" && c.Organization() == ""
-			if storedConfig.OrgSetByUser == false || orgInheritingFromBlankGlobal {
+			if !storedConfig.OrgSetByUser || orgInheritingFromBlankGlobal {
 				setOrgFromLdxSync(c, storedConfig)
 				storedConfig.OrgSetByUser = false
 			}
 			return
 		}
 
-		// Whether to look up the org from LDX-Sync. We keep the existing org if BOTH:
-		// 1. The org has just been changed or was previously set by the user
-		// 2. The org is not now being inherited from a blank global org.
-		orgHasJustChanged := folderConfig.Organization != storedConfig.Organization
 		orgInheritingFromBlankGlobal := folderConfig.Organization == "" && c.Organization() == ""
+		orgHasJustChanged := folderConfig.Organization != storedConfig.Organization
 
-		if (orgHasJustChanged || folderConfig.OrgSetByUser) && !orgInheritingFromBlankGlobal {
+		if orgInheritingFromBlankGlobal || !folderConfig.OrgSetByUser {
+			// The user is either:
+			// 1. blanking their folder config org while they don't have a global org set
+			// 2. blanking their global org while they don't have a folder config org set
+			// 3. explicitly opting in to LDX-Sync.
+			setOrgFromLdxSync(c, storedConfig)
+			storedConfig.OrgSetByUser = false
+		} else if orgHasJustChanged || folderConfig.OrgSetByUser {
 			// Store the user-provided org.
+			// We have already checked that the user wishes to provide an org and the org is valid or can inherit a valid org.
 			storedConfig.Organization = folderConfig.Organization
 			storedConfig.OrgSetByUser = true
-		} else {
-			// If the org is not set by the user, we should resolve it.
-			setOrgFromLdxSync(c, storedConfig)
 		}
 	} else {
 		migrateFolderConfigOrg(c, storedConfig, folderConfig)
@@ -182,8 +183,9 @@ func UpdateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 }
 
 func migrateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
-	// If we are migrating a folderConfig provided by the user, we simply save it and skip LDX-Sync lookup.
-	if folderConfig != nil && (folderConfig.Organization != "" || folderConfig.OrgSetByUser) {
+	// If we are migrating a folderConfig provided by the user, we simply save it and skip LDX-Sync lookup,
+	// unless they are trying to inherit a blank global org.
+	if folderConfig != nil && (folderConfig.Organization != "" || (folderConfig.OrgSetByUser && c.Organization() != "")) {
 		storedConfig.Organization = folderConfig.Organization
 		storedConfig.OrgSetByUser = folderConfig.OrgSetByUser
 		storedConfig.OrgMigratedFromGlobalConfig = true
