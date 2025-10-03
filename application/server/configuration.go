@@ -172,7 +172,12 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 
 		// Folder config might be new or changed, so (re)resolve the org before saving it.
 		// We should also check that the folder's org is still valid if the globally set org has changed.
-		if !folderConfigsOrgSettingsEqual(folderConfig, storedConfig) || c.Organization() != settings.Organization {
+		// Also, if the config hasn't been migrated yet, we need to perform the initial migration.
+		needsMigration := !storedConfig.OrgMigratedFromGlobalConfig
+		orgSettingsChanged := !folderConfigsOrgSettingsEqual(folderConfig, storedConfig)
+		globalOrgChanged := c.Organization() != settings.Organization
+		
+		if needsMigration || orgSettingsChanged || globalOrgChanged {
 			command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig)
 		}
 
