@@ -22,16 +22,14 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -60,6 +58,7 @@ type McpLLMBinding struct {
 	openBrowserFunc     types.OpenBrowserFunc
 	learnService        learn.Service
 	learnServiceFactory LearnServiceFactoryFunc
+	codeScanner         *code.Scanner
 }
 
 func NewMcpLLMBinding(opts ...Option) *McpLLMBinding {
@@ -236,38 +235,4 @@ func (m *McpLLMBinding) Started() bool {
 	defer m.mutex.RUnlock()
 
 	return m.started
-}
-
-func (m *McpLLMBinding) updateGafConfigWithIntegrationEnvironment(invocationCtx workflow.InvocationContext, environmentName, environmentVersion string) {
-	getConfiguration := invocationCtx.GetEngine().GetConfiguration()
-	getConfiguration.Set(configuration.INTEGRATION_NAME, "MCP")
-
-	integrationVersion := "unknown"
-	runtimeInfo := invocationCtx.GetRuntimeInfo()
-	if runtimeInfo != nil {
-		integrationVersion = runtimeInfo.GetVersion()
-	}
-	getConfiguration.Set(configuration.INTEGRATION_VERSION, integrationVersion)
-	getConfiguration.Set(configuration.INTEGRATION_ENVIRONMENT, environmentName)
-	getConfiguration.Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, environmentVersion)
-}
-
-func (m *McpLLMBinding) expandedEnv(integrationVersion, environmentName, environmentVersion string) []string {
-	environ := os.Environ()
-	var expandedEnv = []string{}
-	for _, v := range environ {
-		if strings.HasPrefix(strings.ToLower(v), strings.ToLower(configuration.INTEGRATION_NAME)) {
-			continue
-		}
-		if strings.HasPrefix(strings.ToLower(v), strings.ToLower(configuration.INTEGRATION_VERSION)) {
-			continue
-		}
-		expandedEnv = append(expandedEnv, v)
-	}
-	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_NAME), "MCP"))
-
-	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_VERSION), integrationVersion))
-	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT), environmentName))
-	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT_VERSION), environmentVersion))
-	return expandedEnv
 }

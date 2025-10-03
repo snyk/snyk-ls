@@ -141,10 +141,6 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 
 func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
 	logger := sc.C.Logger().With().Str("method", "code.Scan").Logger()
-	if !sc.C.NonEmptyToken() {
-		logger.Info().Msg("not authenticated, not scanning")
-		return issues, err
-	}
 
 	gafConfig := sc.C.Engine().GetConfiguration()
 
@@ -172,12 +168,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 
 	sc.C.SetSnykAgentFixEnabled(sastResponse.AutofixEnabled)
 
-	sc.changedFilesMutex.Lock()
-	if sc.changedPaths[folderPath] == nil {
-		sc.changedPaths[folderPath] = map[types.FilePath]bool{}
-	}
-	sc.changedPaths[folderPath][path] = true
-	sc.changedFilesMutex.Unlock()
+	sc.AddChangedPath(folderPath, path)
 
 	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
 	// to finish before starting.
@@ -216,6 +207,15 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	sc.removeFromCache(filesToBeScanned)
 	sc.addToCache(results)
 	return results, err
+}
+
+func (sc *Scanner) AddChangedPath(folderPath types.FilePath, path types.FilePath) {
+	sc.changedFilesMutex.Lock()
+	if sc.changedPaths[folderPath] == nil {
+		sc.changedPaths[folderPath] = map[types.FilePath]bool{}
+	}
+	sc.changedPaths[folderPath][path] = true
+	sc.changedFilesMutex.Unlock()
 }
 
 func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {

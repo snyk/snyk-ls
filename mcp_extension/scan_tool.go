@@ -24,13 +24,21 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
+	"time"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
+	codeClient "github.com/snyk/code-client-go"
+	codeClientHTTP "github.com/snyk/code-client-go/http"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/code"
+	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -88,6 +96,29 @@ type SnykMcpTools struct {
 	Tools []SnykMcpToolsDefinition `json:"tools"`
 }
 
+func (m *McpLLMBinding) setupCodeScanner(invocationCtx workflow.InvocationContext) *code.Scanner {
+	engine := invocationCtx.GetEngine()
+
+	codeInstrumentor := code.NewCodeInstrumentor()
+	instrumentor := performance2.NewInstrumentor()
+
+	httpClient := codeClientHTTP.NewHTTPClient(
+		engine.GetNetworkAccess().GetHttpClient,
+		codeClientHTTP.WithLogger(engine.GetLogger()),
+		codeClientHTTP.WithInstrumentor(codeInstrumentor),
+	)
+
+	c := config.NewFromExtension(engine)
+	codeClientScanner := codeClient.NewCodeScanner(
+		c,
+		httpClient,
+		codeClient.WithTrackerFactory(code.NewCodeTrackerFactory()),
+		codeClient.WithLogger(engine.GetLogger()),
+		codeClient.WithInstrumentor(codeInstrumentor),
+	)
+	return code.New(c, instrumentor, nil, nil, m.learnService, nil, codeClientScanner)
+}
+
 func loadMcpToolsFromJson() (*SnykMcpTools, error) {
 	var config SnykMcpTools
 	if err := json.Unmarshal([]byte(snykToolsJson), &config); err != nil {
@@ -98,6 +129,7 @@ func loadMcpToolsFromJson() (*SnykMcpTools, error) {
 }
 
 func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) error {
+	m.codeScanner = m.setupCodeScanner(invocationCtx)
 	config, err := loadMcpToolsFromJson()
 
 	if err != nil || config == nil {
@@ -118,6 +150,8 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykSendFeedback(invocationCtx, toolDef))
 		case SnykAuth:
 			m.mcpServer.AddTool(tool, m.snykAuthHandler(invocationCtx, toolDef))
+		case SnykCodeTest:
+			m.mcpServer.AddTool(tool, m.snyCodeTestHandler(invocationCtx, toolDef))
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -362,4 +396,92 @@ func getAuthMsg(config configuration.Configuration, userName string) string {
 	org := config.GetString(configuration.ORGANIZATION)
 
 	return fmt.Sprintf("Already Authenticated. User: %s Using API Endpoint: %s and Org: %s", userName, apiUrl, org)
+}
+
+func (m *McpLLMBinding) snyCodeTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) server.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := m.logger.With().Str("method", toolDef.Name).Logger()
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+
+		pathArg := request.GetArguments()["path"]
+		if pathArg == nil {
+			return nil, fmt.Errorf("argument 'path' is missing for tool %s", toolDef.Name)
+		}
+
+		folderPath, ok := pathArg.(string)
+		if !ok {
+			return nil, fmt.Errorf("argument 'path' is not a string for tool %s", toolDef.Name)
+		}
+		if folderPath == "" {
+			return nil, fmt.Errorf("empty path given to tool %s", toolDef.Name)
+		}
+
+		hasRunFullScanBefore := len(m.codeScanner.Issues()) > 0
+		if hasRunFullScanBefore {
+			uncommitedFiles, _ := getUncommittedGitFiles(folderPath)
+			for _, filePath := range uncommitedFiles {
+				m.codeScanner.AddChangedPath(types.FilePath(folderPath), types.FilePath(filePath))
+			}
+		}
+
+		startTime := time.Now()
+		issues, err := m.codeScanner.Scan(ctx, "", types.FilePath(folderPath), nil)
+		defer func() {
+			endTime := time.Now()
+			duration := endTime.Sub(startTime)
+			_ = os.WriteFile(fmt.Sprintf("/tmp/scanDuration_new_%s_%d.txt", duration.String(), time.Now().UnixMilli()), []byte(duration.String()), 0644)
+		}()
+		logger.Info().Msgf("Scan took %s")
+		x, _ := json.Marshal(issues)
+		_ = os.WriteFile(fmt.Sprintf("/tmp/scan_%d.json", time.Now().UnixMilli()), x, 0644)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan code: %v", err)
+		}
+		res, err := json.Marshal(m.codeScanner.Issues())
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal issues: %v", err)
+		}
+		return mcp.NewToolResultText(string(res)), nil
+	}
+}
+
+func getToken(config configuration.Configuration) string {
+	token := config.GetString(configuration.AUTHENTICATION_TOKEN)
+	authToken := config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
+	if token != "" {
+		return token
+	}
+	if authToken != "" {
+		return authToken
+	}
+	return ""
+}
+
+// getUncommittedGitFiles returns a sorted list of file paths with uncommitted changes
+// under the repository rooted at the provided path. Paths are relative to the repo root.
+func getUncommittedGitFiles(path string) ([]string, error) {
+	repo, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		return nil, err
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return nil, err
+	}
+
+	status, err := worktree.Status()
+	if err != nil {
+		return nil, err
+	}
+
+	uncommitted := make([]string, 0, len(status))
+	for filePath, fileStatus := range status {
+		if fileStatus.Staging != git.Unmodified || fileStatus.Worktree != git.Unmodified {
+			uncommitted = append(uncommitted, filePath)
+		}
+	}
+
+	sort.Strings(uncommitted)
+	return uncommitted, nil
 }
