@@ -47,8 +47,8 @@ func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.
 
 		emptySettings := types.Settings{}
 		if !reflect.DeepEqual(params.Settings, emptySettings) {
-			// client used settings push
-			UpdateSettings(c, params.Settings, "user", true)
+			// client used settings push - this is a user change, not initialization
+			UpdateSettings(c, params.Settings, "user", false)
 			return true, nil
 		}
 
@@ -75,7 +75,8 @@ func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.
 		}
 
 		if !reflect.DeepEqual(fetchedSettings[0], emptySettings) {
-			UpdateSettings(c, fetchedSettings[0], "user", true)
+			// client used settings pull - this is a user change, not initialization
+			UpdateSettings(c, fetchedSettings[0], "automatic", false)
 			return true, nil
 		}
 
@@ -213,8 +214,11 @@ func updateAuthenticationMethod(c *config.Config, settings types.Settings, trigg
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
 	di.AuthenticationService().ConfigureProviders(c)
 
-	if oldValue != settings.AuthenticationMethod && !initialize {
-		sendWorkspaceConfigChanged(c, "authenticationMethod", oldValue, settings.AuthenticationMethod, triggerSource, initialize)
+	if oldValue != settings.AuthenticationMethod {
+		sendWorkspaceConfigChanged(c)
+		if !initialize {
+			sendConfigChangedAnalytics(c, "authenticationMethod", oldValue, settings.AuthenticationMethod, triggerSource)
+		}
 	}
 }
 
@@ -231,7 +235,10 @@ func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSour
 		oldValue := c.IsTrustedFolderFeatureEnabled()
 		c.SetTrustedFolderFeatureEnabled(trustedFoldersFeatureEnabled)
 		if oldValue != trustedFoldersFeatureEnabled {
-			sendWorkspaceConfigChanged(c, "enableTrustedFoldersFeature", oldValue, trustedFoldersFeatureEnabled, triggerSource, initialize)
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "enableTrustedFoldersFeature", oldValue, trustedFoldersFeatureEnabled, triggerSource)
+			}
 		}
 	} else {
 		c.SetTrustedFolderFeatureEnabled(true)
@@ -245,9 +252,15 @@ func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSour
 		}
 		c.SetTrustedFolders(trustedFolders)
 
-		// Send analytics for trusted folders change if they actually changed
-		if !initialize && !slices.Equal(oldFolders, trustedFolders) {
-			sendWorkspaceConfigChanged(c, "trustedFolders", oldFolders, trustedFolders, triggerSource, initialize)
+		// Send UI update and analytics for trusted folders changes if they actually changed
+		if !slices.Equal(oldFolders, trustedFolders) {
+			// Send UI update
+			sendWorkspaceConfigChanged(c)
+
+			// Send analytics for individual folder changes
+			if !initialize {
+				sendTrustedFoldersAnalytics(c, oldFolders, trustedFolders, triggerSource)
+			}
 		}
 	}
 }
@@ -291,7 +304,10 @@ func updateSnykLearnCodeActions(c *config.Config, settings types.Settings, trigg
 	c.SetSnykLearnCodeActionsEnabled(enable)
 
 	if oldValue != enable {
-		sendWorkspaceConfigChanged(c, "enableSnykLearnCodeActions", oldValue, enable, triggerSource, initialize)
+		sendWorkspaceConfigChanged(c)
+		if !initialize {
+			sendConfigChangedAnalytics(c, "enableSnykLearnCodeActions", oldValue, enable, triggerSource)
+		}
 	}
 }
 
@@ -305,7 +321,10 @@ func updateSnykOSSQuickFixCodeActions(c *config.Config, settings types.Settings,
 	c.SetSnykOSSQuickFixCodeActionsEnabled(enable)
 
 	if oldValue != enable {
-		sendWorkspaceConfigChanged(c, "enableSnykOSSQuickFixCodeActions", oldValue, enable, triggerSource, initialize)
+		sendWorkspaceConfigChanged(c)
+		if !initialize {
+			sendConfigChangedAnalytics(c, "enableSnykOSSQuickFixCodeActions", oldValue, enable, triggerSource)
+		}
 	}
 }
 
@@ -319,7 +338,10 @@ func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSourc
 
 	modified := c.SetDeltaFindingsEnabled(enable)
 	if modified {
-		sendWorkspaceConfigChanged(c, "enableDeltaFindings", oldValue, enable, triggerSource, initialize)
+		sendWorkspaceConfigChanged(c)
+		if !initialize {
+			sendConfigChangedAnalytics(c, "enableDeltaFindings", oldValue, enable, triggerSource)
+		}
 	}
 }
 
@@ -340,8 +362,11 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, isInitializat
 		c.Workspace().Clear()
 
 		// Send analytics for endpoint change if it actually changed
-		if !initialize && oldEndpoint != snykApiUrl {
-			sendWorkspaceConfigChanged(c, "endpoint", oldEndpoint, snykApiUrl, triggerSource, initialize)
+		if oldEndpoint != snykApiUrl {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "endpoint", oldEndpoint, snykApiUrl, triggerSource)
+			}
 		}
 	}
 
@@ -350,7 +375,10 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, isInitializat
 		oldCodeApi := c.SnykCodeApi()
 		c.SetSnykCodeApi(settings.SnykCodeApi)
 		if oldCodeApi != settings.SnykCodeApi {
-			sendWorkspaceConfigChanged(c, "snykCodeApi", oldCodeApi, settings.SnykCodeApi, triggerSource, initialize)
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "snykCodeApi", oldCodeApi, settings.SnykCodeApi, triggerSource)
+			}
 		}
 	}
 }
@@ -361,8 +389,11 @@ func updateOrganization(c *config.Config, settings types.Settings, triggerSource
 		oldOrgId := c.Organization()
 		c.SetOrganization(newOrg)
 		newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
-		if oldOrgId != newOrgId && !initialize {
-			sendWorkspaceConfigChanged(c, "organization", oldOrgId, newOrgId, triggerSource, initialize)
+		if oldOrgId != newOrgId {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "organization", oldOrgId, newOrgId, triggerSource)
+			}
 		}
 	}
 }
@@ -376,7 +407,10 @@ func updateErrorReporting(c *config.Config, settings types.Settings, triggerSour
 		c.SetErrorReportingEnabled(parseBool)
 
 		if oldValue != parseBool {
-			sendWorkspaceConfigChanged(c, "sendErrorReports", oldValue, parseBool, triggerSource, initialize)
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "sendErrorReports", oldValue, parseBool, triggerSource)
+			}
 		}
 	}
 }
@@ -390,7 +424,10 @@ func manageBinariesAutomatically(c *config.Config, settings types.Settings, trig
 		c.SetManageBinariesAutomatically(parseBool)
 
 		if oldValue != parseBool {
-			sendWorkspaceConfigChanged(c, "manageBinariesAutomatically", oldValue, parseBool, triggerSource, initialize)
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "manageBinariesAutomatically", oldValue, parseBool, triggerSource)
+			}
 		}
 	}
 }
@@ -474,8 +511,11 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 		oldValue := c.IsSnykCodeEnabled()
 		c.SetSnykCodeEnabled(parseBool)
 		c.EnableSnykCodeSecurity(parseBool)
-		if oldValue != parseBool && !initialize {
-			sendWorkspaceConfigChanged(c, "activateSnykCode", oldValue, parseBool, triggerSource, initialize)
+		if oldValue != parseBool {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "activateSnykCode", oldValue, parseBool, triggerSource)
+			}
 		}
 	}
 
@@ -486,8 +526,11 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 	} else {
 		oldValue := c.IsSnykOssEnabled()
 		c.SetSnykOssEnabled(parseBool)
-		if oldValue != parseBool && !initialize {
-			sendWorkspaceConfigChanged(c, "activateSnykOpenSource", oldValue, parseBool, triggerSource, initialize)
+		if oldValue != parseBool {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "activateSnykOpenSource", oldValue, parseBool, triggerSource)
+			}
 		}
 	}
 
@@ -498,8 +541,11 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 	} else {
 		oldValue := c.IsSnykIacEnabled()
 		c.SetSnykIacEnabled(parseBool)
-		if oldValue != parseBool && !initialize {
-			sendWorkspaceConfigChanged(c, "activateSnykIac", oldValue, parseBool, triggerSource, initialize)
+		if oldValue != parseBool {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "activateSnykIac", oldValue, parseBool, triggerSource)
+			}
 		}
 	}
 }
@@ -509,8 +555,21 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, trigger
 	oldValue := c.IssueViewOptions()
 	modified := c.SetIssueViewOptions(s)
 
-	if modified {
-		sendWorkspaceConfigChanged(c, "issueViewOptions", oldValue, s, triggerSource, initialize)
+	if !modified {
+		return
+	}
+
+	// Send UI update
+	sendWorkspaceConfigChanged(c)
+
+	// Send analytics for each individual field that changed
+	if !initialize {
+		if oldValue.OpenIssues != s.OpenIssues {
+			sendConfigChangedAnalytics(c, "issueViewOptions.openIssues", oldValue.OpenIssues, s.OpenIssues, triggerSource)
+		}
+		if oldValue.IgnoredIssues != s.IgnoredIssues {
+			sendConfigChangedAnalytics(c, "issueViewOptions.ignoredIssues", oldValue.IgnoredIssues, s.IgnoredIssues, triggerSource)
+		}
 	}
 }
 
@@ -519,25 +578,48 @@ func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSour
 	oldValue := c.FilterSeverity()
 	modified := c.SetSeverityFilter(s)
 
-	if modified {
-		sendWorkspaceConfigChanged(c, "filterSeverity", oldValue, s, triggerSource, initialize)
+	if !modified {
+		return
+	}
+
+	// Send UI update
+	sendWorkspaceConfigChanged(c)
+
+	// Send analytics for each individual field that changed
+	if !initialize {
+		if oldValue.Critical != s.Critical {
+			sendConfigChangedAnalytics(c, "filterSeverity.critical", oldValue.Critical, s.Critical, triggerSource)
+		}
+		if oldValue.High != s.High {
+			sendConfigChangedAnalytics(c, "filterSeverity.high", oldValue.High, s.High, triggerSource)
+		}
+		if oldValue.Medium != s.Medium {
+			sendConfigChangedAnalytics(c, "filterSeverity.medium", oldValue.Medium, s.Medium, triggerSource)
+		}
+		if oldValue.Low != s.Low {
+			sendConfigChangedAnalytics(c, "filterSeverity.low", oldValue.Low, s.Low, triggerSource)
+		}
 	}
 }
 
-func sendWorkspaceConfigChanged(c *config.Config, configName string, oldVal any, newVal any, triggerSource string, initialize bool) {
+// sendWorkspaceConfigChanged handles UI updates only (no analytics)
+func sendWorkspaceConfigChanged(c *config.Config) {
 	ws := c.Workspace()
 	if ws == nil {
 		return
 	}
 	go ws.HandleConfigChange()
+}
 
-	if len(configName) == 0 {
+// sendConfigChangedAnalytics sends analytics for primitive values only
+func sendConfigChangedAnalytics(c *config.Config, configName string, oldVal any, newVal any, triggerSource string) {
+	ws := c.Workspace()
+	if ws == nil {
 		return
 	}
-	if !initialize {
-		for _, folder := range ws.Folders() {
-			go sendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folder.Path(), triggerSource)
-		}
+
+	for _, folder := range ws.Folders() {
+		go sendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folder.Path(), triggerSource)
 	}
 }
 
@@ -550,4 +632,39 @@ func sendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, n
 		"config::" + field + "::triggerSource": triggerSource,
 	}
 	analytics.SendAnalytics(c.Engine(), c.DeviceID(), event, nil)
+}
+
+// sendTrustedFoldersAnalytics sends analytics for individual trusted folder changes
+func sendTrustedFoldersAnalytics(c *config.Config, oldFolders, newFolders []types.FilePath, triggerSource string) {
+	// Create maps for easier lookup
+	oldMap := make(map[types.FilePath]bool)
+	for _, folder := range oldFolders {
+		oldMap[folder] = true
+	}
+
+	newMap := make(map[types.FilePath]bool)
+	for _, folder := range newFolders {
+		newMap[folder] = true
+	}
+
+	// Find added folders
+	for _, folder := range newFolders {
+		if !oldMap[folder] {
+			sendConfigChangedAnalytics(c, "trustedFolders.added", "", string(folder), triggerSource)
+		}
+	}
+
+	// Find removed folders
+	for _, folder := range oldFolders {
+		if !newMap[folder] {
+			sendConfigChangedAnalytics(c, "trustedFolders.removed", string(folder), "", triggerSource)
+		}
+	}
+
+	// Send count change analytics
+	oldCount := len(oldFolders)
+	newCount := len(newFolders)
+	if oldCount != newCount {
+		sendConfigChangedAnalytics(c, "trustedFolders.count", oldCount, newCount, triggerSource)
+	}
 }
