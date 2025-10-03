@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -46,8 +47,8 @@ func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.
 
 		emptySettings := types.Settings{}
 		if !reflect.DeepEqual(params.Settings, emptySettings) {
-			// client used settings push
-			UpdateSettings(c, params.Settings)
+			// client used settings push - this is a user change, not initialization
+			UpdateSettings(c, params.Settings, "user", false)
 			return true, nil
 		}
 
@@ -74,7 +75,8 @@ func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.
 		}
 
 		if !reflect.DeepEqual(fetchedSettings[0], emptySettings) {
-			UpdateSettings(c, fetchedSettings[0])
+			// client used settings pull - this is a user change, not initialization
+			UpdateSettings(c, fetchedSettings[0], "automatic", false)
 			return true, nil
 		}
 
@@ -83,16 +85,16 @@ func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.
 }
 
 func InitializeSettings(c *config.Config, settings types.Settings) {
-	writeSettings(c, settings, true)
+	writeSettings(c, settings, true, "initialize")
 	updateAutoAuthentication(c, settings)
 	updateDeviceInformation(c, settings)
 	updateAutoScan(c, settings)
 	c.SetClientProtocolVersion(settings.RequiredProtocolVersion)
 }
 
-func UpdateSettings(c *config.Config, settings types.Settings) {
+func UpdateSettings(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	previouslyEnabledProducts := c.DisplayableIssueTypes()
-	writeSettings(c, settings, false)
+	writeSettings(c, settings, false, triggerSource)
 
 	// If a product was removed, clear all issues for this product
 	ws := c.Workspace()
@@ -106,34 +108,38 @@ func UpdateSettings(c *config.Config, settings types.Settings) {
 	}
 }
 
-func writeSettings(c *config.Config, settings types.Settings, initialize bool) {
+func writeSettings(c *config.Config, settings types.Settings, initialize bool, triggerSource string) {
 	c.Engine().GetConfiguration().ClearCache()
 
 	emptySettings := types.Settings{}
 	if reflect.DeepEqual(settings, emptySettings) {
 		return
 	}
-	updateSeverityFilter(c, settings.FilterSeverity)
-	updateIssueViewOptions(c, settings.IssueViewOptions)
-	updateProductEnablement(c, settings)
+
+	// Functions that send analytics - pass initialize to control analytics sending
+	updateSeverityFilter(c, settings.FilterSeverity, triggerSource, initialize)
+	updateIssueViewOptions(c, settings.IssueViewOptions, triggerSource, initialize)
+	updateProductEnablement(c, settings, triggerSource, initialize)
+	updateApiEndpoints(c, settings, initialize, triggerSource, initialize) // Must be called before token is set, as it may trigger a logout which clears the token.
+	updateAuthenticationMethod(c, settings, triggerSource, initialize)
+	updateErrorReporting(c, settings, triggerSource, initialize)
+	updateOrganization(c, settings, triggerSource, initialize)
+	manageBinariesAutomatically(c, settings, triggerSource, initialize)
+	updateTrustedFolders(c, settings, triggerSource, initialize)
+	updateSnykLearnCodeActions(c, settings, triggerSource, initialize)
+	updateSnykOSSQuickFixCodeActions(c, settings, triggerSource, initialize)
+	updateDeltaFindings(c, settings, triggerSource, initialize)
+	updateFolderConfig(c, settings, c.Logger(), triggerSource, initialize)
+
+	// Functions that don't send analytics - no initialize parameter needed
 	updateCliConfig(c, settings)
-	updateApiEndpoints(c, settings, initialize) // Must be called before token is set, as it may trigger a logout which clears the token.
-	updateToken(settings.Token)                 // Must be called before the Authentication method is set, as the latter checks the token.
-	updateAuthenticationMethod(c, settings)
+	updateToken(settings.Token) // Must be called before the Authentication method is set, as the latter checks the token.
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings, initialize)
-	updateErrorReporting(c, settings)
-	updateOrganization(c, settings)
-	manageBinariesAutomatically(c, settings)
-	updateTrustedFolders(c, settings)
 	updateSnykCodeSecurity(c, settings)
 	updateRuntimeInfo(c, settings)
 	updateAutoScan(c, settings)
-	updateSnykLearnCodeActions(c, settings)
-	updateSnykOSSQuickFixCodeActions(c, settings)
 	updateSnykOpenBrowserCodeActions(c, settings)
-	updateDeltaFindings(c, settings)
-	updateFolderConfig(c, settings, c.Logger())
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
 }
@@ -156,10 +162,11 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 		enable = true
 	}
 
+	// TODO: Add getter method for SnykOpenBrowserActionsEnabled to enable analytics
 	c.SetSnykOpenBrowserActionsEnabled(enable)
 }
 
-func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger) {
+func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource string, initialize bool) {
 	var folderConfigs []types.FolderConfig
 	for _, folderConfig := range settings.FolderConfigs {
 		path := folderConfig.FolderPath
@@ -170,8 +177,22 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			return
 		}
 
+		// Store the old organization and org_set_by_user before updating
+		oldOrg := storedConfig.Organization
+		oldOrgSetByUser := storedConfig.OrgSetByUser
+
 		// Folder config might be new or changed, so (re)resolve the org before saving it.
 		command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig)
+
+		// Send analytics for organization change if it changed and analytics are enabled
+		if !initialize && oldOrg != storedConfig.Organization {
+			go sendConfigChangedAnalyticsEvent(c, "organization", oldOrg, storedConfig.Organization, path, triggerSource)
+		}
+
+		// Send analytics for org_set_by_user change if it changed and analytics are enabled
+		if !initialize && oldOrgSetByUser != storedConfig.OrgSetByUser {
+			go sendConfigChangedAnalyticsEvent(c, "org_set_by_user", oldOrgSetByUser, storedConfig.OrgSetByUser, path, triggerSource)
+		}
 
 		folderConfigs = append(folderConfigs, *storedConfig)
 	}
@@ -184,13 +205,21 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 	}
 }
 
-func updateAuthenticationMethod(c *config.Config, settings types.Settings) {
+func updateAuthenticationMethod(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	if types.EmptyAuthenticationMethod == settings.AuthenticationMethod {
 		return
 	}
 
+	oldValue := c.AuthenticationMethod()
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
 	di.AuthenticationService().ConfigureProviders(c)
+
+	if oldValue != settings.AuthenticationMethod {
+		sendWorkspaceConfigChanged(c)
+		if !initialize {
+			sendConfigChangedAnalytics(c, "authenticationMethod", oldValue, settings.AuthenticationMethod, triggerSource)
+		}
+	}
 }
 
 func updateRuntimeInfo(c *config.Config, settings types.Settings) {
@@ -200,20 +229,39 @@ func updateRuntimeInfo(c *config.Config, settings types.Settings) {
 	c.SetRuntimeName(settings.RuntimeName)
 }
 
-func updateTrustedFolders(c *config.Config, settings types.Settings) {
+func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	trustedFoldersFeatureEnabled, err := strconv.ParseBool(settings.EnableTrustedFoldersFeature)
 	if err == nil {
+		oldValue := c.IsTrustedFolderFeatureEnabled()
 		c.SetTrustedFolderFeatureEnabled(trustedFoldersFeatureEnabled)
+		if oldValue != trustedFoldersFeatureEnabled {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "enableTrustedFoldersFeature", oldValue, trustedFoldersFeatureEnabled, triggerSource)
+			}
+		}
 	} else {
 		c.SetTrustedFolderFeatureEnabled(true)
 	}
 
 	if settings.TrustedFolders != nil {
+		oldFolders := c.TrustedFolders()
 		var trustedFolders []types.FilePath
 		for _, folder := range settings.TrustedFolders {
 			trustedFolders = append(trustedFolders, types.FilePath(folder))
 		}
 		c.SetTrustedFolders(trustedFolders)
+
+		// Send UI update and analytics for trusted folders changes if they actually changed
+		if !slices.Equal(oldFolders, trustedFolders) {
+			// Send UI update
+			sendWorkspaceConfigChanged(c)
+
+			// Send analytics for individual folder changes
+			if !initialize {
+				sendTrustedFoldersAnalytics(c, oldFolders, trustedFolders, triggerSource)
+			}
+		}
 	}
 }
 
@@ -242,28 +290,45 @@ func updateAutoScan(c *config.Config, settings types.Settings) {
 		autoScan = false
 	}
 
+	// TODO: Add getter method for AutomaticScanning to enable analytics
 	c.SetAutomaticScanning(autoScan)
 }
 
-func updateSnykLearnCodeActions(c *config.Config, settings types.Settings) {
+func updateSnykLearnCodeActions(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	enable := true
 	if settings.EnableSnykLearnCodeActions == "false" {
 		enable = false
 	}
 
+	oldValue := c.IsSnykLearnCodeActionsEnabled()
 	c.SetSnykLearnCodeActionsEnabled(enable)
+
+	if oldValue != enable {
+		sendWorkspaceConfigChanged(c)
+		if !initialize {
+			sendConfigChangedAnalytics(c, "enableSnykLearnCodeActions", oldValue, enable, triggerSource)
+		}
+	}
 }
 
-func updateSnykOSSQuickFixCodeActions(c *config.Config, settings types.Settings) {
+func updateSnykOSSQuickFixCodeActions(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	enable := true
 	if settings.EnableSnykOSSQuickFixCodeActions == "false" {
 		enable = false
 	}
 
+	oldValue := c.IsSnykOSSQuickFixCodeActionsEnabled()
 	c.SetSnykOSSQuickFixCodeActionsEnabled(enable)
+
+	if oldValue != enable {
+		sendWorkspaceConfigChanged(c)
+		if !initialize {
+			sendConfigChangedAnalytics(c, "enableSnykOSSQuickFixCodeActions", oldValue, enable, triggerSource)
+		}
+	}
 }
 
-func updateDeltaFindings(c *config.Config, settings types.Settings) {
+func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	enable := true
 	if settings.EnableDeltaFindings == "" || settings.EnableDeltaFindings == "false" {
 		enable = false
@@ -273,7 +338,10 @@ func updateDeltaFindings(c *config.Config, settings types.Settings) {
 
 	modified := c.SetDeltaFindingsEnabled(enable)
 	if modified {
-		sendWorkspaceConfigChanged(c, "enableDeltaFindings", oldValue, enable)
+		sendWorkspaceConfigChanged(c)
+		if !initialize {
+			sendConfigChangedAnalytics(c, "enableDeltaFindings", oldValue, enable, triggerSource)
+		}
 	}
 }
 
@@ -282,50 +350,85 @@ func updateToken(token string) {
 	di.AuthenticationService().UpdateCredentials(token, false, false)
 }
 
-func updateApiEndpoints(c *config.Config, settings types.Settings, initialization bool) {
+func updateApiEndpoints(c *config.Config, settings types.Settings, isInitialization bool, triggerSource string, initialize bool) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
+	oldEndpoint := c.Endpoint()
 	endpointsUpdated := c.UpdateApiEndpoints(snykApiUrl)
 
-	if endpointsUpdated && !initialization {
+	if endpointsUpdated && !isInitialization {
 		authService := di.AuthenticationService()
 		authService.Logout(context.Background())
 		authService.ConfigureProviders(c)
 		c.Workspace().Clear()
+
+		// Send analytics for endpoint change if it actually changed
+		if oldEndpoint != snykApiUrl {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "endpoint", oldEndpoint, snykApiUrl, triggerSource)
+			}
+		}
 	}
 
 	// a custom set snyk code api (e.g. for testing) always overwrites automatic config
 	if settings.SnykCodeApi != "" {
+		oldCodeApi := c.SnykCodeApi()
 		c.SetSnykCodeApi(settings.SnykCodeApi)
+		if oldCodeApi != settings.SnykCodeApi {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "snykCodeApi", oldCodeApi, settings.SnykCodeApi, triggerSource)
+			}
+		}
 	}
 }
 
-func updateOrganization(c *config.Config, settings types.Settings) {
+func updateOrganization(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	newOrg := strings.TrimSpace(settings.Organization)
 	if newOrg != "" {
 		oldOrgId := c.Organization()
 		c.SetOrganization(newOrg)
 		newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
 		if oldOrgId != newOrgId {
-			go sendConfigChangedAnalyticsEvent(c, "organization", oldOrgId, newOrgId, "")
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "organization", oldOrgId, newOrgId, triggerSource)
+			}
 		}
 	}
 }
 
-func updateErrorReporting(c *config.Config, settings types.Settings) {
+func updateErrorReporting(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
 	if err != nil {
 		c.Logger().Debug().Msgf("couldn't read send error reports %s", settings.SendErrorReports)
 	} else {
+		oldValue := c.IsErrorReportingEnabled()
 		c.SetErrorReportingEnabled(parseBool)
+
+		if oldValue != parseBool {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "sendErrorReports", oldValue, parseBool, triggerSource)
+			}
+		}
 	}
 }
 
-func manageBinariesAutomatically(c *config.Config, settings types.Settings) {
+func manageBinariesAutomatically(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
 	parseBool, err := strconv.ParseBool(settings.ManageBinariesAutomatically)
 	if err != nil {
 		c.Logger().Debug().Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
 	} else {
+		oldValue := c.ManageBinariesAutomatically()
 		c.SetManageBinariesAutomatically(parseBool)
+
+		if oldValue != parseBool {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "manageBinariesAutomatically", oldValue, parseBool, triggerSource)
+			}
+		}
 	}
 }
 
@@ -399,67 +502,172 @@ func updateCliConfig(c *config.Config, settings types.Settings) {
 	currentConfig.SetCliSettings(cliSettings)
 }
 
-func updateProductEnablement(c *config.Config, settings types.Settings) {
+func updateProductEnablement(c *config.Config, settings types.Settings, triggerSource string, initialize bool) {
+	// Snyk Code
 	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
 	if err != nil {
 		c.Logger().Debug().Msg("couldn't parse code setting")
 	} else {
+		oldValue := c.IsSnykCodeEnabled()
 		c.SetSnykCodeEnabled(parseBool)
 		c.EnableSnykCodeSecurity(parseBool)
+		if oldValue != parseBool {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "activateSnykCode", oldValue, parseBool, triggerSource)
+			}
+		}
 	}
+
+	// Snyk Open Source
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {
 		c.Logger().Debug().Msg("couldn't parse open source setting")
 	} else {
+		oldValue := c.IsSnykOssEnabled()
 		c.SetSnykOssEnabled(parseBool)
+		if oldValue != parseBool {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "activateSnykOpenSource", oldValue, parseBool, triggerSource)
+			}
+		}
 	}
+
+	// Snyk IaC
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykIac)
 	if err != nil {
 		c.Logger().Debug().Msg("couldn't parse iac setting")
 	} else {
+		oldValue := c.IsSnykIacEnabled()
 		c.SetSnykIacEnabled(parseBool)
+		if oldValue != parseBool {
+			sendWorkspaceConfigChanged(c)
+			if !initialize {
+				sendConfigChangedAnalytics(c, "activateSnykIac", oldValue, parseBool, triggerSource)
+			}
+		}
 	}
 }
 
-func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions) {
+func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, triggerSource string, initialize bool) {
 	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options:")
+	oldValue := c.IssueViewOptions()
 	modified := c.SetIssueViewOptions(s)
 
-	if modified {
-		sendWorkspaceConfigChanged(c, "", nil, nil)
+	if !modified {
+		return
+	}
+
+	// Send UI update
+	sendWorkspaceConfigChanged(c)
+
+	// Send analytics for each individual field that changed
+	if !initialize {
+		sendAnalyticsForFields(c, "issueViewOptions", &oldValue, s, triggerSource, map[string]func(*types.IssueViewOptions) bool{
+			"OpenIssues":    func(s *types.IssueViewOptions) bool { return s.OpenIssues },
+			"IgnoredIssues": func(s *types.IssueViewOptions) bool { return s.IgnoredIssues },
+		})
 	}
 }
 
-func updateSeverityFilter(c *config.Config, s *types.SeverityFilter) {
+func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSource string, initialize bool) {
 	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter:")
+	oldValue := c.FilterSeverity()
 	modified := c.SetSeverityFilter(s)
 
-	if modified {
-		sendWorkspaceConfigChanged(c, "", nil, nil)
+	if !modified {
+		return
+	}
+
+	// Send UI update
+	sendWorkspaceConfigChanged(c)
+
+	// Send analytics for each individual field that changed
+	if !initialize {
+		sendAnalyticsForFields(c, "filterSeverity", &oldValue, s, triggerSource, map[string]func(*types.SeverityFilter) bool{
+			"Critical": func(s *types.SeverityFilter) bool { return s.Critical },
+			"High":     func(s *types.SeverityFilter) bool { return s.High },
+			"Medium":   func(s *types.SeverityFilter) bool { return s.Medium },
+			"Low":      func(s *types.SeverityFilter) bool { return s.Low },
+		})
 	}
 }
 
-func sendWorkspaceConfigChanged(c *config.Config, configName string, oldVal any, newVal any) {
+// sendWorkspaceConfigChanged handles UI updates only (no analytics)
+func sendWorkspaceConfigChanged(c *config.Config) {
 	ws := c.Workspace()
 	if ws == nil {
 		return
 	}
 	go ws.HandleConfigChange()
+}
 
-	if len(configName) == 0 {
+// sendConfigChangedAnalytics sends analytics for primitive values only
+func sendConfigChangedAnalytics(c *config.Config, configName string, oldVal any, newVal any, triggerSource string) {
+	ws := c.Workspace()
+	if ws == nil {
 		return
 	}
+
 	for _, folder := range ws.Folders() {
-		go sendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folder.Path())
+		go sendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folder.Path(), triggerSource)
 	}
 }
 
-func sendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}, path types.FilePath) {
+// sendAnalyticsForFields is a generic helper function that sends analytics for struct fields
+func sendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, newValue *T, triggerSource string, fieldMappings map[string]func(*T) bool) {
+	for fieldName, getter := range fieldMappings {
+		oldVal := getter(oldValue)
+		newVal := getter(newValue)
+		if oldVal != newVal {
+			sendConfigChangedAnalytics(c, prefix+fieldName, oldVal, newVal, triggerSource)
+		}
+	}
+}
+
+func sendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}, path types.FilePath, triggerSource string) {
 	event := analytics.NewAnalyticsEventParam("Config changed", nil, path)
 
 	event.Extension = map[string]any{
-		"config::" + field + "::oldValue": oldValue,
-		"config::" + field + "::newValue": newValue,
+		"config::" + field + "::oldValue":      oldValue,
+		"config::" + field + "::newValue":      newValue,
+		"config::" + field + "::triggerSource": triggerSource,
 	}
 	analytics.SendAnalytics(c.Engine(), c.DeviceID(), event, nil)
+}
+
+// sendTrustedFoldersAnalytics sends analytics for individual trusted folder changes
+func sendTrustedFoldersAnalytics(c *config.Config, oldFolders, newFolders []types.FilePath, triggerSource string) {
+	// Create maps for easier lookup
+	oldMap := make(map[types.FilePath]bool)
+	for _, folder := range oldFolders {
+		oldMap[folder] = true
+	}
+
+	newMap := make(map[types.FilePath]bool)
+	for _, folder := range newFolders {
+		newMap[folder] = true
+	}
+
+	// Find added folders
+	for _, folder := range newFolders {
+		if !oldMap[folder] {
+			sendConfigChangedAnalytics(c, "trustedFoldersAdded", "", string(folder), triggerSource)
+		}
+	}
+
+	// Find removed folders
+	for _, folder := range oldFolders {
+		if !newMap[folder] {
+			sendConfigChangedAnalytics(c, "trustedFoldersRemoved", string(folder), "", triggerSource)
+		}
+	}
+
+	// Send count change analytics
+	oldCount := len(oldFolders)
+	newCount := len(newFolders)
+	if oldCount != newCount {
+		sendConfigChangedAnalytics(c, "trustedFoldersCount", oldCount, newCount, triggerSource)
+	}
 }
