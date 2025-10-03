@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
@@ -53,6 +54,9 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			logger.Err(err2).Msg("unable to load stored config")
 			return
 		}
+
+		UpdateFolderConfigOrg(c, storedConfig, nil)
+
 		folderConfigs = append(folderConfigs, *storedConfig)
 	}
 
@@ -138,4 +142,86 @@ func GetTrustMessage(untrusted []types.Folder) string {
 	return fmt.Sprintf("When scanning for issues, Snyk may automatically execute code such as invoking "+
 		"the package manager to get dependency information. You should only scan folders you trust."+
 		"\n\nUntrusted Folders: \n%s\n\n", untrustedFolderString)
+}
+
+func UpdateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
+	// For configs that have been migrated, we use the org returned by LDX-Sync unless the user has set one.
+	if storedConfig.OrgMigratedFromGlobalConfig {
+		if folderConfig == nil {
+			// Language server is initializing, or processing added/removed folders (workspace/didChangeWorkspaceFolders)
+			// We are only dealing with stored configs (new configs will not have been migrated yet).
+			// We should look up the org from LDX-Sync if EITHER:
+			// 1. The org is not set by the user
+			// 2. The org is now being inherited from a blank global org.
+			orgInheritingFromBlankGlobal := storedConfig.Organization == "" && c.Organization() == ""
+			if !storedConfig.OrgSetByUser || orgInheritingFromBlankGlobal {
+				setOrgFromLdxSync(c, storedConfig)
+				storedConfig.OrgSetByUser = false
+			}
+			return
+		}
+
+		orgInheritingFromBlankGlobal := folderConfig.Organization == "" && c.Organization() == ""
+		orgHasJustChanged := folderConfig.Organization != storedConfig.Organization
+
+		if orgInheritingFromBlankGlobal || !folderConfig.OrgSetByUser {
+			// The user is either:
+			// 1. blanking their folder config org while they don't have a global org set
+			// 2. blanking their global org while they don't have a folder config org set
+			// 3. explicitly opting in to LDX-Sync.
+			setOrgFromLdxSync(c, storedConfig)
+			storedConfig.OrgSetByUser = false
+		} else if orgHasJustChanged || folderConfig.OrgSetByUser {
+			// Store the user-provided org.
+			// We have already checked that the user wishes to provide an org and the org is valid or can inherit a valid org.
+			storedConfig.Organization = folderConfig.Organization
+			storedConfig.OrgSetByUser = true
+		}
+	} else {
+		migrateFolderConfigOrg(c, storedConfig, folderConfig)
+	}
+}
+
+func migrateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
+	// If we are migrating a folderConfig provided by the user, we simply save it and skip LDX-Sync lookup,
+	// unless they are trying to inherit a blank global org.
+	if folderConfig != nil && (folderConfig.Organization != "" || (folderConfig.OrgSetByUser && c.Organization() != "")) {
+		storedConfig.Organization = folderConfig.Organization
+		storedConfig.OrgSetByUser = folderConfig.OrgSetByUser
+		storedConfig.OrgMigratedFromGlobalConfig = true
+		return
+	}
+
+	// If the folder config does not have an org, we should use the globally set org.
+	storedConfig.Organization = c.Organization()
+
+	// Call LDX-Sync to resolve the org.
+	newOrgIsDefault := setOrgFromLdxSync(c, storedConfig)
+
+	// If LDX-Sync returns a different org, we should mark it as not set by the user.
+	if storedConfig.Organization != c.Organization() || newOrgIsDefault {
+		storedConfig.OrgSetByUser = false
+	} else {
+		// The folder is using same org as the global config. We mark this as user set unless it matches the
+		// default org.
+		storedConfig.Organization = ""
+		storedConfig.OrgSetByUser = true
+	}
+
+	storedConfig.OrgMigratedFromGlobalConfig = true
+}
+
+func setOrgFromLdxSync(c *config.Config, storedConfig *types.FolderConfig) (newOrgIsDefault bool) {
+	logger := c.Logger().With().Str("method", "updateAndSendFolderConfigs").Logger()
+
+	path := storedConfig.FolderPath
+
+	newOrg, err := ldx_sync_config.ResolveOrganization(c.Engine().GetConfiguration(), c.Engine(), &logger, string(path), storedConfig.Organization)
+	if err != nil {
+		logger.Err(err).Msg("unable to resolve organization")
+	} else {
+		storedConfig.Organization = newOrg.Id
+	}
+	newOrgIsDefaultPtr := newOrg.IsDefault
+	return newOrgIsDefaultPtr != nil && *newOrgIsDefaultPtr
 }

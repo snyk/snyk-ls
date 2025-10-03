@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -159,12 +160,42 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 }
 
 func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger) {
-	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), settings.FolderConfigs, logger)
+	var folderConfigs []types.FolderConfig
+	for _, folderConfig := range settings.FolderConfigs {
+		path := folderConfig.FolderPath
+
+		storedConfig, err2 := storedconfig.GetOrCreateFolderConfig(c.Engine().GetConfiguration(), path, logger)
+		if err2 != nil {
+			logger.Err(err2).Msg("unable to load stored config")
+			return
+		}
+
+		// Folder config might be new or changed, so (re)resolve the org before saving it.
+		// We should also check that the folder's org is still valid if the globally set org has changed.
+		// Also, if the config hasn't been migrated yet, we need to perform the initial migration.
+		needsMigration := !storedConfig.OrgMigratedFromGlobalConfig
+		orgSettingsChanged := !folderConfigsOrgSettingsEqual(folderConfig, storedConfig)
+		globalOrgChanged := c.Organization() != settings.Organization
+
+		if needsMigration || orgSettingsChanged || globalOrgChanged {
+			command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig)
+		}
+
+		folderConfigs = append(folderConfigs, *storedConfig)
+	}
+
+	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), folderConfigs, logger)
 	if err != nil {
 		c.Logger().Err(err).Msg("couldn't update folder configs")
 		notifier := di.Notifier()
 		notifier.SendShowMessage(sglsp.MTError, err.Error())
 	}
+}
+
+func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig *types.FolderConfig) bool {
+	return folderConfig.Organization == storedConfig.Organization &&
+		folderConfig.OrgSetByUser == storedConfig.OrgSetByUser &&
+		folderConfig.OrgMigratedFromGlobalConfig == storedConfig.OrgMigratedFromGlobalConfig
 }
 
 func updateAuthenticationMethod(c *config.Config, settings types.Settings) {

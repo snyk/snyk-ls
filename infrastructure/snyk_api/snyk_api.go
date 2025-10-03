@@ -73,16 +73,6 @@ func NewSnykApiClient(c *config.Config, client func() *http.Client) SnykApiClien
 	return &s
 }
 
-func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL {
-	organization := c.Organization()
-	if organization != "" {
-		q := u.Query()
-		q.Set("org", organization)
-		u.RawQuery = q.Encode()
-	}
-	return u
-}
-
 func (s *SnykApiClientImpl) normalizeAPIPathForV1(c *config.Config, path string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
@@ -108,7 +98,6 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 	if err != nil {
 		return FFResponse{}, err
 	}
-	u = s.addOrgToQuery(c, u)
 	logger.Debug().Str("path", path).Msg("API: Getting feature flag status")
 
 	err = s.getApiResponse(method, u.String(), &response)

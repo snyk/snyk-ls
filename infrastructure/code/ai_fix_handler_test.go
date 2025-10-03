@@ -21,7 +21,9 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -31,8 +33,9 @@ func Test_getExplain_Endpoint(t *testing.T) {
 		c := testutil.UnitTest(t)
 		random, _ := uuid.NewRandom()
 		orgUUID := random.String()
-		c.SetOrganization(orgUUID)
-		actualEndpoint := getExplainEndpoint(c).String()
+		folder := types.FilePath(t.TempDir())
+		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{FolderPath: folder, Organization: orgUUID}, c.Logger())
+		actualEndpoint := getExplainEndpoint(c, folder).String()
 		expectedEndpoint := "https://api.snyk.io/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"
 		assert.Equal(t, expectedEndpoint, actualEndpoint)
 	})
@@ -43,9 +46,10 @@ func Test_GetExplain_Endpoint_With_Updated_API_Endpoints(t *testing.T) {
 		c := testutil.UnitTest(t)
 		random, _ := uuid.NewRandom()
 		orgUUID := random.String()
-		c.SetOrganization(orgUUID)
+		folder := types.FilePath(t.TempDir())
+		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{FolderPath: folder, Organization: orgUUID}, c.Logger())
 		c.UpdateApiEndpoints("https://test.snyk.io")
-		actualEndpoint := getExplainEndpoint(c).String()
+		actualEndpoint := getExplainEndpoint(c, folder).String()
 		expectedEndpoint := "https://test.snyk.io/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"
 		assert.Equal(t, expectedEndpoint, actualEndpoint)
 	})
