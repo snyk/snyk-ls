@@ -176,7 +176,7 @@ func UpdateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 func migrateFolderConfigOrg(c *config.Config, folderConfig *types.FolderConfig, notifier noti.Notifier) {
 	// Remember if the user explicitly set the org
 	userExplicitlySetOrg := folderConfig.OrgSetByUser
-	
+
 	// If we are migrating a folderConfig provided by the user, we simply save it and skip LDX-Sync lookup,
 	// unless they are trying to inherit a blank global org.
 	if folderConfig.PreferredOrg != "" || (folderConfig.OrgSetByUser && c.Organization() != "") {
