@@ -249,7 +249,7 @@ func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
 	storedCfg := &types.FolderConfig{
 		FolderPath:                  folderPath,
-		Organization:                folderOrgUUID,
+		PreferredOrg:                folderOrgUUID,
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
