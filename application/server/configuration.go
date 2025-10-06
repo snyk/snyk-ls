@@ -182,7 +182,7 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig, notifier)
 		}
 
-		folderConfigs = append(folderConfigs, *storedConfig)
+		folderConfigs = append(folderConfigs, folderConfig)
 	}
 
 	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), folderConfigs, logger)
