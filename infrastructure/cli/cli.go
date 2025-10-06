@@ -146,6 +146,11 @@ func expandParametersFromConfig(base []string) []string {
 		expandedParams = append(expandedParams, "--insecure")
 	}
 
+	org := conf.Organization()
+	if org != "" {
+		expandedParams = append(expandedParams, "--org="+org)
+	}
+
 	return expandedParams
 }
 

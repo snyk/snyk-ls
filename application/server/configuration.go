@@ -160,6 +160,7 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 }
 
 func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger) {
+	notifier := di.Notifier()
 	var folderConfigs []types.FolderConfig
 	for _, folderConfig := range settings.FolderConfigs {
 		path := folderConfig.FolderPath
@@ -178,7 +179,7 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		globalOrgChanged := c.Organization() != settings.Organization
 
 		if needsMigration || orgSettingsChanged || globalOrgChanged {
-			command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig)
+			command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig, notifier)
 		}
 
 		folderConfigs = append(folderConfigs, *storedConfig)
@@ -187,13 +188,12 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), folderConfigs, logger)
 	if err != nil {
 		c.Logger().Err(err).Msg("couldn't update folder configs")
-		notifier := di.Notifier()
 		notifier.SendShowMessage(sglsp.MTError, err.Error())
 	}
 }
 
 func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig *types.FolderConfig) bool {
-	return folderConfig.Organization == storedConfig.Organization &&
+	return folderConfig.PreferredOrg == storedConfig.PreferredOrg &&
 		folderConfig.OrgSetByUser == storedConfig.OrgSetByUser &&
 		folderConfig.OrgMigratedFromGlobalConfig == storedConfig.OrgMigratedFromGlobalConfig
 }

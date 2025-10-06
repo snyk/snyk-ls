@@ -70,7 +70,7 @@ func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, er
 
 	org := c.FolderOrganization(folder)
 	if org == "" {
-		return "", errors.New("Organization is required in a fedramp environment")
+		return "", errors.New("organization is required in a fedramp environment")
 	}
 
 	u.Path = "/hidden/orgs/" + org + "/code"

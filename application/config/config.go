@@ -837,8 +837,8 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	return snykCodeTimeout
 }
 
-// Organization is also stored per folder in `types.FolderConfig.Organization`.
-// Prefer reading via `c.FolderOrganization(path)` or `c.FolderConfig(path).Organization`.
+// Organization is also stored per folder in `types.FolderConfig.PreferredOrg`.
+// Prefer reading via `c.FolderOrganization(path)` or `c.FolderConfig(path).PreferredOrg`.
 func (c *Config) Organization() string {
 	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
@@ -1295,10 +1295,10 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 // the folder, it returns the global organization.
 func (c *Config) FolderOrganization(path types.FilePath) string {
 	fc := c.FolderConfig(path)
-	if fc == nil || fc.Organization == "" {
+	if fc == nil || fc.PreferredOrg == "" {
 		return c.Organization()
 	}
-	return fc.Organization
+	return fc.PreferredOrg
 }
 
 func (c *Config) HoverVerbosity() int {

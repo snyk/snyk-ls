@@ -168,7 +168,7 @@ func TestSnykTestHandler(t *testing.T) {
 			},
 		},
 		{
-			name: "Test with Organization",
+			name: "Test with PreferredOrg",
 			args: map[string]any{
 				"path":         tmpDir,
 				"all_projects": true,
@@ -287,7 +287,7 @@ func TestSnykCodeTestHandler(t *testing.T) {
 			},
 		},
 		{
-			name: "Test with Organization",
+			name: "Test with PreferredOrg",
 			args: map[string]any{
 				"path": tmpDir,
 				"org":  "my-snyk-org",
