@@ -57,18 +57,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-// InitializationPhase represents the current phase of the initialization process
-type InitializationPhase string
-
-const (
-	// PhaseEmptySettings represents the first phase where no settings have been loaded yet
-	PhaseEmptySettings InitializationPhase = "emptySettings"
-	// PhaseInitialSettings represents the second phase where initial settings have been loaded
-	PhaseInitialSettings InitializationPhase = "initialSettings"
-	// PhaseUserChanges represents the third phase where user/IDE changes are being processed
-	PhaseUserChanges InitializationPhase = "userChanges"
-)
-
 const (
 	deeproxyApiUrlKey     = "DEEPROXY_API_URL"
 	FormatHtml            = "html"

@@ -227,6 +227,9 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			folderConfigsMayHaveChanged = true
 		}
 
+		// Update AdditionalParameters from the incoming folderConfig
+		storedConfig.AdditionalParameters = folderConfig.AdditionalParameters
+
 		// Send analytics for organization change if it changed and analytics are enabled
 		if !initialize && oldOrg != storedConfig.PreferredOrg && storedConfig.PreferredOrg != "" {
 			go sendConfigChangedAnalyticsEvent(c, "organization", oldOrg, storedConfig.PreferredOrg, path, triggerSource)
@@ -234,12 +237,12 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 
 		// Send analytics for org_set_by_user change if it changed and analytics are enabled
 		if !initialize && oldOrgSetByUser != storedConfig.OrgSetByUser {
-			go sendConfigChangedAnalyticsEvent(c, "org_set_by_user", oldOrgSetByUser, storedConfig.OrgSetByUser, path, triggerSource)
+			go sendConfigChangedAnalyticsEvent(c, "orgSetByUser", oldOrgSetByUser, storedConfig.OrgSetByUser, path, triggerSource)
 		}
 
 		// Send analytics for additional_parameters change if it changed and analytics are enabled
 		if !initialize && !slices.Equal(oldAdditionalParameters, storedConfig.AdditionalParameters) {
-			go sendConfigChangedAnalyticsEvent(c, "additional_parameters", oldAdditionalParameters, storedConfig.AdditionalParameters, path, triggerSource)
+			go sendConfigChangedAnalyticsEvent(c, "additionalParameters", oldAdditionalParameters, storedConfig.AdditionalParameters, path, triggerSource)
 		}
 
 		folderConfigs = append(folderConfigs, folderConfig)
@@ -331,8 +334,11 @@ func updateAuthenticationMethod(c *config.Config, settings types.Settings, trigg
 	c.SetAuthenticationMethod(settings.AuthenticationMethod)
 	di.AuthenticationService().ConfigureProviders(c)
 
-	if oldValue != settings.AuthenticationMethod && !initialize {
+	if oldValue != settings.AuthenticationMethod {
 		sendWorkspaceConfigChanged(c)
+		if !initialize {
+			sendConfigChangedAnalytics(c, "authenticationMethod", oldValue, settings.AuthenticationMethod, triggerSource)
+		}
 	}
 }
 
@@ -563,9 +569,9 @@ func updatePathFromSettings(c *config.Config, settings types.Settings, initializ
 	// in front of everything else that is added.
 	c.SetUserSettingsPath(settings.Path)
 
-	if initialize || !c.IsDefaultEnvReady() {
-		// If we are initializing then we don't actually need to do anything else, as PATH is in a clean state with no prior
-		// settings.Path entries, and the first scan will prepend the most recent setting.Path entry for us.
+	if !c.IsDefaultEnvReady() {
+		// If the default environment is not ready yet, we can't safely update the PATH
+		// The first scan will prepend the most recent setting.Path entry for us.
 		return
 	}
 

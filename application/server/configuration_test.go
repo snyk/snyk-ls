@@ -712,7 +712,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *tes
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger, "test", true)
+	updateFolderConfig(c, settings, logger, "test", false)
 
 	// Verify: should attempt to resolve from LDX-Sync because inheriting from blank global
 	// This test specifically checks the case where both folder and global orgs are empty
