@@ -20,14 +20,22 @@ import (
 	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func newCodeRequestContext() codeRequestContext {
+func newCodeRequestContext(folderPath types.FilePath) codeRequestContext {
 	unknown := "unknown"
 	orgId := unknown
-	if config.CurrentConfig().Organization() != "" {
-		orgId = config.CurrentConfig().Organization()
+
+	// Try to get folder-specific organization first, fall back to global org
+	c := config.CurrentConfig()
+	if folderPath != "" {
+		folderOrg := c.FolderOrganization(folderPath)
+		if folderOrg != "" {
+			orgId = folderOrg
+		}
 	}
+
 	return codeRequestContext{
 		Initiator: "IDE",
 		Flow:      "language-server",
@@ -39,8 +47,8 @@ func newCodeRequestContext() codeRequestContext {
 	}
 }
 
-func NewAutofixCodeRequestContext() llm.CodeRequestContext {
-	c := newCodeRequestContext()
+func NewAutofixCodeRequestContext(folderPath types.FilePath) llm.CodeRequestContext {
+	c := newCodeRequestContext(folderPath)
 	return llm.CodeRequestContext{
 		Initiator: c.Initiator,
 		Flow:      c.Flow,
