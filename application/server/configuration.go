@@ -17,12 +17,9 @@
 package server
 
 import (
-	"cmp"
 	"context"
 	"os"
-	"path/filepath"
 	"reflect"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -38,6 +35,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/product"
+	analyticsutil "github.com/snyk/snyk-ls/internal/analytics"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -229,16 +228,8 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			return
 		}
 
-		// Store the old values before updating
-		oldFolderPath := storedConfig.FolderPath
-		oldBaseBranch := storedConfig.BaseBranch
-		oldLocalBranches := storedConfig.LocalBranches
-		oldAdditionalParameters := storedConfig.AdditionalParameters
-		oldReferenceFolderPath := storedConfig.ReferenceFolderPath
-		oldScanCommandConfig := storedConfig.ScanCommandConfig
-		oldOrg := storedConfig.PreferredOrg
-		oldOrgMigratedFromGlobalConfig := storedConfig.OrgMigratedFromGlobalConfig
-		oldOrgSetByUser := storedConfig.OrgSetByUser
+		// Store the old config before updating
+		oldStoredConfig := *storedConfig
 
 		// Folder config might be new or changed, so (re)resolve the org before saving it.
 		// We should also check that the folder's org is still valid if the globally set org has changed.
@@ -251,7 +242,7 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			folderConfigsMayHaveChanged = true
 		}
 
-		sendFolderConfigAnalytics(c, path, triggerSource, oldFolderPath, oldBaseBranch, oldLocalBranches, oldAdditionalParameters, oldReferenceFolderPath, oldScanCommandConfig, oldOrg, oldOrgMigratedFromGlobalConfig, oldOrgSetByUser, &folderConfig)
+		sendFolderConfigAnalytics(c, path, triggerSource, &oldStoredConfig, &folderConfig)
 
 		folderConfigs = append(folderConfigs, folderConfig)
 	}
@@ -269,50 +260,50 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 	}
 }
 
-func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource string, oldFolderPath types.FilePath, oldBaseBranch string, oldLocalBranches, oldAdditionalParameters []string, oldReferenceFolderPath types.FilePath, oldScanCommandConfig map[product.Product]types.ScanCommandConfig, oldOrg string, oldOrgMigratedFromGlobalConfig, oldOrgSetByUser bool, storedConfig *types.FolderConfig) {
+func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource string, oldStoredConfig, newStoredConfig *types.FolderConfig) {
 	// FolderPath change
-	if oldFolderPath != storedConfig.FolderPath {
-		go sendConfigChangedAnalyticsEvent(c, configFolderPath, oldFolderPath, storedConfig.FolderPath, path, triggerSource)
+	if oldStoredConfig.FolderPath != newStoredConfig.FolderPath {
+		go analyticsutil.SendConfigChangedAnalyticsEvent(c, configFolderPath, oldStoredConfig.FolderPath, newStoredConfig.FolderPath, path, triggerSource)
 	}
 
 	// BaseBranch change
-	if oldBaseBranch != storedConfig.BaseBranch {
-		go sendConfigChangedAnalyticsEvent(c, configBaseBranch, oldBaseBranch, storedConfig.BaseBranch, path, triggerSource)
+	if oldStoredConfig.BaseBranch != newStoredConfig.BaseBranch {
+		go analyticsutil.SendConfigChangedAnalyticsEvent(c, configBaseBranch, oldStoredConfig.BaseBranch, newStoredConfig.BaseBranch, path, triggerSource)
 	}
 
 	// LocalBranches change
-	if !slicesEqualIgnoringOrder(oldLocalBranches, storedConfig.LocalBranches) {
-		go sendArrayConfigChangedAnalytics(c, configLocalBranches, oldLocalBranches, storedConfig.LocalBranches, path, triggerSource)
+	if !analyticsutil.SlicesEqualIgnoringOrder(oldStoredConfig.LocalBranches, newStoredConfig.LocalBranches) {
+		go analyticsutil.SendArrayConfigChangedAnalytics(c, configLocalBranches, oldStoredConfig.LocalBranches, newStoredConfig.LocalBranches, path, triggerSource)
 	}
 
 	// AdditionalParameters change
-	if !slicesEqualIgnoringOrder(oldAdditionalParameters, storedConfig.AdditionalParameters) {
-		go sendArrayConfigChangedAnalytics(c, configAdditionalParameters, oldAdditionalParameters, storedConfig.AdditionalParameters, path, triggerSource)
+	if !analyticsutil.SlicesEqualIgnoringOrder(oldStoredConfig.AdditionalParameters, newStoredConfig.AdditionalParameters) {
+		go analyticsutil.SendArrayConfigChangedAnalytics(c, configAdditionalParameters, oldStoredConfig.AdditionalParameters, newStoredConfig.AdditionalParameters, path, triggerSource)
 	}
 
 	// ReferenceFolderPath change
-	if oldReferenceFolderPath != storedConfig.ReferenceFolderPath {
-		go sendConfigChangedAnalyticsEvent(c, configReferenceFolderPath, oldReferenceFolderPath, storedConfig.ReferenceFolderPath, path, triggerSource)
+	if oldStoredConfig.ReferenceFolderPath != newStoredConfig.ReferenceFolderPath {
+		go analyticsutil.SendConfigChangedAnalyticsEvent(c, configReferenceFolderPath, oldStoredConfig.ReferenceFolderPath, newStoredConfig.ReferenceFolderPath, path, triggerSource)
 	}
 
 	// ScanCommandConfig change
-	if !reflect.DeepEqual(oldScanCommandConfig, storedConfig.ScanCommandConfig) {
-		go sendMapConfigChangedAnalytics(c, "scanCommandConfig", oldScanCommandConfig, storedConfig.ScanCommandConfig, path, triggerSource)
+	if !reflect.DeepEqual(oldStoredConfig.ScanCommandConfig, newStoredConfig.ScanCommandConfig) {
+		go analyticsutil.SendMapConfigChangedAnalytics(c, "scanCommandConfig", oldStoredConfig.ScanCommandConfig, newStoredConfig.ScanCommandConfig, path, triggerSource)
 	}
 
 	// PreferredOrg change
-	if oldOrg != storedConfig.PreferredOrg && storedConfig.PreferredOrg != "" {
-		go sendConfigChangedAnalyticsEvent(c, configPreferredOrg, oldOrg, storedConfig.PreferredOrg, path, triggerSource)
+	if oldStoredConfig.PreferredOrg != newStoredConfig.PreferredOrg && newStoredConfig.PreferredOrg != "" {
+		go analyticsutil.SendConfigChangedAnalyticsEvent(c, configPreferredOrg, oldStoredConfig.PreferredOrg, newStoredConfig.PreferredOrg, path, triggerSource)
 	}
 
 	// OrgMigratedFromGlobalConfig change
-	if oldOrgMigratedFromGlobalConfig != storedConfig.OrgMigratedFromGlobalConfig {
-		go sendConfigChangedAnalyticsEvent(c, configOrgMigratedFromGlobalConfig, oldOrgMigratedFromGlobalConfig, storedConfig.OrgMigratedFromGlobalConfig, path, triggerSource)
+	if oldStoredConfig.OrgMigratedFromGlobalConfig != newStoredConfig.OrgMigratedFromGlobalConfig {
+		go analyticsutil.SendConfigChangedAnalyticsEvent(c, configOrgMigratedFromGlobalConfig, oldStoredConfig.OrgMigratedFromGlobalConfig, newStoredConfig.OrgMigratedFromGlobalConfig, path, triggerSource)
 	}
 
 	// OrgSetByUser change
-	if oldOrgSetByUser != storedConfig.OrgSetByUser {
-		go sendConfigChangedAnalyticsEvent(c, configOrgSetByUser, oldOrgSetByUser, storedConfig.OrgSetByUser, path, triggerSource)
+	if oldStoredConfig.OrgSetByUser != newStoredConfig.OrgSetByUser {
+		go analyticsutil.SendConfigChangedAnalyticsEvent(c, configOrgSetByUser, oldStoredConfig.OrgSetByUser, newStoredConfig.OrgSetByUser, path, triggerSource)
 	}
 }
 
@@ -377,7 +368,7 @@ func updateAuthenticationMethod(c *config.Config, settings types.Settings, trigg
 	di.AuthenticationService().ConfigureProviders(c)
 
 	if oldValue != settings.AuthenticationMethod && c.IsLSPInitialized() {
-		sendConfigChangedAnalytics(c, configAuthenticationMethod, oldValue, settings.AuthenticationMethod, triggerSource)
+		analyticsutil.SendConfigChangedAnalytics(c, configAuthenticationMethod, oldValue, settings.AuthenticationMethod, triggerSource)
 	}
 }
 
@@ -397,7 +388,7 @@ func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSour
 		oldValue := c.IsTrustedFolderFeatureEnabled()
 		c.SetTrustedFolderFeatureEnabled(trustedFoldersFeatureEnabled)
 		if oldValue != trustedFoldersFeatureEnabled && c.IsLSPInitialized() {
-			sendConfigChangedAnalytics(c, configEnableTrustedFoldersFeature, oldValue, trustedFoldersFeatureEnabled, triggerSource)
+			analyticsutil.SendConfigChangedAnalytics(c, configEnableTrustedFoldersFeature, oldValue, trustedFoldersFeatureEnabled, triggerSource)
 		}
 	} else {
 		c.SetTrustedFolderFeatureEnabled(true)
@@ -412,9 +403,9 @@ func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSour
 		c.SetTrustedFolders(trustedFolders)
 
 		// Send analytics for trusted folders changes if they actually changed
-		if !slicesEqualIgnoringOrder(oldFolders, trustedFolders) && c.IsLSPInitialized() {
+		if !analyticsutil.SlicesEqualIgnoringOrder(oldFolders, trustedFolders) && c.IsLSPInitialized() {
 			// Send analytics for individual folder changes
-			sendTrustedFoldersAnalytics(c, oldFolders, trustedFolders, triggerSource)
+			analyticsutil.SendTrustedFoldersAnalytics(c, oldFolders, trustedFolders, triggerSource)
 		}
 	}
 }
@@ -458,7 +449,7 @@ func updateSnykLearnCodeActions(c *config.Config, settings types.Settings, trigg
 	c.SetSnykLearnCodeActionsEnabled(enable)
 
 	if oldValue != enable && c.IsLSPInitialized() {
-		sendConfigChangedAnalytics(c, configEnableSnykLearnCodeActions, oldValue, enable, triggerSource)
+		analyticsutil.SendConfigChangedAnalytics(c, configEnableSnykLearnCodeActions, oldValue, enable, triggerSource)
 	}
 }
 
@@ -472,7 +463,7 @@ func updateSnykOSSQuickFixCodeActions(c *config.Config, settings types.Settings,
 	c.SetSnykOSSQuickFixCodeActionsEnabled(enable)
 
 	if oldValue != enable && c.IsLSPInitialized() {
-		sendConfigChangedAnalytics(c, configEnableSnykOSSQuickFixCodeActions, oldValue, enable, triggerSource)
+		analyticsutil.SendConfigChangedAnalytics(c, configEnableSnykOSSQuickFixCodeActions, oldValue, enable, triggerSource)
 	}
 }
 
@@ -487,7 +478,7 @@ func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSourc
 	modified := c.SetDeltaFindingsEnabled(enable)
 	if modified && c.IsLSPInitialized() {
 		sendDiagnosticsForNewSettings(c)
-		sendConfigChangedAnalytics(c, configEnableDeltaFindings, oldValue, enable, triggerSource)
+		analyticsutil.SendConfigChangedAnalytics(c, configEnableDeltaFindings, oldValue, enable, triggerSource)
 	}
 }
 
@@ -509,7 +500,7 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource
 
 		// Send analytics for endpoint change if it actually changed
 		if oldEndpoint != snykApiUrl && c.IsLSPInitialized() {
-			sendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
+			analyticsutil.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
 		}
 	}
 
@@ -518,7 +509,7 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource
 		oldCodeApi := c.SnykCodeApi()
 		c.SetSnykCodeApi(settings.SnykCodeApi)
 		if oldCodeApi != settings.SnykCodeApi && c.IsLSPInitialized() {
-			sendConfigChangedAnalytics(c, configSnykCodeApi, oldCodeApi, settings.SnykCodeApi, triggerSource)
+			analyticsutil.SendConfigChangedAnalytics(c, configSnykCodeApi, oldCodeApi, settings.SnykCodeApi, triggerSource)
 		}
 	}
 }
@@ -530,7 +521,7 @@ func updateOrganization(c *config.Config, settings types.Settings, triggerSource
 		c.SetOrganization(newOrg)
 		newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
 		if oldOrgId != newOrgId && c.IsLSPInitialized() {
-			sendConfigChangedAnalytics(c, configOrganization, oldOrgId, newOrgId, triggerSource)
+			analyticsutil.SendConfigChangedAnalytics(c, configOrganization, oldOrgId, newOrgId, triggerSource)
 		}
 	}
 }
@@ -544,7 +535,7 @@ func updateErrorReporting(c *config.Config, settings types.Settings, triggerSour
 		c.SetErrorReportingEnabled(parseBool)
 
 		if oldValue != parseBool && c.IsLSPInitialized() {
-			sendConfigChangedAnalytics(c, configSendErrorReports, oldValue, parseBool, triggerSource)
+			analyticsutil.SendConfigChangedAnalytics(c, configSendErrorReports, oldValue, parseBool, triggerSource)
 		}
 	}
 }
@@ -558,7 +549,7 @@ func manageBinariesAutomatically(c *config.Config, settings types.Settings, trig
 		c.SetManageBinariesAutomatically(parseBool)
 
 		if oldValue != parseBool && c.IsLSPInitialized() {
-			sendConfigChangedAnalytics(c, configManageBinariesAutomatically, oldValue, parseBool, triggerSource)
+			analyticsutil.SendConfigChangedAnalytics(c, configManageBinariesAutomatically, oldValue, parseBool, triggerSource)
 		}
 	}
 }
@@ -643,7 +634,7 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 		c.SetSnykCodeEnabled(parseBool)
 		c.EnableSnykCodeSecurity(parseBool)
 		if oldValue != parseBool && c.IsLSPInitialized() {
-			sendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, parseBool, triggerSource)
+			analyticsutil.SendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, parseBool, triggerSource)
 		}
 	}
 
@@ -655,7 +646,7 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 		oldValue := c.IsSnykOssEnabled()
 		c.SetSnykOssEnabled(parseBool)
 		if oldValue != parseBool && c.IsLSPInitialized() {
-			sendConfigChangedAnalytics(c, configActivateSnykOpenSource, oldValue, parseBool, triggerSource)
+			analyticsutil.SendConfigChangedAnalytics(c, configActivateSnykOpenSource, oldValue, parseBool, triggerSource)
 		}
 	}
 
@@ -667,7 +658,7 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 		oldValue := c.IsSnykIacEnabled()
 		c.SetSnykIacEnabled(parseBool)
 		if oldValue != parseBool && c.IsLSPInitialized() {
-			sendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
+			analyticsutil.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
 		}
 	}
 }
@@ -686,7 +677,7 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, trigger
 
 	// Send analytics for each individual field that changed
 	if c.IsLSPInitialized() {
-		sendAnalyticsForFields(c, "issueViewOptions", &oldValue, s, triggerSource, map[string]func(*types.IssueViewOptions) bool{
+		analyticsutil.SendAnalyticsForFields(c, "issueViewOptions", &oldValue, s, triggerSource, map[string]func(*types.IssueViewOptions) bool{
 			"OpenIssues":    func(s *types.IssueViewOptions) bool { return s.OpenIssues },
 			"IgnoredIssues": func(s *types.IssueViewOptions) bool { return s.IgnoredIssues },
 		})
@@ -707,7 +698,7 @@ func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSour
 
 	// Send analytics for each individual field that changed
 	if c.IsLSPInitialized() {
-		sendAnalyticsForFields(c, "filterSeverity", &oldValue, s, triggerSource, map[string]func(*types.SeverityFilter) bool{
+		analyticsutil.SendAnalyticsForFields(c, "filterSeverity", &oldValue, s, triggerSource, map[string]func(*types.SeverityFilter) bool{
 			"Critical": func(s *types.SeverityFilter) bool { return s.Critical },
 			"High":     func(s *types.SeverityFilter) bool { return s.High },
 			"Medium":   func(s *types.SeverityFilter) bool { return s.Medium },
@@ -723,159 +714,4 @@ func sendDiagnosticsForNewSettings(c *config.Config) {
 		return
 	}
 	go ws.HandleConfigChange()
-}
-
-// sendConfigChangedAnalytics sends analytics for primitive values only
-func sendConfigChangedAnalytics(c *config.Config, configName string, oldVal any, newVal any, triggerSource string) {
-	ws := c.Workspace()
-	if ws == nil {
-		return
-	}
-
-	for _, folder := range ws.Folders() {
-		go sendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folder.Path(), triggerSource)
-	}
-}
-
-// sendAnalyticsForFields is a generic helper function that sends analytics for struct fields
-func sendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, newValue *T, triggerSource string, fieldMappings map[string]func(*T) bool) {
-	for fieldName, getter := range fieldMappings {
-		oldVal := getter(oldValue)
-		newVal := getter(newValue)
-		if oldVal != newVal {
-			sendConfigChangedAnalytics(c, prefix+fieldName, oldVal, newVal, triggerSource)
-		}
-	}
-}
-
-func sendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}, path types.FilePath, triggerSource string) {
-	event := analytics.NewAnalyticsEventParam("Config changed", nil, path)
-
-	event.Extension = map[string]any{
-		"config::" + field + "::oldValue":      oldValue,
-		"config::" + field + "::newValue":      newValue,
-		"config::" + field + "::triggerSource": triggerSource,
-	}
-	analytics.SendAnalytics(c.Engine(), c.DeviceID(), event, nil)
-}
-
-// sendCollectionChangeAnalytics is a generic helper function that sends analytics for collection changes
-func sendCollectionChangeAnalytics[T comparable](c *config.Config, field string, oldValue, newValue []T, triggerSource string, addedSuffix, removedSuffix, countSuffix string) {
-	// Create maps for easier lookup
-	oldMap := make(map[T]bool)
-	for _, item := range oldValue {
-		oldMap[item] = true
-	}
-
-	newMap := make(map[T]bool)
-	for _, item := range newValue {
-		newMap[item] = true
-	}
-
-	// Find added items
-	for _, item := range newValue {
-		if !oldMap[item] {
-			sendConfigChangedAnalytics(c, field+addedSuffix, "", item, triggerSource)
-		}
-	}
-
-	// Find removed items
-	for _, item := range oldValue {
-		if !newMap[item] {
-			sendConfigChangedAnalytics(c, field+removedSuffix, item, "", triggerSource)
-		}
-	}
-
-	// Send count change analytics
-	oldCount := len(oldValue)
-	newCount := len(newValue)
-	if oldCount != newCount {
-		sendConfigChangedAnalytics(c, field+countSuffix, oldCount, newCount, triggerSource)
-	}
-}
-
-// sendMapChangeAnalytics is a generic helper function that sends analytics for map changes
-func sendMapChangeAnalytics[K comparable, V any](c *config.Config, field string, oldValue, newValue map[K]V, triggerSource string, addedSuffix, modifiedSuffix, removedSuffix, countSuffix string) {
-	// Create maps for easier lookup
-	oldMap := make(map[K]V)
-	for k, v := range oldValue {
-		oldMap[k] = v
-	}
-
-	newMap := make(map[K]V)
-	for k, v := range newValue {
-		newMap[k] = v
-	}
-
-	// Find added/modified keys
-	for k, newV := range newValue {
-		if oldV, exists := oldMap[k]; !exists {
-			// Key was added
-			sendConfigChangedAnalytics(c, field+addedSuffix, "", k, triggerSource)
-		} else if !reflect.DeepEqual(oldV, newV) {
-			// Key was modified
-			sendConfigChangedAnalytics(c, field+modifiedSuffix, oldV, newV, triggerSource)
-		}
-	}
-
-	// Find removed keys
-	for k := range oldValue {
-		if _, exists := newMap[k]; !exists {
-			// Key was removed
-			sendConfigChangedAnalytics(c, field+removedSuffix, k, "", triggerSource)
-		}
-	}
-
-	// Send count change analytics
-	oldCount := len(oldValue)
-	newCount := len(newValue)
-	if oldCount != newCount {
-		sendConfigChangedAnalytics(c, field+countSuffix, oldCount, newCount, triggerSource)
-	}
-}
-
-// sendArrayConfigChangedAnalytics sends analytics for array/slice fields
-func sendArrayConfigChangedAnalytics[T comparable](c *config.Config, field string, oldValue, newValue []T, path types.FilePath, triggerSource string) {
-	sendCollectionChangeAnalytics(c, field, oldValue, newValue, triggerSource, "Added", "Removed", "Count")
-}
-
-// sendMapConfigChangedAnalytics sends analytics for map fields
-func sendMapConfigChangedAnalytics[K comparable, V any](c *config.Config, field string, oldValue, newValue map[K]V, path types.FilePath, triggerSource string) {
-	sendMapChangeAnalytics(c, field, oldValue, newValue, triggerSource, "KeyAdded", "KeyModified", "KeyRemoved", "Count")
-}
-
-// sendTrustedFoldersAnalytics sends analytics for individual trusted folder changes
-func sendTrustedFoldersAnalytics(c *config.Config, oldFolders, newFolders []types.FilePath, triggerSource string) {
-	// Normalize paths before comparison to avoid false removal reports due to path normalization differences
-	normalizedOldFolders := normalizeTrustedFolders(oldFolders)
-	normalizedNewFolders := normalizeTrustedFolders(newFolders)
-
-	sendCollectionChangeAnalytics(c, "trustedFolder", normalizedOldFolders, normalizedNewFolders, triggerSource, "Added", "Removed", "Count")
-}
-
-// normalizeTrustedFolders normalizes a slice of trusted folder paths for consistent comparison
-func normalizeTrustedFolders(folders []types.FilePath) []types.FilePath {
-	normalized := make([]types.FilePath, len(folders))
-	for i, folder := range folders {
-		normalized[i] = types.FilePath(filepath.Clean(string(folder)))
-	}
-	return normalized
-}
-
-// slicesEqualIgnoringOrder compares two slices for equality ignoring element order
-func slicesEqualIgnoringOrder[T cmp.Ordered](a, b []T) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	// Create sorted copies to avoid modifying originals
-	sortedA := make([]T, len(a))
-	copy(sortedA, a)
-	slices.Sort(sortedA)
-
-	sortedB := make([]T, len(b))
-	copy(sortedB, b)
-	slices.Sort(sortedB)
-
-	return slices.Equal(sortedA, sortedB)
 }
