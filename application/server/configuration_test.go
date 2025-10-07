@@ -549,8 +549,10 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 		Organization: "global-org-id", // Include settings.Organization for the condition check
 		FolderConfigs: []types.FolderConfig{
 			{
-				FolderPath:   folderPath,
-				PreferredOrg: "user-org-id",
+				FolderPath:                  folderPath,
+				OrgSetByUser:                true,
+				PreferredOrg:                "user-org-id",
+				OrgMigratedFromGlobalConfig: true,
 			},
 		},
 	}

@@ -36,6 +36,7 @@ import (
 
 // Test scenarios for updateAndSendFolderConfigs (notification sending only)
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
+	t.Skip("Skipping since it makes real network calls at the moment, since we can't mock LDX-Sync easily")
 	c := testutil.UnitTest(t)
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
