@@ -203,7 +203,6 @@ type Config struct {
 	mcpServerEnabled                 bool
 	mcpBaseURL                       *url.URL
 	isLSPInitialized                 bool
-	isFirstConfigurationChange       bool
 	snykAgentFixEnabled              bool
 	cachedOriginalPath               string
 	userSettingsPath                 string
@@ -270,7 +269,6 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c.trustedFoldersFeatureEnabled = true
 	c.automaticScanning = true
 	c.authenticationMethod = types.TokenAuthentication
-	c.isFirstConfigurationChange = true
 	if engine == nil {
 		initWorkFlowEngine(c)
 	} else {
@@ -1391,18 +1389,6 @@ func (c *Config) SetLSPInitialized(initialized bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.isLSPInitialized = initialized
-}
-
-func (c *Config) GetInitializationPhase() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.isFirstConfigurationChange
-}
-
-func (c *Config) SetFirstConfigurationChangeProcessed() {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.isFirstConfigurationChange = false
 }
 
 func (c *Config) SetSnykAgentFixEnabled(enabled bool) {

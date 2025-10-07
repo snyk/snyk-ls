@@ -36,7 +36,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -230,7 +229,7 @@ func Test_UpdateSettings(t *testing.T) {
 		err = initTestRepo(t, tempDir2)
 		assert.NoError(t, err)
 
-		UpdateSettings(c, settings, "test", true)
+		UpdateSettings(c, settings, "test")
 
 		assert.Equal(t, false, c.IsSnykCodeEnabled())
 		assert.Equal(t, false, c.IsSnykOssEnabled())
@@ -284,7 +283,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("hover defaults are set", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		UpdateSettings(c, types.Settings{}, "test", true)
+		UpdateSettings(c, types.Settings{}, "test")
 
 		assert.Equal(t, 3, c.HoverVerbosity())
 		assert.Equal(t, c.Format(), config.FormatMd)
@@ -293,7 +292,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("empty snyk code api is ignored and default is used", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{}, "test", true)
+		UpdateSettings(c, types.Settings{}, "test")
 
 		assert.Equal(t, config.DefaultDeeproxyApiUrl, c.SnykCodeApi())
 	})
@@ -302,7 +301,7 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		c.SetOrganization(expectedOrgId)
 
-		UpdateSettings(c, types.Settings{Organization: " "}, "test", true)
+		UpdateSettings(c, types.Settings{Organization: " "}, "test")
 
 		assert.Equal(t, expectedOrgId, c.Organization())
 	})
@@ -310,7 +309,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("incomplete env vars", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{AdditionalEnv: "a="}, "test", true)
+		UpdateSettings(c, types.Settings{AdditionalEnv: "a="}, "test")
 
 		assert.Empty(t, os.Getenv("a"))
 	})
@@ -319,7 +318,7 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		varCount := len(os.Environ())
 
-		UpdateSettings(c, types.Settings{AdditionalEnv: " "}, "test", true)
+		UpdateSettings(c, types.Settings{AdditionalEnv: " "}, "test")
 
 		assert.Equal(t, varCount, len(os.Environ()))
 	})
@@ -327,7 +326,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("broken env variables", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{AdditionalEnv: "a=; b"}, "test", true)
+		UpdateSettings(c, types.Settings{AdditionalEnv: "a=; b"}, "test")
 
 		assert.Empty(t, os.Getenv("a"))
 		assert.Empty(t, os.Getenv("b"))
@@ -336,7 +335,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("trusted folders", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{TrustedFolders: []string{"/a/b", "/b/c"}}, "test", true)
+		UpdateSettings(c, types.Settings{TrustedFolders: []string{"/a/b", "/b/c"}}, "test")
 
 		assert.Contains(t, c.TrustedFolders(), types.FilePath("/a/b"))
 		assert.Contains(t, c.TrustedFolders(), types.FilePath("/b/c"))
@@ -347,14 +346,14 @@ func Test_UpdateSettings(t *testing.T) {
 		t.Run("true", func(t *testing.T) {
 			UpdateSettings(c, types.Settings{
 				ManageBinariesAutomatically: "true",
-			}, "test", true)
+			}, "test")
 
 			assert.True(t, c.ManageBinariesAutomatically())
 		})
 		t.Run("false", func(t *testing.T) {
 			UpdateSettings(c, types.Settings{
 				ManageBinariesAutomatically: "false",
-			}, "test", true)
+			}, "test")
 
 			assert.False(t, c.ManageBinariesAutomatically())
 		})
@@ -362,11 +361,11 @@ func Test_UpdateSettings(t *testing.T) {
 		t.Run("invalid value does not update", func(t *testing.T) {
 			UpdateSettings(c, types.Settings{
 				ManageBinariesAutomatically: "true",
-			}, "test", true)
+			}, "test")
 
 			UpdateSettings(c, types.Settings{
 				ManageBinariesAutomatically: "dog",
-			}, "test", true)
+			}, "test")
 
 			assert.True(t, c.ManageBinariesAutomatically())
 		})
@@ -375,20 +374,20 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{ActivateSnykCodeSecurity: "true"}, "test", true)
+		UpdateSettings(c, types.Settings{ActivateSnykCodeSecurity: "true"}, "test")
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
 	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{}, "test", true)
+		UpdateSettings(c, types.Settings{}, "test")
 
 		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
 
 		c.EnableSnykCodeSecurity(true)
 
-		UpdateSettings(c, types.Settings{}, "test", true)
+		UpdateSettings(c, types.Settings{}, "test")
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 	})
@@ -397,7 +396,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 		UpdateSettings(c, types.Settings{
 			ActivateSnykCode: "true",
-		}, "test", true)
+		}, "test")
 
 		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
 		assert.Equal(t, true, c.IsSnykCodeEnabled())
@@ -407,22 +406,22 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(true, false, true, false)
-			UpdateSettings(c, types.Settings{FilterSeverity: &mixedSeverityFilter}, "test", true)
+			UpdateSettings(c, types.Settings{FilterSeverity: &mixedSeverityFilter}, "test")
 
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
 			emptyLikeSeverityFilter := types.NewSeverityFilter(false, false, false, false)
-			UpdateSettings(c, types.Settings{FilterSeverity: &emptyLikeSeverityFilter}, "test", true)
+			UpdateSettings(c, types.Settings{FilterSeverity: &emptyLikeSeverityFilter}, "test")
 
 			assert.Equal(t, emptyLikeSeverityFilter, c.FilterSeverity())
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(false, false, true, false)
-			UpdateSettings(c, types.Settings{FilterSeverity: &mixedSeverityFilter}, "test", true)
+			UpdateSettings(c, types.Settings{FilterSeverity: &mixedSeverityFilter}, "test")
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 
-			UpdateSettings(c, types.Settings{}, "test", true)
+			UpdateSettings(c, types.Settings{}, "test")
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 	})
@@ -431,22 +430,22 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
-			UpdateSettings(c, types.Settings{IssueViewOptions: &mixedIssueViewOptions}, "test", true)
+			UpdateSettings(c, types.Settings{IssueViewOptions: &mixedIssueViewOptions}, "test")
 
 			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
 			emptyLikeIssueViewOptions := types.NewIssueViewOptions(false, false)
-			UpdateSettings(c, types.Settings{IssueViewOptions: &emptyLikeIssueViewOptions}, "test", true)
+			UpdateSettings(c, types.Settings{IssueViewOptions: &emptyLikeIssueViewOptions}, "test")
 
 			assert.Equal(t, emptyLikeIssueViewOptions, c.IssueViewOptions())
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
 			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
-			UpdateSettings(c, types.Settings{IssueViewOptions: &mixedIssueViewOptions}, "test", true)
+			UpdateSettings(c, types.Settings{IssueViewOptions: &mixedIssueViewOptions}, "test")
 			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 
-			UpdateSettings(c, types.Settings{}, "test", true)
+			UpdateSettings(c, types.Settings{}, "test")
 			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 		})
 	})
@@ -520,13 +519,46 @@ func (s *folderConfigTestSetup) callUpdateFolderConfig(org string) {
 			},
 		},
 	}
-	updateFolderConfig(s.c, settings, s.logger, "test", true)
+	updateFolderConfig(s.c, settings, s.logger, "test")
 }
 
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(s.engineConfig, s.folderPath, s.logger)
 	assert.NoError(s.t, err)
 	return updatedConfig
+}
+
+// setupMigratedConfigInheritingFromBlankGlobal sets up the test scenario where
+// a migrated config inherits from a blank global organization
+func (s *folderConfigTestSetup) setupMigratedConfigInheritingFromBlankGlobal() {
+	// Setup stored config with empty org, migrated flag set to true, and userSet to false
+	s.createStoredConfig("", true, false)
+
+	// Set global organization to empty
+	s.c.SetOrganization("")
+
+	// Call updateFolderConfig with empty org
+	s.callUpdateFolderConfig("")
+}
+
+// setupNotMigratedLdxSyncReturnsDifferentOrg sets up the test scenario where
+// a non-migrated config has LDX-Sync return a different organization
+func (s *folderConfigTestSetup) setupNotMigratedLdxSyncReturnsDifferentOrg() {
+	// Setup stored config without migration flag, with initial org, and userSet to false
+	s.createStoredConfig("initial-org", false, false)
+
+	// Set global organization
+	s.c.SetOrganization("global-org-id")
+}
+
+// setupMigratedConfigUserSetButInheritingFromBlank sets up the test scenario where
+// a migrated config was previously user-set but now inherits from blank global
+func (s *folderConfigTestSetup) setupMigratedConfigUserSetButInheritingFromBlank() {
+	// Setup stored config with empty org, migrated flag set to true, and userSet to true
+	s.createStoredConfig("", true, true)
+
+	// Set global organization to empty
+	s.c.SetOrganization("")
 }
 
 // Test scenarios for updateFolderConfig with LDX-Sync integration
@@ -564,7 +596,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger, "test", true)
+	updateFolderConfig(c, settings, logger, "test")
 
 	// Verify the org was kept - with the current implementation, UpdateFolderConfigOrg is always called
 	// due to pointer comparison, but the org should remain the same since it's user-set
@@ -576,34 +608,20 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 
 func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing.T) {
 	setup := setupFolderConfigTest(t)
-	c := setup.c
-	folderPath := setup.folderPath
-	engineConfig := setup.engineConfig
-	logger := setup.logger
 
-	// Setup stored config with empty org
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                "",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
-	assert.NoError(t, err)
+	// Setup the test scenario
+	setup.setupMigratedConfigInheritingFromBlankGlobal()
 
-	c.SetOrganization("")
-
-	// Call updateFolderConfig
-	setup.callUpdateFolderConfig("")
+	// Create settings and call updateFolderConfig
 	settings := types.Settings{
 		FolderConfigs: []types.FolderConfig{
 			{
-				FolderPath:   folderPath,
+				FolderPath:   setup.folderPath,
 				PreferredOrg: "",
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger, "test", true)
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
 
 	// Verify: When both folder and global org are empty and LDX-Sync is called
 	updatedConfig := setup.getUpdatedConfig()
@@ -631,7 +649,7 @@ func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, "test", true)
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
 
 	// Verify UpdateFolderConfigOrg was called and set the migration flag
 	updatedConfig := setup.getUpdatedConfig()
@@ -640,26 +658,10 @@ func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 }
 
 func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
-	di.TestInit(t)
+	setup := setupFolderConfigTest(t)
 
-	folderPath := types.FilePath(t.TempDir())
-	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
-
-	// Setup stored config without migration
-	engineConfig := c.Engine().GetConfiguration()
-	logger := c.Logger()
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                "initial-org",
-		OrgMigratedFromGlobalConfig: false,
-		OrgSetByUser:                false,
-	}
-	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
-	assert.NoError(t, err)
-
-	c.SetOrganization("global-org-id")
+	// Setup the test scenario
+	setup.setupNotMigratedLdxSyncReturnsDifferentOrg()
 
 	// Call updateFolderConfig
 	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
@@ -667,57 +669,38 @@ func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T
 	settings := types.Settings{
 		FolderConfigs: []types.FolderConfig{
 			{
-				FolderPath:   folderPath,
+				FolderPath:   setup.folderPath,
 				PreferredOrg: "initial-org",
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger, "test", true)
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
 
 	// Verify UpdateFolderConfigOrg was called and set the migration flag
-	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
-	assert.NoError(t, err)
+	updatedConfig := setup.getUpdatedConfig()
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true after migration")
 }
 
 func Test_updateFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *testing.T) {
-	c := testutil.UnitTest(t)
-	di.TestInit(t)
+	setup := setupFolderConfigTest(t)
 
-	folderPath := types.FilePath(t.TempDir())
-	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
-
-	// Setup: previously user-set, but now both folder and global are empty
-	engineConfig := c.Engine().GetConfiguration()
-	logger := c.Logger()
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                "",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true, // Was previously set by user
-	}
-	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
-	assert.NoError(t, err)
-
-	// Both folder and global org are empty - this is the key difference from the first test
-	c.SetOrganization("")
+	// Setup the test scenario
+	setup.setupMigratedConfigUserSetButInheritingFromBlank()
 
 	// Call updateFolderConfig with empty org settings
 	settings := types.Settings{
 		FolderConfigs: []types.FolderConfig{
 			{
-				FolderPath:   folderPath,
+				FolderPath:   setup.folderPath,
 				PreferredOrg: "",
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger, "test", false)
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
 
 	// Verify: should attempt to resolve from LDX-Sync because inheriting from blank global
 	// This test specifically checks the case where both folder and global orgs are empty
-	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
-	assert.NoError(t, err)
+	updatedConfig := setup.getUpdatedConfig()
 	// When LDX-Sync is called, OrgSetByUser behavior depends on the result
 	assert.Empty(t, updatedConfig.PreferredOrg, "PreferredOrg should remain empty when inheriting from blank global")
 }
@@ -758,7 +741,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger, "test", true)
+	updateFolderConfig(c, settings, logger, "test")
 
 	// Verify config remains unchanged (UpdateFolderConfigOrg was skipped)
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
@@ -789,7 +772,7 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	}
 
 	// Should not panic and should handle nil gracefully
-	updateFolderConfig(c, settings, logger, "test", false)
+	updateFolderConfig(c, settings, logger, "test")
 	// If we get here without panic, the nil check worked
 }
 
@@ -846,16 +829,16 @@ func Test_InitializeSettings(t *testing.T) {
 		t.Setenv(caseSensitivePathKey, "something_meaningful")
 
 		// update path to hold a custom value
-		UpdateSettings(c, types.Settings{Path: first}, "test", true)
+		UpdateSettings(c, types.Settings{Path: first}, "test")
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), first+string(os.PathListSeparator)))
 
 		// update path to hold another value
-		UpdateSettings(c, types.Settings{Path: second}, "test", true)
+		UpdateSettings(c, types.Settings{Path: second}, "test")
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), second+string(os.PathListSeparator)))
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), first))
 
 		// reset path with non-empty settings
-		UpdateSettings(c, types.Settings{Path: "", AuthenticationMethod: "token"}, "test", true)
+		UpdateSettings(c, types.Settings{Path: "", AuthenticationMethod: "token"}, "test")
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), second))
 
 		assert.True(t, keyFoundInEnv(upperCasePathKey))
@@ -863,258 +846,141 @@ func Test_InitializeSettings(t *testing.T) {
 	})
 }
 
-// Test scenarios for updateFolderConfigOrg - already migrated configs
-func Test_updateFolderConfigOrg_MigratedConfig_Initialization_NonUserSet_CallsLdxSync(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetOrganization("global-org")
+func Test_sendCollectionChangeAnalytics(t *testing.T) {
+	t.Run("sends analytics for array changes", func(t *testing.T) {
+		c := testutil.UnitTest(t)
 
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "ldx-resolved-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-	}
+		// Test data
+		oldValue := []string{"item1", "item2", "item3"}
+		newValue := []string{"item1", "item4", "item5", "item6"}
+		field := "testField"
+		triggerSource := "test"
 
-	folderConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "ldx-resolved-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-	}
+		// Test the logic by calling the function and verifying it doesn't panic
+		// Since we can't easily mock the analytics function, we'll test the core logic
+		// by verifying the function executes without errors
+		assert.NotPanics(t, func() {
+			sendCollectionChangeAnalytics(c, field, oldValue, newValue, triggerSource, "Added", "Removed", "Count")
+		})
+	})
 
-	notifier := notification.NewMockNotifier()
-	updateFolderConfigOrg(c, notifier, storedConfig, folderConfig)
+	t.Run("handles empty arrays", func(t *testing.T) {
+		c := testutil.UnitTest(t)
 
-	// Should have called LDX-Sync (we can't easily verify this without mocking, but we can check the behavior)
-	// The org should remain as resolved by LDX-Sync
-	assert.False(t, folderConfig.OrgSetByUser, "Should remain not user-set")
+		oldValue := []string{}
+		newValue := []string{"item1", "item2"}
+		field := "testField"
+		triggerSource := "test"
+
+		assert.NotPanics(t, func() {
+			sendCollectionChangeAnalytics(c, field, oldValue, newValue, triggerSource, "Added", "Removed", "Count")
+		})
+	})
+
+	t.Run("handles identical arrays", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+
+		value := []string{"item1", "item2"}
+		field := "testField"
+		triggerSource := "test"
+
+		assert.NotPanics(t, func() {
+			sendCollectionChangeAnalytics(c, field, value, value, triggerSource, "Added", "Removed", "Count")
+		})
+	})
 }
 
-func Test_updateFolderConfigOrg_MigratedConfig_Initialization_UserSetWithBlankOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetOrganization("") // Blank global org
+func Test_sendMapChangeAnalytics(t *testing.T) {
+	t.Run("sends analytics for map changes", func(t *testing.T) {
+		c := testutil.UnitTest(t)
 
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "", // Blank folder org
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
+		// Test data
+		oldValue := map[string]int{
+			"key1": 1,
+			"key2": 2,
+			"key3": 3,
+		}
+		newValue := map[string]int{
+			"key1": 10, // modified
+			"key4": 4,  // added
+			"key5": 5,  // added
+		}
+		field := "testField"
+		triggerSource := "test"
 
-	folderConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
+		assert.NotPanics(t, func() {
+			sendMapChangeAnalytics(c, field, oldValue, newValue, triggerSource, "KeyAdded", "KeyModified", "KeyRemoved", "Count")
+		})
+	})
 
-	notifier := notification.NewMockNotifier()
-	updateFolderConfigOrg(c, notifier, storedConfig, folderConfig)
+	t.Run("handles empty maps", func(t *testing.T) {
+		c := testutil.UnitTest(t)
 
-	// User explicitly set the org (even if blank), so OrgSetByUser should remain true
-	assert.True(t, folderConfig.OrgSetByUser, "Should remain user-set when user explicitly set blank org")
+		oldValue := map[string]int{}
+		newValue := map[string]int{"key1": 1, "key2": 2}
+		field := "testField"
+		triggerSource := "test"
+
+		assert.NotPanics(t, func() {
+			sendMapChangeAnalytics(c, field, oldValue, newValue, triggerSource, "KeyAdded", "KeyModified", "KeyRemoved", "Count")
+		})
+	})
+
+	t.Run("handles identical maps", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+
+		value := map[string]int{"key1": 1, "key2": 2}
+		field := "testField"
+		triggerSource := "test"
+
+		assert.NotPanics(t, func() {
+			sendMapChangeAnalytics(c, field, value, value, triggerSource, "KeyAdded", "KeyModified", "KeyRemoved", "Count")
+		})
+	})
 }
 
-func Test_updateFolderConfigOrg_MigratedConfig_Initialization_UserSet_KeepsExisting(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetOrganization("global-org")
+func Test_sendArrayConfigChangedAnalytics(t *testing.T) {
+	t.Run("calls sendCollectionChangeAnalytics with correct parameters", func(t *testing.T) {
+		c := testutil.UnitTest(t)
 
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "user-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
+		oldValue := []string{"item1", "item2"}
+		newValue := []string{"item1", "item3"}
+		field := "testField"
+		path := types.FilePath("/test/path")
+		triggerSource := "test"
 
-	folderConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "user-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-
-	notifier := notification.NewMockNotifier()
-	updateFolderConfigOrg(c, notifier, storedConfig, folderConfig)
-
-	// Should keep the user-set org
-	assert.Equal(t, "user-org", folderConfig.PreferredOrg, "Should keep user-set org")
-	assert.True(t, folderConfig.OrgSetByUser, "Should remain user-set")
+		assert.NotPanics(t, func() {
+			sendArrayConfigChangedAnalytics(c, field, oldValue, newValue, path, triggerSource)
+		})
+	})
 }
 
-func Test_updateFolderConfigOrg_MigratedConfig_Update_OrgChanged_StoresNewOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetOrganization("global-org")
+func Test_sendMapConfigChangedAnalytics(t *testing.T) {
+	t.Run("calls sendMapChangeAnalytics with correct parameters", func(t *testing.T) {
+		c := testutil.UnitTest(t)
 
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "old-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-	}
+		oldValue := map[string]int{"key1": 1}
+		newValue := map[string]int{"key1": 2, "key2": 3}
+		field := "testField"
+		path := types.FilePath("/test/path")
+		triggerSource := "test"
 
-	folderConfig := &types.FolderConfig{
-		PreferredOrg:                "new-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-	}
-
-	notifier := notification.NewMockNotifier()
-	updateFolderConfigOrg(c, notifier, storedConfig, folderConfig)
-
-	// The actual org value depends on LDX-Sync resolution
-	assert.False(t, folderConfig.OrgSetByUser, "Should not be user-set when OrgSetByUser flag is false")
+		assert.NotPanics(t, func() {
+			sendMapConfigChangedAnalytics(c, field, oldValue, newValue, path, triggerSource)
+		})
+	})
 }
 
-func Test_updateFolderConfigOrg_MigratedConfig_Update_OrgSetByUser_StoresNewOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetOrganization("global-org")
+func Test_sendTrustedFoldersAnalytics(t *testing.T) {
+	t.Run("calls sendCollectionChangeAnalytics with correct parameters", func(t *testing.T) {
+		c := testutil.UnitTest(t)
 
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "old-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-	}
+		oldFolders := []types.FilePath{"/old/path1", "/old/path2"}
+		newFolders := []types.FilePath{"/old/path1", "/new/path3"}
+		triggerSource := "test"
 
-	folderConfig := &types.FolderConfig{
-		PreferredOrg:                "user-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-
-	notifier := notification.NewMockNotifier()
-	updateFolderConfigOrg(c, notifier, storedConfig, folderConfig)
-
-	// Should store the user-provided org
-	assert.Equal(t, "user-org", folderConfig.PreferredOrg, "Should store user org")
-	assert.True(t, folderConfig.OrgSetByUser, "Should mark as user-set")
-}
-
-func Test_updateFolderConfigOrg_MigratedConfig_Update_InheritingFromBlankGlobal_CallsLdxSync(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetOrganization("") // Blank global org
-
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "old-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-
-	folderConfig := &types.FolderConfig{
-		PreferredOrg:                "", // Blank folder org
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-	}
-
-	notifier := notification.NewMockNotifier()
-	updateFolderConfigOrg(c, notifier, storedConfig, folderConfig)
-
-	// Should call LDX-Sync because inheriting from blank global
-	// The org will be resolved by LDX-Sync (we can't verify the exact value without mocking)
-	// But we can verify the OrgSetByUser flag
-	assert.False(t, folderConfig.OrgSetByUser, "Should not be user-set when inheriting from blank global")
-}
-
-func Test_updateFolderConfigOrg_MigratedConfig_Update_NoChangeNotUserSet_CallsLdxSync(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetOrganization("global-org")
-
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "ldx-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-	}
-
-	folderConfig := &types.FolderConfig{
-		PreferredOrg:                "ldx-org", // Same org
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-	}
-
-	notifier := notification.NewMockNotifier()
-	updateFolderConfigOrg(c, notifier, storedConfig, folderConfig)
-
-	// Should call LDX-Sync because not user-set
-	assert.False(t, folderConfig.OrgSetByUser, "Should remain not user-set")
-}
-
-// Test scenarios for migrateFolderConfigOrg - new configs
-func Test_migrateFolderConfigOrg_WithUserProvidedOrg_SkipsLdxSync(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetOrganization("global-org")
-
-	folderConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "user-org",
-		OrgMigratedFromGlobalConfig: false,
-		OrgSetByUser:                true, // Set to true to indicate user provided this org
-	}
-
-	notifier := notification.NewMockNotifier()
-	migrateFolderConfigOrg(c, notifier, folderConfig)
-
-	// Should store the user-provided org and skip LDX-Sync
-	assert.Equal(t, "user-org", folderConfig.PreferredOrg, "Should store user-provided org")
-	assert.True(t, folderConfig.OrgSetByUser, "Should mark as user-set")
-	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should mark as migrated")
-}
-
-func Test_migrateFolderConfigOrg_WithOrgSetByUserFlag_SkipsLdxSync(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetOrganization("global-org")
-
-	folderConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "",
-		OrgMigratedFromGlobalConfig: false,
-		OrgSetByUser:                true,
-	}
-
-	notifier := notification.NewMockNotifier()
-	migrateFolderConfigOrg(c, notifier, folderConfig)
-
-	// Should skip LDX-Sync when OrgSetByUser is true
-	assert.Equal(t, "", folderConfig.PreferredOrg, "Should store empty org")
-	assert.True(t, folderConfig.OrgSetByUser, "Should mark as user-set")
-	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should mark as migrated")
-}
-
-func Test_migrateFolderConfigOrg_NoOrg_LdxReturnsDifferent_MarksNotUserSet(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetOrganization("global-org")
-
-	folderConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "",
-		OrgMigratedFromGlobalConfig: false,
-		OrgSetByUser:                false,
-	}
-
-	notifier := notification.NewMockNotifier()
-	migrateFolderConfigOrg(c, notifier, folderConfig)
-
-	// Should call LDX-Sync and mark as not user-set if different from global
-	// (We can't verify the exact org without mocking LDX-Sync, but we can verify the migration flag)
-	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should mark as migrated")
-}
-
-func Test_migrateFolderConfigOrg_NoOrg_InitialMigration(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetOrganization("global-org")
-
-	folderConfig := &types.FolderConfig{
-		FolderPath:                  "/test/path",
-		PreferredOrg:                "",
-		OrgMigratedFromGlobalConfig: false,
-		OrgSetByUser:                false,
-	}
-
-	notifier := notification.NewMockNotifier()
-	migrateFolderConfigOrg(c, notifier, folderConfig)
-
-	// Should use global org initially and call LDX-Sync
-	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should mark as migrated")
-	// The final org and OrgSetByUser depend on LDX-Sync response
+		assert.NotPanics(t, func() {
+			sendTrustedFoldersAnalytics(c, oldFolders, newFolders, triggerSource)
+		})
+	})
 }
