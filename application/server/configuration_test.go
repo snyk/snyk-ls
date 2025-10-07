@@ -1021,7 +1021,7 @@ func Test_migrateFolderConfigOrg_NoOrg_InitialMigration(t *testing.T) {
 	}
 
 	notifier := notification.NewMockNotifier()
-	migrateFolderConfigOrg(c, folderConfig, notifier)
+	migrateFolderConfigOrg(c, notifier, folderConfig)
 
 	// Should use global org initially and call LDX-Sync
 	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should mark as migrated")
