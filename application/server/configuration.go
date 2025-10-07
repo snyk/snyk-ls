@@ -246,16 +246,8 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		// Also, if the config hasn't been migrated yet, we need to perform the initial migration.
 		needsMigration := !storedConfig.OrgMigratedFromGlobalConfig
 		orgSettingsChanged := !folderConfigsOrgSettingsEqual(folderConfig, storedConfig)
-		globalOrgChanged := c.Organization() != settings.Organization
 
-		if needsMigration || orgSettingsChanged || globalOrgChanged {
-			// Preserve org-related flags from stored config if not explicitly set in incoming config
-			if !folderConfig.OrgSetByUser && storedConfig.OrgSetByUser {
-				folderConfig.OrgSetByUser = storedConfig.OrgSetByUser
-			}
-			if !folderConfig.OrgMigratedFromGlobalConfig && storedConfig.OrgMigratedFromGlobalConfig {
-				folderConfig.OrgMigratedFromGlobalConfig = storedConfig.OrgMigratedFromGlobalConfig
-			}
+		if needsMigration || orgSettingsChanged {
 			updateFolderConfigOrg(c, notifier, storedConfig, &folderConfig)
 			folderConfigsMayHaveChanged = true
 		}
@@ -343,9 +335,6 @@ func updateFolderConfigOrg(c *config.Config, notifier noti.Notifier, storedConfi
 		} else if !folderConfig.OrgSetByUser {
 			// Ensure we blank the field, so we don't flip it back to an old value when the user disables auto org.
 			folderConfig.PreferredOrg = ""
-		} else {
-			// User has set the org and it hasn't changed, preserve the PreferredOrg
-			folderConfig.PreferredOrg = storedConfig.PreferredOrg
 		}
 	} else {
 		migrateFolderConfigOrg(c, notifier, folderConfig)
