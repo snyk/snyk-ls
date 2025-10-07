@@ -556,6 +556,7 @@ type FolderConfig struct {
 	ReferenceFolderPath         FilePath                              `json:"referenceFolderPath,omitempty"`
 	ScanCommandConfig           map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
 	PreferredOrg                string                                `json:"preferredOrg,omitempty"`
+	AutoDeterminedOrg           string                                `json:"autoDeterminedOrg,omitempty"`
 	OrgMigratedFromGlobalConfig bool                                  `json:"orgMigratedFromGlobalConfig,omitempty"`
 	OrgSetByUser                bool                                  `json:"orgSetByUser,omitempty"`
 }
