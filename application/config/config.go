@@ -1292,13 +1292,22 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 }
 
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
-// the folder, it returns the global organization.
+// the folder, it returns the global organization (which if unset, GAF will return the default org).
 func (c *Config) FolderOrganization(path types.FilePath) string {
 	fc := c.FolderConfig(path)
-	if fc == nil || fc.PreferredOrg == "" {
+	if fc == nil {
+		// Should never happen, but as a safety net, return the global org.
 		return c.Organization()
 	}
-	return fc.PreferredOrg
+	if fc.OrgSetByUser {
+		if fc.PreferredOrg == "" {
+			return c.Organization()
+		} else {
+			return fc.PreferredOrg
+		}
+	} else {
+		return fc.AutoDeterminedOrg
+	}
 }
 
 func (c *Config) HoverVerbosity() int {
