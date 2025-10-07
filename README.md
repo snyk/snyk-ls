@@ -166,7 +166,10 @@ Right now the language server supports the following actions:
         {
           "folderPath": "the/folder/path",
           "baseBranch": "the-base-branch", // e.g. main
-          "localBranches": [ "branch1", "branch2" ]
+          "localBranches": [ "branch1", "branch2" ],
+          "preferredOrg": "org-id", // Organization to use when operating on this folder.
+          "orgMigratedFromGlobalConfig": true, // Set by language server to track migrations over upgrade.
+          "orgSetByUser": true // If false, Language Server determines the organization automatically.
         }
       ]
   }
@@ -519,10 +522,16 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "/another/trusted/path"
   ], // An array of folder that should be trusted
   "folderConfigs": [{
-    "baseBranch": "main", // the base branch for delta scanning
     "folderPath": "a/b/c", // the workspace folder path
-    "additionalParameters": "--file=pom.xml" // additional parameters for CLI scans
-  }], // an array of folder configurations, defining the desired base branch of a workspaceFolder
+    "baseBranch": "main", // the base branch for delta scanning
+    "localBranches": [ "feature-branch" ], // local branches for scanning
+    "additionalParameters": [ "--file=pom.xml" ], // additional parameters for CLI scans
+    "referenceFolderPath": "reference/path", // optional reference folder for post-scan comparison
+    "scanCommandConfig": {}, // scan command configuration per product
+    "preferredOrg": "org-id", // preferred organization ID for this folder
+    "orgMigratedFromGlobalConfig": false, // internal flag for org migration tracking
+    "orgSetByUser": true // whether the org was explicitly set by the user
+  }], // an array of folder configurations, defining settings per workspace folder
 }
 ```
 

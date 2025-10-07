@@ -21,13 +21,15 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
-
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -43,7 +45,7 @@ func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, noti
 }
 
 func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
-	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
+	logger := c.Logger().With().Str("method", "updateAndSendFolderConfigs").Logger()
 	configuration := c.Engine().GetConfiguration()
 
 	var folderConfigs []types.FolderConfig
@@ -53,15 +55,31 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			logger.Err(err2).Msg("unable to load stored config")
 			return
 		}
+		SetAutoBestOrgFromLdxSync(c, notifier, storedConfig, "")
 		folderConfigs = append(folderConfigs, *storedConfig)
 	}
 
 	if folderConfigs == nil {
 		return
 	}
-
 	folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
 	notifier.Send(folderConfigsParam)
+}
+
+func SetAutoBestOrgFromLdxSync(c *config.Config, notifier noti.Notifier, folderConfig *types.FolderConfig, globalOrgForMigrating string) (newOrgIsDefault bool) {
+	logger := c.Logger().With().Str("method", "updateAndSendFolderConfigs").Logger()
+
+	path := folderConfig.FolderPath
+
+	newOrg, err := ldx_sync_config.ResolveOrganization(c.Engine().GetConfiguration(), c.Engine(), &logger, string(path), globalOrgForMigrating)
+	if err != nil {
+		logger.Err(err).Msg("unable to resolve organization")
+		notifier.SendShowMessage(sglsp.MTError, err.Error())
+	} else {
+		folderConfig.AutoDeterminedOrg = newOrg.Id
+	}
+	newOrgIsDefaultPtr := newOrg.IsDefault
+	return newOrgIsDefaultPtr != nil && *newOrgIsDefaultPtr
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {

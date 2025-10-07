@@ -549,12 +549,16 @@ type ScanCommandConfig struct {
 // IDE sends this as part of the settings/initialization
 // LS sends this via the $/snyk.folderConfig notification
 type FolderConfig struct {
-	FolderPath           FilePath                              `json:"folderPath"`
-	BaseBranch           string                                `json:"baseBranch"`
-	LocalBranches        []string                              `json:"localBranches,omitempty"`
-	AdditionalParameters []string                              `json:"additionalParameters,omitempty"`
-	ReferenceFolderPath  FilePath                              `json:"referenceFolderPath,omitempty"`
-	ScanCommandConfig    map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
+	FolderPath                  FilePath                              `json:"folderPath"`
+	BaseBranch                  string                                `json:"baseBranch"`
+	LocalBranches               []string                              `json:"localBranches,omitempty"`
+	AdditionalParameters        []string                              `json:"additionalParameters,omitempty"`
+	ReferenceFolderPath         FilePath                              `json:"referenceFolderPath,omitempty"`
+	ScanCommandConfig           map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
+	PreferredOrg                string                                `json:"preferredOrg,omitempty"`
+	AutoDeterminedOrg           string                                `json:"autoDeterminedOrg,omitempty"`
+	OrgMigratedFromGlobalConfig bool                                  `json:"orgMigratedFromGlobalConfig,omitempty"`
+	OrgSetByUser                bool                                  `json:"orgSetByUser,omitempty"`
 }
 
 type Pair struct {
@@ -568,7 +572,7 @@ type FolderConfigsParam struct {
 
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
-	// global settings start
+	// Global settings start
 	ActivateSnykOpenSource           string               `json:"activateSnykOpenSource,omitempty"`
 	ActivateSnykCode                 string               `json:"activateSnykCode,omitempty"`
 	ActivateSnykIac                  string               `json:"activateSnykIac,omitempty"`
@@ -603,13 +607,14 @@ type Settings struct {
 	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
 	HoverVerbosity                   *int                 `json:"hoverVerbosity,omitempty"`
 	OutputFormat                     *string              `json:"outputFormat,omitempty"`
-	// global settings end
-	// folder specific settings start
+	// Global settings end
+
+	// Folder specific settings start
 	AdditionalParams string         `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
 	AdditionalEnv    string         `json:"additionalEnv,omitempty"`    // TODO make folder specific, move to folder config
 	TrustedFolders   []string       `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
 	FolderConfigs    []FolderConfig `json:"folderConfigs,omitempty"`
-	// folder specific settings end
+	// Folder specific settings end
 }
 
 type AuthenticationMethod string
