@@ -167,6 +167,7 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 			}
 		} else {
 			logger.Err(err).Msg("Received error running command")
+			return resAsString, err
 		}
 	}
 	return resAsString, nil
@@ -216,7 +217,11 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		output, err := m.runSnyk(ctx, invocationCtx, workingDir, args)
 		// we only return Err if we get exit code > 1 from CLI
 		if err != nil {
-			return mcp.NewToolResultText(fmt.Sprintf("Error: %s", output)), nil
+			if output != "" {
+				return mcp.NewToolResultText(fmt.Sprintf("Error: %s", output)), nil
+			} else {
+				return mcp.NewToolResultText(fmt.Sprintf("Error: %s", err.Error())), nil
+			}
 		}
 
 		output = m.enhanceOutput(&logger, toolDef, output, err == nil, workingDir)
