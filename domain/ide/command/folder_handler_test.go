@@ -130,7 +130,7 @@ func Test_UpdateFolderConfigOrg_MigratedConfig_Initialization_NonUserSet_CallsLd
 	assert.False(t, folderConfig.OrgSetByUser, "Should remain not user-set")
 }
 
-func Test_UpdateFolderConfigOrg_MigratedConfig_Initialization_InheritingFromBlankGlobal_CallsLdxSync(t *testing.T) {
+func Test_UpdateFolderConfigOrg_MigratedConfig_Initialization_UserSetWithBlankOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetOrganization("") // Blank global org
 
@@ -138,7 +138,7 @@ func Test_UpdateFolderConfigOrg_MigratedConfig_Initialization_InheritingFromBlan
 		FolderPath:                  "/test/path",
 		PreferredOrg:                "", // Blank folder org
 		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true, // Even if previously user-set
+		OrgSetByUser:                true,
 	}
 
 	folderConfig := &types.FolderConfig{
@@ -151,8 +151,8 @@ func Test_UpdateFolderConfigOrg_MigratedConfig_Initialization_InheritingFromBlan
 	notifier := notification.NewMockNotifier()
 	UpdateFolderConfigOrg(c, storedConfig, folderConfig, notifier)
 
-	// Should have called LDX-Sync because org is inheriting from blank global
-	assert.False(t, folderConfig.OrgSetByUser, "Should be marked as not user-set when inheriting from blank global")
+	// User explicitly set the org (even if blank), so OrgSetByUser should remain true
+	assert.True(t, folderConfig.OrgSetByUser, "Should remain user-set when user explicitly set blank org")
 }
 
 func Test_UpdateFolderConfigOrg_MigratedConfig_Initialization_UserSet_KeepsExisting(t *testing.T) {

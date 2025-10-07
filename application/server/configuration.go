@@ -176,9 +176,8 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		// Also, if the config hasn't been migrated yet, we need to perform the initial migration.
 		needsMigration := !storedConfig.OrgMigratedFromGlobalConfig
 		orgSettingsChanged := !folderConfigsOrgSettingsEqual(folderConfig, storedConfig)
-		globalOrgChanged := c.Organization() != settings.Organization
 
-		if needsMigration || orgSettingsChanged || globalOrgChanged {
+		if needsMigration || orgSettingsChanged {
 			command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig, notifier)
 		}
 

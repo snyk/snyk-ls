@@ -675,47 +675,6 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 	assert.True(t, updatedConfig.OrgSetByUser, "Should remain true since UpdateFolderConfigOrg was skipped")
 }
 
-func Test_updateFolderConfig_UpdatesWhenGlobalOrgChanged(t *testing.T) {
-	c := testutil.UnitTest(t)
-	di.TestInit(t)
-
-	folderPath := types.FilePath(t.TempDir())
-	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
-
-	// Setup stored config with old global org
-	engineConfig := c.Engine().GetConfiguration()
-	logger := c.Logger()
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                "",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-	}
-	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
-	assert.NoError(t, err)
-
-	// Change global org
-	c.SetOrganization("new-global-org")
-
-	// Call updateFolderConfig with different global org
-	settings := types.Settings{
-		Organization: "old-global-org", // Different from current
-		FolderConfigs: []types.FolderConfig{
-			{
-				FolderPath:   folderPath,
-				PreferredOrg: "",
-			},
-		},
-	}
-	updateFolderConfig(c, settings, logger)
-
-	// Verify UpdateFolderConfigOrg was called (org should be resolved)
-	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
-	assert.NoError(t, err)
-	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig)
-}
-
 func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)

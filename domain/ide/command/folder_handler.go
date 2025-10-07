@@ -153,17 +153,12 @@ func GetTrustMessage(untrusted []types.Folder) string {
 func UpdateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier noti.Notifier) {
 	// For configs that have been migrated, we use the org returned by LDX-Sync unless the user has set one.
 	if folderConfig.OrgMigratedFromGlobalConfig {
-		orgInheritingFromBlankGlobal := folderConfig.PreferredOrg == "" && c.Organization() == ""
 		orgHasJustChanged := storedConfig == nil || folderConfig.PreferredOrg != storedConfig.PreferredOrg
 
-		if orgInheritingFromBlankGlobal || !folderConfig.OrgSetByUser {
-			// The user is either:
-			// 1. blanking their folder config org while they don't have a global org set
-			// 2. blanking their global org while they don't have a folder config org set
-			// 3. explicitly opting in to LDX-Sync.
+		if !folderConfig.OrgSetByUser {
+			// Folder config org is not set by the user, so we should use the org returned by LDX-Sync.
 			setOrgFromLdxSync(c, folderConfig, notifier)
-			folderConfig.OrgSetByUser = false
-		} else if orgHasJustChanged || folderConfig.OrgSetByUser {
+		} else if orgHasJustChanged {
 			// Store the user-provided org.
 			// We have already checked that the user wishes to provide an org and the org is valid or can inherit a valid org.
 			folderConfig.OrgSetByUser = true
