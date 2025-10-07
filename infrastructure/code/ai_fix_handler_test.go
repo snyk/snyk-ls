@@ -34,7 +34,7 @@ func Test_getExplain_Endpoint(t *testing.T) {
 		random, _ := uuid.NewRandom()
 		orgUUID := random.String()
 		folder := types.FilePath(t.TempDir())
-		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{FolderPath: folder, PreferredOrg: orgUUID}, c.Logger())
+		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{FolderPath: folder, PreferredOrg: orgUUID, OrgSetByUser: true}, c.Logger())
 		actualEndpoint := getExplainEndpoint(c, folder).String()
 		expectedEndpoint := "https://api.snyk.io/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"
 		assert.Equal(t, expectedEndpoint, actualEndpoint)
@@ -47,7 +47,7 @@ func Test_GetExplain_Endpoint_With_Updated_API_Endpoints(t *testing.T) {
 		random, _ := uuid.NewRandom()
 		orgUUID := random.String()
 		folder := types.FilePath(t.TempDir())
-		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{FolderPath: folder, PreferredOrg: orgUUID}, c.Logger())
+		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{FolderPath: folder, PreferredOrg: orgUUID, OrgSetByUser: true}, c.Logger())
 		c.UpdateApiEndpoints("https://test.snyk.io")
 		actualEndpoint := getExplainEndpoint(c, folder).String()
 		expectedEndpoint := "https://test.snyk.io/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"

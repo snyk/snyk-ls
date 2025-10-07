@@ -82,9 +82,18 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
 	// Use folder-level organization if we are executing from within a project folder.
+	// If no folder-specific org is configured, fall back to global organization.
 	if workingDir != "" {
 		folderOrg := c.c.FolderOrganization(workingDir)
-		legacyCLIConfig.Set(configuration.ORGANIZATION, folderOrg)
+		if folderOrg != "" {
+			legacyCLIConfig.Set(configuration.ORGANIZATION, folderOrg)
+		} else {
+			// Fall back to global organization if no folder-specific org is configured
+			legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
+		}
+	} else {
+		// If no working directory, use global organization
+		legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
 	}
 
 	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))

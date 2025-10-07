@@ -459,6 +459,13 @@ func (c *Config) SnykCodeApi() string {
 	return c.snykCodeApiUrl
 }
 
+func (c *Config) Endpoint() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.snykApiUrl
+}
+
 func (c *Config) SnykUI() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -1306,6 +1313,10 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 			return fc.PreferredOrg
 		}
 	} else {
+		// If AutoDeterminedOrg is empty, fall back to global organization
+		if fc.AutoDeterminedOrg == "" {
+			return c.Organization()
+		}
 		return fc.AutoDeterminedOrg
 	}
 }
