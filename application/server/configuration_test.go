@@ -962,7 +962,7 @@ func Test_migrateFolderConfigOrg_WithUserProvidedOrg_SkipsLdxSync(t *testing.T) 
 	}
 
 	notifier := notification.NewMockNotifier()
-	migrateFolderConfigOrg(c, folderConfig, notifier)
+	migrateFolderConfigOrg(c, notifier, folderConfig)
 
 	// Should store the user-provided org and skip LDX-Sync
 	assert.Equal(t, "user-org", folderConfig.PreferredOrg, "Should store user-provided org")
@@ -982,7 +982,7 @@ func Test_migrateFolderConfigOrg_WithOrgSetByUserFlag_SkipsLdxSync(t *testing.T)
 	}
 
 	notifier := notification.NewMockNotifier()
-	migrateFolderConfigOrg(c, folderConfig, notifier)
+	migrateFolderConfigOrg(c, notifier, folderConfig)
 
 	// Should skip LDX-Sync when OrgSetByUser is true
 	assert.Equal(t, "", folderConfig.PreferredOrg, "Should store empty org")
@@ -1002,7 +1002,7 @@ func Test_migrateFolderConfigOrg_NoOrg_LdxReturnsDifferent_MarksNotUserSet(t *te
 	}
 
 	notifier := notification.NewMockNotifier()
-	migrateFolderConfigOrg(c, folderConfig, notifier)
+	migrateFolderConfigOrg(c, notifier, folderConfig)
 
 	// Should call LDX-Sync and mark as not user-set if different from global
 	// (We can't verify the exact org without mocking LDX-Sync, but we can verify the migration flag)
