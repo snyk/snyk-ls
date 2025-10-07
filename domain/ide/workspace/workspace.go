@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	analyticsutil "github.com/snyk/snyk-ls/internal/analytics"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -235,8 +236,11 @@ func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted 
 		// we need to append and set the trusted path to the config before the scan, as the scan is checking for trust
 		trustedFolderPaths = append(trustedFolderPaths, f.Path())
 		currentConfig.SetTrustedFolders(trustedFolderPaths)
+		// Send analytics for each trusted folder addition
+		analyticsutil.SendConfigChangedAnalytics(currentConfig, "trustedFolderAdded", "", string(f.Path()), "ide")
 		go f.ScanFolder(ctx)
 	}
+
 	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 }
 

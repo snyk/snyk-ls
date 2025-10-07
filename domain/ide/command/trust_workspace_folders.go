@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/snyk/snyk-ls/application/config"
+	analyticsutil "github.com/snyk/snyk-ls/internal/analytics"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -39,14 +40,20 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error)
 		return nil, nil
 	}
 
-	trustedFolderPaths := config.CurrentConfig().TrustedFolders()
+	currentConfig := config.CurrentConfig()
+	trustedFolderPaths := currentConfig.TrustedFolders()
 	_, untrusted := cmd.c.Workspace().GetFolderTrust()
+
 	for _, folder := range untrusted {
 		cmd.c.Logger().Debug().Str("method", "trustWorkspaceFoldersCommand").Msgf("adding trusted folder %s", folder.Path())
 		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
+
+		// Send analytics for each trusted folder addition
+		analyticsutil.SendConfigChangedAnalytics(currentConfig, "trustedFolderAdded", "", string(folder.Path()), "ide")
 	}
 
-	config.CurrentConfig().SetTrustedFolders(trustedFolderPaths)
+	currentConfig.SetTrustedFolders(trustedFolderPaths)
+
 	cmd.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 	return nil, nil
 }
