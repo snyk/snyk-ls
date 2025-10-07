@@ -26,13 +26,14 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -178,7 +179,7 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		orgSettingsChanged := !folderConfigsOrgSettingsEqual(folderConfig, storedConfig)
 
 		if needsMigration || orgSettingsChanged {
-			command.UpdateFolderConfigOrg(c, storedConfig, &folderConfig, notifier)
+			updateFolderConfigOrg(c, storedConfig, &folderConfig, notifier)
 		}
 
 		folderConfigs = append(folderConfigs, folderConfig)
@@ -195,6 +196,68 @@ func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig
 	return folderConfig.PreferredOrg == storedConfig.PreferredOrg &&
 		folderConfig.OrgSetByUser == storedConfig.OrgSetByUser &&
 		folderConfig.OrgMigratedFromGlobalConfig == storedConfig.OrgMigratedFromGlobalConfig
+}
+
+func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier noti.Notifier) {
+	// For configs that have been migrated, we use the org returned by LDX-Sync unless the user has set one.
+	if folderConfig.OrgMigratedFromGlobalConfig {
+		orgHasJustChanged := storedConfig == nil || folderConfig.PreferredOrg != storedConfig.PreferredOrg
+
+		if !folderConfig.OrgSetByUser {
+			// Folder config org is not set by the user, so we should use the org returned by LDX-Sync.
+			setOrgFromLdxSync(c, folderConfig, notifier)
+		} else if orgHasJustChanged {
+			// Store the user-provided org.
+			// We have already checked that the user wishes to provide an org and the org is valid or can inherit a valid org.
+			folderConfig.OrgSetByUser = true
+		}
+	} else {
+		migrateFolderConfigOrg(c, folderConfig, notifier)
+	}
+}
+
+func migrateFolderConfigOrg(c *config.Config, folderConfig *types.FolderConfig, notifier noti.Notifier) {
+	// Remember if the user explicitly set the org
+	userExplicitlySetOrg := folderConfig.OrgSetByUser
+
+	// If we are migrating a folderConfig provided by the user, we simply save it and skip LDX-Sync lookup,
+	// unless they are trying to inherit a blank global org.
+	if folderConfig.PreferredOrg != "" || (folderConfig.OrgSetByUser && c.Organization() != "") {
+		folderConfig.OrgMigratedFromGlobalConfig = true
+		return
+	}
+
+	// If the folder config does not have an org, use the global org and call LDX-Sync to resolve it.
+	folderConfig.PreferredOrg = c.Organization()
+	newOrgIsDefault := setOrgFromLdxSync(c, folderConfig, notifier)
+
+	// Determine OrgSetByUser based on LDX-Sync result
+	if folderConfig.PreferredOrg != c.Organization() || newOrgIsDefault {
+		// LDX-Sync returned a different org or the default org
+		folderConfig.OrgSetByUser = false
+	} else {
+		// Folder org matches global org after LDX-Sync - clear it and set user flag
+		folderConfig.PreferredOrg = ""
+		folderConfig.OrgSetByUser = userExplicitlySetOrg || c.Organization() != ""
+	}
+
+	folderConfig.OrgMigratedFromGlobalConfig = true
+}
+
+func setOrgFromLdxSync(c *config.Config, storedConfig *types.FolderConfig, notifier noti.Notifier) (newOrgIsDefault bool) {
+	logger := c.Logger().With().Str("method", "updateAndSendFolderConfigs").Logger()
+
+	path := storedConfig.FolderPath
+
+	newOrg, err := ldx_sync_config.ResolveOrganization(c.Engine().GetConfiguration(), c.Engine(), &logger, string(path), storedConfig.PreferredOrg)
+	if err != nil {
+		logger.Err(err).Msg("unable to resolve organization")
+		notifier.SendShowMessage(sglsp.MTError, err.Error())
+	} else {
+		storedConfig.PreferredOrg = newOrg.Id
+	}
+	newOrgIsDefaultPtr := newOrg.IsDefault
+	return newOrgIsDefaultPtr != nil && *newOrgIsDefaultPtr
 }
 
 func updateAuthenticationMethod(c *config.Config, settings types.Settings) {

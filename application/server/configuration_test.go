@@ -36,6 +36,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -769,4 +770,260 @@ func Test_InitializeSettings(t *testing.T) {
 		assert.True(t, keyFoundInEnv(upperCasePathKey))
 		assert.False(t, keyFoundInEnv(caseSensitivePathKey))
 	})
+}
+
+// Test scenarios for updateFolderConfigOrg - already migrated configs
+func Test_updateFolderConfigOrg_MigratedConfig_Initialization_NonUserSet_CallsLdxSync(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetOrganization("global-org")
+
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "ldx-resolved-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+	}
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "ldx-resolved-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+	}
+
+	notifier := notification.NewMockNotifier()
+	updateFolderConfigOrg(c, storedConfig, folderConfig, notifier)
+
+	// Should have called LDX-Sync (we can't easily verify this without mocking, but we can check the behavior)
+	// The org should remain as resolved by LDX-Sync
+	assert.False(t, folderConfig.OrgSetByUser, "Should remain not user-set")
+}
+
+func Test_updateFolderConfigOrg_MigratedConfig_Initialization_UserSetWithBlankOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetOrganization("") // Blank global org
+
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "", // Blank folder org
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+
+	notifier := notification.NewMockNotifier()
+	updateFolderConfigOrg(c, storedConfig, folderConfig, notifier)
+
+	// User explicitly set the org (even if blank), so OrgSetByUser should remain true
+	assert.True(t, folderConfig.OrgSetByUser, "Should remain user-set when user explicitly set blank org")
+}
+
+func Test_updateFolderConfigOrg_MigratedConfig_Initialization_UserSet_KeepsExisting(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetOrganization("global-org")
+
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "user-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "user-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+
+	notifier := notification.NewMockNotifier()
+	updateFolderConfigOrg(c, storedConfig, folderConfig, notifier)
+
+	// Should keep the user-set org
+	assert.Equal(t, "user-org", folderConfig.PreferredOrg, "Should keep user-set org")
+	assert.True(t, folderConfig.OrgSetByUser, "Should remain user-set")
+}
+
+func Test_updateFolderConfigOrg_MigratedConfig_Update_OrgChanged_StoresNewOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetOrganization("global-org")
+
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "old-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+	}
+
+	folderConfig := &types.FolderConfig{
+		PreferredOrg:                "new-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+	}
+
+	notifier := notification.NewMockNotifier()
+	updateFolderConfigOrg(c, storedConfig, folderConfig, notifier)
+
+	// The actual org value depends on LDX-Sync resolution
+	assert.False(t, folderConfig.OrgSetByUser, "Should not be user-set when OrgSetByUser flag is false")
+}
+
+func Test_updateFolderConfigOrg_MigratedConfig_Update_OrgSetByUser_StoresNewOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetOrganization("global-org")
+
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "old-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+	}
+
+	folderConfig := &types.FolderConfig{
+		PreferredOrg:                "user-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+
+	notifier := notification.NewMockNotifier()
+	updateFolderConfigOrg(c, storedConfig, folderConfig, notifier)
+
+	// Should store the user-provided org
+	assert.Equal(t, "user-org", folderConfig.PreferredOrg, "Should store user org")
+	assert.True(t, folderConfig.OrgSetByUser, "Should mark as user-set")
+}
+
+func Test_updateFolderConfigOrg_MigratedConfig_Update_InheritingFromBlankGlobal_CallsLdxSync(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetOrganization("") // Blank global org
+
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "old-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+
+	folderConfig := &types.FolderConfig{
+		PreferredOrg:                "", // Blank folder org
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+	}
+
+	notifier := notification.NewMockNotifier()
+	updateFolderConfigOrg(c, storedConfig, folderConfig, notifier)
+
+	// Should call LDX-Sync because inheriting from blank global
+	// The org will be resolved by LDX-Sync (we can't verify the exact value without mocking)
+	// But we can verify the OrgSetByUser flag
+	assert.False(t, folderConfig.OrgSetByUser, "Should not be user-set when inheriting from blank global")
+}
+
+func Test_updateFolderConfigOrg_MigratedConfig_Update_NoChangeNotUserSet_CallsLdxSync(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetOrganization("global-org")
+
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "ldx-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+	}
+
+	folderConfig := &types.FolderConfig{
+		PreferredOrg:                "ldx-org", // Same org
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+	}
+
+	notifier := notification.NewMockNotifier()
+	updateFolderConfigOrg(c, storedConfig, folderConfig, notifier)
+
+	// Should call LDX-Sync because not user-set
+	assert.False(t, folderConfig.OrgSetByUser, "Should remain not user-set")
+}
+
+// Test scenarios for migrateFolderConfigOrg - new configs
+func Test_migrateFolderConfigOrg_WithUserProvidedOrg_SkipsLdxSync(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetOrganization("global-org")
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "user-org",
+		OrgMigratedFromGlobalConfig: false,
+		OrgSetByUser:                true, // Set to true to indicate user provided this org
+	}
+
+	notifier := notification.NewMockNotifier()
+	migrateFolderConfigOrg(c, folderConfig, notifier)
+
+	// Should store the user-provided org and skip LDX-Sync
+	assert.Equal(t, "user-org", folderConfig.PreferredOrg, "Should store user-provided org")
+	assert.True(t, folderConfig.OrgSetByUser, "Should mark as user-set")
+	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should mark as migrated")
+}
+
+func Test_migrateFolderConfigOrg_WithOrgSetByUserFlag_SkipsLdxSync(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetOrganization("global-org")
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "",
+		OrgMigratedFromGlobalConfig: false,
+		OrgSetByUser:                true,
+	}
+
+	notifier := notification.NewMockNotifier()
+	migrateFolderConfigOrg(c, folderConfig, notifier)
+
+	// Should skip LDX-Sync when OrgSetByUser is true
+	assert.Equal(t, "", folderConfig.PreferredOrg, "Should store empty org")
+	assert.True(t, folderConfig.OrgSetByUser, "Should mark as user-set")
+	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should mark as migrated")
+}
+
+func Test_migrateFolderConfigOrg_NoOrg_LdxReturnsDifferent_MarksNotUserSet(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetOrganization("global-org")
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "",
+		OrgMigratedFromGlobalConfig: false,
+		OrgSetByUser:                false,
+	}
+
+	notifier := notification.NewMockNotifier()
+	migrateFolderConfigOrg(c, folderConfig, notifier)
+
+	// Should call LDX-Sync and mark as not user-set if different from global
+	// (We can't verify the exact org without mocking LDX-Sync, but we can verify the migration flag)
+	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should mark as migrated")
+}
+
+func Test_migrateFolderConfigOrg_NoOrg_InitialMigration(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetOrganization("global-org")
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  "/test/path",
+		PreferredOrg:                "",
+		OrgMigratedFromGlobalConfig: false,
+		OrgSetByUser:                false,
+	}
+
+	notifier := notification.NewMockNotifier()
+	migrateFolderConfigOrg(c, folderConfig, notifier)
+
+	// Should use global org initially and call LDX-Sync
+	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should mark as migrated")
+	// The final org and OrgSetByUser depend on LDX-Sync response
 }
