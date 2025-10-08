@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -140,67 +141,55 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	assert.Empty(t, messages)
 }
 
-// Test SetAutoBestOrgFromLdxSync with default org
-func Test_SetAutoBestOrgFromLdxSync_DefaultOrg(t *testing.T) {
+// setupOrgResolverTest is a helper function to reduce duplication in org resolver tests
+func setupOrgResolverTest(t *testing.T, orgID, orgName string, isDefault bool) (*config.Config, *types.FolderConfig, ldx_sync_config.Organization) {
+	t.Helper()
+
 	c := testutil.UnitTest(t)
 	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
-	// Setup mock org resolver to return default org
+	expectedOrg := ldx_sync_config.Organization{
+		Id:        orgID,
+		Name:      orgName,
+		IsDefault: &isDefault,
+	}
+
 	mockResolver := &MockOrgResolver{
 		ResolveFunc: func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error) {
-			isDefault := true
-			return ldx_sync_config.Organization{
-				Id:        "default-org-id",
-				Name:      "Default Org",
-				IsDefault: &isDefault,
-			}, nil
+			return expectedOrg, nil
 		},
 	}
 	SetOrgResolver(mockResolver)
-	defer ResetOrgResolver()
+	t.Cleanup(ResetOrgResolver)
 
 	folderConfig := &types.FolderConfig{
 		FolderPath: types.FilePath(t.TempDir()),
 	}
 
+	return c, folderConfig, expectedOrg
+}
+
+// Test SetAutoBestOrgFromLdxSync with default org
+func Test_SetAutoBestOrgFromLdxSync_DefaultOrg(t *testing.T) {
+	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "default-org-id", "Default Org", true)
+
 	org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
 
 	require.NoError(t, err)
-	assert.Equal(t, "default-org-id", org.Id)
+	assert.Equal(t, expectedOrg.Id, org.Id)
 	assert.True(t, *org.IsDefault)
 }
 
 // Test SetAutoBestOrgFromLdxSync with non-default org
 func Test_SetAutoBestOrgFromLdxSync_NonDefaultOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
-
-	// Setup mock org resolver to return non-default org
-	mockResolver := &MockOrgResolver{
-		ResolveFunc: func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error) {
-			isDefault := false
-			return ldx_sync_config.Organization{
-				Id:        "specific-org-id",
-				Name:      "Specific Org",
-				IsDefault: &isDefault,
-			}, nil
-		},
-	}
-	SetOrgResolver(mockResolver)
-	defer ResetOrgResolver()
-
-	folderConfig := &types.FolderConfig{
-		FolderPath: types.FilePath(t.TempDir()),
-	}
+	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "specific-org-id", "Specific Org", false)
 
 	org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
 
 	require.NoError(t, err)
-	assert.Equal(t, "specific-org-id", org.Id)
+	assert.Equal(t, expectedOrg.Id, org.Id)
 	assert.False(t, *org.IsDefault)
 }
 
@@ -357,7 +346,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	c.SetWorkspace(w)
 
 	logger := c.Logger()
-	
+
 	// Setup different org configs for each folder
 	storedConfig1 := &types.FolderConfig{
 		FolderPath:                  folderPath1,

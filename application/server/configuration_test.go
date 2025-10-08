@@ -1042,7 +1042,7 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T) {
 	}
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
 	assert.NoError(t, err)
-	
+
 	setup.c.SetOrganization("global-org-id")
 
 	// Call updateFolderConfig with empty org (should stay in auto mode)
@@ -1084,7 +1084,7 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
 	}
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
 	assert.NoError(t, err)
-	
+
 	setup.c.SetOrganization("global-org-id")
 
 	// Call updateFolderConfig with DIFFERENT PreferredOrg - this will trigger updateFolderConfigOrg

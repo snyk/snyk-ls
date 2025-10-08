@@ -202,6 +202,29 @@ func Test_SmokePreScanCommand(t *testing.T) {
 	})
 }
 
+// assertFolderConfigNotification is a helper to check folder config notifications
+func assertFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validator func(types.FolderConfig) bool, message string) {
+	t.Helper()
+	assert.Eventuallyf(t, func() bool {
+		notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+		if len(notifications) == 0 {
+			return false
+		}
+
+		for _, n := range notifications {
+			var param types.FolderConfigsParam
+			require.NoError(t, n.UnmarshalParams(&param))
+			if len(param.FolderConfigs) == 0 {
+				continue
+			}
+			if validator(param.FolderConfigs[0]) {
+				return true
+			}
+		}
+		return false
+	}, 10*time.Second, time.Millisecond, message)
+}
+
 func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - takes given non-default org, sends folder config after init", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
@@ -218,23 +241,9 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams)
 
-		assert.Eventuallyf(t, func() bool {
-			notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
-			if len(notifications) == 0 {
-				return false
-			}
-
-			for _, n := range notifications {
-				var param types.FolderConfigsParam
-				require.NoError(t, n.UnmarshalParams(&param))
-				if len(param.FolderConfigs) == 0 {
-					continue
-				}
-				return param.FolderConfigs[0].FolderPath == repo && param.FolderConfigs[0].PreferredOrg == preferredOrg
-			}
-
-			return false
-		}, 10*time.Second, time.Millisecond, "didn't get the right folder config")
+		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
+			return fc.FolderPath == repo && fc.PreferredOrg == preferredOrg
+		}, "didn't get the right folder config")
 	})
 	t.Run("authenticated - determines org when nothing is given", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
@@ -247,23 +256,9 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams)
 
-		assert.Eventuallyf(t, func() bool {
-			notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
-			if len(notifications) == 0 {
-				return false
-			}
-
-			for _, n := range notifications {
-				var param types.FolderConfigsParam
-				require.NoError(t, n.UnmarshalParams(&param))
-				if len(param.FolderConfigs) == 0 {
-					continue
-				}
-				return param.FolderConfigs[0].FolderPath == repo && param.FolderConfigs[0].AutoDeterminedOrg != "0"
-			}
-
-			return false
-		}, 10*time.Second, time.Millisecond, "didn't get the default folder config")
+		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
+			return fc.FolderPath == repo && fc.AutoDeterminedOrg != "0"
+		}, "didn't get the default folder config")
 	})
 	t.Run("authenticated - determines org when global default org is given (migration)", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
@@ -277,26 +272,12 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams)
 
-		assert.Eventuallyf(t, func() bool {
-			notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
-			if len(notifications) == 0 {
-				return false
-			}
-
-			for _, n := range notifications {
-				var param types.FolderConfigsParam
-				require.NoError(t, n.UnmarshalParams(&param))
-				if len(param.FolderConfigs) == 0 {
-					continue
-				}
-				return param.FolderConfigs[0].FolderPath == repo &&
-					param.FolderConfigs[0].AutoDeterminedOrg != "" &&
-					param.FolderConfigs[0].OrgSetByUser == false &&
-					param.FolderConfigs[0].OrgMigratedFromGlobalConfig
-			}
-
-			return false
-		}, 10*time.Second, time.Millisecond, "didn't get an auto-selected config")
+		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
+			return fc.FolderPath == repo &&
+				fc.AutoDeterminedOrg != "" &&
+				fc.OrgSetByUser == false &&
+				fc.OrgMigratedFromGlobalConfig
+		}, "didn't get an auto-selected config")
 	})
 	t.Run("authenticated - doesn't determine org when global non-default org is given (migration)", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
@@ -311,32 +292,18 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams)
 
-		assert.Eventuallyf(t, func() bool {
-			notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
-			if len(notifications) == 0 {
-				return false
-			}
-
-			for _, n := range notifications {
-				var param types.FolderConfigsParam
-				require.NoError(t, n.UnmarshalParams(&param))
-				if len(param.FolderConfigs) == 0 {
-					continue
-				}
-				f := param.FolderConfigs[0]
-				require.Equal(t, repo, f.FolderPath)
-				require.Equal(t, expectedOrg, f.PreferredOrg)
-				require.Empty(t, f.AutoDeterminedOrg)
-				require.True(t, f.OrgMigratedFromGlobalConfig)
-				return true
-			}
-
-			return false
-		}, 10*time.Second, time.Millisecond, "didn't respect given global org")
+		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
+			require.Equal(t, repo, fc.FolderPath)
+			require.Equal(t, expectedOrg, fc.PreferredOrg)
+			require.Empty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+			return true
+		}, "didn't respect given global org")
 	})
 }
 
 func setupSmokeFolderConfig(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
+	t.Helper()
 	c := testutil.SmokeTest(t, false)
 	loc, jsonRpcRecorder := setupServer(t, c)
 	c.EnableSnykCodeSecurity(false)
