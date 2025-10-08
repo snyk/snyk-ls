@@ -59,7 +59,12 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 	normalizedPath := util.PathKey(path)
 
 	if sc.FolderConfigs[normalizedPath] == nil {
-		folderConfig := &types.FolderConfig{}
+		folderConfig := &types.FolderConfig{
+			// New folder configs should never go through org migration; we treat them as migrated.
+			OrgMigratedFromGlobalConfig: true,
+			// New folder configs should have their org determined via LDX-Sync.
+			OrgSetByUser: false,
+		}
 		sc.FolderConfigs[normalizedPath] = folderConfig
 	}
 

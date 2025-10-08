@@ -37,7 +37,6 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
-	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -248,7 +247,7 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		orgSettingsChanged := !folderConfigsOrgSettingsEqual(folderConfig, storedConfig)
 
 		if needsMigration || orgSettingsChanged {
-			updateFolderConfigOrg(c, notifier, storedConfig, &folderConfig)
+			updateFolderConfigOrg(c, storedConfig, &folderConfig)
 			folderConfigsMayHaveChanged = true
 		}
 
@@ -319,12 +318,28 @@ func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSou
 func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig *types.FolderConfig) bool {
 	return folderConfig.PreferredOrg == storedConfig.PreferredOrg &&
 		folderConfig.OrgSetByUser == storedConfig.OrgSetByUser &&
-		folderConfig.OrgMigratedFromGlobalConfig == storedConfig.OrgMigratedFromGlobalConfig
+		folderConfig.OrgMigratedFromGlobalConfig == storedConfig.OrgMigratedFromGlobalConfig &&
+		folderConfig.AutoDeterminedOrg == storedConfig.AutoDeterminedOrg
 }
 
-func updateFolderConfigOrg(c *config.Config, notifier noti.Notifier, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
-	// As a safety net, ensure the folder config has the AutoDeterminedOrg, we never want to save without it.
-	ensureFolderConfigHasAutoDeterminedOrg(c, storedConfig, folderConfig)
+func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
+	// As a safety net, ensure the folder config has the AutoDeterminedOrg; we never want to save without it.
+	if folderConfig.AutoDeterminedOrg == "" {
+		// Folder configs should always save the AutoDeterminedOrg, regardless of if the user needs it.
+		if storedConfig.AutoDeterminedOrg != "" {
+			folderConfig.AutoDeterminedOrg = storedConfig.AutoDeterminedOrg
+		} else {
+			// Somehow we missed the workflows that set this, so just fetch it now.
+			org, _ := command.SetAutoBestOrgFromLdxSync(c, folderConfig, c.Organization())
+			folderConfig.AutoDeterminedOrg = org.Id
+		}
+	}
+
+	// If we have just received settings where folder config claims org is not migrated, but we know we have previously
+	// migrated it, correct that here.
+	if !folderConfig.OrgMigratedFromGlobalConfig && storedConfig.OrgMigratedFromGlobalConfig {
+		folderConfig.OrgMigratedFromGlobalConfig = true
+	}
 
 	// For configs that have been migrated, we use the org returned by LDX-Sync unless the user has set one.
 	if folderConfig.OrgMigratedFromGlobalConfig {
@@ -372,18 +387,6 @@ func migrateFolderConfigOrg(c *config.Config, folderConfig *types.FolderConfig) 
 		folderConfig.AutoDeterminedOrg = org.Id
 	}
 	folderConfig.OrgMigratedFromGlobalConfig = true
-}
-
-func ensureFolderConfigHasAutoDeterminedOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
-	if folderConfig.AutoDeterminedOrg == "" {
-		// Folder configs should always save the AutoDeterminedOrg, regardless of if the user needs it.
-		if storedConfig.AutoDeterminedOrg != "" {
-			folderConfig.AutoDeterminedOrg = storedConfig.AutoDeterminedOrg
-		} else {
-			// Somehow we missed the workflows that set this, so just fetch it now.
-			command.SetAutoBestOrgFromLdxSync(c, folderConfig, c.Organization())
-		}
-	}
 }
 
 func updateAuthenticationMethod(c *config.Config, settings types.Settings, triggerSource string) {

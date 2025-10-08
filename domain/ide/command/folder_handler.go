@@ -56,11 +56,10 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 		org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
 		if err != nil {
 			logger.Err(err).Msg("unable to resolve organization, continuing...")
-			folderConfigs = append(folderConfigs, *folderConfig) // add first, then call service
-			continue
+		} else {
+			folderConfig.AutoDeterminedOrg = org.Id
 		}
 
-		folderConfig.AutoDeterminedOrg = org.Id
 		folderConfigs = append(folderConfigs, *folderConfig) // add first, then call service
 	}
 
@@ -74,7 +73,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 func SetAutoBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig, givenOrg string) (ldx_sync_config.Organization, error) {
 	logger := c.Logger().With().Str("method", "SetAutoBestOrgFromLdxSync").Logger()
 	path := folderConfig.FolderPath
-	return ldx_sync_config.ResolveOrganization(c.Engine().GetConfiguration(), c.Engine(), &logger, string(path), givenOrg)
+	return orgResolver.ResolveOrganization(c.Engine().GetConfiguration(), c.Engine(), &logger, string(path), givenOrg)
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
