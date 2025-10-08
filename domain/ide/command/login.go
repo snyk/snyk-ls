@@ -51,7 +51,7 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 
 		// Send folder configs after successful login,
 		// to re-fetch auto determined org from LDX-Sync.
-		go sendFolderConfigs(cmd.c, cmd.notifier)
+		go sendFolderConfigs(cmd.c, cmd.notifier, true)
 
 		return token, nil
 	}

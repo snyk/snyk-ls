@@ -36,15 +36,15 @@ import (
 const DoTrust = "Trust folders and continue"
 const DontTrust = "Don't trust folders"
 
-func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator) {
+func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, isAuthenticated bool) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
 	// send folder configs (they are queued until initialization is done)
-	go sendFolderConfigs(c, notifier)
+	go sendFolderConfigs(c, notifier, isAuthenticated)
 	HandleUntrustedFolders(ctx, c, srv)
 }
 
-func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
+func sendFolderConfigs(c *config.Config, notifier noti.Notifier, isAuthenticated bool) {
 	logger := c.Logger().With().Str("method", "updateAndSendFolderConfigs").Logger()
 	configuration := c.Engine().GetConfiguration()
 
@@ -55,7 +55,9 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			logger.Err(err2).Msg("unable to load stored config")
 			return
 		}
-		SetAutoBestOrgFromLdxSync(c, notifier, storedConfig, "")
+		if isAuthenticated {
+			SetAutoBestOrgFromLdxSync(c, notifier, storedConfig, "")
+		}
 		folderConfigs = append(folderConfigs, *storedConfig)
 	}
 

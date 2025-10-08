@@ -36,7 +36,6 @@ import (
 
 // Test scenarios for updateAndSendFolderConfigs (notification sending only)
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
-	t.Skip("Skipping since it makes real network calls at the moment, since we can't mock LDX-Sync easily")
 	c := testutil.UnitTest(t)
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
@@ -67,7 +66,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
-	sendFolderConfigs(c, notifier)
+	sendFolderConfigs(c, notifier, false)
 
 	// Verify notification was sent
 	messages := notifier.SentMessages()
@@ -97,7 +96,7 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
 	c.SetWorkspace(w)
 
-	sendFolderConfigs(c, notifier)
+	sendFolderConfigs(c, notifier, false)
 
 	// Verify no notification was sent
 	messages := notifier.SentMessages()

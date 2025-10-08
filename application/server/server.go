@@ -189,7 +189,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Serv
 		logger.Info().Msg("RECEIVING")
 		defer logger.Info().Msg("SENDING")
 		changedFolders := c.Workspace().ChangeWorkspaceFolders(params)
-		command.HandleFolders(c, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
+		command.HandleFolders(c, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.AuthenticationService().IsAuthenticated())
 		if c.IsAutoScanEnabled() {
 			for _, f := range changedFolders {
 				go f.ScanFolder(ctx)
@@ -433,7 +433,7 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
 		}
-		command.HandleFolders(c, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
+		command.HandleFolders(c, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.AuthenticationService().IsAuthenticated())
 
 		// Check once for expired cache in same thread before triggering a scan.
 		// Start a periodic go routine to check for the expired cache afterwards
