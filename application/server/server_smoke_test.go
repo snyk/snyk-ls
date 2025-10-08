@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/creachadair/jrpc2"
@@ -202,7 +204,6 @@ func Test_SmokePreScanCommand(t *testing.T) {
 
 func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - takes given non-default org, sends folder config after init", func(t *testing.T) {
-		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
 		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
 		preferredOrg := "non-default"
 
@@ -234,6 +235,104 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 			return false
 		}, 10*time.Second, time.Millisecond, "didn't get the right folder config")
+	})
+	t.Run("authenticated - determines org when nothing is given", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
+		folderConfig := types.FolderConfig{
+			FolderPath: repo,
+		}
+
+		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
+		initParams.InitializationOptions.ScanningMode = "manual"
+
+		ensureInitialized(t, c, loc, initParams)
+
+		assert.Eventuallyf(t, func() bool {
+			notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+			if len(notifications) == 0 {
+				return false
+			}
+
+			for _, n := range notifications {
+				var param types.FolderConfigsParam
+				require.NoError(t, n.UnmarshalParams(&param))
+				if len(param.FolderConfigs) == 0 {
+					continue
+				}
+				return param.FolderConfigs[0].FolderPath == repo && param.FolderConfigs[0].AutoDeterminedOrg != "0"
+			}
+
+			return false
+		}, 10*time.Second, time.Millisecond, "didn't get the default folder config")
+	})
+	t.Run("authenticated - determines org when global default org is given (migration)", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
+		folderConfig := types.FolderConfig{
+			FolderPath: repo,
+		}
+
+		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
+		initParams.InitializationOptions.ScanningMode = "manual"
+		initParams.InitializationOptions.Organization = "devex_ide"
+
+		ensureInitialized(t, c, loc, initParams)
+
+		assert.Eventuallyf(t, func() bool {
+			notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+			if len(notifications) == 0 {
+				return false
+			}
+
+			for _, n := range notifications {
+				var param types.FolderConfigsParam
+				require.NoError(t, n.UnmarshalParams(&param))
+				if len(param.FolderConfigs) == 0 {
+					continue
+				}
+				return param.FolderConfigs[0].FolderPath == repo &&
+					param.FolderConfigs[0].AutoDeterminedOrg != "" &&
+					param.FolderConfigs[0].OrgSetByUser == false &&
+					param.FolderConfigs[0].OrgMigratedFromGlobalConfig
+			}
+
+			return false
+		}, 10*time.Second, time.Millisecond, "didn't get an auto-selected config")
+	})
+	t.Run("authenticated - doesn't determine org when global non-default org is given (migration)", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
+		folderConfig := types.FolderConfig{
+			FolderPath: repo,
+		}
+
+		expectedOrg := uuid.NewString()
+		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
+		initParams.InitializationOptions.ScanningMode = "manual"
+		initParams.InitializationOptions.Organization = expectedOrg
+
+		ensureInitialized(t, c, loc, initParams)
+
+		assert.Eventuallyf(t, func() bool {
+			notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+			if len(notifications) == 0 {
+				return false
+			}
+
+			for _, n := range notifications {
+				var param types.FolderConfigsParam
+				require.NoError(t, n.UnmarshalParams(&param))
+				if len(param.FolderConfigs) == 0 {
+					continue
+				}
+				f := param.FolderConfigs[0]
+				require.Equal(t, repo, f.FolderPath)
+				require.Equal(t, expectedOrg, f.PreferredOrg)
+				require.Empty(t, f.AutoDeterminedOrg)
+				require.True(t, f.OrgMigratedFromGlobalConfig)
+				return true
+			}
+
+			return false
+		}, 10*time.Second, time.Millisecond, "didn't respect given global org")
 	})
 }
 

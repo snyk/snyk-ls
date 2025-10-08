@@ -21,8 +21,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	sglsp "github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -45,18 +43,25 @@ func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, noti
 }
 
 func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
-	logger := c.Logger().With().Str("method", "updateAndSendFolderConfigs").Logger()
+	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
 	configuration := c.Engine().GetConfiguration()
 
 	var folderConfigs []types.FolderConfig
 	for _, folder := range c.Workspace().Folders() {
-		storedConfig, err2 := storedconfig.GetOrCreateFolderConfig(configuration, folder.Path(), &logger)
+		folderConfig, err2 := storedconfig.GetOrCreateFolderConfig(configuration, folder.Path(), &logger)
 		if err2 != nil {
 			logger.Err(err2).Msg("unable to load stored config")
 			return
 		}
-		SetAutoBestOrgFromLdxSync(c, notifier, storedConfig, "")
-		folderConfigs = append(folderConfigs, *storedConfig)
+		org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
+		if err != nil {
+			logger.Err(err).Msg("unable to resolve organization, continuing...")
+			folderConfigs = append(folderConfigs, *folderConfig) // add first, then call service
+			continue
+		}
+
+		folderConfig.AutoDeterminedOrg = org.Id
+		folderConfigs = append(folderConfigs, *folderConfig) // add first, then call service
 	}
 
 	if folderConfigs == nil {
@@ -66,20 +71,10 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 	notifier.Send(folderConfigsParam)
 }
 
-func SetAutoBestOrgFromLdxSync(c *config.Config, notifier noti.Notifier, folderConfig *types.FolderConfig, globalOrgForMigrating string) (newOrgIsDefault bool) {
-	logger := c.Logger().With().Str("method", "updateAndSendFolderConfigs").Logger()
-
+func SetAutoBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig, givenOrg string) (ldx_sync_config.Organization, error) {
+	logger := c.Logger().With().Str("method", "SetAutoBestOrgFromLdxSync").Logger()
 	path := folderConfig.FolderPath
-
-	newOrg, err := ldx_sync_config.ResolveOrganization(c.Engine().GetConfiguration(), c.Engine(), &logger, string(path), globalOrgForMigrating)
-	if err != nil {
-		logger.Err(err).Msg("unable to resolve organization")
-		notifier.SendShowMessage(sglsp.MTError, err.Error())
-	} else {
-		folderConfig.AutoDeterminedOrg = newOrg.Id
-	}
-	newOrgIsDefaultPtr := newOrg.IsDefault
-	return newOrgIsDefaultPtr != nil && *newOrgIsDefaultPtr
+	return ldx_sync_config.ResolveOrganization(c.Engine().GetConfiguration(), c.Engine(), &logger, string(path), givenOrg)
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
