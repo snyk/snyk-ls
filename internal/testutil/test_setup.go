@@ -53,21 +53,25 @@ func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
 
 func UnitTest(t *testing.T) *config.Config {
 	t.Helper()
-	c := config.New(config.WithBinarySearchPaths([]string{}))
-	err := c.WaitForDefaultEnv(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	// Create mock engine BEFORE creating config to prevent real network calls
+	mockEngine, engineConfig := SetupEngineMockWithNetworkAccess(t)
+
+	// Create config with the mock engine from the start
+	c := config.NewFromExtension(mockEngine, config.WithBinarySearchPaths([]string{}))
+
+	// Set up storage and config persistence
+	redirectConfigAndDataHome(t, c)
+
 	// we don't want server logging in test runs
 	c.ConfigureLogging(nil)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	c.SetTrustedFolderFeatureEnabled(false)
 	c.SetAuthenticationMethod(types.FakeAuthentication)
 	setMCPServerURL(t, c)
-	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t, c)
-	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
+	engineConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
 		Enabled: false,
 	},
 	})
