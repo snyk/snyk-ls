@@ -200,6 +200,59 @@ func Test_SmokePreScanCommand(t *testing.T) {
 	})
 }
 
+func Test_SmokeOrgSelection(t *testing.T) {
+	t.Run("authenticated - takes given non-default org, sends folder config after init", func(t *testing.T) {
+		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
+		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
+		preferredOrg := "non-default"
+
+		folderConfig := types.FolderConfig{
+			FolderPath:   repo,
+			PreferredOrg: preferredOrg,
+			OrgSetByUser: true,
+		}
+
+		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
+		initParams.InitializationOptions.ScanningMode = "manual"
+
+		ensureInitialized(t, c, loc, initParams)
+
+		assert.Eventuallyf(t, func() bool {
+			notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+			if len(notifications) == 0 {
+				return false
+			}
+
+			for _, n := range notifications {
+				var param types.FolderConfigsParam
+				require.NoError(t, n.UnmarshalParams(&param))
+				if len(param.FolderConfigs) == 0 {
+					continue
+				}
+				return param.FolderConfigs[0].FolderPath == repo && param.FolderConfigs[0].PreferredOrg == preferredOrg
+			}
+
+			return false
+		}, 10*time.Second, time.Millisecond, "didn't get the right folder config")
+	})
+}
+
+func setupSmokeFolderConfig(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
+	c := testutil.SmokeTest(t, false)
+	loc, jsonRpcRecorder := setupServer(t, c)
+	c.EnableSnykCodeSecurity(false)
+	c.SetSnykOssEnabled(true)
+	c.SetSnykIacEnabled(false)
+	di.Init()
+
+	repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", c.Logger())
+	require.NoError(t, err)
+	require.NotEmpty(t, repo)
+
+	initParams := prepareInitParams(t, repo, c)
+	return c, loc, jsonRpcRecorder, repo, initParams
+}
+
 func Test_SmokeIssueCaching(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
@@ -1048,8 +1101,8 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {
 	t.Helper()
-	t.Setenv("SNYK_LOG_LEVEL", "info")
-	c.SetLogLevel(zerolog.LevelInfoValue)
+	t.Setenv("SNYK_LOG_LEVEL", "debug")
+	c.SetLogLevel(zerolog.LevelDebugValue)
 	c.ConfigureLogging(nil)
 	gafConfig := c.Engine().GetConfiguration()
 	gafConfig.Set(configuration.DEBUG, false)
