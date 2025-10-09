@@ -18,6 +18,7 @@ package mcp_extension
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -30,6 +31,9 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/auth"
+	"golang.org/x/exp/slices"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -252,7 +256,7 @@ func (m *McpLLMBinding) updateGafConfigWithIntegrationEnvironment(invocationCtx 
 	getConfiguration.Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, environmentVersion)
 }
 
-func (m *McpLLMBinding) expandedEnv(integrationVersion, environmentName, environmentVersion string) []string {
+func (m *McpLLMBinding) expandedEnv(invocationCtx workflow.InvocationContext, integrationVersion, environmentName, environmentVersion string) []string {
 	environ := os.Environ()
 	var expandedEnv = []string{}
 	for _, v := range environ {
@@ -269,5 +273,44 @@ func (m *McpLLMBinding) expandedEnv(integrationVersion, environmentName, environ
 	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_VERSION), integrationVersion))
 	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT), environmentName))
 	expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT_VERSION), environmentVersion))
+
+	if os.Getenv("IDE_CONFIG_PATH") != "" {
+		expandedEnv = m.addAuthEnvVars(invocationCtx, expandedEnv)
+	}
+
+	return expandedEnv
+}
+
+func getParsedOAuthToken(tokenStr string) (*oauth2.Token, error) {
+	var oauthToken oauth2.Token
+	err := json.Unmarshal([]byte(tokenStr), &oauthToken)
+	if err != nil {
+		return nil, err
+	}
+	return &oauthToken, nil
+}
+
+func (m *McpLLMBinding) addAuthEnvVars(invocationCtx workflow.InvocationContext, expandedEnv []string) []string {
+	globalConfig := invocationCtx.GetEngine().GetConfiguration()
+
+	storage := globalConfig.GetStorage()
+	_ = storage.Refresh(globalConfig, auth.CONFIG_KEY_OAUTH_TOKEN)
+	_ = storage.Refresh(globalConfig, configuration.AUTHENTICATION_TOKEN)
+
+	snykToken := globalConfig.GetString(configuration.AUTHENTICATION_TOKEN)
+	oAuthToken := globalConfig.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
+	expandedEnv = slices.DeleteFunc(expandedEnv, func(s string) bool {
+		return strings.HasPrefix(strings.ToLower(s), strings.ToLower(configuration.AUTHENTICATION_TOKEN)) || strings.HasPrefix(strings.ToLower(s), strings.ToLower(configuration.AUTHENTICATION_BEARER_TOKEN))
+	})
+
+	parsedToken, err := getParsedOAuthToken(oAuthToken)
+	if snykToken != "" {
+		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.AUTHENTICATION_TOKEN), snykToken))
+		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED), "0"))
+
+	} else if parsedToken != nil && err == nil {
+		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.AUTHENTICATION_BEARER_TOKEN), parsedToken.AccessToken))
+		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED), "1"))
+	}
 	return expandedEnv
 }

@@ -21,7 +21,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	storage2 "github.com/snyk/snyk-ls/internal/storage"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/spf13/pflag"
 
@@ -56,6 +59,16 @@ func mcpWorkflow(
 	defer entrypoint.OnPanicRecover()
 
 	config := invocation.GetConfiguration()
+	logger := invocation.GetEnhancedLogger()
+
+	ideConfigPath := os.Getenv("IDE_CONFIG_PATH")
+	if ideConfigPath != "" {
+		storageErr := useIdeStorage(invocation, ideConfigPath)
+		if storageErr != nil {
+			logger.Err(storageErr).Msgf("Failed to use IDE storage specified in path %s", ideConfigPath)
+		}
+	}
+
 	config.Set(configuration.INTEGRATION_NAME, "MCP")
 
 	runtimeInfo := invocation.GetRuntimeInfo()
@@ -66,7 +79,6 @@ func mcpWorkflow(
 	}
 
 	output = []workflow.Data{}
-	logger := invocation.GetEnhancedLogger()
 
 	cliPath, err := getCliPath(invocation)
 	if err != nil {
@@ -75,9 +87,45 @@ func mcpWorkflow(
 	}
 	logger.Trace().Interface("environment", os.Environ()).Msg("start environment")
 	config.PersistInStorage(trust.TrustedFoldersConfigKey)
+	config.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	config.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
+
 	mcpStart(invocation, cliPath)
 
 	return output, nil
+}
+
+func useIdeStorage(invocationCtx workflow.InvocationContext, ideConfigPath string) error {
+	file, err := storedconfig.ConfigFile(ideConfigPath)
+	if err != nil {
+		return err
+	}
+
+	// The config file must exist and MCP server shouldn't create it.
+	if _, err = os.Stat(file); err != nil {
+		return err
+	}
+
+	storage, err := storage2.NewStorageWithCallbacks(
+		storage2.WithStorageFile(file),
+		storage2.WithLogger(invocationCtx.GetEnhancedLogger()),
+	)
+	if err != nil {
+		return err
+	}
+
+	config := invocationCtx.GetConfiguration()
+	config.SetStorage(storage)
+	globalConfig := invocationCtx.GetEngine().GetConfiguration()
+	globalConfig.SetStorage(storage)
+
+	// Force refresh of in-memory values
+	_ = storage.Refresh(config, auth.CONFIG_KEY_OAUTH_TOKEN)
+	_ = storage.Refresh(config, configuration.AUTHENTICATION_TOKEN)
+	_ = storage.Refresh(globalConfig, auth.CONFIG_KEY_OAUTH_TOKEN)
+	_ = storage.Refresh(globalConfig, configuration.AUTHENTICATION_TOKEN)
+
+	return nil
 }
 
 func mcpStart(invocationContext workflow.InvocationContext, cliPath string) {

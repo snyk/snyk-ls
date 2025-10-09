@@ -22,6 +22,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -96,6 +97,10 @@ func CallWhoAmI(logger *zerolog.Logger, engine workflow.Engine) (*ActiveUser, er
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to unmarshal user data")
 	}
+
+	storage := globalConf.GetStorage()
+	_ = storage.Refresh(globalConf, auth.CONFIG_KEY_OAUTH_TOKEN)
+	_ = storage.Refresh(globalConf, configuration.AUTHENTICATION_TOKEN)
 
 	return &user, nil
 }
