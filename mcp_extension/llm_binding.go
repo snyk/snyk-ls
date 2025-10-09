@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -303,13 +304,14 @@ func (m *McpLLMBinding) addAuthEnvVars(invocationCtx workflow.InvocationContext,
 		return strings.HasPrefix(strings.ToLower(s), strings.ToLower(configuration.AUTHENTICATION_TOKEN)) || strings.HasPrefix(strings.ToLower(s), strings.ToLower(configuration.AUTHENTICATION_BEARER_TOKEN))
 	})
 
-	parsedToken, err := getParsedOAuthToken(oAuthToken)
-	if snykToken != "" {
-		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.AUTHENTICATION_TOKEN), snykToken))
+	parsedLegacyToken, legacyTokenParseErr := uuid.Parse(snykToken)
+	parsedOAuthToken, oAuthTokenParseErr := getParsedOAuthToken(oAuthToken)
+	if legacyTokenParseErr == nil {
+		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.AUTHENTICATION_TOKEN), parsedLegacyToken.String()))
 		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED), "0"))
 
-	} else if parsedToken != nil && err == nil {
-		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.AUTHENTICATION_BEARER_TOKEN), parsedToken.AccessToken))
+	} else if oAuthTokenParseErr == nil {
+		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.AUTHENTICATION_BEARER_TOKEN), parsedOAuthToken.AccessToken))
 		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED), "1"))
 	}
 	return expandedEnv
