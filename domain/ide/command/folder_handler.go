@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
@@ -53,19 +54,37 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			logger.Err(err2).Msg("unable to load stored config")
 			return
 		}
-		org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
-		if err != nil {
-			logger.Err(err).Msg("unable to resolve organization, continuing...")
-		} else {
+
+		// Try to resolve organization with timeout to avoid blocking
+		orgChan := make(chan ldx_sync_config.Organization, 1)
+		errChan := make(chan error, 1)
+
+		go func() {
+			org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
+			if err != nil {
+				errChan <- err
+			} else {
+				orgChan <- org
+			}
+		}()
+
+		// Wait for org resolution with 5 second timeout
+		select {
+		case org := <-orgChan:
 			folderConfig.AutoDeterminedOrg = org.Id
+		case err := <-errChan:
+			logger.Err(err).Msg("unable to resolve organization, continuing...")
+		case <-time.After(5 * time.Second):
+			logger.Warn().Msg("organization resolution timed out after 5 seconds, continuing without org...")
 		}
 
-		folderConfigs = append(folderConfigs, *folderConfig) // add first, then call service
+		folderConfigs = append(folderConfigs, *folderConfig)
 	}
 
 	if folderConfigs == nil {
 		return
 	}
+
 	folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
 	notifier.Send(folderConfigsParam)
 }
