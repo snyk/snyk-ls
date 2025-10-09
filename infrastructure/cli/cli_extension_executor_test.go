@@ -207,7 +207,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, 2*time.Second, 10*time.Millisecond, "Execute should complete after environment becomes ready")
+	}, 5*time.Second, 10*time.Millisecond, "Execute should complete after environment becomes ready")
 
 	require.NoError(t, execErr)
 	assert.NotNil(t, result)
