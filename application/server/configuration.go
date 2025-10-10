@@ -323,11 +323,6 @@ func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig
 }
 
 func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
-	// If the stored folder config has not been migrated, migrate it.
-	if !storedConfig.OrgMigratedFromGlobalConfig {
-		command.MigrateFolderConfigOrgSettings(c, storedConfig)
-	}
-
 	// As a safety net, ensure the folder config has the AutoDeterminedOrg; we never want to save without it.
 	if folderConfig.AutoDeterminedOrg == "" {
 		// Folder configs should always save the AutoDeterminedOrg, regardless of if the user needs it.

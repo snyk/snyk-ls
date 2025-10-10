@@ -247,7 +247,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			require.True(t, fc.OrgSetByUser)
 			require.NotEmpty(t, fc.AutoDeterminedOrg)
 			require.True(t, fc.OrgMigratedFromGlobalConfig)
-
 			return true
 		}, "didn't get the right folder config")
 	})
@@ -269,7 +268,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			require.NotEmpty(t, fc.AutoDeterminedOrg)
 			require.NotEqual(t, "0", fc.AutoDeterminedOrg)
 			require.True(t, fc.OrgMigratedFromGlobalConfig)
-
 			return true
 		}, "didn't get the default folder config")
 	})
