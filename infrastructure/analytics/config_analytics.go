@@ -17,14 +17,21 @@
 package analytics
 
 import (
+	"cmp"
 	"reflect"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // SendConfigChangedAnalytics sends analytics for primitive values only
 func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any, newVal any, triggerSource string) {
+	// Don't send analytics if old and new values are identical
+	if oldVal == newVal {
+		return
+	}
+
 	ws := c.Workspace()
 	if ws == nil {
 		return
@@ -50,8 +57,23 @@ func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, n
 	SendAnalytics(c.Engine(), c.DeviceID(), event, nil)
 }
 
+// SendCollectionChangeAnalyticsGlobal sends analytics for collection changes to all workspace folders
+func SendCollectionChangeAnalyticsGlobal[T cmp.Ordered](c *config.Config, field string, oldValue, newValue []T, triggerSource string, addedSuffix, removedSuffix, countSuffix string) {
+	sendCollectionChangeAnalyticsInternal(c, field, oldValue, newValue, triggerSource, addedSuffix, removedSuffix, countSuffix, true, types.FilePath(""))
+}
+
 // SendCollectionChangeAnalytics sends analytics for collection changes
-func SendCollectionChangeAnalytics[T comparable](c *config.Config, field string, oldValue, newValue []T, triggerSource string, addedSuffix, removedSuffix, countSuffix string) {
+func SendCollectionChangeAnalytics[T cmp.Ordered](c *config.Config, field string, oldValue, newValue []T, path types.FilePath, triggerSource string, addedSuffix, removedSuffix, countSuffix string) {
+	sendCollectionChangeAnalyticsInternal(c, field, oldValue, newValue, triggerSource, addedSuffix, removedSuffix, countSuffix, false, path)
+}
+
+// sendCollectionChangeAnalyticsInternal contains the common logic for collection change analytics
+func sendCollectionChangeAnalyticsInternal[T cmp.Ordered](c *config.Config, field string, oldValue, newValue []T, triggerSource string, addedSuffix, removedSuffix, countSuffix string, isGlobal bool, path types.FilePath) {
+	// Don't send analytics if collections are identical
+	if util.SlicesEqualIgnoringOrder(oldValue, newValue) {
+		return
+	}
+
 	// Create maps for easier lookup
 	oldMap := make(map[T]bool)
 	for _, item := range oldValue {
@@ -66,14 +88,22 @@ func SendCollectionChangeAnalytics[T comparable](c *config.Config, field string,
 	// Find added items
 	for _, item := range newValue {
 		if !oldMap[item] {
-			SendConfigChangedAnalytics(c, field+addedSuffix, "", item, triggerSource)
+			if isGlobal {
+				SendConfigChangedAnalytics(c, field+addedSuffix, "", item, triggerSource)
+			} else {
+				SendConfigChangedAnalyticsEvent(c, field+addedSuffix, "", item, path, triggerSource)
+			}
 		}
 	}
 
 	// Find removed items
 	for _, item := range oldValue {
 		if !newMap[item] {
-			SendConfigChangedAnalytics(c, field+removedSuffix, item, "", triggerSource)
+			if isGlobal {
+				SendConfigChangedAnalytics(c, field+removedSuffix, item, "", triggerSource)
+			} else {
+				SendConfigChangedAnalyticsEvent(c, field+removedSuffix, item, "", path, triggerSource)
+			}
 		}
 	}
 
@@ -81,7 +111,11 @@ func SendCollectionChangeAnalytics[T comparable](c *config.Config, field string,
 	oldCount := len(oldValue)
 	newCount := len(newValue)
 	if oldCount != newCount {
-		SendConfigChangedAnalytics(c, field+countSuffix, oldCount, newCount, triggerSource)
+		if isGlobal {
+			SendConfigChangedAnalytics(c, field+countSuffix, oldCount, newCount, triggerSource)
+		} else {
+			SendConfigChangedAnalyticsEvent(c, field+countSuffix, oldCount, newCount, path, triggerSource)
+		}
 	}
 }
 

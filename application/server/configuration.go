@@ -274,12 +274,12 @@ func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSou
 
 	// LocalBranches change
 	if !util.SlicesEqualIgnoringOrder(oldStoredConfig.LocalBranches, newStoredConfig.LocalBranches) {
-		go analytics.SendCollectionChangeAnalytics(c, configLocalBranches, oldStoredConfig.LocalBranches, newStoredConfig.LocalBranches, triggerSource, "Added", "Removed", "Count")
+		go analytics.SendCollectionChangeAnalytics(c, configLocalBranches, oldStoredConfig.LocalBranches, newStoredConfig.LocalBranches, path, triggerSource, "Added", "Removed", "Count")
 	}
 
 	// AdditionalParameters change
 	if !util.SlicesEqualIgnoringOrder(oldStoredConfig.AdditionalParameters, newStoredConfig.AdditionalParameters) {
-		go analytics.SendCollectionChangeAnalytics(c, configAdditionalParameters, oldStoredConfig.AdditionalParameters, newStoredConfig.AdditionalParameters, triggerSource, "Added", "Removed", "Count")
+		go analytics.SendCollectionChangeAnalytics(c, configAdditionalParameters, oldStoredConfig.AdditionalParameters, newStoredConfig.AdditionalParameters, path, triggerSource, "Added", "Removed", "Count")
 	}
 
 	// ReferenceFolderPath change
@@ -405,8 +405,8 @@ func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSour
 
 		// Send analytics for trusted folders changes if they actually changed
 		if !util.SlicesEqualIgnoringOrder(oldFolders, trustedFolders) && c.IsLSPInitialized() {
-			// Send analytics for individual folder changes
-			analytics.SendCollectionChangeAnalytics(c, "trustedFolder", oldFolders, trustedFolders, triggerSource, "Added", "Removed", "Count")
+			// Send analytics for individual folder changes to all workspace folders
+			analytics.SendCollectionChangeAnalyticsGlobal(c, "trustedFolder", oldFolders, trustedFolders, triggerSource, "Added", "Removed", "Count")
 		}
 	}
 }
