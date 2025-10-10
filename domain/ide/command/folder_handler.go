@@ -21,8 +21,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	sglsp "github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -45,18 +43,39 @@ func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, noti
 }
 
 func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
-	logger := c.Logger().With().Str("method", "updateAndSendFolderConfigs").Logger()
+	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
 	configuration := c.Engine().GetConfiguration()
 
 	var folderConfigs []types.FolderConfig
 	for _, folder := range c.Workspace().Folders() {
-		storedConfig, err2 := storedconfig.GetOrCreateFolderConfig(configuration, folder.Path(), &logger)
+		folderConfig, err2 := storedconfig.GetOrCreateFolderConfig(configuration, folder.Path(), &logger)
 		if err2 != nil {
 			logger.Err(err2).Msg("unable to load stored config")
 			return
 		}
-		SetAutoBestOrgFromLdxSync(c, notifier, storedConfig, "")
-		folderConfigs = append(folderConfigs, *storedConfig)
+
+		// Trigger migration for folders that haven't been migrated yet
+		// This ensures that folders loaded from storage get migrated on initialization
+		if !folderConfig.OrgMigratedFromGlobalConfig {
+			// Apply migration settings using the shared function
+			MigrateFolderConfigOrgSettings(c, folderConfig)
+
+			// Save the migrated folder config back to storage
+			err := storedconfig.UpdateFolderConfig(configuration, folderConfig, &logger)
+			if err != nil {
+				logger.Err(err).Msg("unable to save migrated folder config")
+			}
+		} else {
+			// For already migrated folders, just update AutoDeterminedOrg
+			org, err := GetBestOrgFromLdxSync(c, folderConfig, "")
+			if err != nil {
+				logger.Err(err).Msg("unable to resolve organization, continuing...")
+			} else {
+				folderConfig.AutoDeterminedOrg = org.Id
+			}
+		}
+
+		folderConfigs = append(folderConfigs, *folderConfig) // add first, then call service
 	}
 
 	if folderConfigs == nil {
@@ -66,20 +85,34 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 	notifier.Send(folderConfigsParam)
 }
 
-func SetAutoBestOrgFromLdxSync(c *config.Config, notifier noti.Notifier, folderConfig *types.FolderConfig, globalOrgForMigrating string) (newOrgIsDefault bool) {
-	logger := c.Logger().With().Str("method", "updateAndSendFolderConfigs").Logger()
-
+func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig, givenOrg string) (ldx_sync_config.Organization, error) {
+	logger := c.Logger().With().Str("method", "GetBestOrgFromLdxSync").Logger()
 	path := folderConfig.FolderPath
+	return orgResolver.ResolveOrganization(c.Engine().GetConfiguration(), c.Engine(), &logger, string(path), givenOrg)
+}
 
-	newOrg, err := ldx_sync_config.ResolveOrganization(c.Engine().GetConfiguration(), c.Engine(), &logger, string(path), globalOrgForMigrating)
+// MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration
+// based on the global organization setting and the LDX-Sync result.
+func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.FolderConfig) {
+	globalConfigOrg := c.Organization()
+	org, err := GetBestOrgFromLdxSync(c, folderConfig, globalConfigOrg)
 	if err != nil {
-		logger.Err(err).Msg("unable to resolve organization")
-		notifier.SendShowMessage(sglsp.MTError, err.Error())
-	} else {
-		folderConfig.AutoDeterminedOrg = newOrg.Id
+		c.Logger().Err(err).Msg("unable to resolve organization automatically")
+		return
 	}
-	newOrgIsDefaultPtr := newOrg.IsDefault
-	return newOrgIsDefaultPtr != nil && *newOrgIsDefaultPtr
+
+	// TODO - replace when GAF is ready.
+	//if globalConfigOrg == getDefaultFromBen() {
+	if c.Organization() != org.Id || c.Organization() == "" || org.IsDefault != nil && *org.IsDefault {
+		folderConfig.PreferredOrg = ""
+		folderConfig.OrgSetByUser = false
+	} else {
+		folderConfig.PreferredOrg = globalConfigOrg
+		folderConfig.OrgSetByUser = true
+	}
+
+	folderConfig.AutoDeterminedOrg = org.Id
+	folderConfig.OrgMigratedFromGlobalConfig = true
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
