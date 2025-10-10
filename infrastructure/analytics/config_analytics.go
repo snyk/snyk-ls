@@ -17,27 +17,30 @@
 package analytics
 
 import (
-	"path/filepath"
 	"reflect"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// AnalyticsSender defines the interface for sending analytics events
-type AnalyticsSender interface {
+// Sender defines the interface for sending analytics events
+type Sender interface {
+	SendAnalytics(field string, oldVal, newVal any, triggerSource string)
+}
+
+// ConfigAnalyticsSender defines the interface for sending config-specific analytics events
+type ConfigAnalyticsSender interface {
 	SendConfigChangedAnalytics(c *config.Config, configName string, oldVal, newVal any, triggerSource string)
 }
 
-// DefaultAnalyticsSender implements AnalyticsSender using the real analytics infrastructure
-type DefaultAnalyticsSender struct{}
+// DefaultConfigAnalyticsSender implements ConfigAnalyticsSender using the real analytics infrastructure
+type DefaultConfigAnalyticsSender struct{}
 
-func (d *DefaultAnalyticsSender) SendConfigChangedAnalytics(c *config.Config, configName string, oldVal, newVal any, triggerSource string) {
+func (d *DefaultConfigAnalyticsSender) SendConfigChangedAnalytics(c *config.Config, configName string, oldVal, newVal any, triggerSource string) {
 	SendConfigChangedAnalytics(c, configName, oldVal, newVal, triggerSource)
 }
 
-// sendConfigChangedAnalytics sends analytics for primitive values only
+// SendConfigChangedAnalytics sends analytics for primitive values only
 func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any, newVal any, triggerSource string) {
 	ws := c.Workspace()
 	if ws == nil {
@@ -51,24 +54,53 @@ func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any,
 
 // SendConfigChangedAnalyticsEvent sends a single analytics event for a config change
 func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}, path types.FilePath, triggerSource string) {
-	event := analytics.NewAnalyticsEventParam("Config changed", nil, path)
+	event := NewAnalyticsEventParam("Config changed", nil, path)
 
 	event.Extension = map[string]any{
 		"config::" + field + "::oldValue":      oldValue,
 		"config::" + field + "::newValue":      newValue,
 		"config::" + field + "::triggerSource": triggerSource,
 	}
-	analytics.SendAnalytics(c.Engine(), c.DeviceID(), event, nil)
+	SendAnalytics(c.Engine(), c.DeviceID(), event, nil)
 }
 
-// SendCollectionChangeAnalytics is a generic helper function that sends analytics for collection changes
+// SendCollectionChangeAnalytics sends analytics for collection changes
 func SendCollectionChangeAnalytics[T comparable](c *config.Config, field string, oldValue, newValue []T, triggerSource string, addedSuffix, removedSuffix, countSuffix string) {
-	sender := &DefaultAnalyticsSender{}
-	SendCollectionChangeAnalyticsWithSender(c, field, oldValue, newValue, triggerSource, addedSuffix, removedSuffix, countSuffix, sender)
+	// Create maps for easier lookup
+	oldMap := make(map[T]bool)
+	for _, item := range oldValue {
+		oldMap[item] = true
+	}
+
+	newMap := make(map[T]bool)
+	for _, item := range newValue {
+		newMap[item] = true
+	}
+
+	// Find added items
+	for _, item := range newValue {
+		if !oldMap[item] {
+			SendConfigChangedAnalytics(c, field+addedSuffix, "", item, triggerSource)
+		}
+	}
+
+	// Find removed items
+	for _, item := range oldValue {
+		if !newMap[item] {
+			SendConfigChangedAnalytics(c, field+removedSuffix, item, "", triggerSource)
+		}
+	}
+
+	// Send count change analytics
+	oldCount := len(oldValue)
+	newCount := len(newValue)
+	if oldCount != newCount {
+		SendConfigChangedAnalytics(c, field+countSuffix, oldCount, newCount, triggerSource)
+	}
 }
 
-// SendCollectionChangeAnalyticsWithSender is a generic helper function that sends analytics for collection changes using a custom sender
-func SendCollectionChangeAnalyticsWithSender[T comparable](c *config.Config, field string, oldValue, newValue []T, triggerSource string, addedSuffix, removedSuffix, countSuffix string, sender AnalyticsSender) {
+// SendCollectionChangeAnalyticsWithSender sends analytics for collection changes using a custom sender
+func SendCollectionChangeAnalyticsWithSender[T comparable](c *config.Config, field string, oldValue, newValue []T, triggerSource string, addedSuffix, removedSuffix, countSuffix string, sender ConfigAnalyticsSender) {
 	// Create maps for easier lookup
 	oldMap := make(map[T]bool)
 	for _, item := range oldValue {
@@ -102,28 +134,20 @@ func SendCollectionChangeAnalyticsWithSender[T comparable](c *config.Config, fie
 	}
 }
 
-// SendArrayConfigChangedAnalytics sends analytics for array/slice fields
-func SendArrayConfigChangedAnalytics[T comparable](c *config.Config, field string, oldValue, newValue []T, path types.FilePath, triggerSource string) {
-	SendCollectionChangeAnalytics(c, field, oldValue, newValue, triggerSource, "Added", "Removed", "Count")
-}
-
 // SendTrustedFoldersAnalytics sends analytics for individual trusted folder changes
 func SendTrustedFoldersAnalytics(c *config.Config, oldFolders, newFolders []types.FilePath, triggerSource string) {
-	// Normalize paths before comparison to avoid false removal reports due to path normalization differences
-	normalizedOldFolders := NormalizeTrustedFolders(oldFolders)
-	normalizedNewFolders := NormalizeTrustedFolders(newFolders)
-
-	SendCollectionChangeAnalytics(c, "trustedFolder", normalizedOldFolders, normalizedNewFolders, triggerSource, "Added", "Removed", "Count")
+	// Note: Path normalization should be handled at the folder trust level, not here
+	// The trusted folders should already be normalized when they are stored/retrieved
+	SendCollectionChangeAnalytics(c, "trustedFolder", oldFolders, newFolders, triggerSource, "Added", "Removed", "Count")
 }
 
 // SendMapConfigChangedAnalytics sends analytics for map fields
 func SendMapConfigChangedAnalytics[K comparable, V any](c *config.Config, field string, oldValue, newValue map[K]V, path types.FilePath, triggerSource string) {
-	sender := &DefaultAnalyticsSender{}
-	SendMapConfigChangedAnalyticsWithSender(c, field, oldValue, newValue, path, triggerSource, sender)
+	SendMapConfigChangedAnalyticsWithSender(c, field, oldValue, newValue, path, triggerSource, &DefaultConfigAnalyticsSender{})
 }
 
 // SendMapConfigChangedAnalyticsWithSender sends analytics for map fields using a custom sender
-func SendMapConfigChangedAnalyticsWithSender[K comparable, V any](c *config.Config, field string, oldValue, newValue map[K]V, path types.FilePath, triggerSource string, sender AnalyticsSender) {
+func SendMapConfigChangedAnalyticsWithSender[K comparable, V any](c *config.Config, field string, oldValue, newValue map[K]V, path types.FilePath, triggerSource string, sender ConfigAnalyticsSender) {
 	// Create maps for easier lookup
 	oldMap := make(map[K]V)
 	for k, v := range oldValue {
@@ -162,18 +186,8 @@ func SendMapConfigChangedAnalyticsWithSender[K comparable, V any](c *config.Conf
 	}
 }
 
-// NormalizeTrustedFolders normalizes a slice of trusted folder paths for consistent comparison
-func NormalizeTrustedFolders(folders []types.FilePath) []types.FilePath {
-	normalized := make([]types.FilePath, len(folders))
-	for i, folder := range folders {
-		normalized[i] = types.FilePath(filepath.Clean(string(folder)))
-	}
-	return normalized
-}
-
-
-// SendAnalyticsForFields is a generic helper function that sends analytics for struct fields
-func SendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, newValue *T, triggerSource string, fieldMappings map[string]func(*T) bool) {
+// SendAnalyticsForFields sends analytics for struct fields
+func SendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, newValue *T, triggerSource string, fieldMappings map[string]func(*T) any) {
 	for fieldName, getter := range fieldMappings {
 		oldVal := getter(oldValue)
 		newVal := getter(newValue)
