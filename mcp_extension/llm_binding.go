@@ -306,13 +306,13 @@ func (m *McpLLMBinding) addAuthEnvVars(invocationCtx workflow.InvocationContext,
 
 	parsedLegacyToken, legacyTokenParseErr := uuid.Parse(snykToken)
 	parsedOAuthToken, oAuthTokenParseErr := getParsedOAuthToken(oAuthToken)
-	if legacyTokenParseErr == nil {
-		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.AUTHENTICATION_TOKEN), parsedLegacyToken.String()))
-		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED), "0"))
-
-	} else if oAuthTokenParseErr == nil {
+	if oAuthTokenParseErr == nil {
 		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.AUTHENTICATION_BEARER_TOKEN), parsedOAuthToken.AccessToken))
 		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED), "1"))
+	} else if legacyTokenParseErr == nil {
+		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.AUTHENTICATION_TOKEN), parsedLegacyToken.String()))
+		expandedEnv = append(expandedEnv, fmt.Sprintf("%s=%s", strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED), "0"))
 	}
+
 	return expandedEnv
 }
