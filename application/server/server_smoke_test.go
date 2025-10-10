@@ -266,19 +266,19 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			FolderPath: repo,
 		}
 
-		defaultOrg := "devex_ide"
-
 		initParams.InitializationOptions.ScanningMode = "manual"
 
 		// Pre-populate storage with a folder config so it gets migrated on init.
 		setupFunc := func(c *config.Config) {
-			//preMigrationConfig := &folderConfig
-			c.SetOrganization(defaultOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 			require.NoError(t, err)
 		}
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
+
+		// We should be using the default org. We derive this at runtime as it will depend on the SNYK_TOKEN
+		// environment variable used to run the test.
+		defaultOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 
 		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
 			require.False(t, fc.OrgSetByUser)
@@ -298,17 +298,12 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		}
 
 		expectedOrg := uuid.NewString()
-		//initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
+
 		initParams.InitializationOptions.ScanningMode = "manual"
-		//initParams.InitializationOptions.Organization = expectedOrg
 
 		// Pre-populate storage with a folder config to simulate migration
 		setupFunc := func(c *config.Config) {
 			c.SetOrganization(expectedOrg)
-
-			//preMigrationConfig := &types.FolderConfig{
-			//	FolderPath: repo,
-			//}
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 			require.NoError(t, err)
 		}
@@ -317,6 +312,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
 			require.Equal(t, repo, fc.FolderPath)
+			require.True(t, fc.OrgSetByUser)
 			require.Equal(t, expectedOrg, fc.PreferredOrg)
 			require.NotEmpty(t, fc.AutoDeterminedOrg)
 			require.True(t, fc.OrgMigratedFromGlobalConfig)
