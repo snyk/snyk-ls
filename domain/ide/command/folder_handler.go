@@ -53,11 +53,43 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			logger.Err(err2).Msg("unable to load stored config")
 			return
 		}
-		org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
-		if err != nil {
-			logger.Err(err).Msg("unable to resolve organization, continuing...")
+
+		// Trigger migration for folders that haven't been migrated yet
+		// This ensures that folders loaded from storage get migrated on initialization
+		if !folderConfig.OrgMigratedFromGlobalConfig {
+			org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, c.Organization())
+			if err != nil {
+				logger.Err(err).Msg("unable to resolve organization during migration, continuing...")
+			} else {
+				// Run migration logic similar to migrateFolderConfigOrg
+				if org.IsDefault != nil && *org.IsDefault || c.Organization() == "" {
+					folderConfig.OrgSetByUser = false
+					folderConfig.AutoDeterminedOrg = org.Id
+				} else if c.Organization() == org.Id {
+					folderConfig.OrgSetByUser = true
+					folderConfig.PreferredOrg = org.Id
+					folderConfig.AutoDeterminedOrg = org.Id
+				} else if c.Organization() != org.Id {
+					folderConfig.OrgSetByUser = true
+					folderConfig.PreferredOrg = c.Organization()
+					folderConfig.AutoDeterminedOrg = org.Id
+				}
+				folderConfig.OrgMigratedFromGlobalConfig = true
+
+				// Save the migrated folder config back to storage
+				err = storedconfig.UpdateFolderConfig(configuration, folderConfig, &logger)
+				if err != nil {
+					logger.Err(err).Msg("unable to save migrated folder config")
+				}
+			}
 		} else {
-			folderConfig.AutoDeterminedOrg = org.Id
+			// For already migrated folders, just update AutoDeterminedOrg
+			org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
+			if err != nil {
+				logger.Err(err).Msg("unable to resolve organization, continuing...")
+			} else {
+				folderConfig.AutoDeterminedOrg = org.Id
+			}
 		}
 
 		folderConfigs = append(folderConfigs, *folderConfig) // add first, then call service

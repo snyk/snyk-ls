@@ -59,6 +59,11 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 	normalizedPath := util.PathKey(path)
 
 	if sc.FolderConfigs[normalizedPath] == nil {
+		logger.Debug().
+			Str("normalizedPath", string(normalizedPath)).
+			Str("originalPath", string(path)).
+			Int("existingFolderCount", len(sc.FolderConfigs)).
+			Msg("Folder config not found in storage, creating new one with OrgMigratedFromGlobalConfig=true")
 		folderConfig := &types.FolderConfig{
 			// New folder configs should never go through org migration; we treat them as migrated.
 			OrgMigratedFromGlobalConfig: true,
@@ -66,6 +71,11 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 			OrgSetByUser: false,
 		}
 		sc.FolderConfigs[normalizedPath] = folderConfig
+	} else {
+		logger.Debug().
+			Str("normalizedPath", string(normalizedPath)).
+			Bool("orgMigratedFromGlobalConfig", sc.FolderConfigs[normalizedPath].OrgMigratedFromGlobalConfig).
+			Msg("Found existing folder config in storage")
 	}
 
 	// Normalize the folder path for consistent storage
@@ -79,6 +89,7 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (
 
 	var sc *StoredConfig
 	if len(storedConfigJsonString) == 0 {
+		logger.Debug().Msg("GetStoredConfig: No stored config found, creating new one")
 		return createNewStoredConfig(conf), nil
 	} else {
 		err := json.Unmarshal([]byte(storedConfigJsonString), &sc)
@@ -87,6 +98,11 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (
 			sc = createNewStoredConfig(conf)
 			return sc, nil
 		}
+
+		logger.Debug().
+			Int("folderCount", len(sc.FolderConfigs)).
+			Msg("GetStoredConfig: Loaded stored config from configuration")
+
 		// Normalize existing keys loaded from storage to ensure consistency
 		if sc != nil && sc.FolderConfigs != nil {
 			normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.FolderConfigs))
@@ -149,6 +165,13 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 	// Generate normalized key for consistent cross-platform storage
 	normalizedPath := util.PathKey(folderConfig.FolderPath)
 
+	logger.Debug().
+		Str("normalizedPath", string(normalizedPath)).
+		Str("originalPath", string(folderConfig.FolderPath)).
+		Bool("orgMigratedFromGlobalConfig", folderConfig.OrgMigratedFromGlobalConfig).
+		Int("existingFolderCount", len(sc.FolderConfigs)).
+		Msg("UpdateFolderConfig: Saving folder config to storage")
+
 	// Normalize paths for consistent storage
 	normalizedFolderConfig := *folderConfig
 	normalizedFolderConfig.FolderPath = normalizedPath
@@ -161,5 +184,10 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 	if err != nil {
 		return err
 	}
+
+	logger.Debug().
+		Str("normalizedPath", string(normalizedPath)).
+		Int("totalFolderCount", len(sc.FolderConfigs)).
+		Msg("UpdateFolderConfig: Successfully saved folder config")
 	return nil
 }
