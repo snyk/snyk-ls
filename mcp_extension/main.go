@@ -23,6 +23,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 
@@ -96,6 +97,7 @@ func mcpWorkflow(
 }
 
 func useIdeStorage(invocationCtx workflow.InvocationContext, ideConfigPath string) error {
+	logger := invocationCtx.GetEnhancedLogger()
 	file, err := storedconfig.ConfigFile(ideConfigPath)
 	if err != nil {
 		return err
@@ -120,10 +122,22 @@ func useIdeStorage(invocationCtx workflow.InvocationContext, ideConfigPath strin
 	globalConfig.SetStorage(storage)
 
 	// Force refresh of in-memory values
-	_ = storage.Refresh(config, auth.CONFIG_KEY_OAUTH_TOKEN)
-	_ = storage.Refresh(config, configuration.AUTHENTICATION_TOKEN)
-	_ = storage.Refresh(globalConfig, auth.CONFIG_KEY_OAUTH_TOKEN)
-	_ = storage.Refresh(globalConfig, configuration.AUTHENTICATION_TOKEN)
+	err = storage.Refresh(config, auth.CONFIG_KEY_OAUTH_TOKEN)
+	if err != nil {
+		logger.Err(err).Msg("Failed to refresh oauth token for local config")
+	}
+	err = storage.Refresh(config, configuration.AUTHENTICATION_TOKEN)
+	if err != nil {
+		logger.Err(err).Msg("Failed to refresh authentication token local config")
+	}
+	err = storage.Refresh(globalConfig, auth.CONFIG_KEY_OAUTH_TOKEN)
+	if err != nil {
+		logger.Err(err).Msg("Failed to refresh oauth token for global config")
+	}
+	err = storage.Refresh(globalConfig, configuration.AUTHENTICATION_TOKEN)
+	if err != nil {
+		logger.Err(err).Msg("Failed to refresh authentication token for global config")
+	}
 
 	return nil
 }
