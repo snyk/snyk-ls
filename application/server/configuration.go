@@ -323,7 +323,6 @@ func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig
 }
 
 func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
-
 	// If the stored folder config has not been migrated, migrate it.
 	if !storedConfig.OrgMigratedFromGlobalConfig {
 		command.MigrateFolderConfigOrgSettings(c, storedConfig)
@@ -337,7 +336,7 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 		} else {
 			// Somehow we missed the workflows that set this, so just fetch it now.
 			org, _ := command.GetBestOrgFromLdxSync(c, folderConfig, "")
-			folderConfig.AutoDeterminedOrg = org.Id
+			command.SetAutoDeterminedOrg(folderConfig, org)
 		}
 	}
 

@@ -71,7 +71,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			if err != nil {
 				logger.Err(err).Msg("unable to resolve organization, continuing...")
 			} else {
-				folderConfig.AutoDeterminedOrg = org.Id
+				SetAutoDeterminedOrg(folderConfig, org)
 			}
 		}
 
@@ -94,24 +94,33 @@ func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig, g
 // MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration
 // based on the global organization setting and the LDX-Sync result.
 func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.FolderConfig) {
-	org, err := GetBestOrgFromLdxSync(c, folderConfig, c.Organization())
+	globalConfigOrg := c.Organization()
+	org, err := GetBestOrgFromLdxSync(c, folderConfig, globalConfigOrg)
 	if err != nil {
 		c.Logger().Err(err).Msg("unable to resolve organization automatically")
 		return
 	}
 
-	// TODO - this is wrong; it is assuming that LDX-Sync will only return the default org if it is is preferred,
-	//  however we might be failing to call the service and falling back.
+	// TODO - replace when GAF is ready.
+	//if globalConfigOrg == getDefaultFromBen() {
 	if c.Organization() != org.Id || c.Organization() == "" || org.IsDefault != nil && *org.IsDefault {
-		folderConfig.OrgSetByUser = false
 		folderConfig.PreferredOrg = ""
+		folderConfig.OrgSetByUser = false
 	} else {
+		folderConfig.PreferredOrg = globalConfigOrg
 		folderConfig.OrgSetByUser = true
-		folderConfig.PreferredOrg = c.Organization()
 	}
 
-	folderConfig.AutoDeterminedOrg = org.Id
+	SetAutoDeterminedOrg(folderConfig, org)
 	folderConfig.OrgMigratedFromGlobalConfig = true
+}
+
+func SetAutoDeterminedOrg(folderConfig *types.FolderConfig, org ldx_sync_config.Organization) {
+	if org.Slug != "" {
+		folderConfig.AutoDeterminedOrg = org.Slug
+	} else {
+		folderConfig.AutoDeterminedOrg = org.Id
+	}
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
