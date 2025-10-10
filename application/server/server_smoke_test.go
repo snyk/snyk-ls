@@ -281,7 +281,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		ensureInitialized(t, c, loc, initParams, setupFunc)
 
 		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
-
 			require.False(t, fc.OrgSetByUser)
 			require.Equal(t, repo, fc.FolderPath)
 			require.Empty(t, fc.PreferredOrg)
