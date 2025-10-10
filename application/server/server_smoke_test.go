@@ -242,7 +242,13 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		ensureInitialized(t, c, loc, initParams, nil)
 
 		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
-			return fc.FolderPath == repo && fc.PreferredOrg == preferredOrg
+			require.Equal(t, repo, fc.FolderPath)
+			require.Equal(t, preferredOrg, fc.PreferredOrg)
+			require.True(t, fc.OrgSetByUser)
+			require.NotEmpty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+
+			return true
 		}, "didn't get the right folder config")
 	})
 	t.Run("authenticated - determines org when nothing is given", func(t *testing.T) {
@@ -257,7 +263,14 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		ensureInitialized(t, c, loc, initParams, nil)
 
 		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
-			return fc.FolderPath == repo && fc.AutoDeterminedOrg != "0"
+			require.Equal(t, repo, fc.FolderPath)
+			require.False(t, fc.OrgSetByUser)
+			require.Empty(t, fc.PreferredOrg)
+			require.NotEmpty(t, fc.AutoDeterminedOrg)
+			require.NotEqual(t, "0", fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+
+			return true
 		}, "didn't get the default folder config")
 	})
 	t.Run("authenticated - determines org when global default org is given (migration)", func(t *testing.T) {
