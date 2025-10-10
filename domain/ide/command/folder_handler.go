@@ -57,34 +57,17 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 		// Trigger migration for folders that haven't been migrated yet
 		// This ensures that folders loaded from storage get migrated on initialization
 		if !folderConfig.OrgMigratedFromGlobalConfig {
-			org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, c.Organization())
-			if err != nil {
-				logger.Err(err).Msg("unable to resolve organization during migration, continuing...")
-			} else {
-				// Run migration logic similar to migrateFolderConfigOrg
-				if org.IsDefault != nil && *org.IsDefault || c.Organization() == "" {
-					folderConfig.OrgSetByUser = false
-					folderConfig.AutoDeterminedOrg = org.Id
-				} else if c.Organization() == org.Id {
-					folderConfig.OrgSetByUser = true
-					folderConfig.PreferredOrg = org.Id
-					folderConfig.AutoDeterminedOrg = org.Id
-				} else if c.Organization() != org.Id {
-					folderConfig.OrgSetByUser = true
-					folderConfig.PreferredOrg = c.Organization()
-					folderConfig.AutoDeterminedOrg = org.Id
-				}
-				folderConfig.OrgMigratedFromGlobalConfig = true
+			// Apply migration settings using the shared function
+			MigrateFolderConfigOrgSettings(c, folderConfig)
 
-				// Save the migrated folder config back to storage
-				err = storedconfig.UpdateFolderConfig(configuration, folderConfig, &logger)
-				if err != nil {
-					logger.Err(err).Msg("unable to save migrated folder config")
-				}
+			// Save the migrated folder config back to storage
+			err := storedconfig.UpdateFolderConfig(configuration, folderConfig, &logger)
+			if err != nil {
+				logger.Err(err).Msg("unable to save migrated folder config")
 			}
 		} else {
 			// For already migrated folders, just update AutoDeterminedOrg
-			org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
+			org, err := GetBestOrgFromLdxSync(c, folderConfig, "")
 			if err != nil {
 				logger.Err(err).Msg("unable to resolve organization, continuing...")
 			} else {
@@ -102,10 +85,33 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 	notifier.Send(folderConfigsParam)
 }
 
-func SetAutoBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig, givenOrg string) (ldx_sync_config.Organization, error) {
-	logger := c.Logger().With().Str("method", "SetAutoBestOrgFromLdxSync").Logger()
+func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig, givenOrg string) (ldx_sync_config.Organization, error) {
+	logger := c.Logger().With().Str("method", "GetBestOrgFromLdxSync").Logger()
 	path := folderConfig.FolderPath
 	return orgResolver.ResolveOrganization(c.Engine().GetConfiguration(), c.Engine(), &logger, string(path), givenOrg)
+}
+
+// MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration
+// based on the global organization setting and the LDX-Sync result.
+func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.FolderConfig) {
+	org, err := GetBestOrgFromLdxSync(c, folderConfig, c.Organization())
+	if err != nil {
+		c.Logger().Err(err).Msg("unable to resolve organization automatically")
+		return
+	}
+
+	// TODO - this is wrong; it is assuming that LDX-Sync will only return the default org if it is is preferred,
+	//  however we might be failing to call the service and falling back.
+	if c.Organization() != org.Id || c.Organization() == "" || org.IsDefault != nil && *org.IsDefault {
+		folderConfig.OrgSetByUser = false
+		folderConfig.PreferredOrg = ""
+	} else {
+		folderConfig.OrgSetByUser = true
+		folderConfig.PreferredOrg = c.Organization()
+	}
+
+	folderConfig.AutoDeterminedOrg = org.Id
+	folderConfig.OrgMigratedFromGlobalConfig = true
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {

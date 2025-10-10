@@ -171,29 +171,29 @@ func setupOrgResolverTest(t *testing.T, orgID, orgName string, isDefault bool) (
 	return c, folderConfig, expectedOrg
 }
 
-// Test SetAutoBestOrgFromLdxSync with default org
+// Test GetBestOrgFromLdxSync with default org
 func Test_SetAutoBestOrgFromLdxSync_DefaultOrg(t *testing.T) {
 	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "default-org-id", "Default Org", true)
 
-	org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
+	org, err := GetBestOrgFromLdxSync(c, folderConfig, "")
 
 	require.NoError(t, err)
 	assert.Equal(t, expectedOrg.Id, org.Id)
 	assert.True(t, *org.IsDefault)
 }
 
-// Test SetAutoBestOrgFromLdxSync with non-default org
+// Test GetBestOrgFromLdxSync with non-default org
 func Test_SetAutoBestOrgFromLdxSync_NonDefaultOrg(t *testing.T) {
 	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "specific-org-id", "Specific Org", false)
 
-	org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
+	org, err := GetBestOrgFromLdxSync(c, folderConfig, "")
 
 	require.NoError(t, err)
 	assert.Equal(t, expectedOrg.Id, org.Id)
 	assert.False(t, *org.IsDefault)
 }
 
-// Test SetAutoBestOrgFromLdxSync with given org parameter
+// Test GetBestOrgFromLdxSync with given org parameter
 func Test_SetAutoBestOrgFromLdxSync_WithGivenOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 	mockEngine, _ := testutil.SetUpEngineMock(t, c)
@@ -220,14 +220,14 @@ func Test_SetAutoBestOrgFromLdxSync_WithGivenOrg(t *testing.T) {
 		FolderPath: types.FilePath(t.TempDir()),
 	}
 
-	org, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "given-org-id")
+	org, err := GetBestOrgFromLdxSync(c, folderConfig, "given-org-id")
 
 	require.NoError(t, err)
 	assert.Equal(t, "given-org-id", capturedGivenOrg, "givenOrg should be passed to resolver")
 	assert.Equal(t, "given-org-id", org.Id)
 }
 
-// Test SetAutoBestOrgFromLdxSync error handling
+// Test GetBestOrgFromLdxSync error handling
 func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	c := testutil.UnitTest(t)
 	mockEngine, _ := testutil.SetUpEngineMock(t, c)
@@ -247,7 +247,7 @@ func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 		FolderPath: types.FilePath(t.TempDir()),
 	}
 
-	_, err := SetAutoBestOrgFromLdxSync(c, folderConfig, "")
+	_, err := GetBestOrgFromLdxSync(c, folderConfig, "")
 
 	require.Error(t, err)
 }

@@ -323,6 +323,12 @@ func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig
 }
 
 func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
+
+	// If the stored folder config has not been migrated, migrate it.
+	if !storedConfig.OrgMigratedFromGlobalConfig {
+		command.MigrateFolderConfigOrgSettings(c, storedConfig)
+	}
+
 	// As a safety net, ensure the folder config has the AutoDeterminedOrg; we never want to save without it.
 	if folderConfig.AutoDeterminedOrg == "" {
 		// Folder configs should always save the AutoDeterminedOrg, regardless of if the user needs it.
@@ -330,7 +336,7 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 			folderConfig.AutoDeterminedOrg = storedConfig.AutoDeterminedOrg
 		} else {
 			// Somehow we missed the workflows that set this, so just fetch it now.
-			org, _ := command.SetAutoBestOrgFromLdxSync(c, folderConfig, c.Organization())
+			org, _ := command.GetBestOrgFromLdxSync(c, folderConfig, "")
 			folderConfig.AutoDeterminedOrg = org.Id
 		}
 	}
@@ -352,41 +358,19 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 			folderConfig.PreferredOrg = ""
 		}
 	} else {
-		migrateFolderConfigOrg(c, folderConfig)
-	}
-}
+		// If we are migrating a folderConfig provided by the user,
+		// (e.g. values set in a repo's ".vscode/settings.json", but this is the first time LS is seeing the folder) ...
+		if folderConfig.OrgSetByUser {
+			// ... where they have said they don't want LDX-Sync, we simply save it as migrated skipping LDX-Sync lookup.
+			folderConfig.OrgMigratedFromGlobalConfig = true
+			return
+		}
 
-func migrateFolderConfigOrg(c *config.Config, folderConfig *types.FolderConfig) {
-	// If we are migrating a folderConfig provided by the user,
-	// (e.g. values set in a repo's ".vscode/settings.json", but this is the first time LS is seeing the folder) ...
-	if folderConfig.OrgSetByUser {
-		// ... where they have said they don't want LDX-Sync, we simply save it as migrated skipping LDX-Sync lookup.
-		folderConfig.OrgMigratedFromGlobalConfig = true
-		return
-	}
+		// We need to blank the preferred org, as we don't want to use it, otherwise they would have set OrgSetByUser.
+		folderConfig.PreferredOrg = ""
 
-	// We need to blank the preferred org, as we don't want to use it, otherwise they would have set OrgSetByUser.
-	folderConfig.PreferredOrg = ""
-
-	// Get the best org from LDX-Sync again, because we need to know if the org returned was default or not.
-	org, err := command.SetAutoBestOrgFromLdxSync(c, folderConfig, c.Organization())
-	if err != nil {
-		c.Logger().Err(err).Msg("unable to resolve organization automatically")
-		return
+		command.MigrateFolderConfigOrgSettings(c, folderConfig)
 	}
-	if org.IsDefault != nil && *org.IsDefault || c.Organization() == "" {
-		folderConfig.OrgSetByUser = false
-		folderConfig.AutoDeterminedOrg = org.Id
-	} else if c.Organization() == org.Id {
-		folderConfig.OrgSetByUser = true
-		folderConfig.PreferredOrg = org.Id
-		folderConfig.AutoDeterminedOrg = org.Id
-	} else if c.Organization() != org.Id {
-		folderConfig.OrgSetByUser = true
-		folderConfig.PreferredOrg = c.Organization()
-		folderConfig.AutoDeterminedOrg = org.Id
-	}
-	folderConfig.OrgMigratedFromGlobalConfig = true
 }
 
 func updateAuthenticationMethod(c *config.Config, settings types.Settings, triggerSource string) {

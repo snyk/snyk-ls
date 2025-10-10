@@ -266,26 +266,30 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			FolderPath: repo,
 		}
 
-		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
-		initParams.InitializationOptions.ScanningMode = "manual"
-		initParams.InitializationOptions.Organization = "devex_ide"
+		defaultOrg := "devex_ide"
 
-		// Pre-populate storage with a folder config to simulate migration
+		initParams.InitializationOptions.ScanningMode = "manual"
+
+		// Pre-populate storage with a folder config so it gets migrated on init.
 		setupFunc := func(c *config.Config) {
-			preMigrationConfig := &types.FolderConfig{
-				FolderPath: repo,
-			}
-			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), preMigrationConfig, c.Logger())
+			//preMigrationConfig := &folderConfig
+			c.SetOrganization(defaultOrg)
+			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 			require.NoError(t, err)
 		}
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
 
 		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
-			return fc.FolderPath == repo &&
-				fc.AutoDeterminedOrg != "" &&
-				fc.OrgSetByUser == false &&
-				fc.OrgMigratedFromGlobalConfig
+
+			require.False(t, fc.OrgSetByUser)
+			require.Equal(t, repo, fc.FolderPath)
+			require.Empty(t, fc.PreferredOrg)
+			require.NotEqual(t, defaultOrg, fc.AutoDeterminedOrg)
+			require.NotEmpty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+
+			return true
 		}, "didn't get an auto-selected config")
 	})
 	t.Run("authenticated - doesn't determine org when global non-default org is given (migration)", func(t *testing.T) {
@@ -295,40 +299,28 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		}
 
 		expectedOrg := uuid.NewString()
-		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
+		//initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
 		initParams.InitializationOptions.ScanningMode = "manual"
-		initParams.InitializationOptions.Organization = expectedOrg
+		//initParams.InitializationOptions.Organization = expectedOrg
 
 		// Pre-populate storage with a folder config to simulate migration
 		setupFunc := func(c *config.Config) {
-			preMigrationConfig := &types.FolderConfig{
-				FolderPath: repo,
-			}
-			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), preMigrationConfig, c.Logger())
+			c.SetOrganization(expectedOrg)
+
+			//preMigrationConfig := &types.FolderConfig{
+			//	FolderPath: repo,
+			//}
+			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 			require.NoError(t, err)
 		}
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
 
 		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
-			// Use boolean checks instead of require so we can skip notifications that don't match
-			if fc.FolderPath != repo {
-				return false
-			}
-			if fc.PreferredOrg == "" {
-				return false
-			}
-			if fc.AutoDeterminedOrg == "" {
-				return false
-			}
-			if !fc.OrgSetByUser {
-				return false
-			}
-			if !fc.OrgMigratedFromGlobalConfig {
-				return false
-			}
-			// The PreferredOrg might equal expectedOrg if LDX-Sync returns it, or it might equal
-			// AutoDeterminedOrg if LDX-Sync found the provided org. Either way, migration worked correctly.
+			require.Equal(t, repo, fc.FolderPath)
+			require.Equal(t, expectedOrg, fc.PreferredOrg)
+			require.NotEmpty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
 			return true
 		}, "didn't respect given global org")
 	})
@@ -1197,7 +1189,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	assert.Greater(t, len(issueList), 100, "More than 100 unmanaged issues expected")
 }
 
-func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams, setupFunc func(*config.Config)) {
+func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(*config.Config)) {
 	t.Helper()
 	t.Setenv("SNYK_LOG_LEVEL", "debug")
 	c.SetLogLevel(zerolog.LevelDebugValue)
@@ -1224,10 +1216,10 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 
 	waitForNetwork(c)
 
-	// Run optional setup function after initialization but before initialized notification
-	// This allows tests to pre-populate storage with the correct configuration instance
-	if setupFunc != nil {
-		setupFunc(c)
+	// Run optional setup function after initialization but before call to initialized.
+	// This allows tests to, for example, pre-populate storage to be read by the initialized call.
+	if preInitSetupFunc != nil {
+		preInitSetupFunc(c)
 	}
 
 	_, err = loc.Client.Call(ctx, "initialized", nil)
