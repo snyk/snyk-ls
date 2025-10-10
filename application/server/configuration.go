@@ -406,7 +406,7 @@ func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSour
 		// Send analytics for trusted folders changes if they actually changed
 		if !util.SlicesEqualIgnoringOrder(oldFolders, trustedFolders) && c.IsLSPInitialized() {
 			// Send analytics for individual folder changes
-			analytics.SendTrustedFoldersAnalytics(c, oldFolders, trustedFolders, triggerSource)
+			analytics.SendCollectionChangeAnalytics(c, "trustedFolder", oldFolders, trustedFolders, triggerSource, "Added", "Removed", "Count")
 		}
 	}
 }

@@ -238,7 +238,7 @@ func AddTrustedFolders(c *config.Config, foldersToAdd []types.Folder, triggerSou
 		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
 
 		// Send analytics for each trusted folder addition
-		analytics.SendConfigChangedAnalytics(c, "trustedFolderAdded", "", string(folder.Path()), triggerSource)
+		analytics.SendConfigChangedAnalyticsEvent(c, "trustedFolderAdded", "", string(folder.Path()), folder.Path(), triggerSource)
 	}
 
 	// Update the config with the new trusted folders list
