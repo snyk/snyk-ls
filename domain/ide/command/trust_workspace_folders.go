@@ -36,12 +36,11 @@ func (cmd *trustWorkspaceFoldersCommand) Command() types.CommandData {
 }
 
 func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error) {
-	if !config.CurrentConfig().IsTrustedFolderFeatureEnabled() {
+	if !cmd.c.IsTrustedFolderFeatureEnabled() {
 		return nil, nil
 	}
 
-	currentConfig := config.CurrentConfig()
-	trustedFolderPaths := currentConfig.TrustedFolders()
+	trustedFolderPaths := cmd.c.TrustedFolders()
 	_, untrusted := cmd.c.Workspace().GetFolderTrust()
 
 	for _, folder := range untrusted {
@@ -49,10 +48,10 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error)
 		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
 
 		// Send analytics for each trusted folder addition
-		analyticsutil.SendConfigChangedAnalytics(currentConfig, "trustedFolderAdded", "", string(folder.Path()), "ide")
+		analyticsutil.SendConfigChangedAnalytics(cmd.c, "trustedFolderAdded", "", string(folder.Path()), "ide")
 	}
 
-	currentConfig.SetTrustedFolders(trustedFolderPaths)
+	cmd.c.SetTrustedFolders(trustedFolderPaths)
 
 	cmd.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 	return nil, nil
