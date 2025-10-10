@@ -115,7 +115,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
 	assert.Equal(t, "test-org", folderConfigsParam.FolderConfigs[0].PreferredOrg, "Notification should contain correct organization")
 	assert.True(t, folderConfigsParam.FolderConfigs[0].OrgSetByUser, "Notification should reflect OrgSetByUser flag")
-	assert.Equal(t, "resolved-org", folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set by LDX-Sync")
+	assert.Equal(t, "resolved-org-id", folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set by LDX-Sync")
 }
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
@@ -170,43 +170,6 @@ func setupOrgResolverTest(t *testing.T, orgID, orgName string, isDefault bool) (
 	}
 
 	return c, folderConfig, expectedOrg
-}
-
-func Test_SetAutoDeterminedOrg(t *testing.T) {
-	t.Run("sets slug when available", func(t *testing.T) {
-		fc := &types.FolderConfig{}
-		org := ldx_sync_config.Organization{
-			Id:   "test-id",
-			Slug: "test-slug",
-		}
-
-		SetAutoDeterminedOrg(fc, org)
-
-		assert.Equal(t, "test-slug", fc.AutoDeterminedOrg, "should use slug when available")
-	})
-
-	t.Run("falls back to ID when slug is empty", func(t *testing.T) {
-		fc := &types.FolderConfig{}
-		org := ldx_sync_config.Organization{
-			Id:   "test-id",
-			Slug: "",
-		}
-
-		SetAutoDeterminedOrg(fc, org)
-
-		assert.Equal(t, "test-id", fc.AutoDeterminedOrg, "should fall back to ID when slug is empty")
-	})
-
-	t.Run("handles empty organization", func(t *testing.T) {
-		fc := &types.FolderConfig{
-			AutoDeterminedOrg: "original-value",
-		}
-		org := ldx_sync_config.Organization{}
-
-		SetAutoDeterminedOrg(fc, org)
-
-		assert.Empty(t, fc.AutoDeterminedOrg, "should clear AutoDeterminedOrg for empty organization")
-	})
 }
 
 // Test GetBestOrgFromLdxSync with default org

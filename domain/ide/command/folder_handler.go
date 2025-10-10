@@ -71,7 +71,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			if err != nil {
 				logger.Err(err).Msg("unable to resolve organization, continuing...")
 			} else {
-				SetAutoDeterminedOrg(folderConfig, org)
+				folderConfig.AutoDeterminedOrg = org.Id
 			}
 		}
 
@@ -111,16 +111,8 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 		folderConfig.OrgSetByUser = true
 	}
 
-	SetAutoDeterminedOrg(folderConfig, org)
+	folderConfig.AutoDeterminedOrg = org.Id
 	folderConfig.OrgMigratedFromGlobalConfig = true
-}
-
-func SetAutoDeterminedOrg(folderConfig *types.FolderConfig, org ldx_sync_config.Organization) {
-	if org.Slug != "" {
-		folderConfig.AutoDeterminedOrg = org.Slug
-	} else {
-		folderConfig.AutoDeterminedOrg = org.Id
-	}
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
