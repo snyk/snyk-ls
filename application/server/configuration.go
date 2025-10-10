@@ -39,6 +39,7 @@ import (
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // Constants for configName strings used in analytics
@@ -242,7 +243,7 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			folderConfigsMayHaveChanged = true
 		}
 
-		sendFolderConfigAnalytics(c, path, triggerSource, &oldStoredConfig, &folderConfig)
+		sendFolderConfigAnalytics(c, path, triggerSource, oldStoredConfig, folderConfig)
 
 		folderConfigs = append(folderConfigs, folderConfig)
 	}
@@ -260,7 +261,7 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 	}
 }
 
-func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource string, oldStoredConfig, newStoredConfig *types.FolderConfig) {
+func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource string, oldStoredConfig, newStoredConfig types.FolderConfig) {
 	// FolderPath change
 	if oldStoredConfig.FolderPath != newStoredConfig.FolderPath {
 		go analyticsutil.SendConfigChangedAnalyticsEvent(c, configFolderPath, oldStoredConfig.FolderPath, newStoredConfig.FolderPath, path, triggerSource)
@@ -272,12 +273,12 @@ func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSou
 	}
 
 	// LocalBranches change
-	if !analyticsutil.SlicesEqualIgnoringOrder(oldStoredConfig.LocalBranches, newStoredConfig.LocalBranches) {
+	if !util.SlicesEqualIgnoringOrder(oldStoredConfig.LocalBranches, newStoredConfig.LocalBranches) {
 		go analyticsutil.SendArrayConfigChangedAnalytics(c, configLocalBranches, oldStoredConfig.LocalBranches, newStoredConfig.LocalBranches, path, triggerSource)
 	}
 
 	// AdditionalParameters change
-	if !analyticsutil.SlicesEqualIgnoringOrder(oldStoredConfig.AdditionalParameters, newStoredConfig.AdditionalParameters) {
+	if !util.SlicesEqualIgnoringOrder(oldStoredConfig.AdditionalParameters, newStoredConfig.AdditionalParameters) {
 		go analyticsutil.SendArrayConfigChangedAnalytics(c, configAdditionalParameters, oldStoredConfig.AdditionalParameters, newStoredConfig.AdditionalParameters, path, triggerSource)
 	}
 
@@ -403,7 +404,7 @@ func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSour
 		c.SetTrustedFolders(trustedFolders)
 
 		// Send analytics for trusted folders changes if they actually changed
-		if !analyticsutil.SlicesEqualIgnoringOrder(oldFolders, trustedFolders) && c.IsLSPInitialized() {
+		if !util.SlicesEqualIgnoringOrder(oldFolders, trustedFolders) && c.IsLSPInitialized() {
 			// Send analytics for individual folder changes
 			analyticsutil.SendTrustedFoldersAnalytics(c, oldFolders, trustedFolders, triggerSource)
 		}

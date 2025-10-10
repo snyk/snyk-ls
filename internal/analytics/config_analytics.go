@@ -17,10 +17,8 @@
 package analytics
 
 import (
-	"cmp"
 	"path/filepath"
 	"reflect"
-	"slices"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
@@ -173,23 +171,6 @@ func NormalizeTrustedFolders(folders []types.FilePath) []types.FilePath {
 	return normalized
 }
 
-// SlicesEqualIgnoringOrder compares two slices for equality ignoring element order
-func SlicesEqualIgnoringOrder[T cmp.Ordered](a, b []T) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	// Create sorted copies to avoid modifying originals
-	sortedA := make([]T, len(a))
-	copy(sortedA, a)
-	slices.Sort(sortedA)
-
-	sortedB := make([]T, len(b))
-	copy(sortedB, b)
-	slices.Sort(sortedB)
-
-	return slices.Equal(sortedA, sortedB)
-}
 
 // SendAnalyticsForFields is a generic helper function that sends analytics for struct fields
 func SendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, newValue *T, triggerSource string, fieldMappings map[string]func(*T) bool) {
