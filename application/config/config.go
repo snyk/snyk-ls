@@ -645,20 +645,44 @@ func (c *Config) SetToken(newTokenString string) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
+	logger := c.logger.With().Str("method", "SetToken").Logger()
+
 	conf := c.engine.GetConfiguration()
 	oldTokenString := c.token
 
 	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, c.logger)
+	legacyToken, legacyTokenErr := uuid.Parse(newTokenString)
+	//
+	//if c.authenticationMethod == types.OAuthAuthentication && oAuthErr == nil &&
+	//	c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
+	//	c.logger.Debug().Msg("put oauth2 token into GAF")
+	//	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	//	conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
+	//} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
+	//	c.logger.Debug().Msg("put api token or pat into GAF")
+	//	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
+	//	conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString) // We use the same config key for PATs and API Tokens.
+	//}
 
-	if c.authenticationMethod == types.OAuthAuthentication && oAuthErr == nil &&
-		c.shouldUpdateOAuth2Token(conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), newTokenString) {
-		c.logger.Debug().Msg("put oauth2 token into GAF")
-		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
-		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
-	} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
-		c.logger.Debug().Msg("put api token or pat into GAF")
+	isNewTokenEmpty := newTokenString == ""
+	isNewTokenOAuthToken := oAuthErr == nil && newOAuthToken != nil && len(newOAuthToken.AccessToken) > 0
+	isNewTokenLegacyToken := legacyTokenErr == nil && len(legacyToken.String()) > 0
+	isNewTokenPatToken := !isNewTokenOAuthToken && !isNewTokenLegacyToken && !isNewTokenEmpty
+
+	if c.authenticationMethod == types.OAuthAuthentication {
+		if c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
+			logger.Debug().Msg("put oauth2 token into GAF")
+			conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+			conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
+		} else {
+			return
+		}
+	} else if c.authenticationMethod != types.OAuthAuthentication && (isNewTokenLegacyToken || isNewTokenPatToken) {
+		logger.Debug().Msg("put api token or pat into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString) // We use the same config key for PATs and API Tokens.
+	} else {
+		logger.Error().Msgf("Invalid or empty token. Authentication Method:%s Token length:%d", c.authenticationMethod, len(newTokenString))
 	}
 
 	// ensure scrubbing of new newTokenString
