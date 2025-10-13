@@ -273,7 +273,12 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	if engine == nil {
 		initWorkFlowEngine(c)
 	} else {
+		// Engine is provided externally, e.g. we were invoked from CLI.
 		c.engine = engine
+		err := initAdditionalWorkflows(c)
+		if err != nil {
+			c.logger.Err(err).Msg("unable to initialize additional workflows")
+		}
 	}
 	gafConfig := c.engine.GetConfiguration()
 	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
@@ -304,7 +309,7 @@ func initWorkFlowEngine(c *Config) {
 
 	err := initWorkflows(c)
 	if err != nil {
-		c.Logger().Err(err).Msg("unable to initialize additional workflows")
+		c.Logger().Err(err).Msg("unable to initialize workflows")
 	}
 
 	err = c.engine.Init()
@@ -337,7 +342,11 @@ func initWorkflows(c *Config) error {
 		return err
 	}
 
-	err = resolve_organization_workflow.InitResolveOrganizationWorkflow(c.engine)
+	return initAdditionalWorkflows(c)
+}
+
+func initAdditionalWorkflows(c *Config) error {
+	err := resolve_organization_workflow.InitResolveOrganizationWorkflow(c.engine)
 	if err != nil {
 		return err
 	}

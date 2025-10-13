@@ -272,6 +272,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		}, "didn't get the default folder config")
 	})
 	t.Run("authenticated - determines org when global default org is given (migration)", func(t *testing.T) {
+		testsupport.NotOnCI(t, "TODO: CI environment needs LDX-Sync test data configured. "+
+			"LDX-Sync currently returns the default org for the test repo (Python-goof), "+
+			"but this test expects a non-default org to be returned.")
+
 		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
 		folderConfig := types.FolderConfig{
 			FolderPath: repo,
