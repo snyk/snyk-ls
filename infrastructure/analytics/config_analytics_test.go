@@ -265,3 +265,74 @@ func TestSendConfigChangedAnalytics(t *testing.T) {
 		}
 	})
 }
+
+func TestIsEmptyValue(t *testing.T) {
+	t.Run("should identify empty values correctly", func(t *testing.T) {
+		testCases := []struct {
+			name     string
+			value    any
+			expected bool
+		}{
+			// Case 1: Different types that represent "empty"
+			{"empty string", "", true},
+			{"nil value", nil, true},
+			{"nil pointer to string", (*string)(nil), true},
+			{"nil slice", ([]string)(nil), true},
+			{"nil map", (map[string]string)(nil), true},
+
+			// Case 4: Different zero values of the same type
+			{"zero int", 0, true},
+			{"zero float64", 0.0, true},
+			{"zero bool", false, true},
+			{"zero int32", int32(0), true},
+			{"zero int64", int64(0), true},
+			{"zero float32", float32(0.0), true},
+
+			// Non-empty values
+			{"non-empty string", "hello", false},
+			{"non-zero int", 42, false},
+			{"non-zero float", 3.14, false},
+			{"true bool", true, false},
+			{"non-empty slice", []string{"item"}, false},
+			{"non-empty map", map[string]string{"key": "value"}, false},
+			{"pointer to non-empty string", stringPtr("hello"), false},
+
+			// Edge cases
+			{"empty slice", []string{}, true},
+			{"empty map", map[string]string{}, true},
+			{"slice with empty strings", []string{"", ""}, false}, // slice itself is not empty
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				result := isEmptyValue(tc.value)
+				assert.Equal(t, tc.expected, result, "isEmptyValue(%v) should return %v", tc.value, tc.expected)
+			})
+		}
+	})
+
+	t.Run("should handle interface{} with different underlying types", func(t *testing.T) {
+		// Test case 1: Different types that represent "empty"
+		var emptyString interface{} = ""
+		var nilValue interface{} = nil
+		var nilPointer interface{} = (*string)(nil)
+
+		assert.True(t, isEmptyValue(emptyString), "empty string should be considered empty")
+		assert.True(t, isEmptyValue(nilValue), "nil should be considered empty")
+		assert.True(t, isEmptyValue(nilPointer), "nil pointer should be considered empty")
+
+		// Test case 4: Different zero values of the same type
+		var zeroInt interface{} = 0
+		var zeroFloat interface{} = 0.0
+		var zeroBool interface{} = false
+
+		assert.True(t, isEmptyValue(zeroInt), "zero int should be considered empty")
+		assert.True(t, isEmptyValue(zeroFloat), "zero float should be considered empty")
+		assert.True(t, isEmptyValue(zeroBool), "zero bool should be considered empty")
+	})
+}
+
+// Helper function to create a pointer to a string
+func stringPtr(s string) *string {
+	return &s
+}
