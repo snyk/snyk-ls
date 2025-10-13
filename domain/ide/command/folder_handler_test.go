@@ -91,15 +91,6 @@ func setupMockIsDefaultOrgWorkflow(mockEngine *mocks.MockEngine, isDefaultOrg bo
 	).Return([]workflow.Data{outputData}, nil).AnyTimes()
 }
 
-// setupMockIsDefaultOrgWorkflowWithError sets up is_default_organization workflow that returns an error
-func setupMockIsDefaultOrgWorkflowWithError(mockEngine *mocks.MockEngine, err error) {
-	mockEngine.EXPECT().InvokeWithInputAndConfig(
-		resolve_organization_workflow.WORKFLOWID_IS_DEFAULT_ORGANIZATION,
-		gomock.Any(),
-		gomock.Any(),
-	).Return(nil, err).AnyTimes()
-}
-
 // Test scenarios for updateAndSendFolderConfigs (notification sending only)
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)

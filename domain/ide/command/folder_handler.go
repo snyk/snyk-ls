@@ -72,7 +72,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			MigrateFolderConfigOrgSettings(c, folderConfig)
 
 			// Save the migrated folder config back to storage
-			err := storedconfig.UpdateFolderConfig(configuration, folderConfig, &logger)
+			err = storedconfig.UpdateFolderConfig(configuration, folderConfig, &logger)
 			if err != nil {
 				logger.Err(err).Msg("unable to save migrated folder config")
 			}

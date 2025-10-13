@@ -32,6 +32,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/resolve_organization_workflow"
@@ -508,7 +509,7 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 			return []workflow.Data{outputData}, nil
 		},
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Register fake is_default_organization_workflow
 	_, err = engine.Register(
@@ -531,10 +532,11 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 			return []workflow.Data{outputData}, nil
 		},
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	folderPath := types.FilePath(t.TempDir())
 	err = initTestRepo(t, string(folderPath))
+	require.NoError(t, err)
 
 	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
@@ -556,7 +558,7 @@ func (s *folderConfigTestSetup) createStoredConfig(org string, migrated bool, us
 		OrgSetByUser:                userSet,
 	}
 	err := storedconfig.UpdateFolderConfig(s.engineConfig, storedConfig, s.logger)
-	assert.NoError(s.t, err)
+	require.NoError(s.t, err)
 }
 
 func (s *folderConfigTestSetup) callUpdateFolderConfig(org string) {
@@ -573,7 +575,7 @@ func (s *folderConfigTestSetup) callUpdateFolderConfig(org string) {
 
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(s.engineConfig, s.folderPath, s.logger)
-	assert.NoError(s.t, err)
+	require.NoError(s.t, err)
 	return updatedConfig
 }
 
@@ -617,7 +619,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Setup stored config with user-set org
 	engineConfig := c.Engine().GetConfiguration()
@@ -629,7 +631,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 		OrgSetByUser:                true,
 	}
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	c.SetOrganization("global-org-id")
 
@@ -650,7 +652,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 	// Verify the org was kept - with the current implementation, UpdateFolderConfigOrg is always called
 	// due to pointer comparison, but the org should remain the same since it's user-set
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "user-org-id", updatedConfig.PreferredOrg, "PreferredOrg should remain as user-set value")
 	// Note: OrgSetByUser behavior depends on UpdateFolderConfigOrg logic when org hasn't actually changed
 }
@@ -762,7 +764,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Setup stored config
 	engineConfig := c.Engine().GetConfiguration()
@@ -774,7 +776,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 		OrgSetByUser:                true,
 	}
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	c.SetOrganization("test-org")
 
@@ -795,7 +797,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 
 	// Verify config remains unchanged (UpdateFolderConfigOrg was skipped)
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "test-org", updatedConfig.PreferredOrg)
 	assert.True(t, updatedConfig.OrgSetByUser, "Should remain true since UpdateFolderConfigOrg was skipped")
 }
@@ -1049,7 +1051,7 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T) {
 		AutoDeterminedOrg:           "existing-auto-org",
 	}
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	setup.c.SetOrganization("global-org-id")
 
@@ -1091,7 +1093,7 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
 		AutoDeterminedOrg:           "auto-org-id",
 	}
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	setup.c.SetOrganization("global-org-id")
 
@@ -1188,7 +1190,7 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 		AutoDeterminedOrg:           "", // Missing in stored config
 	}
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
-	assert.NoError(setup.t, err)
+	require.NoError(setup.t, err)
 
 	setup.c.SetOrganization("global-org-id")
 
