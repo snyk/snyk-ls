@@ -136,8 +136,10 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 		return
 	}
 
+	globalOrg := c.Organization()
+
 	// Check if the configured organization is the default org or unknown slug
-	isDefaultOrUnknown, err := isOrgDefaultOrUnknownSlug(c, c.Organization())
+	isDefaultOrUnknown, err := isOrgDefaultOrUnknownSlug(c, globalOrg)
 	if err != nil {
 		c.Logger().Err(err).Msg("unable to determine if organization is default")
 		return
@@ -147,6 +149,11 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 	// - Using default org, so not set by user, or has an unknown slug, either way opt them in to LDX-Sync.
 	// - Using a non-default org, so it was explicitly set by user, so opt them out of LDX-Sync.
 	folderConfig.OrgSetByUser = !isDefaultOrUnknown
+
+	// We decided to write the global org as-is into the PreferredOrg on migration, if the user is not using LDX-Sync.
+	if !folderConfig.OrgSetByUser {
+		folderConfig.PreferredOrg = globalOrg
+	}
 
 	folderConfig.OrgMigratedFromGlobalConfig = true
 }
