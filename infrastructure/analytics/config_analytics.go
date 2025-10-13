@@ -44,6 +44,16 @@ func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any,
 
 // SendConfigChangedAnalyticsEvent sends a single analytics event for a config change
 func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}, path types.FilePath, triggerSource string) {
+	// Don't send analytics if old and new values are the same
+	if oldValue == newValue {
+		return
+	}
+
+	// Don't send analytics if both values are empty
+	if isEmptyValue(oldValue) && isEmptyValue(newValue) {
+		return
+	}
+
 	event := NewAnalyticsEventParam("Config changed", nil, path)
 
 	// Ensure empty strings are always included in the extension
@@ -88,10 +98,13 @@ func sendCollectionChangeAnalyticsInternal[T cmp.Ordered](c *config.Config, fiel
 	// Find added items
 	for _, item := range newValue {
 		if !oldMap[item] {
-			if isGlobal {
-				SendConfigChangedAnalytics(c, field+addedSuffix, "", item, triggerSource)
-			} else {
-				SendConfigChangedAnalyticsEvent(c, field+addedSuffix, "", item, path, triggerSource)
+			// Don't send analytics for empty values, where old value is ""
+			if !isEmptyValue(item) {
+				if isGlobal {
+					SendConfigChangedAnalytics(c, field+addedSuffix, "", item, triggerSource)
+				} else {
+					SendConfigChangedAnalyticsEvent(c, field+addedSuffix, "", item, path, triggerSource)
+				}
 			}
 		}
 	}
@@ -99,10 +112,13 @@ func sendCollectionChangeAnalyticsInternal[T cmp.Ordered](c *config.Config, fiel
 	// Find removed items
 	for _, item := range oldValue {
 		if !newMap[item] {
-			if isGlobal {
-				SendConfigChangedAnalytics(c, field+removedSuffix, item, "", triggerSource)
-			} else {
-				SendConfigChangedAnalyticsEvent(c, field+removedSuffix, item, "", path, triggerSource)
+			// Don't send analytics for removing empty values, when new value is ""
+			if !isEmptyValue(item) {
+				if isGlobal {
+					SendConfigChangedAnalytics(c, field+removedSuffix, item, "", triggerSource)
+				} else {
+					SendConfigChangedAnalyticsEvent(c, field+removedSuffix, item, "", path, triggerSource)
+				}
 			}
 		}
 	}
@@ -166,6 +182,44 @@ func SendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, ne
 		newVal := getter(newValue)
 		if oldVal != newVal {
 			SendConfigChangedAnalytics(c, prefix+fieldName, oldVal, newVal, triggerSource)
+		}
+	}
+}
+
+// isEmptyValue checks if a value is considered empty
+func isEmptyValue(value any) bool {
+	if value == nil {
+		return true
+	}
+
+	switch v := value.(type) {
+	case string:
+		return v == ""
+	case []string:
+		return len(v) == 0
+	case []int:
+		return len(v) == 0
+	case []float64:
+		return len(v) == 0
+	case []bool:
+		return len(v) == 0
+	case map[string]string:
+		return len(v) == 0
+	case map[string]int:
+		return len(v) == 0
+	case map[string]any:
+		return len(v) == 0
+	default:
+		// For other types, use reflection to check if it's the zero value
+		// This handles slices, maps, and other types generically
+		rv := reflect.ValueOf(value)
+		switch rv.Kind() {
+		case reflect.Slice, reflect.Map, reflect.Array:
+			return rv.Len() == 0
+		case reflect.Ptr, reflect.Interface:
+			return rv.IsNil()
+		default:
+			return reflect.DeepEqual(value, reflect.Zero(reflect.TypeOf(value)).Interface())
 		}
 	}
 }
