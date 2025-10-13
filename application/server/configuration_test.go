@@ -30,15 +30,15 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
-	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/resolve_organization_workflow"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -486,29 +486,55 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
-	// Setup mock org resolver to avoid real API calls
-	mockResolver := &mockOrgResolver{
-		ResolveFunc: func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error) {
-			isDefault := givenOrg == ""
-			orgId := "auto-determined-org-id"
-			if givenOrg != "" {
-				orgId = givenOrg
+	engine := c.Engine()
+
+	// Register fake resolve_organization_workflow
+	_, err := engine.Register(
+		resolve_organization_workflow.WORKFLOWID_RESOLVE_ORGANIZATION,
+		workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}),
+		func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+			org := resolve_organization_workflow.Organization{
+				Id:   "auto-determined-org-id",
+				Name: "Test Org",
 			}
-			return ldx_sync_config.Organization{
-				Id:        orgId,
-				Name:      "Test Org",
-				IsDefault: &isDefault,
-			}, nil
+			output := resolve_organization_workflow.ResolveOrganizationOutput{
+				Organization: org,
+			}
+			outputData := workflow.NewData(
+				workflow.NewTypeIdentifier(resolve_organization_workflow.WORKFLOWID_RESOLVE_ORGANIZATION, "resolve-org-output"),
+				"application/go-struct",
+				output,
+			)
+			return []workflow.Data{outputData}, nil
 		},
-	}
-	command.SetOrgResolver(mockResolver)
-	t.Cleanup(func() {
-		command.ResetOrgResolver()
-	})
+	)
+	assert.NoError(t, err)
+
+	// Register fake is_default_organization_workflow
+	_, err = engine.Register(
+		resolve_organization_workflow.WORKFLOWID_IS_DEFAULT_ORGANIZATION,
+		workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}),
+		func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+			// Parse input to determine if org is default
+			isDefaultInput := input[0].GetPayload().(resolve_organization_workflow.IsDefaultOrganizationInput)
+			isDefault := isDefaultInput.Organization == ""
+
+			output := resolve_organization_workflow.IsDefaultOrganizationOutput{
+				IsDefaultOrg:  isDefault,
+				IsUnknownSlug: false,
+			}
+			outputData := workflow.NewData(
+				workflow.NewTypeIdentifier(resolve_organization_workflow.WORKFLOWID_IS_DEFAULT_ORGANIZATION, "is-default-org-output"),
+				"application/go-struct",
+				output,
+			)
+			return []workflow.Data{outputData}, nil
+		},
+	)
+	assert.NoError(t, err)
 
 	folderPath := types.FilePath(t.TempDir())
-	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
+	err = initTestRepo(t, string(folderPath))
 
 	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
@@ -520,24 +546,6 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 		logger:       logger,
 		folderPath:   folderPath,
 	}
-}
-
-// mockOrgResolver is a mock implementation of command.OrgResolver for testing
-type mockOrgResolver struct {
-	ResolveFunc func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error)
-}
-
-func (m *mockOrgResolver) ResolveOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error) {
-	if m.ResolveFunc != nil {
-		return m.ResolveFunc(config, engine, logger, path, givenOrg)
-	}
-	// Default behavior: return a default org
-	isDefault := true
-	return ldx_sync_config.Organization{
-		Id:        "default-org-id",
-		Name:      "Default Org",
-		IsDefault: &isDefault,
-	}, nil
 }
 
 func (s *folderConfigTestSetup) createStoredConfig(org string, migrated bool, userSet bool) {

@@ -330,7 +330,7 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 			folderConfig.AutoDeterminedOrg = storedConfig.AutoDeterminedOrg
 		} else {
 			// Somehow we missed the workflows that set this, so just fetch it now.
-			org, _ := command.GetBestOrgFromLdxSync(c, folderConfig, "")
+			org, _ := command.GetBestOrgFromLdxSync(c, folderConfig)
 			folderConfig.AutoDeterminedOrg = org.Id
 		}
 	}

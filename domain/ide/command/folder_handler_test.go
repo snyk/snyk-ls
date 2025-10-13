@@ -19,12 +19,14 @@ package command
 import (
 	"testing"
 
-	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/resolve_organization_workflow"
+	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -39,22 +41,63 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// MockOrgResolver is a mock implementation of OrgResolver for testing
-type MockOrgResolver struct {
-	ResolveFunc func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error)
+// setupMockWorkflowForOrg sets up mock workflow responses for GetBestOrgFromLdxSync calls
+func setupMockWorkflowForOrg(mockEngine *mocks.MockEngine, orgId, orgName, orgSlug string, isDefault bool) {
+	mockOrg := resolve_organization_workflow.Organization{
+		Id:        orgId,
+		Name:      orgName,
+		Slug:      orgSlug,
+		IsDefault: &isDefault,
+	}
+	mockOutput := resolve_organization_workflow.ResolveOrganizationOutput{
+		Organization: mockOrg,
+	}
+	outputData := workflow.NewData(
+		workflow.NewTypeIdentifier(resolve_organization_workflow.WORKFLOWID_RESOLVE_ORGANIZATION, "resolve-org-output"),
+		"application/go-struct",
+		mockOutput,
+	)
+	mockEngine.EXPECT().InvokeWithInputAndConfig(
+		resolve_organization_workflow.WORKFLOWID_RESOLVE_ORGANIZATION,
+		gomock.Any(),
+		gomock.Any(),
+	).Return([]workflow.Data{outputData}, nil).AnyTimes()
 }
 
-func (m *MockOrgResolver) ResolveOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error) {
-	if m.ResolveFunc != nil {
-		return m.ResolveFunc(config, engine, logger, path, givenOrg)
+// setupMockWorkflowForOrgWithError sets up a workflow that returns an error
+func setupMockWorkflowForOrgWithError(mockEngine *mocks.MockEngine, err error) {
+	mockEngine.EXPECT().InvokeWithInputAndConfig(
+		resolve_organization_workflow.WORKFLOWID_RESOLVE_ORGANIZATION,
+		gomock.Any(),
+		gomock.Any(),
+	).Return(nil, err).AnyTimes()
+}
+
+// setupMockIsDefaultOrgWorkflow sets up mock workflow responses for isOrgDefaultOrUnknownSlug calls
+func setupMockIsDefaultOrgWorkflow(mockEngine *mocks.MockEngine, isDefaultOrg bool, isUnknownSlug bool) {
+	mockOutput := resolve_organization_workflow.IsDefaultOrganizationOutput{
+		IsDefaultOrg:  isDefaultOrg,
+		IsUnknownSlug: isUnknownSlug,
 	}
-	// Default behavior: return a default org
-	isDefault := true
-	return ldx_sync_config.Organization{
-		Id:        "default-org-id",
-		Name:      "Default Org",
-		IsDefault: &isDefault,
-	}, nil
+	outputData := workflow.NewData(
+		workflow.NewTypeIdentifier(resolve_organization_workflow.WORKFLOWID_IS_DEFAULT_ORGANIZATION, "is-default-org-output"),
+		"application/go-struct",
+		mockOutput,
+	)
+	mockEngine.EXPECT().InvokeWithInputAndConfig(
+		resolve_organization_workflow.WORKFLOWID_IS_DEFAULT_ORGANIZATION,
+		gomock.Any(),
+		gomock.Any(),
+	).Return([]workflow.Data{outputData}, nil).AnyTimes()
+}
+
+// setupMockIsDefaultOrgWorkflowWithError sets up is_default_organization workflow that returns an error
+func setupMockIsDefaultOrgWorkflowWithError(mockEngine *mocks.MockEngine, err error) {
+	mockEngine.EXPECT().InvokeWithInputAndConfig(
+		resolve_organization_workflow.WORKFLOWID_IS_DEFAULT_ORGANIZATION,
+		gomock.Any(),
+		gomock.Any(),
+	).Return(nil, err).AnyTimes()
 }
 
 // Test scenarios for updateAndSendFolderConfigs (notification sending only)
@@ -64,20 +107,8 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
-	// Setup mock org resolver
-	mockResolver := &MockOrgResolver{
-		ResolveFunc: func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error) {
-			isDefault := false
-			return ldx_sync_config.Organization{
-				Id:        "resolved-org-id",
-				Name:      "Resolved Org",
-				Slug:      "resolved-org",
-				IsDefault: &isDefault,
-			}, nil
-		},
-	}
-	SetOrgResolver(mockResolver)
-	defer ResetOrgResolver()
+	// Setup mock workflow response
+	setupMockWorkflowForOrg(mockEngine, "resolved-org-id", "Resolved Org", "resolved-org", false)
 
 	folderPath := types.FilePath(t.TempDir())
 
@@ -143,7 +174,7 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 }
 
 // setupOrgResolverTest is a helper function to reduce duplication in org resolver tests
-func setupOrgResolverTest(t *testing.T, orgID, orgName string, isDefault bool) (*config.Config, *types.FolderConfig, ldx_sync_config.Organization) {
+func setupOrgResolverTest(t *testing.T, orgID, orgName, orgSlug string, isDefault bool) (*config.Config, *types.FolderConfig, resolve_organization_workflow.Organization) {
 	t.Helper()
 
 	c := testutil.UnitTest(t)
@@ -151,19 +182,15 @@ func setupOrgResolverTest(t *testing.T, orgID, orgName string, isDefault bool) (
 	mockEngine.EXPECT().GetConfiguration().AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
-	expectedOrg := ldx_sync_config.Organization{
+	expectedOrg := resolve_organization_workflow.Organization{
 		Id:        orgID,
 		Name:      orgName,
+		Slug:      orgSlug,
 		IsDefault: &isDefault,
 	}
 
-	mockResolver := &MockOrgResolver{
-		ResolveFunc: func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error) {
-			return expectedOrg, nil
-		},
-	}
-	SetOrgResolver(mockResolver)
-	t.Cleanup(ResetOrgResolver)
+	// Setup mock workflow response
+	setupMockWorkflowForOrg(mockEngine, orgID, orgName, orgSlug, isDefault)
 
 	folderConfig := &types.FolderConfig{
 		FolderPath: types.FilePath(t.TempDir()),
@@ -174,9 +201,9 @@ func setupOrgResolverTest(t *testing.T, orgID, orgName string, isDefault bool) (
 
 // Test GetBestOrgFromLdxSync with default org
 func Test_SetAutoBestOrgFromLdxSync_DefaultOrg(t *testing.T) {
-	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "default-org-id", "Default Org", true)
+	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "default-org-id", "Default Org", "default-org", true)
 
-	org, err := GetBestOrgFromLdxSync(c, folderConfig, "")
+	org, err := GetBestOrgFromLdxSync(c, folderConfig)
 
 	require.NoError(t, err)
 	assert.Equal(t, expectedOrg.Id, org.Id)
@@ -185,47 +212,13 @@ func Test_SetAutoBestOrgFromLdxSync_DefaultOrg(t *testing.T) {
 
 // Test GetBestOrgFromLdxSync with non-default org
 func Test_SetAutoBestOrgFromLdxSync_NonDefaultOrg(t *testing.T) {
-	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "specific-org-id", "Specific Org", false)
+	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "specific-org-id", "Specific Org", "specific-org", false)
 
-	org, err := GetBestOrgFromLdxSync(c, folderConfig, "")
+	org, err := GetBestOrgFromLdxSync(c, folderConfig)
 
 	require.NoError(t, err)
 	assert.Equal(t, expectedOrg.Id, org.Id)
 	assert.False(t, *org.IsDefault)
-}
-
-// Test GetBestOrgFromLdxSync with given org parameter
-func Test_SetAutoBestOrgFromLdxSync_WithGivenOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
-
-	// Setup mock org resolver to verify givenOrg is passed through
-	var capturedGivenOrg string
-	mockResolver := &MockOrgResolver{
-		ResolveFunc: func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error) {
-			capturedGivenOrg = givenOrg
-			isDefault := false
-			return ldx_sync_config.Organization{
-				Id:        givenOrg,
-				Name:      "Given Org",
-				IsDefault: &isDefault,
-			}, nil
-		},
-	}
-	SetOrgResolver(mockResolver)
-	defer ResetOrgResolver()
-
-	folderConfig := &types.FolderConfig{
-		FolderPath: types.FilePath(t.TempDir()),
-	}
-
-	org, err := GetBestOrgFromLdxSync(c, folderConfig, "given-org-id")
-
-	require.NoError(t, err)
-	assert.Equal(t, "given-org-id", capturedGivenOrg, "givenOrg should be passed to resolver")
-	assert.Equal(t, "given-org-id", org.Id)
 }
 
 // Test GetBestOrgFromLdxSync error handling
@@ -235,20 +228,14 @@ func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	mockEngine.EXPECT().GetConfiguration().AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
-	// Setup mock org resolver to return error
-	mockResolver := &MockOrgResolver{
-		ResolveFunc: func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error) {
-			return ldx_sync_config.Organization{}, assert.AnError
-		},
-	}
-	SetOrgResolver(mockResolver)
-	defer ResetOrgResolver()
+	// Setup mock workflow to return error
+	setupMockWorkflowForOrgWithError(mockEngine, assert.AnError)
 
 	folderConfig := &types.FolderConfig{
 		FolderPath: types.FilePath(t.TempDir()),
 	}
 
-	_, err := GetBestOrgFromLdxSync(c, folderConfig, "")
+	_, err := GetBestOrgFromLdxSync(c, folderConfig)
 
 	require.Error(t, err)
 }
@@ -260,14 +247,8 @@ func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
-	// Setup mock org resolver to return error
-	mockResolver := &MockOrgResolver{
-		ResolveFunc: func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error) {
-			return ldx_sync_config.Organization{}, assert.AnError
-		},
-	}
-	SetOrgResolver(mockResolver)
-	defer ResetOrgResolver()
+	// Setup mock workflow to return error
+	setupMockWorkflowForOrgWithError(mockEngine, assert.AnError)
 
 	folderPath := types.FilePath(t.TempDir())
 
@@ -314,23 +295,39 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
-	// Setup mock org resolver to return different orgs based on path
-	mockResolver := &MockOrgResolver{
-		ResolveFunc: func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string, givenOrg string) (ldx_sync_config.Organization, error) {
-			isDefault := false
-			return ldx_sync_config.Organization{
-				Id:        "org-for-" + path,
-				Name:      "Org for " + path,
-				Slug:      "org-for-" + path,
-				IsDefault: &isDefault,
-			}, nil
-		},
-	}
-	SetOrgResolver(mockResolver)
-	defer ResetOrgResolver()
-
 	folderPath1 := types.FilePath(t.TempDir())
 	folderPath2 := types.FilePath(t.TempDir())
+
+	// Setup mock workflow to return different orgs based on input path
+	mockEngine.EXPECT().InvokeWithInputAndConfig(
+		resolve_organization_workflow.WORKFLOWID_RESOLVE_ORGANIZATION,
+		gomock.Any(),
+		gomock.Any(),
+	).DoAndReturn(func(_ workflow.Identifier, input []workflow.Data, _ configuration.Configuration) ([]workflow.Data, error) {
+		workflowInput := input[0].GetPayload().(resolve_organization_workflow.ResolveOrganizationInput)
+		path := workflowInput.Directory
+
+		isDefault := false
+		mockOrg := resolve_organization_workflow.Organization{
+			Id:        "org-for-" + path,
+			Name:      "Org for " + path,
+			Slug:      "org-for-" + path,
+			IsDefault: &isDefault,
+		}
+		mockOutput := resolve_organization_workflow.ResolveOrganizationOutput{
+			Organization: mockOrg,
+		}
+		outputData := workflow.NewData(
+			workflow.NewTypeIdentifier(resolve_organization_workflow.WORKFLOWID_RESOLVE_ORGANIZATION, "resolve-org-output"),
+			"application/go-struct",
+			mockOutput,
+		)
+		return []workflow.Data{outputData}, nil
+	}).AnyTimes()
+
+	// Setup mock workflow for is_default_organization (called by MigrateFolderConfigOrgSettings)
+	// For this test, return that it's not the default org
+	setupMockIsDefaultOrgWorkflow(mockEngine, false, false)
 
 	// Setup workspace with multiple folders
 	notifier := notification.NewMockNotifier()

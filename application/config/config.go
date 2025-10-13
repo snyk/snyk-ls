@@ -42,6 +42,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
+	resolve_organization_workflow "github.com/snyk/go-application-framework/pkg/local_workflows/resolve_organization_workflow"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -335,6 +336,17 @@ func initWorkflows(c *Config) error {
 	if err != nil {
 		return err
 	}
+
+	err = resolve_organization_workflow.InitResolveOrganizationWorkflow(c.engine)
+	if err != nil {
+		return err
+	}
+
+	err = resolve_organization_workflow.InitIsDefaultOrganizationWorkflow(c.engine)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
