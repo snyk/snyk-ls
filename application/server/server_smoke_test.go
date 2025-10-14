@@ -203,7 +203,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 }
 
 // assertFolderConfigNotification is a helper to check folder config notifications
-func assertFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validator func(types.FolderConfig) bool, message string) {
+func assertFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, expectedNumber int, validator func(types.FolderConfig), message string) {
 	t.Helper()
 	assert.Eventuallyf(t, func() bool {
 		notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
@@ -214,12 +214,13 @@ func assertFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.J
 		for _, n := range notifications {
 			var param types.FolderConfigsParam
 			require.NoError(t, n.UnmarshalParams(&param))
-			if len(param.FolderConfigs) == 0 {
+			if len(param.FolderConfigs) != expectedNumber {
 				continue
 			}
-			if validator(param.FolderConfigs[0]) {
-				return true
+			for _, folderConfig := range param.FolderConfigs {
+				validator(folderConfig)
 			}
+			return true
 		}
 		return false
 	}, 10*time.Second, time.Millisecond, message)
@@ -241,13 +242,12 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
-		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
+		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
 			require.Equal(t, repo, fc.FolderPath)
 			require.Equal(t, preferredOrg, fc.PreferredOrg)
 			require.True(t, fc.OrgSetByUser)
 			require.NotEmpty(t, fc.AutoDeterminedOrg)
 			require.True(t, fc.OrgMigratedFromGlobalConfig)
-			return true
 		}, "didn't get the right folder config")
 	})
 	t.Run("authenticated - determines org when nothing is given", func(t *testing.T) {
@@ -261,21 +261,19 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
-		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
+		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
 			require.Equal(t, repo, fc.FolderPath)
 			require.False(t, fc.OrgSetByUser)
 			require.Empty(t, fc.PreferredOrg)
 			require.NotEmpty(t, fc.AutoDeterminedOrg)
 			require.NotEqual(t, "0", fc.AutoDeterminedOrg)
 			require.True(t, fc.OrgMigratedFromGlobalConfig)
-			return true
 		}, "didn't get the default folder config")
 	})
 	t.Run("authenticated - determines org when global default org is given (migration)", func(t *testing.T) {
 		// TODO - Should this even be a smoke test? Why not just make it a unit / integration test with mocking?
-		testsupport.NotOnCI(t, "TODO: CI environment needs LDX-Sync test data configured. "+
-			"LDX-Sync currently returns the default org for the test repo (Python-goof), "+
-			"but this test expects a non-default org to be returned.")
+		t.Skip(t, "TODO: Everyone would have to be in an org which takes priority for Python-goof"+
+			"as this test expects a non-default org to be returned.")
 
 		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
 		folderConfig := types.FolderConfig{
@@ -296,15 +294,13 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		// environment variable used to run the test.
 		defaultOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 
-		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
+		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
 			require.Equal(t, repo, fc.FolderPath)
 			require.Empty(t, fc.PreferredOrg)
 			require.NotEqual(t, defaultOrg, fc.AutoDeterminedOrg)
 			require.NotEmpty(t, fc.AutoDeterminedOrg)
 			require.True(t, fc.OrgMigratedFromGlobalConfig)
-
-			return true
 		}, "didn't get an auto-selected config")
 	})
 	t.Run("authenticated - doesn't determine org when global non-default org is given (migration)", func(t *testing.T) {
@@ -326,14 +322,47 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
 
-		assertFolderConfigNotification(t, jsonRpcRecorder, func(fc types.FolderConfig) bool {
+		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
 			require.Equal(t, repo, fc.FolderPath)
 			require.True(t, fc.OrgSetByUser)
 			require.Equal(t, expectedOrg, fc.PreferredOrg)
 			require.NotEmpty(t, fc.AutoDeterminedOrg)
 			require.True(t, fc.OrgMigratedFromGlobalConfig)
-			return true
 		}, "didn't respect given global org")
+	})
+	t.Run("authenticated - new folder without stored config uses auto org", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
+
+		// Don't send any folder config - this simulates a completely new folder
+		// The LS will create a new folder config from scratch
+		initParams.InitializationOptions.FolderConfigs = nil
+		initParams.InitializationOptions.ScanningMode = "manual"
+
+		ensureInitialized(t, c, loc, initParams, nil)
+
+		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
+			require.Equal(t, repo, fc.FolderPath)
+			require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
+			require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
+			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+			require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+		}, "didn't get correct folder config for new folder")
+
+		// Add a new folder to the workspace
+		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc, c)
+
+		assertFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
+			// Skip validation for the first folder (repo) - already validated above
+			if fc.FolderPath == repo {
+				return
+			}
+			// Validate the newly added folder (folderJuice)
+			require.Equal(t, folderJuice.Path(), fc.FolderPath)
+			require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
+			require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
+			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+			require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+		}, "didn't get correct folder config for new folder")
 	})
 }
 
