@@ -364,6 +364,67 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
 		}, "didn't get correct folder config for new folder")
 	})
+
+	t.Run("authenticated - re-adding folder with stored config. (Making sure folder config stays the same)", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
+
+		// Don't send any folder config - this simulates a completely new folder
+		// The LS will create a new folder config from scratch
+		initParams.InitializationOptions.FolderConfigs = nil
+		initParams.InitializationOptions.ScanningMode = "manual"
+
+		ensureInitialized(t, c, loc, initParams, nil)
+
+		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
+			require.Equal(t, repo, fc.FolderPath)
+			require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
+			require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
+			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+			require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+		}, "")
+
+		// add folder
+		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc, c)
+		assertFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
+			// Skip validation for the first folder (repo) - already validated above
+			if fc.FolderPath == repo {
+				return
+			}
+			// Validate the newly added folder (folderJuice)
+			require.Equal(t, folderJuice.Path(), fc.FolderPath)
+			require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
+			require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
+			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+			require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+		}, "didn't get correct folder config for new folder")
+
+		// remove folder
+		juiceLspWorkspaceFolder := types.WorkspaceFolder{Uri: folderJuice.Uri(), Name: folderJuice.Name()}
+		_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+			Event: types.WorkspaceFoldersChangeEvent{Removed: []types.WorkspaceFolder{juiceLspWorkspaceFolder}},
+		})
+		require.NoError(t, err)
+		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
+			require.Equal(t, repo, fc.FolderPath)
+		}, "")
+
+		// re-add folder
+		_, err = loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+			Event: types.WorkspaceFoldersChangeEvent{Added: []types.WorkspaceFolder{juiceLspWorkspaceFolder}},
+		})
+		require.NoError(t, err)
+
+		assertFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
+			if fc.FolderPath == repo {
+				return
+			}
+			require.Equal(t, folderJuice.Path(), fc.FolderPath)
+			require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
+			require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
+			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+			require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+		}, "")
+	})
 }
 
 func setupSmokeFolderConfig(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
@@ -393,7 +454,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 		cloneTargetDirGoofString := (string)(cloneTargetDirGoof)
 		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
@@ -468,7 +529,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
 		require.Truef(t, ok, "Expected to find snyk issue provider")
@@ -535,7 +596,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	c.SetSnykOssEnabled(true)
 	di.Init()
 
-	var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+	cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 	folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 
 	// wait till the whole workspace is scanned
@@ -561,7 +622,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) types.Folder {
 	t.Helper()
-	var cloneTargetDirJuice, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
+	cloneTargetDirJuice, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
 	require.NoError(t, err)
 
 	juiceLspWorkspaceFolder := types.WorkspaceFolder{Uri: uri.PathToUri(cloneTargetDirJuice), Name: "juicy-mac-juice-face"}
@@ -751,7 +812,7 @@ func newFileInCurrentDir(t *testing.T, cloneTargetDir string, fileName string, c
 	t.Helper()
 
 	testFile := filepath.Join(cloneTargetDir, fileName)
-	err := os.WriteFile(testFile, []byte(content), 0600)
+	err := os.WriteFile(testFile, []byte(content), 0o600)
 	assert.NoError(t, err)
 }
 
@@ -949,7 +1010,7 @@ func isNotStandardRegion(c *config.Config) bool {
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
 	t.Helper()
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), repo, commit, c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), repo, commit, c.Logger())
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -1031,7 +1092,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
 	cloneTargetDirString := string(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -1079,7 +1140,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -1108,7 +1169,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
 	fileWithNewVulns := "vulns.js"
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
 	cloneTargetDirString := string(cloneTargetDir)
 	assert.NoError(t, err)
 
@@ -1154,7 +1215,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	scanAggregator := di.ScanStateAggregator()
 
 	fileWithNewVulns := "vulns.js"
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
 	assert.NoError(t, err)
 
 	cloneTargetDirString := string(cloneTargetDir)
@@ -1183,7 +1244,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
 
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/java-goof", "f5719ae", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/java-goof", "f5719ae", c.Logger())
 	assert.NoError(t, err)
 
 	cloneTargetDirString := string(cloneTargetDir)
