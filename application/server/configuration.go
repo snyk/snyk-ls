@@ -229,9 +229,6 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			return
 		}
 
-		// Store the old config before updating
-		oldStoredConfig := *storedConfig
-
 		// Folder config might be new or changed, so (re)resolve the org before saving it.
 		// We should also check that the folder's org is still valid if the globally set org has changed.
 		// Also, if the config hasn't been migrated yet, we need to perform the initial migration.
@@ -243,7 +240,7 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			folderConfigsMayHaveChanged = true
 		}
 
-		sendFolderConfigAnalytics(c, path, triggerSource, oldStoredConfig, folderConfig)
+		sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
 
 		folderConfigs = append(folderConfigs, folderConfig)
 	}
