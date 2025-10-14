@@ -352,17 +352,6 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 			folderConfig.PreferredOrg = ""
 		}
 	} else {
-		// If we are migrating a folderConfig provided by the user,
-		// (e.g. values set in a repo's ".vscode/settings.json", but this is the first time LS is seeing the folder) ...
-		if folderConfig.OrgSetByUser {
-			// ... where they have said they don't want LDX-Sync, we simply save it as migrated skipping LDX-Sync lookup.
-			folderConfig.OrgMigratedFromGlobalConfig = true
-			return
-		}
-
-		// We need to blank the preferred org, as we don't want to use it, otherwise they would have set OrgSetByUser.
-		folderConfig.PreferredOrg = ""
-
 		command.MigrateFolderConfigOrgSettings(c, folderConfig)
 	}
 }
