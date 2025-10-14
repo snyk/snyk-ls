@@ -151,7 +151,7 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 	folderConfig.OrgSetByUser = !isDefaultOrUnknown
 
 	// We decided to write the global org as-is into the PreferredOrg on migration, if the user is not using LDX-Sync.
-	if !folderConfig.OrgSetByUser {
+	if folderConfig.OrgSetByUser {
 		folderConfig.PreferredOrg = globalOrg
 	}
 
