@@ -334,11 +334,15 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 	t.Run("trusted folders", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		di.TestInit(t)
 
 		UpdateSettings(c, types.Settings{TrustedFolders: []string{"/a/b", "/b/c"}}, "test")
 
-		assert.Contains(t, c.TrustedFolders(), types.FilePath("/a/b"))
-		assert.Contains(t, c.TrustedFolders(), types.FilePath("/b/c"))
+		// Paths are normalized by filepath.Clean(), so we need to check for normalized versions
+		expectedPath1 := types.FilePath(filepath.Clean("/a/b"))
+		expectedPath2 := types.FilePath(filepath.Clean("/b/c"))
+		assert.Contains(t, c.TrustedFolders(), expectedPath1)
+		assert.Contains(t, c.TrustedFolders(), expectedPath2)
 	})
 
 	t.Run("manage binaries automatically", func(t *testing.T) {
