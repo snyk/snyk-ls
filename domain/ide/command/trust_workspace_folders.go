@@ -43,7 +43,7 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error)
 	_, untrusted := cmd.c.Workspace().GetFolderTrust()
 
 	// Add trusted folders to config and send analytics
-	workspace.AddTrustedFolders(cmd.c, untrusted, "ide")
+	workspace.SetTrustedFolders(cmd.c, untrusted)
 
 	// Get the updated trusted folder paths for notification
 	trustedFolderPaths := cmd.c.TrustedFolders()

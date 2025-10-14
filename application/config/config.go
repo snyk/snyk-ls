@@ -1009,8 +1009,7 @@ func (c *Config) TrustedFolders() []types.FilePath {
 func (c *Config) SetTrustedFolders(folderPaths []types.FilePath) {
 	c.m.Lock()
 	defer c.m.Unlock()
-	// Normalize paths when setting trusted folders to ensure consistent comparison
-	c.trustedFolders = util.NormalizeFilePaths(folderPaths)
+	c.trustedFolders = folderPaths
 }
 
 func (c *Config) IsSnykCodeSecurityEnabled() bool {

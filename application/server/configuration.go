@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"reflect"
 	"strconv"
@@ -270,13 +271,13 @@ func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSou
 	}
 
 	// LocalBranches change
-	if !util.SlicesEqualIgnoringOrder(oldStoredConfig.LocalBranches, newStoredConfig.LocalBranches) {
-		go analytics.SendCollectionChangeAnalytics(c, configLocalBranches, oldStoredConfig.LocalBranches, newStoredConfig.LocalBranches, path, triggerSource, "Added", "Removed", "Count")
-	}
+	// Dont send analytics for newStoredConfig.LocalBranches
 
 	// AdditionalParameters change
 	if !util.SlicesEqualIgnoringOrder(oldStoredConfig.AdditionalParameters, newStoredConfig.AdditionalParameters) {
-		go analytics.SendCollectionChangeAnalytics(c, configAdditionalParameters, oldStoredConfig.AdditionalParameters, newStoredConfig.AdditionalParameters, path, triggerSource, "Added", "Removed", "Count")
+		oldParamsJSON, _ := json.Marshal(oldStoredConfig.AdditionalParameters)
+		newParamsJSON, _ := json.Marshal(newStoredConfig.AdditionalParameters)
+		go analytics.SendConfigChangedAnalyticsEvent(c, configAdditionalParameters, string(oldParamsJSON), string(newParamsJSON), path, triggerSource)
 	}
 
 	// ReferenceFolderPath change
@@ -285,9 +286,7 @@ func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSou
 	}
 
 	// ScanCommandConfig change
-	if !reflect.DeepEqual(oldStoredConfig.ScanCommandConfig, newStoredConfig.ScanCommandConfig) {
-		go analytics.SendMapConfigChangedAnalytics(c, "scanCommandConfig", oldStoredConfig.ScanCommandConfig, newStoredConfig.ScanCommandConfig, path, triggerSource)
-	}
+	// Dont send analytics for newStoredConfig.ScanCommandConfig until we need it.
 
 	// PreferredOrg change
 	if oldStoredConfig.PreferredOrg != newStoredConfig.PreferredOrg && newStoredConfig.PreferredOrg != "" {
@@ -403,7 +402,9 @@ func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSour
 		// Send analytics for trusted folders changes if they actually changed
 		if !util.SlicesEqualIgnoringOrder(oldFolders, trustedFolders) && c.IsLSPInitialized() {
 			// Send analytics for individual folder changes to all workspace folders
-			analytics.SendCollectionChangeAnalyticsGlobal(c, "trustedFolder", oldFolders, trustedFolders, triggerSource, "Added", "Removed", "Count")
+			oldFoldersJSON, _ := json.Marshal(oldFolders)
+			newFoldersJSON, _ := json.Marshal(trustedFolders)
+			go analytics.SendConfigChangedAnalyticsEvent(c, "trustedFolder", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), triggerSource)
 		}
 	}
 }
