@@ -596,6 +596,7 @@ func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.Workspac
 }
 
 func addWorkSpaceFolder(t *testing.T, loc server.Local, f types.WorkspaceFolder) {
+	t.Helper()
 	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
 		Event: types.WorkspaceFoldersChangeEvent{Added: []types.WorkspaceFolder{f}},
 	})
@@ -603,6 +604,7 @@ func addWorkSpaceFolder(t *testing.T, loc server.Local, f types.WorkspaceFolder)
 }
 
 func removeWorkSpaceFolder(t *testing.T, loc server.Local, f types.WorkspaceFolder) {
+	t.Helper()
 	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
 		Event: types.WorkspaceFoldersChangeEvent{Removed: []types.WorkspaceFolder{f}},
 	})
