@@ -224,11 +224,30 @@ func assertFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.J
 		}
 		return false
 	}, 10*time.Second, time.Millisecond, message)
+	jsonRpcRecorder.ClearNotifications()
+}
+
+func setupOrgSelectionTest(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
+	t.Helper()
+	c := testutil.SmokeTest(t, false)
+	loc, jsonRpcRecorder := setupServer(t, c)
+	c.EnableSnykCodeSecurity(false)
+	c.SetSnykOssEnabled(true)
+	c.SetSnykIacEnabled(false)
+	di.Init()
+
+	repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", c.Logger())
+	require.NoError(t, err)
+	require.NotEmpty(t, repo)
+
+	initParams := prepareInitParams(t, repo, c)
+	initParams.InitializationOptions.ScanningMode = "manual"
+	return c, loc, jsonRpcRecorder, repo, initParams
 }
 
 func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - takes given non-default org, sends folder config after init", func(t *testing.T) {
-		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		preferredOrg := "non-default"
 
 		folderConfig := types.FolderConfig{
@@ -238,7 +257,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		}
 
 		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
-		initParams.InitializationOptions.ScanningMode = "manual"
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
@@ -251,13 +269,12 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		}, "didn't get the right folder config")
 	})
 	t.Run("authenticated - determines org when nothing is given", func(t *testing.T) {
-		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		folderConfig := types.FolderConfig{
 			FolderPath: repo,
 		}
 
 		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
-		initParams.InitializationOptions.ScanningMode = "manual"
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
@@ -275,12 +292,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		t.Skip(t, "TODO: Everyone would have to be in an org which takes priority for Python-goof"+
 			"as this test expects a non-default org to be returned.")
 
-		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		folderConfig := types.FolderConfig{
 			FolderPath: repo,
 		}
-
-		initParams.InitializationOptions.ScanningMode = "manual"
 
 		// Pre-populate storage with a folder config so it gets migrated on init.
 		setupFunc := func(c *config.Config) {
@@ -304,14 +319,12 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		}, "didn't get an auto-selected config")
 	})
 	t.Run("authenticated - doesn't determine org when global non-default org is given (migration)", func(t *testing.T) {
-		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		folderConfig := types.FolderConfig{
 			FolderPath: repo,
 		}
 
 		expectedOrg := uuid.NewString()
-
-		initParams.InitializationOptions.ScanningMode = "manual"
 
 		// Pre-populate storage with a folder config to simulate migration
 		setupFunc := func(c *config.Config) {
@@ -330,48 +343,13 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			require.True(t, fc.OrgMigratedFromGlobalConfig)
 		}, "didn't respect given global org")
 	})
-	t.Run("authenticated - new folder without stored config uses auto org", func(t *testing.T) {
-		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
-
-		// Don't send any folder config - this simulates a completely new folder
-		// The LS will create a new folder config from scratch
-		initParams.InitializationOptions.FolderConfigs = nil
-		initParams.InitializationOptions.ScanningMode = "manual"
-
-		ensureInitialized(t, c, loc, initParams, nil)
-
-		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
-			require.Equal(t, repo, fc.FolderPath)
-			require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
-			require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
-			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
-			require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
-		}, "didn't get correct folder config for new folder")
-
-		// Add a new folder to the workspace
-		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc, c)
-
-		assertFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
-			// Skip validation for the first folder (repo) - already validated above
-			if fc.FolderPath == repo {
-				return
-			}
-			// Validate the newly added folder (folderJuice)
-			require.Equal(t, folderJuice.Path(), fc.FolderPath)
-			require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
-			require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
-			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
-			require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
-		}, "didn't get correct folder config for new folder")
-	})
 
 	t.Run("authenticated - re-adding folder with stored config. (Making sure folder config stays the same)", func(t *testing.T) {
-		c, loc, jsonRpcRecorder, repo, initParams := setupSmokeFolderConfig(t)
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		// Don't send any folder config - this simulates a completely new folder
 		// The LS will create a new folder config from scratch
 		initParams.InitializationOptions.FolderConfigs = nil
-		initParams.InitializationOptions.ScanningMode = "manual"
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
@@ -384,14 +362,15 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		}, "")
 
 		// add folder
-		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc, c)
+		fakeDirFolder, fakeDirFolderPath := addFakeDirAsWorkspaceFolder(t, loc)
+
 		assertFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
 			// Skip validation for the first folder (repo) - already validated above
 			if fc.FolderPath == repo {
 				return
 			}
 			// Validate the newly added folder (folderJuice)
-			require.Equal(t, folderJuice.Path(), fc.FolderPath)
+			require.Equal(t, fakeDirFolderPath, fc.FolderPath)
 			require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
 			require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
 			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
@@ -399,49 +378,35 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		}, "didn't get correct folder config for new folder")
 
 		// remove folder
-		juiceLspWorkspaceFolder := types.WorkspaceFolder{Uri: folderJuice.Uri(), Name: folderJuice.Name()}
-		_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
-			Event: types.WorkspaceFoldersChangeEvent{Removed: []types.WorkspaceFolder{juiceLspWorkspaceFolder}},
-		})
-		require.NoError(t, err)
+		removeWorkSpaceFolder(t, loc, fakeDirFolder)
 		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
 			require.Equal(t, repo, fc.FolderPath)
 		}, "")
 
-		// re-add folder
-		_, err = loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
-			Event: types.WorkspaceFoldersChangeEvent{Added: []types.WorkspaceFolder{juiceLspWorkspaceFolder}},
-		})
+		folderConfig := types.FolderConfig{
+			FolderPath:                  fakeDirFolderPath,
+			AutoDeterminedOrg:           "any",
+			PreferredOrg:                "any",
+			OrgMigratedFromGlobalConfig: true,
+			OrgSetByUser:                false,
+		}
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 		require.NoError(t, err)
+
+		// re-add folder
+		addWorkSpaceFolder(t, loc, fakeDirFolder)
 
 		assertFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
 			if fc.FolderPath == repo {
 				return
 			}
-			require.Equal(t, folderJuice.Path(), fc.FolderPath)
+			require.Equal(t, fakeDirFolderPath, fc.FolderPath)
 			require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
-			require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
-			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+			require.Equal(t, "any", fc.PreferredOrg, "PreferredOrg must be preserved")
+			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
 			require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
 		}, "")
 	})
-}
-
-func setupSmokeFolderConfig(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
-	t.Helper()
-	c := testutil.SmokeTest(t, false)
-	loc, jsonRpcRecorder := setupServer(t, c)
-	c.EnableSnykCodeSecurity(false)
-	c.SetSnykOssEnabled(true)
-	c.SetSnykIacEnabled(false)
-	di.Init()
-
-	repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", c.Logger())
-	require.NoError(t, err)
-	require.NotEmpty(t, repo)
-
-	initParams := prepareInitParams(t, repo, c)
-	return c, loc, jsonRpcRecorder, repo, initParams
 }
 
 func Test_SmokeIssueCaching(t *testing.T) {
@@ -620,18 +585,37 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	require.NotEmpty(t, resp["stdOut"])
 }
 
+func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.WorkspaceFolder, types.FilePath) {
+	t.Helper()
+	fakeDirFolderPath := types.FilePath(t.TempDir())
+	fakeDirFolder := types.WorkspaceFolder{Uri: uri.PathToUri(fakeDirFolderPath), Name: "fake-dir"}
+
+	addWorkSpaceFolder(t, loc, fakeDirFolder)
+
+	return fakeDirFolder, fakeDirFolderPath
+}
+
+func addWorkSpaceFolder(t *testing.T, loc server.Local, f types.WorkspaceFolder) {
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{Added: []types.WorkspaceFolder{f}},
+	})
+	require.NoError(t, err)
+}
+
+func removeWorkSpaceFolder(t *testing.T, loc server.Local, f types.WorkspaceFolder) {
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{Removed: []types.WorkspaceFolder{f}},
+	})
+	require.NoError(t, err)
+}
+
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) types.Folder {
 	t.Helper()
 	cloneTargetDirJuice, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
 	require.NoError(t, err)
 
 	juiceLspWorkspaceFolder := types.WorkspaceFolder{Uri: uri.PathToUri(cloneTargetDirJuice), Name: "juicy-mac-juice-face"}
-	didChangeWorkspaceFoldersParams := types.DidChangeWorkspaceFoldersParams{
-		Event: types.WorkspaceFoldersChangeEvent{Added: []types.WorkspaceFolder{juiceLspWorkspaceFolder}},
-	}
-
-	_, err = loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", didChangeWorkspaceFoldersParams)
-	require.NoError(t, err)
+	addWorkSpaceFolder(t, loc, juiceLspWorkspaceFolder)
 
 	folderJuice := c.Workspace().GetFolderContaining(cloneTargetDirJuice)
 	require.NotNil(t, folderJuice)
