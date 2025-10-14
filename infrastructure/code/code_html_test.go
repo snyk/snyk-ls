@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/stretchr/testify/assert"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
@@ -60,12 +61,11 @@ func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T
 		CodeEnabled: true,
 	}
 	// Set the response for the FeatureFlagStatus method
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
 
 	// invoke method under test
+	c.SetIntegrationName("VS_CODE")
 	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
-	htmlRenderer.inlineIgnoresEnabled = true
-	htmlRenderer.iawEnabled = false
 
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
@@ -438,9 +438,9 @@ func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
 
 	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
 	assert.NoError(t, err)
-	// Enable IAW so the ignore form is rendered
-	htmlRenderer.iawEnabled = true
 
+	c.Engine().GetConfiguration().Set(ignore_workflow.ConfigIgnoreApprovalEnabled, true)
+	// Enable IAW so the ignore form is rendered
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// Form and error badge should be present in the HTML
@@ -460,9 +460,10 @@ func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
 	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
 
+	c.Engine().GetConfiguration().Set(ignore_workflow.ConfigIgnoreApprovalEnabled, true)
+
 	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
 	assert.NoError(t, err)
-	htmlRenderer.iawEnabled = true
 
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	assert.Contains(t, codePanelHtml, ".sn-error-badge")
@@ -600,7 +601,7 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Enabled(t *
 	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
 	assert.NoError(t, err)
 
-	htmlRenderer.updateFeatureFlags()
+	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration())
 
 	assert.True(t, htmlRenderer.inlineIgnoresEnabled)
 }
@@ -615,7 +616,7 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Disabled(t 
 	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
 	assert.NoError(t, err)
 
-	htmlRenderer.updateFeatureFlags()
+	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration())
 
 	assert.False(t, htmlRenderer.inlineIgnoresEnabled)
 }
@@ -634,7 +635,7 @@ func Test_Code_Html_updateFeatureFlags_NonVSCodeIntegration(t *testing.T) {
 	assert.NotNil(t, htmlRenderer)
 
 	// Call the method under test
-	htmlRenderer.updateFeatureFlags()
+	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration())
 
 	// Assert that inlineIgnoresEnabled is false because the integration is not VS_CODE
 	assert.False(t, htmlRenderer.inlineIgnoresEnabled, "inlineIgnoresEnabled should be false for non-VSCode integrations")

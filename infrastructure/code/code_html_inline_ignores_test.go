@@ -42,14 +42,14 @@ func Test_Code_Html_InlineIgnores_Enabled(t *testing.T) {
 	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
 	require.NoError(t, err)
 
-	// Verify that the inline ignores feature is enabled
-	assert.True(t, htmlRenderer.inlineIgnoresEnabled, "InlineIgnores should be enabled")
-
 	// Create a test issue
 	issue := createTestIssue()
 
 	// Get the HTML output
 	htmlOutput := htmlRenderer.GetDetailsHtml(issue)
+
+	// Verify that the inline ignores feature is enabled
+	assert.True(t, htmlRenderer.inlineIgnoresEnabled, "InlineIgnores should be enabled")
 
 	// Verify that the InlineIgnoresEnabled flag is passed to the template
 	// This check should be based on the actual HTML output content, such as checking for UI elements
