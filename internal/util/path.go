@@ -172,12 +172,3 @@ func validatePathExistsAsFile(input string) error {
 	}
 	return nil
 }
-
-// NormalizeFilePaths normalizes a slice of file paths using filepath.Clean
-func NormalizeFilePaths(paths []types.FilePath) []types.FilePath {
-	normalized := make([]types.FilePath, len(paths))
-	for i, path := range paths {
-		normalized[i] = types.FilePath(filepath.Clean(string(path)))
-	}
-	return normalized
-}

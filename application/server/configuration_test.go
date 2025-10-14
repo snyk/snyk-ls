@@ -338,9 +338,9 @@ func Test_UpdateSettings(t *testing.T) {
 
 		UpdateSettings(c, types.Settings{TrustedFolders: []string{"/a/b", "/b/c"}}, "test")
 
-		// Paths are normalized by filepath.Clean(), so we need to check for normalized versions
-		expectedPath1 := types.FilePath(filepath.Clean("/a/b"))
-		expectedPath2 := types.FilePath(filepath.Clean("/b/c"))
+		// Paths are stored as-is without normalization
+		expectedPath1 := types.FilePath("/a/b")
+		expectedPath2 := types.FilePath("/b/c")
 		assert.Contains(t, c.TrustedFolders(), expectedPath1)
 		assert.Contains(t, c.TrustedFolders(), expectedPath2)
 	})

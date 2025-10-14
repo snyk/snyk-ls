@@ -18,6 +18,7 @@ package workspace
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -229,25 +230,31 @@ func (w *Workspace) Clear() {
 	w.hoverService.ClearAllHovers()
 }
 
-// AddTrustedFolders adds trusted folders to the config and sends analytics for each addition
-func AddTrustedFolders(c *config.Config, foldersToAdd []types.Folder, triggerSource string) {
-	trustedFolderPaths := c.TrustedFolders()
+// SetTrustedFolders sets trusted folders to the config and sends analytics for the change
+func SetTrustedFolders(c *config.Config, foldersToSet []types.Folder) {
+	oldTrustedFolderPaths := c.TrustedFolders()
 
-	for _, folder := range foldersToAdd {
-		// Add the folder path to the trusted folders list
-		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
-
-		// Send analytics for each trusted folder addition
-		analytics.SendConfigChangedAnalyticsEvent(c, "trustedFolderAdded", "", string(folder.Path()), folder.Path(), triggerSource)
+	// Convert folders to FilePath slice
+	trustedFolderPaths := make([]types.FilePath, len(foldersToSet))
+	for i, folder := range foldersToSet {
+		c.Logger().Debug().Str("method", "SetTrustedFolders").Msgf("setting trusted folder %s", folder.Path())
+		trustedFolderPaths[i] = folder.Path()
 	}
 
 	// Update the config with the new trusted folders list
 	c.SetTrustedFolders(trustedFolderPaths)
+
+	// Send analytics once with old and new trusted folders lists as JSON strings (only if LSP is initialized)
+	if c.IsLSPInitialized() {
+		oldFoldersJSON, _ := json.Marshal(oldTrustedFolderPaths)
+		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)
+		go analytics.SendConfigChangedAnalyticsEvent(c, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), "ide")
+	}
 }
 
 func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []types.Folder) {
 	// Add trusted folders to config and send analytics
-	AddTrustedFolders(w.c, foldersToBeTrusted, "ide")
+	SetTrustedFolders(w.c, foldersToBeTrusted)
 	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: w.c.TrustedFolders()})
 	for _, f := range foldersToBeTrusted {
 		go f.ScanFolder(ctx)
