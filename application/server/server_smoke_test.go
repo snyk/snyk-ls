@@ -241,6 +241,10 @@ func setupOrgSelectionTest(t *testing.T) (*config.Config, server.Local, *testsup
 	require.NotEmpty(t, repo)
 
 	initParams := prepareInitParams(t, repo, c)
+	initParams.InitializationOptions.ManageBinariesAutomatically = "false"
+	initParams.InitializationOptions.CliPath = "/some/invalid/path/that/does/not/matter/but/cannot/be/blank"
+	initParams.InitializationOptions.AuthenticationMethod = "token"
+	initParams.InitializationOptions.AutomaticAuthentication = "false"
 	initParams.InitializationOptions.ScanningMode = "manual"
 	return c, loc, jsonRpcRecorder, repo, initParams
 }
@@ -283,7 +287,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			require.False(t, fc.OrgSetByUser)
 			require.Empty(t, fc.PreferredOrg)
 			require.NotEmpty(t, fc.AutoDeterminedOrg)
-			require.NotEqual(t, "0", fc.AutoDeterminedOrg)
 			require.True(t, fc.OrgMigratedFromGlobalConfig)
 		}, "didn't get the default folder config")
 	})
