@@ -343,8 +343,15 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 
 	// For configs that have been migrated, we use the org returned by LDX-Sync unless the user has set one.
 	if folderConfig.OrgMigratedFromGlobalConfig {
+		orgSetByUserJustChanged := folderConfig.OrgSetByUser != storedConfig.OrgSetByUser
 		orgHasJustChanged := folderConfig.PreferredOrg != storedConfig.PreferredOrg
-		if orgHasJustChanged {
+		// If the user changes both OrgSetByUser and PreferredOrg, we will prioritise OrgSetByUser changes.
+		if orgSetByUserJustChanged {
+			if !folderConfig.OrgSetByUser {
+				// Ensure we blank the field, so we don't flip it back to an old value when the user disables auto org.
+				folderConfig.PreferredOrg = ""
+			}
+		} else if orgHasJustChanged {
 			// Now we will use the user-provided org and opt them out of LDX-Sync.
 			folderConfig.OrgSetByUser = true
 		} else if !folderConfig.OrgSetByUser {
