@@ -677,6 +677,7 @@ func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.Workspac
 }
 
 func sendConfigurationDidChange(t *testing.T, loc server.Local, s types.Settings) {
+	t.Helper()
 	params := types.DidChangeConfigurationParams{
 		Settings: s,
 	}
