@@ -345,7 +345,7 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 	if folderConfig.OrgMigratedFromGlobalConfig {
 		orgSetByUserJustChanged := folderConfig.OrgSetByUser != storedConfig.OrgSetByUser
 		orgHasJustChanged := folderConfig.PreferredOrg != storedConfig.PreferredOrg
-		// If the user changes both OrgSetByUser and PreferredOrg, we will prioritise OrgSetByUser changes.
+		// If the user changes both OrgSetByUser and PreferredOrg, we will prioritize OrgSetByUser changes.
 		if orgSetByUserJustChanged {
 			if !folderConfig.OrgSetByUser {
 				// Ensure we blank the field, so we don't flip it back to an old value when the user disables auto org.
