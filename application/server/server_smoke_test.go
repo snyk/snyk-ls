@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/google/uuid"
 
 	"github.com/snyk/snyk-ls/internal/util"
@@ -202,10 +204,10 @@ func Test_SmokePreScanCommand(t *testing.T) {
 	})
 }
 
-// assertFolderConfigNotification is a helper to check folder config notifications
-func assertFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, expectedNumber int, validator func(types.FolderConfig), message string) {
+// requireFolderConfigNotification is a helper to check folder config notifications
+func requireFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, expectedNumber int, validator func(types.FolderConfig), message string) {
 	t.Helper()
-	assert.Eventuallyf(t, func() bool {
+	require.Eventuallyf(t, func() bool {
 		notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
 		if len(notifications) == 0 {
 			return false
@@ -264,7 +266,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
-		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
+		requireFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
 			require.Equal(t, repo, fc.FolderPath)
 			require.Equal(t, preferredOrg, fc.PreferredOrg)
 			require.True(t, fc.OrgSetByUser)
@@ -282,7 +284,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
-		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
+		requireFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
 			require.Equal(t, repo, fc.FolderPath)
 			require.False(t, fc.OrgSetByUser)
 			require.Empty(t, fc.PreferredOrg)
@@ -312,7 +314,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		// environment variable used to run the test.
 		defaultOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 
-		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
+		requireFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
 			require.Equal(t, repo, fc.FolderPath)
 			require.Empty(t, fc.PreferredOrg)
@@ -338,7 +340,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
 
-		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
+		requireFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
 			require.Equal(t, repo, fc.FolderPath)
 			require.True(t, fc.OrgSetByUser)
 			require.Equal(t, expectedOrg, fc.PreferredOrg)
@@ -356,7 +358,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
-		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
+		requireFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
 			require.Equal(t, repo, fc.FolderPath)
 			require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
 			require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
@@ -367,7 +369,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		// add folder
 		fakeDirFolder, fakeDirFolderPath := addFakeDirAsWorkspaceFolder(t, loc)
 
-		assertFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
+		requireFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
 			// Skip validation for the first folder (repo) - already validated above
 			if fc.FolderPath == repo {
 				return
@@ -382,7 +384,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		// remove folder
 		removeWorkSpaceFolder(t, loc, fakeDirFolder)
-		assertFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
+		requireFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
 			require.Equal(t, repo, fc.FolderPath)
 		}, "")
 
@@ -399,7 +401,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		// re-add folder
 		addWorkSpaceFolder(t, loc, fakeDirFolder)
 
-		assertFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
+		requireFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
 			if fc.FolderPath == repo {
 				return
 			}
@@ -408,6 +410,82 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			require.Equal(t, "any", fc.PreferredOrg, "PreferredOrg must be preserved")
 			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
 			require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+		}, "")
+	})
+
+	t.Run("unauthenticated - re-adding folder with changing the config through workspace/didChangeConfiguration", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+		t.Setenv("SNYK_TOKEN", "")
+
+		// Don't send any folder config - this simulates a completely new folder
+		// The LS will create a new folder config from scratch
+		initParams.InitializationOptions.FolderConfigs = nil
+
+		ensureInitialized(t, c, loc, initParams, nil)
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
+			require.Equal(t, repo, fc.FolderPath)
+			require.False(t, fc.OrgSetByUser)
+			require.Empty(t, fc.PreferredOrg)
+			require.Empty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		}, "")
+
+		// add folder
+		fakeDirFolder, fakeDirFolderPath := addFakeDirAsWorkspaceFolder(t, loc)
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
+			// Skip validation for the first folder (repo) - already validated above
+			if fc.FolderPath == repo {
+				return
+			}
+			// Validate the newly added folder (folderJuice)
+			require.Equal(t, fakeDirFolderPath, fc.FolderPath)
+			require.False(t, fc.OrgSetByUser)
+			require.Empty(t, fc.PreferredOrg)
+			require.Empty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		}, "")
+
+		// remove folder
+		removeWorkSpaceFolder(t, loc, fakeDirFolder)
+		requireFolderConfigNotification(t, jsonRpcRecorder, 1, func(fc types.FolderConfig) {
+			require.Equal(t, repo, fc.FolderPath)
+			require.False(t, fc.OrgSetByUser)
+			require.Empty(t, fc.PreferredOrg)
+			require.Empty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		}, "")
+
+		// re-add folder
+		addWorkSpaceFolder(t, loc, fakeDirFolder)
+
+		// simulate settings change from the IDE
+		requireFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
+			if fc.FolderPath == repo {
+				return
+			}
+			require.False(t, fc.OrgSetByUser)
+			require.Empty(t, fc.PreferredOrg)
+			require.Empty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		}, "")
+		storedConfig, _ := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+		storedConfig.FolderConfigs[fakeDirFolderPath].PreferredOrg = "any"
+		sendConfigurationDidChange(t, loc, types.Settings{
+			FolderConfigs: lo.Map(lo.Values(storedConfig.FolderConfigs), func(item *types.FolderConfig, _ int) types.FolderConfig {
+				return *item
+			}),
+		})
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, 2, func(fc types.FolderConfig) {
+			if fc.FolderPath == repo {
+				return
+			}
+			require.True(t, fc.OrgSetByUser)
+			require.Equal(t, "any", fc.PreferredOrg)
+			require.Empty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
 		}, "")
 	})
 }
@@ -596,6 +674,14 @@ func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.Workspac
 	addWorkSpaceFolder(t, loc, fakeDirFolder)
 
 	return fakeDirFolder, fakeDirFolderPath
+}
+
+func sendConfigurationDidChange(t *testing.T, loc server.Local, s types.Settings) {
+	params := types.DidChangeConfigurationParams{
+		Settings: s,
+	}
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
+	require.NoError(t, err)
 }
 
 func addWorkSpaceFolder(t *testing.T, loc server.Local, f types.WorkspaceFolder) {
