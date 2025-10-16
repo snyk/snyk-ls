@@ -16,6 +16,7 @@
 package mcp_extension
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,12 +25,17 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
+
+	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
@@ -59,26 +65,134 @@ func TestDefaultURL(t *testing.T) {
 }
 
 func TestExpandedEnv(t *testing.T) {
-	t.Setenv(strings.ToUpper(configuration.INTEGRATION_NAME), "abc")
-	t.Setenv(strings.ToUpper(configuration.INTEGRATION_VERSION), "abc")
-	binding := NewMcpLLMBinding()
+	t.Run("sets integration environment variables", func(t *testing.T) {
+		t.Setenv(strings.ToUpper(configuration.INTEGRATION_NAME), "abc")
+		t.Setenv(strings.ToUpper(configuration.INTEGRATION_VERSION), "abc")
 
-	env := binding.expandedEnv("1.x.1", "Client1", "1.0.0")
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-	for _, s := range os.Environ() {
-		if strings.HasPrefix(s, strings.ToUpper(configuration.INTEGRATION_NAME)) {
-			continue
+		mockEngine := mocks.NewMockEngine(ctrl)
+		engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+
+		invocationCtx := mocks.NewMockInvocationContext(ctrl)
+		invocationCtx.EXPECT().GetEngine().Return(mockEngine).AnyTimes()
+
+		binding := NewMcpLLMBinding()
+
+		env := binding.expandedEnv(invocationCtx, "1.x.1", "Client1", "1.0.0")
+
+		for _, s := range os.Environ() {
+			if strings.HasPrefix(s, strings.ToUpper(configuration.INTEGRATION_NAME)) {
+				continue
+			}
+			if strings.HasPrefix(s, strings.ToUpper(configuration.INTEGRATION_VERSION)) {
+				continue
+			}
+			assert.Contains(t, env, s)
 		}
-		if strings.HasPrefix(s, strings.ToUpper(configuration.INTEGRATION_VERSION)) {
-			continue
-		}
-		assert.Contains(t, env, s)
-	}
 
-	assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_NAME)+"=MCP")
-	assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_VERSION)+"=1.x.1")
-	assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT)+"=Client1")
-	assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT_VERSION)+"=1.0.0")
+		assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_NAME)+"=MCP")
+		assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_VERSION)+"=1.x.1")
+		assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT)+"=Client1")
+		assert.Contains(t, env, strings.ToUpper(configuration.INTEGRATION_ENVIRONMENT_VERSION)+"=1.0.0")
+	})
+
+	t.Run("adds legacy auth token when IDE_CONFIG_PATH is set", func(t *testing.T) {
+		tempDir := t.TempDir()
+		t.Setenv("IDE_CONFIG_PATH", tempDir)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		testToken := uuid.New().String()
+
+		mockStorage := mocks.NewMockStorage(ctrl)
+		mockStorage.EXPECT().Refresh(gomock.Any(), auth.CONFIG_KEY_OAUTH_TOKEN).Return(nil).AnyTimes()
+		mockStorage.EXPECT().Refresh(gomock.Any(), configuration.AUTHENTICATION_TOKEN).Return(nil).AnyTimes()
+
+		mockEngine := mocks.NewMockEngine(ctrl)
+		engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		engineConfig.SetStorage(mockStorage)
+		engineConfig.Set(configuration.AUTHENTICATION_TOKEN, testToken)
+
+		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+
+		logger := zerolog.Nop()
+		invocationCtx := mocks.NewMockInvocationContext(ctrl)
+		invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+		invocationCtx.EXPECT().GetEngine().Return(mockEngine).AnyTimes()
+
+		binding := NewMcpLLMBinding()
+
+		env := binding.expandedEnv(invocationCtx, "1.x.1", "Client1", "1.0.0")
+
+		assert.Contains(t, env, strings.ToUpper(configuration.AUTHENTICATION_TOKEN)+"="+testToken)
+		assert.Contains(t, env, strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)+"=0")
+
+		// Should not contain bearer token
+		for _, e := range env {
+			assert.NotContains(t, e, strings.ToUpper(configuration.AUTHENTICATION_BEARER_TOKEN)+"=")
+		}
+	})
+
+	t.Run("adds OAuth bearer token when IDE_CONFIG_PATH is set", func(t *testing.T) {
+		tempDir := t.TempDir()
+		t.Setenv("IDE_CONFIG_PATH", tempDir)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		testOAuthToken := oauth2.Token{AccessToken: "test-access-token"}
+		tokenJSON, _ := json.Marshal(testOAuthToken)
+
+		mockStorage := mocks.NewMockStorage(ctrl)
+		mockStorage.EXPECT().Refresh(gomock.Any(), auth.CONFIG_KEY_OAUTH_TOKEN).Return(nil).AnyTimes()
+		mockStorage.EXPECT().Refresh(gomock.Any(), configuration.AUTHENTICATION_TOKEN).Return(nil).AnyTimes()
+
+		mockEngine := mocks.NewMockEngine(ctrl)
+		engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		engineConfig.SetStorage(mockStorage)
+		engineConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(tokenJSON))
+
+		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+
+		logger := zerolog.Nop()
+		invocationCtx := mocks.NewMockInvocationContext(ctrl)
+		invocationCtx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+		invocationCtx.EXPECT().GetEngine().Return(mockEngine).AnyTimes()
+
+		binding := NewMcpLLMBinding()
+
+		env := binding.expandedEnv(invocationCtx, "1.x.1", "Client1", "1.0.0")
+
+		assert.Contains(t, env, strings.ToUpper(configuration.AUTHENTICATION_BEARER_TOKEN)+"=test-access-token")
+		assert.Contains(t, env, strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)+"=1")
+	})
+
+	t.Run("does not add auth tokens when IDE_CONFIG_PATH is not set", func(t *testing.T) {
+		t.Setenv("IDE_CONFIG_PATH", "")
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockEngine := mocks.NewMockEngine(ctrl)
+		engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+
+		invocationCtx := mocks.NewMockInvocationContext(ctrl)
+		invocationCtx.EXPECT().GetEngine().Return(mockEngine).AnyTimes()
+
+		binding := NewMcpLLMBinding()
+
+		env := binding.expandedEnv(invocationCtx, "1.x.1", "Client1", "1.0.0")
+
+		// Should not contain any auth tokens
+		for _, e := range env {
+			assert.NotContains(t, e, strings.ToUpper(configuration.AUTHENTICATION_BEARER_TOKEN)+"=")
+		}
+	})
 }
 
 func TestIsValidHttpRequest(t *testing.T) {

@@ -146,7 +146,7 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 		integrationVersion = runtimeInfo.GetVersion()
 	}
 
-	command.Env = m.expandedEnv(integrationVersion, clientInfo.Name, clientInfo.Version)
+	command.Env = m.expandedEnv(invocationCtx, integrationVersion, clientInfo.Name, clientInfo.Version)
 
 	logger.Debug().Strs("args", command.Args).Str("workingDir", command.Dir).Msg("Running Command with")
 	logger.Trace().Strs("env", command.Env).Msg("Environment")
@@ -208,7 +208,7 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 
 		args := buildCommand(m.cliPath, toolDef.Command, params)
 
-		// Add working directory if specified
+		// Add a working directory if specified
 		if workingDir == "" {
 			logger.Debug().Msg("Received empty workingDir")
 		}
