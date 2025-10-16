@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
-        run:
+        run: |
           git config --global core.autocrlf false
           git config --system core.longpaths true
 
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
-        run:
+        run: |
           git config --global core.autocrlf false
           git config --system core.longpaths true
 
@@ -93,7 +93,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Prepare git
-        run:
+        run: |
           git config --global core.autocrlf false
           git config --system core.longpaths true
 
@@ -199,7 +199,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
-        run:
+        run: |
           git config --global core.autocrlf false
           git config --system core.longpaths true
 
