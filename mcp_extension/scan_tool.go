@@ -174,6 +174,7 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	return resAsString, nil
 }
 
+// nolint: gocyclo, nolintlint // func is used for all scanners, will be refactored to use GAF WFs
 // defaultHandler executes a command and enhances output for scan tools
 func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
