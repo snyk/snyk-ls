@@ -88,9 +88,6 @@ func setupServer(t *testing.T, c *config.Config) (server.Local, *testsupport.Jso
 func setupServerWithCustomDI(t *testing.T, c *config.Config, useMocks bool) (server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	s, jsonRPCRecorder := setupCustomServer(t, c, nil)
-	if !useMocks {
-		di.Init()
-	}
 	return s, jsonRPCRecorder
 }
 
