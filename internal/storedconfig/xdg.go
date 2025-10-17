@@ -104,8 +104,11 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (
 			Msg("GetStoredConfig: Loaded stored config from configuration")
 
 		// Normalize existing keys loaded from storage to ensure consistency
-		if sc != nil && sc.FolderConfigs != nil {
+		if sc != nil {
 			normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.FolderConfigs))
+			if sc.FolderConfigs == nil {
+				return sc, nil
+			}
 			for k, v := range sc.FolderConfigs {
 				nk := util.PathKey(k)
 				normalized[nk] = v
