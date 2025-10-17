@@ -22,8 +22,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
+	"regexp"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -118,6 +121,8 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 			m.mcpServer.AddTool(tool, m.snykSendFeedback(invocationCtx, toolDef))
 		case SnykAuth:
 			m.mcpServer.AddTool(tool, m.snykAuthHandler(invocationCtx, toolDef))
+		case SnykCodeTest:
+			m.mcpServer.AddTool(tool, m.snykCodeTestHandler(invocationCtx, toolDef))
 		default:
 			m.mcpServer.AddTool(tool, m.defaultHandler(invocationCtx, toolDef))
 		}
@@ -368,4 +373,131 @@ func getAuthMsg(config configuration.Configuration, userName string) string {
 	apiUrl := config.GetString(configuration.API_URL)
 	org := config.GetString(configuration.ORGANIZATION)
 	return fmt.Sprintf("Already Authenticated. User: %s Using API Endpoint: %s and Org: %s", userName, apiUrl, org)
+}
+
+// getCodeEnablementUrl builds the URL to enable Snyk Code in the organization settings
+// Uses the same logic as application/config/config.go getCustomEndpointUrlFromSnykApi
+func getCodeEnablementUrl(config configuration.Configuration) string {
+	apiUrl := config.GetString(configuration.API_URL)
+
+	// Parse the API URL
+	snykApiUrl, err := url.Parse(strings.TrimSpace(apiUrl))
+	if err != nil || !snykApiUrl.IsAbs() {
+		return "https://app.snyk.io/manage/snyk-code?from=snyk-ls"
+	}
+
+	// Replace "api" or "app" subdomain with "app"
+	// This handles: api.snyk.io -> app.snyk.io, app.snyk.io -> app.snyk.io
+	subdomainRegex := regexp.MustCompile(`^(ap[pi]\.)?`)
+	snykApiUrl.Host = subdomainRegex.ReplaceAllString(snykApiUrl.Host, "app.")
+	snykApiUrl.Path = ""
+
+	return snykApiUrl.String() + "/manage/snyk-code?from=snyk-ls"
+}
+
+// detectSastNotEnabledError checks if the CLI error indicates SAST is not enabled
+// Note: `snyk code test --sarif` returns plain text errors, not JSON
+// Common error patterns when SAST is disabled:
+// - "Snyk Code is not supported for org <org-name>"
+// - "Please enable in Settings > Snyk Code"
+// - Generic "Snyk Code is not enabled" messages
+func detectSastNotEnabledError(output string) bool {
+	// Check plain text output for SAST disabled error messages
+	// These are the actual error patterns returned by `snyk code test --sarif` when SAST is disabled
+	sastDisabledIndicators := []string{
+		"snyk code is not enabled",
+		"snyk code is not supported for org",
+		"sast is not enabled",
+		"code analysis is not enabled",
+		"enable in settings > snyk code",
+		"code is not supported",
+		"is not enabled for",
+	}
+
+	lowerOutput := strings.ToLower(output)
+	for _, indicator := range sastDisabledIndicators {
+		if strings.Contains(lowerOutput, indicator) {
+			return true
+		}
+	}
+	return false
+}
+
+// snykCodeTestHandler is a specialized handler for snyk_code_scan that provides enhanced error messages
+func (m *McpLLMBinding) snykCodeTestHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := m.logger.With().Str("method", "snykCodeTestHandler").Logger()
+		logger.Debug().Str("toolName", toolDef.Name).Msg("Received call for tool")
+
+		if len(toolDef.Command) == 0 {
+			return nil, fmt.Errorf("empty command in tool definition for %s", toolDef.Name)
+		}
+
+		requestArgs := request.GetArguments()
+		params, workingDir, err := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
+		if err != nil {
+			return nil, err
+		}
+
+		trustDisabled := invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) || toolDef.IgnoreTrust
+		if !trustDisabled && !m.folderTrust.IsFolderTrusted(workingDir) {
+			trustErr := fmt.Sprintf("Error: folder '%s' is not trusted. Please run 'snyk_trust' first", workingDir)
+			logger.Error().Msg(trustErr)
+			return mcp.NewToolResultText(trustErr), nil
+		}
+
+		if !toolDef.IgnoreAuth {
+			user, whoAmiErr := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
+			if whoAmiErr != nil || user.UserName == "" {
+				return mcp.NewToolResultText("User not authenticated. Please run 'snyk_auth' first"), nil
+			}
+		}
+
+		args := buildCommand(m.cliPath, toolDef.Command, params)
+
+		if workingDir == "" {
+			logger.Debug().Msg("Received empty workingDir")
+		}
+
+		// Run the command
+		output, err := m.runSnyk(ctx, invocationCtx, workingDir, args)
+
+		// Check if error is due to SAST not being enabled
+		if err != nil {
+			if detectSastNotEnabledError(output) {
+				config := invocationCtx.GetEngine().GetConfiguration()
+				enablementUrl := getCodeEnablementUrl(config)
+
+				// Automatically open the browser to the enablement page
+				logger.Debug().Str("url", enablementUrl).Msg("Opening browser to enable Snyk Code")
+				m.openBrowserFunc(enablementUrl)
+
+				enhancedError := fmt.Sprintf(`Error: Snyk Code (SAST) is not enabled for your organization.
+
+I've opened the Snyk Code enablement page in your browser: %s
+
+Please:
+1. Click "Enable Snyk Code" on the settings page
+2. After enabling, let me know and I'll rerun the scan
+
+Note: You need organization admin permissions to enable Snyk Code.
+
+Original error: %s`, enablementUrl, output)
+
+				logger.Debug().Msg("Detected SAST not enabled error, opened browser and returning enhanced message")
+				return mcp.NewToolResultText(enhancedError), nil
+			}
+
+			// For other errors, return standard error message
+			if output != "" {
+				return mcp.NewToolResultText(fmt.Sprintf("Error: %s", output)), nil
+			} else {
+				return mcp.NewToolResultText(fmt.Sprintf("Error: %s", err.Error())), nil
+			}
+		}
+
+		output = m.enhanceOutput(&logger, toolDef, output, err == nil, workingDir)
+
+		return mcp.NewToolResultText(output), nil
+	}
 }
