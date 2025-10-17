@@ -897,19 +897,24 @@ func TestRunSnyk(t *testing.T) {
 
 func createMockSnykCli(t *testing.T, path, output string) {
 	t.Helper()
+	createMockSnykCliWithExitCode(t, path, output, 0)
+}
+
+func createMockSnykCliWithExitCode(t *testing.T, path, output string, exitCode int) {
+	t.Helper()
 
 	var script string
 
 	if runtime.GOOS == "windows" {
 		script = fmt.Sprintf(`@echo off
 echo %s
-exit /b 0
-`, output)
+exit /b %d
+`, output, exitCode)
 	} else {
 		script = fmt.Sprintf(`#!/bin/sh
 echo '%s'
-exit 0
-`, output)
+exit %d
+`, output, exitCode)
 	}
 
 	err := os.WriteFile(path, []byte(script), 0755)
@@ -1364,4 +1369,203 @@ func whoamiWorkflowResponse(t *testing.T) (*authentication.ActiveUser, []workflo
 			expectedUserJSON),
 	}
 	return &expectedUser, expectedUserData
+}
+
+func TestGetCodeEnablementUrl(t *testing.T) {
+	tests := []struct {
+		name        string
+		apiUrl      string
+		expectedUrl string
+	}{
+		{
+			name:        "Standard API URL",
+			apiUrl:      "https://api.snyk.io",
+			expectedUrl: "https://app.snyk.io/manage/snyk-code?from=snyk-ls",
+		},
+		{
+			name:        "API URL with path",
+			apiUrl:      "https://api.snyk.io/api",
+			expectedUrl: "https://app.snyk.io/manage/snyk-code?from=snyk-ls",
+		},
+		{
+			name:        "Custom endpoint",
+			apiUrl:      "https://api.custom.snyk.io",
+			expectedUrl: "https://app.custom.snyk.io/manage/snyk-code?from=snyk-ls",
+		},
+		{
+			name:        "Custom endpoint with /api path",
+			apiUrl:      "https://custom.endpoint.com/api",
+			expectedUrl: "https://app.custom.endpoint.com/manage/snyk-code?from=snyk-ls",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			config := configuration.NewWithOpts()
+			config.Set(configuration.API_URL, tc.apiUrl)
+
+			result := getCodeEnablementUrl(config)
+			require.Equal(t, tc.expectedUrl, result)
+		})
+	}
+}
+
+func TestDetectSastNotEnabledError(t *testing.T) {
+	tests := []struct {
+		name     string
+		output   string
+		expected bool
+	}{
+		{
+			name:     "Snyk Code is not enabled (lowercase)",
+			output:   "Error: snyk code is not enabled for your organization",
+			expected: true,
+		},
+		{
+			name:     "Snyk Code is not enabled (capitalized)",
+			output:   "Error: Snyk Code is not enabled for your organization",
+			expected: true,
+		},
+		{
+			name:     "Snyk Code is not supported for org",
+			output:   "Snyk Code is not supported for org test-org-123",
+			expected: true,
+		},
+		{
+			name:     "Enable in Settings message",
+			output:   "Please enable in Settings > Snyk Code",
+			expected: true,
+		},
+		{
+			name:     "SAST is not enabled",
+			output:   "SAST is not enabled",
+			expected: true,
+		},
+		{
+			name:     "Code analysis is not enabled",
+			output:   "Code analysis is not enabled for your account",
+			expected: true,
+		},
+		{
+			name:     "Code is not supported",
+			output:   "code is not supported for this organization",
+			expected: true,
+		},
+		{
+			name:     "Generic is not enabled for pattern",
+			output:   "Snyk Code is not enabled for your organization",
+			expected: true,
+		},
+		{
+			name:     "Different error - Authentication (should not match)",
+			output:   "Error: Authentication failed",
+			expected: false,
+		},
+		{
+			name:     "Different error - No vulnerabilities (should not match)",
+			output:   "No vulnerabilities found",
+			expected: false,
+		},
+		{
+			name:     "Empty output (should not match)",
+			output:   "",
+			expected: false,
+		},
+		{
+			name:     "Unrelated error message (should not match)",
+			output:   "Error: Network timeout occurred",
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := detectSastNotEnabledError(tc.output)
+			require.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestSnykCodeTestHandler_SastNotEnabled(t *testing.T) {
+	fixture := setupTestFixture(t)
+	toolDef := getToolWithName(t, fixture.tools, SnykCodeTest)
+	require.NotNil(t, toolDef, "snyk_code_scan tool definition not found")
+
+	// Create a mock CLI that returns realistic SAST not enabled error with exit code 2
+	// Note: `snyk code test --sarif` returns plain text errors, not JSON
+	sastNotEnabledResponse := "Snyk Code is not supported for org test-org. Please enable in Settings > Snyk Code"
+	createMockSnykCliWithExitCode(t, fixture.snykCliPath, sastNotEnabledResponse, 2)
+
+	// Mock browser opening to capture the URL
+	browserOpened := false
+	var capturedUrl string
+	fixture.binding.openBrowserFunc = func(url string) {
+		browserOpened = true
+		capturedUrl = url
+	}
+
+	handler := fixture.binding.snykCodeTestHandler(fixture.invocationContext, *toolDef)
+
+	t.Run("Detects SAST not enabled, opens browser, and returns enhanced error", func(t *testing.T) {
+		testPath := t.TempDir()
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Arguments: map[string]interface{}{
+					"path": testPath,
+				},
+			},
+		}
+
+		result, err := handler(t.Context(), request)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// Verify browser was opened
+		require.True(t, browserOpened, "Browser should have been opened automatically")
+		require.Contains(t, capturedUrl, "/manage/snyk-code?from=snyk-ls")
+
+		// Verify enhanced error message
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		require.Contains(t, textContent.Text, "Snyk Code (SAST) is not enabled")
+		require.Contains(t, textContent.Text, "I've opened the Snyk Code enablement page")
+		require.Contains(t, textContent.Text, "organization admin permissions")
+		require.Contains(t, textContent.Text, "/manage/snyk-code?from=snyk-ls")
+		require.NotContains(t, textContent.Text, "snyk_enable_code", "Should not mention separate tool anymore")
+	})
+}
+
+func TestSnykCodeTestHandler_Success(t *testing.T) {
+	fixture := setupTestFixture(t)
+	toolDef := getToolWithName(t, fixture.tools, SnykCodeTest)
+	require.NotNil(t, toolDef, "snyk_code_scan tool definition not found")
+
+	// Create a mock CLI that returns successful SARIF output
+	successResponse := `{"runs":[{"tool":{"driver":{"name":"SnykCode"}},"results":[]}]}`
+	createMockSnykCli(t, fixture.snykCliPath, successResponse)
+
+	handler := fixture.binding.snykCodeTestHandler(fixture.invocationContext, *toolDef)
+
+	t.Run("Returns success response when SAST is enabled", func(t *testing.T) {
+		testPath := t.TempDir()
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Arguments: map[string]interface{}{
+					"path": testPath,
+				},
+			},
+		}
+
+		result, err := handler(t.Context(), request)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		// Should not contain error message about SAST not being enabled
+		require.NotContains(t, textContent.Text, "SAST is not enabled")
+		require.NotContains(t, textContent.Text, "snyk_enable_code")
+	})
 }
