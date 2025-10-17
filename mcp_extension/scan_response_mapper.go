@@ -48,6 +48,7 @@ type IssueData struct {
 	Message     string                 `json:"message,omitempty"`
 	LearnURL    string                 `json:"learnUrl,omitempty"`
 	FingerPrint string                 `json:"fingerPrint,omitempty"`
+	IsIgnored   bool                   `json:"isIgnored,omitempty"`
 }
 
 const (
@@ -64,7 +65,7 @@ type EnhancedScanResult struct {
 }
 
 // mapScanResponse maps the scan output to an enhanced format for LLMs
-func mapScanResponse(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, workDir string, learnService learn.Service) string {
+func mapScanResponse(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, workDir string, learnService learn.Service, includeIgnores bool) string {
 	mapperFunc, ok := outputMapperMap[toolDef.OutputMapper]
 	if !ok || !IsJSON(output) {
 		return output
@@ -76,7 +77,7 @@ func mapScanResponse(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, out
 		Issues:         []IssueData{},
 	}
 
-	mapperFunc(logger, &result, learnService, workDir)
+	mapperFunc(logger, &result, learnService, workDir, includeIgnores)
 
 	enhancedJSON, err := json.Marshal(result)
 	if err != nil {
@@ -87,7 +88,7 @@ func mapScanResponse(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, out
 }
 
 // extractSCAIssues extracts structured issue data from SCA JSON output
-func extractSCAIssues(logger *zerolog.Logger, result *EnhancedScanResult, learnService learn.Service, workDir string) {
+func extractSCAIssues(logger *zerolog.Logger, result *EnhancedScanResult, learnService learn.Service, workDir string, _ bool) {
 	issues, err := oss.ConvertJSONToIssues(logger, []byte(result.OriginalOutput), learnService, workDir)
 	if err != nil {
 		return
@@ -100,13 +101,16 @@ func extractSCAIssues(logger *zerolog.Logger, result *EnhancedScanResult, learnS
 }
 
 // extractSASTIssues extracts issues from SAST scan output
-func extractSASTIssues(logger *zerolog.Logger, result *EnhancedScanResult, _ learn.Service, workDir string) {
+func extractSASTIssues(logger *zerolog.Logger, result *EnhancedScanResult, _ learn.Service, workDir string, includeIgnores bool) {
 	issues, err := code.ConvertSARIFJSONToIssues(logger, 0, []byte(result.OriginalOutput), workDir)
 	if err != nil {
 		return
 	}
 
 	for _, issue := range issues {
+		if !includeIgnores && issue.GetIsIgnored() {
+			continue
+		}
 		result.Issues = append(result.Issues, convertIssueToData(issue))
 	}
 	result.IssueCount = len(result.Issues)
@@ -122,11 +126,12 @@ func convertIssueToData(issue types.Issue) IssueData {
 	}
 
 	data := IssueData{
-		ID:       issue.GetID(),
-		Title:    title,
-		Severity: issue.GetSeverity().String(),
-		Message:  issue.GetMessage(),
-		LearnURL: learnURL,
+		ID:        issue.GetID(),
+		Title:     title,
+		Severity:  issue.GetSeverity().String(),
+		Message:   issue.GetMessage(),
+		LearnURL:  learnURL,
+		IsIgnored: issue.GetIsIgnored(),
 	}
 
 	// Handle different issue types
