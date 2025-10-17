@@ -124,6 +124,7 @@ func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targe
 
 	output, err := clone.CombinedOutput()
 	if err != nil {
+		t.Log(string(output))
 		t.Fatal(err, "clone didn't work")
 	}
 

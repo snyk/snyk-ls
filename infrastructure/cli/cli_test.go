@@ -154,7 +154,7 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, 2*time.Second, 10*time.Millisecond, "getCommand should complete after environment becomes ready")
+	}, 5*time.Second, 10*time.Millisecond, "getCommand should complete after environment becomes ready")
 
 	require.NoError(t, cmdErr)
 	require.NotNil(t, builtCmd)

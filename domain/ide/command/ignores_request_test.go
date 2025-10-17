@@ -119,6 +119,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 				command: types.CommandData{
 					Arguments: tt.arguments,
 				},
+				c: c,
 			}
 
 			gafConfig := c.Engine().GetConfiguration()

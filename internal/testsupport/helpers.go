@@ -1,6 +1,7 @@
 package testsupport
 
 import (
+	"os"
 	"runtime"
 	"testing"
 
@@ -31,6 +32,13 @@ func OnlyOnWindows(t *testing.T, reason string) {
 	if //goland:noinspection GoBoolExpressions
 	runtime.GOOS != "windows" {
 		t.Skipf("Only on windows, because %s", reason)
+	}
+}
+
+func NotOnCI(t *testing.T, reason string) {
+	t.Helper()
+	if os.Getenv("CI") != "" {
+		t.Skipf("Not on CI, because %s", reason)
 	}
 }
 

@@ -555,10 +555,10 @@ type FolderConfig struct {
 	AdditionalParameters        []string                              `json:"additionalParameters,omitempty"`
 	ReferenceFolderPath         FilePath                              `json:"referenceFolderPath,omitempty"`
 	ScanCommandConfig           map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
-	PreferredOrg                string                                `json:"preferredOrg,omitempty"`
-	AutoDeterminedOrg           string                                `json:"autoDeterminedOrg,omitempty"`
-	OrgMigratedFromGlobalConfig bool                                  `json:"orgMigratedFromGlobalConfig,omitempty"`
-	OrgSetByUser                bool                                  `json:"orgSetByUser,omitempty"`
+	PreferredOrg                string                                `json:"preferredOrg"`
+	AutoDeterminedOrg           string                                `json:"autoDeterminedOrg"`
+	OrgMigratedFromGlobalConfig bool                                  `json:"orgMigratedFromGlobalConfig"`
+	OrgSetByUser                bool                                  `json:"orgSetByUser"`
 }
 
 type Pair struct {
