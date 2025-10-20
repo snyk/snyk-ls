@@ -33,8 +33,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-const DoTrust = "Trust folders and continue"
-const DontTrust = "Don't trust folders"
+const (
+	DoTrust   = "Trust folders and continue"
+	DontTrust = "Don't trust folders"
+)
 
 func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator) {
 	initScanStateAggregator(c, agg)
@@ -63,6 +65,10 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			logger.Err(err).Msg("unable to resolve organization, continuing...")
 		} else {
 			folderConfig.AutoDeterminedOrg = org.Id
+			err = storedconfig.UpdateFolderConfig(configuration, folderConfig, &logger)
+			if err != nil {
+				logger.Err(err).Msg("unable to save ldx-sync defined org")
+			}
 		}
 
 		// Trigger migration for folders that haven't been migrated yet
@@ -198,6 +204,7 @@ func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
 	}
 	agg.Init(folderPaths)
 }
+
 func initScanPersister(c *config.Config, persister persistence.ScanSnapshotPersister) {
 	logger := c.Logger().With().Str("method", "initScanPersister").Logger()
 	w := c.Workspace()

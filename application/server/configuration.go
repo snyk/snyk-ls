@@ -385,8 +385,8 @@ func updateRuntimeInfo(c *config.Config, settings types.Settings) {
 }
 
 func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSource string) {
-	//Not all changes to the trusted folders are updated in the config here. They are actually updated in other parts of the application.
-	//So we are not actually sending analytics for all changes to the trusted folders here.
+	// Not all changes to the trusted folders are updated in the config here. They are actually updated in other parts of the application.
+	// So we are not actually sending analytics for all changes to the trusted folders here.
 
 	trustedFoldersFeatureEnabled, err := strconv.ParseBool(settings.EnableTrustedFoldersFeature)
 	if err == nil {
