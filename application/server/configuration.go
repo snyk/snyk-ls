@@ -256,7 +256,8 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		folderConfigs = append(folderConfigs, folderConfig)
 	}
 
-	if folderConfigsMayHaveChanged {
+	// Don't send folder configs on initialize, since initialized will always send them.
+	if folderConfigsMayHaveChanged && triggerSource != "initialize" {
 		folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
 		notifier.Send(folderConfigsParam)
 	}
@@ -323,15 +324,18 @@ func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig
 }
 
 func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
-	// As a safety net, ensure the folder config has the AutoDeterminedOrg; we never want to save without it.
+	// As a safety net, ensure the folder config has the AutoDeterminedOrg.
 	if folderConfig.AutoDeterminedOrg == "" {
 		// Folder configs should always save the AutoDeterminedOrg, regardless of if the user needs it.
 		if storedConfig.AutoDeterminedOrg != "" {
 			folderConfig.AutoDeterminedOrg = storedConfig.AutoDeterminedOrg
 		} else {
-			// Somehow we missed the workflows that set this, so just fetch it now.
-			org, _ := command.GetBestOrgFromLdxSync(c, folderConfig)
-			folderConfig.AutoDeterminedOrg = org.Id
+			// Case when Folder Configs were provided as part of initialize request
+			// or when user is not logged in during initialized notification
+			org, err := command.GetBestOrgFromLdxSync(c, folderConfig)
+			if err == nil { // No need to log the error, it will have already been logged.
+				folderConfig.AutoDeterminedOrg = org.Id
+			}
 		}
 	}
 

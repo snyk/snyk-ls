@@ -129,17 +129,15 @@ func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (
 // MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration
 // based on the global organization setting and the LDX-Sync result.
 func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.FolderConfig) {
-	// If we are migrating a folderConfig provided by the user,
-	// e.g. the user is changing settings while unauthenticated or values are set in a repo's ".vscode/settings.json",
-	// but this is the first time LS is seeing the folder, ...
+	// Edge case when user provided folder config on initialize params or
+	// the user is changing settings while unauthenticated
 	if folderConfig.OrgSetByUser {
-		// ... where they have said they don't want LDX-Sync, we simply save it as migrated.
+		// we take what they set and simply save it as migrated.
 		folderConfig.OrgMigratedFromGlobalConfig = true
 		return
 	} else if folderConfig.PreferredOrg != "" {
-		// ... where they have set a preferred org manually, even though someone forgot to set the OrgSetByUser field at the
-		// folder level, we should take that as a sign they wanted to be opted out of LDX-Sync, set OrgSetByUser to true,
-		// and save it as migrated.
+		// they may have just changed the preferred org field while unauthenticated, still treat it as opting out of auto-org
+		// or provided initialize params had Preferred org defined but OrgSetByUser = false, so we fix it
 		folderConfig.OrgSetByUser = true
 		folderConfig.OrgMigratedFromGlobalConfig = true
 		return
@@ -206,7 +204,6 @@ func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
 	}
 	agg.Init(folderPaths)
 }
-
 func initScanPersister(c *config.Config, persister persistence.ScanSnapshotPersister) {
 	logger := c.Logger().With().Str("method", "initScanPersister").Logger()
 	w := c.Workspace()

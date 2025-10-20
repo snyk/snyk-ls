@@ -1041,7 +1041,7 @@ func Test_sendTrustedFoldersAnalytics(t *testing.T) {
 	})
 }
 
-// Test: OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, PreferredOrg="" (LDX-Sync auto mode)
+// Test: Mainly tests deleting AutoDeterminedOrg does not forget it.
 func Test_updateFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
@@ -1081,9 +1081,7 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T) {
 	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be preserved")
 }
 
-// Test: OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, PreferredOrg="some-org"
 // This is an edge case where a migrated config has a non-empty org but is not user-set
-// When the incoming config has a different PreferredOrg, it should trigger updateFolderConfigOrg
 func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
@@ -1101,9 +1099,6 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
 
 	setup.c.SetOrganization("global-org-id")
 
-	// Call updateFolderConfig with DIFFERENT PreferredOrg - this will trigger updateFolderConfigOrg
-	// because orgSettingsChanged will be true. When org changes, orgHasJustChanged is true,
-	// so OrgSetByUser will be set to true (line 349 in configuration.go)
 	settings := types.Settings{
 		FolderConfigs: []types.FolderConfig{
 			{
@@ -1116,7 +1111,7 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
 	}
 	updateFolderConfig(setup.c, settings, setup.logger, "test")
 
-	// Verify: Since org changed, orgHasJustChanged is true, so OrgSetByUser is set to true
+	// Verify: We correctly set it as org set by user.
 	updatedConfig := setup.getUpdatedConfig()
 	assert.Equal(t, "different-org", updatedConfig.PreferredOrg, "PreferredOrg should be the new org")
 	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true when org changes")
@@ -1152,7 +1147,7 @@ func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
 }
 
-// Test: OrgMigratedFromGlobalConfig=false, OrgSetByUser=true (migration with user preference)
+// migration with user preferences or user changed settings while unmigrated and unauthenticated
 func Test_updateFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
@@ -1172,7 +1167,7 @@ func Test_updateFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
 	}
 	updateFolderConfig(setup.c, settings, setup.logger, "test")
 
-	// Verify: Should migrate and preserve user-set org (early return in migrateFolderConfigOrg)
+	// Verify: Should migrate and preserve user-set org
 	updatedConfig := setup.getUpdatedConfig()
 	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg, "User-set org should be preserved")
 	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should remain true")
@@ -1234,7 +1229,7 @@ func Test_updateFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *testing.T)
 				FolderPath:                  setup.folderPath,
 				PreferredOrg:                "user-manual-org",
 				OrgMigratedFromGlobalConfig: true,
-				OrgSetByUser:                false, // Still false in incoming settings
+				OrgSetByUser:                false, // IDE still sends false, LS fixes
 			},
 		},
 	}

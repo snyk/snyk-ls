@@ -1106,9 +1106,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		preferredOrg := "non-default"
 
 		folderConfig := types.FolderConfig{
-			FolderPath:   repo,
-			PreferredOrg: preferredOrg,
-			OrgSetByUser: true,
+			FolderPath:                  repo,
+			PreferredOrg:                preferredOrg,
+			OrgSetByUser:                true,
+			OrgMigratedFromGlobalConfig: true,
 		}
 
 		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
@@ -1119,7 +1120,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: func(fc types.FolderConfig) {
 				require.Equal(t, preferredOrg, fc.PreferredOrg)
 				require.True(t, fc.OrgSetByUser)
-				require.NotEmpty(t, fc.AutoDeterminedOrg)
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "Should be set by auto-org resolution on initialized")
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
 			},
 		})
@@ -1177,7 +1178,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 	})
 
-	t.Run("authenticated - doesn't determine org when global non-default org is given (migration)", func(t *testing.T) {
+	t.Run("authenticated - migration uses global non-default org", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		folderConfig := types.FolderConfig{
 			FolderPath: repo,
@@ -1204,26 +1205,22 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 	})
 
-	t.Run("authenticated - adding folder with existing stored config. Making sure PrefferedOrg is preserved", func(t *testing.T) {
+	t.Run("authenticated - adding folder with existing stored config. Making sure PreferredOrg is preserved", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
-
-		// Don't send any folder config - this simulates a completely new folder
-		// The LS will create a new folder config from scratch
-		initParams.InitializationOptions.FolderConfigs = nil
 
 		ensureInitialized(t, c, loc, initParams, nil)
 		repoValidator := func(fc types.FolderConfig) {
-			require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
-			require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
-			require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
-			require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+			require.False(t, fc.OrgSetByUser)
+			require.Empty(t, fc.PreferredOrg)
+			require.NotEmpty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
 		}
 
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
 			repo: repoValidator,
 		})
 
-		// add folder
+		// add folder (LS has not seen before)
 		fakeDirFolder, fakeDirFolderPath := addFakeDirAsWorkspaceFolder(t, loc)
 
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
@@ -1257,9 +1254,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
 			repo: repoValidator,
 			fakeDirFolderPath: func(fc types.FolderConfig) {
-				require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
+				require.False(t, fc.OrgSetByUser, "OrgSetByUser must be preserved")
 				require.Equal(t, "any", fc.PreferredOrg, "PreferredOrg must be preserved")
 				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
+				require.NotEqual(t, "any", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
 				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
 			},
 		})
@@ -1269,14 +1267,14 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := storedconfig.ConfigFile(c.IdeName())
-			os.Remove(s)
+			_ = os.Remove(s)
 		})
 
 		initialOrg := "user-chosen-org"
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
-		c.SetOrganization(globalOrg)
 
 		setupFunc := func(c *config.Config) {
+			c.SetOrganization(globalOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 				FolderPath:                  repo,
 				PreferredOrg:                initialOrg,
@@ -1337,18 +1335,13 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := storedconfig.ConfigFile(c.IdeName())
-			os.Remove(s)
+			_ = os.Remove(s)
 		})
 		t.Setenv("SNYK_TOKEN", "")
-
-		// Don't send any folder config - this simulates a completely new folder
-		// The LS will create a new folder config from scratch
-		initParams.InitializationOptions.FolderConfigs = nil
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
 		repoValidator := func(fc types.FolderConfig) {
-			require.False(t, fc.OrgSetByUser)
 			require.False(t, fc.OrgSetByUser)
 			require.Empty(t, fc.PreferredOrg)
 			require.Empty(t, fc.AutoDeterminedOrg)
@@ -1378,6 +1371,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
 			repo: repoValidator,
 		})
+
 		// re-add folder
 		addWorkSpaceFolder(t, loc, fakeDirFolder)
 

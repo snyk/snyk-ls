@@ -107,6 +107,7 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (
 		if sc != nil {
 			normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.FolderConfigs))
 			if sc.FolderConfigs == nil {
+				sc.FolderConfigs = normalized
 				return sc, nil
 			}
 			for k, v := range sc.FolderConfigs {
