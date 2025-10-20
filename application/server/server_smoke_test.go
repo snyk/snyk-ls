@@ -1078,7 +1078,7 @@ func requireFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.
 }
 
 func Test_SmokeOrgSelection(t *testing.T) {
-	setupOrgSelectionTest := func() (*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
+	setupOrgSelectionTest := func(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
 		t.Helper()
 		c := testutil.SmokeTest(t, false)
 		loc, jsonRpcRecorder := setupServer(t, c)
@@ -1093,7 +1093,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.NoError(t, err)
 
 		initParams := prepareInitParams(t, repo, c)
-		initParams.ClientInfo.Name = "snyk-ls_(" + t.Name() + ")"
 		initParams.InitializationOptions.ManageBinariesAutomatically = "false"
 		initParams.InitializationOptions.CliPath = "/some/invalid/path/that/does/not/matter/but/cannot/be/blank"
 		initParams.InitializationOptions.AuthenticationMethod = types.TokenAuthentication
@@ -1103,7 +1102,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	}
 
 	t.Run("authenticated - takes given non-default org, sends folder config after init", func(t *testing.T) {
-		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest()
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		preferredOrg := "non-default"
 
 		folderConfig := types.FolderConfig{
@@ -1127,7 +1126,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - determines org when nothing is given", func(t *testing.T) {
-		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest()
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		folderConfig := types.FolderConfig{
 			FolderPath: repo,
 		}
@@ -1151,7 +1150,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		t.Skip(t, "TODO: Everyone would have to be in an org which takes priority for Python-goof"+
 			"as this test expects a non-default org to be returned.")
 
-		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest()
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		folderConfig := types.FolderConfig{
 			FolderPath: repo,
 		}
@@ -1179,7 +1178,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - doesn't determine org when global non-default org is given (migration)", func(t *testing.T) {
-		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest()
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		folderConfig := types.FolderConfig{
 			FolderPath: repo,
 		}
@@ -1206,7 +1205,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - adding folder with existing stored config. Making sure PrefferedOrg is preserved", func(t *testing.T) {
-		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest()
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		// Don't send any folder config - this simulates a completely new folder
 		// The LS will create a new folder config from scratch
@@ -1266,8 +1265,76 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 	})
 
+	t.Run("authenticated - user blanks folder-level org, so LS uses global org", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+		t.Cleanup(func() {
+			s, _ := storedconfig.ConfigFile(c.IdeName())
+			os.Remove(s)
+		})
+
+		initialOrg := "user-chosen-org"
+		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
+		c.SetOrganization(globalOrg)
+
+		setupFunc := func(c *config.Config) {
+			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+				FolderPath:                  repo,
+				PreferredOrg:                initialOrg,
+				OrgSetByUser:                true,
+				OrgMigratedFromGlobalConfig: true,
+			}, c.Logger())
+			require.NoError(t, err)
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
+
+		// Verify initial state
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.True(t, fc.OrgSetByUser)
+				require.Equal(t, initialOrg, fc.PreferredOrg)
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+			},
+		})
+
+		// Verify that the global org is still what we set it to
+		require.Equal(t, globalOrg, c.Organization(), "Global org should remain unchanged")
+
+		// Verify that the folder's effective organization equals the preferred org
+		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
+
+		// User blanks the folder-level org via configuration change
+		storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+		require.NoError(t, err)
+		require.Len(t, storedConfig.FolderConfigs, 1, "should only have one folder config")
+
+		storedConfig.FolderConfigs[repo].PreferredOrg = ""
+
+		sendConfigurationDidChange(t, loc, types.Settings{
+			Token:         c.Token(),
+			Organization:  globalOrg,
+			FolderConfigs: []types.FolderConfig{*storedConfig.FolderConfigs[repo]},
+		})
+
+		// Verify PreferredOrg is now empty and OrgSetByUser is true
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.True(t, fc.OrgSetByUser, "OrgSetByUser should remain true after user blanks org")
+				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty after user blanks it")
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should still be set from LDX-Sync")
+				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
+			},
+		})
+
+		// Verify that the global org is still what we set it to
+		assert.Equal(t, globalOrg, c.Organization(), "Global org should remain unchanged")
+
+		// Verify that the folder's effective organization equals the global org
+		assert.Equal(t, globalOrg, c.FolderOrganization(repo), "Folder should use global org when PreferredOrg is blank and OrgSetByUser is true")
+	})
+
 	t.Run("unauthenticated - re-adding folder with changing the config through workspace/didChangeConfiguration", func(t *testing.T) {
-		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest()
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := storedconfig.ConfigFile(c.IdeName())
 			os.Remove(s)
@@ -1353,18 +1420,36 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 	commitHash := getCurrentCommitHash(t, uri.PathFromUri(documentURI))
 	config.Version = commitHash
 
+	// Sanitize test name to make it safe for file system paths
+	sanitizedTestName := testsupport.PathSafeTestName(t)
+
 	if initParams.ClientInfo.Name == "" {
-		initParams.ClientInfo.Name = "snyk-ls_(" + t.Name() + ")"
+		initParams.ClientInfo.Name = "snyk-ls_(" + sanitizedTestName + ")"
 		initParams.ClientInfo.Version = commitHash
 	}
 
 	if initParams.InitializationOptions.IntegrationName == "" {
-		initParams.InitializationOptions.IntegrationName = "ls-smoke-tests(" + t.Name() + ")"
+		initParams.InitializationOptions.IntegrationName = "ls-smoke-tests(" + sanitizedTestName + ")"
 		initParams.InitializationOptions.IntegrationVersion = commitHash
 	}
 
 	_, err := loc.Client.Call(ctx, "initialize", initParams)
 	assert.NoError(t, err)
+
+	// Filter out old stored folder configs and only keep the ones from initParams
+	storedConfig, getSCErr := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+	if getSCErr == nil {
+		filteredConfigs := make(map[types.FilePath]*types.FolderConfig)
+		for _, fc := range initParams.InitializationOptions.FolderConfigs {
+			if storedFc, exists := storedConfig.FolderConfigs[fc.FolderPath]; exists {
+				filteredConfigs[fc.FolderPath] = storedFc
+			}
+		}
+
+		storedConfig.FolderConfigs = filteredConfigs
+		saveErr := storedconfig.Save(c.Engine().GetConfiguration(), storedConfig)
+		assert.NoError(t, saveErr)
+	}
 
 	waitForNetwork(c)
 

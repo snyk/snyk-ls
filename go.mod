@@ -27,6 +27,7 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.5.1
 	github.com/rs/zerolog v1.34.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
+	github.com/samber/lo v1.52.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/code-client-go v1.24.0
 	github.com/snyk/go-application-framework v0.0.0-20251013082525-64e81a1b11a5
@@ -89,7 +90,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
-	github.com/samber/lo v1.52.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/snyk/error-catalog-golang-public v0.0.0-20251006093240-2d9cc5458485 // indirect

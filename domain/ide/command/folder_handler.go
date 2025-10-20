@@ -58,6 +58,8 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			return
 		}
 
+		changedFolderConfig := false
+
 		// Always update AutoDeterminedOrg from LDX-Sync (even for folders where OrgSetByUser is true)
 		// This ensures we always know what LDX-Sync recommends, regardless of whether the user has opted out
 		org, err := GetBestOrgFromLdxSync(c, folderConfig)
@@ -65,10 +67,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			logger.Err(err).Msg("unable to resolve organization, continuing...")
 		} else {
 			folderConfig.AutoDeterminedOrg = org.Id
-			err = storedconfig.UpdateFolderConfig(configuration, folderConfig, &logger)
-			if err != nil {
-				logger.Err(err).Msg("unable to save ldx-sync defined org")
-			}
+			changedFolderConfig = true
 		}
 
 		// Trigger migration for folders that haven't been migrated yet
@@ -76,7 +75,10 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 		if !folderConfig.OrgMigratedFromGlobalConfig {
 			// Apply migration settings using the shared function
 			MigrateFolderConfigOrgSettings(c, folderConfig)
+			changedFolderConfig = true
+		}
 
+		if changedFolderConfig {
 			// Save the migrated folder config back to storage
 			err = storedconfig.UpdateFolderConfig(configuration, folderConfig, &logger)
 			if err != nil {
