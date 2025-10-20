@@ -97,6 +97,16 @@ func createCompleteTestFinding() testapi.FindingData {
 		CvssBaseScore:            7.5,
 		InitiallyFixedInVersions: []string{"4.17.21"},
 		CvssSources:              []testapi.SnykvulndbCvssSource{},
+		References: []testapi.SnykvulndbReferenceLinks{
+			{
+				Title: "GitHub Issue",
+				Url:   "https://github.com/lodash/lodash/issues/1234",
+			},
+			{
+				Title: "Snyk Advisory",
+				Url:   "https://security.snyk.io/vuln/SNYK-JS-LODASH-590103",
+			},
+		},
 	}
 	_ = vulnProblem.FromSnykVulnProblem(vuln)
 
@@ -268,8 +278,18 @@ func Test_Issue_GetRuleID(t *testing.T) {
 func Test_Issue_GetReferences(t *testing.T) {
 	issue := createCompleteTestIssue(t)
 	refs := issue.GetReferences()
-	// References extraction is not implemented yet (marked as TODO)
 	assert.NotNil(t, refs)
+	require.Len(t, refs, 2, "Should extract 2 references from test data")
+
+	// Verify first reference
+	assert.Equal(t, "GitHub Issue", refs[0].Title)
+	assert.NotNil(t, refs[0].Url)
+	assert.Equal(t, "https://github.com/lodash/lodash/issues/1234", refs[0].Url.String())
+
+	// Verify second reference
+	assert.Equal(t, "Snyk Advisory", refs[1].Title)
+	assert.NotNil(t, refs[1].Url)
+	assert.Equal(t, "https://security.snyk.io/vuln/SNYK-JS-LODASH-590103", refs[1].Url.String())
 }
 
 func Test_Issue_GetFindingId(t *testing.T) {
@@ -327,8 +347,12 @@ func Test_OssIssueData_Description(t *testing.T) {
 func Test_OssIssueData_References(t *testing.T) {
 	issue := createCompleteTestIssue(t)
 	ossData := issue.GetAdditionalData().(snyk.OssIssueData)
-	// References are not yet extracted from FindingData
 	assert.NotNil(t, ossData.References)
+	require.Len(t, ossData.References, 2, "Should have 2 references")
+
+	// Verify references are properly mapped
+	assert.Equal(t, "GitHub Issue", ossData.References[0].Title)
+	assert.Equal(t, "https://github.com/lodash/lodash/issues/1234", ossData.References[0].Url.String())
 }
 
 func Test_OssIssueData_Version(t *testing.T) {
@@ -485,4 +509,257 @@ func Test_OssIssueData_IsFixable(t *testing.T) {
 	// IsFixable requires IsUpgradable AND IsPatchable AND valid upgrade path
 	// In our test, IsPatchable is false, so IsFixable should be false
 	assert.False(t, ossData.IsFixable())
+}
+
+// ============================================================================
+// Edge Case and Integration Tests
+// ============================================================================
+
+func Test_ConvertFindingDataToIssues_WithReferences(t *testing.T) {
+	// Arrange
+	ctx := t.Context()
+	finding := createCompleteTestFinding()
+	workDir := types.FilePath("/test/workdir")
+	path := types.FilePath("/test/workdir/package.json")
+	logger := zerolog.Nop()
+	errorReporter := error_reporting.NewTestErrorReporter()
+	var learnService learn.Service
+	packageIssueCache := make(map[string][]types.Issue)
+	format := config.FormatMd
+	metadata := &WorkflowMetadata{ProjectName: "test-project"}
+
+	// Act
+	issues := ConvertFindingDataToIssues(
+		ctx,
+		[]testapi.FindingData{finding},
+		workDir,
+		path,
+		&logger,
+		errorReporter,
+		learnService,
+		packageIssueCache,
+		format,
+		metadata,
+	)
+
+	// Assert
+	require.Len(t, issues, 1)
+	refs := issues[0].GetReferences()
+	assert.Len(t, refs, 2)
+	assert.Equal(t, "GitHub Issue", refs[0].Title)
+	assert.Equal(t, "Snyk Advisory", refs[1].Title)
+}
+
+func Test_ConvertFindingDataToIssues_NoReferences(t *testing.T) {
+	// Arrange
+	ctx := t.Context()
+	workDir := types.FilePath("/test/workdir")
+	path := types.FilePath("/test/workdir/package.json")
+	logger := zerolog.Nop()
+	errorReporter := error_reporting.NewTestErrorReporter()
+	var learnService learn.Service
+	packageIssueCache := make(map[string][]types.Issue)
+	format := config.FormatMd
+	metadata := &WorkflowMetadata{}
+
+	// Create finding without references
+	high := testapi.Severity("high")
+	var ecosystem testapi.SnykvulndbPackageEcosystem
+	_ = ecosystem.FromSnykvulndbBuildPackageEcosystem(testapi.SnykvulndbBuildPackageEcosystem{
+		PackageManager: "npm",
+		Language:       "javascript",
+	})
+
+	var vulnProblem testapi.Problem
+	_ = vulnProblem.FromSnykVulnProblem(testapi.SnykVulnProblem{
+		Id:                       "SNYK-TEST-NO-REFS",
+		PackageName:              "test-pkg",
+		PackageVersion:           "1.0.0",
+		Ecosystem:                ecosystem,
+		CvssBaseScore:            5.0,
+		InitiallyFixedInVersions: []string{},
+		References:               []testapi.SnykvulndbReferenceLinks{}, // Empty references
+	})
+
+	finding := testapi.FindingData{
+		Attributes: &testapi.FindingAttributes{
+			Key:         "SNYK-TEST-NO-REFS",
+			Title:       "Test Vulnerability",
+			Description: "Test",
+			FindingType: "vulnerability",
+			Rating:      testapi.Rating{Severity: high},
+			Problems:    []testapi.Problem{vulnProblem},
+		},
+	}
+
+	// Act
+	issues := ConvertFindingDataToIssues(
+		ctx,
+		[]testapi.FindingData{finding},
+		workDir,
+		path,
+		&logger,
+		errorReporter,
+		learnService,
+		packageIssueCache,
+		format,
+		metadata,
+	)
+
+	// Assert
+	require.Len(t, issues, 1)
+	refs := issues[0].GetReferences()
+	assert.NotNil(t, refs, "References should not be nil")
+	assert.Empty(t, refs, "References should be empty slice, not nil")
+}
+
+func Test_ConvertFindingDataToIssues_InvalidReferenceURL(t *testing.T) {
+	// Arrange
+	ctx := t.Context()
+	workDir := types.FilePath("/test/workdir")
+	path := types.FilePath("/test/workdir/package.json")
+	logger := zerolog.Nop()
+	errorReporter := error_reporting.NewTestErrorReporter()
+	var learnService learn.Service
+	packageIssueCache := make(map[string][]types.Issue)
+	format := config.FormatMd
+	metadata := &WorkflowMetadata{}
+
+	// Create finding with invalid URL
+	high := testapi.Severity("high")
+	var ecosystem testapi.SnykvulndbPackageEcosystem
+	_ = ecosystem.FromSnykvulndbBuildPackageEcosystem(testapi.SnykvulndbBuildPackageEcosystem{
+		PackageManager: "npm",
+		Language:       "javascript",
+	})
+
+	var vulnProblem testapi.Problem
+	_ = vulnProblem.FromSnykVulnProblem(testapi.SnykVulnProblem{
+		Id:                       "SNYK-TEST-INVALID-URL",
+		PackageName:              "test-pkg",
+		PackageVersion:           "1.0.0",
+		Ecosystem:                ecosystem,
+		CvssBaseScore:            5.0,
+		InitiallyFixedInVersions: []string{},
+		References: []testapi.SnykvulndbReferenceLinks{
+			{
+				Title: "Valid Reference",
+				Url:   "https://example.com/valid",
+			},
+			{
+				Title: "Invalid Reference",
+				Url:   "://invalid-url", // Invalid URL
+			},
+			{
+				Title: "Another Valid Reference",
+				Url:   "https://example.com/another",
+			},
+		},
+	})
+
+	finding := testapi.FindingData{
+		Attributes: &testapi.FindingAttributes{
+			Key:         "SNYK-TEST-INVALID-URL",
+			Title:       "Test Vulnerability",
+			Description: "Test",
+			FindingType: "vulnerability",
+			Rating:      testapi.Rating{Severity: high},
+			Problems:    []testapi.Problem{vulnProblem},
+		},
+	}
+
+	// Act
+	issues := ConvertFindingDataToIssues(
+		ctx,
+		[]testapi.FindingData{finding},
+		workDir,
+		path,
+		&logger,
+		errorReporter,
+		learnService,
+		packageIssueCache,
+		format,
+		metadata,
+	)
+
+	// Assert
+	require.Len(t, issues, 1)
+	refs := issues[0].GetReferences()
+	assert.Len(t, refs, 2, "Should skip invalid URL and include only valid ones")
+	assert.Equal(t, "Valid Reference", refs[0].Title)
+	assert.Equal(t, "Another Valid Reference", refs[1].Title)
+}
+
+func Test_ConvertFindingDataToIssues_MultipleSeverities(t *testing.T) {
+	// Test that different severity levels are correctly converted
+	testCases := []struct {
+		name             string
+		severity         testapi.Severity
+		expectedSeverity types.Severity
+	}{
+		{"Critical", "critical", types.Critical},
+		{"High", "high", types.High},
+		{"Medium", "medium", types.Medium},
+		{"Low", "low", types.Low},
+		{"Unknown", "unknown", types.Low}, // Default fallback
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			ctx := t.Context()
+			workDir := types.FilePath("/test/workdir")
+			path := types.FilePath("/test/workdir/package.json")
+			logger := zerolog.Nop()
+			errorReporter := error_reporting.NewTestErrorReporter()
+			var learnService learn.Service
+			packageIssueCache := make(map[string][]types.Issue)
+			format := config.FormatMd
+			metadata := &WorkflowMetadata{}
+
+			var ecosystem testapi.SnykvulndbPackageEcosystem
+			_ = ecosystem.FromSnykvulndbBuildPackageEcosystem(testapi.SnykvulndbBuildPackageEcosystem{
+				PackageManager: "npm",
+				Language:       "javascript",
+			})
+
+			var vulnProblem testapi.Problem
+			_ = vulnProblem.FromSnykVulnProblem(testapi.SnykVulnProblem{
+				Id:             "SNYK-TEST-" + tc.name,
+				PackageName:    "test-pkg",
+				PackageVersion: "1.0.0",
+				Ecosystem:      ecosystem,
+				CvssBaseScore:  5.0,
+			})
+
+			finding := testapi.FindingData{
+				Attributes: &testapi.FindingAttributes{
+					Key:         "SNYK-TEST-" + tc.name,
+					Title:       "Test",
+					Description: "Test",
+					FindingType: "vulnerability",
+					Rating:      testapi.Rating{Severity: tc.severity},
+					Problems:    []testapi.Problem{vulnProblem},
+				},
+			}
+
+			// Act
+			issues := ConvertFindingDataToIssues(
+				ctx,
+				[]testapi.FindingData{finding},
+				workDir,
+				path,
+				&logger,
+				errorReporter,
+				learnService,
+				packageIssueCache,
+				format,
+				metadata,
+			)
+
+			// Assert
+			require.Len(t, issues, 1)
+			assert.Equal(t, tc.expectedSeverity, issues[0].GetSeverity())
+		})
+	}
 }
