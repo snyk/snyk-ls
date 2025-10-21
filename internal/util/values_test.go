@@ -51,7 +51,7 @@ func TestIsEmptyValue(t *testing.T) {
 			{"true bool", true, false},
 			{"non-empty slice", []string{"item"}, false},
 			{"non-empty map", map[string]string{"key": "value"}, false},
-			{"pointer to non-empty string", stringPtr("hello"), false},
+			{"pointer to non-empty string", Ptr("hello"), false},
 
 			// Edge cases
 			{"empty slice", []string{}, true},
@@ -86,9 +86,4 @@ func TestIsEmptyValue(t *testing.T) {
 		assert.True(t, IsEmptyValue(zeroFloat), "zero float should be considered empty")
 		assert.True(t, IsEmptyValue(zeroBool), "zero bool should be considered empty")
 	})
-}
-
-// Helper function to create a pointer to a string
-func stringPtr(s string) *string {
-	return &s
 }

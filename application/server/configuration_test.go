@@ -901,3 +901,204 @@ func Test_InitializeSettings(t *testing.T) {
 		assert.False(t, keyFoundInEnv(caseSensitivePathKey))
 	})
 }
+
+// Test: Mainly tests deleting AutoDeterminedOrg does not forget it.
+func Test_updateFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	// Setup stored config with migration flag set, userSet false, empty org, and AutoDeterminedOrg set
+	engineConfig := setup.c.Engine().GetConfiguration()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  setup.folderPath,
+		PreferredOrg:                "",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+		AutoDeterminedOrg:           "existing-auto-org",
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
+	require.NoError(t, err)
+
+	setup.c.SetOrganization("global-org-id")
+
+	// Call updateFolderConfig with empty org (should stay in auto mode)
+	// Since org settings are equal, updateFolderConfigOrg won't be called
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:                  setup.folderPath,
+				PreferredOrg:                "",
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                false,
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
+
+	// Verify: PreferredOrg should remain empty (auto mode), AutoDeterminedOrg should be preserved
+	updatedConfig := setup.getUpdatedConfig()
+	assert.Empty(t, updatedConfig.PreferredOrg, "PreferredOrg should remain empty in auto mode")
+	assert.False(t, updatedConfig.OrgSetByUser, "OrgSetByUser should remain false in auto mode")
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
+	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be preserved")
+}
+
+// This is an edge case where a migrated config has a non-empty org but is not user-set
+func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	// Setup stored config with migration flag set, userSet false, but has an org
+	engineConfig := setup.c.Engine().GetConfiguration()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  setup.folderPath,
+		PreferredOrg:                "old-auto-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+		AutoDeterminedOrg:           "auto-org-id",
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
+	require.NoError(t, err)
+
+	setup.c.SetOrganization("global-org-id")
+
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:                  setup.folderPath,
+				PreferredOrg:                "different-org", // Different from stored
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                false,
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
+
+	// Verify: We correctly set it as org set by user.
+	updatedConfig := setup.getUpdatedConfig()
+	assert.Equal(t, "different-org", updatedConfig.PreferredOrg, "PreferredOrg should be the new org")
+	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true when org changes")
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
+	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be set")
+}
+
+// Test: Org change detection when PreferredOrg changes for migrated configs
+func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	// Setup stored config with initial org, migrated, and user-set
+	setup.createStoredConfig("initial-org", true, true)
+	setup.c.SetOrganization("global-org-id")
+
+	// Call updateFolderConfig with a different org
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:                  setup.folderPath,
+				PreferredOrg:                "new-user-org",
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                true,
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
+
+	// Verify: Org change should be detected and OrgSetByUser should be set to true
+	updatedConfig := setup.getUpdatedConfig()
+	assert.Equal(t, "new-user-org", updatedConfig.PreferredOrg, "PreferredOrg should be updated")
+	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true after org change")
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
+}
+
+// migration with user preferences or user changed settings while unmigrated and unauthenticated
+func Test_updateFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	// Setup stored config without migration flag but with user-set org
+	setup.createStoredConfig("user-chosen-org", false, true)
+	setup.c.SetOrganization("global-org-id")
+
+	// Call updateFolderConfig
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:   setup.folderPath,
+				PreferredOrg: "user-chosen-org",
+				OrgSetByUser: true,
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
+
+	// Verify: Should migrate and preserve user-set org
+	updatedConfig := setup.getUpdatedConfig()
+	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg, "User-set org should be preserved")
+	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should remain true")
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should be migrated after update")
+}
+
+// Test: AutoDeterminedOrg is missing and needs to be set
+// When org settings change, updateFolderConfigOrg is called which sets AutoDeterminedOrg
+func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	// Setup stored config WITHOUT AutoDeterminedOrg (simulating old config)
+	engineConfig := setup.c.Engine().GetConfiguration()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  setup.folderPath,
+		PreferredOrg:                "test-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+		AutoDeterminedOrg:           "", // Missing in stored config
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
+	require.NoError(setup.t, err)
+
+	setup.c.SetOrganization("global-org-id")
+
+	// Call updateFolderConfig with DIFFERENT org to trigger updateFolderConfigOrg
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:                  setup.folderPath,
+				PreferredOrg:                "different-test-org", // Different to trigger update
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                true,
+				AutoDeterminedOrg:           "", // Missing
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
+
+	// Verify: AutoDeterminedOrg should be fetched and set by updateFolderConfigOrg
+	updatedConfig := setup.getUpdatedConfig()
+	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be fetched and set")
+	// The mock resolver returns "auto-determined-org-id" when givenOrg is not empty
+	assert.Equal(t, "auto-determined-org-id", updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync mock")
+}
+
+// Test: Migrated config where user changes org from auto to manual
+func Test_updateFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	// Setup stored config in auto mode (migrated, not user-set, empty org)
+	setup.createStoredConfig("", true, false)
+	setup.c.SetOrganization("global-org-id")
+
+	// Call updateFolderConfig with user now setting an org
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:                  setup.folderPath,
+				PreferredOrg:                "user-manual-org",
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                false, // IDE still sends false, LS fixes
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
+
+	// Verify: Org change should be detected and OrgSetByUser should be set to true
+	updatedConfig := setup.getUpdatedConfig()
+	assert.Equal(t, "user-manual-org", updatedConfig.PreferredOrg, "PreferredOrg should be set")
+	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true after user sets org")
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
+}

@@ -27,19 +27,9 @@ func IsEmptyValue(value any) bool {
 	switch v := value.(type) {
 	case string:
 		return v == ""
-	case []string:
+	case []any:
 		return len(v) == 0
-	case []int:
-		return len(v) == 0
-	case []float64:
-		return len(v) == 0
-	case []bool:
-		return len(v) == 0
-	case map[string]string:
-		return len(v) == 0
-	case map[string]int:
-		return len(v) == 0
-	case map[string]any:
+	case map[any]any:
 		return len(v) == 0
 	default:
 		// For other types, use reflection to check if it's the zero value
