@@ -146,7 +146,9 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		return issues, err
 	}
 
-	gafConfig := sc.C.Engine().GetConfiguration()
+	// Clone the GAF configuration s
+	gafConfig := sc.C.Engine().GetConfiguration().Clone()
+	gafConfig.Set(configuration.ORGANIZATION, sc.C.FolderOrganization(folderPath))
 
 	response, err := gafConfig.GetWithError(code_workflow.ConfigurationSastSettings)
 	if err != nil {

@@ -38,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
@@ -77,11 +78,21 @@ func setupTestScanner(t *testing.T) *Scanner {
 	t.Helper()
 	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
+	ctrl := gomock.NewController(t)
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockConfig := mocks.NewMockConfiguration(ctrl)
+	c.SetEngine(mockEngine)
 
-	engineConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
+	mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+	mockConfig.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
 
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+
+	// Mock Clone() to return a cloned configuration that can be modified
+	clonedConfig := mocks.NewMockConfiguration(ctrl)
+	clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+	clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
+	mockConfig.EXPECT().Clone().Return(clonedConfig).AnyTimes()
 
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.
@@ -186,11 +197,23 @@ func Test_Scan(t *testing.T) {
 
 	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		ctrl := gomock.NewController(t)
+		mockEngine := mocks.NewMockEngine(ctrl)
+		mockConfig := mocks.NewMockConfiguration(ctrl)
+		c.SetEngine(mockEngine)
 
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
-		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
+		mockConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
+		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+
+		// Mock Clone() to return a cloned configuration
+		clonedConfig := mocks.NewMockConfiguration(ctrl)
+		clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+		clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).AnyTimes()
+		mockConfig.EXPECT().Clone().Return(clonedConfig).AnyTimes()
+
 		_, _ = scanner.Scan(t.Context(), "", tempDir, nil)
 	})
 
@@ -215,9 +238,17 @@ func Test_Scan(t *testing.T) {
 			c := testutil.UnitTest(t)
 			snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
 			ctrl := gomock.NewController(t)
+			mockEngine := mocks.NewMockEngine(ctrl)
 			mockConfiguration := mocks.NewMockConfiguration(ctrl)
-			c.Engine().SetConfiguration(mockConfiguration)
-			mockConfiguration.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil)
+			c.SetEngine(mockEngine)
+			mockEngine.EXPECT().GetConfiguration().Return(mockConfiguration).AnyTimes()
+
+			// Mock Clone() to return a cloned configuration
+			clonedConfig := mocks.NewMockConfiguration(ctrl)
+			clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+			clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
+			mockConfiguration.EXPECT().Clone().Return(clonedConfig).AnyTimes()
+
 			mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(tc.cciEnabled)
 			learnMock := mock_learn.NewMockService(gomock.NewController(t))
 			learnMock.
@@ -541,4 +572,197 @@ func getInterfileTestCodeIssueData() snyk.CodeIssueData {
 			},
 		},
 	}
+}
+
+func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
+	t.Run("Should use folder-specific organization for SAST settings check", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetSnykCodeEnabled(true)
+		ctrl := gomock.NewController(t)
+		mockEngine := mocks.NewMockEngine(ctrl)
+		mockConfig := mocks.NewMockConfiguration(ctrl)
+		c.SetEngine(mockEngine)
+
+		// Set up folder config with specific organization
+		tempDir := types.FilePath(t.TempDir())
+		folderOrg := "folder-specific-org"
+		folderConfig := &types.FolderConfig{
+			FolderPath:   tempDir,
+			PreferredOrg: folderOrg,
+			OrgSetByUser: true,
+		}
+
+		// Create a storage map for the mock config to simulate persistence
+		storage := make(map[string]string)
+
+		// Set up mock expectations with stateful storage
+		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(false).AnyTimes()
+		mockConfig.EXPECT().GetString(gomock.Any()).DoAndReturn(func(key string) string {
+			return storage[key]
+		}).AnyTimes()
+		mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value interface{}) {
+			// For this test, we only need to persist strings.
+			if strVal, ok := value.(string); ok {
+				storage[key] = strVal
+			}
+		}).AnyTimes()
+
+		// Store the folder config so FolderOrganization can retrieve it
+		err := storedconfig.UpdateFolderConfig(mockConfig, folderConfig, c.Logger())
+		require.NoError(t, err)
+
+		// Mock the cloned configuration
+		clonedConfig := mocks.NewMockConfiguration(ctrl)
+		var capturedOrg string
+		clonedConfig.EXPECT().Set(configuration.ORGANIZATION, gomock.Any()).DoAndReturn(func(key string, value any) {
+			capturedOrg = value.(string)
+		}).Times(1)
+		clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).Times(1)
+		mockConfig.EXPECT().Clone().Return(clonedConfig).Times(1)
+
+		learnMock := mock_learn.NewMockService(ctrl)
+		learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&learn.Lesson{}, nil).AnyTimes()
+
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+
+		// Act
+		_, _ = scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
+
+		// Assert - verify that the folder-specific org was used
+		assert.Equal(t, folderOrg, capturedOrg, "Should use folder-specific organization")
+	})
+
+	t.Run("Should fail when SAST is disabled for folder-specific organization", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetSnykCodeEnabled(true)
+		ctrl := gomock.NewController(t)
+		mockEngine := mocks.NewMockEngine(ctrl)
+		mockConfig := mocks.NewMockConfiguration(ctrl)
+		c.SetEngine(mockEngine)
+
+		// Set up folder config with specific organization
+		tempDir := types.FilePath(t.TempDir())
+		folderOrg := "org-with-sast-disabled"
+		folderConfig := &types.FolderConfig{
+			FolderPath:   tempDir,
+			PreferredOrg: folderOrg,
+			OrgSetByUser: true,
+		}
+
+		// Create a storage map for the mock config to simulate persistence
+		storage := make(map[string]string)
+
+		// Set up mock expectations with stateful storage
+		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+		mockConfig.EXPECT().GetString(gomock.Any()).DoAndReturn(func(key string) string {
+			return storage[key]
+		}).AnyTimes()
+		mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value interface{}) {
+			// For this test, we only need to persist strings.
+			if strVal, ok := value.(string); ok {
+				storage[key] = strVal
+			}
+		}).AnyTimes()
+
+		// Store the folder config so FolderOrganization can retrieve it
+		err := storedconfig.UpdateFolderConfig(mockConfig, folderConfig, c.Logger())
+		require.NoError(t, err)
+
+		// Mock the cloned configuration to return SAST disabled for this org
+		clonedConfig := mocks.NewMockConfiguration(ctrl)
+		clonedConfig.EXPECT().Set(configuration.ORGANIZATION, folderOrg).Times(1)
+		clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).Times(1)
+		mockConfig.EXPECT().Clone().Return(clonedConfig).Times(1)
+
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
+
+		// Act
+		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
+
+		// Assert - should return error when SAST is disabled
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "SAST is not enabled")
+		assert.Empty(t, issues)
+	})
+
+	t.Run("Should use different SAST settings for different folder organizations", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetSnykCodeEnabled(true)
+		ctrl := gomock.NewController(t)
+		mockEngine := mocks.NewMockEngine(ctrl)
+		mockConfig := mocks.NewMockConfiguration(ctrl)
+		c.SetEngine(mockEngine)
+
+		// Set up two folders with different organizations
+		tempDir1 := types.FilePath(t.TempDir())
+		tempDir2 := types.FilePath(t.TempDir())
+		org1 := "org-with-sast-enabled"
+		org2 := "org-with-sast-disabled"
+
+		folderConfig1 := &types.FolderConfig{
+			FolderPath:   tempDir1,
+			PreferredOrg: org1,
+			OrgSetByUser: true,
+		}
+		folderConfig2 := &types.FolderConfig{
+			FolderPath:   tempDir2,
+			PreferredOrg: org2,
+			OrgSetByUser: true,
+		}
+
+		// Create a storage map for the mock config to simulate persistence
+		storage := make(map[string]string)
+
+		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(false).AnyTimes()
+		mockConfig.EXPECT().GetString(gomock.Any()).DoAndReturn(func(key string) string {
+			return storage[key]
+		}).AnyTimes()
+		mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value interface{}) {
+			// For this test, we only need to persist strings.
+			if strVal, ok := value.(string); ok {
+				storage[key] = strVal
+			}
+		}).AnyTimes()
+
+		// Store the folder configs so FolderOrganization can retrieve them
+		err := storedconfig.UpdateFolderConfig(mockConfig, folderConfig1, c.Logger())
+		require.NoError(t, err)
+		err = storedconfig.UpdateFolderConfig(mockConfig, folderConfig2, c.Logger())
+		require.NoError(t, err)
+
+		// Mock the cloned configuration for org1 (SAST enabled)
+		clonedConfig1 := mocks.NewMockConfiguration(ctrl)
+		clonedConfig1.EXPECT().Set(configuration.ORGANIZATION, org1).Times(1)
+		clonedConfig1.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).Times(1)
+
+		// Mock the cloned configuration for org2 (SAST disabled)
+		clonedConfig2 := mocks.NewMockConfiguration(ctrl)
+		clonedConfig2.EXPECT().Set(configuration.ORGANIZATION, org2).Times(1)
+		clonedConfig2.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).Times(1)
+
+		mockConfig.EXPECT().Clone().Return(clonedConfig1).Times(1)
+		mockConfig.EXPECT().Clone().Return(clonedConfig2).Times(1)
+
+		learnMock := mock_learn.NewMockService(ctrl)
+		learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&learn.Lesson{}, nil).AnyTimes()
+
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+
+		// Act - scan with org1 (should succeed)
+		issues1, err1 := scanner.Scan(t.Context(), types.FilePath("test1.go"), tempDir1, folderConfig1)
+
+		// Assert - org1 should succeed
+		assert.NoError(t, err1)
+		assert.NotNil(t, issues1)
+
+		// Act - scan with org2 (should fail)
+		issues2, err2 := scanner.Scan(t.Context(), types.FilePath("test2.go"), tempDir2, folderConfig2)
+
+		// Assert - org2 should fail
+		assert.Error(t, err2)
+		assert.Contains(t, err2.Error(), "SAST is not enabled")
+		assert.Empty(t, issues2)
+	})
 }
