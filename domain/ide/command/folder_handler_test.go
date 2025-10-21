@@ -17,6 +17,7 @@
 package command
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -37,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -91,7 +93,41 @@ func setupMockIsDefaultOrgWorkflow(mockEngine *mocks.MockEngine, isDefaultOrg bo
 	).Return([]workflow.Data{outputData}, nil).AnyTimes()
 }
 
-// Test scenarios for updateAndSendFolderConfigs (notification sending only)
+// setupTestWorkspace creates a test workspace with the specified number of folders
+func setupTestWorkspace(t *testing.T, c *config.Config, folderCount int) (
+	notifier *notification.MockNotifier,
+	folderPaths []types.FilePath,
+) {
+	t.Helper()
+
+	// Create mock dependencies
+	notifier = notification.NewMockNotifier()
+	scanNotifier := scanner.NewMockScanNotifier()
+	scanPersister := persistence.NewNopScanPersister()
+	scanStateAggregator := scanstates.NewNoopStateAggregator()
+	sc := scanner.NewTestScanner()
+	hoverService := hover.NewFakeHoverService()
+
+	// Create workspace
+	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
+
+	// Create and add folders
+	safeTestName := testsupport.PathSafeTestName(t)
+	folderPaths = make([]types.FilePath, folderCount)
+	for i := range folderCount {
+		folderPath := types.FilePath(t.TempDir())
+		folderPaths[i] = folderPath
+		folderName := safeTestName + "_test-folder_" + strconv.Itoa(i)
+		folder := workspace.NewFolder(c, folderPath, folderName, sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
+		w.AddFolder(folder)
+	}
+
+	// Set workspace on config
+	c.SetWorkspace(w)
+
+	return notifier, folderPaths
+}
+
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
@@ -101,24 +137,12 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	// Setup mock workflow response
 	setupMockWorkflowForOrg(mockEngine, "resolved-org-id", "Resolved Org", "resolved-org", false)
 
-	folderPath := types.FilePath(t.TempDir())
-
 	// Setup workspace with a folder
-	notifier := notification.NewMockNotifier()
-	scanNotifier := scanner.NewMockScanNotifier()
-	scanPersister := persistence.NewNopScanPersister()
-	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	sc := scanner.NewTestScanner()
-	hoverService := hover.NewFakeHoverService()
-
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
-	folder := workspace.NewFolder(c, folderPath, t.Name(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
-	w.AddFolder(folder)
-	c.SetWorkspace(w)
+	notifier, folderPaths := setupTestWorkspace(t, c, 1)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
+		FolderPath:                  folderPaths[0],
 		PreferredOrg:                "test-org",
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
@@ -147,15 +171,7 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 	// Setup workspace with no folders
-	notifier := notification.NewMockNotifier()
-	scanNotifier := scanner.NewMockScanNotifier()
-	scanPersister := persistence.NewNopScanPersister()
-	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	sc := scanner.NewTestScanner()
-	hoverService := hover.NewFakeHoverService()
-
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
-	c.SetWorkspace(w)
+	notifier, _ := setupTestWorkspace(t, c, 0)
 
 	sendFolderConfigs(c, notifier)
 
@@ -241,24 +257,12 @@ func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 	// Setup mock workflow to return error
 	setupMockWorkflowForOrgWithError(mockEngine, assert.AnError)
 
-	folderPath := types.FilePath(t.TempDir())
-
 	// Setup workspace with a folder
-	notifier := notification.NewMockNotifier()
-	scanNotifier := scanner.NewMockScanNotifier()
-	scanPersister := persistence.NewNopScanPersister()
-	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	sc := scanner.NewTestScanner()
-	hoverService := hover.NewFakeHoverService()
-
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
-	folder := workspace.NewFolder(c, folderPath, t.Name(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
-	w.AddFolder(folder)
-	c.SetWorkspace(w)
+	notifier, folderPaths := setupTestWorkspace(t, c, 1)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
+		FolderPath:                  folderPaths[0],
 		PreferredOrg:                "test-org",
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
@@ -285,9 +289,6 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
-
-	folderPath1 := types.FilePath(t.TempDir())
-	folderPath2 := types.FilePath(t.TempDir())
 
 	// Setup mock workflow to return different orgs based on input path
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
@@ -321,25 +322,13 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	setupMockIsDefaultOrgWorkflow(mockEngine, false, false)
 
 	// Setup workspace with multiple folders
-	notifier := notification.NewMockNotifier()
-	scanNotifier := scanner.NewMockScanNotifier()
-	scanPersister := persistence.NewNopScanPersister()
-	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	sc := scanner.NewTestScanner()
-	hoverService := hover.NewFakeHoverService()
-
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
-	folder1 := workspace.NewFolder(c, folderPath1, "folder1", sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
-	folder2 := workspace.NewFolder(c, folderPath2, "folder2", sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
-	w.AddFolder(folder1)
-	w.AddFolder(folder2)
-	c.SetWorkspace(w)
+	notifier, folderPaths := setupTestWorkspace(t, c, 2)
 
 	logger := c.Logger()
 
 	// Setup different org configs for each folder
 	storedConfig1 := &types.FolderConfig{
-		FolderPath:                  folderPath1,
+		FolderPath:                  folderPaths[0],
 		PreferredOrg:                "user-org-1",
 		OrgMigratedFromGlobalConfig: false,
 		OrgSetByUser:                true,
@@ -348,7 +337,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	require.NoError(t, err)
 
 	storedConfig2 := &types.FolderConfig{
-		FolderPath:                  folderPath2,
+		FolderPath:                  folderPaths[1],
 		PreferredOrg:                "",
 		OrgMigratedFromGlobalConfig: false,
 		OrgSetByUser:                false,

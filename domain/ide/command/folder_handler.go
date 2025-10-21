@@ -73,7 +73,6 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 		// Trigger migration for folders that haven't been migrated yet
 		// This ensures that folders loaded from storage get migrated on initialization
 		if !folderConfig.OrgMigratedFromGlobalConfig {
-			// Apply migration settings using the shared function
 			MigrateFolderConfigOrgSettings(c, folderConfig)
 			changedFolderConfig = true
 		}
@@ -86,7 +85,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			}
 		}
 
-		folderConfigs = append(folderConfigs, *folderConfig) // add first, then call service
+		folderConfigs = append(folderConfigs, *folderConfig)
 	}
 
 	if folderConfigs == nil {
