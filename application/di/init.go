@@ -138,7 +138,7 @@ func initInfrastructure(c *config.Config) {
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
-	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
+	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner, codeInstrumentor, codeErrorReporter)
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(

@@ -90,7 +90,7 @@ func TestInit(t *testing.T) {
 	scanPersister = persistence.NopScanPersister{}
 	scanStateAggregator = scanstates.NewNoopStateAggregator()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
-	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
+	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner, codeInstrumentor, codeErrorReporter)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
