@@ -232,13 +232,14 @@ func (w *Workspace) Clear() {
 
 // SetTrustedFolders sets trusted folders to the config and sends analytics for the change
 func SetTrustedFolders(c *config.Config, foldersToSet []types.Folder) {
+	// Store the old trusted folder slice for analytics.
 	oldTrustedFolderPaths := c.TrustedFolders()
 
-	// Convert folders to FilePath slice
-	trustedFolderPaths := make([]types.FilePath, len(foldersToSet))
-	for i, folder := range foldersToSet {
+	// Add new folders to trust to a copy of the array (preserving the old array for the analytics).
+	trustedFolderPaths := append([]types.FilePath(nil), oldTrustedFolderPaths...)
+	for _, folder := range foldersToSet {
 		c.Logger().Debug().Str("method", "SetTrustedFolders").Msgf("setting trusted folder %s", folder.Path())
-		trustedFolderPaths[i] = folder.Path()
+		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
 	}
 
 	// Update the config with the new trusted folders list

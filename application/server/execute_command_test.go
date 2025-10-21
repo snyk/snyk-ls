@@ -223,7 +223,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder2"))
 	})
 
-	t.Run("Untrusted workspace folders are trusted", func(t *testing.T) {
+	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		loc, _ := setupServerWithCustomDI(t, c, false)
 
@@ -237,9 +237,9 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Only the untrusted folder that was in the workspace should be trusted
-		assert.Len(t, c.TrustedFolders(), 1)
+		assert.Len(t, c.TrustedFolders(), 2)
 		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder1"))
+		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder2"))
 	})
 }
 
