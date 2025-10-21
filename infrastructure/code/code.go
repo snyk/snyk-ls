@@ -146,7 +146,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		return issues, err
 	}
 
-	// Clone the GAF configuration s
+	// Clone the GAF configuration so that we can use the per-folder organization for the SAST lookup.
 	gafConfig := sc.C.Engine().GetConfiguration().Clone()
 	gafConfig.Set(configuration.ORGANIZATION, sc.C.FolderOrganization(folderPath))
 
