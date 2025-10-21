@@ -211,8 +211,11 @@ func buildOssIssueData(
 ) snyk.OssIssueData {
 	attrs := finding.Attributes
 
-	// Build key
-	key := util.GetIssueKey(vuln.Id, string(affectedFilePath), 0, 0, 0, 0)
+	// Extract line number first (needed for key generation)
+	lineNumber := extractLineNumber(finding)
+
+	// Build key - use lineNumber for both start and end like legacy converter
+	key := util.GetIssueKey(vuln.Id, string(affectedFilePath), lineNumber, lineNumber, 0, 0)
 
 	ecosystemStr := extractEcosystemString(vuln.Ecosystem)
 
@@ -223,11 +226,11 @@ func buildOssIssueData(
 		Key:                key,
 		Title:              attrs.Title,
 		Name:               vuln.PackageName,
-		LineNumber:         extractLineNumber(finding),
+		LineNumber:         lineNumber,
 		Identifiers:        extractIdentifiers(finding),
 		Description:        attrs.Description,
 		References:         convertReferences(extractReferences(finding, vuln)),
-		Version:            vuln.PackageVersion,
+		Version:            extractVersion(finding, vuln),
 		License:            extractLicense(finding),
 		PackageManager:     ecosystemStr,
 		PackageName:        vuln.PackageName,
@@ -242,7 +245,7 @@ func buildOssIssueData(
 		IsPatchable:        false, // Patches not supported in unified workflow yet
 		ProjectName:        "",
 		DisplayTargetFile:  affectedFilePath,
-		Language:           extractLanguage(ecosystemStr),
+		Language:           extractLanguageFromEcosystem(vuln.Ecosystem),
 		Details:            attrs.Description,
 		MatchingIssues:     []snyk.OssIssueData{}, // Matching issues computed by delta processing
 		Lesson:             lessonURL,             // Will be populated after issue creation
@@ -372,7 +375,8 @@ func extractDependencyPath(finding testapi.FindingData) []string {
 
 	for _, evidence := range finding.Attributes.Evidence {
 		disc, err := evidence.Discriminator()
-		if err == nil && disc == "dependencypath" {
+		// Try both "dependency_path" and "dependencypath" for compatibility
+		if err == nil && (disc == "dependency_path" || disc == "dependencypath") {
 			depPath, err := evidence.AsDependencyPathEvidence()
 			if err == nil && depPath.Path != nil {
 				// Convert []testapi.Package to []string
@@ -397,18 +401,11 @@ func buildUpgradePath(finding testapi.FindingData, vuln *testapi.SnykVulnProblem
 	}
 
 	// Build upgrade path: first element is false (no patch),
-	// then the path with the fixed version at the vulnerable package position
-	upgradePath := []any{false}
-	for i, pkg := range depPath {
-		if i == len(depPath)-1 && len(vuln.InitiallyFixedInVersions) > 0 {
-			// Replace last element with package@fixedVersion
-			pkgName := vuln.PackageName
-			fixedVersion := vuln.InitiallyFixedInVersions[0]
-			upgradePath = append(upgradePath, fmt.Sprintf("%s@%s", pkgName, fixedVersion))
-		} else {
-			upgradePath = append(upgradePath, pkg)
-		}
-	}
+	// then only the package that needs to be upgraded with its fixed version
+	// Legacy format: [false, "package@fixedVersion"]
+	pkgName := vuln.PackageName
+	fixedVersion := vuln.InitiallyFixedInVersions[0]
+	upgradePath := []any{false, fmt.Sprintf("%s@%s", pkgName, fixedVersion)}
 
 	return upgradePath
 }
@@ -477,33 +474,86 @@ func extractExploit(vuln *testapi.SnykVulnProblem) string {
 		return ""
 	}
 
-	// Return the highest maturity level
-	return string(vuln.ExploitDetails.MaturityLevels[0].Type)
+	// Return the secondary maturity level (CVSSv3) to match legacy behavior
+	// Legacy API used the "secondary" type as the default exploit value
+	var exploitLevel string
+	for _, level := range vuln.ExploitDetails.MaturityLevels {
+		if level.Type == "secondary" {
+			exploitLevel = level.Level
+			break
+		}
+	}
+
+	// Fallback to primary if no secondary found
+	if exploitLevel == "" {
+		for _, level := range vuln.ExploitDetails.MaturityLevels {
+			if level.Type == "primary" {
+				exploitLevel = level.Level
+				break
+			}
+		}
+	}
+
+	// Fallback to first level if neither found
+	if exploitLevel == "" {
+		exploitLevel = vuln.ExploitDetails.MaturityLevels[0].Level
+	}
+
+	// Normalize case to match legacy format (title case for multi-word, unchanged for single word)
+	if exploitLevel == "not defined" {
+		return "Not Defined"
+	}
+	if exploitLevel == "proof of concept" {
+		return "Proof of Concept"
+	}
+	if exploitLevel == "functional" {
+		return "Functional"
+	}
+	if exploitLevel == "high" {
+		return "High"
+	}
+
+	return exploitLevel
 }
 
-// extractLanguage extracts language from ecosystem
-func extractLanguage(ecosystem string) string {
-	// Map ecosystem to language
-	languageMap := map[string]string{
-		"npm":      "javascript",
-		"yarn":     "javascript",
-		"maven":    "java",
-		"gradle":   "java",
-		"pip":      "python",
-		"poetry":   "python",
-		"pipenv":   "python",
-		"nuget":    "csharp",
-		"rubygems": "ruby",
-		"composer": "php",
-		"golang":   "go",
-		"hex":      "elixir",
+// extractLanguageFromEcosystem extracts language from ecosystem structure
+func extractLanguageFromEcosystem(ecosystem testapi.SnykvulndbPackageEcosystem) string {
+	// Try to get build package ecosystem (most common for OSS)
+	buildEco, err := ecosystem.AsSnykvulndbBuildPackageEcosystem()
+	if err == nil {
+		return buildEco.Language
 	}
 
-	if lang, ok := languageMap[ecosystem]; ok {
-		return lang
+	// Fallback: try OS package ecosystem
+	osEco, err := ecosystem.AsSnykvulndbOsPackageEcosystem()
+	if err == nil {
+		// OS ecosystems don't have a language field, derive from type
+		return string(osEco.Type)
 	}
 
-	return ecosystem
+	// Fallback: return empty string
+	return ""
+}
+
+// extractVersion extracts the package version from finding locations
+func extractVersion(finding testapi.FindingData, vuln *testapi.SnykVulnProblem) string {
+	if finding.Attributes == nil {
+		return vuln.PackageVersion // Fallback to vuln's version
+	}
+
+	// Look for package location matching the vulnerable package
+	for _, location := range finding.Attributes.Locations {
+		disc, err := location.Discriminator()
+		if err == nil && disc == "package" {
+			pkgLoc, err := location.AsPackageLocation()
+			if err == nil && pkgLoc.Package.Name == vuln.PackageName {
+				return pkgLoc.Package.Version
+			}
+		}
+	}
+
+	// Fallback to package version from vuln
+	return vuln.PackageVersion
 }
 
 // buildRemediationAdvice builds remediation advice text
@@ -617,17 +667,25 @@ func buildFormattedMessage(finding testapi.FindingData, vuln *testapi.SnykVulnPr
 
 // extractRange extracts range information from finding locations
 func extractRange(finding testapi.FindingData) types.Range {
-	// Range extraction from FindingLocation is not yet implemented
-	// OSS vulnerabilities typically don't have specific line/column ranges
-	// as they affect the entire project through dependencies
+	// TODO: The unified API doesn't provide file locations with line/column information
+	// in the FindingData. Like the legacy converter, we need to:
+	// 1. Read the manifest file content (package.json, pom.xml, etc.)
+	// 2. Use RangeFinder (NpmRangeFinder, mavenRangeFinder, etc.) to parse and find the dependency declaration
+	// 3. Extract the line/column range
+	//
+	// This file parsing should happen at the scanner level (similar to UnmarshallAndRetrieveAnalysis)
+	// and be passed to the converter, or the converter should accept file content as a parameter.
+	//
+	// For now, returning empty range as the unified API doesn't expose this information directly.
 	return types.Range{}
 }
 
 // extractLineNumber extracts line number from finding locations
 func extractLineNumber(finding testapi.FindingData) int {
-	// Line number extraction from FindingLocation is not yet implemented
-	// OSS vulnerabilities typically don't have specific line numbers
-	// as they are declared in manifest files (package.json, pom.xml, etc.)
+	// TODO: Same as extractRange - the unified API doesn't provide line numbers directly.
+	// The legacy converter gets this by parsing the manifest file to find where the dependency is declared.
+	// Until the unified converter has access to file content and uses RangeFinder,
+	// we default to 0 (which matches the legacy behavior when file content is unavailable).
 	return 0
 }
 

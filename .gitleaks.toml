@@ -1,0 +1,9 @@
+# Gitleaks configuration file
+# Documentation: https://github.com/gitleaks/gitleaks
+
+[allowlist]
+description = "Allowlist for test data files"
+paths = [
+    '''.*testdata/.*''',
+]
+
