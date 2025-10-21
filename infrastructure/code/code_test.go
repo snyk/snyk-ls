@@ -85,6 +85,7 @@ func setupTestScanner(t *testing.T) *Scanner {
 
 	mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 	mockConfig.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
+	mockConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
 
 	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
 
@@ -202,17 +203,20 @@ func Test_Scan(t *testing.T) {
 		mockConfig := mocks.NewMockConfiguration(ctrl)
 		c.SetEngine(mockEngine)
 
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
-		mockConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
 		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+		mockConfig.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
+		mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 
 		// Mock Clone() to return a cloned configuration
 		clonedConfig := mocks.NewMockConfiguration(ctrl)
 		clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 		clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).AnyTimes()
 		mockConfig.EXPECT().Clone().Return(clonedConfig).AnyTimes()
+
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
+		mockConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
 
 		_, _ = scanner.Scan(t.Context(), "", tempDir, nil)
 	})
@@ -242,6 +246,8 @@ func Test_Scan(t *testing.T) {
 			mockConfiguration := mocks.NewMockConfiguration(ctrl)
 			c.SetEngine(mockEngine)
 			mockEngine.EXPECT().GetConfiguration().Return(mockConfiguration).AnyTimes()
+			mockConfiguration.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
+			mockConfiguration.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 
 			// Mock Clone() to return a cloned configuration
 			clonedConfig := mocks.NewMockConfiguration(ctrl)
