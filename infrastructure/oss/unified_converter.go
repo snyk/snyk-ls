@@ -560,36 +560,6 @@ func extractAppliedPolicyRules(finding testapi.FindingData) snyk.AppliedPolicyRu
 	return snyk.AppliedPolicyRules{}
 }
 
-// extractIgnoreDetails extracts ignore/suppression details from finding attributes
-func extractIgnoreDetails(finding testapi.FindingData) *types.IgnoreDetails {
-	if finding.Attributes == nil || finding.Attributes.Suppression == nil {
-		return nil
-	}
-
-	suppression := finding.Attributes.Suppression
-
-	// Map suppression status to category
-	category := string(suppression.Status)
-	if category == "" {
-		category = "not-specified"
-	}
-
-	// Extract reason (justification is a pointer to string)
-	reason := "No reason provided"
-	if suppression.Justification != nil && *suppression.Justification != "" {
-		reason = *suppression.Justification
-	}
-
-	// Extract ignored by (structure may vary, leaving empty for now)
-	ignoredBy := ""
-
-	return &types.IgnoreDetails{
-		Category:  category,
-		Reason:    reason,
-		IgnoredBy: ignoredBy,
-	}
-}
-
 // buildMessage builds the short message for the issue
 func buildMessage(finding testapi.FindingData, data snyk.OssIssueData, format string) string {
 	title := finding.Attributes.Title
