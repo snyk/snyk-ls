@@ -367,7 +367,7 @@ func extractDependencyPath(finding testapi.FindingData) []string {
 	for _, evidence := range finding.Attributes.Evidence {
 		disc, err := evidence.Discriminator()
 		// Try both "dependency_path" and "dependencypath" for compatibility
-		if err == nil && (disc == "dependency_path" || disc == "dependencypath") {
+		if err == nil && disc == "dependency_path" {
 			depPath, err := evidence.AsDependencyPathEvidence()
 			if err == nil && depPath.Path != nil {
 				// Convert []testapi.Package to []string
