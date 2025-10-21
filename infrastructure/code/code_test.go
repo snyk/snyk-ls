@@ -626,10 +626,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 
-		// Act
 		_, _ = scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
-
-		// Assert - verify that the folder-specific org was used
 		assert.Equal(t, folderOrg, capturedOrg, "Should use folder-specific organization")
 	})
 
@@ -677,10 +674,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
 
-		// Act
 		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
-
-		// Assert - should return error when SAST is disabled
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "SAST is not enabled")
 		assert.Empty(t, issues)
@@ -750,17 +744,13 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
 
-		// Act - scan with org1 (should succeed)
+		// Scan with org1 (should succeed since SAST is enabled)
 		issues1, err1 := scanner.Scan(t.Context(), types.FilePath("test1.go"), tempDir1, folderConfig1)
-
-		// Assert - org1 should succeed
 		assert.NoError(t, err1)
 		assert.NotNil(t, issues1)
 
-		// Act - scan with org2 (should fail)
+		// Scan with org2 (should fail since SAST is disabled)
 		issues2, err2 := scanner.Scan(t.Context(), types.FilePath("test2.go"), tempDir2, folderConfig2)
-
-		// Assert - org2 should fail
 		assert.Error(t, err2)
 		assert.Contains(t, err2.Error(), "SAST is not enabled")
 		assert.Empty(t, issues2)
