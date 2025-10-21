@@ -230,15 +230,15 @@ func (w *Workspace) Clear() {
 	w.hoverService.ClearAllHovers()
 }
 
-// SetTrustedFolders sets trusted folders to the config and sends analytics for the change
-func SetTrustedFolders(c *config.Config, foldersToSet []types.Folder) {
+// AddTrustedFolders sets trusted folders to the config and sends analytics for the change
+func AddTrustedFolders(c *config.Config, foldersToSet []types.Folder) {
 	// Store the old trusted folder slice for analytics.
 	oldTrustedFolderPaths := c.TrustedFolders()
 
 	// Add new folders to trust to a copy of the array (preserving the old array for the analytics).
 	trustedFolderPaths := append([]types.FilePath(nil), oldTrustedFolderPaths...)
 	for _, folder := range foldersToSet {
-		c.Logger().Debug().Str("method", "SetTrustedFolders").Msgf("setting trusted folder %s", folder.Path())
+		c.Logger().Debug().Str("method", "AddTrustedFolders").Msgf("adding trusted folder %s", folder.Path())
 		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
 	}
 
@@ -255,7 +255,7 @@ func SetTrustedFolders(c *config.Config, foldersToSet []types.Folder) {
 
 func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []types.Folder) {
 	// Add trusted folders to config and send analytics
-	SetTrustedFolders(w.c, foldersToBeTrusted)
+	AddTrustedFolders(w.c, foldersToBeTrusted)
 	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: w.c.TrustedFolders()})
 	for _, f := range foldersToBeTrusted {
 		go f.ScanFolder(ctx)
