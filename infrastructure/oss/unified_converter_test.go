@@ -114,9 +114,7 @@ func Test_convertFindingToIssue_GetID(t *testing.T) {
 	finding := createTestFinding()
 	workDir := types.FilePath("/test/workdir")
 	affectedFilePath := types.FilePath("/test/workdir/package.json")
-	logger := zerolog.Nop()
 	var learnService learn.Service
-	errorReporter := error_reporting.NewTestErrorReporter()
 	format := config.FormatMd
 	metadata := &WorkflowMetadata{
 		ProjectName:    "test-project",
@@ -124,16 +122,7 @@ func Test_convertFindingToIssue_GetID(t *testing.T) {
 	}
 
 	// Act
-	issue, err := convertFindingToIssue(
-		finding,
-		workDir,
-		affectedFilePath,
-		&logger,
-		learnService,
-		errorReporter,
-		format,
-		metadata,
-	)
+	issue, err := convertFindingToIssue(finding, workDir, affectedFilePath, learnService, format, metadata)
 
 	// Assert
 	require.NoError(t, err)
@@ -146,9 +135,7 @@ func Test_convertFindingToIssue_GetSeverity(t *testing.T) {
 	finding := createTestFinding()
 	workDir := types.FilePath("/test/workdir")
 	affectedFilePath := types.FilePath("/test/workdir/package.json")
-	logger := zerolog.Nop()
 	var learnService learn.Service
-	errorReporter := error_reporting.NewTestErrorReporter()
 	format := config.FormatMd
 	metadata := &WorkflowMetadata{
 		ProjectName:    "test-project",
@@ -156,16 +143,7 @@ func Test_convertFindingToIssue_GetSeverity(t *testing.T) {
 	}
 
 	// Act
-	issue, err := convertFindingToIssue(
-		finding,
-		workDir,
-		affectedFilePath,
-		&logger,
-		learnService,
-		errorReporter,
-		format,
-		metadata,
-	)
+	issue, err := convertFindingToIssue(finding, workDir, affectedFilePath, learnService, format, metadata)
 
 	// Assert
 	require.NoError(t, err)

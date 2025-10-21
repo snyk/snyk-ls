@@ -38,9 +38,7 @@ func createCompleteTestIssue(t *testing.T) *snyk.Issue {
 	finding := createCompleteTestFinding()
 	workDir := types.FilePath("/test/workdir")
 	affectedFilePath := types.FilePath("/test/workdir/package.json")
-	logger := zerolog.Nop()
 	var learnService learn.Service
-	errorReporter := error_reporting.NewTestErrorReporter()
 	format := config.FormatMd
 	metadata := &WorkflowMetadata{
 		ProjectName:       "test-project",
@@ -48,16 +46,7 @@ func createCompleteTestIssue(t *testing.T) *snyk.Issue {
 		DisplayTargetFile: "package.json",
 	}
 
-	issue, err := convertFindingToIssue(
-		finding,
-		workDir,
-		affectedFilePath,
-		&logger,
-		learnService,
-		errorReporter,
-		format,
-		metadata,
-	)
+	issue, err := convertFindingToIssue(finding, workDir, affectedFilePath, learnService, format, metadata)
 
 	require.NoError(t, err)
 	require.NotNil(t, issue)

@@ -76,24 +76,14 @@ func ConvertFindingDataToIssues(
 			break
 		}
 
-		issue, err := convertFindingToIssue(
-			finding,
-			workDir,
-			path,
-			logger,
-			learnService,
-			errorReporter,
-			format,
-			metadata,
-		)
+		issue, err := convertFindingToIssue(finding, workDir, path, learnService, format, metadata)
 
 		if err != nil {
 			findingIdStr := ""
 			if finding.Id != nil {
 				findingIdStr = finding.Id.String()
 			}
-			logger.Error().Err(err).Str("findingId", findingIdStr).Msg("Failed to convert finding to issue")
-			errorReporter.CaptureErrorAndReportAsIssue(path, err)
+			logger.Warn().Err(err).Str("findingId", findingIdStr).Msg("Failed to convert finding to issue")
 			continue
 		}
 
@@ -125,16 +115,7 @@ func ConvertFindingDataToIssues(
 }
 
 // convertFindingToIssue converts a single testapi.FindingData to a snyk.Issue
-func convertFindingToIssue(
-	finding testapi.FindingData,
-	workDir types.FilePath,
-	affectedFilePath types.FilePath,
-	logger *zerolog.Logger,
-	learnService learn.Service,
-	errorReporter error_reporting.ErrorReporter,
-	format string,
-	metadata *WorkflowMetadata,
-) (*snyk.Issue, error) {
+func convertFindingToIssue(finding testapi.FindingData, workDir types.FilePath, affectedFilePath types.FilePath, learnService learn.Service, format string, metadata *WorkflowMetadata) (*snyk.Issue, error) {
 	if finding.Attributes == nil {
 		return nil, fmt.Errorf("finding has no attributes")
 	}
@@ -171,13 +152,23 @@ func convertFindingToIssue(
 
 	// Build Issue
 	issue := &snyk.Issue{
-		ID:                  vuln.Id,
-		Severity:            severity,
-		IssueType:           types.DependencyVulnerability,
-		IsIgnored:           finding.Attributes.Suppression != nil,
-		IsNew:               false,
-		IgnoreDetails:       extractIgnoreDetails(finding),
-		Range:               extractRange(finding),
+		ID:            vuln.Id,
+		Severity:      severity,
+		IssueType:     types.DependencyVulnerability,
+		IsIgnored:     false, // TODO check if finding.Attributes.Suppression != nil is correct or how to get pending status
+		IsNew:         false,
+		IgnoreDetails: nil, // extractIgnoreDetails(finding), // TODO revisit when we have open source ignore policies added
+		// TODO: The unified API doesn't provide file locations with line/column information
+		// in the FindingData. Like the legacy converter, we need to:
+		// 1. Read the manifest file content (package.json, pom.xml, etc.)
+		// 2. Use RangeFinder (NpmRangeFinder, mavenRangeFinder, etc.) to parse and find the dependency declaration
+		// 3. Extract the line/column range
+		//
+		// This file parsing should happen at the scanner level (similar to UnmarshallAndRetrieveAnalysis)
+		// and be passed to the converter, or the converter should accept file content as a parameter.
+		//
+		// For now, returning empty range as the unified API doesn't expose this information directly.
+		Range:               types.Range{}, // filled on the top level
 		Message:             buildMessage(finding, additionalData, format),
 		FormattedMessage:    buildFormattedMessage(finding, vuln, ecosystemStr),
 		ContentRoot:         workDir,
@@ -229,7 +220,7 @@ func buildOssIssueData(
 		LineNumber:         lineNumber,
 		Identifiers:        extractIdentifiers(finding),
 		Description:        attrs.Description,
-		References:         convertReferences(extractReferences(finding, vuln)),
+		References:         extractReferences(finding, vuln),
 		Version:            extractVersion(finding, vuln),
 		License:            extractLicense(finding),
 		PackageManager:     ecosystemStr,
@@ -404,6 +395,7 @@ func buildUpgradePath(finding testapi.FindingData, vuln *testapi.SnykVulnProblem
 	// then only the package that needs to be upgraded with its fixed version
 	// Legacy format: [false, "package@fixedVersion"]
 	pkgName := vuln.PackageName
+	// TODO this needs to be updated once the upgrade path is correct and complete in the API
 	fixedVersion := vuln.InitiallyFixedInVersions[0]
 	upgradePath := []any{false, fmt.Sprintf("%s@%s", pkgName, fixedVersion)}
 
@@ -432,17 +424,11 @@ func extractReferences(finding testapi.FindingData, vuln *testapi.SnykVulnProble
 	return references
 }
 
-// convertReferences converts types.Reference to snyk references
-func convertReferences(refs []types.Reference) []types.Reference {
-	// Already in correct format
-	return refs
-}
-
 // extractCVSSv3 extracts CVSS v3 string from vulnerability
 func extractCVSSv3(vuln *testapi.SnykVulnProblem) string {
 	// Find CVSS v3.1 from Snyk in sources
 	for _, source := range vuln.CvssSources {
-		if source.CvssVersion == "3.1" && source.Assigner == "Snyk" {
+		if source.CvssVersion == "3.1" {
 			return source.Vector
 		}
 	}
@@ -475,7 +461,7 @@ func extractExploit(vuln *testapi.SnykVulnProblem) string {
 	}
 
 	// Return the secondary maturity level (CVSSv3) to match legacy behavior
-	// Legacy API used the "secondary" type as the default exploit value
+	// Legacy API used the CVSSv3 default exploit
 	var exploitLevel string
 	for _, level := range vuln.ExploitDetails.MaturityLevels {
 		if level.Type == "secondary" {
@@ -484,7 +470,7 @@ func extractExploit(vuln *testapi.SnykVulnProblem) string {
 		}
 	}
 
-	// Fallback to primary if no secondary found
+	// Fallback to primary (CVSSv4) if no secondary found
 	if exploitLevel == "" {
 		for _, level := range vuln.ExploitDetails.MaturityLevels {
 			if level.Type == "primary" {
@@ -663,21 +649,6 @@ func buildFormattedMessage(finding testapi.FindingData, vuln *testapi.SnykVulnPr
 	}
 
 	return message.String()
-}
-
-// extractRange extracts range information from finding locations
-func extractRange(finding testapi.FindingData) types.Range {
-	// TODO: The unified API doesn't provide file locations with line/column information
-	// in the FindingData. Like the legacy converter, we need to:
-	// 1. Read the manifest file content (package.json, pom.xml, etc.)
-	// 2. Use RangeFinder (NpmRangeFinder, mavenRangeFinder, etc.) to parse and find the dependency declaration
-	// 3. Extract the line/column range
-	//
-	// This file parsing should happen at the scanner level (similar to UnmarshallAndRetrieveAnalysis)
-	// and be passed to the converter, or the converter should accept file content as a parameter.
-	//
-	// For now, returning empty range as the unified API doesn't expose this information directly.
-	return types.Range{}
 }
 
 // extractLineNumber extracts line number from finding locations
