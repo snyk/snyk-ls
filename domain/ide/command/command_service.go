@@ -33,6 +33,7 @@ import (
 )
 
 var instance types.CommandService
+var organizationResolver OrgResolver
 
 type serviceImpl struct {
 	authService   authentication.AuthenticationService
@@ -59,10 +60,19 @@ func SetService(service types.CommandService) {
 	instance = service
 }
 
-// Service returns the singleton instance of the command service. If not already created,
-// it will create a new instance.
+// Service returns the singleton instance of the command service.
 func Service() types.CommandService {
 	return instance
+}
+
+// SetOrganizationResolver sets the singleton organization resolver.
+func SetOrganizationResolver(resolver OrgResolver) {
+	organizationResolver = resolver
+}
+
+// OrganizationResolver returns the singleton organization resolver.
+func OrganizationResolver() OrgResolver {
+	return organizationResolver
 }
 
 func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server types.Server) (any, error) {

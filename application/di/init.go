@@ -153,6 +153,7 @@ func initApplication(c *config.Config) {
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier)
 	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeScanner, snykCli))
+	command.SetOrganizationResolver(command.NewLDXSyncOrgResolver())
 }
 
 /*

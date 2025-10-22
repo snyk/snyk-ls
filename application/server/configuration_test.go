@@ -28,18 +28,19 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/resolve_organization_workflow"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/ide/command/mock_command"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -491,58 +492,25 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
-	engine := c.Engine()
+	engineConfig := c.Engine().GetConfiguration()
 
-	// Register fake resolve_organization_workflow
-	_, err := engine.Register(
-		resolve_organization_workflow.WORKFLOWID_RESOLVE_ORGANIZATION,
-		workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}),
-		func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
-			org := resolve_organization_workflow.Organization{
-				Id:   "auto-determined-org-id",
-				Name: "Test Org",
-			}
-			output := resolve_organization_workflow.ResolveOrganizationOutput{
-				Organization: org,
-			}
-			outputData := workflow.NewData(
-				workflow.NewTypeIdentifier(resolve_organization_workflow.WORKFLOWID_RESOLVE_ORGANIZATION, "resolve-org-output"),
-				"application/go-struct",
-				output,
-			)
-			return []workflow.Data{outputData}, nil
-		},
-	)
-	require.NoError(t, err)
+	// Register mock default value functions for org config to avoid API calls in tests
+	engineConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("test-default-org-uuid"))
+	engineConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("test-default-org-slug"))
 
-	// Register fake is_default_organization_workflow
-	_, err = engine.Register(
-		resolve_organization_workflow.WORKFLOWID_IS_DEFAULT_ORGANIZATION,
-		workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}),
-		func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
-			// Parse input to determine if org is default
-			isDefaultInput := input[0].GetPayload().(resolve_organization_workflow.IsDefaultOrganizationInput)
-			isDefault := isDefaultInput.Organization == ""
-
-			output := resolve_organization_workflow.IsDefaultOrganizationOutput{
-				IsDefaultOrg:  isDefault,
-				IsUnknownSlug: false,
-			}
-			outputData := workflow.NewData(
-				workflow.NewTypeIdentifier(resolve_organization_workflow.WORKFLOWID_IS_DEFAULT_ORGANIZATION, "is-default-org-output"),
-				"application/go-struct",
-				output,
-			)
-			return []workflow.Data{outputData}, nil
-		},
-	)
-	require.NoError(t, err)
+	// Set up mock organization resolver for configuration tests
+	ctrl := gomock.NewController(t)
+	mockResolver := mock_command.NewMockOrgResolver(ctrl)
+	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{
+		Id:   "auto-determined-org-id",
+		Name: "Test Org",
+	}, nil).AnyTimes()
+	command.SetOrganizationResolver(mockResolver)
 
 	folderPath := types.FilePath(t.TempDir())
-	err = initTestRepo(t, string(folderPath))
+	err := initTestRepo(t, string(folderPath))
 	require.NoError(t, err)
 
-	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
 
 	return &folderConfigTestSetup{
