@@ -478,6 +478,25 @@ func initTestRepo(t *testing.T, tempDir string) error {
 	return err
 }
 
+// setupMockOrgResolver sets up a mock organization resolver for tests
+func setupMockOrgResolver(t *testing.T, orgId, orgName string) {
+	t.Helper()
+	originalService := command.Service()
+	t.Cleanup(func() {
+		command.SetService(originalService)
+	})
+
+	ctrl := gomock.NewController(t)
+	mockResolver := mock_command.NewMockOrgResolver(ctrl)
+	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{
+		Id:   orgId,
+		Name: orgName,
+	}, nil).AnyTimes()
+	mockService := types.NewCommandServiceMock()
+	mockService.SetOrgResolver(mockResolver)
+	command.SetService(mockService)
+}
+
 // Common test setup for updateFolderConfig tests
 type folderConfigTestSetup struct {
 	t            *testing.T
@@ -499,13 +518,7 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	engineConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("test-default-org-slug"))
 
 	// Set up mock organization resolver for configuration tests
-	ctrl := gomock.NewController(t)
-	mockResolver := mock_command.NewMockOrgResolver(ctrl)
-	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{
-		Id:   "auto-determined-org-id",
-		Name: "Test Org",
-	}, nil).AnyTimes()
-	command.SetOrganizationResolver(mockResolver)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
@@ -777,6 +790,9 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
+
+	// Set up mock organization resolver
+	setupMockOrgResolver(t, "resolved-org-id", "Resolved Org")
 
 	// Use a non-existent path that might return nil
 	folderPath := types.FilePath("/non/existent/path")

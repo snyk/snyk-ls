@@ -48,19 +48,33 @@ import (
 // setupMockOrgResolver sets up a mock organization resolver that returns the given organization
 func setupMockOrgResolver(t *testing.T, org ldx_sync_config.Organization) {
 	t.Helper()
+	originalService := Service()
+	t.Cleanup(func() {
+		SetService(originalService)
+	})
+
 	ctrl := gomock.NewController(t)
 	mockResolver := mock_command.NewMockOrgResolver(ctrl)
 	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(org, nil).AnyTimes()
-	SetOrganizationResolver(mockResolver)
+	mockService := types.NewCommandServiceMock()
+	mockService.SetOrgResolver(mockResolver)
+	SetService(mockService)
 }
 
 // setupMockOrgResolverWithError sets up a mock organization resolver that returns an error
 func setupMockOrgResolverWithError(t *testing.T, err error) {
 	t.Helper()
+	originalService := Service()
+	t.Cleanup(func() {
+		SetService(originalService)
+	})
+
 	ctrl := gomock.NewController(t)
 	mockResolver := mock_command.NewMockOrgResolver(ctrl)
 	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{}, err).AnyTimes()
-	SetOrganizationResolver(mockResolver)
+	mockService := types.NewCommandServiceMock()
+	mockService.SetOrgResolver(mockResolver)
+	SetService(mockService)
 }
 
 // setupTestWorkspace creates a test workspace with the specified number of folders
@@ -267,19 +281,25 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 	// Setup mock organization resolver to return different orgs based on input path
+	originalService := Service()
+	t.Cleanup(func() {
+		SetService(originalService)
+	})
+
 	ctrl := gomock.NewController(t)
 	mockResolver := mock_command.NewMockOrgResolver(ctrl)
 	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string) (ldx_sync_config.Organization, error) {
-			isDefault := false
 			return ldx_sync_config.Organization{
-				Id:        "org-for-" + path,
-				Name:      "Org for " + path,
-				Slug:      "org-for-" + path,
-				IsDefault: &isDefault,
+				Id:        "org-id-for-" + path,
+				Name:      "Org Name for " + path,
+				Slug:      "org-slug-for-" + path,
+				IsDefault: util.Ptr(false),
 			}, nil
 		}).AnyTimes()
-	SetOrganizationResolver(mockResolver)
+	mockService := types.NewCommandServiceMock()
+	mockService.SetOrgResolver(mockResolver)
+	SetService(mockService)
 
 	// Setup workspace with multiple folders
 	notifier, folderPaths := setupTestWorkspace(t, c, 2)
@@ -318,6 +338,6 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	// Verify each folder has its own AutoDeterminedOrg
 	for _, fc := range folderConfigsParam.FolderConfigs {
 		assert.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for each folder")
-		assert.Contains(t, fc.AutoDeterminedOrg, "org-for-", "AutoDeterminedOrg should be path-specific")
+		assert.Contains(t, fc.AutoDeterminedOrg, "org-id-for-", "AutoDeterminedOrg should be path-specific")
 	}
 }

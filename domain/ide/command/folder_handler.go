@@ -99,7 +99,7 @@ func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (
 	engine := c.Engine()
 	gafConfig := engine.GetConfiguration()
 
-	return OrganizationResolver().ResolveOrganization(gafConfig, engine, c.Logger(), string(folderConfig.FolderPath))
+	return Service().GetOrgResolver().ResolveOrganization(gafConfig, engine, c.Logger(), string(folderConfig.FolderPath))
 }
 
 // MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration
@@ -150,6 +150,9 @@ func isOrgDefault(c *config.Config, organization string) (bool, error) {
 		return true, nil
 	}
 
+	// Below is a hacky way to get the default org ID and slug.
+	// If we set the org to "" on a cloned GAF config, then try get it, it will use the default func to get it.
+	// TODO - Have a proper way to fetch the user's default org from GAF.
 	clonedGAFConfig := c.Engine().GetConfiguration().Clone()
 	clonedGAFConfig.Set(configuration.ORGANIZATION, "")
 	defaultOrgUUID := clonedGAFConfig.GetString(configuration.ORGANIZATION)

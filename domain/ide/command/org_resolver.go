@@ -22,22 +22,19 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-//go:generate go tool github.com/golang/mock/mockgen -source=org_resolver.go -destination=mock_command/org_resolver_mock.go -package=mock_command
-
-// OrgResolver defines the interface for organization resolution
-type OrgResolver interface {
-	ResolveOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, dir string) (ldx_sync_config.Organization, error)
-}
+//go:generate go tool github.com/golang/mock/mockgen -destination=mock_command/org_resolver_mock.go -package=mock_command github.com/snyk/snyk-ls/internal/types OrgResolver
 
 // LDXSyncOrgResolver implements the OrgResolver interface using the GAF ldx_sync_config package
 type LDXSyncOrgResolver struct{}
 
-var _ OrgResolver = (*LDXSyncOrgResolver)(nil)
+var _ types.OrgResolver = (*LDXSyncOrgResolver)(nil)
 
 // NewLDXSyncOrgResolver creates a new LDXSyncOrgResolver
-func NewLDXSyncOrgResolver() OrgResolver {
+func NewLDXSyncOrgResolver() types.OrgResolver {
 	return &LDXSyncOrgResolver{}
 }
 
