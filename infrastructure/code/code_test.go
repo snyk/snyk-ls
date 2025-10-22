@@ -589,7 +589,7 @@ func getInterfileTestCodeIssueData() snyk.CodeIssueData {
 // Returns the storage map that can be used to verify stored values.
 func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, mockConfig *mocks.MockConfiguration, enableConsistentIgnores bool) map[string]string {
 	storage := make(map[string]string)
-	
+
 	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
 	mockConfig.EXPECT().GetString(gomock.Any()).DoAndReturn(func(key string) string {
 		return storage[key]
@@ -600,13 +600,13 @@ func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, mockConfig *mocks.
 			storage[key] = strVal
 		}
 	}).AnyTimes()
-	
+
 	if enableConsistentIgnores {
 		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true).AnyTimes()
 	} else {
 		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(false).AnyTimes()
 	}
-	
+
 	return storage
 }
 
