@@ -25,6 +25,7 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -584,6 +585,52 @@ func getInterfileTestCodeIssueData() snyk.CodeIssueData {
 	}
 }
 
+// setupMockConfigWithStorage sets up a mock configuration with stateful storage for folder configs.
+// Returns the storage map that can be used to verify stored values.
+func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, mockConfig *mocks.MockConfiguration, enableConsistentIgnores bool) map[string]string {
+	storage := make(map[string]string)
+	
+	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+	mockConfig.EXPECT().GetString(gomock.Any()).DoAndReturn(func(key string) string {
+		return storage[key]
+	}).AnyTimes()
+	mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value interface{}) {
+		// For these tests, we only need to persist strings.
+		if strVal, ok := value.(string); ok {
+			storage[key] = strVal
+		}
+	}).AnyTimes()
+	
+	if enableConsistentIgnores {
+		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true).AnyTimes()
+	} else {
+		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(false).AnyTimes()
+	}
+	
+	return storage
+}
+
+// setupClonedConfigMock creates a mock cloned configuration that returns the specified SAST settings.
+func setupClonedConfigMock(ctrl *gomock.Controller, org string, sastEnabled bool) *mocks.MockConfiguration {
+	clonedConfig := mocks.NewMockConfiguration(ctrl)
+	clonedConfig.EXPECT().Set(configuration.ORGANIZATION, org).Times(1)
+	clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: sastEnabled}, nil).Times(1)
+	return clonedConfig
+}
+
+// setupFolderConfig creates a folder config and stores it in the mock configuration.
+func setupFolderConfig(t *testing.T, mockConfig *mocks.MockConfiguration, logger *zerolog.Logger, folderPath types.FilePath, org string) *types.FolderConfig {
+	t.Helper()
+	folderConfig := &types.FolderConfig{
+		FolderPath:   folderPath,
+		PreferredOrg: org,
+		OrgSetByUser: true,
+	}
+	err := storedconfig.UpdateFolderConfig(mockConfig, folderConfig, logger)
+	require.NoError(t, err)
+	return folderConfig
+}
+
 func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 	t.Run("Should use folder-specific organization for SAST settings check", func(t *testing.T) {
 		c := testutil.UnitTest(t)
@@ -593,36 +640,13 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		mockConfig := mocks.NewMockConfiguration(ctrl)
 		c.SetEngine(mockEngine)
 
-		// Set up folder config with specific organization
 		tempDir := types.FilePath(t.TempDir())
 		folderOrg := "folder-specific-org"
-		folderConfig := &types.FolderConfig{
-			FolderPath:   tempDir,
-			PreferredOrg: folderOrg,
-			OrgSetByUser: true,
-		}
 
-		// Create a storage map for the mock config to simulate persistence
-		storage := make(map[string]string)
+		setupMockConfigWithStorage(mockEngine, mockConfig, false)
+		folderConfig := setupFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
 
-		// Set up mock expectations with stateful storage
-		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
-		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(false).AnyTimes()
-		mockConfig.EXPECT().GetString(gomock.Any()).DoAndReturn(func(key string) string {
-			return storage[key]
-		}).AnyTimes()
-		mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value interface{}) {
-			// For this test, we only need to persist strings.
-			if strVal, ok := value.(string); ok {
-				storage[key] = strVal
-			}
-		}).AnyTimes()
-
-		// Store the folder config so FolderOrganization can retrieve it
-		err := storedconfig.UpdateFolderConfig(mockConfig, folderConfig, c.Logger())
-		require.NoError(t, err)
-
-		// Mock the cloned configuration
+		// Mock the cloned configuration with custom capture logic
 		clonedConfig := mocks.NewMockConfiguration(ctrl)
 		var capturedOrg string
 		clonedConfig.EXPECT().Set(configuration.ORGANIZATION, gomock.Any()).DoAndReturn(func(key string, value any) {
@@ -648,38 +672,13 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		mockConfig := mocks.NewMockConfiguration(ctrl)
 		c.SetEngine(mockEngine)
 
-		// Set up folder config with specific organization
 		tempDir := types.FilePath(t.TempDir())
 		folderOrg := "org-with-sast-disabled"
-		folderConfig := &types.FolderConfig{
-			FolderPath:   tempDir,
-			PreferredOrg: folderOrg,
-			OrgSetByUser: true,
-		}
 
-		// Create a storage map for the mock config to simulate persistence
-		storage := make(map[string]string)
+		setupMockConfigWithStorage(mockEngine, mockConfig, false)
+		folderConfig := setupFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
 
-		// Set up mock expectations with stateful storage
-		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
-		mockConfig.EXPECT().GetString(gomock.Any()).DoAndReturn(func(key string) string {
-			return storage[key]
-		}).AnyTimes()
-		mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value interface{}) {
-			// For this test, we only need to persist strings.
-			if strVal, ok := value.(string); ok {
-				storage[key] = strVal
-			}
-		}).AnyTimes()
-
-		// Store the folder config so FolderOrganization can retrieve it
-		err := storedconfig.UpdateFolderConfig(mockConfig, folderConfig, c.Logger())
-		require.NoError(t, err)
-
-		// Mock the cloned configuration to return SAST disabled for this org
-		clonedConfig := mocks.NewMockConfiguration(ctrl)
-		clonedConfig.EXPECT().Set(configuration.ORGANIZATION, folderOrg).Times(1)
-		clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).Times(1)
+		clonedConfig := setupClonedConfigMock(ctrl, folderOrg, false)
 		mockConfig.EXPECT().Clone().Return(clonedConfig).Times(1)
 
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
@@ -698,54 +697,17 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		mockConfig := mocks.NewMockConfiguration(ctrl)
 		c.SetEngine(mockEngine)
 
-		// Set up two folders with different organizations
 		tempDir1 := types.FilePath(t.TempDir())
 		tempDir2 := types.FilePath(t.TempDir())
 		org1 := "org-with-sast-enabled"
 		org2 := "org-with-sast-disabled"
 
-		folderConfig1 := &types.FolderConfig{
-			FolderPath:   tempDir1,
-			PreferredOrg: org1,
-			OrgSetByUser: true,
-		}
-		folderConfig2 := &types.FolderConfig{
-			FolderPath:   tempDir2,
-			PreferredOrg: org2,
-			OrgSetByUser: true,
-		}
+		setupMockConfigWithStorage(mockEngine, mockConfig, false)
+		folderConfig1 := setupFolderConfig(t, mockConfig, c.Logger(), tempDir1, org1)
+		folderConfig2 := setupFolderConfig(t, mockConfig, c.Logger(), tempDir2, org2)
 
-		// Create a storage map for the mock config to simulate persistence
-		storage := make(map[string]string)
-
-		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
-		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(false).AnyTimes()
-		mockConfig.EXPECT().GetString(gomock.Any()).DoAndReturn(func(key string) string {
-			return storage[key]
-		}).AnyTimes()
-		mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value interface{}) {
-			// For this test, we only need to persist strings.
-			if strVal, ok := value.(string); ok {
-				storage[key] = strVal
-			}
-		}).AnyTimes()
-
-		// Store the folder configs so FolderOrganization can retrieve them
-		err := storedconfig.UpdateFolderConfig(mockConfig, folderConfig1, c.Logger())
-		require.NoError(t, err)
-		err = storedconfig.UpdateFolderConfig(mockConfig, folderConfig2, c.Logger())
-		require.NoError(t, err)
-
-		// Mock the cloned configuration for org1 (SAST enabled)
-		clonedConfig1 := mocks.NewMockConfiguration(ctrl)
-		clonedConfig1.EXPECT().Set(configuration.ORGANIZATION, org1).Times(1)
-		clonedConfig1.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).Times(1)
-
-		// Mock the cloned configuration for org2 (SAST disabled)
-		clonedConfig2 := mocks.NewMockConfiguration(ctrl)
-		clonedConfig2.EXPECT().Set(configuration.ORGANIZATION, org2).Times(1)
-		clonedConfig2.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).Times(1)
-
+		clonedConfig1 := setupClonedConfigMock(ctrl, org1, true)
+		clonedConfig2 := setupClonedConfigMock(ctrl, org2, false)
 		mockConfig.EXPECT().Clone().Return(clonedConfig1).Times(1)
 		mockConfig.EXPECT().Clone().Return(clonedConfig2).Times(1)
 
