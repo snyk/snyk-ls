@@ -78,11 +78,15 @@ func setupTestScanner(t *testing.T) *Scanner {
 	t.Helper()
 	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
+
+	// Some of these tests rely on cloning the configuration object, so we need to mock it.
+	// We cannot use testutil.SetUpEngineMock() because it returns a real configuration object.
 	ctrl := gomock.NewController(t)
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockConfig := mocks.NewMockConfiguration(ctrl)
 	c.SetEngine(mockEngine)
 
+	// Set up mocks on the configuration object to allow it to be cloned and modified.
 	mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 	mockConfig.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
 	mockConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
