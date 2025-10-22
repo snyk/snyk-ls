@@ -84,7 +84,9 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	require.Error(t, err)
 
 	lockFileName, err := c.CLIDownloadLockFileName()
-	assert.Eventuallyf(t, func() bool {
+	require.NoError(t, err)
+
+	require.Eventuallyf(t, func() bool {
 		_, err := os.Stat(lockFileName)
 		return err != nil
 	}, time.Second*2, time.Millisecond, "lock file should not exist")
