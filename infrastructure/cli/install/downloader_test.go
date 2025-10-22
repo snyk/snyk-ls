@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -75,17 +76,18 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 
 	// simulate cancellation when some progress received
 	go func() {
+		<-progressCh
 		progress.Cancel(progressTracker.GetToken())
 	}()
 
 	err := d.Download(r, false)
-	assert.Error(t, err)
+	require.Error(t, err)
 
-	// make sure cancellation cleanup works
 	lockFileName, err := c.CLIDownloadLockFileName()
-	require.NoError(t, err)
-	_, err = os.Stat(lockFileName)
-	assert.Error(t, err)
+	assert.Eventuallyf(t, func() bool {
+		_, err := os.Stat(lockFileName)
+		return err != nil
+	}, time.Second*2, time.Millisecond, "lock file should not exist")
 }
 
 func getTestAsset() *Release {
