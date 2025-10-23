@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -126,6 +127,39 @@ func (m *McpLLMBinding) addSnykTools(invocationCtx workflow.InvocationContext) e
 	return nil
 }
 
+// startProgressReporting starts a goroutine that reports progress from 0 to 99 every second
+// The done channel should be closed by the caller when the operation completes
+func (m *McpLLMBinding) startProgressReporting(progressToken mcp.ProgressToken, done chan bool) {
+	totalProgress := float64(100)
+
+	go func() {
+		progress := float64(0)
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				if progress < 99 {
+					progress++
+				}
+				progressNotification := mcp.NewProgressNotification(progressToken,
+					progress,
+					&totalProgress,
+					nil)
+				m.mcpServer.SendNotificationToAllClients(progressNotification.Method, map[string]any{
+					"progressToken": progressNotification.Params.ProgressToken,
+					"progress":      progressNotification.Params.Progress,
+					"total":         progressNotification.Params.Total,
+					"message":       progressNotification.Params.Message,
+				})
+			}
+		}
+	}()
+}
+
 // runSnyk runs a Snyk command and returns the result
 func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.InvocationContext, workingDir string, cmd []string) (string, error) {
 	logger := m.logger.With().Str("method", "runSnyk").Logger()
@@ -213,8 +247,20 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			logger.Debug().Msg("Received empty workingDir")
 		}
 
+		var progressToken mcp.ProgressToken
+		if request.Params.Meta != nil {
+			progressToken = request.Params.Meta.ProgressToken
+		}
+
+		// Start progress reporting goroutine
+		progressDoneChan := make(chan bool)
+		m.startProgressReporting(progressToken, progressDoneChan)
+
 		// Run the command
 		output, err := m.runSnyk(ctx, invocationCtx, workingDir, args)
+
+		// Signal the progress goroutine to stop before returning response
+		close(progressDoneChan)
 		// we only return Err if we get exit code > 1 from CLI
 		if err != nil {
 			if output != "" {
