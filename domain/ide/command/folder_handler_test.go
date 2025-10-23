@@ -341,3 +341,80 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 		assert.Contains(t, fc.AutoDeterminedOrg, "org-id-for-", "AutoDeterminedOrg should be path-specific")
 	}
 }
+
+func Test_isOrgDefault(t *testing.T) {
+	tests := []struct {
+		name                 string
+		setDefaultOrgValue   string
+		setDefaultSlugValue  string
+		testValue            string
+		expectedIsDefault    bool
+		expectedErrorMessage string
+	}{
+		{
+			name:                "empty organization",
+			setDefaultOrgValue:  "test-default-org-uuid",
+			setDefaultSlugValue: "test-default-org-slug",
+			testValue:           "",
+			expectedIsDefault:   true,
+		},
+		{
+			name:                "matching UUID",
+			setDefaultOrgValue:  "test-default-org-uuid",
+			setDefaultSlugValue: "test-default-org-slug",
+			testValue:           "test-default-org-uuid",
+			expectedIsDefault:   true,
+		},
+		{
+			name:                "matching slug",
+			setDefaultOrgValue:  "test-default-org-uuid",
+			setDefaultSlugValue: "test-default-org-slug",
+			testValue:           "test-default-org-slug",
+			expectedIsDefault:   true,
+		},
+		{
+			name:                "non-matching organization",
+			setDefaultOrgValue:  "test-default-org-uuid",
+			setDefaultSlugValue: "test-default-org-slug",
+			testValue:           "different-org-id",
+			expectedIsDefault:   false,
+		},
+		{
+			name:                 "failed to fetch default UUID returns error",
+			setDefaultOrgValue:   "",
+			setDefaultSlugValue:  "test-default-org-slug",
+			testValue:            "some-org-id",
+			expectedErrorMessage: "could not retrieve the user's default organization",
+		},
+		{
+			name:                 "failed to fetch default slug returns error when UUID not matched",
+			setDefaultOrgValue:   "test-default-org-uuid",
+			setDefaultSlugValue:  "",
+			testValue:            "some-org-id",
+			expectedErrorMessage: "could not retrieve the user's default organization slug",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			mockEngine, gafConfig := testutil.SetUpEngineMock(t, c)
+			mockEngine.EXPECT().GetConfiguration().Return(gafConfig).AnyTimes()
+
+			// Setup mock default values for org config - these will not be overridden by a GAF config clone, which the function does.
+			gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(tt.setDefaultOrgValue))
+			gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction(tt.setDefaultSlugValue))
+
+			isDefault, err := isOrgDefault(c, tt.testValue)
+
+			if tt.expectedErrorMessage != "" {
+				require.Error(t, err)
+				assert.False(t, isDefault)
+				assert.Contains(t, err.Error(), tt.expectedErrorMessage)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedIsDefault, isDefault)
+			}
+		})
+	}
+}
