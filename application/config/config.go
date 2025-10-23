@@ -652,7 +652,7 @@ func (c *Config) SetToken(newTokenString string) {
 	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, c.logger)
 
 	if c.authenticationMethod == types.OAuthAuthentication && oAuthErr == nil &&
-		c.shouldUpdateOAuth2Token(conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), newTokenString) {
+		c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
 		c.logger.Debug().Msg("put oauth2 token into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
