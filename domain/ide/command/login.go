@@ -19,8 +19,7 @@ package command
 import (
 	"context"
 
-	"github.com/rs/zerolog"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -31,7 +30,7 @@ type loginCommand struct {
 	command     types.CommandData
 	authService authentication.AuthenticationService
 	notifier    noti.Notifier
-	logger      *zerolog.Logger
+	c           *config.Config
 }
 
 func (cmd *loginCommand) Command() types.CommandData {
@@ -39,16 +38,21 @@ func (cmd *loginCommand) Command() types.CommandData {
 }
 
 func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
-	cmd.logger.Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
+	cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
 	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
-		cmd.logger.Err(err).Msg("Error on snyk.login command")
+		cmd.c.Logger().Err(err).Msg("Error on snyk.login command")
 		cmd.notifier.SendError(err)
 	}
 	if err == nil && token != "" {
-		cmd.logger.Debug().Str("method", "loginCommand.Execute").
+		cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
+
+		// Send folder configs after successful login,
+		// to re-fetch auto determined org from LDX-Sync.
+		go sendFolderConfigs(cmd.c, cmd.notifier)
+
 		return token, nil
 	}
 	return nil, err

@@ -71,7 +71,7 @@ func (cmd *codeFixFeedback) Execute(_ context.Context) (any, error) {
 			FixID:               fixId,
 			Result:              feedback,
 			Host:                host,
-			CodeRequestContext:  code.NewAutofixCodeRequestContext(),
+			CodeRequestContext:  code.NewAutofixCodeRequestContext(""),
 			IdeExtensionDetails: code.GetAutofixIdeExtensionDetails(c),
 		}
 

@@ -41,9 +41,10 @@ type serviceImpl struct {
 	issueProvider snyk.IssueProvider
 	codeScanner   *code.Scanner
 	cli           cli.Executor
+	orgResolver   types.OrgResolver
 }
 
-func NewService(authService authentication.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor) types.CommandService {
+func NewService(authService authentication.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, orgResolver types.OrgResolver) types.CommandService {
 	return &serviceImpl{
 		authService:   authService,
 		notifier:      notifier,
@@ -51,6 +52,7 @@ func NewService(authService authentication.AuthenticationService, notifier noti.
 		issueProvider: issueProvider,
 		codeScanner:   codeScanner,
 		cli:           cli,
+		orgResolver:   orgResolver,
 	}
 }
 
@@ -59,10 +61,14 @@ func SetService(service types.CommandService) {
 	instance = service
 }
 
-// Service returns the singleton instance of the command service. If not already created,
-// it will create a new instance.
+// Service returns the singleton instance of the command service.
 func Service() types.CommandService {
 	return instance
+}
+
+// GetOrgResolver returns the organization resolver.
+func (s *serviceImpl) GetOrgResolver() types.OrgResolver {
+	return s.orgResolver
 }
 
 func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server types.Server) (any, error) {

@@ -73,16 +73,6 @@ func NewSnykApiClient(c *config.Config, client func() *http.Client) SnykApiClien
 	return &s
 }
 
-func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL {
-	organization := c.Organization()
-	if organization != "" {
-		q := u.Query()
-		q.Set("org", organization)
-		u.RawQuery = q.Encode()
-	}
-	return u
-}
-
 func (s *SnykApiClientImpl) normalizeAPIPathForV1(c *config.Config, path string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
@@ -91,6 +81,32 @@ func (s *SnykApiClientImpl) normalizeAPIPathForV1(c *config.Config, path string)
 		path = "/v1" + path
 	}
 	return path
+}
+
+func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL {
+	// Since feature flags don't have folder context, we loop through workspace folders to find the first one with a
+	// configured org. Fall back to the global org if none found.
+	var organization string
+	ws := c.Workspace()
+	if ws != nil {
+		folders := ws.Folders()
+		for _, folder := range folders {
+			org := c.FolderOrganization(folder.Path())
+			if org != "" {
+				organization = org
+				break
+			}
+		}
+	}
+	if organization == "" {
+		organization = c.Organization()
+	}
+	if organization != "" {
+		q := u.Query()
+		q.Set("org", organization)
+		u.RawQuery = q.Encode()
+	}
+	return u
 }
 
 func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
@@ -110,7 +126,6 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 	}
 	u = s.addOrgToQuery(c, u)
 	logger.Debug().Str("path", path).Msg("API: Getting feature flag status")
-
 	err = s.getApiResponse(method, u.String(), &response)
 	if err != nil {
 		if strings.Contains(err.Error(), "403 Forbidden") {
@@ -120,7 +135,6 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 		logger.Err(err).Msg("Error when calling featureFlagSettings endpoint")
 		return FFResponse{}, err
 	}
-
 	logger.Debug().Msgf("Feature flag '%s' is enabled", featureFlagType)
 	return response, nil
 }

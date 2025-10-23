@@ -272,6 +272,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	if engine == nil {
 		initWorkFlowEngine(c)
 	} else {
+		// Engine is provided externally, e.g. we were invoked from CLI.
 		c.engine = engine
 	}
 	gafConfig := c.engine.GetConfiguration()
@@ -303,7 +304,7 @@ func initWorkFlowEngine(c *Config) {
 
 	err := initWorkflows(c)
 	if err != nil {
-		c.Logger().Err(err).Msg("unable to initialize additional workflows")
+		c.Logger().Err(err).Msg("unable to initialize workflows")
 	}
 
 	err = c.engine.Init()
@@ -457,6 +458,13 @@ func (c *Config) SnykCodeApi() string {
 	defer c.m.RUnlock()
 
 	return c.snykCodeApiUrl
+}
+
+func (c *Config) Endpoint() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.snykApiUrl
 }
 
 func (c *Config) SnykUI() string {
@@ -837,6 +845,8 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	return snykCodeTimeout
 }
 
+// Organization is also stored per folder in `types.FolderConfig.PreferredOrg`.
+// Prefer reading via `c.FolderOrganization(path)` or `c.FolderConfig(path).PreferredOrg`.
 func (c *Config) Organization() string {
 	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
@@ -1287,6 +1297,29 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
 	return folderConfig
+}
+
+// FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
+// the folder, it returns the global organization (which if unset, GAF will return the default org).
+func (c *Config) FolderOrganization(path types.FilePath) string {
+	fc := c.FolderConfig(path)
+	if fc == nil {
+		// Should never happen, but as a safety net, return the global org.
+		return c.Organization()
+	}
+	if fc.OrgSetByUser {
+		if fc.PreferredOrg == "" {
+			return c.Organization()
+		} else {
+			return fc.PreferredOrg
+		}
+	} else {
+		// If AutoDeterminedOrg is empty, fall back to global organization
+		if fc.AutoDeterminedOrg == "" {
+			return c.Organization()
+		}
+		return fc.AutoDeterminedOrg
+	}
 }
 
 func (c *Config) HoverVerbosity() int {

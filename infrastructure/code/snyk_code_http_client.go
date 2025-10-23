@@ -50,7 +50,14 @@ func issueSeverity(snykSeverity string) types.Severity {
 	return sev
 }
 
+// GetCodeApiUrl returns the code API URL.
 func GetCodeApiUrl(c *config.Config) (string, error) {
+	return GetCodeApiUrlForFolder(c, "")
+}
+
+// GetCodeApiUrlForFolder returns the code API URL. In FedRAMP, it uses the organization from the given folder
+// when set; otherwise it falls back to the global organization for backward compatibility.
+func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, error) {
 	if !c.IsFedramp() {
 		return c.SnykCodeApi(), nil
 	}
@@ -61,11 +68,12 @@ func GetCodeApiUrl(c *config.Config) (string, error) {
 
 	u.Host = codeApiRegex.ReplaceAllString(u.Host, "api.")
 
-	if c.Organization() == "" {
-		return "", errors.New("Organization is required in a fedramp environment")
+	org := c.FolderOrganization(folder)
+	if org == "" {
+		return "", errors.New("organization is required in a fedramp environment")
 	}
 
-	u.Path = "/hidden/orgs/" + c.Organization() + "/code"
+	u.Path = "/hidden/orgs/" + org + "/code"
 
 	return u.String(), nil
 }

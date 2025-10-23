@@ -501,6 +501,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	if err := rsp.UnmarshalResult(&result); err != nil {
 		t.Fatal(err)
 	}
+	// PreferredOrg is set globally during initialization
 	assert.Equal(t, expectedOrgId, c.Organization())
 	assert.Equal(t, "xxx", c.Token())
 }

@@ -19,6 +19,7 @@ package testsupport
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,4 +45,22 @@ func CreateFileOrFail(t *testing.T, filePath string, content []byte) {
 	assert.NoError(t, err)
 	err = os.WriteFile(filePath, content, 0644)
 	assert.NoError(t, err)
+}
+
+// PathSafeTestName returns a file-system-safe version of the test name.
+// Replaces characters that could cause issues with file system paths.
+func PathSafeTestName(t *testing.T) string {
+	t.Helper()
+	replacer := strings.NewReplacer(
+		"/", "__",
+		"\\", "__",
+		":", "_",
+		"*", "_",
+		"?", "_",
+		"\"", "_",
+		"<", "_",
+		">", "_",
+		"|", "_",
+	)
+	return replacer.Replace(t.Name())
 }

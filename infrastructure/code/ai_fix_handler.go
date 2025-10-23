@@ -98,7 +98,7 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 			return c.Engine().GetNetworkAccess().GetHttpClient()
 		}),
 	)
-	explanations, err := deepCodeLLMBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs, Endpoint: getExplainEndpoint(c)})
+	explanations, err := deepCodeLLMBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs, Endpoint: getExplainEndpoint(c, issue.GetContentRoot())})
 	if err != nil {
 		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.GetID())
 		return
@@ -112,8 +112,9 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	}
 }
 
-func getExplainEndpoint(c *config.Config) *url.URL {
-	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", c.SnykApi(), c.Organization()))
+func getExplainEndpoint(c *config.Config, folder types.FilePath) *url.URL {
+	org := c.FolderOrganization(folder)
+	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", c.SnykApi(), org))
 	if err != nil {
 		return &url.URL{}
 	}
