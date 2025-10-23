@@ -40,5 +40,5 @@ func NewLDXSyncOrgResolver() types.OrgResolver {
 
 // ResolveOrganization resolves the organization for a given directory
 func (r *LDXSyncOrgResolver) ResolveOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, dir string) (ldx_sync_config.Organization, error) {
-	return ldx_sync_config.ResolveOrganization(config, engine, logger, dir, "")
+	return ldx_sync_config.ResolveOrganization(config, engine, logger, dir)
 }
