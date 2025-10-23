@@ -23,8 +23,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -48,14 +46,13 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var (
-	_ snyk.CacheProvider = (*Folder)(nil)
-)
+var _ snyk.CacheProvider = (*Folder)(nil)
 
 const (
 	Unscanned types.FolderStatus = iota
@@ -344,8 +341,8 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 	if !scanData.UpdateGlobalCache {
 		return
 	}
-	var newCache = snyk.IssuesByFile{}
-	var dedupMap = map[string]bool{}
+	newCache := snyk.IssuesByFile{}
+	dedupMap := map[string]bool{}
 	for _, issue := range scanData.Issues {
 		if !f.Contains(issue.GetAffectedFilePath()) {
 			msg := "issue found in scanData " + issue.GetAffectedFilePath() + " that does not pertain to folder: " + f.path
@@ -487,7 +484,8 @@ func createTestSummary(data *types.ScanData, c *config.Config) json_schemas.Test
 }
 
 func appendTestResults(sic types.SeverityIssueCounts, results []json_schemas.TestSummaryResult,
-	severity types.Severity) []json_schemas.TestSummaryResult {
+	severity types.Severity,
+) []json_schemas.TestSummaryResult {
 	if ic, exists := sic[severity]; exists {
 		results = append(results, json_schemas.TestSummaryResult{
 			Severity: severity.String(),
@@ -548,7 +546,6 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 
 	df := delta2.NewDeltaFinderForProduct(p)
 	enrichedIssues, err := df.DiffAndEnrich(baseFindingIdentifiable, currentFindingIdentifiable)
-
 	if err != nil {
 		logger.Error().Err(err).Msg("couldn't calculate delta")
 		return issueByFile, err
@@ -630,7 +627,7 @@ func (f *Folder) FilterIssues(
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
 
-	codeConsistentIgnoresEnabled := f.c.Engine().GetConfiguration().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	codeConsistentIgnoresEnabled, _ := featureflag.GetFeatureFlagFromFolderConfig(f.path, featureflag.SnykCodeConsistentIgnores)
 
 	for path, issueSlice := range issues {
 		if !f.Contains(path) {

@@ -147,7 +147,7 @@ func (c *CliSettings) SetPath(path string) {
 
 func (c *CliSettings) DefaultBinaryInstallPath() string {
 	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
-	err := os.MkdirAll(lsPath, 0755)
+	err := os.MkdirAll(lsPath, 0o755)
 	if err != nil {
 		c.C.Logger().Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
 		return ""
@@ -418,7 +418,7 @@ func (c *Config) CLIDownloadLockFileName() (string, error) {
 		c.cliSettings.cliPath = c.cliSettings.DefaultBinaryInstallPath()
 	}
 	path = filepath.Dir(c.cliSettings.cliPath)
-	err := os.MkdirAll(path, 0755)
+	err := os.MkdirAll(path, 0o755)
 	if err != nil {
 		return "", err
 	}
@@ -466,6 +466,7 @@ func (c *Config) LogPath() string {
 
 	return c.logPath
 }
+
 func (c *Config) SnykApi() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -502,19 +503,23 @@ func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnal
 func (c *Config) IntegrationName() string {
 	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_NAME)
 }
+
 func (c *Config) IntegrationVersion() string {
 	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_VERSION)
 }
+
 func (c *Config) FilterSeverity() types.SeverityFilter {
 	c.m.RLock()
 	defer c.m.RUnlock()
 	return c.filterSeverity
 }
+
 func (c *Config) IssueViewOptions() types.IssueViewOptions {
 	c.m.RLock()
 	defer c.m.RUnlock()
 	return c.issueViewOptions
 }
+
 func (c *Config) Token() string {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -625,6 +630,7 @@ func (c *Config) SetSnykCodeEnabled(enabled bool) {
 	c.isSnykCodeEnabled = enabled
 	c.activateSnykCodeSecurity = enabled
 }
+
 func (c *Config) SetSnykIacEnabled(enabled bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -772,7 +778,7 @@ func (c *Config) ConfigureLogging(server types.Server) {
 	writers := []io.Writer{levelWriter}
 
 	if c.LogPath() != "" {
-		c.logFile, err = os.OpenFile(c.LogPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+		c.logFile, err = os.OpenFile(c.LogPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 		if err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, "couldn't open logfile")
 		} else {
@@ -866,7 +872,7 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 }
 
 // Organization is also stored per folder in `types.FolderConfig.PreferredOrg`.
-// Prefer reading via `c.FolderOrganization(path)` or `c.FolderConfig(path).PreferredOrg`.
+// Prefer reading via `c.FolderOrganization(path)`
 func (c *Config) Organization() string {
 	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
@@ -994,6 +1000,7 @@ func (c *Config) SetIdeName(ideName string) {
 	defer c.m.Unlock()
 	c.engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, ideName)
 }
+
 func (c *Config) SetIdeVersion(ideVersion string) {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -1250,6 +1257,7 @@ func (c *Config) IdeVersion() string {
 	defer c.m.RUnlock()
 	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
 }
+
 func (c *Config) IdeName() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -1268,7 +1276,6 @@ func (c *Config) IsAnalyticsPermitted() bool {
 	logger := c.Logger().With().Str("method", "IsAnalyticsPermitted").Logger()
 
 	u, err := url.Parse(c.engine.GetConfiguration().GetString(configuration.API_URL))
-
 	if err != nil {
 		logger.Error().Err(err).Msg("unable to parse configured API_URL")
 		return false

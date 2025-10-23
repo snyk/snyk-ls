@@ -36,6 +36,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -109,9 +110,12 @@ func GetHTMLRenderer(c *config.Config, snykApiClient snyk_api.SnykApiClient) (*H
 	}
 
 	codeRenderer = &HtmlRenderer{
-		c:                    c,
-		globalTemplate:       globalTemplate,
-		snykApiClient:        snykApiClient,
+		c: c,
+
+		globalTemplate: globalTemplate,
+
+		snykApiClient: snykApiClient,
+
 		inlineIgnoresEnabled: false,
 	}
 
@@ -152,11 +156,9 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	folderPath := renderer.determineFolderPath(issue.GetAffectedFilePath())
 
 	gafConfig := renderer.c.Engine().GetConfiguration().Clone()
-	folderOrg := renderer.c.FolderOrganization(folderPath)
-	if folderOrg != "" {
-		gafConfig.Set(configuration.ORGANIZATION, folderOrg)
-	}
-	codeRenderer.updateFeatureFlags(gafConfig)
+	gafConfig.Set(configuration.ORGANIZATION, renderer.c.FolderOrganization(folderPath))
+
+	codeRenderer.updateFeatureFlags(gafConfig, folderPath)
 
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
@@ -244,22 +246,22 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		return ""
 	}
 
-	var result = buffer.String()
+	result := buffer.String()
 	return result
 }
 
-func (renderer *HtmlRenderer) updateFeatureFlags(conf configuration.Configuration) {
+func (renderer *HtmlRenderer) updateFeatureFlags(conf configuration.Configuration, folder types.FilePath) {
 	logger := renderer.c.Logger().With().Str("method", "updateFeatureFlags").Logger()
 	renderer.iawEnabled = conf.GetBool(ignore_workflow.ConfigIgnoreApprovalEnabled)
 	renderer.inlineIgnoresEnabled = false
+
 	if renderer.c.IntegrationName() == "VS_CODE" {
-		ffInlineIgnores := "snykCodeInlineIgnore"
-		status, err := renderer.snykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagType(ffInlineIgnores))
-		if err != nil {
-			msg := fmt.Sprintf("Failed to retrieve feature flag status (%s), assuming deactivated", ffInlineIgnores)
-			logger.Warn().Err(err).Msg(msg)
+		ff, ok := featureflag.GetFeatureFlagFromFolderConfig(folder, featureflag.SnykCodeInlineIgnore)
+		if !ok {
+			msg := fmt.Sprintf("Failed to retrieve feature flag status (%s), assuming deactivated", featureflag.SnykCodeInlineIgnore)
+			logger.Warn().Msg(msg)
 		}
-		renderer.inlineIgnoresEnabled = status.Ok
+		renderer.inlineIgnoresEnabled = ff
 	}
 }
 

@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -41,9 +42,18 @@ const (
 func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	// send folder configs (they are queued until initialization is done)
-	go sendFolderConfigs(c, notifier)
+	sendFolderConfigs(c, notifier)
 	HandleUntrustedFolders(ctx, c, srv)
+}
+
+func populateFeatureFlags(c *config.Config, folderConfig *types.FolderConfig) {
+	logger := c.Logger().With().Str("method", "populateFeatureFlags").Logger()
+	org := c.FolderOrganization(folderConfig.FolderPath)
+	flags, err := featureflag.GetInstance().GetFlags(org)
+	if err != nil {
+		logger.Err(err).Msg("couldn't get feature flags")
+	}
+	folderConfig.FeatureFlags = flags
 }
 
 func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
@@ -57,6 +67,8 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			logger.Err(err2).Msg("unable to load stored config")
 			return
 		}
+
+		populateFeatureFlags(c, folderConfig)
 
 		changedFolderConfig := false
 
@@ -203,6 +215,7 @@ func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
 	}
 	agg.Init(folderPaths)
 }
+
 func initScanPersister(c *config.Config, persister persistence.ScanSnapshotPersister) {
 	logger := c.Logger().With().Str("method", "initScanPersister").Logger()
 	w := c.Workspace()
