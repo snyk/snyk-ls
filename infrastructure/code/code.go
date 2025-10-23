@@ -92,6 +92,7 @@ type Scanner struct {
 	C                   *config.Config
 	codeInstrumentor    codeClientObservability.Instrumentor
 	codeErrorReporter   codeClientObservability.ErrorReporter
+	codeScanner         func(sc *Scanner, path types.FilePath) codeClient.CodeScanner
 }
 
 func (sc *Scanner) BundleHashes() map[types.FilePath]string {
@@ -109,7 +110,7 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, path types.FilePath) codeClient.CodeScanner) *Scanner {
 	sc := &Scanner{
 		SnykApiClient:     apiClient,
 		errorReporter:     reporter,
@@ -123,6 +124,7 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		C:                 c,
 		codeInstrumentor:  codeInstrumentor,
 		codeErrorReporter: codeErrorReporter,
+		codeScanner:       codeScanner,
 	}
 	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
 		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
@@ -391,7 +393,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 	}
 
 	// Create a new code scanner with Organization populated from folder configuration
-	newCodeScanner := sc.createCodeScanner(path)
+	newCodeScanner := sc.codeScanner(sc, path)
 
 	var sarifResponse *sarif.SarifResponse
 	var bundleHash string
@@ -466,17 +468,17 @@ func (sc *Scanner) createCodeConfig(path types.FilePath) codeClientConfig.Config
 	}
 }
 
-// createCodeScanner creates a new code scanner with Organization populated from folder configuration
-func (sc *Scanner) createCodeScanner(path types.FilePath) codeClient.CodeScanner {
+// CreateCodeScanner creates a real code scanner with Organization populated from folder configuration
+func CreateCodeScanner(scanner *Scanner, path types.FilePath) codeClient.CodeScanner {
 	// Create a new codeConfig with Organization populated from folder configuration
-	codeConfig := sc.createCodeConfig(path)
+	codeConfig := scanner.createCodeConfig(path)
 
 	// Create a new HTTP client
 	httpClient := codeClientHTTP.NewHTTPClient(
-		sc.C.Engine().GetNetworkAccess().GetHttpClient,
-		codeClientHTTP.WithLogger(sc.C.Engine().GetLogger()),
-		codeClientHTTP.WithInstrumentor(sc.codeInstrumentor),
-		codeClientHTTP.WithErrorReporter(sc.codeErrorReporter),
+		scanner.C.Engine().GetNetworkAccess().GetHttpClient,
+		codeClientHTTP.WithLogger(scanner.C.Engine().GetLogger()),
+		codeClientHTTP.WithInstrumentor(scanner.codeInstrumentor),
+		codeClientHTTP.WithErrorReporter(scanner.codeErrorReporter),
 	)
 
 	// Create and return a new code scanner with the custom config
@@ -484,8 +486,8 @@ func (sc *Scanner) createCodeScanner(path types.FilePath) codeClient.CodeScanner
 		codeConfig,
 		httpClient,
 		codeClient.WithTrackerFactory(NewCodeTrackerFactory()),
-		codeClient.WithLogger(sc.C.Engine().GetLogger()),
-		codeClient.WithInstrumentor(sc.codeInstrumentor),
-		codeClient.WithErrorReporter(sc.codeErrorReporter),
+		codeClient.WithLogger(scanner.C.Engine().GetLogger()),
+		codeClient.WithInstrumentor(scanner.codeInstrumentor),
+		codeClient.WithErrorReporter(scanner.codeErrorReporter),
 	)
 }
