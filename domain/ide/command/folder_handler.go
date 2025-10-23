@@ -145,6 +145,7 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 // 1. an empty string
 // 2. the same UUID as the user's default org
 // 3. the same slug as the user's default org
+// Note, the function does not check whether the string provided is a valid or real org.
 func isOrgDefault(c *config.Config, organization string) (bool, error) {
 	if organization == "" {
 		return true, nil
