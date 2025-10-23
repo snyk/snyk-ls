@@ -166,6 +166,11 @@ func (cmd *submitIgnoreRequest) initializeEditConfigurations(gafConfig configura
 		return nil, err
 	}
 
+	folderOrg := cmd.c.FolderOrganization(contentRoot)
+	if folderOrg != "" {
+		gafConfig.Set(configuration.ORGANIZATION, folderOrg)
+	}
+
 	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
 	gafConfig = addCreateAndUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
 	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
@@ -194,6 +199,11 @@ func (cmd *submitIgnoreRequest) initializeDeleteConfiguration(gafConfig configur
 	ignoreId, ok := cmd.command.Arguments[2].(string)
 	if !ok {
 		return nil, fmt.Errorf("ignoreId should be a string")
+	}
+
+	folderOrg := cmd.c.FolderOrganization(contentRoot)
+	if folderOrg != "" {
+		gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 	}
 
 	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
