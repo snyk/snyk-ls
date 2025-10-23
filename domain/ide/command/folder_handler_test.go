@@ -410,7 +410,7 @@ func Test_isOrgDefault(t *testing.T) {
 			if tt.expectedErrorMessage != "" {
 				require.Error(t, err)
 				assert.False(t, isDefault)
-				assert.Contains(t, err.Error(), tt.expectedErrorMessage)
+				assert.ErrorContains(t, err, tt.expectedErrorMessage)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedIsDefault, isDefault)
