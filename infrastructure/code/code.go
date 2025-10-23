@@ -84,7 +84,6 @@ type Scanner struct {
 	// these are needed when we want to retrieve auto-fixes for a previously
 	// analyzed folder
 	bundleHashes map[types.FilePath]string
-	codeScanner  codeClient.CodeScanner
 	// this is the local scanner issue cache. In the future, it should be used as source of truth for the issues
 	// the cache in workspace/folder should just delegate to this cache
 	issueCache          *imcache.Cache[types.FilePath, []types.Issue]
@@ -110,7 +109,7 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter) *Scanner {
 	sc := &Scanner{
 		SnykApiClient:     apiClient,
 		errorReporter:     reporter,
@@ -120,7 +119,6 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		learnService:      learnService,
 		notifier:          notifier,
 		bundleHashes:      map[types.FilePath]string{},
-		codeScanner:       codeScanner,
 		Instrumentor:      instrumentor,
 		C:                 c,
 		codeInstrumentor:  codeInstrumentor,

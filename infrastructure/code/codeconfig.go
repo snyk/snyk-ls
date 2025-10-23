@@ -3,6 +3,8 @@ package code
 import (
 	"time"
 
+	codeClientConfig "github.com/snyk/code-client-go/config"
+
 	"github.com/snyk/snyk-ls/application/config"
 )
 
@@ -12,6 +14,9 @@ type CodeConfig struct {
 	orgForFolder string
 	lsConfig     *config.Config
 }
+
+// Compile-time check to ensure CodeConfig implements codeClientConfig.Config
+var _ codeClientConfig.Config = (*CodeConfig)(nil)
 
 func (c *CodeConfig) Organization() string {
 	return c.orgForFolder

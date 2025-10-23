@@ -17,7 +17,8 @@
 package code
 
 const (
-	FixPositiveFeedback string = "FIX_POSITIVE_FEEDBACK"
-	FixNegativeFeedback string = "FIX_NEGATIVE_FEEDBACK"
-	FixAppliedUserEvent string = "FIX_APPLIED"
+	FixPositiveFeedback    string = "FIX_POSITIVE_FEEDBACK"
+	FixNegativeFeedback    string = "FIX_NEGATIVE_FEEDBACK"
+	FixAppliedUserEvent    string = "FIX_APPLIED"
+	DontUsePrintStackTrace string = "java/DontUsePrintStackTrace"
 )
