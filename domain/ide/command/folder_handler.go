@@ -22,8 +22,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/snyk/go-application-framework/pkg/local_workflows/resolve_organization_workflow"
-	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -58,11 +58,11 @@ func populateFeatureFlags(c *config.Config, folderConfig *types.FolderConfig) {
 
 func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
-	configuration := c.Engine().GetConfiguration()
+	gafConfig := c.Engine().GetConfiguration()
 
 	var folderConfigs []types.FolderConfig
 	for _, folder := range c.Workspace().Folders() {
-		folderConfig, err2 := storedconfig.GetOrCreateFolderConfig(configuration, folder.Path(), &logger)
+		folderConfig, err2 := storedconfig.GetOrCreateFolderConfig(gafConfig, folder.Path(), &logger)
 		if err2 != nil {
 			logger.Err(err2).Msg("unable to load stored config")
 			return
@@ -91,7 +91,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 
 		if changedFolderConfig {
 			// Save the migrated folder config back to storage
-			err = storedconfig.UpdateFolderConfig(configuration, folderConfig, &logger)
+			err = storedconfig.UpdateFolderConfig(gafConfig, folderConfig, &logger)
 			if err != nil {
 				logger.Err(err).Msg("unable to save migrated folder config")
 			}
@@ -107,34 +107,11 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 	notifier.Send(folderConfigsParam)
 }
 
-func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (resolve_organization_workflow.Organization, error) {
-	// Prepare workflow input
-	input := resolve_organization_workflow.ResolveOrganizationInput{
-		Directory: string(folderConfig.FolderPath),
-	}
-	inputData := workflow.NewData(
-		workflow.NewTypeIdentifier(resolve_organization_workflow.WORKFLOWID_RESOLVE_ORGANIZATION, "resolve-org-input"),
-		"application/go-struct",
-		input,
-	)
-
-	// Invoke the workflow
+func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (ldx_sync_config.Organization, error) {
 	engine := c.Engine()
-	output, err := engine.InvokeWithInputAndConfig(resolve_organization_workflow.WORKFLOWID_RESOLVE_ORGANIZATION, []workflow.Data{inputData}, engine.GetConfiguration())
-	if err != nil {
-		return resolve_organization_workflow.Organization{}, fmt.Errorf("workflow invocation failed: %w", err)
-	}
+	gafConfig := engine.GetConfiguration()
 
-	// Parse workflow output
-	if len(output) == 0 {
-		return resolve_organization_workflow.Organization{}, fmt.Errorf("workflow returned no output")
-	}
-	result, ok := output[0].GetPayload().(resolve_organization_workflow.ResolveOrganizationOutput)
-	if !ok {
-		return resolve_organization_workflow.Organization{}, fmt.Errorf("workflow output payload is not ResolveOrganizationOutput")
-	}
-
-	return result.Organization, nil
+	return Service().GetOrgResolver().ResolveOrganization(gafConfig, engine, c.Logger(), string(folderConfig.FolderPath))
 }
 
 // MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration
@@ -156,8 +133,8 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 
 	globalOrg := c.Organization()
 
-	// Check if the configured organization is the default org or unknown slug
-	isDefaultOrUnknown, err := isOrgDefaultOrUnknownSlug(c, globalOrg)
+	// Check if the configured organization is the default org
+	isDefaultOrUnknown, err := isOrgDefault(c, globalOrg)
 	if err != nil {
 		c.Logger().Err(err).Msg("unable to determine if organization is default")
 		return
@@ -176,36 +153,37 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 	folderConfig.OrgMigratedFromGlobalConfig = true
 }
 
-func isOrgDefaultOrUnknownSlug(c *config.Config, organization string) (bool, error) {
-	// Prepare workflow input
-	input := resolve_organization_workflow.IsDefaultOrganizationInput{
-		Organization:  organization,
-		EmptyStringIs: resolve_organization_workflow.EmptyIsDefaultOrg,
-	}
-	inputData := workflow.NewData(
-		workflow.NewTypeIdentifier(resolve_organization_workflow.WORKFLOWID_IS_DEFAULT_ORGANIZATION, "is-default-org-input"),
-		"application/go-struct",
-		input,
-	)
-
-	// Invoke the workflow
-	engine := c.Engine()
-	output, err := engine.InvokeWithInputAndConfig(resolve_organization_workflow.WORKFLOWID_IS_DEFAULT_ORGANIZATION, []workflow.Data{inputData}, engine.GetConfiguration())
-	if err != nil {
-		return false, err
+// isOrgDefault Returns true if the org provided is either:
+// 1. an empty string
+// 2. the same UUID as the user's default org
+// 3. the same slug as the user's default org
+func isOrgDefault(c *config.Config, organization string) (bool, error) {
+	if organization == "" {
+		return true, nil
 	}
 
-	// Parse workflow output
-	if len(output) == 0 {
-		return false, fmt.Errorf("workflow returned no output")
+	// Below is a hacky way to get the default org ID and slug.
+	// If we set the org to "" on a cloned GAF config, then try get it, it will use the default func to get it.
+	// TODO - Have a proper way to fetch the user's default org from GAF.
+	clonedGAFConfig := c.Engine().GetConfiguration().Clone()
+	clonedGAFConfig.Set(configuration.ORGANIZATION, "")
+	defaultOrgUUID := clonedGAFConfig.GetString(configuration.ORGANIZATION)
+	if defaultOrgUUID == "" {
+		return false, fmt.Errorf("could not retrieve the user's default organization")
 	}
-	result, ok := output[0].GetPayload().(resolve_organization_workflow.IsDefaultOrganizationOutput)
-	if !ok {
-		return false, fmt.Errorf("workflow output payload is not IsDefaultOrganizationOutput")
+	if organization == defaultOrgUUID {
+		return true, nil
 	}
 
-	// Return true for both default org and unknown slugs
-	return result.IsDefaultOrg || result.IsUnknownSlug, nil
+	defaultOrgSlug := clonedGAFConfig.GetString(configuration.ORGANIZATION_SLUG)
+	if defaultOrgSlug == "" {
+		return false, fmt.Errorf("could not retrieve the user's default organization slug")
+	}
+	if organization == defaultOrgSlug {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
