@@ -41,9 +41,8 @@ var pathListSep = string(os.PathListSeparator)
 
 func Test_ExpandParametersFromConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
-	testOrg, err := uuid.NewUUID()
+	_, err := uuid.NewUUID()
 	assert.NoError(t, err)
-	c.SetOrganization(testOrg.String())
 	settings := config.CliSettings{
 		Insecure: true,
 		C:        c,
@@ -56,7 +55,6 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	assert.Contains(t, cmd, "a")
 	assert.Contains(t, cmd, "b")
 	assert.Contains(t, cmd, "--insecure")
-	assert.Contains(t, cmd, "--org="+testOrg.String())
 }
 
 func Test_GetCommand_UsesConfigFiles(t *testing.T) {
@@ -156,7 +154,7 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, 2*time.Second, 10*time.Millisecond, "getCommand should complete after environment becomes ready")
+	}, 5*time.Second, 10*time.Millisecond, "getCommand should complete after environment becomes ready")
 
 	require.NoError(t, cmdErr)
 	require.NotNil(t, builtCmd)

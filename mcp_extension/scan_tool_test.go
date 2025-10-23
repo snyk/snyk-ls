@@ -40,9 +40,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
-
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/mcp_extension/trust"
 )
 
@@ -168,7 +168,7 @@ func TestSnykTestHandler(t *testing.T) {
 			},
 		},
 		{
-			name: "Test with Organization",
+			name: "Test with PreferredOrg",
 			args: map[string]any{
 				"path":         tmpDir,
 				"all_projects": true,
@@ -287,7 +287,7 @@ func TestSnykCodeTestHandler(t *testing.T) {
 			},
 		},
 		{
-			name: "Test with Organization",
+			name: "Test with PreferredOrg",
 			args: map[string]any{
 				"path": tmpDir,
 				"org":  "my-snyk-org",
@@ -918,7 +918,7 @@ exit 0
 
 func TestPrepareCmdArgsForTool(t *testing.T) {
 	dir := t.TempDir()
-	tempFile, err := os.CreateTemp(dir, t.Name())
+	tempFile, err := os.CreateTemp(dir, testsupport.PathSafeTestName(t))
 	if err != nil {
 		t.Fatal(err)
 	}

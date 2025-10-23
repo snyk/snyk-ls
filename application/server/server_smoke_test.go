@@ -26,6 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/samber/lo"
+
 	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/creachadair/jrpc2"
@@ -176,7 +179,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 			PreScanCommand:             script,
 		}
 		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
-		ensureInitialized(t, c, loc, initParams)
+		ensureInitialized(t, c, loc, initParams, nil)
 
 		assert.Eventuallyf(t, func() bool {
 			notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.scan")
@@ -210,7 +213,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 		cloneTargetDirGoofString := (string)(cloneTargetDirGoof)
 		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
@@ -285,7 +288,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
 		require.Truef(t, ok, "Expected to find snyk issue provider")
@@ -352,7 +355,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	c.SetSnykOssEnabled(true)
 	di.Init()
 
-	var cloneTargetDirGoof = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+	cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 	folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 
 	// wait till the whole workspace is scanned
@@ -378,16 +381,11 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) types.Folder {
 	t.Helper()
-	var cloneTargetDirJuice, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
+	cloneTargetDirJuice, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
 	require.NoError(t, err)
 
 	juiceLspWorkspaceFolder := types.WorkspaceFolder{Uri: uri.PathToUri(cloneTargetDirJuice), Name: "juicy-mac-juice-face"}
-	didChangeWorkspaceFoldersParams := types.DidChangeWorkspaceFoldersParams{
-		Event: types.WorkspaceFoldersChangeEvent{Added: []types.WorkspaceFolder{juiceLspWorkspaceFolder}},
-	}
-
-	_, err = loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", didChangeWorkspaceFoldersParams)
-	require.NoError(t, err)
+	addWorkSpaceFolder(t, loc, juiceLspWorkspaceFolder)
 
 	folderJuice := c.Workspace().GetFolderContaining(cloneTargetDirJuice)
 	require.NotNil(t, folderJuice)
@@ -568,7 +566,7 @@ func newFileInCurrentDir(t *testing.T, cloneTargetDir string, fileName string, c
 	t.Helper()
 
 	testFile := filepath.Join(cloneTargetDir, fileName)
-	err := os.WriteFile(testFile, []byte(content), 0600)
+	err := os.WriteFile(testFile, []byte(content), 0o600)
 	assert.NoError(t, err)
 }
 
@@ -766,13 +764,13 @@ func isNotStandardRegion(c *config.Config) bool {
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
 	t.Helper()
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), repo, commit, c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), repo, commit, c.Logger())
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
-	ensureInitialized(t, c, loc, initParams)
+	ensureInitialized(t, c, loc, initParams, nil)
 	return cloneTargetDir
 }
 
@@ -848,7 +846,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
 	cloneTargetDirString := string(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -896,7 +894,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -906,7 +904,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	assert.NoError(t, err)
 
 	initializeParams := prepareInitParams(t, types.FilePath(uncPath), c)
-	ensureInitialized(t, c, loc, initializeParams)
+	ensureInitialized(t, c, loc, initializeParams, nil)
 	waitForScan(t, uncPath, c)
 	testPath := types.FilePath(filepath.Join(uncPath, "app.js"))
 
@@ -925,7 +923,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
 	fileWithNewVulns := "vulns.js"
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
 	cloneTargetDirString := string(cloneTargetDir)
 	assert.NoError(t, err)
 
@@ -939,7 +937,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	c.SetManageBinariesAutomatically(false)
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
-	ensureInitialized(t, c, loc, initParams)
+	ensureInitialized(t, c, loc, initParams, nil)
 
 	waitForScan(t, cloneTargetDirString, c)
 
@@ -971,7 +969,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	scanAggregator := di.ScanStateAggregator()
 
 	fileWithNewVulns := "vulns.js"
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
 	assert.NoError(t, err)
 
 	cloneTargetDirString := string(cloneTargetDir)
@@ -980,7 +978,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
-	ensureInitialized(t, c, loc, initParams)
+	ensureInitialized(t, c, loc, initParams, nil)
 
 	waitForScan(t, cloneTargetDirString, c)
 
@@ -1000,14 +998,14 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
 
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/java-goof", "f5719ae", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/java-goof", "f5719ae", c.Logger())
 	assert.NoError(t, err)
 
 	cloneTargetDirString := string(cloneTargetDir)
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
-	ensureInitialized(t, c, loc, initParams)
+	ensureInitialized(t, c, loc, initParams, nil)
 
 	waitForScan(t, cloneTargetDirString, c)
 
@@ -1037,7 +1035,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	folderConfig.AdditionalParameters = []string{"--unmanaged"}
 	initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{*folderConfig}
 
-	ensureInitialized(t, c, loc, initParams)
+	ensureInitialized(t, c, loc, initParams, nil)
 
 	waitForScan(t, cloneTargetDirString, c)
 
@@ -1046,10 +1044,368 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	assert.Greater(t, len(issueList), 100, "More than 100 unmanaged issues expected")
 }
 
-func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams) {
+// requireFolderConfigNotification is a helper to check folder config notifications
+// validators is a map of folder path to validation function, call require/assert inside of them
+func requireFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.FolderConfig)) {
 	t.Helper()
-	t.Setenv("SNYK_LOG_LEVEL", "info")
-	c.SetLogLevel(zerolog.LevelInfoValue)
+
+	var notifications []jrpc2.Request
+	require.Eventuallyf(t, func() bool {
+		notifications = jsonRpcRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+		return len(notifications) != 0
+	}, 10*time.Second, 5*time.Millisecond, "No $/snyk.folderConfigs notifications")
+	require.Equal(t, 1, len(notifications), "Expected exactly one $/snyk.folderConfigs notification")
+
+	var param types.FolderConfigsParam
+	require.NoError(t, notifications[0].UnmarshalParams(&param))
+
+	validationsCount := 0
+
+	for _, folderConfig := range param.FolderConfigs {
+		validator, ok := validators[folderConfig.FolderPath]
+		// allowing empty validator for cases when we just care about folderconfig being present
+		if ok {
+			validationsCount = validationsCount + 1
+		}
+		if validator != nil {
+			validator(folderConfig)
+		}
+	}
+
+	require.Equal(t, len(param.FolderConfigs), validationsCount, "Not all folder configs were validated")
+
+	jsonRpcRecorder.ClearNotifications()
+}
+
+func Test_SmokeOrgSelection(t *testing.T) {
+	setupOrgSelectionTest := func(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
+		t.Helper()
+		c := testutil.SmokeTest(t, false)
+		loc, jsonRpcRecorder := setupServer(t, c)
+		c.EnableSnykCodeSecurity(false)
+		c.SetSnykOssEnabled(true)
+		c.SetSnykIacEnabled(false)
+		di.Init()
+
+		repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", c.Logger())
+		require.NoError(t, err)
+		require.NotEmpty(t, repo)
+		require.NoError(t, err)
+
+		initParams := prepareInitParams(t, repo, c)
+		initParams.InitializationOptions.ManageBinariesAutomatically = "false"
+		initParams.InitializationOptions.CliPath = "/some/invalid/path/that/does/not/matter/but/cannot/be/blank"
+		initParams.InitializationOptions.AuthenticationMethod = types.TokenAuthentication
+		initParams.InitializationOptions.AutomaticAuthentication = "false"
+		initParams.InitializationOptions.ScanningMode = "manual"
+		return c, loc, jsonRpcRecorder, repo, initParams
+	}
+
+	t.Run("authenticated - takes given non-default org, sends folder config after init", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+		preferredOrg := "non-default"
+
+		folderConfig := types.FolderConfig{
+			FolderPath:                  repo,
+			PreferredOrg:                preferredOrg,
+			OrgSetByUser:                true,
+			OrgMigratedFromGlobalConfig: true,
+		}
+
+		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
+
+		ensureInitialized(t, c, loc, initParams, nil)
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.Equal(t, preferredOrg, fc.PreferredOrg)
+				require.True(t, fc.OrgSetByUser)
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "Should be set by auto-org resolution on initialized")
+				require.True(t, fc.OrgMigratedFromGlobalConfig)
+			},
+		})
+	})
+
+	t.Run("authenticated - determines org when nothing is given", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+		folderConfig := types.FolderConfig{
+			FolderPath: repo,
+		}
+
+		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
+
+		ensureInitialized(t, c, loc, initParams, nil)
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.False(t, fc.OrgSetByUser)
+				require.Empty(t, fc.PreferredOrg)
+				require.NotEmpty(t, fc.AutoDeterminedOrg)
+				require.True(t, fc.OrgMigratedFromGlobalConfig)
+			},
+		})
+	})
+
+	t.Run("authenticated - determines org when global default org is given (migration)", func(t *testing.T) {
+		// TODO - Should this even be a smoke test? Why not just make it a unit / integration test with mocking?
+		t.Skip(t, "TODO: Everyone would have to be in an org which takes priority for Python-goof"+
+			"as this test expects a non-default org to be returned.")
+
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+		folderConfig := types.FolderConfig{
+			FolderPath: repo,
+		}
+
+		// Pre-populate storage with a folder config so it gets migrated on init.
+		setupFunc := func(c *config.Config) {
+			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
+			require.NoError(t, err)
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
+
+		// We should be using the default org. We derive this at runtime as it will depend on the SNYK_TOKEN
+		// environment variable used to run the test.
+		defaultOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.False(t, fc.OrgSetByUser)
+				require.Empty(t, fc.PreferredOrg)
+				require.NotEqual(t, defaultOrg, fc.AutoDeterminedOrg)
+				require.NotEmpty(t, fc.AutoDeterminedOrg)
+				require.True(t, fc.OrgMigratedFromGlobalConfig)
+			},
+		})
+	})
+
+	t.Run("authenticated - migration uses global non-default org", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+		folderConfig := types.FolderConfig{
+			FolderPath: repo,
+		}
+
+		expectedOrg := uuid.NewString()
+
+		// Pre-populate storage with a folder config to simulate migration
+		setupFunc := func(c *config.Config) {
+			c.SetOrganization(expectedOrg)
+			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
+			require.NoError(t, err)
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.True(t, fc.OrgSetByUser)
+				require.Equal(t, expectedOrg, fc.PreferredOrg)
+				require.NotEmpty(t, fc.AutoDeterminedOrg)
+				require.True(t, fc.OrgMigratedFromGlobalConfig)
+			},
+		})
+	})
+
+	t.Run("authenticated - adding folder with existing stored config. Making sure PreferredOrg is preserved", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+
+		ensureInitialized(t, c, loc, initParams, nil)
+		repoValidator := func(fc types.FolderConfig) {
+			require.False(t, fc.OrgSetByUser)
+			require.Empty(t, fc.PreferredOrg)
+			require.NotEmpty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		}
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+		})
+
+		// add folder (LS has not seen before)
+		fakeDirFolder, fakeDirFolderPath := addFakeDirAsWorkspaceFolder(t, loc)
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+			fakeDirFolderPath: func(fc types.FolderConfig) {
+				require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
+				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+			},
+		})
+
+		// remove folder
+		removeWorkSpaceFolder(t, loc, fakeDirFolder)
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+		})
+
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+			FolderPath:                  fakeDirFolderPath,
+			AutoDeterminedOrg:           "any",
+			PreferredOrg:                "any",
+			OrgMigratedFromGlobalConfig: true,
+			OrgSetByUser:                false,
+		}, c.Logger())
+		require.NoError(t, err)
+
+		// re-add folder
+		addWorkSpaceFolder(t, loc, fakeDirFolder)
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+			fakeDirFolderPath: func(fc types.FolderConfig) {
+				require.False(t, fc.OrgSetByUser, "OrgSetByUser must be preserved")
+				require.Equal(t, "any", fc.PreferredOrg, "PreferredOrg must be preserved")
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
+				require.NotEqual(t, "any", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
+				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+			},
+		})
+	})
+
+	t.Run("authenticated - user blanks folder-level org, so LS uses global org", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+		t.Cleanup(func() {
+			s, _ := storedconfig.ConfigFile(c.IdeName())
+			_ = os.Remove(s)
+		})
+
+		initialOrg := "user-chosen-org"
+		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
+
+		setupFunc := func(c *config.Config) {
+			c.SetOrganization(globalOrg)
+			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+				FolderPath:                  repo,
+				PreferredOrg:                initialOrg,
+				OrgSetByUser:                true,
+				OrgMigratedFromGlobalConfig: true,
+			}, c.Logger())
+			require.NoError(t, err)
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
+
+		// Verify initial state
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.True(t, fc.OrgSetByUser)
+				require.Equal(t, initialOrg, fc.PreferredOrg)
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+			},
+		})
+
+		// Verify that the global org is still what we set it to
+		require.Equal(t, globalOrg, c.Organization(), "Global org should remain unchanged")
+
+		// Verify that the folder's effective organization equals the preferred org
+		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
+
+		// User blanks the folder-level org via configuration change
+		storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+		require.NoError(t, err)
+		require.Len(t, storedConfig.FolderConfigs, 1, "should only have one folder config")
+
+		storedConfig.FolderConfigs[repo].PreferredOrg = ""
+
+		sendConfigurationDidChange(t, loc, types.Settings{
+			Token:         c.Token(),
+			Organization:  globalOrg,
+			FolderConfigs: []types.FolderConfig{*storedConfig.FolderConfigs[repo]},
+		})
+
+		// Verify PreferredOrg is now empty and OrgSetByUser is true
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.True(t, fc.OrgSetByUser, "OrgSetByUser should remain true after user blanks org")
+				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty after user blanks it")
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should still be set from LDX-Sync")
+				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
+			},
+		})
+
+		// Verify that the global org is still what we set it to
+		assert.Equal(t, globalOrg, c.Organization(), "Global org should remain unchanged")
+
+		// Verify that the folder's effective organization equals the global org
+		assert.Equal(t, globalOrg, c.FolderOrganization(repo), "Folder should use global org when PreferredOrg is blank and OrgSetByUser is true")
+	})
+
+	t.Run("unauthenticated - re-adding folder with changing the config through workspace/didChangeConfiguration", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+		t.Cleanup(func() {
+			s, _ := storedconfig.ConfigFile(c.IdeName())
+			_ = os.Remove(s)
+		})
+		t.Setenv("SNYK_TOKEN", "")
+
+		ensureInitialized(t, c, loc, initParams, nil)
+
+		repoValidator := func(fc types.FolderConfig) {
+			require.False(t, fc.OrgSetByUser)
+			require.Empty(t, fc.PreferredOrg)
+			require.Empty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		}
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+		})
+
+		// add folder
+		fakeDirFolder, fakeDirFolderPath := addFakeDirAsWorkspaceFolder(t, loc)
+		fakeDirFolderInitialValidator := func(fc types.FolderConfig) {
+			require.False(t, fc.OrgSetByUser)
+			require.Empty(t, fc.PreferredOrg)
+			require.Empty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		}
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo:              repoValidator,
+			fakeDirFolderPath: fakeDirFolderInitialValidator,
+		})
+
+		// remove folder
+		removeWorkSpaceFolder(t, loc, fakeDirFolder)
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+		})
+
+		// re-add folder
+		addWorkSpaceFolder(t, loc, fakeDirFolder)
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo:              repoValidator,
+			fakeDirFolderPath: fakeDirFolderInitialValidator,
+		})
+
+		storedConfig, _ := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+		storedConfig.FolderConfigs[fakeDirFolderPath].PreferredOrg = "any"
+
+		// simulate settings change from the IDE
+		sendConfigurationDidChange(t, loc, types.Settings{
+			FolderConfigs: lo.Map(lo.Values(storedConfig.FolderConfigs), func(item *types.FolderConfig, _ int) types.FolderConfig {
+				return *item
+			}),
+		})
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+			fakeDirFolderPath: func(fc types.FolderConfig) {
+				require.True(t, fc.OrgSetByUser)
+				require.Equal(t, "any", fc.PreferredOrg)
+				require.Empty(t, fc.AutoDeterminedOrg)
+				require.True(t, fc.OrgMigratedFromGlobalConfig)
+			},
+		})
+	})
+}
+
+func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(*config.Config)) {
+	t.Helper()
+	t.Setenv("SNYK_LOG_LEVEL", "debug")
+	c.SetLogLevel(zerolog.LevelDebugValue)
 	c.ConfigureLogging(nil)
 	gafConfig := c.Engine().GetConfiguration()
 	gafConfig.Set(configuration.DEBUG, false)
@@ -1058,20 +1414,44 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 	commitHash := getCurrentCommitHash(t, uri.PathFromUri(documentURI))
 	config.Version = commitHash
 
+	// Sanitize test name to make it safe for file system paths
+	sanitizedTestName := testsupport.PathSafeTestName(t)
+
 	if initParams.ClientInfo.Name == "" {
-		initParams.ClientInfo.Name = "snyk-ls_(" + t.Name() + ")"
+		initParams.ClientInfo.Name = "snyk-ls_(" + sanitizedTestName + ")"
 		initParams.ClientInfo.Version = commitHash
 	}
 
 	if initParams.InitializationOptions.IntegrationName == "" {
-		initParams.InitializationOptions.IntegrationName = "ls-smoke-tests(" + t.Name() + ")"
+		initParams.InitializationOptions.IntegrationName = "ls-smoke-tests(" + sanitizedTestName + ")"
 		initParams.InitializationOptions.IntegrationVersion = commitHash
 	}
 
 	_, err := loc.Client.Call(ctx, "initialize", initParams)
 	assert.NoError(t, err)
 
+	// Filter out old stored folder configs and only keep the ones from initParams
+	storedConfig, getSCErr := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+	if getSCErr == nil {
+		filteredConfigs := make(map[types.FilePath]*types.FolderConfig)
+		for _, fc := range initParams.InitializationOptions.FolderConfigs {
+			if storedFc, exists := storedConfig.FolderConfigs[fc.FolderPath]; exists {
+				filteredConfigs[fc.FolderPath] = storedFc
+			}
+		}
+
+		storedConfig.FolderConfigs = filteredConfigs
+		saveErr := storedconfig.Save(c.Engine().GetConfiguration(), storedConfig)
+		assert.NoError(t, saveErr)
+	}
+
 	waitForNetwork(c)
+
+	// Run optional setup function after initialization but before call to initialized.
+	// This allows tests to, for example, pre-populate storage to be read by the initialized call.
+	if preInitSetupFunc != nil {
+		preInitSetupFunc(c)
+	}
 
 	_, err = loc.Client.Call(ctx, "initialized", nil)
 	assert.NoError(t, err)
@@ -1109,4 +1489,39 @@ func textDocumentDidSave(t *testing.T, loc *server.Local, testPath types.FilePat
 	}
 
 	return didSaveParams
+}
+
+func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.WorkspaceFolder, types.FilePath) {
+	t.Helper()
+	fakeDirFolderPath := types.FilePath(t.TempDir())
+	fakeDirFolder := types.WorkspaceFolder{Uri: uri.PathToUri(fakeDirFolderPath), Name: "fake-dir"}
+
+	addWorkSpaceFolder(t, loc, fakeDirFolder)
+
+	return fakeDirFolder, fakeDirFolderPath
+}
+
+func sendConfigurationDidChange(t *testing.T, loc server.Local, s types.Settings) {
+	t.Helper()
+	params := types.DidChangeConfigurationParams{
+		Settings: s,
+	}
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
+	require.NoError(t, err)
+}
+
+func addWorkSpaceFolder(t *testing.T, loc server.Local, f types.WorkspaceFolder) {
+	t.Helper()
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{Added: []types.WorkspaceFolder{f}},
+	})
+	require.NoError(t, err)
+}
+
+func removeWorkSpaceFolder(t *testing.T, loc server.Local, f types.WorkspaceFolder) {
+	t.Helper()
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{Removed: []types.WorkspaceFolder{f}},
+	})
+	require.NoError(t, err)
 }

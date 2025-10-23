@@ -42,6 +42,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
+	resolve_organization_workflow "github.com/snyk/go-application-framework/pkg/local_workflows/resolve_organization_workflow"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -272,7 +273,12 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	if engine == nil {
 		initWorkFlowEngine(c)
 	} else {
+		// Engine is provided externally, e.g. we were invoked from CLI.
 		c.engine = engine
+		err := initAdditionalWorkflows(c)
+		if err != nil {
+			c.logger.Err(err).Msg("unable to initialize additional workflows")
+		}
 	}
 	gafConfig := c.engine.GetConfiguration()
 	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
@@ -303,7 +309,7 @@ func initWorkFlowEngine(c *Config) {
 
 	err := initWorkflows(c)
 	if err != nil {
-		c.Logger().Err(err).Msg("unable to initialize additional workflows")
+		c.Logger().Err(err).Msg("unable to initialize workflows")
 	}
 
 	err = c.engine.Init()
@@ -335,6 +341,21 @@ func initWorkflows(c *Config) error {
 	if err != nil {
 		return err
 	}
+
+	return initAdditionalWorkflows(c)
+}
+
+func initAdditionalWorkflows(c *Config) error {
+	err := resolve_organization_workflow.InitResolveOrganizationWorkflow(c.engine)
+	if err != nil {
+		return err
+	}
+
+	err = resolve_organization_workflow.InitIsDefaultOrganizationWorkflow(c.engine)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -457,6 +478,13 @@ func (c *Config) SnykCodeApi() string {
 	defer c.m.RUnlock()
 
 	return c.snykCodeApiUrl
+}
+
+func (c *Config) Endpoint() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.snykApiUrl
 }
 
 func (c *Config) SnykUI() string {
@@ -837,6 +865,8 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	return snykCodeTimeout
 }
 
+// Organization is also stored per folder in `types.FolderConfig.PreferredOrg`.
+// Prefer reading via `c.FolderOrganization(path)` or `c.FolderConfig(path).PreferredOrg`.
 func (c *Config) Organization() string {
 	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
@@ -1287,6 +1317,29 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
 	return folderConfig
+}
+
+// FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
+// the folder, it returns the global organization (which if unset, GAF will return the default org).
+func (c *Config) FolderOrganization(path types.FilePath) string {
+	fc := c.FolderConfig(path)
+	if fc == nil {
+		// Should never happen, but as a safety net, return the global org.
+		return c.Organization()
+	}
+	if fc.OrgSetByUser {
+		if fc.PreferredOrg == "" {
+			return c.Organization()
+		} else {
+			return fc.PreferredOrg
+		}
+	} else {
+		// If AutoDeterminedOrg is empty, fall back to global organization
+		if fc.AutoDeterminedOrg == "" {
+			return c.Organization()
+		}
+		return fc.AutoDeterminedOrg
+	}
 }
 
 func (c *Config) HoverVerbosity() int {
