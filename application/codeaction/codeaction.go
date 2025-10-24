@@ -24,7 +24,7 @@ type dirtyFilesWatcher interface {
 
 // CodeActionsService is an application-layer service for handling code actions.
 type CodeActionsService struct {
-	IssuesProvider snyk.IssueProvider
+	IssuesProvider     snyk.IssueProvider
 	featureFlagService featureflag.Service
 
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
@@ -43,13 +43,13 @@ type cachedAction struct {
 
 func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service) *CodeActionsService {
 	return &CodeActionsService{
-		IssuesProvider: provider,
+		IssuesProvider:     provider,
 		featureFlagService: featureFlagService,
-		actionsCache:   make(map[uuid.UUID]cachedAction),
-		c:              c,
-		logger:         c.Logger().With().Str("service", "CodeActionsService").Logger(),
-		fileWatcher:    fileWatcher,
-		notifier:       notifier,
+		actionsCache:       make(map[uuid.UUID]cachedAction),
+		c:                  c,
+		logger:             c.Logger().With().Str("service", "CodeActionsService").Logger(),
+		fileWatcher:        fileWatcher,
+		notifier:           notifier,
 	}
 }
 

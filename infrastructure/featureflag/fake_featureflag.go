@@ -23,7 +23,7 @@ type FakeFeatureFlagService struct {
 	FlushCacheCalled bool
 }
 
-func NewFakeFeatureFlagService() *FakeFeatureFlagService {
+func NewFakeService() *FakeFeatureFlagService {
 	return &FakeFeatureFlagService{Flags: make(map[string]bool)}
 }
 

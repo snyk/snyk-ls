@@ -517,101 +517,55 @@ func periodicallyCheckForExpiredCache(c *config.Config) {
 }
 
 func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
-
 	const method = "addWorkspaceFolders"
-
 	w := c.Workspace()
 
 	if len(params.WorkspaceFolders) > 0 {
-
 		for _, workspaceFolder := range params.WorkspaceFolders {
-
 			c.Logger().Info().Str("method", method).Msgf("Adding workspaceFolder %v", workspaceFolder)
 
 			f := workspace.NewFolder(
-
-					c,
-
-					uri.PathFromUri(workspaceFolder.Uri),
-
-					workspaceFolder.Name,
-
-					di.Scanner(),
-
-					di.HoverService(),
-
-					di.ScanNotifier(),
-
-					di.Notifier(),
-
-					di.ScanPersister(),
-
-					di.ScanStateAggregator(),
-
-					di.FeatureFlagService())
-
+				c,
+				uri.PathFromUri(workspaceFolder.Uri),
+				workspaceFolder.Name,
+				di.Scanner(),
+				di.HoverService(),
+				di.ScanNotifier(),
+				di.Notifier(),
+				di.ScanPersister(),
+				di.ScanStateAggregator(),
+				di.FeatureFlagService())
 			w.AddFolder(f)
-
 		}
-
 	} else {
-
 		if params.RootURI != "" {
-
 			f := workspace.NewFolder(
-
-					c,
-
-					uri.PathFromUri(params.RootURI),
-
-					params.ClientInfo.Name,
-
-					di.Scanner(),
-
-					di.HoverService(),
-
-					di.ScanNotifier(),
-
-					di.Notifier(),
-
-					di.ScanPersister(),
-
-					di.ScanStateAggregator(),
-
-					di.FeatureFlagService())
-
+				c,
+				uri.PathFromUri(params.RootURI),
+				params.ClientInfo.Name,
+				di.Scanner(),
+				di.HoverService(),
+				di.ScanNotifier(),
+				di.Notifier(),
+				di.ScanPersister(),
+				di.ScanStateAggregator(),
+				di.FeatureFlagService())
 			w.AddFolder(f)
-
 		} else if params.RootPath != "" {
-
 			f := workspace.NewFolder(
-
-					c,
-
-					types.FilePath(params.RootPath),
-
-					params.ClientInfo.Name,
-
-					di.Scanner(),
-
-					di.HoverService(),
-
-					di.ScanNotifier(),
-
-					di.Notifier(),
-
-					di.ScanPersister(),
-
-					di.ScanStateAggregator(),
-
-					di.FeatureFlagService())
-
+				c,
+				types.FilePath(params.RootPath),
+				params.ClientInfo.Name,
+				di.Scanner(),
+				di.HoverService(),
+				di.ScanNotifier(),
+				di.Notifier(),
+				di.ScanPersister(),
+				di.ScanStateAggregator(),
+				di.FeatureFlagService())
 			w.AddFolder(f)
-
 		}
-
 	}
-
 }
 
 // setClientInformation sets the integration name and version from the client information.

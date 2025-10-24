@@ -851,7 +851,7 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	return snykCodeTimeout
 }
 
-// Deprecated: use FolderOrganization(path) to get organization per folder
+// Deprecated use FolderOrganization(path) to get organization per folder
 func (c *Config) Organization() string {
 	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }

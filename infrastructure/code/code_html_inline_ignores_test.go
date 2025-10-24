@@ -31,7 +31,7 @@ func Test_Code_Html_InlineIgnores_Enabled(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetIntegrationName("VS_CODE")
 
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
 	// Get the HTML renderer with the feature flag enabled
@@ -56,7 +56,7 @@ func Test_Code_Html_InlineIgnores_Enabled(t *testing.T) {
 func Test_Code_Html_InlineIgnores_Disabled(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// Get the HTML renderer with the feature flag disabled

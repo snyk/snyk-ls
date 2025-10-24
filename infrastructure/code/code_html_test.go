@@ -56,7 +56,7 @@ func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T
 		},
 	}
 
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
 	// invoke method under test
@@ -127,7 +127,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
@@ -172,7 +172,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
@@ -227,7 +227,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
@@ -273,7 +273,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
@@ -322,7 +322,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
@@ -394,7 +394,7 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
@@ -414,7 +414,7 @@ func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
 		AdditionalData: snyk.CodeIssueData{},
 	}
 
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	c.Engine().GetConfiguration().Set(ignore_workflow.ConfigIgnoreApprovalEnabled, true)
@@ -437,7 +437,7 @@ func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
 		AdditionalData: snyk.CodeIssueData{HasAIFix: true},
 	}
 
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	c.Engine().GetConfiguration().Set(ignore_workflow.ConfigIgnoreApprovalEnabled, true)
@@ -575,7 +575,7 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Enabled(t *
 	c := testutil.UnitTest(t)
 	c.SetIntegrationName("VS_CODE")
 
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
 	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
@@ -590,7 +590,7 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Disabled(t 
 	c := testutil.UnitTest(t)
 	c.SetIntegrationName("VS_CODE")
 
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
@@ -606,7 +606,7 @@ func Test_Code_Html_updateFeatureFlags_NonVSCodeIntegration(t *testing.T) {
 	c.SetIntegrationName("ECLIPSE") // Set a non-VSCode integration name
 
 	// Create a fake API client
-	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
 	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
