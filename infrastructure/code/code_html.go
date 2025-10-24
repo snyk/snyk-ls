@@ -115,8 +115,6 @@ func GetHTMLRenderer(c *config.Config, snykApiClient snyk_api.SnykApiClient) (*H
 		inlineIgnoresEnabled: false,
 	}
 
-	codeRenderer.updateFeatureFlags()
-
 	codeRenderer.AiFixHandler = &AiFixHandler{
 		aiFixDiffState: aiResultState{status: AiFixNotStarted},
 	}
@@ -152,6 +150,14 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		return ""
 	}
 	folderPath := renderer.determineFolderPath(issue.GetAffectedFilePath())
+
+	gafConfig := renderer.c.Engine().GetConfiguration().Clone()
+	folderOrg := renderer.c.FolderOrganization(folderPath)
+	if folderOrg != "" {
+		gafConfig.Set(configuration.ORGANIZATION, folderOrg)
+	}
+	codeRenderer.updateFeatureFlags(gafConfig)
+
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
 	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
@@ -177,8 +183,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	appLink := renderer.c.SnykUI()
 	if isPending {
-		orgSlug := renderer.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION_SLUG)
-		pendingIgnoreURL, err := url.JoinPath(renderer.c.SnykUI(), "org", orgSlug, "ignore-requests")
+		pendingIgnoreURL, err := url.JoinPath(renderer.c.SnykUI(), "org", gafConfig.GetString(configuration.ORGANIZATION_SLUG), "ignore-requests")
 		if err != nil {
 			renderer.c.Logger().Error().Err(err).Msg("Failed to construct pending ignore link")
 		} else {
@@ -243,8 +248,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	return result
 }
 
-func (renderer *HtmlRenderer) updateFeatureFlags() {
-	conf := renderer.c.Engine().GetConfiguration()
+func (renderer *HtmlRenderer) updateFeatureFlags(conf configuration.Configuration) {
 	logger := renderer.c.Logger().With().Str("method", "updateFeatureFlags").Logger()
 	renderer.iawEnabled = conf.GetBool(ignore_workflow.ConfigIgnoreApprovalEnabled)
 	renderer.inlineIgnoresEnabled = false

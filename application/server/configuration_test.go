@@ -28,14 +28,19 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/ide/command/mock_command"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -334,11 +339,15 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 	t.Run("trusted folders", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		di.TestInit(t)
 
-		UpdateSettings(c, types.Settings{TrustedFolders: []string{"/a/b", "/b/c"}}, "test")
+		// Use platform-appropriate paths
+		path1 := filepath.Join("a", "b")
+		path2 := filepath.Join("b", "c")
+		UpdateSettings(c, types.Settings{TrustedFolders: []string{path1, path2}}, "test")
 
-		assert.Contains(t, c.TrustedFolders(), types.FilePath("/a/b"))
-		assert.Contains(t, c.TrustedFolders(), types.FilePath("/b/c"))
+		assert.Contains(t, c.TrustedFolders(), types.FilePath(path1))
+		assert.Contains(t, c.TrustedFolders(), types.FilePath(path2))
 	})
 
 	t.Run("manage binaries automatically", func(t *testing.T) {
@@ -469,6 +478,25 @@ func initTestRepo(t *testing.T, tempDir string) error {
 	return err
 }
 
+// setupMockOrgResolver sets up a mock organization resolver for tests
+func setupMockOrgResolver(t *testing.T, orgId, orgName string) {
+	t.Helper()
+	originalService := command.Service()
+	t.Cleanup(func() {
+		command.SetService(originalService)
+	})
+
+	ctrl := gomock.NewController(t)
+	mockResolver := mock_command.NewMockOrgResolver(ctrl)
+	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{
+		Id:   orgId,
+		Name: orgName,
+	}, nil).AnyTimes()
+	mockService := types.NewCommandServiceMock()
+	mockService.SetOrgResolver(mockResolver)
+	command.SetService(mockService)
+}
+
 // Common test setup for updateFolderConfig tests
 type folderConfigTestSetup struct {
 	t            *testing.T
@@ -483,11 +511,19 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
+	engineConfig := c.Engine().GetConfiguration()
+
+	// Register mock default value functions for org config to avoid API calls in tests
+	engineConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("test-default-org-uuid"))
+	engineConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("test-default-org-slug"))
+
+	// Set up mock organization resolver for configuration tests
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
+
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
 
 	return &folderConfigTestSetup{
@@ -507,7 +543,7 @@ func (s *folderConfigTestSetup) createStoredConfig(org string, migrated bool, us
 		OrgSetByUser:                userSet,
 	}
 	err := storedconfig.UpdateFolderConfig(s.engineConfig, storedConfig, s.logger)
-	assert.NoError(s.t, err)
+	require.NoError(s.t, err)
 }
 
 func (s *folderConfigTestSetup) callUpdateFolderConfig(org string) {
@@ -524,7 +560,7 @@ func (s *folderConfigTestSetup) callUpdateFolderConfig(org string) {
 
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(s.engineConfig, s.folderPath, s.logger)
-	assert.NoError(s.t, err)
+	require.NoError(s.t, err)
 	return updatedConfig
 }
 
@@ -568,7 +604,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Setup stored config with user-set org
 	engineConfig := c.Engine().GetConfiguration()
@@ -580,7 +616,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 		OrgSetByUser:                true,
 	}
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	c.SetOrganization("global-org-id")
 
@@ -601,7 +637,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 	// Verify the org was kept - with the current implementation, UpdateFolderConfigOrg is always called
 	// due to pointer comparison, but the org should remain the same since it's user-set
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "user-org-id", updatedConfig.PreferredOrg, "PreferredOrg should remain as user-set value")
 	// Note: OrgSetByUser behavior depends on UpdateFolderConfigOrg logic when org hasn't actually changed
 }
@@ -713,7 +749,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Setup stored config
 	engineConfig := c.Engine().GetConfiguration()
@@ -725,7 +761,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 		OrgSetByUser:                true,
 	}
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	c.SetOrganization("test-org")
 
@@ -746,7 +782,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 
 	// Verify config remains unchanged (UpdateFolderConfigOrg was skipped)
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "test-org", updatedConfig.PreferredOrg)
 	assert.True(t, updatedConfig.OrgSetByUser, "Should remain true since UpdateFolderConfigOrg was skipped")
 }
@@ -754,6 +790,9 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
+
+	// Set up mock organization resolver
+	setupMockOrgResolver(t, "resolved-org-id", "Resolved Org")
 
 	// Use a non-existent path that might return nil
 	folderPath := types.FilePath("/non/existent/path")
@@ -847,141 +886,203 @@ func Test_InitializeSettings(t *testing.T) {
 	})
 }
 
-func Test_sendCollectionChangeAnalytics(t *testing.T) {
-	t.Run("sends analytics for array changes", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+// Test: Mainly tests deleting AutoDeterminedOrg does not forget it.
+func Test_updateFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
-		// Test data
-		oldValue := []string{"item1", "item2", "item3"}
-		newValue := []string{"item1", "item4", "item5", "item6"}
-		field := "testField"
-		triggerSource := "test"
+	// Setup stored config with migration flag set, userSet false, empty org, and AutoDeterminedOrg set
+	engineConfig := setup.c.Engine().GetConfiguration()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  setup.folderPath,
+		PreferredOrg:                "",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+		AutoDeterminedOrg:           "existing-auto-org",
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
+	require.NoError(t, err)
 
-		// Test the logic by calling the function and verifying it doesn't panic
-		// Since we can't easily mock the analytics function, we'll test the core logic
-		// by verifying the function executes without errors
-		assert.NotPanics(t, func() {
-			sendCollectionChangeAnalytics(c, field, oldValue, newValue, triggerSource, "Added", "Removed", "Count")
-		})
-	})
+	setup.c.SetOrganization("global-org-id")
 
-	t.Run("handles empty arrays", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+	// Call updateFolderConfig with empty org (should stay in auto mode)
+	// Since org settings are equal, updateFolderConfigOrg won't be called
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:                  setup.folderPath,
+				PreferredOrg:                "",
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                false,
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
 
-		oldValue := []string{}
-		newValue := []string{"item1", "item2"}
-		field := "testField"
-		triggerSource := "test"
-
-		assert.NotPanics(t, func() {
-			sendCollectionChangeAnalytics(c, field, oldValue, newValue, triggerSource, "Added", "Removed", "Count")
-		})
-	})
-
-	t.Run("handles identical arrays", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-
-		value := []string{"item1", "item2"}
-		field := "testField"
-		triggerSource := "test"
-
-		assert.NotPanics(t, func() {
-			sendCollectionChangeAnalytics(c, field, value, value, triggerSource, "Added", "Removed", "Count")
-		})
-	})
+	// Verify: PreferredOrg should remain empty (auto mode), AutoDeterminedOrg should be preserved
+	updatedConfig := setup.getUpdatedConfig()
+	assert.Empty(t, updatedConfig.PreferredOrg, "PreferredOrg should remain empty in auto mode")
+	assert.False(t, updatedConfig.OrgSetByUser, "OrgSetByUser should remain false in auto mode")
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
+	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be preserved")
 }
 
-func Test_sendMapChangeAnalytics(t *testing.T) {
-	t.Run("sends analytics for map changes", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+// This is an edge case where a migrated config has a non-empty org but is not user-set
+func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
-		// Test data
-		oldValue := map[string]int{
-			"key1": 1,
-			"key2": 2,
-			"key3": 3,
-		}
-		newValue := map[string]int{
-			"key1": 10, // modified
-			"key4": 4,  // added
-			"key5": 5,  // added
-		}
-		field := "testField"
-		triggerSource := "test"
+	// Setup stored config with migration flag set, userSet false, but has an org
+	engineConfig := setup.c.Engine().GetConfiguration()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  setup.folderPath,
+		PreferredOrg:                "old-auto-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+		AutoDeterminedOrg:           "auto-org-id",
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
+	require.NoError(t, err)
 
-		assert.NotPanics(t, func() {
-			sendMapChangeAnalytics(c, field, oldValue, newValue, triggerSource, "KeyAdded", "KeyModified", "KeyRemoved", "Count")
-		})
-	})
+	setup.c.SetOrganization("global-org-id")
 
-	t.Run("handles empty maps", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:                  setup.folderPath,
+				PreferredOrg:                "different-org", // Different from stored
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                false,
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
 
-		oldValue := map[string]int{}
-		newValue := map[string]int{"key1": 1, "key2": 2}
-		field := "testField"
-		triggerSource := "test"
-
-		assert.NotPanics(t, func() {
-			sendMapChangeAnalytics(c, field, oldValue, newValue, triggerSource, "KeyAdded", "KeyModified", "KeyRemoved", "Count")
-		})
-	})
-
-	t.Run("handles identical maps", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-
-		value := map[string]int{"key1": 1, "key2": 2}
-		field := "testField"
-		triggerSource := "test"
-
-		assert.NotPanics(t, func() {
-			sendMapChangeAnalytics(c, field, value, value, triggerSource, "KeyAdded", "KeyModified", "KeyRemoved", "Count")
-		})
-	})
+	// Verify: We correctly set it as org set by user.
+	updatedConfig := setup.getUpdatedConfig()
+	assert.Equal(t, "different-org", updatedConfig.PreferredOrg, "PreferredOrg should be the new org")
+	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true when org changes")
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
+	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be set")
 }
 
-func Test_sendArrayConfigChangedAnalytics(t *testing.T) {
-	t.Run("calls sendCollectionChangeAnalytics with correct parameters", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+// Test: Org change detection when PreferredOrg changes for migrated configs
+func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
-		oldValue := []string{"item1", "item2"}
-		newValue := []string{"item1", "item3"}
-		field := "testField"
-		path := types.FilePath("/test/path")
-		triggerSource := "test"
+	// Setup stored config with initial org, migrated, and user-set
+	setup.createStoredConfig("initial-org", true, true)
+	setup.c.SetOrganization("global-org-id")
 
-		assert.NotPanics(t, func() {
-			sendArrayConfigChangedAnalytics(c, field, oldValue, newValue, path, triggerSource)
-		})
-	})
+	// Call updateFolderConfig with a different org
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:                  setup.folderPath,
+				PreferredOrg:                "new-user-org",
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                true,
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
+
+	// Verify: Org change should be detected and OrgSetByUser should be set to true
+	updatedConfig := setup.getUpdatedConfig()
+	assert.Equal(t, "new-user-org", updatedConfig.PreferredOrg, "PreferredOrg should be updated")
+	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true after org change")
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
 }
 
-func Test_sendMapConfigChangedAnalytics(t *testing.T) {
-	t.Run("calls sendMapChangeAnalytics with correct parameters", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+// migration with user preferences or user changed settings while unmigrated and unauthenticated
+func Test_updateFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
-		oldValue := map[string]int{"key1": 1}
-		newValue := map[string]int{"key1": 2, "key2": 3}
-		field := "testField"
-		path := types.FilePath("/test/path")
-		triggerSource := "test"
+	// Setup stored config without migration flag but with user-set org
+	setup.createStoredConfig("user-chosen-org", false, true)
+	setup.c.SetOrganization("global-org-id")
 
-		assert.NotPanics(t, func() {
-			sendMapConfigChangedAnalytics(c, field, oldValue, newValue, path, triggerSource)
-		})
-	})
+	// Call updateFolderConfig
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:   setup.folderPath,
+				PreferredOrg: "user-chosen-org",
+				OrgSetByUser: true,
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
+
+	// Verify: Should migrate and preserve user-set org
+	updatedConfig := setup.getUpdatedConfig()
+	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg, "User-set org should be preserved")
+	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should remain true")
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should be migrated after update")
 }
 
-func Test_sendTrustedFoldersAnalytics(t *testing.T) {
-	t.Run("calls sendCollectionChangeAnalytics with correct parameters", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+// Test: AutoDeterminedOrg is missing and needs to be set
+// When org settings change, updateFolderConfigOrg is called which sets AutoDeterminedOrg
+func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
-		oldFolders := []types.FilePath{"/old/path1", "/old/path2"}
-		newFolders := []types.FilePath{"/old/path1", "/new/path3"}
-		triggerSource := "test"
+	// Setup stored config WITHOUT AutoDeterminedOrg (simulating old config)
+	engineConfig := setup.c.Engine().GetConfiguration()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  setup.folderPath,
+		PreferredOrg:                "test-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+		AutoDeterminedOrg:           "", // Missing in stored config
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
+	require.NoError(setup.t, err)
 
-		assert.NotPanics(t, func() {
-			sendTrustedFoldersAnalytics(c, oldFolders, newFolders, triggerSource)
-		})
-	})
+	setup.c.SetOrganization("global-org-id")
+
+	// Call updateFolderConfig with DIFFERENT org to trigger updateFolderConfigOrg
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:                  setup.folderPath,
+				PreferredOrg:                "different-test-org", // Different to trigger update
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                true,
+				AutoDeterminedOrg:           "", // Missing
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
+
+	// Verify: AutoDeterminedOrg should be fetched and set by updateFolderConfigOrg
+	updatedConfig := setup.getUpdatedConfig()
+	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be fetched and set")
+	// The mock resolver returns "auto-determined-org-id" when givenOrg is not empty
+	assert.Equal(t, "auto-determined-org-id", updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync mock")
+}
+
+// Test: Migrated config where user changes org from auto to manual
+func Test_updateFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	// Setup stored config in auto mode (migrated, not user-set, empty org)
+	setup.createStoredConfig("", true, false)
+	setup.c.SetOrganization("global-org-id")
+
+	// Call updateFolderConfig with user now setting an org
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:                  setup.folderPath,
+				PreferredOrg:                "user-manual-org",
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                false, // IDE still sends false, LS fixes
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, "test")
+
+	// Verify: Org change should be detected and OrgSetByUser should be set to true
+	updatedConfig := setup.getUpdatedConfig()
+	assert.Equal(t, "user-manual-org", updatedConfig.PreferredOrg, "PreferredOrg should be set")
+	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true after user sets org")
+	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
 }

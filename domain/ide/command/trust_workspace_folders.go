@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -35,18 +36,18 @@ func (cmd *trustWorkspaceFoldersCommand) Command() types.CommandData {
 }
 
 func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error) {
-	if !config.CurrentConfig().IsTrustedFolderFeatureEnabled() {
+	if !cmd.c.IsTrustedFolderFeatureEnabled() {
 		return nil, nil
 	}
 
-	trustedFolderPaths := config.CurrentConfig().TrustedFolders()
 	_, untrusted := cmd.c.Workspace().GetFolderTrust()
-	for _, folder := range untrusted {
-		cmd.c.Logger().Debug().Str("method", "trustWorkspaceFoldersCommand").Msgf("adding trusted folder %s", folder.Path())
-		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
-	}
 
-	config.CurrentConfig().SetTrustedFolders(trustedFolderPaths)
+	// Add trusted folders to config and send analytics
+	workspace.AddTrustedFolders(cmd.c, untrusted)
+
+	// Get the updated trusted folder paths for notification
+	trustedFolderPaths := cmd.c.TrustedFolders()
+
 	cmd.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 	return nil, nil
 }

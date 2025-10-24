@@ -154,7 +154,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	fakeAuthenticationProvider.IsAuthenticated = false
 
 	// reset to use real service
-	command.SetService(command.NewService(authenticationService, di.Notifier(), di.LearnService(), nil, nil, nil))
+	command.SetService(command.NewService(authenticationService, di.Notifier(), di.LearnService(), nil, nil, nil, nil))
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -284,6 +284,10 @@ func (tcs *testCommandService) ExecuteCommandData(ctx context.Context, cmdData t
 		return nil, errors.New("we only expect our special command to be run")
 	}
 	return tcs.testCmd.Execute(ctx)
+}
+
+func (tcs *testCommandService) GetOrgResolver() types.OrgResolver {
+	return nil
 }
 
 func Test_ExecuteCommand_CancelRequest(t *testing.T) {
