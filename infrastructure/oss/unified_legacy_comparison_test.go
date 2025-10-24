@@ -104,86 +104,13 @@ func TestUnifiedVsLegacy_IssueCount(t *testing.T) {
 	assert.NotEmpty(t, legacyIssues, "Legacy API should return issues")
 }
 
-// TestUnifiedVsLegacy_CompareFirstIssue compares fields of the first issue from both APIs
-func TestUnifiedVsLegacy_CompareFirstIssue(t *testing.T) {
-	c, ctx := testutil.UnitTestWithCtx(t)
-	path := "package.json"
-	workDir := filepath.Join("testdata", path)
-	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
-	packageIssueCache := make(map[string][]types.Issue)
-	errorReporter := error_reporting.NewTestErrorReporter()
-
-	// Parse unified JSON
-	unifiedData, err := os.ReadFile("testdata/nodejs-goof-unified-example.json")
-	require.NoError(t, err)
-	var unifiedResult UnifiedResponse
-	err = json.Unmarshal(unifiedData, &unifiedResult)
-	require.NoError(t, err)
-
-	// Parse legacy JSON
-	legacyData, err := os.ReadFile("testdata/nodejs-goof-legacy-example.json")
-	require.NoError(t, err)
-	var legacyResult scanResult
-	err = json.Unmarshal(legacyData, &legacyResult)
-	require.NoError(t, err)
-
-	unifiedFindings := convertUnifiedToFindingData(unifiedResult)
-	mockResult := createMockResult(t, path)
-	mockResult.EXPECT().Findings(ctx).Return(unifiedFindings, true, nil).AnyTimes()
-
-	unifiedIssues, _ := convertTestResultToIssues(
-		ctx,
-		mockResult,
-		packageIssueCache,
-	)
-
-	// Convert legacy to issues
-	legacyIssues := convertScanResultToIssues(
-		c.Logger(),
-		&legacyResult,
-		types.FilePath(workDir),
-		types.FilePath(path),
-		nil,
-		nil,
-		errorReporter,
-		packageIssueCache,
-		c.Format(),
-	)
-
-	require.NotEmpty(t, unifiedIssues, "Unified issues should not be empty")
-	require.NotEmpty(t, legacyIssues, "Legacy issues should not be empty")
-
-	// Find a matching issue by ID to compare
-	// We'll use the first unified issue and find its match in legacy
-	unifiedIssue := unifiedIssues[0]
-	unifiedID := unifiedIssue.GetID()
-
-	var legacyIssue types.Issue
-	found := false
-	for _, issue := range legacyIssues {
-		if issue.GetID() == unifiedID {
-			legacyIssue = issue
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Skipf("Could not find matching issue %s in legacy data for comparison", unifiedID)
-		return
-	}
-
-	t.Logf("Comparing issue: %s", unifiedID)
-
-	// Compare Issue interface fields
-	compareIssueFields(t, unifiedIssue, legacyIssue, unifiedID)
-}
-
 // TestUnifiedVsLegacy_CompareAllMatchingIssues compares all matching issues between unified and legacy APIs
 func TestUnifiedVsLegacy_CompareAllMatchingIssues(t *testing.T) {
 	c, ctx := testutil.UnitTestWithCtx(t)
-	path := "package.json"
-	workDir := filepath.Join("testdata", path)
+	workDir, err := filepath.Abs("testdata")
+	require.NoError(t, err)
+
+	path := filepath.Join(workDir, "package.json")
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
 	packageIssueCache := make(map[string][]types.Issue)
 	errorReporter := error_reporting.NewTestErrorReporter()

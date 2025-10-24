@@ -304,7 +304,7 @@ func Lesson(ctx context.Context, problem *testapi.SnykVulnProblem, cwes []string
 // buildOssIssueData constructs the OssIssueData from FindingData
 func buildOssIssueData(ctx context.Context, problem *testapi.SnykVulnProblem, finding testapi.FindingData, affectedFilePath types.FilePath, myRange types.Range) (snyk.OssIssueData, error) {
 	logger := getLogger(ctx).With().Str("method", "buildOssIssueData").Logger()
-	logger.Debug().Interface("problem", problem).Interface("finding", finding.Id).Msg("building oss issue data")
+	logger.Debug().Interface("problem", problem.Id).Interface("finding", finding.Id).Msg("building oss issue data")
 
 	attrs := finding.Attributes
 
