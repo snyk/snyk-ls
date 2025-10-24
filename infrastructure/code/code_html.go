@@ -37,7 +37,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -83,14 +82,14 @@ type HtmlRenderer struct {
 	AiFixHandler         *AiFixHandler
 	inlineIgnoresEnabled bool
 	iawEnabled           bool
-	snykApiClient        snyk_api.SnykApiClient
+	featureFlagService   featureflag.Service
 }
 
 var codeRenderer *HtmlRenderer
 
-func GetHTMLRenderer(c *config.Config, snykApiClient snyk_api.SnykApiClient) (*HtmlRenderer, error) {
-	if snykApiClient == nil {
-		return nil, fmt.Errorf("passed Snyk API client is nil")
+func GetHTMLRenderer(c *config.Config, featureFlagService featureflag.Service) (*HtmlRenderer, error) {
+	if featureFlagService == nil {
+		return nil, fmt.Errorf("passed featureFlagService is nil")
 	}
 
 	if codeRenderer != nil && codeRenderer.c == c {
@@ -110,12 +109,9 @@ func GetHTMLRenderer(c *config.Config, snykApiClient snyk_api.SnykApiClient) (*H
 	}
 
 	codeRenderer = &HtmlRenderer{
-		c: c,
-
-		globalTemplate: globalTemplate,
-
-		snykApiClient: snykApiClient,
-
+		c:                    c,
+		globalTemplate:       globalTemplate,
+		featureFlagService:   featureFlagService,
 		inlineIgnoresEnabled: false,
 	}
 
@@ -256,7 +252,7 @@ func (renderer *HtmlRenderer) updateFeatureFlags(conf configuration.Configuratio
 	renderer.inlineIgnoresEnabled = false
 
 	if renderer.c.IntegrationName() == "VS_CODE" {
-		ff, ok := featureflag.GetFeatureFlagFromFolderConfig(folder, featureflag.SnykCodeInlineIgnore)
+		ff, ok := renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeInlineIgnore)
 		if !ok {
 			msg := fmt.Sprintf("Failed to retrieve feature flag status (%s), assuming deactivated", featureflag.SnykCodeInlineIgnore)
 			logger.Warn().Msg(msg)

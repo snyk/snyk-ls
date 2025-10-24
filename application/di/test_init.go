@@ -38,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
@@ -97,8 +98,8 @@ func TestInit(t *testing.T) {
 	hoverService = hover.NewDefaultService(c)
 	command.SetService(&types.CommandServiceMock{})
 	// don't use getters or it'll deadlock
-	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
+	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureflag.New(c))
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier)
+	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureflag.New(c))
 }

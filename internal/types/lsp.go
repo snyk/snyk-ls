@@ -17,6 +17,7 @@
 package types
 
 import (
+	"maps"
 	"time"
 
 	"github.com/google/uuid"
@@ -562,6 +563,44 @@ type FolderConfig struct {
 	FeatureFlags                map[string]bool                       `json:"featureFlags,omitempty"`
 }
 
+func (fc *FolderConfig) Clone() *FolderConfig {
+	if fc == nil {
+		return nil
+	}
+
+	clone := &FolderConfig{
+		FolderPath:                  fc.FolderPath,
+		BaseBranch:                  fc.BaseBranch,
+		ReferenceFolderPath:         fc.ReferenceFolderPath,
+		PreferredOrg:                fc.PreferredOrg,
+		AutoDeterminedOrg:           fc.AutoDeterminedOrg,
+		OrgMigratedFromGlobalConfig: fc.OrgMigratedFromGlobalConfig,
+		OrgSetByUser:                fc.OrgSetByUser,
+	}
+
+	if fc.LocalBranches != nil {
+		clone.LocalBranches = make([]string, len(fc.LocalBranches))
+		copy(clone.LocalBranches, fc.LocalBranches)
+	}
+
+	if fc.AdditionalParameters != nil {
+		clone.AdditionalParameters = make([]string, len(fc.AdditionalParameters))
+		copy(clone.AdditionalParameters, fc.AdditionalParameters)
+	}
+
+	if fc.ScanCommandConfig != nil {
+		clone.ScanCommandConfig = make(map[product.Product]ScanCommandConfig, len(fc.ScanCommandConfig))
+		maps.Copy(clone.ScanCommandConfig, fc.ScanCommandConfig)
+	}
+
+	if fc.FeatureFlags != nil {
+		clone.FeatureFlags = make(map[string]bool, len(fc.FeatureFlags))
+		maps.Copy(clone.FeatureFlags, fc.FeatureFlags)
+	}
+
+	return clone
+}
+
 type Pair struct {
 	First  any `json:"first"`
 	Second any `json:"second"`
@@ -620,11 +659,13 @@ type Settings struct {
 
 type AuthenticationMethod string
 
-const TokenAuthentication AuthenticationMethod = "token"
-const OAuthAuthentication AuthenticationMethod = "oauth"
-const PatAuthentication AuthenticationMethod = "pat"
-const FakeAuthentication AuthenticationMethod = "fake"
-const EmptyAuthenticationMethod AuthenticationMethod = ""
+const (
+	TokenAuthentication       AuthenticationMethod = "token"
+	OAuthAuthentication       AuthenticationMethod = "oauth"
+	PatAuthentication         AuthenticationMethod = "pat"
+	FakeAuthentication        AuthenticationMethod = "fake"
+	EmptyAuthenticationMethod AuthenticationMethod = ""
+)
 
 type DidChangeConfigurationParams struct {
 	// The actual changed settings
@@ -675,9 +716,11 @@ type ProgressParams struct {
 	Value any `json:"value,omitempty"`
 }
 
-const WorkDoneProgressBeginKind = "begin"
-const WorkDoneProgressReportKind = "report"
-const WorkDoneProgressEndKind = "end"
+const (
+	WorkDoneProgressBeginKind  = "begin"
+	WorkDoneProgressReportKind = "report"
+	WorkDoneProgressEndKind    = "end"
+)
 
 type WorkDoneProgressKind struct {
 	Kind string `json:"kind"`
@@ -1023,8 +1066,10 @@ type ApplyWorkspaceEditParams struct {
 	Edit *sglsp.WorkspaceEdit `json:"edit"`
 }
 
-type CodeLensRefresh struct{}
-type InlineValueRefresh struct{}
+type (
+	CodeLensRefresh    struct{}
+	InlineValueRefresh struct{}
+)
 
 type ApplyWorkspaceEditResult struct {
 	/**
@@ -1050,10 +1095,12 @@ type ApplyWorkspaceEditResult struct {
 
 type MessageType int
 
-const Error MessageType = 1
-const Warning MessageType = 2
-const Info MessageType = 3
-const Log MessageType = 4
+const (
+	Error   MessageType = 1
+	Warning MessageType = 2
+	Info    MessageType = 3
+	Log     MessageType = 4
+)
 
 type LogMessageParams struct {
 	/**

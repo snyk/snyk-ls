@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -325,7 +326,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, featureflag.New(c))
 	assert.Nil(t, err)
 	html := htmlRenderer.GetDetailsHtml(issues[0])
 	// Assert
@@ -339,17 +340,17 @@ func setupIgnoreWorkspace(t *testing.T) (tempDir types.FilePath, ignoredFilePath
 	tempDir = writeTestGitIgnore(t, expectedPatterns)
 
 	ignoredFilePath = types.FilePath(filepath.Join(string(tempDir), "ignored.xml"))
-	err := os.WriteFile(string(ignoredFilePath), []byte("test"), 0600)
+	err := os.WriteFile(string(ignoredFilePath), []byte("test"), 0o600)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write ignored file ignored.xml")
 	}
 	notIgnoredFilePath = types.FilePath(filepath.Join(string(tempDir), "not-ignored.java"))
-	err = os.WriteFile(string(notIgnoredFilePath), []byte("test"), 0600)
+	err = os.WriteFile(string(notIgnoredFilePath), []byte("test"), 0o600)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write ignored file not-ignored.java")
 	}
 	ignoredDir := filepath.Join(string(tempDir), "bin")
-	err = os.Mkdir(ignoredDir, 0755)
+	err = os.Mkdir(ignoredDir, 0o755)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write ignoreDirectory %s", ignoredDir)
 	}
@@ -367,7 +368,7 @@ func writeTestGitIgnore(t *testing.T, ignorePatterns string) (tempDir types.File
 func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir types.FilePath) {
 	t.Helper()
 	filePath := filepath.Join(string(tempDir), ".gitignore")
-	err := os.WriteFile(filePath, []byte(ignorePatterns), 0600)
+	err := os.WriteFile(filePath, []byte(ignorePatterns), 0o600)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write .gitignore")
 	}

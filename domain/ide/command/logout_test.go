@@ -51,6 +51,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		command:     types.CommandData{CommandId: types.LogoutCommand},
 		authService: authenticationService,
 		c:           c,
+		// TODO add featureFlagService fake service and use it here
 	}
 
 	sc := scanner.NewTestScanner()

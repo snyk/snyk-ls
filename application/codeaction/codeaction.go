@@ -25,6 +25,7 @@ type dirtyFilesWatcher interface {
 // CodeActionsService is an application-layer service for handling code actions.
 type CodeActionsService struct {
 	IssuesProvider snyk.IssueProvider
+	featureFlagService featureflag.Service
 
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
@@ -40,29 +41,16 @@ type cachedAction struct {
 	action types.CodeAction
 }
 
-func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier) *CodeActionsService {
+func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service) *CodeActionsService {
 	return &CodeActionsService{
 		IssuesProvider: provider,
+		featureFlagService: featureFlagService,
 		actionsCache:   make(map[uuid.UUID]cachedAction),
 		c:              c,
 		logger:         c.Logger().With().Str("service", "CodeActionsService").Logger(),
 		fileWatcher:    fileWatcher,
 		notifier:       notifier,
 	}
-}
-
-func (c *CodeActionsService) determineFolderPathFromFile(filePath types.FilePath) types.FilePath {
-	ws := c.c.Workspace()
-	if ws == nil {
-		return ""
-	}
-	for _, folder := range ws.Folders() {
-		folderPath := folder.Path()
-		if uri.FolderContains(folderPath, filePath) {
-			return folderPath
-		}
-	}
-	return ""
 }
 
 func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []types.LSPCodeAction {
@@ -77,8 +65,8 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	logMsg := fmt.Sprint("Found ", len(issues), " issues for path ", path, " and range ", r)
 	c.logger.Debug().Msg(logMsg)
 
-	folderPath := c.determineFolderPathFromFile(path)
-	codeConsistentIgnoresEnabled, _ := featureflag.GetFeatureFlagFromFolderConfig(folderPath, featureflag.SnykCodeConsistentIgnores)
+	folderPath := c.c.Workspace().GetFolderContaining(path)
+	codeConsistentIgnoresEnabled, _ := c.featureFlagService.GetFromFolderConfig(folderPath.Path(), featureflag.SnykCodeConsistentIgnores)
 
 	var filteredIssues []types.Issue
 	if !codeConsistentIgnoresEnabled {

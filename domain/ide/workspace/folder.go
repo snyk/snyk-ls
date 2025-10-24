@@ -76,6 +76,7 @@ type Folder struct {
 	c                       *config.Config
 	scanPersister           persistence.ScanSnapshotPersister
 	scanStateAggregator     scanstates.Aggregator
+	featureFlagService      featureflag.Service
 }
 
 func (f *Folder) ScanResultProcessor() types.ScanResultProcessor {
@@ -252,6 +253,7 @@ func NewFolder(
 	notifier noti.Notifier,
 	scanPersister persistence.ScanSnapshotPersister,
 	scanStateAggregator scanstates.Aggregator,
+	featureFlagService featureflag.Service,
 ) *Folder {
 	folder := Folder{
 		scanner:             scanner,
@@ -264,6 +266,7 @@ func NewFolder(
 		c:                   c,
 		scanPersister:       scanPersister,
 		scanStateAggregator: scanStateAggregator,
+		featureFlagService:  featureFlagService,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[types.FilePath, []types.Issue]()
 	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
@@ -627,7 +630,7 @@ func (f *Folder) FilterIssues(
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
 
-	codeConsistentIgnoresEnabled, _ := featureflag.GetFeatureFlagFromFolderConfig(f.path, featureflag.SnykCodeConsistentIgnores)
+	codeConsistentIgnoresEnabled, _ := f.featureFlagService.GetFromFolderConfig(f.path, featureflag.SnykCodeConsistentIgnores)
 
 	for path, issueSlice := range issues {
 		if !f.Contains(path) {

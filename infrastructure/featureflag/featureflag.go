@@ -36,7 +36,9 @@ var flags = []string{
 }
 
 type Service interface {
-	GetFlags(org string) (map[string]bool, error)
+	Fetch(org string) (map[string]bool, error)
+	GetFromFolderConfig(folderPath types.FilePath, flag string) (bool, bool)
+	PopulateFolderConfig(folderConfig *types.FolderConfig) bool
 	FlushCache()
 }
 
@@ -46,23 +48,15 @@ type serviceImpl struct {
 	mutex     *sync.Mutex
 }
 
-var (
-	instance Service
-	once     sync.Once
-)
-
-func GetInstance() Service {
-	once.Do(func() {
-		instance = &serviceImpl{
-			c:         config.CurrentConfig(),
-			orgToFlag: make(map[string]map[string]bool),
-			mutex:     &sync.Mutex{},
-		}
-	})
-	return instance
+func New(c *config.Config) Service {
+	return &serviceImpl{
+		c:         c,
+		orgToFlag: make(map[string]map[string]bool),
+		mutex:     &sync.Mutex{},
+	}
 }
 
-func (s *serviceImpl) GetFlags(org string) (map[string]bool, error) {
+func (s *serviceImpl) Fetch(org string) (map[string]bool, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -90,8 +84,20 @@ func (s *serviceImpl) FlushCache() {
 	s.orgToFlag = make(map[string]map[string]bool)
 }
 
-func GetFeatureFlagFromFolderConfig(folderPath types.FilePath, flag string) (bool, bool) {
-	folderConfig := config.CurrentConfig().FolderConfig(folderPath)
+func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) (bool, bool) {
+	folderConfig := s.c.FolderConfig(folderPath)
 	v, ok := folderConfig.FeatureFlags[flag]
 	return v, ok
+}
+
+func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) bool {
+	logger := s.c.Logger().With().Str("method", "PopulateFeatureFlags").Logger()
+	org := s.c.FolderOrganization(folderConfig.FolderPath)
+	flags, err := s.Fetch(org)
+	if err != nil {
+		logger.Err(err).Msg("couldn't get feature flags")
+		return false
+	}
+	folderConfig.FeatureFlags = flags
+	return true
 }

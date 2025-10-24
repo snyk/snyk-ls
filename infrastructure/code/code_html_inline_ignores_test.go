@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -31,15 +31,11 @@ func Test_Code_Html_InlineIgnores_Enabled(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetIntegrationName("VS_CODE")
 
-	// Create a fake API client with the feature flag enabled
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
-	}
-	// Set the response for the FeatureFlagStatus method
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
+	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
 	// Get the HTML renderer with the feature flag enabled
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	require.NoError(t, err)
 
 	// Create a test issue
@@ -60,15 +56,11 @@ func Test_Code_Html_InlineIgnores_Enabled(t *testing.T) {
 func Test_Code_Html_InlineIgnores_Disabled(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	// Create a fake API client with the feature flag disabled
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
-	}
-	// Set the response for the FeatureFlagStatus method
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+	fakeFeatureFlagService := featureflag.NewFakeFeatureFlagService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// Get the HTML renderer with the feature flag disabled
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	require.NoError(t, err)
 
 	// Verify that the inline ignores feature is disabled
