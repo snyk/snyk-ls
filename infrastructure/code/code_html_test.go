@@ -28,7 +28,7 @@ import (
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -56,16 +56,12 @@ func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T
 		},
 	}
 
-	// Create a fake API client with the feature flag disabled
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
-	}
-	// Set the response for the FeatureFlagStatus method
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
 	// invoke method under test
 	c.SetIntegrationName("VS_CODE")
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
@@ -131,14 +127,11 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
-	}
-	// Set the response for the FeatureFlagStatus method
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
@@ -179,14 +172,11 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
-	}
-	// Set the response for the FeatureFlagStatus method
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -204,6 +194,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	// assert Footer buttons are not present when issue is ignored
 	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
 }
+
 func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 	c := testutil.UnitTest(t)
 
@@ -236,14 +227,11 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
-	}
-	// Set the response for the FeatureFlagStatus method
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -285,14 +273,11 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
-	}
-	// Set the response for the FeatureFlagStatus method
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -337,14 +322,11 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
-	}
-	// Set the response for the FeatureFlagStatus method
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -383,8 +365,10 @@ func getFixes() []snyk.ExampleCommitFix {
 					LineChange: "added",
 				},
 			},
-		}}
+		},
+	}
 }
+
 func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	c := testutil.UnitTest(t)
 
@@ -410,14 +394,11 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	}
 
 	// Create a fake API client with the feature flag disabled
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
-	}
-	// Set the response for the FeatureFlagStatus method
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
@@ -433,14 +414,13 @@ func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
 		AdditionalData: snyk.CodeIssueData{},
 	}
 
-	apiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
-
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
-	assert.NoError(t, err)
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	c.Engine().GetConfiguration().Set(ignore_workflow.ConfigIgnoreApprovalEnabled, true)
-	// Enable IAW so the ignore form is rendered
+
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService) // Enable IAW so the ignore form is rendered
+	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	// Form and error badge should be present in the HTML
@@ -457,12 +437,12 @@ func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
 		AdditionalData: snyk.CodeIssueData{HasAIFix: true},
 	}
 
-	apiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	c.Engine().GetConfiguration().Set(ignore_workflow.ConfigIgnoreApprovalEnabled, true)
 
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
@@ -595,13 +575,13 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Enabled(t *
 	c := testutil.UnitTest(t)
 	c.SetIntegrationName("VS_CODE")
 
-	apiClient := &snyk_api.FakeApiClient{}
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration())
+	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration(), types.FilePath(""))
 
 	assert.True(t, htmlRenderer.inlineIgnoresEnabled)
 }
@@ -610,13 +590,13 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Disabled(t 
 	c := testutil.UnitTest(t)
 	c.SetIntegrationName("VS_CODE")
 
-	apiClient := &snyk_api.FakeApiClient{}
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration())
+	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration(), types.FilePath(""))
 
 	assert.False(t, htmlRenderer.inlineIgnoresEnabled)
 }
@@ -626,16 +606,15 @@ func Test_Code_Html_updateFeatureFlags_NonVSCodeIntegration(t *testing.T) {
 	c.SetIntegrationName("ECLIPSE") // Set a non-VSCode integration name
 
 	// Create a fake API client
-	apiClient := &snyk_api.FakeApiClient{}
-	// Set the feature flag to true, to ensure the integration name is the deciding factor
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: true})
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	assert.NotNil(t, htmlRenderer)
 
 	// Call the method under test
-	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration())
+	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration(), types.FilePath(""))
 
 	// Assert that inlineIgnoresEnabled is false because the integration is not VS_CODE
 	assert.False(t, htmlRenderer.inlineIgnoresEnabled, "inlineIgnoresEnabled should be false for non-VSCode integrations")

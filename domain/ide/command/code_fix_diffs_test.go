@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -48,11 +49,11 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 		C:             c,
 	}
 	cut := codeFixDiffs{
-		notifier:      notification.NewMockNotifier(),
-		codeScanner:   codeScanner,
-		c:             c,
-		srv:           server,
-		snykApiClient: snykApiClient,
+		notifier:           notification.NewMockNotifier(),
+		codeScanner:        codeScanner,
+		c:                  c,
+		srv:                server,
+		featureFlagService: featureflag.NewFakeService(),
 	}
 	if runtime.GOOS == "windows" {
 		codeScanner.AddBundleHash("\\folderPath", "bundleHash")

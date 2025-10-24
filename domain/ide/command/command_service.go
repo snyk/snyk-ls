@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -35,24 +36,26 @@ import (
 var instance types.CommandService
 
 type serviceImpl struct {
-	authService   authentication.AuthenticationService
-	notifier      noti.Notifier
-	learnService  learn.Service
-	issueProvider snyk.IssueProvider
-	codeScanner   *code.Scanner
-	cli           cli.Executor
-	orgResolver   types.OrgResolver
+	authService        authentication.AuthenticationService
+	featureFlagService featureflag.Service
+	notifier           noti.Notifier
+	learnService       learn.Service
+	issueProvider      snyk.IssueProvider
+	codeScanner        *code.Scanner
+	cli                cli.Executor
+	orgResolver        types.OrgResolver
 }
 
-func NewService(authService authentication.AuthenticationService, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, orgResolver types.OrgResolver) types.CommandService {
+func NewService(authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, orgResolver types.OrgResolver) types.CommandService {
 	return &serviceImpl{
-		authService:   authService,
-		notifier:      notifier,
-		learnService:  learnService,
-		issueProvider: issueProvider,
-		codeScanner:   codeScanner,
-		cli:           cli,
-		orgResolver:   orgResolver,
+		authService:        authService,
+		featureFlagService: featureFlagService,
+		notifier:           notifier,
+		learnService:       learnService,
+		issueProvider:      issueProvider,
+		codeScanner:        codeScanner,
+		cli:                cli,
+		orgResolver:        orgResolver,
 	}
 }
 
@@ -80,14 +83,13 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 	}
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
-	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli)
+	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err
 	}
 
 	result, err := command.Execute(ctx)
-
 	if err != nil {
 		logger.Err(err).Msg("failed to execute command")
 	}

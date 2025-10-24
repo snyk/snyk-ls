@@ -21,16 +21,18 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type loginCommand struct {
-	command     types.CommandData
-	authService authentication.AuthenticationService
-	notifier    noti.Notifier
-	c           *config.Config
+	command            types.CommandData
+	authService        authentication.AuthenticationService
+	featureFlagService featureflag.Service
+	notifier           noti.Notifier
+	c                  *config.Config
 }
 
 func (cmd *loginCommand) Command() types.CommandData {
@@ -51,7 +53,7 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 
 		// Send folder configs after successful login,
 		// to re-fetch auto determined org from LDX-Sync.
-		go sendFolderConfigs(cmd.c, cmd.notifier)
+		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService)
 
 		return token, nil
 	}

@@ -29,17 +29,17 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 type navigateToRangeCommand struct {
-	command   types.CommandData
-	srv       types.Server
-	logger    *zerolog.Logger
-	c         *config.Config
-	apiClient snyk_api.SnykApiClient
+	command            types.CommandData
+	srv                types.Server
+	logger             *zerolog.Logger
+	c                  *config.Config
+	featureFlagService featureflag.Service
 }
 
 func (cmd *navigateToRangeCommand) Command() types.CommandData {
@@ -74,7 +74,7 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 	} else {
 		documentUri = sglsp.DocumentURI(path)
 		// TODO: move this to a new command to process snyk magnet link
-		renderer, rendererErr := code.GetHTMLRenderer(cmd.c, cmd.apiClient)
+		renderer, rendererErr := code.GetHTMLRenderer(cmd.c, cmd.featureFlagService)
 		if rendererErr == nil {
 			renderer.AiFixHandler.SetAutoTriggerAiFix(true)
 		}

@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -49,6 +50,7 @@ type Workspace struct {
 	c                   *config.Config
 	scanPersister       persistence.ScanSnapshotPersister
 	scanStateAggregator scanstates.Aggregator
+	featureFlagService  featureflag.Service
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
@@ -84,6 +86,7 @@ func New(
 	notifier noti.Notifier,
 	scanPersister persistence.ScanSnapshotPersister,
 	scanStateAggregator scanstates.Aggregator,
+	featureFlagService featureflag.Service,
 ) *Workspace {
 	return &Workspace{
 		folders:             make(map[types.FilePath]types.Folder),
@@ -95,6 +98,7 @@ func New(
 		c:                   c,
 		scanPersister:       scanPersister,
 		scanStateAggregator: scanStateAggregator,
+		featureFlagService:  featureFlagService,
 	}
 }
 
@@ -212,7 +216,7 @@ func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFolder
 	}
 	var changedWorkspaceFolders []types.Folder
 	for _, folder := range params.Event.Added {
-		f := NewFolder(w.c, uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator)
+		f := NewFolder(w.c, uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator, w.featureFlagService)
 		w.AddFolder(f)
 		changedWorkspaceFolders = append(changedWorkspaceFolders, f)
 	}

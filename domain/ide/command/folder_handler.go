@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
@@ -28,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -38,27 +40,28 @@ const (
 	DontTrust = "Don't trust folders"
 )
 
-func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator) {
+func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	// send folder configs (they are queued until initialization is done)
-	go sendFolderConfigs(c, notifier)
+	sendFolderConfigs(c, notifier, featureFlagService)
 	HandleUntrustedFolders(ctx, c, srv)
 }
 
-func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
+func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service) {
 	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
-
 	var folderConfigs []types.FolderConfig
+
 	for _, folder := range c.Workspace().Folders() {
-		folderConfig, err2 := storedconfig.GetOrCreateFolderConfig(gafConfig, folder.Path(), &logger)
+		storedFolderConfig, err2 := storedconfig.GetOrCreateFolderConfig(gafConfig, folder.Path(), &logger)
 		if err2 != nil {
 			logger.Err(err2).Msg("unable to load stored config")
-			return
+			continue
 		}
 
-		changedFolderConfig := false
+		folderConfig := storedFolderConfig.Clone()
+
+		featureFlagService.PopulateFolderConfig(folderConfig)
 
 		// Always update AutoDeterminedOrg from LDX-Sync (even for folders where OrgSetByUser is true)
 		// This ensures we always know what LDX-Sync recommends, regardless of whether the user has opted out
@@ -67,21 +70,19 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 			logger.Err(err).Msg("unable to resolve organization, continuing...")
 		} else {
 			folderConfig.AutoDeterminedOrg = org.Id
-			changedFolderConfig = true
 		}
 
 		// Trigger migration for folders that haven't been migrated yet
 		// This ensures that folders loaded from storage get migrated on initialization
 		if !folderConfig.OrgMigratedFromGlobalConfig {
 			MigrateFolderConfigOrgSettings(c, folderConfig)
-			changedFolderConfig = true
 		}
 
-		if changedFolderConfig {
+		if !cmp.Equal(folderConfig, storedFolderConfig) {
 			// Save the migrated folder config back to storage
 			err = storedconfig.UpdateFolderConfig(gafConfig, folderConfig, &logger)
 			if err != nil {
-				logger.Err(err).Msg("unable to save migrated folder config")
+				logger.Err(err).Msg("unable to save folder config")
 			}
 		}
 
@@ -91,8 +92,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier) {
 	if folderConfigs == nil {
 		return
 	}
-	folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
-	notifier.Send(folderConfigsParam)
+	notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
 }
 
 func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (ldx_sync_config.Organization, error) {
@@ -182,6 +182,7 @@ func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
 	}
 	agg.Init(folderPaths)
 }
+
 func initScanPersister(c *config.Config, persister persistence.ScanSnapshotPersister) {
 	logger := c.Logger().With().Str("method", "initScanPersister").Logger()
 	w := c.Workspace()

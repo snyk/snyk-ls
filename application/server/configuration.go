@@ -26,6 +26,7 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
+	"github.com/google/go-cmp/cmp"
 	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -35,7 +36,6 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -217,15 +217,12 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource string) {
 	notifier := di.Notifier()
 	var folderConfigs []types.FolderConfig
-	folderConfigsMayHaveChanged := false
+	needsToSendUpdateToClient := false
+
 	for _, folderConfig := range settings.FolderConfigs {
 		path := folderConfig.FolderPath
 
-		storedConfig, err2 := storedconfig.GetOrCreateFolderConfig(c.Engine().GetConfiguration(), path, logger)
-		if err2 != nil {
-			logger.Err(err2).Msg("unable to load stored config")
-			return
-		}
+		storedConfig := c.FolderConfig(path)
 
 		// Folder config might be new or changed, so (re)resolve the org before saving it.
 		// We should also check that the folder's org is still valid if the globally set org has changed.
@@ -235,7 +232,20 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 
 		if needsMigration || orgSettingsChanged {
 			updateFolderConfigOrg(c, storedConfig, &folderConfig)
-			folderConfigsMayHaveChanged = true
+			err := c.UpdateFolderConfig(&folderConfig) // a lot of methods depend on correct persisted organization values
+			if err != nil {
+				notifier.SendShowMessage(sglsp.MTError, err.Error())
+			}
+		}
+
+		di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
+
+		if !cmp.Equal(folderConfig, *storedConfig) {
+			needsToSendUpdateToClient = true
+			err := c.UpdateFolderConfig(&folderConfig)
+			if err != nil {
+				notifier.SendShowMessage(sglsp.MTError, err.Error())
+			}
 		}
 
 		sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
@@ -243,16 +253,8 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		folderConfigs = append(folderConfigs, folderConfig)
 	}
 
-	// Don't send folder configs on initialize, since initialized will always send them.
-	if folderConfigsMayHaveChanged && triggerSource != "initialize" {
-		folderConfigsParam := types.FolderConfigsParam{FolderConfigs: folderConfigs}
-		notifier.Send(folderConfigsParam)
-	}
-
-	err := storedconfig.UpdateFolderConfigs(c.Engine().GetConfiguration(), folderConfigs, logger)
-	if err != nil {
-		c.Logger().Err(err).Msg("couldn't update folder configs")
-		notifier.SendShowMessage(sglsp.MTError, err.Error())
+	if needsToSendUpdateToClient && triggerSource != "initialize" { // Don't send folder configs on initialize, since initialized will always send them.
+		notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
 	}
 }
 
@@ -330,25 +332,26 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 		folderConfig.OrgMigratedFromGlobalConfig = true
 	}
 
+	if !folderConfig.OrgMigratedFromGlobalConfig {
+		command.MigrateFolderConfigOrgSettings(c, folderConfig)
+		return
+	}
+
 	// For configs that have been migrated, we use the org returned by LDX-Sync unless the user has set one.
-	if folderConfig.OrgMigratedFromGlobalConfig {
-		orgSetByUserJustChanged := folderConfig.OrgSetByUser != storedConfig.OrgSetByUser
-		orgHasJustChanged := folderConfig.PreferredOrg != storedConfig.PreferredOrg
-		// If the user changes both OrgSetByUser and PreferredOrg, we will prioritize OrgSetByUser changes.
-		if orgSetByUserJustChanged {
-			if !folderConfig.OrgSetByUser {
-				// Ensure we blank the field, so we don't flip it back to an old value when the user disables auto org.
-				folderConfig.PreferredOrg = ""
-			}
-		} else if orgHasJustChanged {
-			// Now we will use the user-provided org and opt them out of LDX-Sync.
-			folderConfig.OrgSetByUser = true
-		} else if !folderConfig.OrgSetByUser {
+	orgSetByUserJustChanged := folderConfig.OrgSetByUser != storedConfig.OrgSetByUser
+	orgHasJustChanged := folderConfig.PreferredOrg != storedConfig.PreferredOrg
+	// If the user changes both OrgSetByUser and PreferredOrg, we will prioritize OrgSetByUser changes.
+	if orgSetByUserJustChanged {
+		if !folderConfig.OrgSetByUser {
 			// Ensure we blank the field, so we don't flip it back to an old value when the user disables auto org.
 			folderConfig.PreferredOrg = ""
 		}
-	} else {
-		command.MigrateFolderConfigOrgSettings(c, folderConfig)
+	} else if orgHasJustChanged {
+		// Now we will use the user-provided org and opt them out of LDX-Sync.
+		folderConfig.OrgSetByUser = true
+	} else if !folderConfig.OrgSetByUser {
+		// Ensure we blank the field, so we don't flip it back to an old value when the user disables auto org.
+		folderConfig.PreferredOrg = ""
 	}
 }
 
