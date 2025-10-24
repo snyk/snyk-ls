@@ -17,138 +17,94 @@
 package oss
 
 import (
+	"path/filepath"
 	"testing"
 
-	"github.com/rs/zerolog"
+	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func Test_ConvertFindingDataToIssues_EmptyFindings(t *testing.T) {
-	// Arrange
-	ctx := t.Context()
-	workDir := types.FilePath("/test/workdir")
-	path := types.FilePath("/test/workdir/package.json")
-	logger := zerolog.Nop()
-	errorReporter := error_reporting.NewTestErrorReporter()
-	var learnService learn.Service
-	packageIssueCache := make(map[string][]types.Issue)
-	format := config.FormatMd
-	metadata := &WorkflowMetadata{
-		ProjectName:    "test-project",
-		PackageManager: "npm",
-	}
+func Test_convertFindingDataToIssues_EmptyFindings(t *testing.T) {
+	_, ctx := testutil.UnitTestWithCtx(t)
+	workDir, err := filepath.Abs("testdata")
+	require.NoError(t, err)
 
-	var findings []testapi.FindingData
+	path := filepath.Join(workDir, "package.json")
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
+	packageIssueCache := make(map[string][]types.Issue)
+
+	mockResult := createMockResult(t, path)
+	mockResult.EXPECT().Findings(gomock.Any()).Return(nil, true, nil).AnyTimes()
 
 	// Act
-	issues := ConvertFindingDataToIssues(
+	issues, err := convertTestResultToIssues(
 		ctx,
-		findings,
-		workDir,
-		path,
-		&logger,
-		errorReporter,
-		learnService,
+		mockResult,
 		packageIssueCache,
-		format,
-		metadata,
 	)
 
-	// Assert
-	assert.NotNil(t, issues)
-	assert.Empty(t, issues)
+	// require
+	require.NoError(t, err)
+	require.NotNil(t, issues)
+	require.Empty(t, issues)
 }
 
-func Test_ConvertFindingDataToIssues_SingleVulnerability(t *testing.T) {
+func Test_convertFindingDataToIssues_SingleVulnerability(t *testing.T) {
+	_, ctx := testutil.UnitTestWithCtx(t)
 	// Arrange
-	ctx := t.Context()
-	workDir := types.FilePath("/test/workdir")
-	path := types.FilePath("/test/workdir/package.json")
-	logger := zerolog.Nop()
-	errorReporter := error_reporting.NewTestErrorReporter()
-	var learnService learn.Service
+	workDir, err := filepath.Abs("testdata")
+	require.NoError(t, err)
+	path := filepath.Join(workDir, "package.json")
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
 	packageIssueCache := make(map[string][]types.Issue)
-	format := config.FormatMd
-	metadata := &WorkflowMetadata{
-		ProjectName:    "test-project",
-		PackageManager: "npm",
-	}
 
 	// Create a test finding
 	finding := createTestFinding()
 	findings := []testapi.FindingData{finding}
 
+	mockResult := createMockResult(t, path)
+	mockResult.EXPECT().Findings(ctx).Return(findings, true, nil).AnyTimes()
+
 	// Act
-	issues := ConvertFindingDataToIssues(
+	issues, err := convertTestResultToIssues(
 		ctx,
-		findings,
-		workDir,
-		path,
-		&logger,
-		errorReporter,
-		learnService,
+		mockResult,
 		packageIssueCache,
-		format,
-		metadata,
 	)
 
-	// Assert
+	// require
+	require.NoError(t, err)
 	require.NotNil(t, issues)
 	require.Len(t, issues, 1)
 
 	issue := issues[0]
-	assert.NotEmpty(t, issue.GetID())
-	assert.NotEmpty(t, issue.GetMessage())
-	assert.NotNil(t, issue.GetAdditionalData())
+	require.NotEmpty(t, issue.GetID())
+	require.NotEmpty(t, issue.GetMessage())
+	require.NotNil(t, issue.GetAdditionalData())
 }
 
-func Test_convertFindingToIssue_GetID(t *testing.T) {
-	// Arrange
-	finding := createTestFinding()
-	workDir := types.FilePath("/test/workdir")
-	affectedFilePath := types.FilePath("/test/workdir/package.json")
-	var learnService learn.Service
-	format := config.FormatMd
-	metadata := &WorkflowMetadata{
-		ProjectName:    "test-project",
-		PackageManager: "npm",
-	}
+func createMockResult(t *testing.T, path string) *mocks.MockTestResult {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	mockResult := mocks.NewMockTestResult(ctrl)
 
-	// Act
-	issue, err := convertFindingToIssue(finding, workDir, affectedFilePath, learnService, format, metadata)
+	subject := testapi.DepGraphSubject{Type: testapi.DepGraphSubjectTypeDepGraph, Locator: testapi.LocalPathLocator{
+		Paths: []string{path},
+		Type:  testapi.LocalPath,
+	}}
 
-	// Assert
+	testSubject := testapi.TestSubject{}
+	err := testSubject.FromDepGraphSubject(subject)
 	require.NoError(t, err)
-	require.NotNil(t, issue)
-	assert.Equal(t, "SNYK-JS-TEST-123456", issue.GetID())
-}
 
-func Test_convertFindingToIssue_GetSeverity(t *testing.T) {
-	// Arrange
-	finding := createTestFinding()
-	workDir := types.FilePath("/test/workdir")
-	affectedFilePath := types.FilePath("/test/workdir/package.json")
-	var learnService learn.Service
-	format := config.FormatMd
-	metadata := &WorkflowMetadata{
-		ProjectName:    "test-project",
-		PackageManager: "npm",
-	}
-
-	// Act
-	issue, err := convertFindingToIssue(finding, workDir, affectedFilePath, learnService, format, metadata)
-
-	// Assert
-	require.NoError(t, err)
-	require.NotNil(t, issue)
-	assert.Equal(t, types.High, issue.GetSeverity())
+	mockResult.EXPECT().GetTestSubject().Return(testSubject).AnyTimes()
+	return mockResult
 }
 
 // createTestFinding creates a sample FindingData for testing

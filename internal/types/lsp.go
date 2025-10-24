@@ -559,6 +559,7 @@ type FolderConfig struct {
 	AutoDeterminedOrg           string                                `json:"autoDeterminedOrg"`
 	OrgMigratedFromGlobalConfig bool                                  `json:"orgMigratedFromGlobalConfig"`
 	OrgSetByUser                bool                                  `json:"orgSetByUser"`
+	FeatureFlags                map[string]bool                       `json:"featureFlags,omitempty"`
 }
 
 type Pair struct {

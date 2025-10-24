@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -37,7 +38,7 @@ import (
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
 func ConvertJSONToIssues(logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
 	// Call the standalone version of unmarshallAndRetrieveAnalysis
-	issues := UnmarshallAndRetrieveAnalysis(
+	issues, _ := UnmarshallAndRetrieveAnalysis(
 		context.Background(),
 		jsonData,
 		types.FilePath(workDir),
@@ -55,9 +56,10 @@ func ConvertJSONToIssues(logger *zerolog.Logger, jsonData []byte, learnService l
 
 // UnmarshallAndRetrieveAnalysis is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
 // that can be used without a CLIScanner instance
+//   - scanOutput: the output of the scan (can be either a []byte or []workflow.Data)
 func UnmarshallAndRetrieveAnalysis(
 	ctx context.Context,
-	res []byte,
+	scanOutput any,
 	workDir types.FilePath,
 	path types.FilePath,
 	logger *zerolog.Logger,
@@ -66,20 +68,31 @@ func UnmarshallAndRetrieveAnalysis(
 	packageIssueCache map[string][]types.Issue,
 	readFiles bool,
 	format string,
-) []types.Issue {
+) ([]types.Issue, error) {
 	if ctx.Err() != nil {
-		return nil
+		return nil, nil
 	}
 
-	scanResults, err := UnmarshallOssJson(res)
+	// new ostest workflow result processing
+	if output, ok := scanOutput.([]workflow.Data); ok {
+		return processOsTestWorkFlowData(ctx, output, nil)
+	}
+
+	// unchanged legacy workflow
+	var allIssues []types.Issue
+	scanOutputBytes, ok := scanOutput.([]byte)
+	if !ok || len(scanOutputBytes) == 0 {
+		return nil, nil
+	}
+
+	scanResults, err := UnmarshallOssJson(scanOutputBytes)
 	if err != nil {
 		errorReporter.CaptureErrorAndReportAsIssue(path, err)
-		return nil
+		return nil, nil
 	}
 
-	var allIssues []types.Issue
 	for _, scanResult := range scanResults {
-		targetFilePath := getAbsTargetFilePath(logger, scanResult, workDir, path)
+		targetFilePath := getAbsTargetFilePath(logger, scanResult.DisplayTargetFile, scanResult.Path, workDir, path)
 
 		var fileContent []byte
 
@@ -94,7 +107,7 @@ func UnmarshallAndRetrieveAnalysis(
 		allIssues = append(allIssues, issues...)
 	}
 
-	return allIssues
+	return allIssues, nil
 }
 
 // UnmarshallOssJson is a standalone version of CLIScanner.unmarshallOssJson
