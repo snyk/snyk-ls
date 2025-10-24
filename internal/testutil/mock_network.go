@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -58,8 +57,8 @@ func SetupEngineMockWithNetworkAccess(t *testing.T) (*mocks.MockEngine, configur
 	// Mock GetConfiguration
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 
-	// Mock GetLogger
-	mockEngine.EXPECT().GetLogger().Return(zerolog.Nop()).AnyTimes()
+	// Mock GetLogger - return nil as the engine logger is optional
+	mockEngine.EXPECT().GetLogger().Return(nil).AnyTimes()
 
 	// Mock SetLogger (called during config initialization)
 	mockEngine.EXPECT().SetLogger(gomock.Any()).AnyTimes()
