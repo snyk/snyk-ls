@@ -20,17 +20,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -44,50 +45,14 @@ type UnifiedFindingItem struct {
 	Attributes testapi.FindingAttributes `json:"attributes"`
 }
 
-// TestUnifiedVsLegacy_ParseFiles tests that both JSON files can be parsed
-func TestUnifiedVsLegacy_ParseFiles(t *testing.T) {
-	t.Run("parse unified JSON", func(t *testing.T) {
-		data, err := os.ReadFile("testdata/nodejs-goof-unified-example.json")
-		require.NoError(t, err)
-
-		var result UnifiedResponse
-		err = json.Unmarshal(data, &result)
-		require.NoError(t, err)
-		assert.NotEmpty(t, result.Data, "Data should not be empty")
-	})
-
-	t.Run("parse legacy JSON", func(t *testing.T) {
-		data, err := os.ReadFile("testdata/nodejs-goof-legacy-example.json")
-		require.NoError(t, err)
-
-		var result scanResult
-		err = json.Unmarshal(data, &result)
-		require.NoError(t, err)
-		assert.NotEmpty(t, result.Vulnerabilities, "Vulnerabilities should not be empty")
-	})
-}
-
-// convertUnifiedToFindingData converts unified API response to FindingData array
-func convertUnifiedToFindingData(response UnifiedResponse) []testapi.FindingData {
-	var findings []testapi.FindingData
-	for _, item := range response.Data {
-		finding := testapi.FindingData{
-			Attributes: &item.Attributes,
-		}
-		findings = append(findings, finding)
-	}
-	return findings
-}
-
 // TestUnifiedVsLegacy_IssueCount compares the number of issues from both APIs
 func TestUnifiedVsLegacy_IssueCount(t *testing.T) {
-	ctx := t.Context()
-	logger := zerolog.Nop()
-	errorReporter := error_reporting.NewTestErrorReporter()
-	workDir := types.FilePath("/test/workdir")
-	path := types.FilePath("/test/workdir/package.json")
+	c, ctx := testutil.UnitTestWithCtx(t)
+	path := "package.json"
+	workDir := filepath.Join("testdata", path)
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
 	packageIssueCache := make(map[string][]types.Issue)
-	format := config.FormatMd
+	errorReporter := error_reporting.NewTestErrorReporter()
 
 	// Parse unified JSON
 	unifiedData, err := os.ReadFile("testdata/nodejs-goof-unified-example.json")
@@ -104,35 +69,29 @@ func TestUnifiedVsLegacy_IssueCount(t *testing.T) {
 	require.NoError(t, err)
 
 	// Convert unified to issues
-	metadata := &WorkflowMetadata{
-		ProjectName:    "goof",
-		PackageManager: "npm",
-	}
 	unifiedFindings := convertUnifiedToFindingData(unifiedResult)
-	unifiedIssues := ConvertFindingDataToIssues(
+
+	mockResult := createMockResult(t, path)
+	mockResult.EXPECT().Findings(ctx).Return(unifiedFindings, true, nil).AnyTimes()
+
+	unifiedIssues, err := convertTestResultToIssues(
 		ctx,
-		unifiedFindings,
-		workDir,
-		path,
-		&logger,
-		errorReporter,
-		nil,
+		mockResult,
 		packageIssueCache,
-		format,
-		metadata,
 	)
+	require.NoError(t, err)
 
 	// Convert legacy to issues
 	legacyIssues := convertScanResultToIssues(
-		&logger,
+		c.Logger(),
 		&legacyResult,
-		workDir,
-		path,
+		types.FilePath(workDir),
+		types.FilePath(path),
 		nil,
 		nil,
 		errorReporter,
 		packageIssueCache,
-		format,
+		c.Format(),
 	)
 
 	// Compare counts
@@ -147,13 +106,12 @@ func TestUnifiedVsLegacy_IssueCount(t *testing.T) {
 
 // TestUnifiedVsLegacy_CompareFirstIssue compares fields of the first issue from both APIs
 func TestUnifiedVsLegacy_CompareFirstIssue(t *testing.T) {
-	ctx := t.Context()
-	logger := zerolog.Nop()
-	errorReporter := error_reporting.NewTestErrorReporter()
-	workDir := types.FilePath("/test/workdir")
-	path := types.FilePath("/test/workdir/package.json")
+	c, ctx := testutil.UnitTestWithCtx(t)
+	path := "package.json"
+	workDir := filepath.Join("testdata", path)
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
 	packageIssueCache := make(map[string][]types.Issue)
-	format := config.FormatMd
+	errorReporter := error_reporting.NewTestErrorReporter()
 
 	// Parse unified JSON
 	unifiedData, err := os.ReadFile("testdata/nodejs-goof-unified-example.json")
@@ -169,36 +127,27 @@ func TestUnifiedVsLegacy_CompareFirstIssue(t *testing.T) {
 	err = json.Unmarshal(legacyData, &legacyResult)
 	require.NoError(t, err)
 
-	// Convert unified to issues
-	metadata := &WorkflowMetadata{
-		ProjectName:    "goof",
-		PackageManager: "npm",
-	}
 	unifiedFindings := convertUnifiedToFindingData(unifiedResult)
-	unifiedIssues := ConvertFindingDataToIssues(
+	mockResult := createMockResult(t, path)
+	mockResult.EXPECT().Findings(ctx).Return(unifiedFindings, true, nil).AnyTimes()
+
+	unifiedIssues, _ := convertTestResultToIssues(
 		ctx,
-		unifiedFindings,
-		workDir,
-		path,
-		&logger,
-		errorReporter,
-		nil,
+		mockResult,
 		packageIssueCache,
-		format,
-		metadata,
 	)
 
 	// Convert legacy to issues
 	legacyIssues := convertScanResultToIssues(
-		&logger,
+		c.Logger(),
 		&legacyResult,
-		workDir,
-		path,
+		types.FilePath(workDir),
+		types.FilePath(path),
 		nil,
 		nil,
 		errorReporter,
 		packageIssueCache,
-		format,
+		c.Format(),
 	)
 
 	require.NotEmpty(t, unifiedIssues, "Unified issues should not be empty")
@@ -232,13 +181,12 @@ func TestUnifiedVsLegacy_CompareFirstIssue(t *testing.T) {
 
 // TestUnifiedVsLegacy_CompareAllMatchingIssues compares all matching issues between unified and legacy APIs
 func TestUnifiedVsLegacy_CompareAllMatchingIssues(t *testing.T) {
-	ctx := t.Context()
-	logger := zerolog.Nop()
-	errorReporter := error_reporting.NewTestErrorReporter()
-	workDir := types.FilePath("/test/workdir")
-	path := types.FilePath("/test/workdir/package.json")
+	c, ctx := testutil.UnitTestWithCtx(t)
+	path := "package.json"
+	workDir := filepath.Join("testdata", path)
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
 	packageIssueCache := make(map[string][]types.Issue)
-	format := config.FormatMd
+	errorReporter := error_reporting.NewTestErrorReporter()
 
 	// Parse unified JSON
 	unifiedData, err := os.ReadFile("testdata/nodejs-goof-unified-example.json")
@@ -254,36 +202,27 @@ func TestUnifiedVsLegacy_CompareAllMatchingIssues(t *testing.T) {
 	err = json.Unmarshal(legacyData, &legacyResult)
 	require.NoError(t, err)
 
-	// Convert unified to issues
-	metadata := &WorkflowMetadata{
-		ProjectName:    "goof",
-		PackageManager: "npm",
-	}
 	unifiedFindings := convertUnifiedToFindingData(unifiedResult)
-	unifiedIssues := ConvertFindingDataToIssues(
+	mockResult := createMockResult(t, path)
+	mockResult.EXPECT().Findings(ctx).Return(unifiedFindings, true, nil).AnyTimes()
+
+	unifiedIssues, _ := convertTestResultToIssues(
 		ctx,
-		unifiedFindings,
-		workDir,
-		path,
-		&logger,
-		errorReporter,
-		nil,
+		mockResult,
 		packageIssueCache,
-		format,
-		metadata,
 	)
 
 	// Convert legacy to issues
 	legacyIssues := convertScanResultToIssues(
-		&logger,
+		c.Logger(),
 		&legacyResult,
-		workDir,
-		path,
+		types.FilePath(workDir),
+		types.FilePath(path),
 		nil,
 		nil,
 		errorReporter,
 		packageIssueCache,
-		format,
+		c.Format(),
 	)
 
 	// Create a map of legacy issues for exact matching
@@ -344,6 +283,18 @@ func TestUnifiedVsLegacy_CompareAllMatchingIssues(t *testing.T) {
 
 	// At least some issues should match
 	assert.Greater(t, matchedCount, 0, "At least some issues should match between unified and legacy")
+}
+
+// convertUnifiedToFindingData converts unified API response to FindingData array
+func convertUnifiedToFindingData(response UnifiedResponse) []testapi.FindingData {
+	var findings []testapi.FindingData
+	for _, item := range response.Data {
+		finding := testapi.FindingData{
+			Attributes: &item.Attributes,
+		}
+		findings = append(findings, finding)
+	}
+	return findings
 }
 
 // generateComparisonReport creates a detailed summary of the comparison results

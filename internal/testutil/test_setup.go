@@ -17,11 +17,13 @@
 package testutil
 
 import (
+	"context"
 	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
 
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -53,6 +55,12 @@ func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
 
 func UnitTest(t *testing.T) *config.Config {
 	t.Helper()
+	c, _ := UnitTestWithCtx(t)
+	return c
+}
+
+func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
+	t.Helper()
 	c := config.New(config.WithBinarySearchPaths([]string{}))
 	err := c.WaitForDefaultEnv(t.Context())
 	if err != nil {
@@ -75,7 +83,12 @@ func UnitTest(t *testing.T) *config.Config {
 		cleanupFakeCliFile(c)
 		progress.CleanupChannels()
 	})
-	return c
+
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepConfig: c,
+	})
+	ctx = ctx2.NewContextWithLogger(ctx, c.Logger())
+	return c, ctx
 }
 
 func cleanupFakeCliFile(c *config.Config) {
