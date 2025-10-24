@@ -12,7 +12,7 @@ repos:
         pass_filenames: false
       - id: tests
         name: unit tests
-        entry: go test ./...
+        entry: go test -failfast ./...
         language: system
         stages: [ pre-push ]
         verbose: true
