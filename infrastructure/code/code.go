@@ -27,6 +27,8 @@ import (
 	"github.com/rs/zerolog"
 
 	codeClient "github.com/snyk/code-client-go"
+	codeClientConfig "github.com/snyk/code-client-go/config"
+	codeClientHTTP "github.com/snyk/code-client-go/http"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
@@ -82,13 +84,15 @@ type Scanner struct {
 	// these are needed when we want to retrieve auto-fixes for a previously
 	// analyzed folder
 	bundleHashes map[types.FilePath]string
-	codeScanner  codeClient.CodeScanner
 	// this is the local scanner issue cache. In the future, it should be used as source of truth for the issues
 	// the cache in workspace/folder should just delegate to this cache
 	issueCache          *imcache.Cache[types.FilePath, []types.Issue]
 	cacheRemovalHandler func(path types.FilePath)
 	Instrumentor        performance.Instrumentor
 	C                   *config.Config
+	codeInstrumentor    codeClientObservability.Instrumentor
+	codeErrorReporter   codeClientObservability.ErrorReporter
+	codeScanner         func(sc *Scanner, path types.FilePath) codeClient.CodeScanner
 }
 
 func (sc *Scanner) BundleHashes() map[types.FilePath]string {
@@ -106,19 +110,21 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner codeClient.CodeScanner) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, path types.FilePath) codeClient.CodeScanner) *Scanner {
 	sc := &Scanner{
-		SnykApiClient: apiClient,
-		errorReporter: reporter,
-		runningScans:  map[types.FilePath]*ScanStatus{},
-		changedPaths:  map[types.FilePath]map[types.FilePath]bool{},
-		fileFilters:   xsync.NewMapOf[*utils.FileFilter](),
-		learnService:  learnService,
-		notifier:      notifier,
-		bundleHashes:  map[types.FilePath]string{},
-		codeScanner:   codeScanner,
-		Instrumentor:  instrumentor,
-		C:             c,
+		SnykApiClient:     apiClient,
+		errorReporter:     reporter,
+		runningScans:      map[types.FilePath]*ScanStatus{},
+		changedPaths:      map[types.FilePath]map[types.FilePath]bool{},
+		fileFilters:       xsync.NewMapOf[*utils.FileFilter](),
+		learnService:      learnService,
+		notifier:          notifier,
+		bundleHashes:      map[types.FilePath]string{},
+		Instrumentor:      instrumentor,
+		C:                 c,
+		codeInstrumentor:  codeInstrumentor,
+		codeErrorReporter: codeErrorReporter,
+		codeScanner:       codeScanner,
 	}
 	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
 		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
@@ -386,10 +392,13 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 		stringChangedFiles[string(k)] = v
 	}
 
+	// Create a new code scanner with Organization populated from folder configuration
+	newCodeScanner := sc.codeScanner(sc, path)
+
 	var sarifResponse *sarif.SarifResponse
 	var bundleHash string
 	if codeConsistentIgnores {
-		sarifResponse, bundleHash, err = sc.codeScanner.UploadAndAnalyze(ctx, requestId, target, files, stringChangedFiles)
+		sarifResponse, bundleHash, err = newCodeScanner.UploadAndAnalyze(ctx, requestId, target, files, stringChangedFiles)
 	} else {
 		shardKey := getShardKey(path, sc.C.Token())
 
@@ -402,7 +411,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 			}
 		}()
 
-		sarifResponse, bundleHash, err = sc.codeScanner.UploadAndAnalyzeLegacy(ctx, requestId, target, shardKey, files, stringChangedFiles, statusChannel)
+		sarifResponse, bundleHash, err = newCodeScanner.UploadAndAnalyzeLegacy(ctx, requestId, target, shardKey, files, stringChangedFiles, statusChannel)
 	}
 
 	if err != nil || ctx.Err() != nil {
@@ -444,4 +453,41 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 	issueEnhancer.addIssueActions(ctx, issues)
 
 	return issues, nil
+}
+
+// createCodeConfig creates a new codeConfig with Organization populated from folder configuration
+// and delegates other values to the language server config
+func (sc *Scanner) createCodeConfig(path types.FilePath) codeClientConfig.Config {
+	// Get organization from folder configuration for the specific path
+	organization := sc.C.FolderOrganization(path)
+
+	// Create a lazy config that delegates to the language server config
+	return &CodeConfig{
+		orgForFolder: organization,
+		lsConfig:     sc.C,
+	}
+}
+
+// CreateCodeScanner creates a real code scanner with Organization populated from folder configuration
+func CreateCodeScanner(scanner *Scanner, path types.FilePath) codeClient.CodeScanner {
+	// Create a new codeConfig with Organization populated from folder configuration
+	codeConfig := scanner.createCodeConfig(path)
+
+	// Create a new HTTP client
+	httpClient := codeClientHTTP.NewHTTPClient(
+		scanner.C.Engine().GetNetworkAccess().GetHttpClient,
+		codeClientHTTP.WithLogger(scanner.C.Engine().GetLogger()),
+		codeClientHTTP.WithInstrumentor(scanner.codeInstrumentor),
+		codeClientHTTP.WithErrorReporter(scanner.codeErrorReporter),
+	)
+
+	// Create and return a new code scanner with the custom config
+	return codeClient.NewCodeScanner(
+		codeConfig,
+		httpClient,
+		codeClient.WithTrackerFactory(NewCodeTrackerFactory()),
+		codeClient.WithLogger(scanner.C.Engine().GetLogger()),
+		codeClient.WithInstrumentor(scanner.codeInstrumentor),
+		codeClient.WithErrorReporter(scanner.codeErrorReporter),
+	)
 }
