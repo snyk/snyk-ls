@@ -602,6 +602,7 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 	}
 
 	return clone
+	FeatureFlags                map[string]bool                       `json:"featureFlags,omitempty"`
 }
 
 type Pair struct {

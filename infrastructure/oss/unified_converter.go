@@ -18,8 +18,10 @@ package oss
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -29,7 +31,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -44,31 +47,80 @@ type WorkflowMetadata struct {
 	OrgID             string
 }
 
-// ConvertFindingDataToIssues converts testapi.FindingData from unified workflow to types.Issue
+type ProblemsMap map[*testapi.SnykVulnProblem][]testapi.FindingData
+
+// convertTestResultToIssues converts testapi.FindingData from unified workflow to types.Issue
 // This is the main entry point for converting findings from the new unified test API to the
 // language server's Issue format, maintaining compatibility with existing Issue consumers.
-func ConvertFindingDataToIssues(
-	ctx context.Context,
-	findings []testapi.FindingData,
-	workDir types.FilePath,
-	path types.FilePath,
-	logger *zerolog.Logger,
-	errorReporter error_reporting.ErrorReporter,
-	learnService learn.Service,
-	packageIssueCache map[string][]types.Issue,
-	format string,
-	metadata *WorkflowMetadata,
-) []types.Issue {
+func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResult, packageIssueCache map[string][]types.Issue) ([]types.Issue, error) {
 	if ctx.Err() != nil {
-		return nil
+		return nil, nil
+	}
+	logger := getLogger(ctx).With().Str("method", "convertTestResultToIssues").Logger()
+
+	findings, complete, err := testResult.Findings(ctx)
+	if err != nil {
+		msg := "failed to fetch findings"
+		logger.Error().Err(err).Msg(msg)
+		return nil, fmt.Errorf(msg+": %w", err)
+	}
+
+	if !complete {
+		const msg = "findings are not complete"
+		logger.Error().Msg(msg)
+		return nil, errors.New(msg)
 	}
 
 	if len(findings) == 0 {
-		return []types.Issue{}
+		return []types.Issue{}, nil
 	}
 
+	// analyze test subject
+
+	subject, err := testResult.GetTestSubject().AsDepGraphSubject()
+	if err != nil {
+		msg := "failed to fetch test subject"
+		logger.Error().Err(err).Msg(msg)
+		return nil, fmt.Errorf(msg+": %w", err)
+	}
+
+	workDir := ctx2.WorkDirFromContext(ctx)
+	filePath := ctx2.FilePathFromContext(ctx)
+
+	displayTargetFile := subject.Locator.Paths[0]
+	logger.Debug().Str("displayTargetFile", displayTargetFile).Msg("displayTargetFile")
+	affectedFilePath := getAbsTargetFilePath(&logger, string(workDir), displayTargetFile, workDir, filePath)
+
+	// Group findings by problem
+	problems := asProblemsMap(ctx, findings)
+
+	// Create issues from problems
 	var issues []types.Issue
-	duplicateCheckMap := map[string]bool{}
+	for problem, problemFindings := range problems {
+		issue, err := convertProblemToIssue(ctx, problem, problemFindings, affectedFilePath)
+		if err != nil {
+			logger.Err(err).Msg("Failed to convert finding to issue")
+			return []types.Issue{}, err
+		}
+
+		// the resulting issue is a top level issue with matching issues that refer to that problem in the
+		// field `matchingIssues`
+		issues = append(issues, issue)
+
+		// Add to package cache
+		packageKey := fmt.Sprintf("%s@%s", problem.PackageName, problem.PackageVersion)
+		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], issue)
+	}
+	return issues, nil
+}
+
+func asProblemsMap(ctx context.Context, findings []testapi.FindingData) ProblemsMap {
+	problems := ProblemsMap{}
+
+	getKey := func(finding testapi.FindingData) *testapi.SnykVulnProblem {
+		problem := extractSnykVulnProblem(finding)
+		return problem
+	}
 
 	for _, finding := range findings {
 		// Skip if context is canceled
@@ -76,114 +128,75 @@ func ConvertFindingDataToIssues(
 			break
 		}
 
-		issue, err := convertFindingToIssue(finding, workDir, path, learnService, format, metadata)
-
-		if err != nil {
-			findingIdStr := ""
-			if finding.Id != nil {
-				findingIdStr = finding.Id.String()
-			}
-			logger.Warn().Err(err).Str("findingId", findingIdStr).Msg("Failed to convert finding to issue")
-			continue
+		key := getKey(finding)
+		if problems[key] == nil {
+			problems[key] = []testapi.FindingData{}
 		}
 
-		// Generate duplicate check key
-		vuln := extractSnykVulnProblem(finding)
-		if vuln == nil {
-			findingIdStr := ""
-			if finding.Id != nil {
-				findingIdStr = finding.Id.String()
-			}
-			logger.Warn().Str("findingId", findingIdStr).Msg("No vulnerability problem found in finding")
-			continue
-		}
-
-		duplicateKey := fmt.Sprintf("%s|%s|%s", path, vuln.Id, vuln.PackageName)
-		if duplicateCheckMap[duplicateKey] {
-			continue
-		}
-
-		// Add to package cache
-		packageKey := fmt.Sprintf("%s@%s", vuln.PackageName, vuln.PackageVersion)
-		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], issue)
-
-		issues = append(issues, issue)
-		duplicateCheckMap[duplicateKey] = true
+		problems[key] = append(problems[key], finding)
 	}
-
-	return issues
+	return problems
 }
 
-// convertFindingToIssue converts a single testapi.FindingData to a snyk.Issue
-func convertFindingToIssue(finding testapi.FindingData, workDir types.FilePath, affectedFilePath types.FilePath, learnService learn.Service, format string, metadata *WorkflowMetadata) (*snyk.Issue, error) {
-	if finding.Attributes == nil {
-		return nil, fmt.Errorf("finding has no attributes")
-	}
-
+// convertProblemToIssue converts a single testapi.FindingData to a snyk.Issue
+func convertProblemToIssue(ctx context.Context, problem *testapi.SnykVulnProblem, problemFindings []testapi.FindingData, affectedFilePath types.FilePath) (*snyk.Issue, error) {
 	// Extract the primary vulnerability problem
-	vuln := extractSnykVulnProblem(finding)
-	if vuln == nil {
-		return nil, fmt.Errorf("no vulnerability problem found in finding")
+	if problem == nil || problemFindings == nil {
+		return nil, fmt.Errorf("no vulnerability problem found in problem")
 	}
 
-	// Build OssIssueData from finding
-	additionalData := buildOssIssueData(finding, vuln, affectedFilePath, metadata)
+	c := Config(ctx)
+	if c == nil {
+		return nil, fmt.Errorf("no dependency config found in context")
+	}
+	logger := getLogger(ctx).With().Str("method", "convertProblemToIssue").Logger()
+	workDir := ctx2.WorkDirFromContext(ctx)
+	ecosystemStr := extractEcosystemString(problem.Ecosystem)
 
-	// Extract severity
-	severity := extractSeverity(finding)
+	// get the dependency path from the first finding
+	dependencyPath := extractDependencyPath(problemFindings[0])
 
-	// Convert finding ID to string
-	findingIdStr := ""
-	if finding.Id != nil {
-		findingIdStr = finding.Id.String()
+	myRange, err := getRange(ctx, string(affectedFilePath), ecosystemStr, dependencyPath)
+	if err != nil {
+		logger.Warn().Err(err).Msg("failed to get range")
 	}
 
-	// Convert ecosystem to string
-	ecosystemStr := extractEcosystemString(vuln.Ecosystem)
-
-	// Extract lesson URL from learn service
-	lessonURL := ""
-	if learnService != nil {
-		lesson, err := learnService.GetLesson(ecosystemStr, vuln.Id, extractCWEs(finding), extractCVEs(finding), types.DependencyVulnerability)
-		if err == nil && lesson != nil {
-			lessonURL = lesson.Url
-		}
+	cwes, cves, titles, remediations, descriptions, ossIssues := findingsDataUsedInIssue(ctx, problem, problemFindings, affectedFilePath, myRange)
+	title, remediation, description, cwes, cves, err := consolidate(cwes, cves, titles, remediations, descriptions, logger)
+	if err != nil {
+		return nil, err
 	}
+
+	lessonURL := Lesson(ctx, problem, cwes, cves, ecosystemStr)
+	severity := types.IssuesSeverity[strings.ToLower(string(problem.Severity))]
+
+	// let's use the first finding as the primary issue and the rest as matching issues
+	additionalData := ossIssues[0]
+	additionalData.MatchingIssues = ossIssues[1:]
 
 	// Build Issue
 	issue := &snyk.Issue{
-		ID:            vuln.Id,
-		Severity:      severity,
-		IssueType:     types.DependencyVulnerability,
-		IsIgnored:     false, // TODO check if finding.Attributes.Suppression != nil is correct or how to get pending status
-		IsNew:         false,
-		IgnoreDetails: nil, // extractIgnoreDetails(finding), // TODO revisit when we have open source ignore policies added
-		// TODO: The unified API doesn't provide file locations with line/column information
-		// in the FindingData. Like the legacy converter, we need to:
-		// 1. Read the manifest file content (package.json, pom.xml, etc.)
-		// 2. Use RangeFinder (NpmRangeFinder, mavenRangeFinder, etc.) to parse and find the dependency declaration
-		// 3. Extract the line/column range
-		//
-		// This file parsing should happen at the scanner level (similar to UnmarshallAndRetrieveAnalysis)
-		// and be passed to the converter, or the converter should accept file content as a parameter.
-		//
-		// For now, returning empty range as the unified API doesn't expose this information directly.
-		Range:               types.Range{}, // filled on the top level
-		Message:             buildMessage(finding, additionalData, format),
-		FormattedMessage:    buildFormattedMessage(finding, vuln, ecosystemStr),
+		ID:                  problem.Id,
+		Severity:            severity,
+		IssueType:           types.DependencyVulnerability,
+		IsIgnored:           false, // TODO check if problem.Attributes.Suppression != nil is correct or how to get pending status
+		IsNew:               false,
+		IgnoreDetails:       nil,     // extractIgnoreDetails(problem), // TODO revisit when we have open source ignore policies added
+		Range:               myRange, // filled on the top level
+		Message:             buildMessage(title, problem.PackageName, remediation),
+		FormattedMessage:    buildFormattedMessage(problem, ecosystemStr, title, description, severity.String()),
 		ContentRoot:         workDir,
 		AffectedFilePath:    affectedFilePath,
 		Product:             product.ProductOpenSource,
-		References:          extractReferences(finding, vuln),
-		IssueDescriptionURL: createIssueURL(vuln.Id),
-		CodeActions:         []types.CodeAction{},  // Code actions generated by codeaction layer
+		References:          extractReferences(problem),
+		IssueDescriptionURL: createIssueURL(problem.Id),
+		CodeActions:         []types.CodeAction{},  // Code actions generated by code action layer
 		CodelensCommands:    []types.CommandData{}, // Codelens commands generated by codelens layer
 		Ecosystem:           ecosystemStr,
-		CWEs:                extractCWEs(finding),
-		CVEs:                extractCVEs(finding),
+		CWEs:                cwes,
+		CVEs:                cves,
 		AdditionalData:      additionalData,
 		LessonUrl:           lessonURL,
-		FindingId:           findingIdStr,
 	}
 
 	// Calculate fingerprint
@@ -193,63 +206,188 @@ func convertFindingToIssue(finding testapi.FindingData, workDir types.FilePath, 
 	return issue, nil
 }
 
+func consolidate(cwes []string, cves []string, titles []string, remediations []string, descriptions []string, logger zerolog.Logger) (string, string, string, []string, []string, error) {
+	cwes = data_structure.Unique(cwes)
+	cves = data_structure.Unique(cves)
+	titles = data_structure.Unique(titles)
+	remediations = data_structure.Unique(remediations)
+	descriptions = data_structure.Unique(descriptions)
+
+	title, err := consolidateSlice("title", titles, logger)
+	if err != nil {
+		return "", "", "", nil, nil, err
+	}
+
+	remediation, err := consolidateSlice("remediation", remediations, logger)
+	if err != nil {
+		return "", "", "", nil, nil, err
+	}
+
+	description, err := consolidateSlice("description", descriptions, logger)
+	if err != nil {
+		return "", "", "", nil, nil, err
+	}
+	return title, remediation, description, cwes, cves, nil
+}
+
+func consolidateSlice(fieldName string, slice []string, logger zerolog.Logger) (string, error) {
+	if len(slice) > 1 {
+		logger.Warn().Any("slice", slice).Msgf("Multiple entries found for vulnerability, taking %s", slice[0])
+	} else if len(slice) == 0 {
+		msg := fmt.Sprintf("No %s found for vulnerability", fieldName)
+		logger.Warn().Msg(msg)
+		return "", fmt.Errorf("%s", msg)
+	}
+	value := slice[0]
+	return value, nil
+}
+
+func findingsDataUsedInIssue(ctx context.Context, problem *testapi.SnykVulnProblem, problemFindings []testapi.FindingData, affectedFilePath types.FilePath, myRange types.Range) ([]string, []string, []string, []string, []string, []snyk.OssIssueData) {
+	logger := getLogger(ctx).With().Str("method", "findingsDataUsedInIssue").Logger()
+	var cwes, cves, titles, remediations, descriptions []string
+	var ossIssues []snyk.OssIssueData
+	for _, finding := range problemFindings {
+		additionalData, err := buildOssIssueData(ctx, problem, finding, affectedFilePath, myRange)
+		if err != nil {
+			logger.Err(err).Msg("Failed to convert finding to issue")
+			continue
+		}
+		ossIssues = append(ossIssues, additionalData)
+
+		// ------------------------------------------------------
+		// - collect finding data that needs to be consolidated -
+		// ------------------------------------------------------
+
+		cwes = append(cwes, extractCWEs(finding)...)
+		cves = append(cves, extractCVEs(finding)...)
+		titles = append(titles, additionalData.Title)
+		remediations = append(remediations, additionalData.Remediation)
+		descriptions = append(descriptions, additionalData.Description)
+	}
+	return cwes, cves, titles, remediations, descriptions, ossIssues
+}
+
+func Config(ctx context.Context) *config.Config {
+	deps, found := ctx2.DependenciesFromContext(ctx)
+	if !found {
+		return nil
+	}
+
+	configDep := deps[ctx2.DepConfig]
+	if configDep == nil {
+		return nil
+	}
+	c, ok := configDep.(*config.Config)
+	if !ok {
+		return nil
+	}
+	return c
+}
+
+func Lesson(ctx context.Context, problem *testapi.SnykVulnProblem, cwes []string, cves []string, ecosystemStr string) string {
+	var lessonURL string
+	deps, depsFound := ctx2.DependenciesFromContext(ctx)
+	if depsFound {
+		if ls, ok := deps[ctx2.DepLearnService].(learn.Service); ok {
+			// Extract lesson URL from learn service
+			if ls != nil {
+				lesson, err := ls.GetLesson(ecosystemStr, problem.Id, cwes, cves, types.DependencyVulnerability)
+				if err == nil && lesson != nil {
+					lessonURL = lesson.Url
+				}
+			}
+		}
+	}
+	return lessonURL
+}
+
 // buildOssIssueData constructs the OssIssueData from FindingData
-func buildOssIssueData(
-	finding testapi.FindingData,
-	vuln *testapi.SnykVulnProblem,
-	affectedFilePath types.FilePath,
-	metadata *WorkflowMetadata,
-) snyk.OssIssueData {
+func buildOssIssueData(ctx context.Context, problem *testapi.SnykVulnProblem, finding testapi.FindingData, affectedFilePath types.FilePath, myRange types.Range) (snyk.OssIssueData, error) {
+	logger := getLogger(ctx).With().Str("method", "buildOssIssueData").Logger()
+	logger.Debug().Interface("problem", problem).Interface("finding", finding.Id).Msg("building oss issue data")
+
 	attrs := finding.Attributes
 
-	// Extract line number first (needed for key generation)
-	lineNumber := extractLineNumber(finding)
-
 	// Build key - use lineNumber for both start and end like legacy converter
-	key := util.GetIssueKey(vuln.Id, string(affectedFilePath), lineNumber, lineNumber, 0, 0)
+	key := util.GetIssueKey(
+		problem.Id,
+		string(affectedFilePath),
+		myRange.Start.Line,
+		myRange.End.Line,
+		myRange.Start.Character,
+		myRange.End.Character,
+	)
 
-	ecosystemStr := extractEcosystemString(vuln.Ecosystem)
-
-	// Extract lesson URL if learn service is available (note: passed via context, not directly here)
-	lessonURL := ""
+	ecosystemStr := extractEcosystemString(problem.Ecosystem)
 
 	data := snyk.OssIssueData{
 		Key:                key,
 		Title:              attrs.Title,
-		Name:               vuln.PackageName,
-		LineNumber:         lineNumber,
+		Name:               problem.PackageName,
+		LineNumber:         myRange.Start.Line,
 		Identifiers:        extractIdentifiers(finding),
 		Description:        attrs.Description,
-		References:         extractReferences(finding, vuln),
-		Version:            extractVersion(finding, vuln),
+		References:         extractReferences(problem),
+		Version:            extractVersion(finding, problem),
 		License:            extractLicense(finding),
 		PackageManager:     ecosystemStr,
-		PackageName:        vuln.PackageName,
+		PackageName:        problem.PackageName,
 		From:               extractDependencyPath(finding),
-		FixedIn:            vuln.InitiallyFixedInVersions,
-		UpgradePath:        buildUpgradePath(finding, vuln),
-		IsUpgradable:       len(vuln.InitiallyFixedInVersions) > 0,
-		CVSSv3:             extractCVSSv3(vuln),
-		CvssScore:          float64(vuln.CvssBaseScore),
-		CvssSources:        convertCvssSources(vuln),
-		Exploit:            extractExploit(vuln),
+		FixedIn:            problem.InitiallyFixedInVersions,
+		UpgradePath:        buildUpgradePath(finding, problem),
+		IsUpgradable:       len(problem.InitiallyFixedInVersions) > 0,
+		CVSSv3:             extractCVSSv3(problem),
+		CvssScore:          float64(problem.CvssBaseScore),
+		CvssSources:        convertCvssSources(problem),
+		Exploit:            extractExploit(problem),
 		IsPatchable:        false, // Patches not supported in unified workflow yet
-		ProjectName:        "",
+		ProjectName:        "",    //TODO
 		DisplayTargetFile:  affectedFilePath,
-		Language:           extractLanguageFromEcosystem(vuln.Ecosystem),
+		Language:           extractLanguageFromEcosystem(problem.Ecosystem),
 		Details:            attrs.Description,
-		MatchingIssues:     []snyk.OssIssueData{}, // Matching issues computed by delta processing
-		Lesson:             lessonURL,             // Will be populated after issue creation
-		Remediation:        buildRemediationAdvice(finding, vuln),
-		AppliedPolicyRules: extractAppliedPolicyRules(finding),
+		MatchingIssues:     []snyk.OssIssueData{}, // populated in caller
+		Lesson:             "",
+		Remediation:        buildRemediationAdvice(problem),
+		AppliedPolicyRules: extractAppliedPolicyRules(),
 	}
 
-	// Set project name from metadata if available
-	if metadata != nil {
-		data.ProjectName = metadata.ProjectName
+	return data, nil
+}
+
+func getRange(ctx context.Context, affectedFilePath, packageManager string, dependencyPath []string) (types.Range, error) {
+	logger := getLogger(ctx).With().Str("method", "getRangeFromRangeFinder").Logger()
+	content, err := os.ReadFile(affectedFilePath)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to read file")
+		return types.Range{}, err
 	}
 
-	return data
+	node := getDependencyNode(&logger, types.FilePath(affectedFilePath), packageManager, dependencyPath, content)
+	if node == nil {
+		logger.Error().Msg("failed to get dependency node")
+		return types.Range{}, fmt.Errorf("failed to get dependency node")
+	}
+
+	r := types.Range{
+		Start: types.Position{
+			Line:      node.Line,
+			Character: node.StartChar,
+		},
+		End: types.Position{
+			Line:      node.Line,
+			Character: node.EndChar,
+		},
+	}
+	return r, nil
+}
+
+func getLogger(ctx context.Context) *zerolog.Logger {
+	logger := ctx2.LoggerFromContext(ctx)
+	if logger == nil {
+		l := zerolog.Nop()
+		logger = &l
+	}
+	return logger
 }
 
 // extractEcosystemString extracts the package manager string from the ecosystem structure
@@ -287,27 +425,6 @@ func extractSnykVulnProblem(finding testapi.FindingData) *testapi.SnykVulnProble
 	}
 
 	return nil
-}
-
-// extractSeverity extracts severity from finding rating
-func extractSeverity(finding testapi.FindingData) types.Severity {
-	if finding.Attributes == nil {
-		return types.Low
-	}
-
-	severityStr := string(finding.Attributes.Rating.Severity)
-	switch severityStr {
-	case "critical":
-		return types.Critical
-	case "high":
-		return types.High
-	case "medium":
-		return types.Medium
-	case "low":
-		return types.Low
-	default:
-		return types.Low
-	}
 }
 
 // extractCWEs extracts CWE identifiers from problems
@@ -366,7 +483,7 @@ func extractDependencyPath(finding testapi.FindingData) []string {
 
 	for _, evidence := range finding.Attributes.Evidence {
 		disc, err := evidence.Discriminator()
-		// Try both "dependency_path" and "dependencypath" for compatibility
+		// Try both "dependency_path"
 		if err == nil && disc == "dependency_path" {
 			depPath, err := evidence.AsDependencyPathEvidence()
 			if err == nil && depPath.Path != nil {
@@ -403,12 +520,12 @@ func buildUpgradePath(finding testapi.FindingData, vuln *testapi.SnykVulnProblem
 }
 
 // extractReferences extracts references from finding and vulnerability problem
-func extractReferences(finding testapi.FindingData, vuln *testapi.SnykVulnProblem) []types.Reference {
+func extractReferences(problem *testapi.SnykVulnProblem) []types.Reference {
 	references := []types.Reference{} // Initialize as empty slice, not nil
 
 	// Extract references from vulnerability problem if available
-	if vuln != nil && len(vuln.References) > 0 {
-		for _, ref := range vuln.References {
+	if problem != nil && len(problem.References) > 0 {
+		for _, ref := range problem.References {
 			// Parse URL string to *url.URL
 			parsedURL, err := url.Parse(ref.Url)
 			if err != nil {
@@ -543,7 +660,7 @@ func extractVersion(finding testapi.FindingData, vuln *testapi.SnykVulnProblem) 
 }
 
 // buildRemediationAdvice builds remediation advice text
-func buildRemediationAdvice(finding testapi.FindingData, vuln *testapi.SnykVulnProblem) string {
+func buildRemediationAdvice(vuln *testapi.SnykVulnProblem) string {
 	if len(vuln.InitiallyFixedInVersions) == 0 {
 		return "No remediation available"
 	}
@@ -553,7 +670,7 @@ func buildRemediationAdvice(finding testapi.FindingData, vuln *testapi.SnykVulnP
 }
 
 // extractAppliedPolicyRules extracts policy modifications from finding attributes
-func extractAppliedPolicyRules(finding testapi.FindingData) snyk.AppliedPolicyRules {
+func extractAppliedPolicyRules() snyk.AppliedPolicyRules {
 	// PolicyModifications structure extraction is complex and depends on the testapi schema
 	// For now, return empty struct as policy rules are not critical for initial converter implementation
 	// This can be enhanced once the actual PolicyModification structure is better understood
@@ -561,18 +678,12 @@ func extractAppliedPolicyRules(finding testapi.FindingData) snyk.AppliedPolicyRu
 }
 
 // buildMessage builds the short message for the issue
-func buildMessage(finding testapi.FindingData, data snyk.OssIssueData, format string) string {
-	title := finding.Attributes.Title
-	if format == config.FormatHtml {
-		// HTML formatting handled elsewhere
-		title = finding.Attributes.Title
-	}
-
+func buildMessage(title, packageName, remediation string) string {
 	message := fmt.Sprintf(
 		"%s affecting package %s. %s",
 		title,
-		data.PackageName,
-		data.Remediation,
+		packageName,
+		remediation,
 	)
 
 	const maxLength = 200
@@ -584,50 +695,39 @@ func buildMessage(finding testapi.FindingData, data snyk.OssIssueData, format st
 }
 
 // buildFormattedMessage builds the comprehensive formatted message with all details
-func buildFormattedMessage(finding testapi.FindingData, vuln *testapi.SnykVulnProblem, ecosystem string) string {
-	if finding.Attributes == nil {
-		return ""
-	}
-
-	attrs := finding.Attributes
+func buildFormattedMessage(problem *testapi.SnykVulnProblem, ecosystem, title, description, severity string) string {
 	var message strings.Builder
 
 	// Title and description
-	message.WriteString(fmt.Sprintf("## %s\n\n", attrs.Title))
-	message.WriteString(fmt.Sprintf("%s\n\n", attrs.Description))
+	message.WriteString(fmt.Sprintf("## %s\n\n", title))
+	message.WriteString(fmt.Sprintf("%s\n\n", description))
 
 	// Package information
-	message.WriteString(fmt.Sprintf("**Package**: %s@%s\n", vuln.PackageName, vuln.PackageVersion))
+	message.WriteString(fmt.Sprintf("**Package**: %s@%s\n", problem.PackageName, problem.PackageVersion))
 	message.WriteString(fmt.Sprintf("**Ecosystem**: %s\n", ecosystem))
 
 	// Severity and CVSS
-	message.WriteString(fmt.Sprintf("**Severity**: %s", attrs.Rating.Severity))
-	if vuln.CvssBaseScore > 0 {
-		message.WriteString(fmt.Sprintf(" (CVSS Score: %.1f)\n", vuln.CvssBaseScore))
+	message.WriteString(fmt.Sprintf("**Severity**: %s", severity))
+	if problem.CvssBaseScore > 0 {
+		message.WriteString(fmt.Sprintf(" (CVSS Score: %.1f)\n", problem.CvssBaseScore))
 	} else {
 		message.WriteString("\n")
 	}
 
 	// Fixed versions
-	if len(vuln.InitiallyFixedInVersions) > 0 {
-		message.WriteString(fmt.Sprintf("\n**Fixed in**: %s\n", strings.Join(vuln.InitiallyFixedInVersions, ", ")))
+	if len(problem.InitiallyFixedInVersions) > 0 {
+		message.WriteString(fmt.Sprintf("\n**Fixed in**: %s\n", strings.Join(problem.InitiallyFixedInVersions, ", ")))
 	}
 
 	// Exploit maturity
-	if len(vuln.ExploitDetails.MaturityLevels) > 0 {
-		message.WriteString(fmt.Sprintf("**Exploit Maturity**: %s\n", vuln.ExploitDetails.MaturityLevels[0].Type))
+	maturityLevels := problem.ExploitDetails.MaturityLevels
+	if len(maturityLevels) > 0 {
+		for _, level := range maturityLevels {
+			message.WriteString(fmt.Sprintf("\n**Exploit Maturity**: %s\n", level.Type))
+		}
 	}
 
 	return message.String()
-}
-
-// extractLineNumber extracts line number from finding locations
-func extractLineNumber(finding testapi.FindingData) int {
-	// TODO: Same as extractRange - the unified API doesn't provide line numbers directly.
-	// The legacy converter gets this by parsing the manifest file to find where the dependency is declared.
-	// Until the unified converter has access to file content and uses RangeFinder,
-	// we default to 0 (which matches the legacy behavior when file content is unavailable).
-	return 0
 }
 
 // extractLicense extracts license information from finding problems
