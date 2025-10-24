@@ -53,21 +53,28 @@ This ensures unit tests:
 - Are secure (no real tokens or credentials used)
 - Can run offline
 
-## Setting Up Engine Mocks
+## Customizing Mock Engine Expectations
 
-If you need to customize the mock engine, use `SetupEngineMockWithNetworkAccess(t)`:
+If you need to customize the mock engine expectations, use `UnitTestWithEngine(t)` instead of `UnitTest(t)`:
 
 ```go
 func TestWithCustomEngine(t *testing.T) {
-    c := testutil.UnitTest(t)
-    mockEngine, engineConfig := testutil.SetupEngineMockWithNetworkAccess(t)
+    c, mockEngine, engineConfig := testutil.UnitTestWithEngine(t)
     
-    // Customize mock expectations
+    // Customize mock expectations on the engine that's already associated with the config
     mockEngine.EXPECT().SomeMethod().Return(someValue).Times(1)
+    
+    // Or modify the engine configuration
+    engineConfig.Set("some-key", "some-value")
     
     // ... your test code
 }
 ```
+
+**Important**: 
+- Use `UnitTestWithEngine(t)` when you need to customize the mock engine
+- Do not call `SetupEngineMockWithNetworkAccess(t)` separately after `UnitTest(t)`, as it creates a new mock engine that is not associated with the config
+- The mock engine returned by `UnitTestWithEngine(t)` is the same one used by the config
 
 ## Common Patterns
 

@@ -40,7 +40,7 @@ import (
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
 	c := testutil.UnitTest(t)
-	loc, _ := setupServerWithCustomDI(t, c, false)
+	loc, _ := setupServer(t, c)
 
 	s := &scanner.TestScanner{}
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
@@ -57,7 +57,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 
 func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceipt(t *testing.T) {
 	c := testutil.UnitTest(t)
-	loc, _ := setupServerWithCustomDI(t, c, false)
+	loc, _ := setupServer(t, c)
 
 	s := &scanner.TestScanner{}
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
@@ -74,7 +74,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 
 func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostics(t *testing.T) {
 	c := testutil.UnitTest(t)
-	loc, _ := setupServerWithCustomDI(t, c, false)
+	loc, _ := setupServer(t, c)
 
 	scannerForFolder := scanner.NewTestScanner()
 	scannerForDontClear := scanner.NewTestScanner()
@@ -107,7 +107,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 
 func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	c := testutil.UnitTest(t)
-	loc, jsonRPCRecorder := setupServerWithCustomDI(t, c, false)
+	loc, jsonRPCRecorder := setupServer(t, c)
 
 	s := &scanner.TestScanner{}
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
@@ -126,7 +126,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 
 func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) {
 	c := testutil.UnitTest(t)
-	loc, jsonRPCRecorder := setupServerWithCustomDI(t, c, false)
+	loc, jsonRPCRecorder := setupServer(t, c)
 
 	s := &scanner.TestScanner{}
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
@@ -191,7 +191,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 func Test_TrustWorkspaceFolders(t *testing.T) {
 	t.Run("Doesn't mutate trusted folders, if trusted folders disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		loc, _ := setupServerWithCustomDI(t, c, false)
+		loc, _ := setupServer(t, c)
 
 		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 
@@ -206,7 +206,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Updates trusted workspace folders", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		loc, _ := setupServerWithCustomDI(t, c, false)
+		loc, _ := setupServer(t, c)
 
 		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
@@ -225,7 +225,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		loc, _ := setupServerWithCustomDI(t, c, false)
+		loc, _ := setupServer(t, c)
 
 		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator()))
 		c.SetTrustedFolderFeatureEnabled(true)

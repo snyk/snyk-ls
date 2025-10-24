@@ -51,7 +51,15 @@ func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
 	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, useConsistentIgnores)
 }
 
-func UnitTest(t *testing.T) *config.Config {
+// UnitTestWithEngine creates a test configuration with a mock engine for unit tests.
+// Returns the config, mock engine, and engine configuration to allow customization of mock expectations.
+//
+// Use this when you need to customize mock engine expectations:
+//
+//	c, mockEngine, engineConfig := testutil.UnitTestWithEngine(t)
+//	mockEngine.EXPECT().SomeMethod().Return(someValue).Times(1)
+//	engineConfig.Set("some-key", "some-value")
+func UnitTestWithEngine(t *testing.T) (*config.Config, *mocks.MockEngine, configuration.Configuration) {
 	t.Helper()
 
 	// Create mock engine BEFORE creating config to prevent real network calls
@@ -79,6 +87,16 @@ func UnitTest(t *testing.T) *config.Config {
 		cleanupFakeCliFile(c)
 		progress.CleanupChannels()
 	})
+	return c, mockEngine, engineConfig
+}
+
+// UnitTest creates a test configuration with a mock engine for unit tests.
+// Returns only the config for backward compatibility.
+//
+// If you need to customize mock engine expectations, use UnitTestWithEngine instead.
+func UnitTest(t *testing.T) *config.Config {
+	t.Helper()
+	c, _, _ := UnitTestWithEngine(t)
 	return c
 }
 
