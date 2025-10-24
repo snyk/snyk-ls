@@ -38,7 +38,7 @@ import (
 )
 
 func Test_Concurrent_CLI_Runs(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	srv, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykIacEnabled(false)
 	c.SetSnykOssEnabled(true)

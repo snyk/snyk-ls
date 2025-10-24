@@ -58,7 +58,7 @@ import (
 )
 
 func Test_SmokeInstanceTest(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	ossFile := "package.json"
 	codeFile := "app.js"
 	testutil.CreateDummyProgressListener(t)
@@ -148,7 +148,11 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c := testutil.SmokeTest(t, false)
+			secretTokenName := ""
+			if tc.useConsistentIgnores {
+				secretTokenName = "SNYK_TOKEN_CONSISTENT_IGNORES"
+			}
+			c := testutil.SmokeTest(t, secretTokenName)
 			runSmokeTest(t, c, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "")
 		})
 	}
@@ -157,7 +161,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 func Test_SmokePreScanCommand(t *testing.T) {
 	t.Run("executes pre scan command if configured", func(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRpcRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(false)
 		c.SetSnykOssEnabled(true)
@@ -206,7 +210,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 func Test_SmokeIssueCaching(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRPCRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(true)
 		c.SetSnykOssEnabled(true)
@@ -281,7 +285,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	})
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRPCRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(true)
 		c.SetSnykOssEnabled(true)
@@ -348,7 +352,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 }
 
 func Test_SmokeExecuteCLICommand(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, _ := setupServer(t, c)
 	c.EnableSnykCodeSecurity(false)
 	c.SetSnykIacEnabled(false)
@@ -840,7 +844,7 @@ func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 }
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	cleanupChannels()
@@ -913,7 +917,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykOssEnabled(false)
@@ -960,7 +964,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetDeltaFindingsEnabled(true)
@@ -990,7 +994,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetDeltaFindingsEnabled(true)
@@ -1018,7 +1022,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykIacEnabled(false)
 	cleanupChannels()
@@ -1080,7 +1084,7 @@ func requireFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.
 func Test_SmokeOrgSelection(t *testing.T) {
 	setupOrgSelectionTest := func(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
 		t.Helper()
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRpcRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(false)
 		c.SetSnykOssEnabled(true)
