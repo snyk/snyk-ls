@@ -85,15 +85,6 @@ func setupServer(t *testing.T, c *config.Config) (server.Local, *testsupport.Jso
 	return setupCustomServer(t, c, nil)
 }
 
-func setupServerWithCustomDI(t *testing.T, c *config.Config, useMocks bool) (server.Local, *testsupport.JsonRPCRecorder) {
-	t.Helper()
-	s, jsonRPCRecorder := setupCustomServer(t, c, nil)
-	if !useMocks {
-		di.Init()
-	}
-	return s, jsonRPCRecorder
-}
-
 func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) (server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	if c == nil {

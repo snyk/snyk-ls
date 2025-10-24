@@ -51,23 +51,35 @@ func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
 	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, useConsistentIgnores)
 }
 
-func UnitTest(t *testing.T) *config.Config {
+// UnitTestWithEngine creates a test configuration with a mock engine for unit tests.
+// Returns the config, mock engine, and engine configuration to allow customization of mock expectations.
+//
+// Use this when you need to customize mock engine expectations:
+//
+//	c, mockEngine, engineConfig := testutil.UnitTestWithEngine(t)
+//	mockEngine.EXPECT().SomeMethod().Return(someValue).Times(1)
+//	engineConfig.Set("some-key", "some-value")
+func UnitTestWithEngine(t *testing.T) (*config.Config, *mocks.MockEngine, configuration.Configuration) {
 	t.Helper()
-	c := config.New(config.WithBinarySearchPaths([]string{}))
-	err := c.WaitForDefaultEnv(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	// Create mock engine BEFORE creating config to prevent real network calls
+	mockEngine, engineConfig := SetupEngineMockWithNetworkAccess(t)
+
+	// Create config with the mock engine from the start
+	c := config.NewFromExtension(mockEngine, config.WithBinarySearchPaths([]string{}))
+
+	// Set up storage and config persistence
+	redirectConfigAndDataHome(t, c)
+
 	// we don't want server logging in test runs
 	c.ConfigureLogging(nil)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	c.SetTrustedFolderFeatureEnabled(false)
 	c.SetAuthenticationMethod(types.FakeAuthentication)
 	setMCPServerURL(t, c)
-	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t, c)
-	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
+	engineConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
 		Enabled: false,
 	},
 	})
@@ -75,6 +87,16 @@ func UnitTest(t *testing.T) *config.Config {
 		cleanupFakeCliFile(c)
 		progress.CleanupChannels()
 	})
+	return c, mockEngine, engineConfig
+}
+
+// UnitTest creates a test configuration with a mock engine for unit tests.
+// Returns only the config for backward compatibility.
+//
+// If you need to customize mock engine expectations, use UnitTestWithEngine instead.
+func UnitTest(t *testing.T) *config.Config {
+	t.Helper()
+	c, _, _ := UnitTestWithEngine(t)
 	return c
 }
 
