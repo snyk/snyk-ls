@@ -48,8 +48,10 @@ type UnifiedFindingItem struct {
 // TestUnifiedVsLegacy_IssueCount compares the number of issues from both APIs
 func TestUnifiedVsLegacy_IssueCount(t *testing.T) {
 	c, ctx := testutil.UnitTestWithCtx(t)
-	path := "package.json"
-	workDir := filepath.Join("testdata", path)
+	workDir, err := filepath.Abs("testdata")
+	require.NoError(t, err)
+
+	path := filepath.Join(workDir, "package.json")
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
 	packageIssueCache := make(map[string][]types.Issue)
 	errorReporter := error_reporting.NewTestErrorReporter()
