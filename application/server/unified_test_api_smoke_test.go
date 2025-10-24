@@ -1,5 +1,5 @@
 /*
- * © 2022-2025 Snyk Limited
+ * © 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,24 @@
  * limitations under the License.
  */
 
-package testsupport
+package server
 
 import (
 	"os"
+	"testing"
+
+	"github.com/snyk/snyk-ls/internal/testsupport"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func GetEnvironmentToken(secretName string) string {
-	if len(secretName) > 0 {
-		return os.Getenv(secretName)
+func TestUnifiedTestApiSmokeTest(t *testing.T) {
+	c := testutil.SmokeTest(t, "")
+	ossFile := "package.json"
+	codeFile := "app.js"
+	testutil.CreateDummyProgressListener(t)
+	endpoint := os.Getenv("SNYK_API")
+	if endpoint == "" {
+		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
-	return os.Getenv("SNYK_TOKEN")
+	runSmokeTest(t, c, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint)
 }

@@ -44,13 +44,13 @@ import (
 
 func IntegTest(t *testing.T) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, testsupport.IntegTestEnvVar, false)
+	return prepareTestHelper(t, testsupport.IntegTestEnvVar, "")
 }
 
 // TODO: remove useConsistentIgnores once we have fully rolled out the feature
-func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
+func SmokeTest(t *testing.T, tokenSecretName string) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, useConsistentIgnores)
+	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
 }
 
 func UnitTest(t *testing.T) *config.Config {
@@ -137,7 +137,7 @@ func CreateDummyProgressListener(t *testing.T) {
 	}()
 }
 
-func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *config.Config {
+func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *config.Config {
 	t.Helper()
 	if os.Getenv(envVar) == "" {
 		t.Logf("%s is not set", envVar)
@@ -150,7 +150,7 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 		t.Fatal(err)
 	}
 	c.ConfigureLogging(nil)
-	c.SetToken(testsupport.GetEnvironmentToken(useConsistentIgnores))
+	c.SetToken(testsupport.GetEnvironmentToken(tokenSecretName))
 	c.SetAuthenticationMethod(types.TokenAuthentication)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
