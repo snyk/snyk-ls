@@ -172,7 +172,7 @@ func convertProblemToIssue(ctx context.Context, problem *testapi.SnykVulnProblem
 
 	// let's use the first finding as the primary issue and the rest as matching issues
 	additionalData := ossIssues[0]
-	additionalData.MatchingIssues = ossIssues[1:]
+	additionalData.MatchingIssues = ossIssues
 
 	// Build Issue
 	issue := &snyk.Issue{
@@ -302,7 +302,7 @@ func Lesson(ctx context.Context, problem *testapi.SnykVulnProblem, cwes []string
 }
 
 // buildOssIssueData constructs the OssIssueData from FindingData
-func buildOssIssueData(ctx context.Context, problem *testapi.SnykVulnProblem, finding testapi.FindingData, affectedFilePath types.FilePath, myRange types.Range) (snyk.OssIssueData, error) {
+func buildOssIssueData(ctx context.Context, problem *testapi.SnykVulnProblem, finding testapi.FindingData, affectedFilePath types.FilePath, issueRange types.Range) (snyk.OssIssueData, error) {
 	logger := getLogger(ctx).With().Str("method", "buildOssIssueData").Logger()
 	logger.Debug().Interface("problem", problem.Id).Interface("finding", finding.Id).Msg("building oss issue data")
 
@@ -312,10 +312,10 @@ func buildOssIssueData(ctx context.Context, problem *testapi.SnykVulnProblem, fi
 	key := util.GetIssueKey(
 		problem.Id,
 		string(affectedFilePath),
-		myRange.Start.Line,
-		myRange.End.Line,
-		myRange.Start.Character,
-		myRange.End.Character,
+		issueRange.Start.Line,
+		issueRange.End.Line,
+		issueRange.Start.Character,
+		issueRange.End.Character,
 	)
 
 	ecosystemStr := extractEcosystemString(problem.Ecosystem)
@@ -324,7 +324,7 @@ func buildOssIssueData(ctx context.Context, problem *testapi.SnykVulnProblem, fi
 		Key:                key,
 		Title:              attrs.Title,
 		Name:               problem.PackageName,
-		LineNumber:         myRange.Start.Line,
+		LineNumber:         issueRange.Start.Line,
 		Identifiers:        extractIdentifiers(finding),
 		Description:        attrs.Description,
 		References:         extractReferences(problem),
@@ -666,7 +666,7 @@ func buildRemediationAdvice(vuln *testapi.SnykVulnProblem) string {
 	}
 
 	fixedVersion := vuln.InitiallyFixedInVersions[0]
-	return fmt.Sprintf("Upgrade %s to version %s or higher", vuln.PackageName, fixedVersion)
+	return fmt.Sprintf("Upgrade to %s@%s", vuln.PackageName, fixedVersion)
 }
 
 // extractAppliedPolicyRules extracts policy modifications from finding attributes

@@ -258,20 +258,21 @@ func (cliScanner *CLIScanner) scanInternal(
 	}()
 
 	// determine which scanner to use
-	useLegacyScan := folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"]
-	logger.Debug().Bool("useLegacyScan", useLegacyScan).Send()
+	useLegacyScan := !folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"]
+	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨🚨🚨🚨 oss scan usage 🚨🚨🚨🚨")
 
 	// do actual scan
 	var output any
 	if useLegacyScan {
-		logger.Info().Msg("using legacy OSS scanner")
+		logger.Info().Msg("⚠️ using legacy OSS scanner")
+
 		output, err = cliScanner.legacyScan(s.Context(), path, cmd, workDir)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
 			return []types.Issue{}, err
 		}
 	} else {
-		logger.Info().Msg("using new ostest scanner")
+		logger.Info().Msg("🐉🪰using new ostest scanner")
 		output, err = cliScanner.ostestScan(s.Context(), path, cmd, workDir)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
@@ -404,7 +405,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 	path types.FilePath,
 	format string,
 ) (issues []types.Issue) {
-	issues, _ = UnmarshallAndRetrieveAnalysis(
+	issues, err := UnmarshallAndRetrieveAnalysis(
 		ctx,
 		scanOutput,
 		workDir,
@@ -416,6 +417,11 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 		true, // readFiles = true for CLIScanner
 		format,
 	)
+
+	if err != nil {
+		cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
+		return []types.Issue{}
+	}
 
 	// Add vulnerability counts to cache (CLIScanner-specific behavior)
 	if len(issues) > 0 {

@@ -133,10 +133,10 @@ type Annotation struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []snyk.OssIssueData, affectedFilePath types.FilePath) snyk.OssIssueData {
+func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []snyk.OssIssueData, affectedFilePath types.FilePath, issueRange types.Range) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
 
-	additionalData.Key = util.GetIssueKey(i.Id, string(affectedFilePath), i.LineNumber, i.LineNumber, 0, 0)
+	additionalData.Key = util.GetIssueKey(i.Id, string(affectedFilePath), issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character)
 	additionalData.Title = i.Title
 	additionalData.Name = i.Name
 	additionalData.Identifiers = snyk.Identifiers{
