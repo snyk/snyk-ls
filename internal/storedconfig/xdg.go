@@ -58,30 +58,35 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 
 	normalizedPath := util.PathKey(path)
 
-	if sc.FolderConfigs[normalizedPath] == nil {
+	fc := sc.FolderConfigs[normalizedPath]
+	if fc == nil {
 		logger.Debug().
 			Str("normalizedPath", string(normalizedPath)).
 			Str("originalPath", string(path)).
 			Int("existingFolderCount", len(sc.FolderConfigs)).
-			Msg("Folder config not found in storage, creating new one with OrgMigratedFromGlobalConfig=true")
+			Msg("Folder fc not found in storage, creating new one with OrgMigratedFromGlobalConfig=true")
 		folderConfig := &types.FolderConfig{
 			// New folder configs should never go through org migration; we treat them as migrated.
 			OrgMigratedFromGlobalConfig: true,
 			// New folder configs should have their org determined via LDX-Sync.
 			OrgSetByUser: false,
 		}
-		sc.FolderConfigs[normalizedPath] = folderConfig
+		fc = folderConfig
 	} else {
 		logger.Debug().
 			Str("normalizedPath", string(normalizedPath)).
-			Bool("orgMigratedFromGlobalConfig", sc.FolderConfigs[normalizedPath].OrgMigratedFromGlobalConfig).
-			Msg("Found existing folder config in storage")
+			Bool("orgMigratedFromGlobalConfig", fc.OrgMigratedFromGlobalConfig).
+			Msg("Found existing folder fc in storage")
 	}
 
 	// Normalize the folder path for consistent storage
-	sc.FolderConfigs[normalizedPath].FolderPath = normalizedPath
+	fc.FolderPath = normalizedPath
 
-	return sc.FolderConfigs[normalizedPath], nil
+	// initialize feature flags if not set
+	if fc.FeatureFlags == nil {
+		fc.FeatureFlags = map[string]bool{}
+	}
+	return fc, nil
 }
 
 func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (*StoredConfig, error) {

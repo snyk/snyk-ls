@@ -36,13 +36,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var issuesSeverity = map[string]types.Severity{
-	"critical": types.Critical,
-	"high":     types.High,
-	"low":      types.Low,
-	"medium":   types.Medium,
-}
-
 func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string) *snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
 	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueDepNode)
@@ -137,7 +130,7 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 	return r
 }
 
-func convertScanResultToIssues(logger *zerolog.Logger, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string) []types.Issue {
+func convertScanResultToIssues(logger *zerolog.Logger, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string) []types.Issue {
 	var issues []types.Issue
 
 	duplicateCheckMap := map[string]bool{}
@@ -152,8 +145,8 @@ func convertScanResultToIssues(logger *zerolog.Logger, res *scanResult, workDir 
 		if duplicateCheckMap[duplicateKey] {
 			continue
 		}
-		node := getDependencyNode(logger, targetFilePath, issue, fileContent)
-		snykIssue := toIssue(workDir, targetFilePath, issue, res, node, ls, ep, format)
+		node := getDependencyNode(logger, targetFilePath, issue.PackageManager, issue.From, fileContent)
+		snykIssue := toIssue(workDir, targetFilePath, issue, res, node, learnService, ep, format)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true

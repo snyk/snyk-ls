@@ -310,7 +310,7 @@ func (i *ossIssue) createCweLink() string {
 }
 
 func (i *ossIssue) ToIssueSeverity() types.Severity {
-	sev, ok := issuesSeverity[i.Severity]
+	sev, ok := types.IssuesSeverity[i.Severity]
 	if !ok {
 		return types.Low
 	}

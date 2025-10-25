@@ -52,28 +52,28 @@ func (n *NpmRangeFinder) find(introducingPackageName string, introducingVersion 
 	return &node, nil
 }
 
-func introducingPackageAndVersion(issue ossIssue) (string, string) {
+func introducingPackageAndVersion(from []string, packageManager string) (string, string) {
 	var packageName string
 	var version string
-	if len(issue.From) > 1 {
-		split := strings.Split(issue.From[1], "@")
-		splitArrayLength := len(split)
-		packageSplit := split[splitArrayLength-2]
-		if splitArrayLength > 2 {
-			// handle scoped packages
-			packageSplit = fmt.Sprintf("@%s", split[splitArrayLength-2])
-		}
-		switch issue.PackageManager {
-		case "maven":
-			index := strings.LastIndex(packageSplit, ":")
-			packageName = packageSplit[index+1:]
-		default:
-			packageName = packageSplit
-		}
-		version = split[splitArrayLength-1]
-	} else {
-		packageName = issue.Name
-		version = issue.Version
+	if len(from) <= 1 {
+		// gotta try to find the package name in issue/problem
+		return "", ""
 	}
+
+	split := strings.Split(from[1], "@")
+	splitArrayLength := len(split)
+	packageSplit := split[splitArrayLength-2]
+	if splitArrayLength > 2 {
+		// handle scoped packages
+		packageSplit = fmt.Sprintf("@%s", split[splitArrayLength-2])
+	}
+	switch packageManager {
+	case "maven":
+		index := strings.LastIndex(packageSplit, ":")
+		packageName = packageSplit[index+1:]
+	default:
+		packageName = packageSplit
+	}
+	version = split[splitArrayLength-1]
 	return packageName, version
 }

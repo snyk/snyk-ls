@@ -50,6 +50,13 @@ func (s Severity) String() string {
 	}
 }
 
+var IssuesSeverity = map[string]Severity{
+	"critical": Critical,
+	"high":     High,
+	"low":      Low,
+	"medium":   Medium,
+}
+
 // IssueType will typically match 1o1 to Snyk product lines but are not necessarily coupled to those.
 type IssueType int8
 

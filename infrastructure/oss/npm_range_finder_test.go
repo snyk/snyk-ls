@@ -65,7 +65,7 @@ func TestNpmRangeFinder_Find(t *testing.T) {
 
 func executeFinding(t *testing.T, issue ossIssue, npmRangeFinder NpmRangeFinder, expected ast.Node) {
 	t.Helper()
-	p, v := introducingPackageAndVersion(issue)
+	p, v := introducingPackageAndVersion(issue.From, issue.PackageManager)
 
 	actual, _ := npmRangeFinder.find(p, v)
 	assert.Equal(t, expected.Line, actual.Line)
