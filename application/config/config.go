@@ -36,6 +36,7 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -294,9 +295,7 @@ func initWorkFlowEngine(c *Config) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	conf := configuration.NewWithOpts(
-		configuration.WithAutomaticEnv(),
-	)
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	conf.PersistInStorage(storedConfig.ConfigMainKey)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
@@ -333,6 +332,8 @@ func initWorkflows(c *Config) error {
 	}
 
 	err = localworkflows.InitCodeWorkflow(c.engine)
+
+	err = osflows.Init(c.engine)
 	if err != nil {
 		return err
 	}

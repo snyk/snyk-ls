@@ -75,7 +75,7 @@ func UnmarshallAndRetrieveAnalysis(
 
 	// new ostest workflow result processing
 	if output, ok := scanOutput.([]workflow.Data); ok {
-		return processOsTestWorkFlowData(ctx, output, nil)
+		return processOsTestWorkFlowData(ctx, output, packageIssueCache)
 	}
 
 	// unchanged legacy workflow
