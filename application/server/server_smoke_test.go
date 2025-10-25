@@ -502,46 +502,14 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc, c)
 	cloneTargetDirString := (string)(cloneTargetDir)
 
-	// -----------------------------------------
-	// Set feature flags
-	// -----------------------------------------
-	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
-	folderConfig.FeatureFlags["useExperimentalRiskScore"] = c.Engine().GetConfiguration().GetBool(FeatureFlagRiskScore)
-	folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"] = c.Engine().GetConfiguration().GetBool(FeatureFlagRiskScoreInCLI)
-
-	// -----------------------------------------
-	// substitute depgraph workflow
-	// -----------------------------------------
-	substituteDepGraphFlow(t, c, cloneTargetDirString, file1)
-
 	waitForScan(t, cloneTargetDirString, c)
 
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
 	assert.Greater(t, len(notifications), 0)
 
-	foundFolderConfig := false
-	for _, notification := range notifications {
-		var folderConfigsParam types.FolderConfigsParam
-		err := notification.UnmarshalParams(&folderConfigsParam)
-		require.NoError(t, err)
-
-		for _, folderConfig := range folderConfigsParam.FolderConfigs {
-			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
-			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
-
-			// Normalize both paths for comparison since folder config paths are now normalized
-			normalizedCloneTargetDir := util.PathKey(cloneTargetDir)
-			if folderConfig.FolderPath == normalizedCloneTargetDir {
-				foundFolderConfig = true
-				break
-			}
-		}
-
-		if foundFolderConfig {
-			break
-		}
-	}
-	assert.Truef(t, foundFolderConfig, "could not find folder config for %s", cloneTargetDirString)
+	assert.Eventuallyf(t, func() bool {
+		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
+	}, time.Second*5, time.Second, "did not receive folder configs")
 
 	var testPath types.FilePath
 
@@ -583,6 +551,32 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDirString, loc)
 	}
 	waitForDeltaScan(t, di.ScanStateAggregator())
+}
+
+func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
+	foundFolderConfig := false
+	for _, notification := range notifications {
+		var folderConfigsParam types.FolderConfigsParam
+		err := notification.UnmarshalParams(&folderConfigsParam)
+		require.NoError(t, err)
+
+		for _, folderConfig := range folderConfigsParam.FolderConfigs {
+			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
+			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
+
+			// Normalize both paths for comparison since folder config paths are now normalized
+			normalizedCloneTargetDir := util.PathKey(cloneTargetDir)
+			if folderConfig.FolderPath == normalizedCloneTargetDir {
+				foundFolderConfig = true
+				break
+			}
+		}
+
+		if foundFolderConfig {
+			break
+		}
+	}
+	return foundFolderConfig
 }
 
 var (
@@ -1532,9 +1526,9 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 	t.Helper()
 	t.Setenv("SNYK_LOG_LEVEL", "debug")
 	c.SetLogLevel(zerolog.LevelDebugValue)
-	c.ConfigureLogging(nil)
+	c.ConfigureLogging(loc.Server)
 	gafConfig := c.Engine().GetConfiguration()
-	gafConfig.Set(configuration.DEBUG, false)
+	gafConfig.Set(configuration.DEBUG, c.Logger().GetLevel() == zerolog.DebugLevel)
 
 	documentURI := initParams.WorkspaceFolders[0].Uri
 	commitHash := getCurrentCommitHash(t, uri.PathFromUri(documentURI))
