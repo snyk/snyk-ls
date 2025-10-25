@@ -50,6 +50,7 @@ func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossI
 	}
 
 	var codelensCommands []types.CommandData
+	rangeFromNode := getRangeFromNode(issueDepNode)
 	for _, codeAction := range codeActions {
 		if strings.Contains(codeAction.GetTitle(), "Upgrade to") {
 			codelensCommands = append(codelensCommands, types.CommandData{
@@ -58,7 +59,7 @@ func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossI
 				Arguments: []any{
 					codeAction.GetUuid(),
 					affectedFilePath,
-					getRangeFromNode(issueDepNode),
+					rangeFromNode,
 				},
 				GroupingKey:   codeAction.GetGroupingKey(),
 				GroupingType:  codeAction.GetGroupingType(),
@@ -70,12 +71,16 @@ func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossI
 	matchingIssues := []snyk.OssIssueData{}
 	for _, otherIssue := range scanResult.Vulnerabilities {
 		if otherIssue.Id == issue.Id {
-			matchingIssues = append(matchingIssues, otherIssue.toAdditionalData(scanResult,
-				[]snyk.OssIssueData{}, affectedFilePath))
+			matchingIssues = append(matchingIssues, otherIssue.toAdditionalData(
+				scanResult,
+				[]snyk.OssIssueData{},
+				affectedFilePath,
+				rangeFromNode,
+			))
 		}
 	}
 
-	additionalData := issue.toAdditionalData(scanResult, matchingIssues, affectedFilePath)
+	additionalData := issue.toAdditionalData(scanResult, matchingIssues, affectedFilePath, rangeFromNode)
 
 	title := issue.Title
 	if format == config.FormatHtml {
@@ -98,7 +103,7 @@ func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossI
 		ID:                  issue.Id,
 		Message:             message,
 		FormattedMessage:    issue.GetExtendedMessage(issue),
-		Range:               getRangeFromNode(issueDepNode),
+		Range:               rangeFromNode,
 		Severity:            issue.ToIssueSeverity(),
 		ContentRoot:         workDir,
 		AffectedFilePath:    affectedFilePath,

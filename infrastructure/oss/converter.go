@@ -92,7 +92,7 @@ func UnmarshallAndRetrieveAnalysis(
 	}
 
 	for _, scanResult := range scanResults {
-		targetFilePath := getAbsTargetFilePath(logger, scanResult.DisplayTargetFile, scanResult.Path, workDir, path)
+		targetFilePath := getAbsTargetFilePath(logger, scanResult.Path, scanResult.DisplayTargetFile, workDir, path)
 
 		var fileContent []byte
 
