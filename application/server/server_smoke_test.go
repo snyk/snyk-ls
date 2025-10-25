@@ -19,12 +19,20 @@ package server
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/samber/lo"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
+
+	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
@@ -493,6 +501,19 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 
 	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc, c)
 	cloneTargetDirString := (string)(cloneTargetDir)
+
+	// -----------------------------------------
+	// Set feature flags
+	// -----------------------------------------
+	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
+	folderConfig.FeatureFlags["useExperimentalRiskScore"] = c.Engine().GetConfiguration().GetBool(FeatureFlagRiskScore)
+	folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"] = c.Engine().GetConfiguration().GetBool(FeatureFlagRiskScoreInCLI)
+
+	// -----------------------------------------
+	// substitute depgraph workflow
+	// -----------------------------------------
+	substituteDepGraphFlow(t, c, cloneTargetDirString, file1)
+
 	waitForScan(t, cloneTargetDirString, c)
 
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
@@ -521,8 +542,12 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 		}
 	}
 	assert.Truef(t, foundFolderConfig, "could not find folder config for %s", cloneTargetDirString)
-	jsonRPCRecorder.ClearNotifications()
+
 	var testPath types.FilePath
+
+	// ------------------------------------------------------
+	// check snyk open source diagnostics (file1)
+	// ------------------------------------------------------
 	if file1 != "" {
 		testPath = types.FilePath(filepath.Join(cloneTargetDirString, file1))
 		waitForNetwork(c)
@@ -532,6 +557,10 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	}
 
 	jsonRPCRecorder.ClearNotifications()
+
+	// ------------------------------------------------------
+	// check snyk code diagnostics (file2)
+	// ------------------------------------------------------
 	testPath = types.FilePath(filepath.Join(cloneTargetDirString, file2))
 	waitForNetwork(c)
 	textDocumentDidSave(t, &loc, testPath)
@@ -554,6 +583,35 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDirString, loc)
 	}
 	waitForDeltaScan(t, di.ScanStateAggregator())
+}
+
+var (
+	// now register it with the engine
+	depGraphWorkFlowID = workflow.NewWorkflowIdentifier("depgraph")
+	depGraphDataID     = workflow.NewTypeIdentifier(depGraphWorkFlowID, "depgraph")
+)
+
+// substituteDepGraphFlow generate depgraph. necessary, as depgraph workflow needs legacycli workflow which
+// does not work without the TypeScript CLI
+func substituteDepGraphFlow(t *testing.T, c *config.Config, cloneTargetDirString, displayTargetFile string) {
+	t.Helper()
+
+	flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+	callback := func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
+		cmd := exec.CommandContext(t.Context(), c.CliSettings().Path(), "depgraph")
+		cmd.Dir = cloneTargetDirString
+		cmd.Env = os.Environ()
+		depGraphJson, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("couldn't retrieve the depgraph %s: ", err.Error())
+		}
+		depGraphData := workflow.NewData(depGraphDataID, "application/json", depGraphJson)
+		depGraphData.SetMetaData("Content-Location", strings.TrimSpace(displayTargetFile))
+		return []workflow.Data{depGraphData}, nil
+	}
+
+	_, err := c.Engine().Register(depGraphWorkFlowID, flagset, callback)
+	require.NoError(t, err)
 }
 
 func waitForNetwork(c *config.Config) {
