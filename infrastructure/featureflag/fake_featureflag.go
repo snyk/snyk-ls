@@ -27,10 +27,6 @@ func NewFakeService() *FakeFeatureFlagService {
 	return &FakeFeatureFlagService{Flags: make(map[string]bool)}
 }
 
-func (f *FakeFeatureFlagService) Fetch(org string) map[string]bool {
-	return f.Flags
-}
-
 func (f *FakeFeatureFlagService) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
 	val, ok := f.Flags[flag]
 	if !ok {

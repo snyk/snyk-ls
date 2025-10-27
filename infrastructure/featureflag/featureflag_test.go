@@ -32,13 +32,13 @@ func Test_Fetch_cachesFlags(t *testing.T) {
 	org := "test-org-123"
 
 	// First fetch populates cache
-	flags1 := service.Fetch(org)
+	flags1 := service.fetch(org)
 	require.NotNil(t, flags1)
 	assert.Contains(t, flags1, SnykCodeConsistentIgnores)
 	assert.Contains(t, flags1, SnykCodeInlineIgnore)
 
 	// Second fetch returns cached flags
-	flags2 := service.Fetch(org)
+	flags2 := service.fetch(org)
 	assert.Equal(t, flags1, flags2)
 
 	// Cache should contain the org
@@ -52,10 +52,10 @@ func Test_Fetch_differentOrgsSeparateCaches(t *testing.T) {
 	org1 := "org-1"
 	org2 := "org-2"
 
-	flags1 := service.Fetch(org1)
+	flags1 := service.fetch(org1)
 	assert.NotNil(t, flags1)
 
-	flags2 := service.Fetch(org2)
+	flags2 := service.fetch(org2)
 	assert.NotNil(t, flags2)
 
 	// Cache should have both orgs
@@ -69,7 +69,7 @@ func Test_FlushCache_clearsAllOrgs(t *testing.T) {
 	service := New(c).(*serviceImpl)
 
 	org := "test-org"
-	_ = service.Fetch(org)
+	_ = service.fetch(org)
 	assert.NotEmpty(t, service.orgToFlag)
 
 	service.FlushCache()

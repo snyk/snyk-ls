@@ -37,7 +37,6 @@ var Flags = []string{
 }
 
 type Service interface {
-	Fetch(org string) map[string]bool
 	GetFromFolderConfig(folderPath types.FilePath, flag string) bool
 	PopulateFolderConfig(folderConfig *types.FolderConfig)
 	FlushCache()
@@ -57,7 +56,7 @@ func New(c *config.Config) Service {
 	}
 }
 
-func (s *serviceImpl) Fetch(org string) map[string]bool {
+func (s *serviceImpl) fetch(org string) map[string]bool {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -98,6 +97,6 @@ func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	org := s.c.FolderOrganization(folderConfig.FolderPath)
-	flags := s.Fetch(org)
+	flags := s.fetch(org)
 	folderConfig.FeatureFlags = flags
 }
