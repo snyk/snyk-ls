@@ -77,6 +77,9 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 		return nil, errors.New(msg)
 	}
 
+	// Debug: Log total findings count
+	logger.Debug().Int("totalFindings", len(findings)).Msg("Total findings from Unified Test API")
+
 	if len(findings) == 0 {
 		return []types.Issue{}, nil
 	}
@@ -134,21 +137,11 @@ func asProblemsMap(ctx context.Context, findings []testapi.FindingData) Problems
 			continue
 		}
 
-		// Extract the introducing package from the dependency path (from[1])
-		// This determines the range/line where the diagnostic will appear
-		// Matches legacy flow behavior: same vuln through same introducing package = one diagnostic
-		dependencyPath := extractDependencyPath(finding)
-		introducingPackage := ""
-		if len(dependencyPath) > 1 {
-			// from[1] is the top-level/direct dependency that introduces the vulnerability
-			introducingPackage = dependencyPath[1]
-		}
-
-		// Create key: vulnerability ID + package + version + introducing package
+		// Create key: vulnerability ID + package + version (matching Legacy CLI behavior)
 		// This ensures:
-		// - Same vuln, same introducing package → grouped together (one diagnostic, multiple matching issues)
-		// - Same vuln, different introducing package → separate diagnostics (different ranges)
-		key := fmt.Sprintf("%s|%s|%s|%s", problem.Id, problem.PackageName, problem.PackageVersion, introducingPackage)
+		// - Same vuln, same package+version → grouped together (one diagnostic, multiple matching issues)
+		// - All paths to the same vulnerability are grouped regardless of introducing package
+		key := fmt.Sprintf("%s|%s|%s", problem.Id, problem.PackageName, problem.PackageVersion)
 
 		if _, exists := problems[key]; !exists {
 			problems[key] = ProblemGroup{
@@ -161,6 +154,14 @@ func asProblemsMap(ctx context.Context, findings []testapi.FindingData) Problems
 		group.Findings = append(group.Findings, finding)
 		problems[key] = group
 	}
+
+	// Debug: Log grouping results
+	logger := getLogger(ctx)
+	logger.Debug().
+		Int("totalFindings", len(findings)).
+		Int("uniqueProblemGroups", len(problems)).
+		Msg("Grouped findings by problem key")
+
 	return problems
 }
 
@@ -200,6 +201,14 @@ func convertProblemToIssue(ctx context.Context, problem *testapi.SnykVulnProblem
 	additionalData := ossIssues[0]
 	additionalData.Lesson = lessonURL
 	additionalData.MatchingIssues = ossIssues
+
+	// Debug: Log MatchingIssues length
+	logger.Debug().
+		Str("problemId", problem.Id).
+		Str("packageName", problem.PackageName).
+		Int("matchingIssuesLength", len(ossIssues)).
+		Int("totalFindingsInGroup", len(problemFindings)).
+		Msg("Converted problem to issue with matching issues")
 
 	// Build Issue
 	issue := &snyk.Issue{
