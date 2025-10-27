@@ -39,6 +39,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -69,16 +70,17 @@ func NewScanStatus() *ScanStatus {
 }
 
 type Scanner struct {
-	SnykApiClient     snyk_api.SnykApiClient
-	errorReporter     codeClientObservability.ErrorReporter
-	bundleHashesMutex sync.RWMutex
-	changedFilesMutex sync.RWMutex
-	scanStatusMutex   sync.RWMutex
-	runningScans      map[types.FilePath]*ScanStatus
-	changedPaths      map[types.FilePath]map[types.FilePath]bool // tracks files that were changed since the last scan per workspace folder
-	learnService      learn.Service
-	fileFilters       *xsync.MapOf[string, *utils.FileFilter]
-	notifier          notification.Notifier
+	SnykApiClient      snyk_api.SnykApiClient
+	errorReporter      codeClientObservability.ErrorReporter
+	bundleHashesMutex  sync.RWMutex
+	changedFilesMutex  sync.RWMutex
+	scanStatusMutex    sync.RWMutex
+	runningScans       map[types.FilePath]*ScanStatus
+	changedPaths       map[types.FilePath]map[types.FilePath]bool // tracks files that were changed since the last scan per workspace folder
+	learnService       learn.Service
+	featureFlagService featureflag.Service
+	fileFilters        *xsync.MapOf[string, *utils.FileFilter]
+	notifier           notification.Notifier
 
 	// global map to store last used bundle hashes for each workspace folder
 	// these are needed when we want to retrieve auto-fixes for a previously
@@ -110,21 +112,22 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, path types.FilePath) codeClient.CodeScanner) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, path types.FilePath) codeClient.CodeScanner) *Scanner {
 	sc := &Scanner{
-		SnykApiClient:     apiClient,
-		errorReporter:     reporter,
-		runningScans:      map[types.FilePath]*ScanStatus{},
-		changedPaths:      map[types.FilePath]map[types.FilePath]bool{},
-		fileFilters:       xsync.NewMapOf[*utils.FileFilter](),
-		learnService:      learnService,
-		notifier:          notifier,
-		bundleHashes:      map[types.FilePath]string{},
-		Instrumentor:      instrumentor,
-		C:                 c,
-		codeInstrumentor:  codeInstrumentor,
-		codeErrorReporter: codeErrorReporter,
-		codeScanner:       codeScanner,
+		SnykApiClient:      apiClient,
+		errorReporter:      reporter,
+		runningScans:       map[types.FilePath]*ScanStatus{},
+		changedPaths:       map[types.FilePath]map[types.FilePath]bool{},
+		fileFilters:        xsync.NewMapOf[*utils.FileFilter](),
+		learnService:       learnService,
+		featureFlagService: featureFlagService,
+		notifier:           notifier,
+		bundleHashes:       map[types.FilePath]string{},
+		Instrumentor:       instrumentor,
+		C:                  c,
+		codeInstrumentor:   codeInstrumentor,
+		codeErrorReporter:  codeErrorReporter,
+		codeScanner:        codeScanner,
 	}
 	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
 		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
@@ -260,7 +263,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 		return results, err
 	}
 
-	codeConsistentIgnoresEnabled := sc.C.Engine().GetConfiguration().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	codeConsistentIgnoresEnabled := sc.featureFlagService.GetFromFolderConfig(folderPath, featureflag.SnykCodeConsistentIgnores)
 	results, err = sc.UploadAndAnalyze(ctx, folderPath, files, filesToBeScanned, codeConsistentIgnoresEnabled, t)
 
 	return results, err
@@ -381,7 +384,6 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 	logger.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
 
 	target, err := scan.NewRepositoryTarget(string(path))
-
 	if err != nil {
 		logger.Warn().Msg("could not determine repository URL (target)")
 	}

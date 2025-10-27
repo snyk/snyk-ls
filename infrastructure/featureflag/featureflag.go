@@ -37,9 +37,9 @@ var Flags = []string{
 }
 
 type Service interface {
-	Fetch(org string) (map[string]bool, error)
-	GetFromFolderConfig(folderPath types.FilePath, flag string) (bool, bool)
-	PopulateFolderConfig(folderConfig *types.FolderConfig) bool
+	Fetch(org string) map[string]bool
+	GetFromFolderConfig(folderPath types.FilePath, flag string) bool
+	PopulateFolderConfig(folderConfig *types.FolderConfig)
 	FlushCache()
 }
 
@@ -57,12 +57,12 @@ func New(c *config.Config) Service {
 	}
 }
 
-func (s *serviceImpl) Fetch(org string) (map[string]bool, error) {
+func (s *serviceImpl) Fetch(org string) map[string]bool {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	if s.orgToFlag[org] != nil {
-		return s.orgToFlag[org], nil
+		return s.orgToFlag[org]
 	}
 
 	s.orgToFlag[org] = make(map[string]bool)
@@ -76,7 +76,7 @@ func (s *serviceImpl) Fetch(org string) (map[string]bool, error) {
 		}
 		s.orgToFlag[org][flag] = enabled
 	}
-	return s.orgToFlag[org], nil
+	return s.orgToFlag[org]
 }
 
 func (s *serviceImpl) FlushCache() {
@@ -85,20 +85,19 @@ func (s *serviceImpl) FlushCache() {
 	s.orgToFlag = make(map[string]map[string]bool)
 }
 
-func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) (bool, bool) {
+func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
 	folderConfig := s.c.FolderConfig(folderPath)
 	v, ok := folderConfig.FeatureFlags[flag]
-	return v, ok
-}
-
-func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) bool {
-	logger := s.c.Logger().With().Str("method", "PopulateFeatureFlags").Logger()
-	org := s.c.FolderOrganization(folderConfig.FolderPath)
-	flags, err := s.Fetch(org)
-	if err != nil {
-		logger.Err(err).Msg("couldn't get feature flags")
+	if !ok {
+		s.c.Logger().Warn().Str("method", "GetFromFolderConfig").Msgf("feature flag %s not found in folder config for path %s", flag, folderPath)
 		return false
 	}
+
+	return v
+}
+
+func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
+	org := s.c.FolderOrganization(folderConfig.FolderPath)
+	flags := s.Fetch(org)
 	folderConfig.FeatureFlags = flags
-	return true
 }

@@ -630,7 +630,7 @@ func (f *Folder) FilterIssues(
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
 
-	codeConsistentIgnoresEnabled, _ := f.featureFlagService.GetFromFolderConfig(f.path, featureflag.SnykCodeConsistentIgnores)
+	codeConsistentIgnoresEnabled := f.featureFlagService.GetFromFolderConfig(f.path, featureflag.SnykCodeConsistentIgnores)
 
 	for path, issueSlice := range issues {
 		if !f.Contains(path) {

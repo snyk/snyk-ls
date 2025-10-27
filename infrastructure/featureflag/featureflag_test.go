@@ -32,15 +32,13 @@ func Test_Fetch_cachesFlags(t *testing.T) {
 	org := "test-org-123"
 
 	// First fetch populates cache
-	flags1, err := service.Fetch(org)
-	require.NoError(t, err)
+	flags1 := service.Fetch(org)
 	require.NotNil(t, flags1)
 	assert.Contains(t, flags1, SnykCodeConsistentIgnores)
 	assert.Contains(t, flags1, SnykCodeInlineIgnore)
 
 	// Second fetch returns cached flags
-	flags2, err := service.Fetch(org)
-	require.NoError(t, err)
+	flags2 := service.Fetch(org)
 	assert.Equal(t, flags1, flags2)
 
 	// Cache should contain the org
@@ -54,12 +52,10 @@ func Test_Fetch_differentOrgsSeparateCaches(t *testing.T) {
 	org1 := "org-1"
 	org2 := "org-2"
 
-	flags1, err1 := service.Fetch(org1)
-	require.NoError(t, err1)
+	flags1 := service.Fetch(org1)
 	assert.NotNil(t, flags1)
 
-	flags2, err2 := service.Fetch(org2)
-	require.NoError(t, err2)
+	flags2 := service.Fetch(org2)
 	assert.NotNil(t, flags2)
 
 	// Cache should have both orgs
@@ -73,8 +69,7 @@ func Test_FlushCache_clearsAllOrgs(t *testing.T) {
 	service := New(c).(*serviceImpl)
 
 	org := "test-org"
-	_, err := service.Fetch(org)
-	require.NoError(t, err)
+	_ = service.Fetch(org)
 	assert.NotEmpty(t, service.orgToFlag)
 
 	service.FlushCache()
@@ -99,17 +94,14 @@ func Test_GetFromFolderConfig_returnsCorrectFlag(t *testing.T) {
 	c.UpdateFolderConfig(folderConfig)
 
 	// Test existing flags
-	value1, ok1 := service.GetFromFolderConfig(folderPath, SnykCodeConsistentIgnores)
-	assert.True(t, ok1)
+	value1 := service.GetFromFolderConfig(folderPath, SnykCodeConsistentIgnores)
 	assert.True(t, value1)
 
-	value2, ok2 := service.GetFromFolderConfig(folderPath, SnykCodeInlineIgnore)
-	assert.True(t, ok2)
+	value2 := service.GetFromFolderConfig(folderPath, SnykCodeInlineIgnore)
 	assert.False(t, value2)
 
 	// Test non-existent flag
-	value3, ok3 := service.GetFromFolderConfig(folderPath, "nonExistentFlag")
-	assert.False(t, ok3)
+	value3 := service.GetFromFolderConfig(folderPath, "nonExistentFlag")
 	assert.False(t, value3)
 }
 
@@ -137,12 +129,10 @@ func Test_GetFromFolderConfig_multipleFolders(t *testing.T) {
 	c.UpdateFolderConfig(config2)
 
 	// Each folder should have its own flags
-	val1, ok1 := service.GetFromFolderConfig(folder1, SnykCodeConsistentIgnores)
-	assert.True(t, ok1)
+	val1 := service.GetFromFolderConfig(folder1, SnykCodeConsistentIgnores)
 	assert.True(t, val1)
 
-	val2, ok2 := service.GetFromFolderConfig(folder2, SnykCodeConsistentIgnores)
-	assert.True(t, ok2)
+	val2 := service.GetFromFolderConfig(folder2, SnykCodeConsistentIgnores)
 	assert.False(t, val2)
 }
 
@@ -155,9 +145,8 @@ func Test_PopulateFolderConfig_setsFlags(t *testing.T) {
 		FolderPath: folderPath,
 	}
 
-	success := service.PopulateFolderConfig(folderConfig)
+	service.PopulateFolderConfig(folderConfig)
 
-	assert.True(t, success)
 	assert.NotNil(t, folderConfig.FeatureFlags)
 	assert.Contains(t, folderConfig.FeatureFlags, SnykCodeConsistentIgnores)
 	assert.Contains(t, folderConfig.FeatureFlags, SnykCodeInlineIgnore)
@@ -171,11 +160,9 @@ func Test_PopulateFolderConfig_multipleFolders(t *testing.T) {
 	folder2 := &types.FolderConfig{FolderPath: "/folder2"}
 
 	// Populate both folders
-	success1 := service.PopulateFolderConfig(folder1)
-	success2 := service.PopulateFolderConfig(folder2)
+	service.PopulateFolderConfig(folder1)
+	service.PopulateFolderConfig(folder2)
 
-	assert.True(t, success1)
-	assert.True(t, success2)
 	assert.NotNil(t, folder1.FeatureFlags)
 	assert.NotNil(t, folder2.FeatureFlags)
 }

@@ -27,18 +27,20 @@ func NewFakeService() *FakeFeatureFlagService {
 	return &FakeFeatureFlagService{Flags: make(map[string]bool)}
 }
 
-func (f *FakeFeatureFlagService) Fetch(org string) (map[string]bool, error) {
-	return f.Flags, nil
+func (f *FakeFeatureFlagService) Fetch(org string) map[string]bool {
+	return f.Flags
 }
 
-func (f *FakeFeatureFlagService) GetFromFolderConfig(folderPath types.FilePath, flag string) (bool, bool) {
+func (f *FakeFeatureFlagService) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
 	val, ok := f.Flags[flag]
-	return val, ok
+	if !ok {
+		return false
+	}
+	return val
 }
 
-func (f *FakeFeatureFlagService) PopulateFolderConfig(folderConfig *types.FolderConfig) bool {
+func (f *FakeFeatureFlagService) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	folderConfig.FeatureFlags = f.Flags
-	return true
 }
 
 func (f *FakeFeatureFlagService) FlushCache() {

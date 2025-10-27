@@ -247,17 +247,11 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 }
 
 func (renderer *HtmlRenderer) updateFeatureFlags(conf configuration.Configuration, folder types.FilePath) {
-	logger := renderer.c.Logger().With().Str("method", "updateFeatureFlags").Logger()
 	renderer.iawEnabled = conf.GetBool(ignore_workflow.ConfigIgnoreApprovalEnabled)
 	renderer.inlineIgnoresEnabled = false
 
 	if renderer.c.IntegrationName() == "VS_CODE" {
-		ff, ok := renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeInlineIgnore)
-		if !ok {
-			msg := fmt.Sprintf("Failed to retrieve feature flag status (%s), assuming deactivated", featureflag.SnykCodeInlineIgnore)
-			logger.Warn().Msg(msg)
-		}
-		renderer.inlineIgnoresEnabled = ff
+		renderer.inlineIgnoresEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeInlineIgnore)
 	}
 }
 

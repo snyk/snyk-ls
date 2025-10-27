@@ -66,7 +66,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	c.logger.Debug().Msg(logMsg)
 
 	folderPath := c.c.Workspace().GetFolderContaining(path)
-	codeConsistentIgnoresEnabled, _ := c.featureFlagService.GetFromFolderConfig(folderPath.Path(), featureflag.SnykCodeConsistentIgnores)
+	codeConsistentIgnoresEnabled := c.featureFlagService.GetFromFolderConfig(folderPath.Path(), featureflag.SnykCodeConsistentIgnores)
 
 	var filteredIssues []types.Issue
 	if !codeConsistentIgnoresEnabled {
