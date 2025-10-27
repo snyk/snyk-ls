@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
@@ -31,6 +32,7 @@ import (
 	appNotification "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/application/watcher"
 	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/ide/command/mock_command"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -94,7 +96,15 @@ func TestInit(t *testing.T) {
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(c)
-	command.SetService(&types.CommandServiceMock{})
+
+	// Set up command service with mock org resolver
+	commandServiceMock := &types.CommandServiceMock{}
+	mockOrgResolverCtrl := gomock.NewController(t)
+	mockOrgResolver := mock_command.NewMockOrgResolver(mockOrgResolverCtrl)
+	mockOrgResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{}, nil).AnyTimes()
+	commandServiceMock.SetOrgResolver(mockOrgResolver)
+	command.SetService(commandServiceMock)
+
 	// don't use getters or it'll deadlock
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
 	c.SetWorkspace(w)
