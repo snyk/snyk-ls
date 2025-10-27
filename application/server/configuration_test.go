@@ -181,6 +181,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("All settings are updated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
+		setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 
 		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
