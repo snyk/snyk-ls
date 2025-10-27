@@ -18,6 +18,7 @@ package oss
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -155,4 +156,120 @@ func createTestProblems() []testapi.Problem {
 	_ = problem.FromSnykVulnProblem(vulnProblem)
 
 	return []testapi.Problem{problem}
+}
+
+// Test_buildUpgradePath tests the buildUpgradePath function
+func Test_buildUpgradePath(t *testing.T) {
+	tests := []struct {
+		name            string
+		finding         testapi.FindingData
+		vuln            *testapi.SnykVulnProblem
+		expectedUpgrade []any
+		description     string
+	}{
+		{
+			name:    "Fallback when no upgrade path in API",
+			finding: createFindingWithoutUpgradePath(),
+			vuln: &testapi.SnykVulnProblem{
+				PackageName:              "test-package",
+				PackageVersion:           "1.0.0",
+				InitiallyFixedInVersions: []string{"1.0.1"},
+			},
+			expectedUpgrade: []any{false, "test-package@1.0.1"},
+			description:     "Should fallback to InitiallyFixedInVersions when no upgrade path",
+		},
+		{
+			name:    "Empty when no upgrade path and no fixed versions",
+			finding: createFindingWithoutUpgradePath(),
+			vuln: &testapi.SnykVulnProblem{
+				PackageName:              "test-package",
+				PackageVersion:           "1.0.0",
+				InitiallyFixedInVersions: []string{},
+			},
+			expectedUpgrade: []any{false},
+			description:     "Should return [false] when no upgrade information but has dependency path",
+		},
+		{
+			name:    "Upgrade path with dependency path",
+			finding: createFindingWithUpgradePath("goof@1.0.1", []string{"hbs@4.0.4", "handlebars@4.0.14", "uglify-js@3.13.9"}),
+			vuln: &testapi.SnykVulnProblem{
+				PackageName:              "uglify-js",
+				PackageVersion:           "3.13.9",
+				InitiallyFixedInVersions: []string{"3.19.3"},
+			},
+			expectedUpgrade: []any{false, "hbs@4.0.4", "handlebars@4.0.14", "uglify-js@3.19.3"},
+			description:     "Should use dependency path with upgraded version for target",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Act
+			result := buildUpgradePath(tt.finding, tt.vuln)
+
+			// Assert
+			require.Equal(t, len(tt.expectedUpgrade), len(result), "Length mismatch")
+			for i, expected := range tt.expectedUpgrade {
+				require.Equal(t, expected, result[i], "Upgrade path element %d mismatch", i)
+			}
+		})
+	}
+}
+
+// Helper functions for creating test findings
+func createFindingWithUpgradePath(root string, path []string) testapi.FindingData {
+	finding := createTestFinding()
+
+	// Add dependency path evidence
+	if finding.Attributes == nil {
+		finding.Attributes = &testapi.FindingAttributes{}
+	}
+	if finding.Attributes.Evidence == nil {
+		finding.Attributes.Evidence = []testapi.Evidence{}
+	}
+
+	// Create dependency packages
+	dependencyPkgs := make([]testapi.Package, len(path)+1)
+	rootParts := strings.Split(root, "@")
+	dependencyPkgs[0] = testapi.Package{Name: rootParts[0], Version: rootParts[1]}
+
+	for i, pkgStr := range path {
+		parts := strings.Split(pkgStr, "@")
+		dependencyPkgs[i+1] = testapi.Package{Name: parts[0], Version: parts[1]}
+	}
+
+	// Add dependency path evidence
+	var depEv testapi.Evidence
+	_ = depEv.FromDependencyPathEvidence(testapi.DependencyPathEvidence{
+		Path: dependencyPkgs,
+	})
+
+	finding.Attributes.Evidence = append(finding.Attributes.Evidence, depEv)
+
+	return finding
+}
+
+func createFindingWithoutUpgradePath() testapi.FindingData {
+	finding := createTestFinding()
+
+	// Add dependency path evidence but no upgrade path
+	if finding.Attributes == nil {
+		finding.Attributes = &testapi.FindingAttributes{}
+	}
+
+	if finding.Attributes.Evidence == nil {
+		finding.Attributes.Evidence = []testapi.Evidence{}
+	}
+
+	var depEv testapi.Evidence
+	_ = depEv.FromDependencyPathEvidence(testapi.DependencyPathEvidence{
+		Path: []testapi.Package{
+			{Name: "root", Version: "1.0.0"},
+			{Name: "test-package", Version: "1.0.0"},
+		},
+	})
+
+	finding.Attributes.Evidence = append(finding.Attributes.Evidence, depEv)
+
+	return finding
 }
