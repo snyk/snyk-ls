@@ -316,6 +316,10 @@ func compareAndReportDiagnostics(t *testing.T, unified, legacy []types.Diagnosti
 				UnifiedValue:    "EXISTS",
 				LegacyValue:     "MISSING",
 			})
+
+			// Extract context fields from the unified diagnostic
+			unifiedDiag := unifiedMap[key]
+			allComparisons = append(allComparisons, extractContextFieldsFromSingleDiagnostic(key, unifiedDiag, true)...)
 		}
 	}
 
@@ -332,6 +336,10 @@ func compareAndReportDiagnostics(t *testing.T, unified, legacy []types.Diagnosti
 				UnifiedValue:    "MISSING",
 				LegacyValue:     "EXISTS",
 			})
+
+			// Extract context fields from the legacy diagnostic
+			legacyDiag := legacyMap[key]
+			allComparisons = append(allComparisons, extractContextFieldsFromSingleDiagnostic(key, legacyDiag, false)...)
 		}
 	}
 
@@ -385,28 +393,26 @@ func compareAndReportDiagnostics(t *testing.T, unified, legacy []types.Diagnosti
 func collectDiagnosticFieldComparisons(title string, unified, legacy types.Diagnostic) []FieldComparison {
 	var comparisons []FieldComparison
 
-	// ONLY collect mismatches to reduce output
+	// ONLY collect mismatches to reduce output (except for key fields like Range, PackageName, Version)
 
-	// Compare Range
-	if unified.Range.Start != legacy.Range.Start {
-		comparisons = append(comparisons, FieldComparison{
-			DiagnosticTitle: title,
-			FieldPath:       "Range.Start",
-			Matched:         false,
-			UnifiedValue:    formatPosition(unified.Range.Start),
-			LegacyValue:     formatPosition(legacy.Range.Start),
-		})
-	}
+	// ALWAYS output Range (even if matching)
+	rangeStartMatched := unified.Range.Start == legacy.Range.Start
+	comparisons = append(comparisons, FieldComparison{
+		DiagnosticTitle: title,
+		FieldPath:       "Range.Start",
+		Matched:         rangeStartMatched,
+		UnifiedValue:    formatPosition(unified.Range.Start),
+		LegacyValue:     formatPosition(legacy.Range.Start),
+	})
 
-	if unified.Range.End != legacy.Range.End {
-		comparisons = append(comparisons, FieldComparison{
-			DiagnosticTitle: title,
-			FieldPath:       "Range.End",
-			Matched:         false,
-			UnifiedValue:    formatPosition(unified.Range.End),
-			LegacyValue:     formatPosition(legacy.Range.End),
-		})
-	}
+	rangeEndMatched := unified.Range.End == legacy.Range.End
+	comparisons = append(comparisons, FieldComparison{
+		DiagnosticTitle: title,
+		FieldPath:       "Range.End",
+		Matched:         rangeEndMatched,
+		UnifiedValue:    formatPosition(unified.Range.End),
+		LegacyValue:     formatPosition(legacy.Range.End),
+	})
 
 	// Compare Severity
 	if unified.Severity != legacy.Severity {
@@ -929,15 +935,15 @@ func collectOssIssueDataComparisons(title string, unified, legacy types.OssIssue
 		})
 	}
 
-	if unified.PackageName != legacy.PackageName {
-		comparisons = append(comparisons, FieldComparison{
-			DiagnosticTitle: title,
-			FieldPath:       "Data.AdditionalData.PackageName",
-			Matched:         false,
-			UnifiedValue:    formatAny(unified.PackageName),
-			LegacyValue:     formatAny(legacy.PackageName),
-		})
-	}
+	// ALWAYS output PackageName (even if matching) for context
+	packageNameMatched := unified.PackageName == legacy.PackageName
+	comparisons = append(comparisons, FieldComparison{
+		DiagnosticTitle: title,
+		FieldPath:       "Data.AdditionalData.PackageName",
+		Matched:         packageNameMatched,
+		UnifiedValue:    formatAny(unified.PackageName),
+		LegacyValue:     formatAny(legacy.PackageName),
+	})
 
 	if unified.Name != legacy.Name {
 		comparisons = append(comparisons, FieldComparison{
@@ -949,15 +955,15 @@ func collectOssIssueDataComparisons(title string, unified, legacy types.OssIssue
 		})
 	}
 
-	if unified.Version != legacy.Version {
-		comparisons = append(comparisons, FieldComparison{
-			DiagnosticTitle: title,
-			FieldPath:       "Data.AdditionalData.Version",
-			Matched:         false,
-			UnifiedValue:    formatAny(unified.Version),
-			LegacyValue:     formatAny(legacy.Version),
-		})
-	}
+	// ALWAYS output Version (even if matching) for context
+	versionMatched := unified.Version == legacy.Version
+	comparisons = append(comparisons, FieldComparison{
+		DiagnosticTitle: title,
+		FieldPath:       "Data.AdditionalData.Version",
+		Matched:         versionMatched,
+		UnifiedValue:    formatAny(unified.Version),
+		LegacyValue:     formatAny(legacy.Version),
+	})
 
 	if unified.Exploit != legacy.Exploit {
 		comparisons = append(comparisons, FieldComparison{
@@ -994,6 +1000,46 @@ func collectOssIssueDataComparisons(title string, unified, legacy types.OssIssue
 
 	// Compare FixedIn array (only mismatches)
 	comparisons = append(comparisons, collectStringArrayComparison(title, "Data.AdditionalData.FixedIn", unified.FixedIn, legacy.FixedIn)...)
+
+	// ALWAYS output introducing package (from[1]) for context - this determines the diagnostic range
+	unifiedIntroducingPkg := ""
+	legacyIntroducingPkg := ""
+	if len(unified.From) > 1 {
+		unifiedIntroducingPkg = unified.From[1]
+	}
+	if len(legacy.From) > 1 {
+		legacyIntroducingPkg = legacy.From[1]
+	}
+	introducingPkgMatched := unifiedIntroducingPkg == legacyIntroducingPkg
+	comparisons = append(comparisons, FieldComparison{
+		DiagnosticTitle: title,
+		FieldPath:       "Data.AdditionalData.From[1] (Introducing Package)",
+		Matched:         introducingPkgMatched,
+		UnifiedValue:    formatAny(unifiedIntroducingPkg),
+		LegacyValue:     formatAny(legacyIntroducingPkg),
+	})
+
+	// Extract and ALWAYS show introducing package name and version separately
+	unifiedIntroName, unifiedIntroVersion := parsePackageNameVersion(unifiedIntroducingPkg)
+	legacyIntroName, legacyIntroVersion := parsePackageNameVersion(legacyIntroducingPkg)
+
+	introNameMatched := unifiedIntroName == legacyIntroName
+	comparisons = append(comparisons, FieldComparison{
+		DiagnosticTitle: title,
+		FieldPath:       "Data.AdditionalData.From[1].Name (Introducing Package Name)",
+		Matched:         introNameMatched,
+		UnifiedValue:    formatAny(unifiedIntroName),
+		LegacyValue:     formatAny(legacyIntroName),
+	})
+
+	introVersionMatched := unifiedIntroVersion == legacyIntroVersion
+	comparisons = append(comparisons, FieldComparison{
+		DiagnosticTitle: title,
+		FieldPath:       "Data.AdditionalData.From[1].Version (Introducing Package Version)",
+		Matched:         introVersionMatched,
+		UnifiedValue:    formatAny(unifiedIntroVersion),
+		LegacyValue:     formatAny(legacyIntroVersion),
+	})
 
 	// Compare From array (only mismatches)
 	comparisons = append(comparisons, collectStringArrayComparison(title, "Data.AdditionalData.From", unified.From, legacy.From)...)
@@ -1426,6 +1472,31 @@ func formatPosition(p sglsp.Position) string {
 	return fmt.Sprintf("Line:%d, Char:%d", p.Line, p.Character)
 }
 
+// parsePackageNameVersion parses "package@version" or "groupId:artifactId@version" format
+func parsePackageNameVersion(pkgString string) (name, version string) {
+	if pkgString == "" {
+		return "", ""
+	}
+
+	// Split by @ to get name and version
+	parts := strings.Split(pkgString, "@")
+	if len(parts) < 2 {
+		return pkgString, ""
+	}
+
+	// Handle scoped packages like @org/package@version
+	// or Maven packages like groupId:artifactId@version
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+
+	// For scoped packages: @org/package@version splits into ["", "org/package", "version"]
+	// Join the first parts back together for the name
+	version = parts[len(parts)-1]
+	name = strings.Join(parts[:len(parts)-1], "@")
+	return name, version
+}
+
 func joinStrings(strs []string, sep string) string {
 	if len(strs) == 0 {
 		return ""
@@ -1493,10 +1564,23 @@ func writeComparisonFiles(t *testing.T, comparisons []FieldComparison) error {
 	fmt.Fprintln(mdFile, "# Diagnostic Comparison Report")
 	fmt.Fprintln(mdFile, "")
 
-	// Group by matched status
+	// Group by matched status and count diagnostics
 	matchedComps := []FieldComparison{}
 	unmatchedComps := []FieldComparison{}
+	diagnosticSet := make(map[string]bool)
+	missingInLegacy := make(map[string]bool)
+	missingInUnified := make(map[string]bool)
+
 	for _, fc := range comparisons {
+		diagnosticSet[fc.DiagnosticTitle] = true
+		if fc.FieldPath == "_DIAGNOSTIC_" {
+			if fc.UnifiedValue == "EXISTS" && fc.LegacyValue == "MISSING" {
+				missingInLegacy[fc.DiagnosticTitle] = true
+			} else if fc.UnifiedValue == "MISSING" && fc.LegacyValue == "EXISTS" {
+				missingInUnified[fc.DiagnosticTitle] = true
+			}
+		}
+
 		if fc.Matched {
 			matchedComps = append(matchedComps, fc)
 		} else {
@@ -1504,11 +1588,37 @@ func writeComparisonFiles(t *testing.T, comparisons []FieldComparison) error {
 		}
 	}
 
+	// Calculate statistics
+	totalDiagnostics := len(diagnosticSet)
+	matchedDiagnostics := totalDiagnostics - len(missingInLegacy) - len(missingInUnified)
+	totalFieldComparisons := len(comparisons)
+	matchedFields := len(matchedComps)
+	unmatchedFields := len(unmatchedComps)
+
+	// Write statistics section
+	fmt.Fprintln(mdFile, "## 📊 Comparison Statistics")
+	fmt.Fprintln(mdFile, "")
+	fmt.Fprintf(mdFile, "| Metric | Count | Percentage |\n")
+	fmt.Fprintf(mdFile, "|--------|-------|------------|\n")
+	fmt.Fprintf(mdFile, "| **Total Diagnostics Compared** | %d | - |\n", totalDiagnostics)
+	fmt.Fprintf(mdFile, "| Diagnostics in Both Flows | %d | %.1f%% |\n", matchedDiagnostics, float64(matchedDiagnostics)/float64(totalDiagnostics)*100)
+	fmt.Fprintf(mdFile, "| Diagnostics Only in Unified | %d | %.1f%% |\n", len(missingInLegacy), float64(len(missingInLegacy))/float64(totalDiagnostics)*100)
+	fmt.Fprintf(mdFile, "| Diagnostics Only in Legacy | %d | %.1f%% |\n", len(missingInUnified), float64(len(missingInUnified))/float64(totalDiagnostics)*100)
+	fmt.Fprintf(mdFile, "| **Total Field Comparisons** | %d | - |\n", totalFieldComparisons)
+	fmt.Fprintf(mdFile, "| Matched Fields | %d | %.1f%% |\n", matchedFields, float64(matchedFields)/float64(totalFieldComparisons)*100)
+	fmt.Fprintf(mdFile, "| Unmatched Fields | %d | %.1f%% |\n", unmatchedFields, float64(unmatchedFields)/float64(totalFieldComparisons)*100)
+	fmt.Fprintln(mdFile, "")
+	fmt.Fprintln(mdFile, "---")
+	fmt.Fprintln(mdFile, "")
+
+	// Build a map of key context fields for each diagnostic (to show in both sections)
+	contextFields := buildContextFieldsMap(comparisons)
+
 	// Write unmatched section first (more important)
 	if len(unmatchedComps) > 0 {
 		fmt.Fprintln(mdFile, "## ❌ Unmatched Fields")
 		fmt.Fprintln(mdFile, "")
-		writeMDSection(mdFile, unmatchedComps)
+		writeMDSectionWithContext(mdFile, unmatchedComps, contextFields)
 	}
 
 	// Write matched section
@@ -1520,6 +1630,71 @@ func writeComparisonFiles(t *testing.T, comparisons []FieldComparison) error {
 
 	t.Logf("Comparison files written: diagnostic_comparison.csv and diagnostic_comparison.md")
 	return nil
+}
+
+// buildContextFieldsMap extracts key context fields for each diagnostic
+func buildContextFieldsMap(comparisons []FieldComparison) map[string][]FieldComparison {
+	contextFieldsMap := make(map[string][]FieldComparison)
+
+	// Key fields that provide context for understanding the diagnostic
+	keyFields := map[string]bool{
+		"Range.Start":                     true,
+		"Range.End":                       true,
+		"Data.AdditionalData.PackageName": true,
+		"Data.AdditionalData.Version":     true,
+		"Data.AdditionalData.From[1] (Introducing Package)":                 true,
+		"Data.AdditionalData.From[1].Name (Introducing Package Name)":       true,
+		"Data.AdditionalData.From[1].Version (Introducing Package Version)": true,
+	}
+
+	for _, fc := range comparisons {
+		if keyFields[fc.FieldPath] {
+			contextFieldsMap[fc.DiagnosticTitle] = append(contextFieldsMap[fc.DiagnosticTitle], fc)
+		}
+	}
+
+	return contextFieldsMap
+}
+
+// writeMDSectionWithContext writes a section with context fields prepended to each diagnostic
+func writeMDSectionWithContext(file *os.File, comparisons []FieldComparison, contextFields map[string][]FieldComparison) {
+	currentDiagnostic := ""
+
+	for _, fc := range comparisons {
+		// New diagnostic section
+		if fc.DiagnosticTitle != currentDiagnostic {
+			if currentDiagnostic != "" {
+				fmt.Fprintln(file, "")
+			}
+			currentDiagnostic = fc.DiagnosticTitle
+			fmt.Fprintf(file, "### Diagnostic: %s\n\n", escapeMarkdown(currentDiagnostic))
+			fmt.Fprintln(file, "| Field Path | Unified Value | Legacy Value |")
+			fmt.Fprintln(file, "|------------|---------------|--------------|")
+
+			// Write context fields first (if available)
+			if context, exists := contextFields[currentDiagnostic]; exists {
+				for _, ctxField := range context {
+					matchIndicator := "✅"
+					if !ctxField.Matched {
+						matchIndicator = "❌"
+					}
+					fmt.Fprintf(file, "| %s %s | %s | %s |\n",
+						matchIndicator,
+						escapeMarkdown(ctxField.FieldPath),
+						escapeMarkdown(ctxField.UnifiedValue),
+						escapeMarkdown(ctxField.LegacyValue))
+				}
+			}
+		}
+
+		// Write field row
+		fmt.Fprintf(file, "| %s | %s | %s |\n",
+			escapeMarkdown(fc.FieldPath),
+			escapeMarkdown(fc.UnifiedValue),
+			escapeMarkdown(fc.LegacyValue))
+	}
+
+	fmt.Fprintln(file, "")
 }
 
 func writeMDSection(file *os.File, comparisons []FieldComparison) {
@@ -1554,4 +1729,172 @@ func escapeMarkdown(s string) string {
 		"\r", "",
 	)
 	return replacer.Replace(s)
+}
+
+// extractContextFieldsFromSingleDiagnostic extracts context fields from a diagnostic that exists only in one flow
+func extractContextFieldsFromSingleDiagnostic(title string, diag types.Diagnostic, isUnified bool) []FieldComparison {
+	var comparisons []FieldComparison
+
+	// Extract Range
+	comparisons = append(comparisons, FieldComparison{
+		DiagnosticTitle: title,
+		FieldPath:       "Range.Start",
+		Matched:         false,
+		UnifiedValue: func() string {
+			if isUnified {
+				return formatPosition(diag.Range.Start)
+			} else {
+				return "N/A"
+			}
+		}(),
+		LegacyValue: func() string {
+			if !isUnified {
+				return formatPosition(diag.Range.Start)
+			} else {
+				return "N/A"
+			}
+		}(),
+	})
+
+	comparisons = append(comparisons, FieldComparison{
+		DiagnosticTitle: title,
+		FieldPath:       "Range.End",
+		Matched:         false,
+		UnifiedValue: func() string {
+			if isUnified {
+				return formatPosition(diag.Range.End)
+			} else {
+				return "N/A"
+			}
+		}(),
+		LegacyValue: func() string {
+			if !isUnified {
+				return formatPosition(diag.Range.End)
+			} else {
+				return "N/A"
+			}
+		}(),
+	})
+
+	// Try to extract OssIssueData
+	ossData, ok := diag.Data.AdditionalData.(types.OssIssueData)
+	if !ok {
+		// Try to convert from map
+		ossData, ok = convertMapToOssIssueData(diag.Data.AdditionalData)
+	}
+
+	if ok {
+		// Extract PackageName
+		comparisons = append(comparisons, FieldComparison{
+			DiagnosticTitle: title,
+			FieldPath:       "Data.AdditionalData.PackageName",
+			Matched:         false,
+			UnifiedValue: func() string {
+				if isUnified {
+					return formatAny(ossData.PackageName)
+				} else {
+					return "N/A"
+				}
+			}(),
+			LegacyValue: func() string {
+				if !isUnified {
+					return formatAny(ossData.PackageName)
+				} else {
+					return "N/A"
+				}
+			}(),
+		})
+
+		// Extract Version
+		comparisons = append(comparisons, FieldComparison{
+			DiagnosticTitle: title,
+			FieldPath:       "Data.AdditionalData.Version",
+			Matched:         false,
+			UnifiedValue: func() string {
+				if isUnified {
+					return formatAny(ossData.Version)
+				} else {
+					return "N/A"
+				}
+			}(),
+			LegacyValue: func() string {
+				if !isUnified {
+					return formatAny(ossData.Version)
+				} else {
+					return "N/A"
+				}
+			}(),
+		})
+
+		// Extract Introducing Package (from[1])
+		introducingPkg := ""
+		if len(ossData.From) > 1 {
+			introducingPkg = ossData.From[1]
+		}
+
+		comparisons = append(comparisons, FieldComparison{
+			DiagnosticTitle: title,
+			FieldPath:       "Data.AdditionalData.From[1] (Introducing Package)",
+			Matched:         false,
+			UnifiedValue: func() string {
+				if isUnified {
+					return formatAny(introducingPkg)
+				} else {
+					return "N/A"
+				}
+			}(),
+			LegacyValue: func() string {
+				if !isUnified {
+					return formatAny(introducingPkg)
+				} else {
+					return "N/A"
+				}
+			}(),
+		})
+
+		// Extract Introducing Package Name and Version
+		introName, introVersion := parsePackageNameVersion(introducingPkg)
+
+		comparisons = append(comparisons, FieldComparison{
+			DiagnosticTitle: title,
+			FieldPath:       "Data.AdditionalData.From[1].Name (Introducing Package Name)",
+			Matched:         false,
+			UnifiedValue: func() string {
+				if isUnified {
+					return formatAny(introName)
+				} else {
+					return "N/A"
+				}
+			}(),
+			LegacyValue: func() string {
+				if !isUnified {
+					return formatAny(introName)
+				} else {
+					return "N/A"
+				}
+			}(),
+		})
+
+		comparisons = append(comparisons, FieldComparison{
+			DiagnosticTitle: title,
+			FieldPath:       "Data.AdditionalData.From[1].Version (Introducing Package Version)",
+			Matched:         false,
+			UnifiedValue: func() string {
+				if isUnified {
+					return formatAny(introVersion)
+				} else {
+					return "N/A"
+				}
+			}(),
+			LegacyValue: func() string {
+				if !isUnified {
+					return formatAny(introVersion)
+				} else {
+					return "N/A"
+				}
+			}(),
+		})
+	}
+
+	return comparisons
 }
