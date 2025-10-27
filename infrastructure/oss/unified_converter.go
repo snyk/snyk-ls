@@ -585,27 +585,40 @@ func extractUpgradePackage(finding testapi.FindingData) []string {
 }
 
 // buildUpgradePath builds the upgrade path from the unified API fix data
+// Returns: [false, "intermediate1@version", "intermediate2@version", ..., "target@version"]
+// This matches Legacy CLI behavior which shows the full dependency path with upgraded versions
 func buildUpgradePath(finding testapi.FindingData, vuln *testapi.SnykVulnProblem) []any {
-	// Extract upgrade path from the unified API
-	upgradePath := extractUpgradePackage(finding)
-
-	// Fallback to InitiallyFixedInVersions when Relationships.Fix is missing
-	if len(upgradePath) == 0 && len(vuln.InitiallyFixedInVersions) > 0 {
-		result := []any{false}
-		result = append(result, fmt.Sprintf("%s@%s", vuln.PackageName, vuln.InitiallyFixedInVersions[0]))
-		return result
-	}
-
-	if len(upgradePath) == 0 {
+	// Get the dependency path (From field)
+	dependencyPath := extractDependencyPath(finding)
+	if len(dependencyPath) == 0 {
+		// Fallback when no dependency path is available
+		if len(vuln.InitiallyFixedInVersions) > 0 {
+			result := []any{false}
+			result = append(result, fmt.Sprintf("%s@%s", vuln.PackageName, vuln.InitiallyFixedInVersions[0]))
+			return result
+		}
 		return []any{}
 	}
 
-	// Format matches legacy: [false, "package@version", "intermediate@version", ...]
+	// Extract upgrade path from the unified API
+	upgradePath := extractUpgradePackage(finding)
+
+	// Build result matching Legacy format: [false, intermediate1@v1, intermediate2@v2, ..., target@version]
 	result := []any{false} // First element is always false (no patch)
 
-	// Add all packages from upgrade path except the root project (skip index 0)
-	for i := 1; i < len(upgradePath); i++ {
-		result = append(result, upgradePath[i])
+	// If we have upgrade path data from the API, use it
+	if len(upgradePath) > 1 {
+		// Add all packages from upgrade path except the root (skip index 0)
+		for i := 1; i < len(upgradePath); i++ {
+			result = append(result, upgradePath[i])
+		}
+	} else if len(vuln.InitiallyFixedInVersions) > 0 {
+		// Fallback: Use dependency path with upgraded version for target
+		// Replace last package with upgraded version
+		for i := 1; i < len(dependencyPath)-1; i++ {
+			result = append(result, dependencyPath[i])
+		}
+		result = append(result, fmt.Sprintf("%s@%s", vuln.PackageName, vuln.InitiallyFixedInVersions[0]))
 	}
 
 	return result
