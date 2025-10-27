@@ -589,6 +589,13 @@ func buildUpgradePath(finding testapi.FindingData, vuln *testapi.SnykVulnProblem
 	// Extract upgrade path from the unified API
 	upgradePath := extractUpgradePackage(finding)
 
+	// Fallback to InitiallyFixedInVersions when Relationships.Fix is missing
+	if len(upgradePath) == 0 && len(vuln.InitiallyFixedInVersions) > 0 {
+		result := []any{false}
+		result = append(result, fmt.Sprintf("%s@%s", vuln.PackageName, vuln.InitiallyFixedInVersions[0]))
+		return result
+	}
+
 	if len(upgradePath) == 0 {
 		return []any{}
 	}
