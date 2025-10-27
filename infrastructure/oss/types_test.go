@@ -50,7 +50,8 @@ func Test_ossIssue_toAdditionalData_ConvertsPolicyAnnotations(t *testing.T) {
 	}
 
 	path := types.FilePath(fmt.Sprintf("/path/to/%s", fakeScanResult.DisplayTargetFile))
-	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{}, path)
+	emptyRange := types.Range{}
+	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{}, path, emptyRange)
 
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.Annotation.Value)
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.Annotation.Reason)
@@ -64,7 +65,8 @@ func Test_ossIssue_toAdditionalData_HasLicenseLearnURL(t *testing.T) {
 		ProjectName:       "test",
 	}
 	path := types.FilePath(fmt.Sprintf("/path/to/%s", fakeScanResult.DisplayTargetFile))
-	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{}, path)
+	emptyRange := types.Range{}
+	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{}, path, emptyRange)
 
 	assert.Equal(t, "https://learn.snyk.io/lesson/license-policy-management/?loc=ide", convertedIssue.Lesson)
 }
@@ -77,7 +79,8 @@ func Test_ossIssue_toAdditionalData_ConvertsSeverityChange(t *testing.T) {
 		ProjectName:       "test",
 	}
 	path := types.FilePath(fmt.Sprintf("/path/to/%s", fakeScanResult.DisplayTargetFile))
-	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{}, path)
+	emptyRange := types.Range{}
+	convertedIssue := issue.toAdditionalData(fakeScanResult, []snyk.OssIssueData{}, path, emptyRange)
 
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.SeverityChange.OriginalSeverity)
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.SeverityChange.NewSeverity)

@@ -42,7 +42,7 @@ import (
 // This is an integration test that downloads and installs the CLI if necessary
 // it uses real CLI output for verification of functionality
 func Test_Scan(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	testutil.CreateDummyProgressListener(t)
 	c.SetFormat(config.FormatHtml)
 	ctx := t.Context()

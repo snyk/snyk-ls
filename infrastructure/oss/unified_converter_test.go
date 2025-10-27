@@ -17,138 +17,95 @@
 package oss
 
 import (
+	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/rs/zerolog"
+	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func Test_ConvertFindingDataToIssues_EmptyFindings(t *testing.T) {
-	// Arrange
-	ctx := t.Context()
-	workDir := types.FilePath("/test/workdir")
-	path := types.FilePath("/test/workdir/package.json")
-	logger := zerolog.Nop()
-	errorReporter := error_reporting.NewTestErrorReporter()
-	var learnService learn.Service
-	packageIssueCache := make(map[string][]types.Issue)
-	format := config.FormatMd
-	metadata := &WorkflowMetadata{
-		ProjectName:    "test-project",
-		PackageManager: "npm",
-	}
+func Test_convertFindingDataToIssues_EmptyFindings(t *testing.T) {
+	_, ctx := testutil.UnitTestWithCtx(t)
+	workDir, err := filepath.Abs("testdata")
+	require.NoError(t, err)
 
-	var findings []testapi.FindingData
+	path := filepath.Join(workDir, "package.json")
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
+	packageIssueCache := make(map[string][]types.Issue)
+
+	mockResult := createMockResult(t, path)
+	mockResult.EXPECT().Findings(gomock.Any()).Return(nil, true, nil).AnyTimes()
 
 	// Act
-	issues := ConvertFindingDataToIssues(
+	issues, err := convertTestResultToIssues(
 		ctx,
-		findings,
-		workDir,
-		path,
-		&logger,
-		errorReporter,
-		learnService,
+		mockResult,
 		packageIssueCache,
-		format,
-		metadata,
 	)
 
-	// Assert
-	assert.NotNil(t, issues)
-	assert.Empty(t, issues)
+	// require
+	require.NoError(t, err)
+	require.NotNil(t, issues)
+	require.Empty(t, issues)
 }
 
-func Test_ConvertFindingDataToIssues_SingleVulnerability(t *testing.T) {
+func Test_convertFindingDataToIssues_SingleVulnerability(t *testing.T) {
+	_, ctx := testutil.UnitTestWithCtx(t)
 	// Arrange
-	ctx := t.Context()
-	workDir := types.FilePath("/test/workdir")
-	path := types.FilePath("/test/workdir/package.json")
-	logger := zerolog.Nop()
-	errorReporter := error_reporting.NewTestErrorReporter()
-	var learnService learn.Service
+	workDir, err := filepath.Abs("testdata")
+	require.NoError(t, err)
+	path := filepath.Join(workDir, "package.json")
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
 	packageIssueCache := make(map[string][]types.Issue)
-	format := config.FormatMd
-	metadata := &WorkflowMetadata{
-		ProjectName:    "test-project",
-		PackageManager: "npm",
-	}
 
 	// Create a test finding
 	finding := createTestFinding()
 	findings := []testapi.FindingData{finding}
 
+	mockResult := createMockResult(t, path)
+	mockResult.EXPECT().Findings(ctx).Return(findings, true, nil).AnyTimes()
+
 	// Act
-	issues := ConvertFindingDataToIssues(
+	issues, err := convertTestResultToIssues(
 		ctx,
-		findings,
-		workDir,
-		path,
-		&logger,
-		errorReporter,
-		learnService,
+		mockResult,
 		packageIssueCache,
-		format,
-		metadata,
 	)
 
-	// Assert
+	// require
+	require.NoError(t, err)
 	require.NotNil(t, issues)
 	require.Len(t, issues, 1)
 
 	issue := issues[0]
-	assert.NotEmpty(t, issue.GetID())
-	assert.NotEmpty(t, issue.GetMessage())
-	assert.NotNil(t, issue.GetAdditionalData())
+	require.NotEmpty(t, issue.GetID())
+	require.NotEmpty(t, issue.GetMessage())
+	require.NotNil(t, issue.GetAdditionalData())
 }
 
-func Test_convertFindingToIssue_GetID(t *testing.T) {
-	// Arrange
-	finding := createTestFinding()
-	workDir := types.FilePath("/test/workdir")
-	affectedFilePath := types.FilePath("/test/workdir/package.json")
-	var learnService learn.Service
-	format := config.FormatMd
-	metadata := &WorkflowMetadata{
-		ProjectName:    "test-project",
-		PackageManager: "npm",
-	}
+func createMockResult(t *testing.T, path string) *mocks.MockTestResult {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	mockResult := mocks.NewMockTestResult(ctrl)
 
-	// Act
-	issue, err := convertFindingToIssue(finding, workDir, affectedFilePath, learnService, format, metadata)
+	subject := testapi.DepGraphSubject{Type: testapi.DepGraphSubjectTypeDepGraph, Locator: testapi.LocalPathLocator{
+		Paths: []string{path},
+		Type:  testapi.LocalPath,
+	}}
 
-	// Assert
+	testSubject := testapi.TestSubject{}
+	err := testSubject.FromDepGraphSubject(subject)
 	require.NoError(t, err)
-	require.NotNil(t, issue)
-	assert.Equal(t, "SNYK-JS-TEST-123456", issue.GetID())
-}
 
-func Test_convertFindingToIssue_GetSeverity(t *testing.T) {
-	// Arrange
-	finding := createTestFinding()
-	workDir := types.FilePath("/test/workdir")
-	affectedFilePath := types.FilePath("/test/workdir/package.json")
-	var learnService learn.Service
-	format := config.FormatMd
-	metadata := &WorkflowMetadata{
-		ProjectName:    "test-project",
-		PackageManager: "npm",
-	}
-
-	// Act
-	issue, err := convertFindingToIssue(finding, workDir, affectedFilePath, learnService, format, metadata)
-
-	// Assert
-	require.NoError(t, err)
-	require.NotNil(t, issue)
-	assert.Equal(t, types.High, issue.GetSeverity())
+	mockResult.EXPECT().GetTestSubject().Return(testSubject).AnyTimes()
+	return mockResult
 }
 
 // createTestFinding creates a sample FindingData for testing
@@ -199,4 +156,154 @@ func createTestProblems() []testapi.Problem {
 	_ = problem.FromSnykVulnProblem(vulnProblem)
 
 	return []testapi.Problem{problem}
+}
+
+// Test_buildUpgradePath tests the buildUpgradePath function
+func Test_buildUpgradePath(t *testing.T) {
+	tests := []struct {
+		name            string
+		finding         testapi.FindingData
+		vuln            *testapi.SnykVulnProblem
+		expectedUpgrade []any
+		description     string
+	}{
+		{
+			name:    "Fallback when no upgrade path in API",
+			finding: createFindingWithoutUpgradePath(),
+			vuln: &testapi.SnykVulnProblem{
+				PackageName:              "test-package",
+				PackageVersion:           "1.0.0",
+				InitiallyFixedInVersions: []string{"1.0.1"},
+			},
+			expectedUpgrade: []any{false, "test-package@1.0.1"},
+			description:     "Should fallback to InitiallyFixedInVersions when no upgrade path",
+		},
+		{
+			name:    "Empty when no upgrade path and no fixed versions",
+			finding: createFindingWithoutUpgradePath(),
+			vuln: &testapi.SnykVulnProblem{
+				PackageName:              "test-package",
+				PackageVersion:           "1.0.0",
+				InitiallyFixedInVersions: []string{},
+			},
+			expectedUpgrade: []any{false},
+			description:     "Should return [false] when no upgrade information but has dependency path",
+		},
+		{
+			name:    "Upgrade path with dependency path",
+			finding: createFindingWithUpgradePath("goof@1.0.1", []string{"hbs@4.0.4", "handlebars@4.0.14", "uglify-js@3.13.9"}),
+			vuln: &testapi.SnykVulnProblem{
+				PackageName:              "uglify-js",
+				PackageVersion:           "3.13.9",
+				InitiallyFixedInVersions: []string{"3.19.3"},
+			},
+			expectedUpgrade: []any{false, "hbs@4.0.4", "handlebars@4.0.14", "uglify-js@3.19.3"},
+			description:     "Should use dependency path with upgraded version for target",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Act
+			result := buildUpgradePath(tt.finding, tt.vuln)
+
+			// Assert
+			require.Equal(t, len(tt.expectedUpgrade), len(result), "Length mismatch")
+			for i, expected := range tt.expectedUpgrade {
+				require.Equal(t, expected, result[i], "Upgrade path element %d mismatch", i)
+			}
+		})
+	}
+}
+
+// Helper functions for creating test findings
+func createFindingWithUpgradePath(root string, path []string) testapi.FindingData {
+	finding := createTestFinding()
+
+	// Add dependency path evidence
+	if finding.Attributes == nil {
+		finding.Attributes = &testapi.FindingAttributes{}
+	}
+	if finding.Attributes.Evidence == nil {
+		finding.Attributes.Evidence = []testapi.Evidence{}
+	}
+
+	// Create dependency packages
+	dependencyPkgs := make([]testapi.Package, len(path)+1)
+	rootParts := strings.Split(root, "@")
+	dependencyPkgs[0] = testapi.Package{Name: rootParts[0], Version: rootParts[1]}
+
+	for i, pkgStr := range path {
+		parts := strings.Split(pkgStr, "@")
+		dependencyPkgs[i+1] = testapi.Package{Name: parts[0], Version: parts[1]}
+	}
+
+	// Add dependency path evidence
+	var depEv testapi.Evidence
+	_ = depEv.FromDependencyPathEvidence(testapi.DependencyPathEvidence{
+		Path: dependencyPkgs,
+	})
+
+	finding.Attributes.Evidence = append(finding.Attributes.Evidence, depEv)
+
+	return finding
+}
+
+func createFindingWithoutUpgradePath() testapi.FindingData {
+	finding := createTestFinding()
+
+	// Add dependency path evidence but no upgrade path
+	if finding.Attributes == nil {
+		finding.Attributes = &testapi.FindingAttributes{}
+	}
+
+	if finding.Attributes.Evidence == nil {
+		finding.Attributes.Evidence = []testapi.Evidence{}
+	}
+
+	var depEv testapi.Evidence
+	_ = depEv.FromDependencyPathEvidence(testapi.DependencyPathEvidence{
+		Path: []testapi.Package{
+			{Name: "root", Version: "1.0.0"},
+			{Name: "test-package", Version: "1.0.0"},
+		},
+	})
+
+	finding.Attributes.Evidence = append(finding.Attributes.Evidence, depEv)
+
+	return finding
+}
+
+// Test_buildRemediationAdvice tests the buildRemediationAdvice function
+func Test_buildRemediationAdvice(t *testing.T) {
+	tests := []struct {
+		name            string
+		finding         testapi.FindingData
+		vuln            *testapi.SnykVulnProblem
+		expectedMessage string
+		description     string
+	}{
+		{
+			name: "No remediation when no fixed versions",
+			finding: createFindingWithoutUpgradePath(),
+			vuln: &testapi.SnykVulnProblem{
+				PackageName:              "test-package",
+				PackageVersion:           "1.0.0",
+				InitiallyFixedInVersions: []string{},
+			},
+			expectedMessage: "No remediation advice available",
+			description:     "Should return no remediation message when no fix available",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Act
+			result := buildRemediationAdvice(tt.finding, tt.vuln)
+
+			// Assert
+			require.NotEmpty(t, result, "Message should not be empty")
+			require.Contains(t, result, tt.expectedMessage)
+		})
+	}
 }

@@ -52,16 +52,16 @@ type Scanner interface {
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
-	scanners            []types.ProductScanner
+	authService         authentication.AuthenticationService
+	c                   *config.Config
 	initializer         initialize.Initializer
 	instrumentor        performance.Instrumentor
-	scanNotifier        ScanNotifier
-	snykApiClient       snyk_api.SnykApiClient
-	authService         authentication.AuthenticationService
 	notifier            notification.Notifier
-	c                   *config.Config
+	scanners            []types.ProductScanner
+	scanNotifier        ScanNotifier
 	scanPersister       persistence.ScanSnapshotPersister
 	scanStateAggregator scanstates.Aggregator
+	snykApiClient       snyk_api.SnykApiClient
 }
 
 func (sc *DelegatingConcurrentScanner) Issue(key string) types.Issue {
@@ -161,15 +161,15 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 
 func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, scanners ...types.ProductScanner) Scanner {
 	return &DelegatingConcurrentScanner{
-		instrumentor:        instrumentor,
+		authService:         authService,
+		c:                   c,
 		initializer:         initializer,
-		scanNotifier:        scanNotifier,
+		instrumentor:        instrumentor,
+		notifier:            notifier,
 		snykApiClient:       snykApiClient,
 		scanners:            scanners,
-		authService:         authService,
-		notifier:            notifier,
+		scanNotifier:        scanNotifier,
 		scanPersister:       scanPersister,
-		c:                   c,
 		scanStateAggregator: scanStateAggregator,
 	}
 }
@@ -208,7 +208,8 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 		return
 	}
 
-	ctx, logger = sc.enrichContextAndLogger(ctx, logger)
+	folderConfig := sc.c.FolderConfig(folderPath)
+	ctx, logger = sc.enrichContextAndLogger(ctx, logger, folderConfig, folderPath, path)
 
 	authenticated := sc.authService.IsAuthenticated()
 
@@ -240,7 +241,6 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 	}
 
 	sc.scanNotifier.SendInProgress(folderPath)
-	folderConfig := sc.c.FolderConfig(folderPath)
 	gitCheckoutHandler := vcs.NewCheckoutHandler(sc.c.Engine().GetConfiguration())
 
 	waitGroup := &sync.WaitGroup{}
@@ -251,7 +251,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 			referenceBranchScanWaitGroup.Add(1)
 			go func(s types.ProductScanner) {
 				defer waitGroup.Done()
-				enrichedContext, productWDScanLogger := sc.enrichContextAndLogger(ctx, logger)
+				enrichedContext, productWDScanLogger := sc.enrichContextAndLogger(ctx, logger, folderConfig, folderPath, path)
 				span := sc.instrumentor.NewTransaction(context.WithValue(enrichedContext, s.Product(), s), string(s.Product()), method)
 				defer sc.instrumentor.Finish(span)
 				productWDScanLogger.Info().Msgf("Scanning %s with %T: STARTED", path, s)
@@ -291,8 +291,8 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 				go func() {
 					defer referenceBranchScanWaitGroup.Done()
 					isSingleFileScan := path != folderPath
-					scanTypeCtx := ctx2.NewContextWithDeltaScanType(context.Background(), ctx2.Reference)
-					refScanCtx, productRefScanLogger := sc.enrichContextAndLogger(scanTypeCtx, logger)
+					scanTypeCtx := ctx2.NewContextWithDeltaScanType(ctx2.Clone(ctx, context.Background()), ctx2.Reference)
+					refScanCtx, productRefScanLogger := sc.enrichContextAndLogger(scanTypeCtx, logger, folderConfig, folderPath, path)
 
 					// only trigger a base scan if we are scanning an actual working directory. It could also be a
 					// single file scan, triggered by e.g. a file save
@@ -343,27 +343,6 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 	}()
 }
 
-func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(ctx context.Context, logger zerolog.Logger) (context.Context, zerolog.Logger) {
-	// by default, scan source is IDE
-	scanSource, ok := ctx2.ScanSourceFromContext(ctx)
-	if !ok {
-		scanSource = ctx2.IDE
-		ctx = ctx2.NewContextWithScanSource(ctx, scanSource)
-	}
-
-	logger = logger.With().Any("scanSource", scanSource).Logger()
-
-	scanType, ok := ctx2.DeltaScanTypeFromContext(ctx)
-	if !ok {
-		scanType = ctx2.WorkingDirectory
-		ctx = ctx2.NewContextWithDeltaScanType(ctx, scanType)
-	}
-
-	logger = logger.With().Any("deltaScanType", scanType).Logger()
-
-	return ctx, logger
-}
-
 func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types.ProductScanner, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) ([]types.Issue, error) {
 	foundIssues, err := s.Scan(ctx, path, folderPath, folderConfig)
 	if err != nil {
@@ -371,4 +350,50 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types
 	}
 
 	return foundIssues, nil
+}
+
+func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(
+	ctx context.Context,
+	logger zerolog.Logger,
+	folderConfig *types.FolderConfig,
+	workDir types.FilePath,
+	filePath types.FilePath,
+) (context.Context, zerolog.Logger) {
+	// by default, scan source is IDE
+	scanSource, ok := ctx2.ScanSourceFromContext(ctx)
+	if !ok {
+		scanSource = ctx2.IDE
+		ctx = ctx2.NewContextWithScanSource(ctx, scanSource)
+	}
+
+	scanType, ok := ctx2.DeltaScanTypeFromContext(ctx)
+	if !ok {
+		scanType = ctx2.WorkingDirectory
+		ctx = ctx2.NewContextWithDeltaScanType(ctx, scanType)
+	}
+
+	logger = logger.With().Any("deltaScanType", scanType).Any("scanSource", scanSource).Logger()
+
+	// add logger to context
+	ctx = ctx2.NewContextWithLogger(ctx, &logger)
+
+	// add scanner dependencies to context
+	ctx = ctx2.NewContextWithDependencies(ctx, map[string]any{
+		ctx2.DepScanners:            sc.scanners,
+		ctx2.DepNotifier:            sc.notifier,
+		ctx2.DepScanNotifier:        sc.scanNotifier,
+		ctx2.DepInstrumentor:        sc.instrumentor,
+		ctx2.DepConfig:              sc.c,
+		ctx2.DepInitializer:         sc.initializer,
+		ctx2.DepApiClient:           sc.snykApiClient,
+		ctx2.DepAuthService:         sc.authService,
+		ctx2.DepScanPersister:       sc.scanPersister,
+		ctx2.DepScanStateAggregator: sc.scanStateAggregator,
+		ctx2.DepFolderConfig:        folderConfig,
+	})
+
+	// add work dir and file path to context
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workDir, filePath)
+
+	return ctx, logger
 }

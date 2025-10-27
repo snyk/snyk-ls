@@ -74,7 +74,7 @@ func Test_FindRange(t *testing.T) {
 	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
 	var p = "build.gradle"
-	node := getDependencyNode(c.Logger(), types.FilePath(p), issue, []byte(content))
+	node := getDependencyNode(c.Logger(), types.FilePath(p), issue.PackageManager, issue.From, []byte(content))
 	foundRange := getRangeFromNode(node)
 
 	assert.Equal(t, 3, foundRange.Start.Line)
@@ -83,20 +83,7 @@ func Test_FindRange(t *testing.T) {
 }
 
 func Test_introducingPackageAndVersion(t *testing.T) {
-	var issue = ossIssue{
-		Id:             "testIssue",
-		Name:           "SNYK-TEST-ISSUE-1",
-		Title:          "THOU SHALL NOT PASS",
-		Severity:       "1",
-		LineNumber:     0,
-		Description:    "Getting into Moria is an issue!",
-		References:     nil,
-		Version:        "",
-		PackageManager: "npm",
-		From:           []string{"goof@1.0.1", "lodash@4.17.4"},
-	}
-
-	actualPackage, actualVersion := introducingPackageAndVersion(issue)
+	actualPackage, actualVersion := introducingPackageAndVersion([]string{"goof@1.0.1", "lodash@4.17.4"}, "npm")
 	assert.Equal(t, "4.17.4", actualVersion)
 	assert.Equal(t, "lodash", actualPackage)
 }
@@ -197,7 +184,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 func Test_introducingPackageAndVersionJava(t *testing.T) {
 	issue := mavenTestIssue()
 
-	actualPackage, actualVersion := introducingPackageAndVersion(issue)
+	actualPackage, actualVersion := introducingPackageAndVersion(issue.From, issue.PackageManager)
 	assert.Equal(t, "4.17.4", actualVersion)
 	assert.Equal(t, "test", actualPackage)
 }
