@@ -781,6 +781,9 @@ func buildRemediationAdvice(finding testapi.FindingData, vuln *testapi.SnykVulnP
 	dependencyPath := extractDependencyPath(finding)
 	packageManager := extractEcosystemString(vuln.Ecosystem)
 
+	// Extract the actual version from the finding
+	actualVersion := extractVersion(finding, vuln)
+
 	// Build upgrade message
 	upgradeMessage := ""
 	if len(upgradePath) > 1 {
@@ -802,7 +805,7 @@ func buildRemediationAdvice(finding testapi.FindingData, vuln *testapi.SnykVulnP
 	if len(vuln.InitiallyFixedInVersions) > 0 {
 		if isOutdated {
 			// Outdated dependencies scenario
-			return buildOutdatedDependencyMessage(vuln.PackageName, vuln.PackageVersion, packageManager)
+			return buildOutdatedDependencyMessage(vuln.PackageName, actualVersion, packageManager)
 		} else if upgradeMessage != "" {
 			return upgradeMessage
 		}

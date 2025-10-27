@@ -273,3 +273,37 @@ func createFindingWithoutUpgradePath() testapi.FindingData {
 
 	return finding
 }
+
+// Test_buildRemediationAdvice tests the buildRemediationAdvice function
+func Test_buildRemediationAdvice(t *testing.T) {
+	tests := []struct {
+		name            string
+		finding         testapi.FindingData
+		vuln            *testapi.SnykVulnProblem
+		expectedMessage string
+		description     string
+	}{
+		{
+			name: "No remediation when no fixed versions",
+			finding: createFindingWithoutUpgradePath(),
+			vuln: &testapi.SnykVulnProblem{
+				PackageName:              "test-package",
+				PackageVersion:           "1.0.0",
+				InitiallyFixedInVersions: []string{},
+			},
+			expectedMessage: "No remediation advice available",
+			description:     "Should return no remediation message when no fix available",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Act
+			result := buildRemediationAdvice(tt.finding, tt.vuln)
+
+			// Assert
+			require.NotEmpty(t, result, "Message should not be empty")
+			require.Contains(t, result, tt.expectedMessage)
+		})
+	}
+}
