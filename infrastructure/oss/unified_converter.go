@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/data_structure"
+	"github.com/snyk/snyk-ls/internal/float"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -47,7 +48,12 @@ type WorkflowMetadata struct {
 	OrgID             string
 }
 
-type ProblemsMap map[*testapi.SnykVulnProblem][]testapi.FindingData
+type ProblemsMap map[string]ProblemGroup
+
+type ProblemGroup struct {
+	Problem  *testapi.SnykVulnProblem
+	Findings []testapi.FindingData
+}
 
 // convertTestResultToIssues converts testapi.FindingData from unified workflow to types.Issue
 // This is the main entry point for converting findings from the new unified test API to the
@@ -96,8 +102,8 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 
 	// Create issues from problems
 	var issues []types.Issue
-	for problem, problemFindings := range problems {
-		issue, err := convertProblemToIssue(ctx, problem, problemFindings, affectedFilePath)
+	for _, group := range problems {
+		issue, err := convertProblemToIssue(ctx, group.Problem, group.Findings, affectedFilePath)
 		if err != nil {
 			logger.Err(err).Msg("Failed to convert finding to issue")
 			return []types.Issue{}, err
@@ -108,7 +114,7 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 		issues = append(issues, issue)
 
 		// Add to package cache
-		packageKey := fmt.Sprintf("%s@%s", problem.PackageName, problem.PackageVersion)
+		packageKey := fmt.Sprintf("%s@%s", group.Problem.PackageName, group.Problem.PackageVersion)
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], issue)
 	}
 	return issues, nil
@@ -117,23 +123,43 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 func asProblemsMap(ctx context.Context, findings []testapi.FindingData) ProblemsMap {
 	problems := ProblemsMap{}
 
-	getKey := func(finding testapi.FindingData) *testapi.SnykVulnProblem {
-		problem := extractSnykVulnProblem(finding)
-		return problem
-	}
-
 	for _, finding := range findings {
 		// Skip if context is canceled
 		if ctx.Err() != nil {
 			break
 		}
 
-		key := getKey(finding)
-		if problems[key] == nil {
-			problems[key] = []testapi.FindingData{}
+		problem := extractSnykVulnProblem(finding)
+		if problem == nil {
+			continue
 		}
 
-		problems[key] = append(problems[key], finding)
+		// Extract the introducing package from the dependency path (from[1])
+		// This determines the range/line where the diagnostic will appear
+		// Matches legacy flow behavior: same vuln through same introducing package = one diagnostic
+		dependencyPath := extractDependencyPath(finding)
+		introducingPackage := ""
+		if len(dependencyPath) > 1 {
+			// from[1] is the top-level/direct dependency that introduces the vulnerability
+			introducingPackage = dependencyPath[1]
+		}
+
+		// Create key: vulnerability ID + package + version + introducing package
+		// This ensures:
+		// - Same vuln, same introducing package → grouped together (one diagnostic, multiple matching issues)
+		// - Same vuln, different introducing package → separate diagnostics (different ranges)
+		key := fmt.Sprintf("%s|%s|%s|%s", problem.Id, problem.PackageName, problem.PackageVersion, introducingPackage)
+
+		if _, exists := problems[key]; !exists {
+			problems[key] = ProblemGroup{
+				Problem:  problem,
+				Findings: []testapi.FindingData{},
+			}
+		}
+
+		group := problems[key]
+		group.Findings = append(group.Findings, finding)
+		problems[key] = group
 	}
 	return problems
 }
@@ -172,6 +198,7 @@ func convertProblemToIssue(ctx context.Context, problem *testapi.SnykVulnProblem
 
 	// let's use the first finding as the primary issue and the rest as matching issues
 	additionalData := ossIssues[0]
+	additionalData.Lesson = lessonURL
 	additionalData.MatchingIssues = ossIssues
 
 	// Build Issue
@@ -320,6 +347,15 @@ func buildOssIssueData(ctx context.Context, problem *testapi.SnykVulnProblem, fi
 
 	ecosystemStr := extractEcosystemString(problem.Ecosystem)
 
+	// Extract project name from dependency path (from[0])
+	dependencyPath := extractDependencyPath(finding)
+	projectName := ""
+	if len(dependencyPath) > 0 {
+		// from[0] is "projectName@version", extract just the name
+		parts := strings.Split(dependencyPath[0], "@")
+		projectName = parts[0]
+	}
+
 	data := snyk.OssIssueData{
 		Key:                key,
 		Title:              attrs.Title,
@@ -341,13 +377,13 @@ func buildOssIssueData(ctx context.Context, problem *testapi.SnykVulnProblem, fi
 		CvssSources:        convertCvssSources(problem),
 		Exploit:            extractExploit(problem),
 		IsPatchable:        false, // Patches not supported in unified workflow yet
-		ProjectName:        "",    //TODO
+		ProjectName:        projectName,
 		DisplayTargetFile:  affectedFilePath,
 		Language:           extractLanguageFromEcosystem(problem.Ecosystem),
 		Details:            attrs.Description,
 		MatchingIssues:     []snyk.OssIssueData{}, // populated in caller
 		Lesson:             "",
-		Remediation:        buildRemediationAdvice(problem),
+		Remediation:        buildRemediationAdvice(finding, problem),
 		AppliedPolicyRules: extractAppliedPolicyRules(),
 	}
 
@@ -500,23 +536,72 @@ func extractDependencyPath(finding testapi.FindingData) []string {
 	return []string{}
 }
 
-// buildUpgradePath builds the upgrade path from evidence and fixed versions
+// extractUpgradePackage extracts upgrade path information from finding.Relationships.Fix
+func extractUpgradePackage(finding testapi.FindingData) []string {
+	// Check if finding has relationships and fix data
+	if finding.Relationships == nil || finding.Relationships.Fix == nil {
+		return nil
+	}
+
+	fixData := finding.Relationships.Fix.Data
+	if fixData == nil || fixData.Attributes == nil {
+		return nil
+	}
+
+	// Get the actions from fix attributes
+	actions := fixData.Attributes.Actions
+	if actions == nil {
+		return nil
+	}
+
+	// Check if this is an upgrade_package action
+	disc, err := actions.Discriminator()
+	if err != nil || disc != "upgrade_package" {
+		return nil
+	}
+
+	// Extract the upgrade package action
+	upgradeAction, err := actions.AsUpgradePackageAction()
+	if err != nil {
+		return nil
+	}
+
+	// Get the first upgrade path (if available)
+	if len(upgradeAction.UpgradePaths) == 0 {
+		return nil
+	}
+
+	upgradePath := upgradeAction.UpgradePaths[0]
+	if len(upgradePath.DependencyPath) == 0 {
+		return nil
+	}
+
+	// Convert []testapi.Package to []string
+	var path []string
+	for _, pkg := range upgradePath.DependencyPath {
+		path = append(path, pkg.Name+"@"+pkg.Version)
+	}
+	return path
+}
+
+// buildUpgradePath builds the upgrade path from the unified API fix data
 func buildUpgradePath(finding testapi.FindingData, vuln *testapi.SnykVulnProblem) []any {
-	// Extract dependency path
-	depPath := extractDependencyPath(finding)
-	if len(depPath) == 0 || len(vuln.InitiallyFixedInVersions) == 0 {
+	// Extract upgrade path from the unified API
+	upgradePath := extractUpgradePackage(finding)
+
+	if len(upgradePath) == 0 {
 		return []any{}
 	}
 
-	// Build upgrade path: first element is false (no patch),
-	// then only the package that needs to be upgraded with its fixed version
-	// Legacy format: [false, "package@fixedVersion"]
-	pkgName := vuln.PackageName
-	// TODO this needs to be updated once the upgrade path is correct and complete in the API
-	fixedVersion := vuln.InitiallyFixedInVersions[0]
-	upgradePath := []any{false, fmt.Sprintf("%s@%s", pkgName, fixedVersion)}
+	// Format matches legacy: [false, "package@version", "intermediate@version", ...]
+	result := []any{false} // First element is always false (no patch)
 
-	return upgradePath
+	// Add all packages from upgrade path except the root project (skip index 0)
+	for i := 1; i < len(upgradePath); i++ {
+		result = append(result, upgradePath[i])
+	}
+
+	return result
 }
 
 // extractReferences extracts references from finding and vulnerability problem
@@ -562,9 +647,9 @@ func convertCvssSources(vuln *testapi.SnykVulnProblem) []types.CvssSource {
 			Vector:           source.Vector,
 			Assigner:         source.Assigner,
 			Severity:         string(source.Severity),
-			BaseScore:        float64(source.BaseScore),
+			BaseScore:        float.ToFixed(float64(source.BaseScore), 1),
 			CvssVersion:      source.CvssVersion,
-			ModificationTime: source.ModifiedAt.Format("2006-01-02T15:04:05.000Z"),
+			ModificationTime: source.ModifiedAt.Format("2006-01-02T15:04:05.000000Z"),
 		})
 	}
 
@@ -659,14 +744,58 @@ func extractVersion(finding testapi.FindingData, vuln *testapi.SnykVulnProblem) 
 	return vuln.PackageVersion
 }
 
-// buildRemediationAdvice builds remediation advice text
-func buildRemediationAdvice(vuln *testapi.SnykVulnProblem) string {
-	if len(vuln.InitiallyFixedInVersions) == 0 {
-		return "No remediation available"
+// buildRemediationAdvice builds remediation advice text from the upgrade path
+// Matches legacy flow: uses UpgradePath[1] (the package to be upgraded)
+func buildRemediationAdvice(finding testapi.FindingData, vuln *testapi.SnykVulnProblem) string {
+	// Get the upgrade path from the API
+	upgradePath := buildUpgradePath(finding, vuln)
+	dependencyPath := extractDependencyPath(finding)
+	packageManager := extractEcosystemString(vuln.Ecosystem)
+
+	// Build upgrade message
+	upgradeMessage := ""
+	if len(upgradePath) > 1 {
+		packageToUpgrade, ok := upgradePath[1].(string)
+		if ok {
+			upgradeMessage = fmt.Sprintf("Upgrade to %s", packageToUpgrade)
+		}
 	}
 
-	fixedVersion := vuln.InitiallyFixedInVersions[0]
-	return fmt.Sprintf("Upgrade to %s@%s", vuln.PackageName, fixedVersion)
+	// Check if this is an "outdated dependency" scenario
+	// isOutdated: UpgradePath[1] == From[1] means the direct dependency should already have the fix
+	// but the lockfile is out of date
+	isOutdated := upgradeMessage != "" &&
+		len(upgradePath) > 1 &&
+		len(dependencyPath) > 1 &&
+		upgradePath[1] == dependencyPath[1]
+
+	// If upgradable, decide between upgrade message and outdated message
+	if len(vuln.InitiallyFixedInVersions) > 0 {
+		if isOutdated {
+			// Outdated dependencies scenario
+			return buildOutdatedDependencyMessage(vuln.PackageName, vuln.PackageVersion, packageManager)
+		} else if upgradeMessage != "" {
+			return upgradeMessage
+		}
+	}
+
+	// No remediation available
+	return "No remediation advice available"
+}
+
+// buildOutdatedDependencyMessage returns the message for outdated dependencies
+// Matches legacy flow behavior
+func buildOutdatedDependencyMessage(packageName, packageVersion, packageManager string) string {
+	remediationAdvice := fmt.Sprintf("Your dependencies are out of date, "+
+		"otherwise you would be using a newer %s than %s@%s. ", packageName, packageName, packageVersion)
+
+	if packageManager == "npm" || packageManager == "yarn" || packageManager == "yarn-workspace" {
+		remediationAdvice += "Try relocking your lockfile or deleting node_modules and reinstalling" +
+			" your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	} else {
+		remediationAdvice += "Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules."
+	}
+	return remediationAdvice
 }
 
 // extractAppliedPolicyRules extracts policy modifications from finding attributes
