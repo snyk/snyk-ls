@@ -789,7 +789,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.Settings{
 			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       os.Getenv("SNYK_TOKEN"),
+			Token:                       c.Token(),
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
@@ -1123,6 +1123,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 				require.True(t, fc.OrgSetByUser)
 				require.NotEmpty(t, fc.AutoDeterminedOrg, "Should be set by auto-org resolution on initialized")
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
+
+				// Check for required feature flag keys
+				for _, key := range featureflag.Flags {
+					require.Contains(t, fc.FeatureFlags, key, "FeatureFlag map should contain %s key", key)
+				}
 			},
 		})
 	})

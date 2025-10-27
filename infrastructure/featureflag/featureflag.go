@@ -31,7 +31,7 @@ const (
 	SnykCodeInlineIgnore      string = "snykCodeInlineIgnore"
 )
 
-var flags = []string{
+var Flags = []string{
 	SnykCodeConsistentIgnores,
 	SnykCodeInlineIgnore,
 }
@@ -66,7 +66,7 @@ func (s *serviceImpl) Fetch(org string) (map[string]bool, error) {
 	}
 
 	s.orgToFlag[org] = make(map[string]bool)
-	for _, flag := range flags {
+	for _, flag := range Flags {
 		conf := s.c.Engine().GetConfiguration().Clone()
 		conf.Set(configuration.ORGANIZATION, org)
 		httpClient := s.c.Engine().GetNetworkAccess().GetHttpClient()
