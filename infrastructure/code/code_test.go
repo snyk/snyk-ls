@@ -25,9 +25,14 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	"github.com/snyk/go-application-framework/pkg/mocks"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -38,13 +43,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
-
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
-	"github.com/snyk/go-application-framework/pkg/mocks"
 )
 
 func setupTestData() (issue *snyk.Issue, expectedURI string, expectedTitle string) {
@@ -77,18 +79,41 @@ func setupTestScanner(t *testing.T) *Scanner {
 	t.Helper()
 	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 
-	engineConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
+	// Some of these tests rely on cloning the configuration object, so we need to mock it.
+	// We cannot use testutil.SetUpEngineMock() because it returns a real configuration object.
+	ctrl := gomock.NewController(t)
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockConfig := mocks.NewMockConfiguration(ctrl)
+	c.SetEngine(mockEngine)
 
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	// Set up mocks on the configuration object to allow it to be cloned and modified.
+	mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+	mockConfig.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
+	mockConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
+
+	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+
+	// Mock Clone() to return a cloned configuration that can be modified
+	clonedConfig := mocks.NewMockConfiguration(ctrl)
+	clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+	clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
+	mockConfig.EXPECT().Clone().Return(clonedConfig).AnyTimes()
 
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	learnMock.
 		EXPECT().
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
-	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+	scanner := New(c,
+		performance.NewInstrumentor(),
+		&snyk_api.FakeApiClient{CodeEnabled: true},
+		newTestCodeErrorReporter(),
+		learnMock,
+		notification.NewNotifier(),
+		NewCodeInstrumentor(),
+		newTestCodeErrorReporter(),
+		NewFakeCodeScannerClient)
 
 	return scanner
 }
@@ -106,7 +131,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 	t.Run(
 		"should retrieve from backend", func(t *testing.T) {
-			scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+			scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 			filePath, path := TempWorkdirWithIssues(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(string(path))
 			files := []string{string(filePath)}
@@ -138,15 +163,12 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	filePath, workDir := TempWorkdirWithIssues(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(string(workDir))
 	files := []string{string(filePath)}
-	fakeCodeScanner := &FakeCodeScannerClient{rootPath: workDir}
 	channel := make(chan types.ProgressParams, 10000)
 	cancelChannel := make(chan bool, 1)
 	testTracker := progress.NewTestTracker(channel, cancelChannel)
 
-	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), fakeCodeScanner)
+	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 	issues, _ := scanner.UploadAndAnalyze(t.Context(), workDir, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
-
-	assert.True(t, fakeCodeScanner.UploadAndAnalyzeWasCalled)
 	assert.False(t, issues[0].GetIsIgnored())
 	assert.Nil(t, issues[0].GetIgnoreDetails())
 	assert.Equal(t, true, issues[1].GetIsIgnored())
@@ -186,11 +208,26 @@ func Test_Scan(t *testing.T) {
 
 	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		ctrl := gomock.NewController(t)
+		mockEngine := mocks.NewMockEngine(ctrl)
+		mockConfig := mocks.NewMockConfiguration(ctrl)
+		c.SetEngine(mockEngine)
 
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), &FakeCodeScannerClient{})
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
-		c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
+		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+		mockConfig.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
+		mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+
+		// Mock Clone() to return a cloned configuration
+		clonedConfig := mocks.NewMockConfiguration(ctrl)
+		clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+		clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).AnyTimes()
+		mockConfig.EXPECT().Clone().Return(clonedConfig).AnyTimes()
+
+		mockConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
+
 		_, _ = scanner.Scan(t.Context(), "", tempDir, nil)
 	})
 
@@ -215,9 +252,19 @@ func Test_Scan(t *testing.T) {
 			c := testutil.UnitTest(t)
 			snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
 			ctrl := gomock.NewController(t)
+			mockEngine := mocks.NewMockEngine(ctrl)
 			mockConfiguration := mocks.NewMockConfiguration(ctrl)
-			c.Engine().SetConfiguration(mockConfiguration)
-			mockConfiguration.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil)
+			c.SetEngine(mockEngine)
+			mockEngine.EXPECT().GetConfiguration().Return(mockConfiguration).AnyTimes()
+			mockConfiguration.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
+			mockConfiguration.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+
+			// Mock Clone() to return a cloned configuration
+			clonedConfig := mocks.NewMockConfiguration(ctrl)
+			clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+			clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
+			mockConfiguration.EXPECT().Clone().Return(clonedConfig).AnyTimes()
+
 			mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(tc.cciEnabled)
 			learnMock := mock_learn.NewMockService(gomock.NewController(t))
 			learnMock.
@@ -225,7 +272,7 @@ func Test_Scan(t *testing.T) {
 				GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(&learn.Lesson{}, nil).AnyTimes()
 
-			scanner := New(c, performance.NewInstrumentor(), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+			scanner := New(c, performance.NewInstrumentor(), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
 			issues, err := scanner.Scan(t.Context(), "", tempDir, nil)
@@ -382,7 +429,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
 
 		autofixSetupAndCleanup(t, c)
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 		filePath, path := TempWorkdirWithIssues(t)
 		t.Cleanup(
 			func() {
@@ -411,7 +458,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		autofixSetupAndCleanup(t, c)
 		getCodeSettings().isAutofixEnabled.Set(true)
 
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), &FakeCodeScannerClient{})
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 		filePath, path := TempWorkdirWithIssues(t)
 		files := []string{string(filePath)}
 
@@ -541,4 +588,148 @@ func getInterfileTestCodeIssueData() snyk.CodeIssueData {
 			},
 		},
 	}
+}
+
+// setupMockConfigWithStorage sets up a mock configuration with stateful storage for folder configs.
+// Returns the storage map that can be used to verify stored values.
+func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, mockConfig *mocks.MockConfiguration, enableConsistentIgnores bool) map[string]string {
+	storage := make(map[string]string)
+
+	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+	mockConfig.EXPECT().GetString(gomock.Any()).DoAndReturn(func(key string) string {
+		return storage[key]
+	}).AnyTimes()
+	mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value interface{}) {
+		// For these tests, we only need to persist strings.
+		if strVal, ok := value.(string); ok {
+			storage[key] = strVal
+		}
+	}).AnyTimes()
+
+	if enableConsistentIgnores {
+		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true).AnyTimes()
+	} else {
+		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(false).AnyTimes()
+	}
+
+	return storage
+}
+
+// setupClonedConfigMock creates a mock cloned configuration that returns the specified SAST settings.
+func setupClonedConfigMock(ctrl *gomock.Controller, org string, sastEnabled bool) *mocks.MockConfiguration {
+	clonedConfig := mocks.NewMockConfiguration(ctrl)
+	clonedConfig.EXPECT().Set(configuration.ORGANIZATION, org).Times(1)
+	clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: sastEnabled}, nil).Times(1)
+	return clonedConfig
+}
+
+// setupFolderConfig creates a folder config and stores it in the mock configuration.
+func setupFolderConfig(t *testing.T, mockConfig *mocks.MockConfiguration, logger *zerolog.Logger, folderPath types.FilePath, org string) *types.FolderConfig {
+	t.Helper()
+	folderConfig := &types.FolderConfig{
+		FolderPath:   folderPath,
+		PreferredOrg: org,
+		OrgSetByUser: true,
+	}
+	err := storedconfig.UpdateFolderConfig(mockConfig, folderConfig, logger)
+	require.NoError(t, err)
+	return folderConfig
+}
+
+func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
+	t.Run("Should use folder-specific organization for SAST settings check", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetSnykCodeEnabled(true)
+		ctrl := gomock.NewController(t)
+		mockEngine := mocks.NewMockEngine(ctrl)
+		mockConfig := mocks.NewMockConfiguration(ctrl)
+		c.SetEngine(mockEngine)
+
+		tempDir := types.FilePath(t.TempDir())
+		folderOrg := "folder-specific-org"
+
+		setupMockConfigWithStorage(mockEngine, mockConfig, false)
+		folderConfig := setupFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
+
+		// Mock the cloned configuration with custom capture logic
+		clonedConfig := mocks.NewMockConfiguration(ctrl)
+		var capturedOrg string
+		clonedConfig.EXPECT().Set(configuration.ORGANIZATION, gomock.Any()).DoAndReturn(func(key string, value any) {
+			capturedOrg = value.(string)
+		}).Times(1)
+		clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).Times(1)
+		mockConfig.EXPECT().Clone().Return(clonedConfig).Times(1)
+
+		learnMock := mock_learn.NewMockService(ctrl)
+		learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&learn.Lesson{}, nil).AnyTimes()
+
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+
+		_, _ = scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
+		assert.Equal(t, folderOrg, capturedOrg, "Should use folder-specific organization")
+	})
+
+	t.Run("Should fail when SAST is disabled for folder-specific organization", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetSnykCodeEnabled(true)
+		ctrl := gomock.NewController(t)
+		mockEngine := mocks.NewMockEngine(ctrl)
+		mockConfig := mocks.NewMockConfiguration(ctrl)
+		c.SetEngine(mockEngine)
+
+		tempDir := types.FilePath(t.TempDir())
+		folderOrg := "org-with-sast-disabled"
+
+		setupMockConfigWithStorage(mockEngine, mockConfig, false)
+		folderConfig := setupFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
+
+		clonedConfig := setupClonedConfigMock(ctrl, folderOrg, false)
+		mockConfig.EXPECT().Clone().Return(clonedConfig).Times(1)
+
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+
+		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "SAST is not enabled")
+		assert.Empty(t, issues)
+	})
+
+	t.Run("Should use different SAST settings for different folder organizations", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetSnykCodeEnabled(true)
+		ctrl := gomock.NewController(t)
+		mockEngine := mocks.NewMockEngine(ctrl)
+		mockConfig := mocks.NewMockConfiguration(ctrl)
+		c.SetEngine(mockEngine)
+
+		tempDir1 := types.FilePath(t.TempDir())
+		tempDir2 := types.FilePath(t.TempDir())
+		org1 := "org-with-sast-enabled"
+		org2 := "org-with-sast-disabled"
+
+		setupMockConfigWithStorage(mockEngine, mockConfig, false)
+		folderConfig1 := setupFolderConfig(t, mockConfig, c.Logger(), tempDir1, org1)
+		folderConfig2 := setupFolderConfig(t, mockConfig, c.Logger(), tempDir2, org2)
+
+		clonedConfig1 := setupClonedConfigMock(ctrl, org1, true)
+		clonedConfig2 := setupClonedConfigMock(ctrl, org2, false)
+		mockConfig.EXPECT().Clone().Return(clonedConfig1).Times(1)
+		mockConfig.EXPECT().Clone().Return(clonedConfig2).Times(1)
+
+		learnMock := mock_learn.NewMockService(ctrl)
+		learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&learn.Lesson{}, nil).AnyTimes()
+
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+
+		// Scan with org1 (should succeed since SAST is enabled)
+		issues1, err1 := scanner.Scan(t.Context(), types.FilePath("test1.go"), tempDir1, folderConfig1)
+		assert.NoError(t, err1)
+		assert.NotNil(t, issues1)
+
+		// Scan with org2 (should fail since SAST is disabled)
+		issues2, err2 := scanner.Scan(t.Context(), types.FilePath("test2.go"), tempDir2, folderConfig2)
+		assert.Error(t, err2)
+		assert.ErrorContains(t, err2, "SAST is not enabled")
+		assert.Empty(t, issues2)
+	})
 }

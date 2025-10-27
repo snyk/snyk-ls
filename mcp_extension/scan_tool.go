@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -79,7 +80,7 @@ type SnykMcpToolParameter struct {
 var snykToolsJson string
 
 var (
-	outputMapperMap = map[string]func(logger *zerolog.Logger, result *EnhancedScanResult, learnService learn.Service, workDir string){
+	outputMapperMap = map[string]func(logger *zerolog.Logger, result *EnhancedScanResult, learnService learn.Service, workDir string, includeIgnores bool){
 		ScaOutputMapper:  extractSCAIssues,
 		CodeOutputMapper: extractSASTIssues,
 	}
@@ -180,7 +181,7 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 		integrationVersion = runtimeInfo.GetVersion()
 	}
 
-	command.Env = m.expandedEnv(integrationVersion, clientInfo.Name, clientInfo.Version)
+	command.Env = m.expandedEnv(invocationCtx, integrationVersion, clientInfo.Name, clientInfo.Version)
 
 	logger.Debug().Strs("args", command.Args).Str("workingDir", command.Dir).Msg("Running Command with")
 	logger.Trace().Strs("env", command.Env).Msg("Environment")
@@ -207,6 +208,7 @@ func (m *McpLLMBinding) runSnyk(ctx context.Context, invocationCtx workflow.Invo
 	return resAsString, nil
 }
 
+// nolint: gocyclo, nolintlint // func is used for all scanners, will be refactored to use GAF WFs
 // defaultHandler executes a command and enhances output for scan tools
 func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -220,6 +222,14 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		params, workingDir, err := prepareCmdArgsForTool(m.logger, toolDef, requestArgs)
 		if err != nil {
 			return nil, err
+		}
+		includeIgnores := false
+		if param, exists := params["include-ignores"]; exists && toolDef.Name == SnykCodeTest {
+			if value, parsable := param.value.(bool); value && parsable {
+				includeIgnores = true
+				// deleting the key to not include in the CLI run
+				delete(params, "include-ignores")
+			}
 		}
 
 		trustDisabled := invocationCtx.GetConfiguration().GetBool(trust.DisableTrustFlag) || toolDef.IgnoreTrust
@@ -242,7 +252,7 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 
 		args := buildCommand(m.cliPath, toolDef.Command, params)
 
-		// Add working directory if specified
+		// Add a working directory if specified
 		if workingDir == "" {
 			logger.Debug().Msg("Received empty workingDir")
 		}
@@ -264,21 +274,25 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		// we only return Err if we get exit code > 1 from CLI
 		if err != nil {
 			if output != "" {
+				appUrl := invocationCtx.GetEngine().GetConfiguration().GetString(configuration.WEB_APP_URL)
+				if strings.Contains(strings.ToLower(output), "snyk-code-0005") && toolDef.Name == SnykCodeTest {
+					output += fmt.Sprintf("\nTo activate Snyk Code visit %s/manage/snyk-code?from=mcp or ask your administrator.", appUrl)
+				}
 				return mcp.NewToolResultText(fmt.Sprintf("Error: %s", output)), nil
 			} else {
 				return mcp.NewToolResultText(fmt.Sprintf("Error: %s", err.Error())), nil
 			}
 		}
 
-		output = m.enhanceOutput(&logger, toolDef, output, err == nil, workingDir)
+		output = m.enhanceOutput(&logger, toolDef, output, err == nil, workingDir, includeIgnores)
 
 		return mcp.NewToolResultText(output), nil
 	}
 }
 
 // enhanceOutput enhances the scan output with structured issue data
-func (m *McpLLMBinding) enhanceOutput(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, workDir string) string {
-	return mapScanResponse(logger, toolDef, output, success, workDir, m.learnService)
+func (m *McpLLMBinding) enhanceOutput(logger *zerolog.Logger, toolDef SnykMcpToolsDefinition, output string, success bool, workDir string, includeIgnores bool) string {
+	return mapScanResponse(logger, toolDef, output, success, workDir, m.learnService, includeIgnores)
 }
 
 func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext, toolDef SnykMcpToolsDefinition) server.ToolHandlerFunc {

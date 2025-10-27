@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	codeClient "github.com/snyk/code-client-go"
 	"github.com/snyk/code-client-go/bundle"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
@@ -423,4 +424,9 @@ func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(
 ) (*codeClientSarif.SarifResponse, string, error) {
 	defer close(statusChannel)
 	return f.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)
+}
+
+// NewFakeCodeScannerClient creates a fake code scanner for testing
+func NewFakeCodeScannerClient(_ *Scanner, path types.FilePath) codeClient.CodeScanner {
+	return &FakeCodeScannerClient{rootPath: path}
 }

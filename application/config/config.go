@@ -42,7 +42,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
-	resolve_organization_workflow "github.com/snyk/go-application-framework/pkg/local_workflows/resolve_organization_workflow"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -275,10 +274,6 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	} else {
 		// Engine is provided externally, e.g. we were invoked from CLI.
 		c.engine = engine
-		err := initAdditionalWorkflows(c)
-		if err != nil {
-			c.logger.Err(err).Msg("unable to initialize additional workflows")
-		}
 	}
 	gafConfig := c.engine.GetConfiguration()
 	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
@@ -341,21 +336,6 @@ func initWorkflows(c *Config) error {
 	if err != nil {
 		return err
 	}
-
-	return initAdditionalWorkflows(c)
-}
-
-func initAdditionalWorkflows(c *Config) error {
-	err := resolve_organization_workflow.InitResolveOrganizationWorkflow(c.engine)
-	if err != nil {
-		return err
-	}
-
-	err = resolve_organization_workflow.InitIsDefaultOrganizationWorkflow(c.engine)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -672,7 +652,7 @@ func (c *Config) SetToken(newTokenString string) {
 	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, c.logger)
 
 	if c.authenticationMethod == types.OAuthAuthentication && oAuthErr == nil &&
-		c.shouldUpdateOAuth2Token(conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), newTokenString) {
+		c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
 		c.logger.Debug().Msg("put oauth2 token into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)

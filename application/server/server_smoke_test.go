@@ -1302,16 +1302,9 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User blanks the folder-level org via configuration change
-		storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
-		require.NoError(t, err)
-		require.Len(t, storedConfig.FolderConfigs, 1, "should only have one folder config")
-
-		storedConfig.FolderConfigs[repo].PreferredOrg = ""
-
-		sendConfigurationDidChange(t, loc, types.Settings{
-			Token:         c.Token(),
-			Organization:  globalOrg,
-			FolderConfigs: []types.FolderConfig{*storedConfig.FolderConfigs[repo]},
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+			require.Len(t, folderConfigs, 1, "should only have one folder config")
+			folderConfigs[repo].PreferredOrg = ""
 		})
 
 		// Verify PreferredOrg is now empty and OrgSetByUser is true
@@ -1380,14 +1373,9 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			fakeDirFolderPath: fakeDirFolderInitialValidator,
 		})
 
-		storedConfig, _ := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
-		storedConfig.FolderConfigs[fakeDirFolderPath].PreferredOrg = "any"
-
 		// simulate settings change from the IDE
-		sendConfigurationDidChange(t, loc, types.Settings{
-			FolderConfigs: lo.Map(lo.Values(storedConfig.FolderConfigs), func(item *types.FolderConfig, _ int) types.FolderConfig {
-				return *item
-			}),
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+			folderConfigs[fakeDirFolderPath].PreferredOrg = "any"
 		})
 
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
@@ -1399,6 +1387,110 @@ func Test_SmokeOrgSelection(t *testing.T) {
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
 			},
 		})
+	})
+
+	t.Run("authenticated - user opts in to automatic org selection", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+		t.Cleanup(func() {
+			s, _ := storedconfig.ConfigFile(c.IdeName())
+			_ = os.Remove(s)
+		})
+
+		initialOrg := "user-chosen-org"
+		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
+
+		setupFunc := func(c *config.Config) {
+			c.SetOrganization(globalOrg)
+			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+				FolderPath:                  repo,
+				PreferredOrg:                initialOrg,
+				OrgSetByUser:                true,
+				OrgMigratedFromGlobalConfig: true,
+			}, c.Logger())
+			require.NoError(t, err)
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
+
+		// Verify initial state
+		var autoDeterminedOrg string
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.True(t, fc.OrgSetByUser)
+				require.Equal(t, initialOrg, fc.PreferredOrg)
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+				autoDeterminedOrg = fc.AutoDeterminedOrg
+			},
+		})
+		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
+
+		// User opts-in to automatic org selection for the folder
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+			require.Len(t, folderConfigs, 1, "should only have one folder config")
+			folderConfigs[repo].OrgSetByUser = false
+		})
+
+		// Verify that OrgSetByUser is false, PreferredOrg is empty, and the folder's effective org is the auto-determined one
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false after user opts-in to auto org selection")
+				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty after user opts-in to auto org selection")
+				require.Equal(t, autoDeterminedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should remain the same")
+				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
+			},
+		})
+		assert.Equal(t, autoDeterminedOrg, c.FolderOrganization(repo), "Folder should use auto-determined org when OrgSetByUser is false")
+	})
+
+	t.Run("authenticated - user opts out of automatic org selection", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+		t.Cleanup(func() {
+			s, _ := storedconfig.ConfigFile(c.IdeName())
+			_ = os.Remove(s)
+		})
+
+		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
+
+		setupFunc := func(c *config.Config) {
+			c.SetOrganization(globalOrg)
+			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+				FolderPath:                  repo,
+				OrgSetByUser:                false, // auto-selection enabled
+				OrgMigratedFromGlobalConfig: true,
+			}, c.Logger())
+			require.NoError(t, err)
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
+
+		// Verify initial state
+		var autoDeterminedOrg string
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.False(t, fc.OrgSetByUser)
+				require.Empty(t, fc.PreferredOrg)
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+				autoDeterminedOrg = fc.AutoDeterminedOrg
+			},
+		})
+		require.Equal(t, autoDeterminedOrg, c.FolderOrganization(repo), "Folder should use auto-determined org when OrgSetByUser is false")
+
+		// User opts-out of automatic org selection for the folder
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+			require.Len(t, folderConfigs, 1, "should only have one folder config")
+			folderConfigs[repo].OrgSetByUser = true
+		})
+
+		// Verify that OrgSetByUser is true, and the folder's effective org is the global one
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: func(fc types.FolderConfig) {
+				require.True(t, fc.OrgSetByUser, "OrgSetByUser should be true after user opts-out of auto org selection")
+				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty")
+				require.Equal(t, autoDeterminedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should remain the same")
+				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
+			},
+		})
+		assert.Equal(t, globalOrg, c.FolderOrganization(repo), "Folder should use global org when OrgSetByUser is true and PreferredOrg is empty")
 	})
 }
 
@@ -1499,6 +1591,21 @@ func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.Workspac
 	addWorkSpaceFolder(t, loc, fakeDirFolder)
 
 	return fakeDirFolder, fakeDirFolderPath
+}
+
+func sendModifiedFolderConfiguration(
+	t *testing.T,
+	c *config.Config,
+	loc server.Local,
+	modification func(folderConfigs map[types.FilePath]*types.FolderConfig),
+) {
+	t.Helper()
+	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+	require.NoError(t, err)
+	modification(storedConfig.FolderConfigs)
+	sendConfigurationDidChange(t, loc, types.Settings{
+		FolderConfigs: lo.Values(lo.MapValues(storedConfig.FolderConfigs, func(v *types.FolderConfig, k types.FilePath) types.FolderConfig { return *v })),
+	})
 }
 
 func sendConfigurationDidChange(t *testing.T, loc server.Local, s types.Settings) {

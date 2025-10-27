@@ -23,8 +23,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/internal/types"
 
-	codeClient "github.com/snyk/code-client-go"
-	codeClientHTTP "github.com/snyk/code-client-go/http"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
@@ -119,26 +117,11 @@ func initInfrastructure(c *config.Config) {
 	codeInstrumentor = code.NewCodeInstrumentor()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
-	httpClient := codeClientHTTP.NewHTTPClient(
-		authorizedClient,
-		codeClientHTTP.WithLogger(engine.GetLogger()),
-		codeClientHTTP.WithInstrumentor(codeInstrumentor),
-		codeClientHTTP.WithErrorReporter(codeErrorReporter),
-	)
-
-	codeClientScanner := codeClient.NewCodeScanner(
-		c,
-		httpClient,
-		codeClient.WithTrackerFactory(code.NewCodeTrackerFactory()),
-		codeClient.WithLogger(engine.GetLogger()),
-		codeClient.WithInstrumentor(codeInstrumentor),
-		codeClient.WithErrorReporter(codeErrorReporter),
-	)
-
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
-	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, notifier, codeClientScanner)
+	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner)
+
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
@@ -152,7 +135,8 @@ func initApplication(c *config.Config) {
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier)
-	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeScanner, snykCli))
+	orgResolver := command.NewLDXSyncOrgResolver()
+	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeScanner, snykCli, orgResolver))
 }
 
 /*
