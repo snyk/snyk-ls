@@ -32,6 +32,7 @@ OVERRIDE_GOCI_LINT_V := v1.64.8
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
+# Parameters for go test commands. These must not be blank strings (else go test treats them as a test target and skips the run).
 NOCACHE := "-count=1"
 TIMEOUT := "-timeout=45m"
 
