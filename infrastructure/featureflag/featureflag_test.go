@@ -19,6 +19,7 @@ package featureflag
 import (
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -165,4 +166,117 @@ func Test_PopulateFolderConfig_multipleFolders(t *testing.T) {
 
 	assert.NotNil(t, folder1.FeatureFlags)
 	assert.NotNil(t, folder2.FeatureFlags)
+}
+
+func Test_FetchSastSettings_cachesSettings(t *testing.T) {
+	c := testutil.UnitTest(t)
+	service := New(c).(*serviceImpl)
+	org := "test-org-sast"
+
+	// First fetch populates cache
+	settings1, err1 := service.fetchSastSettings(org)
+	require.NoError(t, err1)
+	require.NotNil(t, settings1)
+
+	// Second fetch returns cached settings
+	settings2, err2 := service.fetchSastSettings(org)
+	require.NoError(t, err2)
+	assert.Equal(t, settings1, settings2)
+
+	// Cache should contain the org
+	assert.Contains(t, service.orgToSastSettings, org)
+}
+
+func Test_FetchSastSettings_differentOrgsSeparateCaches(t *testing.T) {
+	c := testutil.UnitTest(t)
+	service := New(c).(*serviceImpl)
+
+	org1 := "org-sast-1"
+	org2 := "org-sast-2"
+
+	settings1, err1 := service.fetchSastSettings(org1)
+	require.NoError(t, err1)
+	assert.NotNil(t, settings1)
+
+	settings2, err2 := service.fetchSastSettings(org2)
+	require.NoError(t, err2)
+	assert.NotNil(t, settings2)
+
+	// Cache should have both orgs
+	assert.Contains(t, service.orgToSastSettings, org1)
+	assert.Contains(t, service.orgToSastSettings, org2)
+	assert.Len(t, service.orgToSastSettings, 2)
+}
+
+func Test_FlushCache_clearsSastSettings(t *testing.T) {
+	c := testutil.UnitTest(t)
+	service := New(c).(*serviceImpl)
+
+	org := "test-org-sast"
+	_, _ = service.fetchSastSettings(org)
+	assert.NotEmpty(t, service.orgToSastSettings)
+
+	service.FlushCache()
+
+	assert.Empty(t, service.orgToSastSettings)
+}
+
+func Test_GetSastSettings_returnsSettings(t *testing.T) {
+	c := testutil.UnitTest(t)
+	service := New(c)
+
+	folderPath := types.FilePath("/test/folder")
+
+	// First populate folder config
+	folderConfig := &types.FolderConfig{
+		FolderPath: folderPath,
+	}
+	service.PopulateFolderConfig(folderConfig)
+	c.UpdateFolderConfig(folderConfig)
+
+	// Then get SAST settings
+	settings := service.GetSastSettingsFromFolderConfig(folderPath)
+	assert.NotNil(t, settings)
+}
+
+func Test_GetSastSettings_returnsDefaultWhenNotFound(t *testing.T) {
+	c := testutil.UnitTest(t)
+	service := New(c)
+
+	folderPath := types.FilePath("/nonexistent/folder")
+
+	settings := service.GetSastSettingsFromFolderConfig(folderPath)
+	assert.NotNil(t, settings)
+	// Should return default struct, not nil
+	assert.Equal(t, &sast_contract.SastResponse{}, settings)
+}
+
+func Test_PopulateFolderConfig_populatesSastSettings(t *testing.T) {
+	c := testutil.UnitTest(t)
+	service := New(c)
+
+	folderPath := types.FilePath("/test/folder")
+	folderConfig := &types.FolderConfig{
+		FolderPath: folderPath,
+	}
+
+	service.PopulateFolderConfig(folderConfig)
+
+	assert.NotNil(t, folderConfig.FeatureFlags)
+	assert.NotNil(t, folderConfig.SastSettings)
+}
+
+func Test_PopulateFolderConfig_continuesOnSastSettingsError(t *testing.T) {
+	c := testutil.UnitTest(t)
+	service := New(c)
+
+	folderPath := types.FilePath("/test/folder")
+	folderConfig := &types.FolderConfig{
+		FolderPath: folderPath,
+	}
+
+	// Even if SAST settings fetch fails, feature flags should still be populated
+	service.PopulateFolderConfig(folderConfig)
+
+	assert.NotNil(t, folderConfig.FeatureFlags)
 }

@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/uuid"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/product"
@@ -561,6 +562,7 @@ type FolderConfig struct {
 	OrgMigratedFromGlobalConfig bool                                  `json:"orgMigratedFromGlobalConfig"`
 	OrgSetByUser                bool                                  `json:"orgSetByUser"`
 	FeatureFlags                map[string]bool                       `json:"featureFlags"`
+	SastSettings                *sast_contract.SastResponse           `json:"sastSettings"`
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {
@@ -576,6 +578,7 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 		AutoDeterminedOrg:           fc.AutoDeterminedOrg,
 		OrgMigratedFromGlobalConfig: fc.OrgMigratedFromGlobalConfig,
 		OrgSetByUser:                fc.OrgSetByUser,
+		SastSettings:                fc.SastSettings,
 	}
 
 	if fc.LocalBranches != nil {
