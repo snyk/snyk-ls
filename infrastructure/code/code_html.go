@@ -36,7 +36,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -82,18 +82,18 @@ type HtmlRenderer struct {
 	AiFixHandler         *AiFixHandler
 	inlineIgnoresEnabled bool
 	iawEnabled           bool
-	snykApiClient        snyk_api.SnykApiClient
+	featureFlagService   featureflag.Service
 }
 
 var codeRenderer *HtmlRenderer
 
-func GetHTMLRenderer(c *config.Config, snykApiClient snyk_api.SnykApiClient) (*HtmlRenderer, error) {
+func GetHTMLRenderer(c *config.Config, featureFlagService featureflag.Service) (*HtmlRenderer, error) {
 	if codeRenderer != nil && codeRenderer.c == c {
 		return codeRenderer, nil
 	}
 
-	if snykApiClient == nil {
-		return nil, fmt.Errorf("passed Snyk API client is nil")
+	if featureFlagService == nil {
+		return nil, fmt.Errorf("passed featureFlagService is nil")
 	}
 
 	funcMap := template.FuncMap{
@@ -111,7 +111,7 @@ func GetHTMLRenderer(c *config.Config, snykApiClient snyk_api.SnykApiClient) (*H
 	codeRenderer = &HtmlRenderer{
 		c:                    c,
 		globalTemplate:       globalTemplate,
-		snykApiClient:        snykApiClient,
+		featureFlagService:   featureFlagService,
 		inlineIgnoresEnabled: false,
 	}
 
@@ -158,11 +158,9 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	folderPath := renderer.determineFolderPath(issue.GetAffectedFilePath())
 
 	gafConfig := renderer.c.Engine().GetConfiguration().Clone()
-	folderOrg := renderer.c.FolderOrganization(folderPath)
-	if folderOrg != "" {
-		gafConfig.Set(configuration.ORGANIZATION, folderOrg)
-	}
-	codeRenderer.updateFeatureFlags(gafConfig)
+	gafConfig.Set(configuration.ORGANIZATION, renderer.c.FolderOrganization(folderPath))
+
+	codeRenderer.updateFeatureFlags(gafConfig, folderPath)
 
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
@@ -250,22 +248,16 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		return ""
 	}
 
-	var result = buffer.String()
+	result := buffer.String()
 	return result
 }
 
-func (renderer *HtmlRenderer) updateFeatureFlags(conf configuration.Configuration) {
-	logger := renderer.c.Logger().With().Str("method", "updateFeatureFlags").Logger()
+func (renderer *HtmlRenderer) updateFeatureFlags(conf configuration.Configuration, folder types.FilePath) {
 	renderer.iawEnabled = conf.GetBool(ignore_workflow.ConfigIgnoreApprovalEnabled)
 	renderer.inlineIgnoresEnabled = false
+
 	if renderer.c.IntegrationName() == "VS_CODE" {
-		ffInlineIgnores := "snykCodeInlineIgnore"
-		status, err := renderer.snykApiClient.FeatureFlagStatus(snyk_api.FeatureFlagType(ffInlineIgnores))
-		if err != nil {
-			msg := fmt.Sprintf("Failed to retrieve feature flag status (%s), assuming deactivated", ffInlineIgnores)
-			logger.Warn().Err(err).Msg(msg)
-		}
-		renderer.inlineIgnoresEnabled = status.Ok
+		renderer.inlineIgnoresEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeInlineIgnore)
 	}
 }
 

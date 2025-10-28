@@ -189,7 +189,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Serv
 		logger.Info().Msg("RECEIVING")
 		defer logger.Info().Msg("SENDING")
 		changedFolders := c.Workspace().ChangeWorkspaceFolders(params)
-		command.HandleFolders(c, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
+		command.HandleFolders(c, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService())
 		if c.IsAutoScanEnabled() {
 			for _, f := range changedFolders {
 				go f.ScanFolder(ctx)
@@ -433,7 +433,7 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
 		}
-		command.HandleFolders(c, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
+		command.HandleFolders(c, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService())
 
 		// Check once for expired cache in same thread before triggering a scan.
 		// Start a periodic go routine to check for the expired cache afterwards
@@ -519,9 +519,11 @@ func periodicallyCheckForExpiredCache(c *config.Config) {
 func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 	const method = "addWorkspaceFolders"
 	w := c.Workspace()
+
 	if len(params.WorkspaceFolders) > 0 {
 		for _, workspaceFolder := range params.WorkspaceFolders {
 			c.Logger().Info().Str("method", method).Msgf("Adding workspaceFolder %v", workspaceFolder)
+
 			f := workspace.NewFolder(
 				c,
 				uri.PathFromUri(workspaceFolder.Uri),
@@ -531,7 +533,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.ScanNotifier(),
 				di.Notifier(),
 				di.ScanPersister(),
-				di.ScanStateAggregator())
+				di.ScanStateAggregator(),
+				di.FeatureFlagService())
 			w.AddFolder(f)
 		}
 	} else {
@@ -545,7 +548,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.ScanNotifier(),
 				di.Notifier(),
 				di.ScanPersister(),
-				di.ScanStateAggregator())
+				di.ScanStateAggregator(),
+				di.FeatureFlagService())
 			w.AddFolder(f)
 		} else if params.RootPath != "" {
 			f := workspace.NewFolder(
@@ -557,7 +561,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.ScanNotifier(),
 				di.Notifier(),
 				di.ScanPersister(),
-				di.ScanStateAggregator())
+				di.ScanStateAggregator(),
+				di.FeatureFlagService())
 			w.AddFolder(f)
 		}
 	}

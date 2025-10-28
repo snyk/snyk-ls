@@ -24,6 +24,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -37,6 +38,7 @@ func CreateFromCommandData(
 	commandData types.CommandData,
 	srv types.Server,
 	authService authentication.AuthenticationService,
+	featureFlagService featureflag.Service,
 	learnService learn.Service,
 	notifier noti.Notifier,
 	issueProvider snyk.IssueProvider,
@@ -47,7 +49,13 @@ func CreateFromCommandData(
 
 	switch commandData.CommandId {
 	case types.NavigateToRangeCommand:
-		return &navigateToRangeCommand{command: commandData, srv: srv, logger: c.Logger(), c: c, apiClient: snykApiClient}, nil
+		return &navigateToRangeCommand{
+			command:            commandData,
+			srv:                srv,
+			logger:             c.Logger(),
+			c:                  c,
+			featureFlagService: featureFlagService,
+		}, nil
 	case types.WorkspaceScanCommand:
 		return &workspaceScanCommand{command: commandData, srv: srv, c: c}, nil
 	case types.WorkspaceFolderScanCommand:
@@ -55,11 +63,11 @@ func CreateFromCommandData(
 	case types.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData, logger: c.Logger()}, nil
 	case types.LoginCommand:
-		return &loginCommand{command: commandData, authService: authService, notifier: notifier, c: c}, nil
+		return &loginCommand{command: commandData, authService: authService, notifier: notifier, c: c, featureFlagService: featureFlagService}, nil
 	case types.CopyAuthLinkCommand:
 		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
 	case types.LogoutCommand:
-		return &logoutCommand{command: commandData, authService: authService, c: c}, nil
+		return &logoutCommand{command: commandData, authService: authService, c: c, featureFlagService: featureFlagService}, nil
 	case types.TrustWorkspaceFoldersCommand:
 		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, c: c}, nil
 	case types.GetLearnLesson:
@@ -77,18 +85,25 @@ func CreateFromCommandData(
 	case types.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
 	case types.CodeFixApplyEditCommand:
-		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, c: c, logger: c.Logger(), apiClient: snykApiClient}, nil
+		return &applyAiFixEditCommand{
+			command:            commandData,
+			issueProvider:      issueProvider,
+			notifier:           notifier,
+			c:                  c,
+			logger:             c.Logger(),
+			featureFlagService: featureFlagService,
+		}, nil
 	case types.CodeSubmitFixFeedback:
 		return &codeFixFeedback{command: commandData, issueProvider: issueProvider}, nil
 	case types.CodeFixDiffsCommand:
 		return &codeFixDiffs{
-			command:       commandData,
-			codeScanner:   codeScanner,
-			srv:           srv,
-			issueProvider: issueProvider,
-			notifier:      notifier,
-			c:             c,
-			snykApiClient: snykApiClient,
+			command:            commandData,
+			codeScanner:        codeScanner,
+			srv:                srv,
+			issueProvider:      issueProvider,
+			notifier:           notifier,
+			c:                  c,
+			featureFlagService: featureFlagService,
 		}, nil
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
@@ -97,7 +112,11 @@ func CreateFromCommandData(
 	case types.ClearCacheCommand:
 		return &clearCache{command: commandData, c: c}, nil
 	case types.GenerateIssueDescriptionCommand:
-		return &generateIssueDescription{command: commandData, issueProvider: issueProvider, snykApiClient: snykApiClient}, nil
+		return &generateIssueDescription{
+			command:            commandData,
+			issueProvider:      issueProvider,
+			featureFlagService: featureFlagService,
+		}, nil
 	case types.SubmitIgnoreRequest:
 		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, c: c}, nil
 	}

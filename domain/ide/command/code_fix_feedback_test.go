@@ -30,7 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -67,8 +67,8 @@ func Test_getFolderFromFixId_ReturnsErrorWhenNoWorkspace(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Initialize HtmlRenderer but don't set up workspace
-	apiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
-	_, err := code.GetHTMLRenderer(c, apiClient)
+	fakeFFService := featureflag.NewFakeService()
+	_, err := code.GetHTMLRenderer(c, fakeFFService)
 	require.NoError(t, err)
 
 	cmd := &codeFixFeedback{}
@@ -86,8 +86,8 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFixIdNotFound(t *testing.T) {
 	setupWorkspaceWithFolders(t, c, []string{"/workspace/folder1", "/workspace/folder2"})
 
 	// Initialize HtmlRenderer
-	apiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
-	_, err := code.GetHTMLRenderer(c, apiClient)
+	fakeFFService := featureflag.NewFakeService()
+	_, err := code.GetHTMLRenderer(c, fakeFFService)
 	require.NoError(t, err)
 
 	cmd := &codeFixFeedback{}
@@ -105,8 +105,8 @@ func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
 	setupWorkspaceWithFolders(t, c, []string{"/workspace/folder1", "/workspace/folder2"})
 
 	// Initialize HtmlRenderer
-	apiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
-	renderer, err := code.GetHTMLRenderer(c, apiClient)
+	fakeFFService := featureflag.NewFakeService()
+	renderer, err := code.GetHTMLRenderer(c, fakeFFService)
 	require.NoError(t, err)
 
 	// Populate AiFixHandler with test fix results
@@ -137,8 +137,8 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFileNotInAnyFolder(t *testing.T) {
 	setupWorkspaceWithFolders(t, c, []string{"/workspace/folder1", "/workspace/folder2"})
 
 	// Initialize HtmlRenderer
-	apiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
-	renderer, err := code.GetHTMLRenderer(c, apiClient)
+	fakeFFService := featureflag.NewFakeService()
+	renderer, err := code.GetHTMLRenderer(c, fakeFFService)
 	require.NoError(t, err)
 
 	// Populate AiFixHandler with fix results for file outside workspace
@@ -169,8 +169,8 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 	setupWorkspaceWithFolders(t, c, []string{"/workspace/project1", "/workspace/project2", "/workspace/project3"})
 
 	// Initialize HtmlRenderer
-	apiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
-	renderer, err := code.GetHTMLRenderer(c, apiClient)
+	fakeFFService := featureflag.NewFakeService()
+	renderer, err := code.GetHTMLRenderer(c, fakeFFService)
 	require.NoError(t, err)
 
 	// Test fix in first folder
@@ -217,6 +217,7 @@ func setupWorkspaceWithFolders(t *testing.T, c *config.Config, folderPaths []str
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
+	fakeFFService := featureflag.NewFakeService()
 
 	w := workspace.New(
 		c,
@@ -227,6 +228,7 @@ func setupWorkspaceWithFolders(t *testing.T, c *config.Config, folderPaths []str
 		notification.NewMockNotifier(),
 		scanPersister,
 		scanStateAggregator,
+		fakeFFService,
 	)
 
 	for _, folderPath := range folderPaths {
@@ -240,6 +242,7 @@ func setupWorkspaceWithFolders(t *testing.T, c *config.Config, folderPaths []str
 			notification.NewMockNotifier(),
 			scanPersister,
 			scanStateAggregator,
+			fakeFFService,
 		)
 		w.AddFolder(folder)
 	}

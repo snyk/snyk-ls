@@ -50,6 +50,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -788,7 +789,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.Settings{
 			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       os.Getenv("SNYK_TOKEN"),
+			Token:                       c.Token(),
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
@@ -873,7 +874,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, "app.js"))
 
 	w := c.Workspace()
-	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator())
+	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService())
 	w.AddFolder(f)
 
 	c.SetLSPInitialized(true)
@@ -1122,6 +1123,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 				require.True(t, fc.OrgSetByUser)
 				require.NotEmpty(t, fc.AutoDeterminedOrg, "Should be set by auto-org resolution on initialized")
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
+
+				// Check for required feature flag keys
+				for _, key := range featureflag.Flags {
+					require.Contains(t, fc.FeatureFlags, key, "FeatureFlag map should contain %s key", key)
+				}
 			},
 		})
 	})

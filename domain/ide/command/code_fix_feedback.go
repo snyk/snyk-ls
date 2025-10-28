@@ -98,7 +98,7 @@ func (cmd *codeFixFeedback) Execute(_ context.Context) (any, error) {
 // so the AiFixHandler maintains the fix results even after the original command completes.
 func (cmd *codeFixFeedback) getFolderFromFixId(c *config.Config, fixId string) (types.FilePath, error) {
 	// Get the persistent HtmlRenderer which contains the AiFixHandler with stored fix results
-	// Pass nil for API client since we're only reading from existing state, not creating a new renderer
+	// Pass nil for FF service since we're only reading from existing state, not creating a new renderer
 	htmlRenderer, err := code.GetHTMLRenderer(c, nil)
 	if err != nil {
 		return "", fmt.Errorf("HTML renderer not initialized: %w", err)
