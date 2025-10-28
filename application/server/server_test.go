@@ -48,6 +48,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -609,7 +610,8 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 		di.ScanNotifier(),
 		di.Notifier(),
 		di.ScanPersister(),
-		di.ScanStateAggregator()))
+		di.ScanStateAggregator(),
+		featureflag.NewFakeService()))
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -844,7 +846,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 	}}
 
 	folder := workspace.NewFolder(c, fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
-		di.ScanPersister(), di.ScanStateAggregator())
+		di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService())
 	c.Workspace().AddFolder(folder)
 
 	_, err = loc.Client.Call(ctx, textDocumentDidOpenOperation, didOpenParams)
@@ -935,7 +937,8 @@ func sendFileSavedMessage(t *testing.T, c *config.Config, filePath types.FilePat
 		di.ScanNotifier(),
 		di.Notifier(),
 		di.ScanPersister(),
-		di.ScanStateAggregator()))
+		di.ScanStateAggregator(),
+		featureflag.NewFakeService()))
 
 	_, err := loc.Client.Call(ctx, textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {

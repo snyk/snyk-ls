@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -46,16 +47,18 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
+	fakeFeatureFlagService := featureflag.NewFakeService()
 	authenticationService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notifier)
 	cmd := logoutCommand{
-		command:     types.CommandData{CommandId: types.LogoutCommand},
-		authService: authenticationService,
-		c:           c,
+		command:            types.CommandData{CommandId: types.LogoutCommand},
+		authService:        authenticationService,
+		featureFlagService: fakeFeatureFlagService,
+		c:                  c,
 	}
 
 	sc := scanner.NewTestScanner()
 
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, fakeFeatureFlagService)
 	folder := workspace.NewFolder(
 		c,
 		types.FilePath(t.TempDir()),
@@ -66,6 +69,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		notifier,
 		scanPersister,
 		scanStateAggregator,
+		fakeFeatureFlagService,
 	)
 	c.SetWorkspace(w)
 	w.AddFolder(folder)

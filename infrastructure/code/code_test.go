@@ -36,6 +36,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -110,6 +111,7 @@ func setupTestScanner(t *testing.T) *Scanner {
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		newTestCodeErrorReporter(),
 		learnMock,
+		featureflag.NewFakeService(),
 		notification.NewNotifier(),
 		NewCodeInstrumentor(),
 		newTestCodeErrorReporter(),
@@ -131,7 +133,16 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 	t.Run(
 		"should retrieve from backend", func(t *testing.T) {
-			scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+			scanner := New(c,
+				performance.NewInstrumentor(),
+				&snyk_api.FakeApiClient{CodeEnabled: true},
+				newTestCodeErrorReporter(),
+				learnMock,
+				featureflag.NewFakeService(),
+				notification.NewNotifier(),
+				NewCodeInstrumentor(),
+				newTestCodeErrorReporter(),
+				NewFakeCodeScannerClient)
 			filePath, path := TempWorkdirWithIssues(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(string(path))
 			files := []string{string(filePath)}
@@ -167,7 +178,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	cancelChannel := make(chan bool, 1)
 	testTracker := progress.NewTestTracker(channel, cancelChannel)
 
-	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 	issues, _ := scanner.UploadAndAnalyze(t.Context(), workDir, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
 	assert.False(t, issues[0].GetIsIgnored())
 	assert.Nil(t, issues[0].GetIgnoreDetails())
@@ -213,7 +224,7 @@ func Test_Scan(t *testing.T) {
 		mockConfig := mocks.NewMockConfiguration(ctrl)
 		c.SetEngine(mockEngine)
 
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
@@ -265,14 +276,16 @@ func Test_Scan(t *testing.T) {
 			clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
 			mockConfiguration.EXPECT().Clone().Return(clonedConfig).AnyTimes()
 
-			mockConfiguration.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(tc.cciEnabled)
+			fakeFeatureFlagService := featureflag.NewFakeService()
+			fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = tc.cciEnabled
+
 			learnMock := mock_learn.NewMockService(gomock.NewController(t))
 			learnMock.
 				EXPECT().
 				GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(&learn.Lesson{}, nil).AnyTimes()
 
-			scanner := New(c, performance.NewInstrumentor(), snykApiMock, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+			scanner := New(c, performance.NewInstrumentor(), snykApiMock, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
 			issues, err := scanner.Scan(t.Context(), "", tempDir, nil)
@@ -330,7 +343,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, apiClient)
+	htmlRenderer, err := GetHTMLRenderer(c, featureflag.New(c))
 	assert.Nil(t, err)
 	html := htmlRenderer.GetDetailsHtml(issues[0])
 	// Assert
@@ -344,17 +357,17 @@ func setupIgnoreWorkspace(t *testing.T) (tempDir types.FilePath, ignoredFilePath
 	tempDir = writeTestGitIgnore(t, expectedPatterns)
 
 	ignoredFilePath = types.FilePath(filepath.Join(string(tempDir), "ignored.xml"))
-	err := os.WriteFile(string(ignoredFilePath), []byte("test"), 0600)
+	err := os.WriteFile(string(ignoredFilePath), []byte("test"), 0o600)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write ignored file ignored.xml")
 	}
 	notIgnoredFilePath = types.FilePath(filepath.Join(string(tempDir), "not-ignored.java"))
-	err = os.WriteFile(string(notIgnoredFilePath), []byte("test"), 0600)
+	err = os.WriteFile(string(notIgnoredFilePath), []byte("test"), 0o600)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write ignored file not-ignored.java")
 	}
 	ignoredDir := filepath.Join(string(tempDir), "bin")
-	err = os.Mkdir(ignoredDir, 0755)
+	err = os.Mkdir(ignoredDir, 0o755)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write ignoreDirectory %s", ignoredDir)
 	}
@@ -372,7 +385,7 @@ func writeTestGitIgnore(t *testing.T, ignorePatterns string) (tempDir types.File
 func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir types.FilePath) {
 	t.Helper()
 	filePath := filepath.Join(string(tempDir), ".gitignore")
-	err := os.WriteFile(filePath, []byte(ignorePatterns), 0600)
+	err := os.WriteFile(filePath, []byte(ignorePatterns), 0o600)
 	if err != nil {
 		t.Fatal(t, err, "Couldn't write .gitignore")
 	}
@@ -429,7 +442,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
 
 		autofixSetupAndCleanup(t, c)
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 		filePath, path := TempWorkdirWithIssues(t)
 		t.Cleanup(
 			func() {
@@ -458,7 +471,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		autofixSetupAndCleanup(t, c)
 		getCodeSettings().isAutofixEnabled.Set(true)
 
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 		filePath, path := TempWorkdirWithIssues(t)
 		files := []string{string(filePath)}
 
@@ -591,8 +604,8 @@ func getInterfileTestCodeIssueData() snyk.CodeIssueData {
 }
 
 // setupMockConfigWithStorage sets up a mock configuration with stateful storage for folder configs.
-// Returns the storage map that can be used to verify stored values.
-func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, mockConfig *mocks.MockConfiguration, enableConsistentIgnores bool) map[string]string {
+// Returns the storage map and a configured fakeFeatureFlagService.
+func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, mockConfig *mocks.MockConfiguration, enableConsistentIgnores bool) (map[string]string, *featureflag.FakeFeatureFlagService) {
 	storage := make(map[string]string)
 
 	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
@@ -606,13 +619,10 @@ func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, mockConfig *mocks.
 		}
 	}).AnyTimes()
 
-	if enableConsistentIgnores {
-		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(true).AnyTimes()
-	} else {
-		mockConfig.EXPECT().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES).Return(false).AnyTimes()
-	}
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = enableConsistentIgnores
 
-	return storage
+	return storage, fakeFeatureFlagService
 }
 
 // setupClonedConfigMock creates a mock cloned configuration that returns the specified SAST settings.
@@ -648,7 +658,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		tempDir := types.FilePath(t.TempDir())
 		folderOrg := "folder-specific-org"
 
-		setupMockConfigWithStorage(mockEngine, mockConfig, false)
+		_, fakeFeatureFlagService := setupMockConfigWithStorage(mockEngine, mockConfig, false)
 		folderConfig := setupFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
 
 		// Mock the cloned configuration with custom capture logic
@@ -663,7 +673,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		learnMock := mock_learn.NewMockService(ctrl)
 		learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&learn.Lesson{}, nil).AnyTimes()
 
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 
 		_, _ = scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
 		assert.Equal(t, folderOrg, capturedOrg, "Should use folder-specific organization")
@@ -680,13 +690,13 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		tempDir := types.FilePath(t.TempDir())
 		folderOrg := "org-with-sast-disabled"
 
-		setupMockConfigWithStorage(mockEngine, mockConfig, false)
+		_, fakeFeatureFlagService := setupMockConfigWithStorage(mockEngine, mockConfig, false)
 		folderConfig := setupFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
 
 		clonedConfig := setupClonedConfigMock(ctrl, folderOrg, false)
 		mockConfig.EXPECT().Clone().Return(clonedConfig).Times(1)
 
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 
 		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
 		assert.Error(t, err)
@@ -707,7 +717,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		org1 := "org-with-sast-enabled"
 		org2 := "org-with-sast-disabled"
 
-		setupMockConfigWithStorage(mockEngine, mockConfig, false)
+		_, fakeFeatureFlagService := setupMockConfigWithStorage(mockEngine, mockConfig, false)
 		folderConfig1 := setupFolderConfig(t, mockConfig, c.Logger(), tempDir1, org1)
 		folderConfig2 := setupFolderConfig(t, mockConfig, c.Logger(), tempDir2, org2)
 
@@ -719,7 +729,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		learnMock := mock_learn.NewMockService(ctrl)
 		learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&learn.Lesson{}, nil).AnyTimes()
 
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 
 		// Scan with org1 (should succeed since SAST is enabled)
 		issues1, err1 := scanner.Scan(t.Context(), types.FilePath("test1.go"), tempDir1, folderConfig1)

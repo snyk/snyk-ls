@@ -28,10 +28,16 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/watcher"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -49,6 +55,27 @@ var exampleRange = sglsp.Range{
 }
 
 const documentUriExample = sglsp.DocumentURI("file:///path/to/file")
+
+// setupTestWorkspace creates a minimal workspace with a folder for testing
+func setupTestWorkspace(c *config.Config) {
+	if c.Workspace() != nil {
+		return // Already initialized
+	}
+
+	// Create workspace with minimal dependencies
+	notifier := notification.NewMockNotifier()
+	scanNotifier := scanner.NewMockScanNotifier()
+	scanStateAggregator := scanstates.NewNoopStateAggregator()
+	sc := scanner.NewTestScanner()
+
+	w := workspace.New(c, performance.NewInstrumentor(), sc, hover.NewFakeHoverService(), scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService())
+
+	// Add a folder that contains the test file path
+	folder := workspace.NewFolder(c, "/path/to", "test-folder", sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService())
+	w.AddFolder(folder)
+
+	c.SetWorkspace(w)
+}
 
 func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 	c := testutil.UnitTest(t)
@@ -97,11 +124,13 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	// It doesn't seem like there's a difference between returning a nil and returning an empty array. If this assumption
 	// is proved to be false, this test can be changed.
 	// Arrange
+	setupTestWorkspace(c)
+
 	ctrl := gomock.NewController(t)
 	var issues []types.Issue
 	providerMock := mock_snyk.NewMockIssueProvider(ctrl)
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return(issues)
-	service := codeaction.NewService(c, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier())
+	service := codeaction.NewService(c, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService())
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: documentUriExample,
@@ -121,13 +150,14 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 	c := testutil.UnitTest(t)
 	// Arrange
 
-	var mockTextEdit = types.TextEdit{
+	mockTextEdit := types.TextEdit{
 		Range: types.Range{
 			Start: types.Position{Line: 1, Character: 2},
-			End:   types.Position{Line: 3, Character: 4}},
+			End:   types.Position{Line: 3, Character: 4},
+		},
 		NewText: "someText",
 	}
-	var mockEdit = &types.WorkspaceEdit{
+	mockEdit := &types.WorkspaceEdit{
 		Changes: map[string][]types.TextEdit{
 			"someUri": {mockTextEdit},
 		},
@@ -197,6 +227,7 @@ func Test_ResolveCodeAction_KeyAndCommandIsNull_ReturnsError(t *testing.T) {
 	assert.Error(t, err, "Expected error when resolving a code action with a null key")
 	assert.True(t, codeaction.IsMissingKeyError(err))
 }
+
 func Test_ResolveCodeAction_KeyIsNull_ReturnsCodeAction(t *testing.T) {
 	c := testutil.UnitTest(t)
 	service := setupService(t, c)
@@ -266,9 +297,11 @@ func Test_UpdateIssuesWithQuickFix_TitleConcatenationIssue_WhenCalledMultipleTim
 
 func setupService(t *testing.T, c *config.Config) *codeaction.CodeActionsService {
 	t.Helper()
+	setupTestWorkspace(c)
+
 	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return([]types.Issue{}).AnyTimes()
-	service := codeaction.NewService(c, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier())
+	service := codeaction.NewService(c, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService())
 	return service
 }
 
@@ -277,11 +310,14 @@ func setupWithSingleIssue(t *testing.T, c *config.Config, issue types.Issue) (*c
 	r := exampleRange
 	uriPath := documentUriExample
 	path := uri.PathFromUri(uriPath)
+
+	setupTestWorkspace(c)
+
 	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	issues := []types.Issue{issue}
 	providerMock.EXPECT().IssuesForRange(path, converter.FromRange(r)).Return(issues).AnyTimes()
 	fileWatcher := watcher.NewFileWatcher()
-	service := codeaction.NewService(c, providerMock, fileWatcher, notification.NewMockNotifier())
+	service := codeaction.NewService(c, providerMock, fileWatcher, notification.NewMockNotifier(), featureflag.NewFakeService())
 
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
