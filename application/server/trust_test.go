@@ -111,6 +111,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	c.SetTrustedFolderFeatureEnabled(true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -134,6 +135,7 @@ func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	c.SetTrustedFolderFeatureEnabled(true)
 
 	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
@@ -152,6 +154,7 @@ func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T
 func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 
 	c.SetTrustedFolderFeatureEnabled(true)
 
