@@ -39,6 +39,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
@@ -50,30 +51,33 @@ import (
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 )
 
-var snykApiClient snyk_api.SnykApiClient
-var snykCodeScanner *code.Scanner
-var infrastructureAsCodeScanner *iac.Scanner
-var openSourceScanner types.ProductScanner
-var scanInitializer initialize.Initializer
-var authenticationService authentication.AuthenticationService
-var learnService learn.Service
-var instrumentor performance2.Instrumentor
-var errorReporter er.ErrorReporter
-var installer install.Installer
-var hoverService hover.Service
-var scanner scanner2.Scanner
-var cliInitializer *cli.Initializer
-var scanNotifier scanner2.ScanNotifier
-var codeActionService *codeaction.CodeActionsService
-var fileWatcher *watcher.FileWatcher
-var initMutex = &sync.Mutex{}
-var notifier notification.Notifier
-var codeInstrumentor codeClientObservability.Instrumentor
-var codeErrorReporter codeClientObservability.ErrorReporter
-var scanPersister persistence.ScanSnapshotPersister
-var scanStateAggregator scanstates.Aggregator
-var scanStateChangeEmitter scanstates.ScanStateChangeEmitter
-var snykCli cli.Executor
+var (
+	snykApiClient               snyk_api.SnykApiClient
+	snykCodeScanner             *code.Scanner
+	infrastructureAsCodeScanner *iac.Scanner
+	openSourceScanner           types.ProductScanner
+	scanInitializer             initialize.Initializer
+	authenticationService       authentication.AuthenticationService
+	learnService                learn.Service
+	instrumentor                performance2.Instrumentor
+	errorReporter               er.ErrorReporter
+	installer                   install.Installer
+	hoverService                hover.Service
+	scanner                     scanner2.Scanner
+	featureFlagService          featureflag.Service
+	cliInitializer              *cli.Initializer
+	scanNotifier                scanner2.ScanNotifier
+	codeActionService           *codeaction.CodeActionsService
+	fileWatcher                 *watcher.FileWatcher
+	initMutex                   = &sync.Mutex{}
+	notifier                    notification.Notifier
+	codeInstrumentor            codeClientObservability.Instrumentor
+	codeErrorReporter           codeClientObservability.ErrorReporter
+	scanPersister               persistence.ScanSnapshotPersister
+	scanStateAggregator         scanstates.Aggregator
+	scanStateChangeEmitter      scanstates.ScanStateChangeEmitter
+	snykCli                     cli.Executor
+)
 
 func Init() {
 	initMutex.Lock()
@@ -102,6 +106,7 @@ func initInfrastructure(c *config.Config) {
 	installer = install.NewInstaller(errorReporter, unauthorizedHttpClient)
 	learnService = learn.New(gafConfiguration, c.Logger(), unauthorizedHttpClient)
 	instrumentor = performance2.NewInstrumentor()
+	featureFlagService = featureflag.New(c)
 	snykApiClient = snyk_api.NewSnykApiClient(c, authorizedClient)
 	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), gafConfiguration)
 	scanStateChangeEmitter = scanstates.NewSummaryEmitter(c, notifier)
@@ -120,7 +125,7 @@ func initInfrastructure(c *config.Config) {
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
-	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner)
+	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner)
 
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
@@ -131,12 +136,12 @@ func initInfrastructure(c *config.Config) {
 }
 
 func initApplication(c *config.Config) {
-	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator) // don't use getters or it'll deadlock
+	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService) // don't use getters or it'll deadlock
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier)
+	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService)
 	orgResolver := command.NewLDXSyncOrgResolver()
-	command.SetService(command.NewService(authenticationService, notifier, learnService, w, snykCodeScanner, snykCli, orgResolver))
+	command.SetService(command.NewService(authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, orgResolver))
 }
 
 /*
@@ -220,4 +225,10 @@ func LearnService() learn.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return learnService
+}
+
+func FeatureFlagService() featureflag.Service {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return featureFlagService
 }

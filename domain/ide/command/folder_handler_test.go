@@ -36,6 +36,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -93,7 +94,7 @@ func setupTestWorkspace(t *testing.T, c *config.Config, folderCount int) (
 	hoverService := hover.NewFakeHoverService()
 
 	// Create workspace
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureflag.NewFakeService())
 
 	// Create and add folders
 	safeTestName := testsupport.PathSafeTestName(t)
@@ -102,7 +103,7 @@ func setupTestWorkspace(t *testing.T, c *config.Config, folderCount int) (
 		folderPath := types.FilePath(t.TempDir())
 		folderPaths[i] = folderPath
 		folderName := safeTestName + "_test-folder_" + strconv.Itoa(i)
-		folder := workspace.NewFolder(c, folderPath, folderName, sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
+		folder := workspace.NewFolder(c, folderPath, folderName, sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureflag.NewFakeService())
 		w.AddFolder(folder)
 	}
 
@@ -140,7 +141,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
-	sendFolderConfigs(c, notifier)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify notification was sent
 	messages := notifier.SentMessages()
@@ -163,7 +164,7 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	// Setup workspace with no folders
 	notifier, _ := setupTestWorkspace(t, c, 0)
 
-	sendFolderConfigs(c, notifier)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
@@ -259,8 +260,7 @@ func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 	}
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
-
-	sendFolderConfigs(c, notifier)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify notification was still sent despite error
 	messages := notifier.SentMessages()
@@ -325,7 +325,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig2, logger)
 	require.NoError(t, err)
 
-	sendFolderConfigs(c, notifier)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify notification was sent with both folders
 	messages := notifier.SentMessages()

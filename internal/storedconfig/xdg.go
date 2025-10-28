@@ -137,16 +137,6 @@ func createNewStoredConfig(conf configuration.Configuration) *StoredConfig {
 	return &config
 }
 
-func UpdateFolderConfigs(conf configuration.Configuration, folderConfigs []types.FolderConfig, logger *zerolog.Logger) error {
-	for _, folderConfig := range folderConfigs {
-		err := UpdateFolderConfig(conf, &folderConfig, logger)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig, logger *zerolog.Logger) error {
 	if err := util.ValidatePathForStorage(folderConfig.FolderPath); err != nil {
 		logger.Error().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("invalid folder path")
