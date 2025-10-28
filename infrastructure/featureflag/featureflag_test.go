@@ -32,28 +32,70 @@ import (
 
 // mockExternalCallsProvider is a mock implementation of ExternalCallsProvider for testing
 type mockExternalCallsProvider struct {
-	ignoreApproval bool
-	ignoreErr      error
-	featureFlags   map[string]bool
-	flagErr        error
-	sastSettings   *sast_contract.SastResponse
-	sastErr        error
-	folderOrg      string
+	ignoreApprovalByOrg map[string]bool
+	ignoreErr           error
+	featureFlagsByOrg   map[string]map[string]bool
+	flagErr             error
+	sastSettingsByOrg   map[string]*sast_contract.SastResponse
+	sastErr             error
+	folderOrg           string
+
+	// Call counters to verify no unnecessary external calls
+	ignoreApprovalCalls int
+	featureFlagCalls    int
+	sastSettingsCalls   int
+	mu                  sync.Mutex
 }
 
 func (m *mockExternalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, error) {
-	return m.ignoreApproval, m.ignoreErr
+	m.mu.Lock()
+	m.ignoreApprovalCalls++
+	m.mu.Unlock()
+	if m.ignoreErr != nil {
+		return false, m.ignoreErr
+	}
+	if val, ok := m.ignoreApprovalByOrg[org]; ok {
+		return val, nil
+	}
+	// Default value if org not specified
+	return true, nil
 }
 
 func (m *mockExternalCallsProvider) getFeatureFlag(flag string, org string) (bool, error) {
+	m.mu.Lock()
+	m.featureFlagCalls++
+	m.mu.Unlock()
 	if m.flagErr != nil {
 		return false, m.flagErr
 	}
-	return m.featureFlags[flag], nil
+	if orgFlags, ok := m.featureFlagsByOrg[org]; ok {
+		return orgFlags[flag], nil
+	}
+	// Default values if org not specified
+	defaultFlags := map[string]bool{
+		SnykCodeConsistentIgnores: true,
+		SnykCodeInlineIgnore:      false,
+	}
+	return defaultFlags[flag], nil
 }
 
 func (m *mockExternalCallsProvider) getSastSettings(org string) (*sast_contract.SastResponse, error) {
-	return m.sastSettings, m.sastErr
+	m.mu.Lock()
+	m.sastSettingsCalls++
+	m.mu.Unlock()
+	if m.sastErr != nil {
+		return nil, m.sastErr
+	}
+	if settings, ok := m.sastSettingsByOrg[org]; ok {
+		return settings, nil
+	}
+	// Default settings if org not specified
+	return &sast_contract.SastResponse{
+		SastEnabled: true,
+		LocalCodeEngine: sast_contract.LocalCodeEngine{
+			Enabled: true,
+		},
+	}, nil
 }
 
 func (m *mockExternalCallsProvider) folderOrganization(path types.FilePath) string {
@@ -65,18 +107,10 @@ func setupMockProvider(t *testing.T) (*config.Config, *mockExternalCallsProvider
 	c := testutil.UnitTest(t)
 
 	mockProvider := &mockExternalCallsProvider{
-		ignoreApproval: true,
-		featureFlags: map[string]bool{
-			SnykCodeConsistentIgnores: true,
-			SnykCodeInlineIgnore:      false,
-		},
-		sastSettings: &sast_contract.SastResponse{
-			SastEnabled: true,
-			LocalCodeEngine: sast_contract.LocalCodeEngine{
-				Enabled: true,
-			},
-		},
-		folderOrg: "test-org",
+		ignoreApprovalByOrg: make(map[string]bool),
+		featureFlagsByOrg:   make(map[string]map[string]bool),
+		sastSettingsByOrg:   make(map[string]*sast_contract.SastResponse),
+		folderOrg:           "test-org",
 	}
 
 	return c, mockProvider
@@ -101,9 +135,21 @@ func TestFetch(t *testing.T) {
 		assert.Contains(t, flags1, SnykCodeInlineIgnore)
 		assert.Contains(t, flags1, IgnoreApprovalEnabled)
 
+		// Record call counts after first fetch
+		mockProvider.mu.Lock()
+		firstFetchIgnoreCalls := mockProvider.ignoreApprovalCalls
+		firstFetchFlagCalls := mockProvider.featureFlagCalls
+		mockProvider.mu.Unlock()
+
 		// Second fetch returns cached flags (no provider calls)
 		flags2 := service.fetch(org)
 		assert.Equal(t, flags1, flags2)
+
+		// Verify no additional calls were made (cache was used)
+		mockProvider.mu.Lock()
+		assert.Equal(t, firstFetchIgnoreCalls, mockProvider.ignoreApprovalCalls, "second fetch should not call getIgnoreApprovalEnabled")
+		assert.Equal(t, firstFetchFlagCalls, mockProvider.featureFlagCalls, "second fetch should not call getFeatureFlag")
+		mockProvider.mu.Unlock()
 
 		// Cache should contain the org
 		assert.Contains(t, service.orgToFlag, org)
@@ -111,6 +157,20 @@ func TestFetch(t *testing.T) {
 
 	t.Run("different orgs have separate caches", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
+
+		org1 := "org-1"
+		org2 := "org-2"
+
+		// Configure different feature flags for each org
+		mockProvider.featureFlagsByOrg[org1] = map[string]bool{
+			SnykCodeConsistentIgnores: true,
+			SnykCodeInlineIgnore:      false,
+		}
+		mockProvider.featureFlagsByOrg[org2] = map[string]bool{
+			SnykCodeConsistentIgnores: false,
+			SnykCodeInlineIgnore:      true,
+		}
+
 		service := &serviceImpl{
 			c:                 c,
 			provider:          mockProvider,
@@ -118,9 +178,6 @@ func TestFetch(t *testing.T) {
 			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
 			mutex:             &sync.Mutex{},
 		}
-
-		org1 := "org-1"
-		org2 := "org-2"
 
 		flags1 := service.fetch(org1)
 		assert.NotNil(t, flags1)
@@ -132,6 +189,18 @@ func TestFetch(t *testing.T) {
 		assert.Contains(t, service.orgToFlag, org1)
 		assert.Contains(t, service.orgToFlag, org2)
 		assert.Len(t, service.orgToFlag, 2)
+
+		// Explicitly verify caches are distinct entries with different values
+		assert.Equal(t, flags1, service.orgToFlag[org1], "org1 cache should match flags1")
+		assert.Equal(t, flags2, service.orgToFlag[org2], "org2 cache should match flags2")
+
+		// Verify that different orgs have different flag values
+		assert.NotEqual(t, flags1[SnykCodeConsistentIgnores], flags2[SnykCodeConsistentIgnores], "org1 and org2 should have different SnykCodeConsistentIgnores values")
+		assert.NotEqual(t, flags1[SnykCodeInlineIgnore], flags2[SnykCodeInlineIgnore], "org1 and org2 should have different SnykCodeInlineIgnore values")
+
+		// Verify specific values
+		assert.True(t, flags1[SnykCodeConsistentIgnores], "org-1 should have SnykCodeConsistentIgnores=true")
+		assert.False(t, flags2[SnykCodeConsistentIgnores], "org-2 should have SnykCodeConsistentIgnores=false")
 	})
 
 	t.Run("concurrent access is thread-safe", func(t *testing.T) {
@@ -552,6 +621,24 @@ func TestFetchSastSettings(t *testing.T) {
 
 	t.Run("different orgs have separate caches", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
+
+		org1 := "org-sast-1"
+		org2 := "org-sast-2"
+
+		// Configure different SAST settings for each org
+		mockProvider.sastSettingsByOrg[org1] = &sast_contract.SastResponse{
+			SastEnabled: true,
+			LocalCodeEngine: sast_contract.LocalCodeEngine{
+				Enabled: true,
+			},
+		}
+		mockProvider.sastSettingsByOrg[org2] = &sast_contract.SastResponse{
+			SastEnabled: false,
+			LocalCodeEngine: sast_contract.LocalCodeEngine{
+				Enabled: false,
+			},
+		}
+
 		service := &serviceImpl{
 			c:                 c,
 			provider:          mockProvider,
@@ -559,9 +646,6 @@ func TestFetchSastSettings(t *testing.T) {
 			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
 			mutex:             &sync.Mutex{},
 		}
-
-		org1 := "org-sast-1"
-		org2 := "org-sast-2"
 
 		settings1, err1 := service.fetchSastSettings(org1)
 		require.NoError(t, err1)
@@ -575,6 +659,18 @@ func TestFetchSastSettings(t *testing.T) {
 		assert.Contains(t, service.orgToSastSettings, org1)
 		assert.Contains(t, service.orgToSastSettings, org2)
 		assert.Len(t, service.orgToSastSettings, 2)
+
+		// Explicitly verify caches are distinct entries with different values
+		assert.Equal(t, settings1, service.orgToSastSettings[org1], "org1 SAST cache should match settings1")
+		assert.Equal(t, settings2, service.orgToSastSettings[org2], "org2 SAST cache should match settings2")
+
+		// Verify that different orgs have different SAST settings
+		assert.NotEqual(t, settings1.SastEnabled, settings2.SastEnabled, "org1 and org2 should have different SastEnabled values")
+		assert.NotEqual(t, settings1.LocalCodeEngine.Enabled, settings2.LocalCodeEngine.Enabled, "org1 and org2 should have different LocalCodeEngine.Enabled values")
+
+		// Verify specific values
+		assert.True(t, settings1.SastEnabled, "org-sast-1 should have SastEnabled=true")
+		assert.False(t, settings2.SastEnabled, "org-sast-2 should have SastEnabled=false")
 	})
 
 	t.Run("concurrent SAST settings fetch is thread-safe", func(t *testing.T) {
