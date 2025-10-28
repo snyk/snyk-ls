@@ -42,6 +42,14 @@ var Flags = []string{
 	IgnoreApprovalEnabled,
 }
 
+// ExternalCallsProvider abstracts configuration and API calls for testability
+type ExternalCallsProvider interface {
+	GetIgnoreApprovalEnabled(org string) (bool, error)
+	GetFeatureFlag(flag string, org string) (bool, error)
+	GetSastSettings(org string) (*sast_contract.SastResponse, error)
+	FolderOrganization(path types.FilePath) string
+}
+
 type Service interface {
 	GetFromFolderConfig(folderPath types.FilePath, flag string) bool
 	GetSastSettingsFromFolderConfig(folderPath types.FilePath) *sast_contract.SastResponse
@@ -49,8 +57,46 @@ type Service interface {
 	FlushCache()
 }
 
+type externalCallsProvider struct {
+	c *config.Config
+}
+
+func (p *externalCallsProvider) GetIgnoreApprovalEnabled(org string) (bool, error) {
+	conf := p.c.Engine().GetConfiguration().Clone()
+	conf.Set(configuration.ORGANIZATION, org)
+	return conf.GetBoolWithError(ignore_workflow.ConfigIgnoreApprovalEnabled)
+}
+
+func (p *externalCallsProvider) GetFeatureFlag(flag string, org string) (bool, error) {
+	conf := p.c.Engine().GetConfiguration().Clone()
+	conf.Set(configuration.ORGANIZATION, org)
+	return config_utils.GetFeatureFlagValue(flag, conf, p.c.Engine().GetNetworkAccess().GetHttpClient())
+}
+
+func (p *externalCallsProvider) GetSastSettings(org string) (*sast_contract.SastResponse, error) {
+	gafConfig := p.c.Engine().GetConfiguration().Clone()
+	gafConfig.Set(configuration.ORGANIZATION, org)
+
+	response, err := gafConfig.GetWithError(code_workflow.ConfigurationSastSettings)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch SAST settings for org %s: %w", org, err)
+	}
+
+	sastResponse, ok := response.(*sast_contract.SastResponse)
+	if !ok {
+		return nil, fmt.Errorf("failed to type assert SAST response for org %s", org)
+	}
+
+	return sastResponse, nil
+}
+
+func (p *externalCallsProvider) FolderOrganization(path types.FilePath) string {
+	return p.c.FolderOrganization(path)
+}
+
 type serviceImpl struct {
 	c                 *config.Config
+	provider          ExternalCallsProvider
 	orgToFlag         map[string]map[string]bool
 	orgToSastSettings map[string]*sast_contract.SastResponse
 	mutex             *sync.Mutex
@@ -59,6 +105,7 @@ type serviceImpl struct {
 func New(c *config.Config) Service {
 	return &serviceImpl{
 		c:                 c,
+		provider:          &externalCallsProvider{c: c},
 		orgToFlag:         make(map[string]map[string]bool),
 		orgToSastSettings: make(map[string]*sast_contract.SastResponse),
 		mutex:             &sync.Mutex{},
@@ -83,17 +130,14 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 		go func() {
 			defer wg.Done()
 
-			conf := s.c.Engine().GetConfiguration().Clone()
-			conf.Set(configuration.ORGANIZATION, org)
-
 			var enabled bool
 			var err error
 
-			// IgnoreApprovalEnabled is fetched differently from other feature flags
+			// Use provider to fetch config values
 			if flag == IgnoreApprovalEnabled {
-				enabled, err = conf.GetBoolWithError(ignore_workflow.ConfigIgnoreApprovalEnabled)
+				enabled, err = s.provider.GetIgnoreApprovalEnabled(org)
 			} else {
-				enabled, err = config_utils.GetFeatureFlagValue(flag, conf, s.c.Engine().GetNetworkAccess().GetHttpClient())
+				enabled, err = s.provider.GetFeatureFlag(flag, org)
 			}
 
 			if err != nil {
@@ -102,7 +146,10 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 			}
 
 			s.mutex.Lock()
-			s.orgToFlag[org][flag] = enabled
+			// Check if cache was flushed while we were fetching
+			if s.orgToFlag[org] != nil {
+				s.orgToFlag[org][flag] = enabled
+			}
 			s.mutex.Unlock()
 		}()
 	}
@@ -125,17 +172,9 @@ func (s *serviceImpl) fetchSastSettings(org string) (*sast_contract.SastResponse
 	}
 	s.mutex.Unlock()
 
-	gafConfig := s.c.Engine().GetConfiguration().Clone()
-	gafConfig.Set(configuration.ORGANIZATION, org)
-
-	response, err := gafConfig.GetWithError(code_workflow.ConfigurationSastSettings)
+	sastResponse, err := s.provider.GetSastSettings(org)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch SAST settings for org %s: %w", org, err)
-	}
-
-	sastResponse, ok := response.(*sast_contract.SastResponse)
-	if !ok {
-		return nil, fmt.Errorf("failed to type assert SAST response for org %s", org)
+		return nil, err
 	}
 
 	s.mutex.Lock()
@@ -173,7 +212,7 @@ func (s *serviceImpl) GetSastSettingsFromFolderConfig(folderPath types.FilePath)
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
-	org := s.c.FolderOrganization(folderConfig.FolderPath)
+	org := s.provider.FolderOrganization(folderConfig.FolderPath)
 
 	// Fetch feature flags and SAST settings in parallel
 	var flags map[string]bool
