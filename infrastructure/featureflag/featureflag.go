@@ -71,6 +71,7 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 		httpClient := s.c.Engine().GetNetworkAccess().GetHttpClient()
 		enabled, err := config_utils.GetFeatureFlagValue(flag, conf, httpClient)
 		if err != nil {
+			// TODO: wait until @startOfflineDetection is integrated. If error isn't related to network issues, there is nothing user can do anyway
 			s.c.Logger().Err(err).Str("method", "GetFlags").Msgf("couldn't get feature flag %s", flag)
 		}
 		s.orgToFlag[org][flag] = enabled
