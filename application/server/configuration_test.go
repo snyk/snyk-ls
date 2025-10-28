@@ -482,10 +482,14 @@ func initTestRepo(t *testing.T, tempDir string) error {
 // setupMockOrgResolver sets up a mock organization resolver for tests
 func setupMockOrgResolver(t *testing.T, orgId, orgName string) {
 	t.Helper()
-	originalService := command.Service()
-	t.Cleanup(func() {
-		command.SetService(originalService)
-	})
+
+	// Check if we already have a mock service with an org resolver
+	if svc := command.Service(); svc != nil {
+		if resolver := svc.GetOrgResolver(); resolver != nil {
+			// Already set up, no need to do it again
+			return
+		}
+	}
 
 	ctrl := gomock.NewController(t)
 	mockResolver := mock_command.NewMockOrgResolver(ctrl)
