@@ -483,23 +483,24 @@ func initTestRepo(t *testing.T, tempDir string) error {
 func setupMockOrgResolver(t *testing.T, orgId, orgName string) {
 	t.Helper()
 
-	// Check if we already have a mock service with an org resolver
-	if svc := command.Service(); svc != nil {
-		if resolver := svc.GetOrgResolver(); resolver != nil {
-			// Already set up, no need to do it again
-			return
-		}
-	}
-
 	ctrl := gomock.NewController(t)
 	mockResolver := mock_command.NewMockOrgResolver(ctrl)
 	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{
 		Id:   orgId,
 		Name: orgName,
 	}, nil).AnyTimes()
-	mockService := types.NewCommandServiceMock()
-	mockService.SetOrgResolver(mockResolver)
-	command.SetService(mockService)
+
+	// Get the existing service or create a new mock
+	svc := command.Service()
+	if mockSvc, ok := svc.(*types.CommandServiceMock); ok {
+		// If it's already a mock service, just update the resolver
+		mockSvc.SetOrgResolver(mockResolver)
+	} else {
+		// Otherwise, create a new mock service
+		mockService := types.NewCommandServiceMock()
+		mockService.SetOrgResolver(mockResolver)
+		command.SetService(mockService)
+	}
 }
 
 // Common test setup for updateFolderConfig tests
