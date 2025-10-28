@@ -126,10 +126,7 @@ func (cmd *submitIgnoreRequest) initializeCreateConfiguration(gafConfig configur
 		return nil, err
 	}
 
-	folderOrg := cmd.c.FolderOrganization(contentRoot)
-	if folderOrg != "" {
-		gafConfig.Set(configuration.ORGANIZATION, folderOrg)
-	}
+	gafConfig.Set(configuration.ORGANIZATION, cmd.c.FolderOrganization(contentRoot))
 	gafConfig.Set(ignore_workflow.FindingsIdKey, findingId)
 
 	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)

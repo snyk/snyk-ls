@@ -9,11 +9,10 @@ import (
 	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -25,7 +24,8 @@ type dirtyFilesWatcher interface {
 
 // CodeActionsService is an application-layer service for handling code actions.
 type CodeActionsService struct {
-	IssuesProvider snyk.IssueProvider
+	IssuesProvider     snyk.IssueProvider
+	featureFlagService featureflag.Service
 
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
@@ -41,14 +41,15 @@ type cachedAction struct {
 	action types.CodeAction
 }
 
-func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier) *CodeActionsService {
+func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service) *CodeActionsService {
 	return &CodeActionsService{
-		IssuesProvider: provider,
-		actionsCache:   make(map[uuid.UUID]cachedAction),
-		c:              c,
-		logger:         c.Logger().With().Str("service", "CodeActionsService").Logger(),
-		fileWatcher:    fileWatcher,
-		notifier:       notifier,
+		IssuesProvider:     provider,
+		featureFlagService: featureFlagService,
+		actionsCache:       make(map[uuid.UUID]cachedAction),
+		c:                  c,
+		logger:             c.Logger().With().Str("service", "CodeActionsService").Logger(),
+		fileWatcher:        fileWatcher,
+		notifier:           notifier,
 	}
 }
 
@@ -64,7 +65,9 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	logMsg := fmt.Sprint("Found ", len(issues), " issues for path ", path, " and range ", r)
 	c.logger.Debug().Msg(logMsg)
 
-	codeConsistentIgnoresEnabled := c.c.Engine().GetConfiguration().GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	folderPath := c.c.Workspace().GetFolderContaining(path)
+	codeConsistentIgnoresEnabled := c.featureFlagService.GetFromFolderConfig(folderPath.Path(), featureflag.SnykCodeConsistentIgnores)
+
 	var filteredIssues []types.Issue
 	if !codeConsistentIgnoresEnabled {
 		filteredIssues = issues
@@ -211,6 +214,7 @@ type missingKeyError struct{}
 func (e missingKeyError) Error() string {
 	return "code action lookup key is missing - this is not a deferred code action"
 }
+
 func IsMissingKeyError(err error) bool {
 	var missingKeyErr missingKeyError
 	ok := errors.As(err, &missingKeyErr)
