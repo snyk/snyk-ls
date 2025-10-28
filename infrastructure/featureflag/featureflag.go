@@ -44,10 +44,10 @@ var Flags = []string{
 
 // ExternalCallsProvider abstracts configuration and API calls for testability
 type ExternalCallsProvider interface {
-	GetIgnoreApprovalEnabled(org string) (bool, error)
-	GetFeatureFlag(flag string, org string) (bool, error)
-	GetSastSettings(org string) (*sast_contract.SastResponse, error)
-	FolderOrganization(path types.FilePath) string
+	getIgnoreApprovalEnabled(org string) (bool, error)
+	getFeatureFlag(flag string, org string) (bool, error)
+	getSastSettings(org string) (*sast_contract.SastResponse, error)
+	folderOrganization(path types.FilePath) string
 }
 
 type Service interface {
@@ -61,19 +61,19 @@ type externalCallsProvider struct {
 	c *config.Config
 }
 
-func (p *externalCallsProvider) GetIgnoreApprovalEnabled(org string) (bool, error) {
+func (p *externalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, error) {
 	conf := p.c.Engine().GetConfiguration().Clone()
 	conf.Set(configuration.ORGANIZATION, org)
 	return conf.GetBoolWithError(ignore_workflow.ConfigIgnoreApprovalEnabled)
 }
 
-func (p *externalCallsProvider) GetFeatureFlag(flag string, org string) (bool, error) {
+func (p *externalCallsProvider) getFeatureFlag(flag string, org string) (bool, error) {
 	conf := p.c.Engine().GetConfiguration().Clone()
 	conf.Set(configuration.ORGANIZATION, org)
 	return config_utils.GetFeatureFlagValue(flag, conf, p.c.Engine().GetNetworkAccess().GetHttpClient())
 }
 
-func (p *externalCallsProvider) GetSastSettings(org string) (*sast_contract.SastResponse, error) {
+func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.SastResponse, error) {
 	gafConfig := p.c.Engine().GetConfiguration().Clone()
 	gafConfig.Set(configuration.ORGANIZATION, org)
 
@@ -90,7 +90,7 @@ func (p *externalCallsProvider) GetSastSettings(org string) (*sast_contract.Sast
 	return sastResponse, nil
 }
 
-func (p *externalCallsProvider) FolderOrganization(path types.FilePath) string {
+func (p *externalCallsProvider) folderOrganization(path types.FilePath) string {
 	return p.c.FolderOrganization(path)
 }
 
@@ -135,9 +135,9 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 
 			// Use provider to fetch config values
 			if flag == IgnoreApprovalEnabled {
-				enabled, err = s.provider.GetIgnoreApprovalEnabled(org)
+				enabled, err = s.provider.getIgnoreApprovalEnabled(org)
 			} else {
-				enabled, err = s.provider.GetFeatureFlag(flag, org)
+				enabled, err = s.provider.getFeatureFlag(flag, org)
 			}
 
 			if err != nil {
@@ -172,7 +172,7 @@ func (s *serviceImpl) fetchSastSettings(org string) (*sast_contract.SastResponse
 	}
 	s.mutex.Unlock()
 
-	sastResponse, err := s.provider.GetSastSettings(org)
+	sastResponse, err := s.provider.getSastSettings(org)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func (s *serviceImpl) GetSastSettingsFromFolderConfig(folderPath types.FilePath)
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
-	org := s.provider.FolderOrganization(folderConfig.FolderPath)
+	org := s.provider.folderOrganization(folderConfig.FolderPath)
 
 	// Fetch feature flags and SAST settings in parallel
 	var flags map[string]bool

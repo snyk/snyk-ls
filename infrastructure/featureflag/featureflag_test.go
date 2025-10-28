@@ -32,32 +32,32 @@ import (
 
 // mockExternalCallsProvider is a mock implementation of ExternalCallsProvider for testing
 type mockExternalCallsProvider struct {
-	ignoreApproval     bool
-	ignoreErr          error
-	featureFlags       map[string]bool
-	flagErr            error
-	sastSettings       *sast_contract.SastResponse
-	sastErr            error
-	folderOrganization string
+	ignoreApproval bool
+	ignoreErr      error
+	featureFlags   map[string]bool
+	flagErr        error
+	sastSettings   *sast_contract.SastResponse
+	sastErr        error
+	folderOrg      string
 }
 
-func (m *mockExternalCallsProvider) GetIgnoreApprovalEnabled(org string) (bool, error) {
+func (m *mockExternalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, error) {
 	return m.ignoreApproval, m.ignoreErr
 }
 
-func (m *mockExternalCallsProvider) GetFeatureFlag(flag string, org string) (bool, error) {
+func (m *mockExternalCallsProvider) getFeatureFlag(flag string, org string) (bool, error) {
 	if m.flagErr != nil {
 		return false, m.flagErr
 	}
 	return m.featureFlags[flag], nil
 }
 
-func (m *mockExternalCallsProvider) GetSastSettings(org string) (*sast_contract.SastResponse, error) {
+func (m *mockExternalCallsProvider) getSastSettings(org string) (*sast_contract.SastResponse, error) {
 	return m.sastSettings, m.sastErr
 }
 
-func (m *mockExternalCallsProvider) FolderOrganization(path types.FilePath) string {
-	return m.folderOrganization
+func (m *mockExternalCallsProvider) folderOrganization(path types.FilePath) string {
+	return m.folderOrg
 }
 
 func setupMockProvider(t *testing.T) (*config.Config, *mockExternalCallsProvider) {
@@ -76,7 +76,7 @@ func setupMockProvider(t *testing.T) (*config.Config, *mockExternalCallsProvider
 				Enabled: true,
 			},
 		},
-		folderOrganization: "test-org",
+		folderOrg: "test-org",
 	}
 
 	return c, mockProvider
