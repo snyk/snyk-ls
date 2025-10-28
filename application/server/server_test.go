@@ -353,6 +353,7 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -417,6 +418,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
