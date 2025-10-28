@@ -94,7 +94,10 @@ func TestInit(t *testing.T) {
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(c)
-	command.SetService(&types.CommandServiceMock{})
+	mockCommandService := types.NewCommandServiceMock()
+	orgResolver := command.NewLDXSyncOrgResolver()
+	mockCommandService.SetOrgResolver(orgResolver)
+	command.SetService(mockCommandService)
 	// don't use getters or it'll deadlock
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator)
 	c.SetWorkspace(w)
