@@ -79,7 +79,7 @@ func CreateFromCommandData(
 	case types.CodeFixApplyEditCommand:
 		return &applyAiFixEditCommand{command: commandData, issueProvider: issueProvider, notifier: notifier, c: c, logger: c.Logger(), apiClient: snykApiClient}, nil
 	case types.CodeSubmitFixFeedback:
-		return &codeFixFeedback{command: commandData}, nil
+		return &codeFixFeedback{command: commandData, issueProvider: issueProvider}, nil
 	case types.CodeFixDiffsCommand:
 		return &codeFixDiffs{
 			command:       commandData,

@@ -73,10 +73,12 @@ func (cmd *applyAiFixEditCommand) Execute(_ context.Context) (any, error) {
 		// This un-awaited goroutine potentially outlives the command's execution.
 		// It cannot reuse the command's context, as the command executor will cancel it when the command finishes.
 		bgCtx := context.Background()
+
 		codeFixFeedbackCmd := codeFixFeedback{
 			command: types.CommandData{
 				Arguments: []any{fixId, code.FixAppliedUserEvent},
 			},
+			issueProvider: cmd.issueProvider,
 		}
 
 		_, err := codeFixFeedbackCmd.Execute(bgCtx)
