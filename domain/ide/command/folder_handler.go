@@ -121,23 +121,15 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 
 	globalOrg := c.Organization()
 
-	// Skip migration if we don't have a token yet and we're not using fake authentication
-	// This happens during initialization before authentication is set up.
-	// Migration will be retried later when authentication is ready.
-	if !c.NonEmptyToken() && c.AuthenticationMethod() != types.FakeAuthentication {
-		c.Logger().Debug().Msg("skipping org migration during initialization - no token available yet")
-		return
-	}
-
 	// Check if the configured organization is the default org
 	var isDefaultOrUnknown bool
-	var err error
 
 	// Skip API calls for fake authentication to avoid issues during testing
 	if c.AuthenticationMethod() == types.FakeAuthentication {
 		// For fake authentication, assume the org is user-set (non-default) to be safe
 		isDefaultOrUnknown = false
 	} else {
+		var err error
 		isDefaultOrUnknown, err = isOrgDefault(c, globalOrg)
 		if err != nil {
 			c.Logger().Err(err).Msg("unable to determine if organization is default")
