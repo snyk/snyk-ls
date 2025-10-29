@@ -125,7 +125,6 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 	isDefaultOrUnknown, err := isOrgDefault(c, globalOrg)
 	if err != nil {
 		c.Logger().Err(err).Msg("unable to determine if organization is default")
-		return
 	}
 
 	// Determine OrgSetByUser based on whether the org is the default (or an unknown slug)
