@@ -24,14 +24,12 @@ import (
 	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type codeFixFeedback struct {
-	command       types.CommandData
-	issueProvider snyk.IssueProvider
+	command types.CommandData
 }
 
 func (cmd *codeFixFeedback) Command() types.CommandData {

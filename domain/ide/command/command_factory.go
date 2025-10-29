@@ -94,7 +94,7 @@ func CreateFromCommandData(
 			featureFlagService: featureFlagService,
 		}, nil
 	case types.CodeSubmitFixFeedback:
-		return &codeFixFeedback{command: commandData, issueProvider: issueProvider}, nil
+		return &codeFixFeedback{command: commandData}, nil
 	case types.CodeFixDiffsCommand:
 		return &codeFixDiffs{
 			command:            commandData,
