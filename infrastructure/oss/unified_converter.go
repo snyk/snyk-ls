@@ -766,6 +766,7 @@ func extractVersion(finding testapi.FindingData, vuln *testapi.SnykVulnProblem) 
 
 // buildRemediationAdvice builds remediation advice text from the upgrade path
 // Matches legacy flow: uses UpgradePath[1] (the package to be upgraded)
+// Logic matches Legacy's GetRemediation() which checks IsUpgradable || IsPatchable
 func buildRemediationAdvice(finding testapi.FindingData, vuln *testapi.SnykVulnProblem) string {
 	// Get the upgrade path from the API
 	upgradePath := buildUpgradePath(finding, vuln)
@@ -792,14 +793,21 @@ func buildRemediationAdvice(finding testapi.FindingData, vuln *testapi.SnykVulnP
 		len(dependencyPath) > 1 &&
 		upgradePath[1] == dependencyPath[1]
 
-	// If upgradable, decide between upgrade message and outdated message
-	if len(vuln.InitiallyFixedInVersions) > 0 {
+	// Match Legacy logic: check IsUpgradable
+	// IsUpgradable = len(vuln.InitiallyFixedInVersions) > 0
+	// Note: IsPatchable is always false in unified workflow (patches not supported)
+	isUpgradable := len(vuln.InitiallyFixedInVersions) > 0
+
+	// If we have an upgrade message (either from upgradable status or fix relationships), provide remediation
+	if upgradeMessage != "" || isUpgradable {
 		if isOutdated {
-			// Outdated dependencies scenario
+			// Outdated dependencies scenario - return outdated message
 			return buildOutdatedDependencyMessage(vuln.PackageName, actualVersion, packageManager)
-		} else if upgradeMessage != "" {
-			return upgradeMessage
 		}
+		// Return upgrade message when available
+		// Note: if isUpgradable but upgradeMessage is empty, we return empty string
+		// but that case should be rare since upgradePath is built from InitiallyFixedInVersions
+		return upgradeMessage
 	}
 
 	// No remediation available
