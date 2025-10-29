@@ -16,11 +16,16 @@
 
 package featureflag
 
-import "github.com/snyk/snyk-ls/internal/types"
+import (
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+
+	"github.com/snyk/snyk-ls/internal/types"
+)
 
 type FakeFeatureFlagService struct {
 	Flags            map[string]bool
 	FlushCacheCalled bool
+	SastSettings     *sast_contract.SastResponse
 }
 
 func NewFakeService() *FakeFeatureFlagService {
@@ -35,8 +40,13 @@ func (f *FakeFeatureFlagService) GetFromFolderConfig(folderPath types.FilePath, 
 	return val
 }
 
+func (f *FakeFeatureFlagService) GetSastSettingsFromFolderConfig(folderPath types.FilePath) *sast_contract.SastResponse {
+	return f.SastSettings
+}
+
 func (f *FakeFeatureFlagService) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	folderConfig.FeatureFlags = f.Flags
+	folderConfig.SastSettings = f.SastSettings
 }
 
 func (f *FakeFeatureFlagService) FlushCache() {

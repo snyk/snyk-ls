@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/stretchr/testify/assert"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
@@ -416,8 +415,7 @@ func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
-
-	c.Engine().GetConfiguration().Set(ignore_workflow.ConfigIgnoreApprovalEnabled, true)
+	fakeFeatureFlagService.Flags[featureflag.IgnoreApprovalEnabled] = true
 
 	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService) // Enable IAW so the ignore form is rendered
 	assert.NoError(t, err)
@@ -439,8 +437,7 @@ func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
-
-	c.Engine().GetConfiguration().Set(ignore_workflow.ConfigIgnoreApprovalEnabled, true)
+	fakeFeatureFlagService.Flags[featureflag.IgnoreApprovalEnabled] = true
 
 	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
@@ -581,7 +578,7 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Enabled(t *
 	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration(), types.FilePath(""))
+	htmlRenderer.updateFeatureFlags(types.FilePath(""))
 
 	assert.True(t, htmlRenderer.inlineIgnoresEnabled)
 }
@@ -596,7 +593,7 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Disabled(t 
 	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration(), types.FilePath(""))
+	htmlRenderer.updateFeatureFlags(types.FilePath(""))
 
 	assert.False(t, htmlRenderer.inlineIgnoresEnabled)
 }
@@ -614,7 +611,7 @@ func Test_Code_Html_updateFeatureFlags_NonVSCodeIntegration(t *testing.T) {
 	assert.NotNil(t, htmlRenderer)
 
 	// Call the method under test
-	htmlRenderer.updateFeatureFlags(c.Engine().GetConfiguration(), types.FilePath(""))
+	htmlRenderer.updateFeatureFlags(types.FilePath(""))
 
 	// Assert that inlineIgnoresEnabled is false because the integration is not VS_CODE
 	assert.False(t, htmlRenderer.inlineIgnoresEnabled, "inlineIgnoresEnabled should be false for non-VSCode integrations")
