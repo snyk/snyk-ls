@@ -877,6 +877,11 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService())
 	w.AddFolder(f)
 
+	// Populate folder config with SAST settings after adding the folder
+	folderConfig := c.FolderConfig(cloneTargetDir)
+	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
+	_ = c.UpdateFolderConfig(folderConfig)
+
 	c.SetLSPInitialized(true)
 
 	_ = textDocumentDidSave(t, &loc, testPath)
