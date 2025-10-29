@@ -1332,6 +1332,12 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 	}
 }
 
+func (c *Config) FolderOrganizationSlug(path types.FilePath) string {
+	clonedConfig := c.Engine().GetConfiguration()
+	clonedConfig.Set(configuration.ORGANIZATION, c.FolderOrganization(path))
+	return clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
+}
+
 func (c *Config) HoverVerbosity() int {
 	c.m.RLock()
 	defer c.m.RUnlock()
