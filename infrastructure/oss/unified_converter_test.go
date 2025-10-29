@@ -284,7 +284,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 		description     string
 	}{
 		{
-			name: "No remediation when no fixed versions",
+			name:    "No remediation when no fixed versions",
 			finding: createFindingWithoutUpgradePath(),
 			vuln: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
