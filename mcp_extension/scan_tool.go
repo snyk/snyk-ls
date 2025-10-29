@@ -206,8 +206,8 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		}
 
 		if !toolDef.IgnoreAuth {
-			user, whoAmiErr := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
-			if whoAmiErr != nil || user.UserName == "" {
+			_, whoAmiErr := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
+			if whoAmiErr != nil {
 				return mcp.NewToolResultText("User not authenticated. Please run 'snyk_auth' first"), nil
 			}
 		}
@@ -259,8 +259,8 @@ func (m *McpLLMBinding) snykAuthHandler(invocationCtx workflow.InvocationContext
 		apiUrl := globalConfig.GetString(configuration.API_URL)
 
 		user, err := authentication.CallWhoAmI(&logger, engine)
-		if err == nil && user.UserName != "" {
-			msg := getAuthMsg(globalConfig, user.UserName)
+		if err == nil && user != nil {
+			msg := getAuthMsg(globalConfig, user)
 			return mcp.NewToolResultText(msg), nil
 		}
 
@@ -378,8 +378,15 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 	}
 }
 
-func getAuthMsg(config configuration.Configuration, userName string) string {
+func getAuthMsg(config configuration.Configuration, activeUser *authentication.ActiveUser) string {
+	user := activeUser.UserName
+	if activeUser.UserName != "" {
+		user = activeUser.UserName
+	} else if activeUser.Name != "" {
+		user = activeUser.Name
+	}
+
 	apiUrl := config.GetString(configuration.API_URL)
 	org := config.GetString(configuration.ORGANIZATION)
-	return fmt.Sprintf("Already Authenticated. User: %s Using API Endpoint: %s and Org: %s", userName, apiUrl, org)
+	return fmt.Sprintf("Already Authenticated. User: %s Using API Endpoint: %s and Org: %s", user, apiUrl, org)
 }
