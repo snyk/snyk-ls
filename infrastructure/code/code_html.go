@@ -29,8 +29,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
@@ -151,10 +149,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	}
 	folderPath := renderer.determineFolderPath(issue.GetAffectedFilePath())
 
-	gafConfig := renderer.c.Engine().GetConfiguration().Clone()
-	gafConfig.Set(configuration.ORGANIZATION, renderer.c.FolderOrganization(folderPath))
-
-	codeRenderer.updateFeatureFlags(gafConfig, folderPath)
+	codeRenderer.updateFeatureFlags(folderPath)
 
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
@@ -181,7 +176,9 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	appLink := renderer.c.SnykUI()
 	if isPending {
-		pendingIgnoreURL, err := url.JoinPath(renderer.c.SnykUI(), "org", gafConfig.GetString(configuration.ORGANIZATION_SLUG), "ignore-requests")
+		// Get organization slug for the folder
+		orgSlug := renderer.c.FolderOrganizationSlug(folderPath)
+		pendingIgnoreURL, err := url.JoinPath(renderer.c.SnykUI(), "org", orgSlug, "ignore-requests")
 		if err != nil {
 			renderer.c.Logger().Error().Err(err).Msg("Failed to construct pending ignore link")
 		} else {
@@ -246,8 +243,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	return result
 }
 
-func (renderer *HtmlRenderer) updateFeatureFlags(conf configuration.Configuration, folder types.FilePath) {
-	renderer.iawEnabled = conf.GetBool(ignore_workflow.ConfigIgnoreApprovalEnabled)
+func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
+	renderer.iawEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.IgnoreApprovalEnabled)
 	renderer.inlineIgnoresEnabled = false
 
 	if renderer.c.IntegrationName() == "VS_CODE" {
