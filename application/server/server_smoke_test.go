@@ -919,7 +919,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
-	t.Skip("Skipping: Delta tests require SAST to be enabled via API for the test org/token. The folder config SAST settings are overwritten by the real API response during HandleFolders. This test needs either a SAST-enabled test environment or refactoring to use mocked services.")
+	t.Skip("Skipping: SAST is now checked per folder. We need to enable SAST on the backend for the folders under test.")
 	c := testutil.SmokeTest(t, false)
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
@@ -967,7 +967,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
-	t.Skip("Skipping: Delta tests require SAST to be enabled via API for the test org/token. The folder config SAST settings are overwritten by the real API response during HandleFolders. This test needs either a SAST-enabled test environment or refactoring to use mocked services.")
+	t.Skip("Skipping: SAST is now checked per folder. We need to enable SAST on the backend for the folders under test.")
 	c := testutil.SmokeTest(t, false)
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
@@ -998,7 +998,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
-	t.Skip("Skipping: Delta tests require SAST to be enabled via API for the test org/token. The folder config SAST settings are overwritten by the real API response during HandleFolders. This test needs either a SAST-enabled test environment or refactoring to use mocked services.")
+	t.Skip("Skipping: SAST is now checked per folder. We need to enable SAST on the backend for the folders under test.")
 	c := testutil.SmokeTest(t, false)
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
