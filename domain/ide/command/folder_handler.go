@@ -122,24 +122,10 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 	globalOrg := c.Organization()
 
 	// Check if the configured organization is the default org
-	var isDefaultOrUnknown bool
-
-	// Skip API calls for fake authentication to avoid issues during testing
-	if c.AuthenticationMethod() == types.FakeAuthentication {
-		// For fake authentication, assume the org is user-set (non-default) to be safe
-		isDefaultOrUnknown = false
-	} else if !c.NonEmptyToken() {
-		// No token available yet - treat as using auto-org selection (default behavior)
-		c.Logger().Debug().Msg("no token available during org migration - defaulting to auto-org selection")
-		isDefaultOrUnknown = true
-	} else {
-		var err error
-		isDefaultOrUnknown, err = isOrgDefault(c, globalOrg)
-		if err != nil {
-			c.Logger().Err(err).Msg("unable to determine if organization is default")
-			// Continue with migration - isDefaultOrUnknown will be false (zero value)
-			// which means we'll treat the org as user-set (non-default)
-		}
+	isDefaultOrUnknown, err := isOrgDefault(c, globalOrg)
+	if err != nil {
+		c.Logger().Err(err).Msg("unable to determine if organization is default")
+		return
 	}
 
 	// Determine OrgSetByUser based on whether the org is the default (or an unknown slug)
