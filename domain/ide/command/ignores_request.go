@@ -305,5 +305,6 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 
 func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error, path types.FilePath) {
 	event := analytics.NewAnalyticsEventParam("Create ignore", err, path)
-	analytics.SendAnalytics(cmd.c.Engine(), cmd.c.DeviceID(), event, err)
+	folderOrg := cmd.c.FolderOrganization(path)
+	analytics.SendAnalytics(cmd.c.Engine(), cmd.c.DeviceID(), folderOrg, event, err)
 }

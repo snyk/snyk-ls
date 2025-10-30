@@ -51,7 +51,27 @@ func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 		if !ok {
 			return nil, fmt.Errorf("error converting argument to string. %v", arg)
 		}
-		err := analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), []byte(payload))
+
+		// Send to first folder's org since analytics are sent to a specific org,
+		// the first folder's org has as good a chance as any to work and not 404.
+		// Pre-built payloads don't have folder context and are not folder-specific.
+		// TODO - This is a temporary solution to avoid inflating analytics counts.
+		ws := c.Workspace()
+		if ws != nil {
+			folders := ws.Folders()
+			if len(folders) > 0 {
+				firstFolderOrg := c.FolderOrganization(folders[0].Path())
+				err := analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), firstFolderOrg, []byte(payload))
+				if err != nil {
+					logger.Err(err).Str("firstFolderOrg", firstFolderOrg).Msg("error sending analytics to API")
+					return nil, err
+				}
+				continue
+			}
+		}
+
+		// Fallback: If no folders, send with empty org to use the user's preferred org from the web UI
+		err := analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), "", []byte(payload))
 		if err != nil {
 			logger.Err(err).Msg("error sending analytics to API")
 			return nil, err

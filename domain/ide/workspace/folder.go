@@ -451,7 +451,8 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 		logger.Error().Err(err).Msg("Failed to marshal analytics")
 	}
 
-	err = analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), v2InstrumentationData)
+	folderOrg := c.FolderOrganization(data.Path)
+	err = analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), folderOrg, v2InstrumentationData)
 	if err != nil {
 		logger.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
 		return

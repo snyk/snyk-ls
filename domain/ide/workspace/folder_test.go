@@ -40,7 +40,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -51,6 +50,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -665,7 +665,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	engineMock, gafConfig := setUpEngineMock(t, c)
+	engineMock, gafConfig := testutil.SetUpEngineMock(t, c)
 
 	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
 
@@ -698,13 +698,24 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	engineMock, gafConfig := setUpEngineMock(t, c)
-
 	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
+
+	engineMock, gafConfig := testutil.SetUpEngineMock(t, c)
+
+	// Configure folder-specific org
+	const testFolderOrg = "test-folder-org-uuid"
+	folderConfig := &types.FolderConfig{
+		FolderPath:   f.Path(),
+		PreferredOrg: testFolderOrg,
+		OrgSetByUser: true,
+	}
+	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
+	require.NoError(t, err, "failed to configure folder org")
 
 	filePath := types.FilePath(filepath.Join(string(f.Path()), "dummy.java"))
 	scanData := types.ScanData{
 		Product: product.ProductOpenSource,
+		Path:    f.Path(),
 		Issues: []types.Issue{
 			&snyk.Issue{Severity: types.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
 			&snyk.Issue{Severity: types.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
@@ -719,21 +730,44 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
 	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+
+	// Capture analytics WF's GAF config to verify folder org (using channel for safe goroutine communication)
+	capturedGAFConfigCh := make(chan configuration.Configuration, 1)
 	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
-		Times(1)
+		Times(1).
+		Do(func(_ workflow.Identifier, _ []workflow.Data, potentialGAFConfig any) {
+			// Safe type assertion
+			if capturedGAFConfig, ok := potentialGAFConfig.(configuration.Configuration); ok {
+				capturedGAFConfigCh <- capturedGAFConfig
+			} else {
+				t.Errorf("expected configuration.Configuration, got %T", potentialGAFConfig)
+			}
+		}).Return(nil, nil)
 
 	// Act
 	f.ProcessResults(t.Context(), scanData)
 
-	// Assert
+	// Assert: Verify severity counts
 	require.NotEmpty(t, scanData.GetSeverityIssueCounts())
 	require.Equal(t, product.ProductOpenSource, scanData.Product)
 	require.Equal(t, 3, scanData.GetSeverityIssueCounts()[types.Critical].Total)
 	require.Equal(t, 2, scanData.GetSeverityIssueCounts()[types.Critical].Open)
 	require.Equal(t, 1, scanData.GetSeverityIssueCounts()[types.Critical].Ignored)
 
-	// wait for async analytics sending
-	time.Sleep(time.Second)
+	// Wait for async analytics sending
+	var capturedGAFConfig configuration.Configuration
+	require.Eventually(t, func() bool {
+		select {
+		case capturedGAFConfig = <-capturedGAFConfigCh:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond, "analytics should have been sent")
+
+	// Assert: Verify analytics sent with correct folder org
+	actualOrg := capturedGAFConfig.Get(configuration.ORGANIZATION)
+	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
 
 func NewMockFolder(c *config.Config, notifier noti.Notifier) *Folder {
@@ -772,13 +806,4 @@ func NewMockIssueWithIgnored(id string, path types.FilePath, ignored bool) *snyk
 func GetValueFromMap(m *xsync.MapOf[types.FilePath, []types.Issue], key types.FilePath) []types.Issue {
 	value, _ := m.Load(key)
 	return value
-}
-
-func setUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {
-	t.Helper()
-	ctrl := gomock.NewController(t)
-	mockEngine := mocks.NewMockEngine(ctrl)
-	engineConfig := c.Engine().GetConfiguration()
-	c.SetEngine(mockEngine)
-	return mockEngine, engineConfig
 }

@@ -18,8 +18,20 @@ package analytics
 
 import (
 	"testing"
+	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+
+	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func TestNewAnalyticsEventParam(t *testing.T) {
@@ -128,4 +140,132 @@ func TestSendConfigChangedAnalytics(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
+	// Shared test constants
+	const (
+		firstFolderOrg  = "first-folder-org-uuid"
+		secondFolderOrg = "second-folder-org-uuid"
+		configName      = "testConfig"
+		oldValue        = "old-value"
+		newValue        = "new-value"
+	)
+
+	testCases := []struct {
+		name        string
+		setupWs     func(t *testing.T, ctrl *gomock.Controller, engineConfig configuration.Configuration, logger *zerolog.Logger) types.Workspace
+		expectedOrg string
+	}{
+		{
+			name: "uses first folder org in multi-folder workspace",
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engineConfig configuration.Configuration, logger *zerolog.Logger) types.Workspace {
+				t.Helper()
+
+				folder1Path := types.FilePath("/fake/folder1")
+				folder2Path := types.FilePath("/fake/folder2")
+
+				// Set folder-specific orgs using storedconfig
+				folder1Config := &types.FolderConfig{
+					FolderPath:   folder1Path,
+					PreferredOrg: firstFolderOrg,
+					OrgSetByUser: true,
+				}
+				folder2Config := &types.FolderConfig{
+					FolderPath:   folder2Path,
+					PreferredOrg: secondFolderOrg,
+					OrgSetByUser: true,
+				}
+
+				err := storedconfig.UpdateFolderConfig(engineConfig, folder1Config, logger)
+				require.NoError(t, err, "failed to configure first folder org")
+				err = storedconfig.UpdateFolderConfig(engineConfig, folder2Config, logger)
+				require.NoError(t, err, "failed to configure second folder org")
+
+				// Setup mock workspace with the 2 folders
+				mockFolder1 := mock_types.NewMockFolder(ctrl)
+				mockFolder1.EXPECT().Path().Return(folder1Path).AnyTimes()
+
+				mockFolder2 := mock_types.NewMockFolder(ctrl)
+				mockFolder2.EXPECT().Path().Return(folder2Path).AnyTimes()
+
+				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+				mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder1, mockFolder2}).AnyTimes()
+
+				return mockWorkspace
+			},
+			expectedOrg: firstFolderOrg,
+		},
+		{
+			name: "falls back to empty org when no folders",
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engineConfig configuration.Configuration, logger *zerolog.Logger) types.Workspace {
+				t.Helper()
+				// Setup workspace with NO folders (empty slice)
+				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+				mockWorkspace.EXPECT().Folders().Return([]types.Folder{}).AnyTimes()
+
+				return mockWorkspace
+			},
+			expectedOrg: "",
+		},
+		{
+			name: "falls back to empty org when nil workspace",
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engineConfig configuration.Configuration, logger *zerolog.Logger) types.Workspace {
+				t.Helper()
+				// Return nil workspace
+				return nil
+			},
+			expectedOrg: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+
+			mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
+
+			// Setup workspace (test case specific) and set it on config
+			ws := tc.setupWs(t, ctrl, engineConfig, c.Logger())
+			c.SetWorkspace(ws)
+
+			mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+			mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+
+			// Capture analytics WF's GAF config to verify folder org (using channel for safe goroutine communication)
+			capturedGAFConfigCh := make(chan configuration.Configuration, 1)
+			mockEngine.EXPECT().InvokeWithInputAndConfig(
+				localworkflows.WORKFLOWID_REPORT_ANALYTICS,
+				gomock.Any(),
+				gomock.Any(),
+			).Times(1).Do(func(_ any, _ any, potentialGAFConfig any) {
+				// Safe type assertion
+				if capturedGAFConfig, ok := potentialGAFConfig.(configuration.Configuration); ok {
+					capturedGAFConfigCh <- capturedGAFConfig
+				} else {
+					t.Errorf("expected configuration.Configuration, got %T", potentialGAFConfig)
+				}
+			}).Return(nil, nil)
+
+			// Act: Send config changed analytics (runs in goroutine)
+			SendConfigChangedAnalytics(c, configName, oldValue, newValue, TriggerSourceTest)
+
+			// Assert: Wait for analytics to be sent and verify org
+			var capturedGAFConfig configuration.Configuration
+			require.Eventually(t, func() bool {
+				select {
+				case capturedGAFConfig = <-capturedGAFConfigCh:
+					return true
+				default:
+					return false
+				}
+			}, time.Second, 10*time.Millisecond, "analytics should have been sent within timeout")
+
+			actualOrg := capturedGAFConfig.Get(configuration.ORGANIZATION)
+			assert.Equal(t, tc.expectedOrg, actualOrg)
+		})
+	}
 }
