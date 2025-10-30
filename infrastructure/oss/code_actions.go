@@ -18,6 +18,7 @@ package oss
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -208,4 +209,209 @@ func (i *ossIssue) getUpgradedPathParts() (string, string, error) {
 	depName := strings.Join(rootDependencyUpgrade[:len(rootDependencyUpgrade)-1], "@")
 	depVersion := rootDependencyUpgrade[len(rootDependencyUpgrade)-1]
 	return depName, depVersion, nil
+}
+
+// AddCodeActionsFromOssIssueData generates code actions from OssIssueData directly
+// This avoids the need to convert OssIssueData back to ossIssue for unified flow issues
+func AddCodeActionsFromOssIssueData(
+	ossData snyk.OssIssueData,
+	issueId string,
+	learnService learn.Service,
+	ep error_reporting.ErrorReporter,
+	affectedFilePath types.FilePath,
+	issueDepNode *ast.Node,
+) (actions []types.CodeAction) {
+	c := config.CurrentConfig()
+	if issueDepNode == nil {
+		c.Logger().Debug().Str("issue", issueId).Msg("skipping adding code action, as issueDepNode is empty")
+		return actions
+	}
+
+	// let's see if we can offer a quickfix here
+	// value has the version information, so if it's empty, we'll need to look at the parent
+	var quickFixAction types.CodeAction
+	if issueDepNode.Tree != nil && issueDepNode.Value == "" {
+		fixNode := issueDepNode.LinkedParentDependencyNode
+		if fixNode != nil {
+			quickFixAction = AddQuickFixActionFromOssIssueData(ossData, types.FilePath(fixNode.Tree.Document), getRangeFromNode(fixNode), []byte(fixNode.Tree.Root.Value), true)
+		}
+	} else {
+		quickFixAction = AddQuickFixActionFromOssIssueData(ossData, affectedFilePath, getRangeFromNode(issueDepNode), nil, false)
+	}
+	if quickFixAction != nil {
+		actions = append(actions, quickFixAction)
+	}
+
+	if c.IsSnykOpenBrowserActionEnabled() {
+		title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", ossData.Title, ossData.PackageName)
+		issueURL := createIssueURLFromId(issueId)
+		command := &types.CommandData{
+			Title:     title,
+			CommandId: types.OpenBrowserCommand,
+			Arguments: []any{issueURL.String()},
+		}
+
+		action, err := snyk.NewCodeAction(title, nil, command)
+		if err != nil {
+			c.Logger().Err(err).Msgf("could not create code action %s", title)
+		} else {
+			actions = append(actions, action)
+		}
+	}
+
+	codeAction := AddSnykLearnActionFromOssIssueData(ossData, issueId, learnService, ep)
+	if codeAction != nil {
+		actions = append(actions, codeAction)
+	}
+
+	return actions
+}
+
+// AddSnykLearnActionFromOssIssueData creates a Snyk Learn code action from OssIssueData
+func AddSnykLearnActionFromOssIssueData(ossData snyk.OssIssueData, issueId string, learnService learn.Service, ep error_reporting.ErrorReporter) (action types.CodeAction) {
+	if config.CurrentConfig().IsSnykLearnCodeActionsEnabled() {
+		lesson, err := learnService.GetLesson(ossData.PackageManager, issueId, ossData.Identifiers.CWE, ossData.Identifiers.CVE, types.DependencyVulnerability)
+		if err != nil {
+			msg := "failed to get lesson"
+			config.CurrentConfig().Logger().Err(err).Msg(msg)
+			ep.CaptureError(errors.WithMessage(err, msg))
+			return nil
+		}
+
+		if lesson != nil && lesson.Url != "" {
+			title := fmt.Sprintf("Learn more about %s (Snyk)", ossData.Title)
+			action = &snyk.CodeAction{
+				Title:         title,
+				OriginalTitle: title,
+				Command: &types.CommandData{
+					Title:     title,
+					CommandId: types.OpenBrowserCommand,
+					Arguments: []any{lesson.Url},
+				},
+			}
+			config.CurrentConfig().Logger().Debug().Str("method", "oss.AddSnykLearnActionFromOssIssueData").Msgf("Learn action: %v", action)
+		}
+	}
+	return action
+}
+
+// AddQuickFixActionFromOssIssueData creates a quick-fix code action from OssIssueData
+func AddQuickFixActionFromOssIssueData(ossData snyk.OssIssueData, affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, addFileNameToFixTitle bool) types.CodeAction {
+	logger := config.CurrentConfig().Logger().With().Str("method", "oss.AddQuickFixActionFromOssIssueData").Logger()
+	if !config.CurrentConfig().IsSnykOSSQuickFixCodeActionsEnabled() {
+		return nil
+	}
+	logger.Debug().Msg("create deferred quickfix code action")
+	filePathString := string(affectedFilePath)
+	quickfixEdit := getQuickfixEditFromOssIssueData(ossData, affectedFilePath)
+	if quickfixEdit == "" {
+		return nil
+	}
+	upgradeMessage := "⚡️ Upgrade to " + quickfixEdit
+	if addFileNameToFixTitle {
+		upgradeMessage += " [ in file: " + filePathString + " ]"
+	}
+	autofixEditCallback := func() *types.WorkspaceEdit {
+		edit := &types.WorkspaceEdit{}
+		var err error
+		if fileContent == nil {
+			fileContent, err = os.ReadFile(filePathString)
+			if err != nil {
+				logger.Error().Err(err).Str("file", filePathString).Msg("could not open file")
+				return edit
+			}
+		}
+
+		singleTextEdit := types.TextEdit{
+			Range:   issueRange,
+			NewText: quickfixEdit,
+		}
+		edit.Changes = make(map[string][]types.TextEdit)
+		edit.Changes[filePathString] = []types.TextEdit{singleTextEdit}
+		return edit
+	}
+
+	// our grouping key for oss quickfixes is the dependency name
+	groupingKey, groupingValue, err := getUpgradedPathPartsFromOssIssueData(ossData)
+	if err != nil {
+		logger.Warn().Err(err).Msg("could not get the upgrade path, so cannot add quickfix.")
+		return nil
+	}
+
+	action, err := snyk.NewDeferredCodeAction(upgradeMessage, &autofixEditCallback, nil, types.Key(groupingKey), groupingValue)
+	if err != nil {
+		logger.Error().Msg("failed to create deferred quickfix code action")
+		return nil
+	}
+	return &action
+}
+
+// getQuickfixEditFromOssIssueData generates the quickfix edit text from OssIssueData
+func getQuickfixEditFromOssIssueData(ossData snyk.OssIssueData, affectedFilePath types.FilePath) string {
+	logger := config.CurrentConfig().Logger().With().Str("method", "oss.getQuickfixEditFromOssIssueData").Logger()
+	hasUpgradePath := len(ossData.UpgradePath) > 1
+	if !hasUpgradePath {
+		return ""
+	}
+
+	// UpgradePath[0] is the upgrade for the package that was scanned
+	// UpgradePath[1] is the upgrade for the root dependency
+	depName, depVersion, err := getUpgradedPathPartsFromOssIssueData(ossData)
+	if err != nil {
+		logger.Warn().Err(err).Msg("could not get the upgrade path, so cannot add quickfix.")
+		return ""
+	}
+	if len(ossData.UpgradePath) > 1 && len(ossData.From) > 1 {
+		logger.Debug().Msgf("comparing %s with %s", ossData.UpgradePath[1], ossData.From[1])
+		// from[1] contains the package that caused this issue
+		normalizedCurrentVersion := strings.Split(ossData.From[1], "@")[1]
+		if semver.Compare("v"+depVersion, "v"+normalizedCurrentVersion) == 0 {
+			logger.Warn().Msg("proposed upgrade version is the same version as the current, not adding quickfix")
+			return ""
+		}
+	}
+	if ossData.PackageManager == "npm" || ossData.PackageManager == "yarn" || ossData.PackageManager == "yarn-workspace" {
+		return fmt.Sprintf("\"%s\": \"%s\"", depName, depVersion)
+	} else if ossData.PackageManager == "maven" {
+		depNameSplit := strings.Split(depName, ":")
+		depName = depNameSplit[len(depNameSplit)-1]
+		// TODO: remove once https://snyksec.atlassian.net/browse/OSM-1775 is fixed
+		if strings.Contains(string(affectedFilePath), "build.gradle") {
+			return fmt.Sprintf("%s:%s", depName, depVersion)
+		}
+		return depVersion
+	} else if ossData.PackageManager == "gradle" {
+		depNameSplit := strings.Split(depName, ":")
+		depName = depNameSplit[len(depNameSplit)-1]
+		return fmt.Sprintf("%s:%s", depName, depVersion)
+	}
+	if ossData.PackageManager == "gomodules" {
+		return fmt.Sprintf("v%s", depVersion)
+	}
+
+	return ""
+}
+
+// getUpgradedPathPartsFromOssIssueData extracts dependency name and version from OssIssueData
+func getUpgradedPathPartsFromOssIssueData(ossData snyk.OssIssueData) (string, string, error) {
+	if len(ossData.UpgradePath) < 2 {
+		return "", "", errors.New("upgrade path too short")
+	}
+	s, ok := ossData.UpgradePath[1].(string)
+	if !ok {
+		return "", "", errors.New("invalid upgrade path, could not cast to string")
+	}
+	rootDependencyUpgrade := strings.Split(s, "@")
+	depName := strings.Join(rootDependencyUpgrade[:len(rootDependencyUpgrade)-1], "@")
+	depVersion := rootDependencyUpgrade[len(rootDependencyUpgrade)-1]
+	return depName, depVersion, nil
+}
+
+// createIssueURLFromId creates an issue URL from an issue ID
+func createIssueURLFromId(issueId string) *url.URL {
+	parse, err := url.Parse("https://snyk.io/vuln/" + issueId)
+	if err != nil {
+		config.CurrentConfig().Logger().Err(err).Msg("Unable to create issue link for issue:" + issueId)
+	}
+	return parse
 }

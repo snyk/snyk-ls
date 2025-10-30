@@ -24,6 +24,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
@@ -106,6 +107,111 @@ func createMockResult(t *testing.T, path string) *mocks.MockTestResult {
 
 	mockResult.EXPECT().GetTestSubject().Return(testSubject).AnyTimes()
 	return mockResult
+}
+
+// New tests to validate that unified issues produce upgrade-related quick-fix actions and code lenses.
+// NOTE: These tests currently express the desired behavior and may fail until the unified
+// conversion flow adds OSS quick-fix code actions and corresponding codelens commands.
+
+func Test_UnifiedIssue_HasUpgradeQuickFixAction(t *testing.T) {
+	// Arrange: create a unified finding with an upgrade path suggesting a newer version
+	finding := createCompleteUnifiedFinding(
+		"npm",
+		"goof@1.0.0",
+		[]string{"lodash@4.17.20"}, // dependency path ending with vulnerable package current version
+		[]string{"4.17.21"},        // fixed version available
+		"lodash",
+		"4.17.20",
+		"Prototype Pollution",
+	)
+
+	// convert to Problems map and then to issues
+	c, ctx := testutil.UnitTestWithCtx(t)
+	workDir, err := filepath.Abs("testdata")
+	require.NoError(t, err)
+	path := filepath.Join(workDir, "package.json")
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
+	problems := asProblemsMap(ctx, []testapi.FindingData{finding})
+	require.NotEmpty(t, problems)
+	// Enable OSS quick-fix actions (deps already injected by UnitTestWithCtx)
+	c.SetSnykOSSQuickFixCodeActionsEnabled(true)
+
+	// Pick first problem group
+	for _, group := range problems {
+		issue, err := convertProblemToIssue(ctx, group.Problem, group.Findings, types.FilePath(path))
+		require.NoError(t, err)
+		require.NotNil(t, issue)
+
+		// deps already injected above
+		enriched := addUnifiedOssQuickFixesAndLenses(ctx, []types.Issue{issue})
+		require.Len(t, enriched, 1)
+		enrichedIssue := enriched[0]
+
+		// Act: inspect code actions collected on the unified issue
+		actions := enrichedIssue.GetCodeActions()
+
+		// Assert: expect an upgrade quick-fix to be present (title contains "Upgrade to")
+		// This will start failing until the unified flow adds OSS quick-fix actions.
+		hasUpgrade := false
+		for _, a := range actions {
+			if strings.Contains(a.GetTitle(), "Upgrade to") {
+				hasUpgrade = true
+				break
+			}
+		}
+		assert.True(t, hasUpgrade, "expected unified issue to include an 'Upgrade to' quick-fix action")
+		break
+	}
+}
+
+func Test_UnifiedIssue_ProducesUpgradeCodeLens(t *testing.T) {
+	// Arrange: create a unified finding with an upgrade path
+	finding := createCompleteUnifiedFinding(
+		"npm",
+		"goof@1.0.0",
+		[]string{"lodash@4.17.20"},
+		[]string{"4.17.21"},
+		"lodash",
+		"4.17.20",
+		"Prototype Pollution",
+	)
+
+	// convert to Problems map and then to issues
+	c, ctx := testutil.UnitTestWithCtx(t)
+	workDir, err := filepath.Abs("testdata")
+	require.NoError(t, err)
+	path := filepath.Join(workDir, "package.json")
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
+	problems := asProblemsMap(ctx, []testapi.FindingData{finding})
+	require.NotEmpty(t, problems)
+	// Enable OSS quick-fix actions
+	c.SetSnykOSSQuickFixCodeActionsEnabled(true)
+
+	for _, group := range problems {
+		issue, err := convertProblemToIssue(ctx, group.Problem, group.Findings, types.FilePath(path))
+		require.NoError(t, err)
+		require.NotNil(t, issue)
+
+		// deps already injected by UnitTestWithCtx
+		enriched := addUnifiedOssQuickFixesAndLenses(ctx, []types.Issue{issue})
+		require.Len(t, enriched, 1)
+		enrichedIssue := enriched[0]
+
+		// Act: inspect codelens commands on the unified issue
+		lenses := enrichedIssue.GetCodelensCommands()
+
+		// Assert: expect at least one lens with title containing "Upgrade to"
+		// This will start failing until codelenses are added for unified issues.
+		hasUpgradeLens := false
+		for _, l := range lenses {
+			if strings.Contains(l.Title, "Upgrade to") {
+				hasUpgradeLens = true
+				break
+			}
+		}
+		assert.True(t, hasUpgradeLens, "expected unified issue to include an 'Upgrade to' code lens")
+		break
+	}
 }
 
 // createTestFinding creates a sample FindingData for testing
@@ -270,6 +376,71 @@ func createFindingWithoutUpgradePath() testapi.FindingData {
 	})
 
 	finding.Attributes.Evidence = append(finding.Attributes.Evidence, depEv)
+
+	return finding
+}
+
+// createCompleteUnifiedFinding builds a FindingData with all key fields populated so that
+// unified conversion can yield actionable issues (UpgradePath/From/FixedIn etc.).
+func createCompleteUnifiedFinding(
+	packageManager string,
+	root string,
+	path []string,
+	fixedIn []string,
+	pkgName string,
+	version string,
+	title string,
+) testapi.FindingData {
+	finding := createTestFinding()
+
+	// Override attributes as requested
+	if finding.Attributes == nil {
+		finding.Attributes = &testapi.FindingAttributes{}
+	}
+	finding.Attributes.Title = title
+	finding.Attributes.Description = title + " description"
+
+	// Build ecosystem from packageManager
+	var ecosystem testapi.SnykvulndbPackageEcosystem
+	_ = ecosystem.FromSnykvulndbBuildPackageEcosystem(testapi.SnykvulndbBuildPackageEcosystem{
+		PackageManager: packageManager,
+		Language:       "",
+	})
+
+	// Inject SnykVulnProblem with desired fields
+	var problem testapi.Problem
+	_ = problem.FromSnykVulnProblem(testapi.SnykVulnProblem{
+		Id:                       pkgName + "-id",
+		PackageName:              pkgName,
+		PackageVersion:           version,
+		Ecosystem:                ecosystem,
+		InitiallyFixedInVersions: fixedIn,
+	})
+	finding.Attributes.Problems = []testapi.Problem{problem}
+
+	// Dependency path evidence (root + path...)
+	if finding.Attributes.Evidence == nil {
+		finding.Attributes.Evidence = []testapi.Evidence{}
+	}
+	dependencyPkgs := make([]testapi.Package, len(path)+1)
+	rootParts := strings.Split(root, "@")
+	dependencyPkgs[0] = testapi.Package{Name: rootParts[0], Version: rootParts[1]}
+	for i, pkgStr := range path {
+		parts := strings.Split(pkgStr, "@")
+		dependencyPkgs[i+1] = testapi.Package{Name: parts[0], Version: parts[1]}
+	}
+	var depEv testapi.Evidence
+	_ = depEv.FromDependencyPathEvidence(testapi.DependencyPathEvidence{Path: dependencyPkgs})
+	finding.Attributes.Evidence = append(finding.Attributes.Evidence, depEv)
+
+	// Add a package location to help extractVersion logic
+	finding.Attributes.Locations = append(finding.Attributes.Locations, func() testapi.FindingLocation {
+		var loc testapi.FindingLocation
+		_ = loc.FromPackageLocation(testapi.PackageLocation{
+			Package: testapi.Package{Name: pkgName, Version: version},
+		})
+		return loc
+	}())
 
 	return finding
 }

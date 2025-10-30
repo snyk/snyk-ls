@@ -26,6 +26,7 @@ import (
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/util"
 
+	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/require"
@@ -34,7 +35,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/constants"
+	internal_er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/storage"
 	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
@@ -84,8 +87,15 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 		progress.CleanupChannels()
 	})
 
+	// Create mock learn service and error reporter for tests
+	ctrl := gomock.NewController(t)
+	ls := mock_learn.NewMockService(ctrl)
+	ls.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepConfig: c,
+		ctx2.DepConfig:        c,
+		ctx2.DepLearnService:  ls,
+		ctx2.DepErrorReporter: internal_er.NewTestErrorReporter(),
 	})
 	ctx = ctx2.NewContextWithLogger(ctx, c.Logger())
 	return c, ctx

@@ -1,5 +1,12 @@
 {
   "name": "goof",
+  "version": "1.0.0",
+  "dependencies": {
+    "lodash": "4.17.20"
+  }
+}
+{
+  "name": "goof",
   "version": "1.0.1",
   "description": "A vulnerable todo demo application",
   "homepage": "https://snyk.io/",
