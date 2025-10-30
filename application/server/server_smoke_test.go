@@ -941,7 +941,19 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	c.SetSnykOssEnabled(false)
 	c.SetSnykIacEnabled(false)
 	c.SetManageBinariesAutomatically(false)
+
+	// Prepare folder config with SAST settings
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  cloneTargetDir,
+		BaseBranch:                  "",
+		OrgMigratedFromGlobalConfig: false,
+		OrgSetByUser:                false,
+		PreferredOrg:                "",
+	}
+	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
+
 	initParams := prepareInitParams(t, cloneTargetDir, c)
+	initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{*folderConfig}
 
 	ensureInitialized(t, c, loc, initParams, nil)
 
@@ -982,7 +994,18 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 	newFileInCurrentDir(t, cloneTargetDirString, fileWithNewVulns, "// no problems")
 
+	// Prepare folder config with SAST settings
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  cloneTargetDir,
+		BaseBranch:                  "",
+		OrgMigratedFromGlobalConfig: false,
+		OrgSetByUser:                false,
+		PreferredOrg:                "",
+	}
+	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
+
 	initParams := prepareInitParams(t, cloneTargetDir, c)
+	initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{*folderConfig}
 
 	ensureInitialized(t, c, loc, initParams, nil)
 
@@ -1009,7 +1032,18 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 
 	cloneTargetDirString := string(cloneTargetDir)
 
+	// Prepare folder config with SAST settings
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  cloneTargetDir,
+		BaseBranch:                  "",
+		OrgMigratedFromGlobalConfig: false,
+		OrgSetByUser:                false,
+		PreferredOrg:                "",
+	}
+	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
+
 	initParams := prepareInitParams(t, cloneTargetDir, c)
+	initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{*folderConfig}
 
 	ensureInitialized(t, c, loc, initParams, nil)
 
