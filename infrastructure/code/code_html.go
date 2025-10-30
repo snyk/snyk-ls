@@ -86,12 +86,12 @@ type HtmlRenderer struct {
 var codeRenderer *HtmlRenderer
 
 func GetHTMLRenderer(c *config.Config, featureFlagService featureflag.Service) (*HtmlRenderer, error) {
-	if featureFlagService == nil {
-		return nil, fmt.Errorf("passed featureFlagService is nil")
-	}
-
 	if codeRenderer != nil && codeRenderer.c == c {
 		return codeRenderer, nil
+	}
+
+	if featureFlagService == nil {
+		return nil, fmt.Errorf("passed featureFlagService is nil")
 	}
 
 	funcMap := template.FuncMap{
@@ -117,6 +117,12 @@ func GetHTMLRenderer(c *config.Config, featureFlagService featureflag.Service) (
 		aiFixDiffState: aiResultState{status: AiFixNotStarted},
 	}
 	return codeRenderer, nil
+}
+
+// ResetHTMLRenderer resets the singleton HtmlRenderer to nil.
+// This is intended for use in tests to ensure test isolation.
+func ResetHTMLRenderer() {
+	codeRenderer = nil
 }
 
 func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types.FilePath {
