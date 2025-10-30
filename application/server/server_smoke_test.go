@@ -1026,6 +1026,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 }
 
 func Test_SmokeScanUnmanaged(t *testing.T) {
+	t.Skip("Skipping: SAST is now checked per folder. We need to enable SAST on the backend for the folders under test.")
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	c := testutil.SmokeTest(t, false)
 	loc, jsonRPCRecorder := setupServer(t, c)
