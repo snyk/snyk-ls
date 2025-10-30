@@ -40,6 +40,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
 	"github.com/snyk/snyk-ls/internal/testsupport"
 
@@ -946,11 +947,13 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	folderConfig := &types.FolderConfig{
 		FolderPath:                  cloneTargetDir,
 		BaseBranch:                  "",
-		OrgMigratedFromGlobalConfig: false,
+		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                false,
 		PreferredOrg:                "",
+		SastSettings: &sast_contract.SastResponse{
+			SastEnabled: true,
+		},
 	}
-	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 	initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{*folderConfig}
@@ -998,11 +1001,13 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	folderConfig := &types.FolderConfig{
 		FolderPath:                  cloneTargetDir,
 		BaseBranch:                  "",
-		OrgMigratedFromGlobalConfig: false,
+		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                false,
 		PreferredOrg:                "",
+		SastSettings: &sast_contract.SastResponse{
+			SastEnabled: true,
+		},
 	}
-	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 	initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{*folderConfig}
@@ -1036,11 +1041,13 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	folderConfig := &types.FolderConfig{
 		FolderPath:                  cloneTargetDir,
 		BaseBranch:                  "",
-		OrgMigratedFromGlobalConfig: false,
+		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                false,
 		PreferredOrg:                "",
+		SastSettings: &sast_contract.SastResponse{
+			SastEnabled: true,
+		},
 	}
-	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 	initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{*folderConfig}
