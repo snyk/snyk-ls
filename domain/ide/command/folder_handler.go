@@ -128,6 +128,10 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 	if c.AuthenticationMethod() == types.FakeAuthentication {
 		// For fake authentication, assume the org is user-set (non-default) to be safe
 		isDefaultOrUnknown = false
+	} else if !c.NonEmptyToken() {
+		// No token available yet - treat as using auto-org selection (default behavior)
+		c.Logger().Debug().Msg("no token available during org migration - defaulting to auto-org selection")
+		isDefaultOrUnknown = true
 	} else {
 		var err error
 		isDefaultOrUnknown, err = isOrgDefault(c, globalOrg)
