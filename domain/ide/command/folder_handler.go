@@ -157,6 +157,7 @@ func isOrgDefault(c *config.Config, organization string) (bool, error) {
 	// TODO - Have a proper way to fetch the user's default org from GAF.
 	clonedGAFConfig := c.Engine().GetConfiguration().Clone()
 	clonedGAFConfig.Set(configuration.ORGANIZATION, "")
+	clonedGAFConfig.Set("temp_use_real_gaf_default_org_func", "1")
 	defaultOrgUUID := clonedGAFConfig.GetString(configuration.ORGANIZATION)
 	if defaultOrgUUID == "" {
 		return false, fmt.Errorf("could not retrieve the user's default organization")

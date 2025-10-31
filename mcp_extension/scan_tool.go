@@ -341,6 +341,7 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 			"mcp::remediatedIssuesCount": int(remediatedCount),
 		}
 		// MCP doesn't have the concept of folder orgs, so just use org from GAF config
+		// TODO - This probably needs to be fixed or corrected in some way.
 		org := invocationCtx.GetConfiguration().GetString(configuration.ORGANIZATION)
 		go analytics.SendAnalytics(invocationCtx.GetEngine(), "", org, event, nil)
 

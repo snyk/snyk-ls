@@ -27,7 +27,8 @@ func newCodeRequestContext(folderPath types.FilePath) codeRequestContext {
 	unknown := "unknown"
 	orgId := unknown
 
-	// Try to get folder-specific organization first, fall back to global org
+	// Try to get folder-specific organization
+	// TODO - For testing we should probably error if there is no foler path.
 	c := config.CurrentConfig()
 	if folderPath != "" {
 		folderOrg := c.FolderOrganization(folderPath)

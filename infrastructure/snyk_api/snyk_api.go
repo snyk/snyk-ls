@@ -85,7 +85,10 @@ func (s *SnykApiClientImpl) normalizeAPIPathForV1(c *config.Config, path string)
 
 func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL {
 	// Since feature flags don't have folder context, we loop through workspace folders to find the first one with a
-	// configured org. Fall back to the global org if none found.
+	// configured org.
+	// TODO - The comment above is wrong, we need to fix this logic in the future.
+	// We may be able to get away with querying all the folder orgs for any with the FF enabled and retruning true if any are true.
+	// Raised IDE-1529 and IDE-1530 to fix the issues at a later date.
 	var organization string
 	ws := c.Workspace()
 	if ws != nil {
@@ -98,9 +101,8 @@ func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL
 			}
 		}
 	}
-	if organization == "" {
-		organization = c.Organization()
-	}
+	// If no organization is found, maybe we get lucky without the org being set in the query.
+	// TODO - Again, this is wrong.
 	if organization != "" {
 		q := u.Query()
 		q.Set("org", organization)

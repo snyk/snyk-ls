@@ -24,6 +24,8 @@ import (
 	"github.com/pact-foundation/pact-go/dsl"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -54,8 +56,9 @@ func TestSnykApiPact(t *testing.T) {
 	}()
 
 	t.Run("Get feature flag status", func(t *testing.T) {
-		organization := orgUUID
-		c.SetOrganization(organization)
+		// Set org directly in GAF config since addOrgToQuery reads from there (feature flags don't have folder context)
+		// TODO - This is not the proper way to do things, we should change it at some point.
+		c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, orgUUID)
 		var featureFlagType FeatureFlagType = "snykCodeConsistentIgnores"
 
 		expectedResponse := FFResponse{
@@ -63,7 +66,7 @@ func TestSnykApiPact(t *testing.T) {
 		}
 
 		matcher := dsl.MapMatcher{}
-		matcher["org"] = dsl.String(organization)
+		matcher["org"] = dsl.String(orgUUID)
 
 		interaction := pact.AddInteraction().
 			WithRequest(dsl.Request{
@@ -97,18 +100,19 @@ func TestSnykApiPact(t *testing.T) {
 	})
 
 	t.Run("Get feature flag status when disabled for a ORG", func(t *testing.T) {
-		organization := "00000000-0000-0000-0000-000000000099"
-		c.SetOrganization(organization)
+		// Set org directly in GAF config since addOrgToQuery reads from there (feature flags don't have folder context)
+		// TODO - This is not the proper way to do things, we should change it at some point.
+		c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, orgUUID)
 		featureFlagType := FeatureFlagType("snykCodeConsistentIgnores")
 
-		message := "Org " + organization + " doesn't have '" + string(featureFlagType) + "' feature enabled"
+		message := "Org " + orgUUID + " doesn't have '" + string(featureFlagType) + "' feature enabled"
 		disabledResponse := FFResponse{
 			Ok:          false,
 			UserMessage: message,
 		}
 
 		matcher := dsl.MapMatcher{}
-		matcher["org"] = dsl.String(organization)
+		matcher["org"] = dsl.String(orgUUID)
 
 		interaction := pact.AddInteraction().
 			WithRequest(dsl.Request{

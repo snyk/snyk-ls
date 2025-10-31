@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -280,6 +281,11 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
 	gafConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	gafConfig.Set("configfile", c.configFile)
+
+	// Override GAF default org function to throw errors - this helps us identify if anything relies on it
+	// TODO - This is a temporary thing, we will probably remove it later after testing.
+	overrideGAFDefaultOrgFunction(c.engine, gafConfig)
+
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = types.DefaultSeverityFilter()
@@ -320,6 +326,89 @@ func initWorkFlowEngine(c *Config) {
 		rti := runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion(Version))
 		c.engine.SetRuntimeInfo(rti)
 	}
+}
+
+// overrideGAFDefaultOrgFunction overrides the GAF default org function to throw an error
+// when called with no existing value or empty string. This helps us identify if anything in snyk-ls relies on the GAF default org resolution.
+// If a value is already set (non-empty), we return it (we're not relying on default resolution in that case).
+// TODO - This is a temporary thing, we will probably remove it later after testing.
+// If the "temp_use_real_gaf_default_org_func" flag is set in the config, we call the real GAF default org function instead.
+func overrideGAFDefaultOrgFunction(engine workflow.Engine, gafConfig configuration.Configuration) {
+	errorThrowingDefaultOrgFunc := func(cfg configuration.Configuration, existingValue any) (any, error) {
+		// Check if the flag is set to use the real GAF default org function
+		if cfg.GetString("temp_use_real_gaf_default_org_func") == "1" {
+			// Call the real GAF default org function logic manually
+			client := engine.GetNetworkAccess().GetHttpClient()
+			apiUrl := cfg.GetString(configuration.API_URL)
+			orgId, err := getDefaultOrgIdFromAPI(apiUrl, client)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get default org ID: %w", err)
+			}
+			return orgId, nil
+		}
+
+		// If a value is already set and non-empty, return it (we're not relying on default resolution, usually set by tests)
+		if existingValue != nil {
+			if str, ok := existingValue.(string); ok && str != "" {
+				return str, nil
+			}
+		}
+		// No value set or empty string - throw error to detect if we're relying on default resolution
+		// Tests that want to use the fallback (user's preferred org from web UI) should explicitly set an org value
+		return nil, errors.New("GAF default org function called - this should not happen in snyk-ls")
+	}
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION, errorThrowingDefaultOrgFunc)
+}
+
+// getDefaultOrgIdFromAPI manually calls the Snyk API to get the user's default org ID
+// This replicates the logic from GAF's internal API client when the flag is set
+// TODO - Delete this.
+func getDefaultOrgIdFromAPI(apiUrl string, client *http.Client) (string, error) {
+	// Construct the /rest/self endpoint URL
+	baseURL := strings.TrimSuffix(apiUrl, "/")
+	endpoint := baseURL + "/rest/self"
+
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add version header if needed (GAF uses SNYK_DEFAULT_API_VERSION)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to call /rest/self: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code from /rest/self: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Parse the response - matching GAF's contract.SelfResponse structure
+	var selfResponse struct {
+		Data struct {
+			Attributes struct {
+				DefaultOrgContext string `json:"default_org_context"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &selfResponse); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if selfResponse.Data.Attributes.DefaultOrgContext == "" {
+		return "", fmt.Errorf("default_org_context not found in response")
+	}
+
+	return selfResponse.Data.Attributes.DefaultOrgContext, nil
 }
 
 func initWorkflows(c *Config) error {
@@ -1326,21 +1415,23 @@ func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
 // so should be defaulted to the user's preferred org from the web UI.
 func (c *Config) FolderOrganization(path types.FilePath) string {
 	fc := c.FolderConfig(path)
+	clonedGAFConfig := c.engine.GetConfiguration().Clone()
+	clonedGAFConfig.Set("temp_use_real_gaf_default_org_func", "1")
 	if fc == nil {
 		// Should never happen, but as a safety net, fall back to the user's preferred org from the web UI.
-		return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
+		return clonedGAFConfig.GetString(configuration.ORGANIZATION)
 	}
 	if fc.OrgSetByUser {
 		if fc.PreferredOrg == "" {
 			// If empty it is an indication that the user wants to use their preferred org from the web UI.
-			return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
+			return clonedGAFConfig.GetString(configuration.ORGANIZATION)
 		} else {
 			return fc.PreferredOrg
 		}
 	} else {
 		// If AutoDeterminedOrg is empty, fall back to the user's preferred org from the web UI.
 		if fc.AutoDeterminedOrg == "" {
-			return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
+			return clonedGAFConfig.GetString(configuration.ORGANIZATION)
 		}
 		return fc.AutoDeterminedOrg
 	}
