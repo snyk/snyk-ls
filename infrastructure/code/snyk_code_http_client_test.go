@@ -43,7 +43,6 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 	t.Run("should return error when folder path argument is the empty string in FedRAMP", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		c.UpdateApiEndpoints("https://api.snykgov.io")
-		c.SetOrganization("test-org")
 
 		_, err := GetCodeApiUrlForFolder(c, "")
 		assert.ErrorContains(t, err, "specifying a folder is required in a fedramp environment")
@@ -52,7 +51,6 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 	t.Run("should return error when workspace folder not found in FedRAMP", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		c.UpdateApiEndpoints("https://api.snykgov.io")
-		c.SetOrganization("test-org")
 
 		// Setup workspace with a folder, but try to access a different path
 		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)

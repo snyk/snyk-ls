@@ -33,14 +33,13 @@ const (
 func (c *Config) clientSettingsFromEnv() {
 	c.productEnablementFromEnv()
 	c.errorReportsEnablementFromEnv()
-	c.orgFromEnv()
+	c.wipeOrgFromEnv()
 }
 
-func (c *Config) orgFromEnv() {
-	org := os.Getenv(Organization)
-	if org != "" {
-		c.SetOrganization(org)
-	}
+func (c *Config) wipeOrgFromEnv() {
+	// Remove SNYK_CFG_ORG so that CLI processes we spawn don't inherit and use it.
+	// snyk-ls manages organization settings per-folder and shouldn't rely on global env vars.
+	os.Unsetenv(Organization)
 }
 
 func (c *Config) errorReportsEnablementFromEnv() {

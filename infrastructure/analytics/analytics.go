@@ -97,7 +97,11 @@ func SendAnalyticsToAPI(engine workflow.Engine, deviceId string, organization st
 	}
 	clonedGAFConfig := engine.GetConfiguration().Clone()
 	clonedGAFConfig.Set(configuration.FLAG_EXPERIMENTAL, true)
-	clonedGAFConfig.Set(configuration.ORGANIZATION, organization)
+	// Only set org if non-empty. If empty, don't override what has already been retrieved and cached already in the GAF config,
+	// as it should be the user's preferred org from the web UI, which is what empty string means.
+	if organization != "" {
+		clonedGAFConfig.Set(configuration.ORGANIZATION, organization)
+	}
 
 	analyticsMu.Lock()
 	_, err = engine.InvokeWithInputAndConfig(

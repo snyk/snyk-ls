@@ -205,6 +205,7 @@ type Config struct {
 	isLSPInitialized                 bool
 	snykAgentFixEnabled              bool
 	cachedOriginalPath               string
+	globalOrganization               string // Deprecated: Only used for migration. Use folder-specific org instead.
 	userSettingsPath                 string
 }
 
@@ -851,13 +852,24 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 	return snykCodeTimeout
 }
 
-// Deprecated use FolderOrganization(path) to get organization per folder
+// Organization returns the deprecated global organization.
+//
+// Deprecated: Use FolderOrganization(path) to get organization per folder.
+// This should now only be used for migration only.
 func (c *Config) Organization() string {
-	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.globalOrganization
 }
 
+// SetOrganization sets the deprecated global organization.
+//
+// Deprecated: Use folder-specific organization configuration instead.
+// This should now only be used for migration only.
 func (c *Config) SetOrganization(organization string) {
-	c.engine.GetConfiguration().Set(configuration.ORGANIZATION, organization)
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.globalOrganization = organization
 }
 
 func (c *Config) ManageBinariesAutomatically() bool {
@@ -1310,31 +1322,38 @@ func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
 }
 
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
-// the folder, it returns the global organization (which if unset, GAF will return the default org).
+// the folder, it gets the organization from the GAF config, which we should not have manually set,
+// so should be defaulted to the user's preferred org from the web UI.
 func (c *Config) FolderOrganization(path types.FilePath) string {
 	fc := c.FolderConfig(path)
 	if fc == nil {
-		// Should never happen, but as a safety net, return the global org.
-		return c.Organization()
+		// Should never happen, but as a safety net, fall back to the user's preferred org from the web UI.
+		return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 	}
 	if fc.OrgSetByUser {
 		if fc.PreferredOrg == "" {
-			return c.Organization()
+			// If empty it is an indication that the user wants to use their preferred org from the web UI.
+			return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 		} else {
 			return fc.PreferredOrg
 		}
 	} else {
-		// If AutoDeterminedOrg is empty, fall back to global organization
+		// If AutoDeterminedOrg is empty, fall back to the user's preferred org from the web UI.
 		if fc.AutoDeterminedOrg == "" {
-			return c.Organization()
+			return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 		}
 		return fc.AutoDeterminedOrg
 	}
 }
 
 func (c *Config) FolderOrganizationSlug(path types.FilePath) string {
+	folderOrg := c.FolderOrganization(path)
+	if folderOrg == "" {
+		// If folder org is empty, then we are probably not logged in, so we shall return early.
+		return ""
+	}
 	clonedConfig := c.Engine().GetConfiguration()
-	clonedConfig.Set(configuration.ORGANIZATION, c.FolderOrganization(path))
+	clonedConfig.Set(configuration.ORGANIZATION, folderOrg)
 	return clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
 }
 

@@ -247,8 +247,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, "d", os.Getenv("c"))
 		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), "addPath"+string(os.PathListSeparator)))
 		assert.True(t, c.IsErrorReportingEnabled())
-		// Organization is set globally but may be cleared at folder level by LDX-Sync logic
-		// when it matches the global org and is not the default
+		//nolint:staticcheck // Verifying deprecated global org field works (kept for migration purposes)
 		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.False(t, c.ManageBinariesAutomatically())
 		assert.Equal(t, settings.CliPath, c.CliSettings().Path())
@@ -305,10 +304,12 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("blank organization is ignored", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		//nolint:staticcheck // Still test deprecated SetOrganization() method, as it is used for migration
 		c.SetOrganization(expectedOrgId)
 
 		UpdateSettings(c, types.Settings{Organization: " "}, analytics.TriggerSourceTest)
 
+		//nolint:staticcheck // Still test deprecated Organization() method, as it is used for migration
 		assert.Equal(t, expectedOrgId, c.Organization())
 	})
 
@@ -572,6 +573,7 @@ func (s *folderConfigTestSetup) setupMigratedConfigInheritingFromBlankGlobal() {
 	s.createStoredConfig("", true, false)
 
 	// Set global organization to empty
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	s.c.SetOrganization("")
 
 	// Call updateFolderConfig with empty org
@@ -585,6 +587,7 @@ func (s *folderConfigTestSetup) setupNotMigratedLdxSyncReturnsDifferentOrg() {
 	s.createStoredConfig("initial-org", false, false)
 
 	// Set global organization
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	s.c.SetOrganization("global-org-id")
 }
 
@@ -595,6 +598,7 @@ func (s *folderConfigTestSetup) setupMigratedConfigUserSetButInheritingFromBlank
 	s.createStoredConfig("", true, true)
 
 	// Set global organization to empty
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	s.c.SetOrganization("")
 }
 
@@ -619,6 +623,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	c.SetOrganization("global-org-id")
 
 	// Call updateFolderConfig with the folder config
@@ -672,6 +677,7 @@ func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 
 	// Setup stored config without migration flag and empty org
 	setup.createStoredConfig("", false, false)
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	setup.c.SetOrganization("global-org-id")
 	folderPath := setup.folderPath
 
@@ -764,6 +770,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	c.SetOrganization("test-org")
 
 	// Call updateFolderConfig with exact same config and same global org
@@ -799,6 +806,7 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	folderPath := types.FilePath("/non/existent/path")
 	logger := c.Logger()
 
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	c.SetOrganization("test-org")
 
 	// Call updateFolderConfig with a folder that doesn't exist
@@ -903,6 +911,7 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
 	require.NoError(t, err)
 
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	setup.c.SetOrganization("global-org-id")
 
 	// Call updateFolderConfig with empty org (should stay in auto mode)
@@ -943,6 +952,7 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
 	require.NoError(t, err)
 
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	setup.c.SetOrganization("global-org-id")
 
 	settings := types.Settings{
@@ -971,6 +981,7 @@ func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
 
 	// Setup stored config with initial org, migrated, and user-set
 	setup.createStoredConfig("initial-org", true, true)
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	setup.c.SetOrganization("global-org-id")
 
 	// Call updateFolderConfig with a different org
@@ -999,6 +1010,7 @@ func Test_updateFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
 
 	// Setup stored config without migration flag but with user-set org
 	setup.createStoredConfig("user-chosen-org", false, true)
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	setup.c.SetOrganization("global-org-id")
 
 	// Call updateFolderConfig
@@ -1037,6 +1049,7 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
 	require.NoError(setup.t, err)
 
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	setup.c.SetOrganization("global-org-id")
 
 	// Call updateFolderConfig with DIFFERENT org to trigger updateFolderConfigOrg
@@ -1066,6 +1079,7 @@ func Test_updateFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *testing.T)
 
 	// Setup stored config in auto mode (migrated, not user-set, empty org)
 	setup.createStoredConfig("", true, false)
+	//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 	setup.c.SetOrganization("global-org-id")
 
 	// Call updateFolderConfig with user now setting an org

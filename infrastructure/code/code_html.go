@@ -180,15 +180,17 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		ignoreReason = ignoreDetails.Reason
 	}
 
-	appLink := renderer.c.SnykUI()
+	appLink := renderer.c.SnykUI() // default link if we cannot determine the correct one
 	if isPending {
 		// Get organization slug for the folder
 		orgSlug := renderer.c.FolderOrganizationSlug(folderPath)
-		pendingIgnoreURL, err := url.JoinPath(renderer.c.SnykUI(), "org", orgSlug, "ignore-requests")
-		if err != nil {
-			renderer.c.Logger().Error().Err(err).Msg("Failed to construct pending ignore link")
-		} else {
-			appLink = pendingIgnoreURL
+		if orgSlug != "" {
+			pendingIgnoreURL, err := url.JoinPath(renderer.c.SnykUI(), "org", orgSlug, "ignore-requests")
+			if err != nil {
+				renderer.c.Logger().Error().Err(err).Msg("Failed to construct pending ignore link")
+			} else {
+				appLink = pendingIgnoreURL
+			}
 		}
 	}
 

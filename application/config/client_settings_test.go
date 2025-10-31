@@ -20,7 +20,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -80,19 +79,6 @@ func TestConfig_IsErrorReportingEnabledFromEnv_Error(t *testing.T) {
 	c.clientSettingsFromEnv()
 
 	assert.Equal(t, true, c.IsErrorReportingEnabled())
-}
-
-func TestConfig_OrganizationFromEnv(t *testing.T) {
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-	SetCurrentConfig(c)
-
-	orgUuid, _ := uuid.NewRandom()
-	expectedOrgId := orgUuid.String()
-	t.Setenv(Organization, expectedOrgId)
-	c.clientSettingsFromEnv()
-
-	assert.Equal(t, expectedOrgId, c.Organization())
 }
 
 func TestInitializeDefaultProductEnablement(t *testing.T) {

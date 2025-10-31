@@ -1194,6 +1194,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		// Pre-populate storage with a folder config to simulate migration
 		setupFunc := func(c *config.Config) {
+			//nolint:staticcheck // Deprecated SetOrganization() method is still kept for migration
 			c.SetOrganization(expectedOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 			require.NoError(t, err)
@@ -1280,6 +1281,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
 		setupFunc := func(c *config.Config) {
+			//nolint:staticcheck // Deprecated SetOrganization() method, is still kept for migration
 			c.SetOrganization(globalOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 				FolderPath:                  repo,
@@ -1302,6 +1304,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 
 		// Verify that the global org is still what we set it to
+		//nolint:staticcheck // Deprecated Organization() method is still kept for migration
 		require.Equal(t, globalOrg, c.Organization(), "Global org should remain unchanged")
 
 		// Verify that the folder's effective organization equals the preferred org
@@ -1324,6 +1327,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 
 		// Verify that the global org is still what we set it to
+		//nolint:staticcheck // Deprecated Organization() method is still kept for migration
 		assert.Equal(t, globalOrg, c.Organization(), "Global org should remain unchanged")
 
 		// Verify that the folder's effective organization equals the global org
@@ -1406,6 +1410,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
 		setupFunc := func(c *config.Config) {
+			//nolint:staticcheck // Deprecated SetOrganization() method is still kept for migration
 			c.SetOrganization(globalOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 				FolderPath:                  repo,
@@ -1458,6 +1463,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
 		setupFunc := func(c *config.Config) {
+			//nolint:staticcheck // Deprecated SetOrganization() method is still kept for migration
 			c.SetOrganization(globalOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 				FolderPath:                  repo,

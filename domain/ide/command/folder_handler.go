@@ -119,6 +119,7 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 		return
 	}
 
+	//nolint:staticcheck // Deprecated Organization() method is still used for migration logic
 	globalOrg := c.Organization()
 
 	// Check if the configured organization is the default org

@@ -513,12 +513,17 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource
 	}
 }
 
+// updateOrganization updates the deprecated global organization from settings.
+// This is kept for migration purposes only.
 func updateOrganization(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
 	newOrg := strings.TrimSpace(settings.Organization)
 	if newOrg != "" {
+		//nolint:staticcheck // Deprecated Organization() method is still used for migration logic
 		oldOrgId := c.Organization()
+		//nolint:staticcheck // Deprecated SetOrganization() method is still used for migration logic
 		c.SetOrganization(newOrg)
-		newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
+		//nolint:staticcheck // Deprecated Organization() method is still used for migration logic
+		newOrgId := c.Organization()
 		if oldOrgId != newOrgId && c.IsLSPInitialized() {
 			analytics.SendConfigChangedAnalytics(c, configOrganization, oldOrgId, newOrgId, triggerSource)
 		}
