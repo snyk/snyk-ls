@@ -26,22 +26,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/samber/lo"
-
-	"github.com/snyk/snyk-ls/internal/util"
-
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
+	"github.com/samber/lo"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-
-	"github.com/snyk/snyk-ls/internal/testsupport"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -53,9 +47,11 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_SmokeInstanceTest(t *testing.T) {
@@ -1199,7 +1195,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			FolderPath: repo,
 		}
 
-		expectedOrg := uuid.NewString()
+		expectedOrg := "00000000-0000-0000-0000-000000000001"
 
 		// Pre-populate storage with a folder config to simulate migration
 		setupFunc := func(c *config.Config) {
@@ -1212,7 +1208,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
 			repo: func(fc types.FolderConfig) {
-				require.True(t, fc.OrgSetByUser)
+				require.True(t, fc.OrgSetByUser, "OrgSetByUser should be true for non-default org")
 				require.Equal(t, expectedOrg, fc.PreferredOrg)
 				require.NotEmpty(t, fc.AutoDeterminedOrg)
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
