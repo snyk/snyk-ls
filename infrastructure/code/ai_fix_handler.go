@@ -91,8 +91,12 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 		return
 	}
 	contextWithCancel, cancelFunc := context.WithTimeout(ctx, explainTimeout)
-	fixHandler.explainCancelFunc = cancelFunc
 	defer cancelFunc()
+
+	fixHandler.mu.Lock()
+	fixHandler.explainCancelFunc = cancelFunc
+	fixHandler.mu.Unlock()
+
 	if len(suggestions) == 0 {
 		return
 	}
@@ -198,10 +202,13 @@ func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue types.Issue) {
 	fixHandler.mu.Lock()
 	fixHandler.aiFixDiffState = aiResultState{status: AiFixNotStarted}
 	fixHandler.currentIssueId = issueKey
+
+	// Make a copy of the explain cancel function to avoid race conditions
+	localExplainCancelFunc := fixHandler.explainCancelFunc
+	fixHandler.explainCancelFunc = nil
 	fixHandler.mu.Unlock()
 
-	if fixHandler.explainCancelFunc != nil {
-		fixHandler.explainCancelFunc()
+	if localExplainCancelFunc != nil {
+		localExplainCancelFunc()
 	}
-	fixHandler.explainCancelFunc = nil
 }
