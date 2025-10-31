@@ -181,6 +181,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("All settings are updated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
+		setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 
 		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
@@ -492,9 +493,18 @@ func setupMockOrgResolver(t *testing.T, orgId, orgName string) {
 		Id:   orgId,
 		Name: orgName,
 	}, nil).AnyTimes()
-	mockService := types.NewCommandServiceMock()
-	mockService.SetOrgResolver(mockResolver)
-	command.SetService(mockService)
+
+	// Get the existing service or create a new mock
+	svc := command.Service()
+	if mockSvc, ok := svc.(*types.CommandServiceMock); ok {
+		// If it's already a mock service, just update the resolver
+		mockSvc.SetOrgResolver(mockResolver)
+	} else {
+		// Otherwise, create a new mock service
+		mockService := types.NewCommandServiceMock()
+		mockService.SetOrgResolver(mockResolver)
+		command.SetService(mockService)
+	}
 }
 
 // Common test setup for updateFolderConfig tests

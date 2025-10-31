@@ -140,7 +140,7 @@ func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types
 }
 
 func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
-	autoTriggerAiFix := renderer.AiFixHandler.autoTriggerAiFix
+	autoTriggerAiFix := renderer.AiFixHandler.GetAutoTriggerAiFix()
 	renderer.AiFixHandler.resetAiFixCacheIfDifferent(issue)
 	additionalData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 	if !ok {
@@ -161,12 +161,12 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
 	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
 	var aiFixErr string
-	if renderer.AiFixHandler.aiFixDiffState.err != nil {
-		aiFixErr = renderer.AiFixHandler.aiFixDiffState.err.Error()
+	if aiFixDiffErr := renderer.AiFixHandler.GetAiFixDiffError(); aiFixDiffErr != nil {
+		aiFixErr = aiFixDiffErr.Error()
 	}
 
 	aiFixResult := "{}"
-	aiFixSerialized, err := json.Marshal(renderer.AiFixHandler.aiFixDiffState.result)
+	aiFixSerialized, err := json.Marshal(renderer.AiFixHandler.GetAiFixDiffResult())
 	if err == nil && string(aiFixSerialized) != "null" {
 		aiFixResult = string(aiFixSerialized)
 	}
@@ -233,7 +233,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"Scripts":              template.JS(customScripts),
 		"Nonce":                nonce,
 		"AiFixResult":          aiFixResult,
-		"AiFixDiffStatus":      renderer.AiFixHandler.aiFixDiffState.status,
+		"AiFixDiffStatus":      renderer.AiFixHandler.GetAiFixDiffStatus(),
 		"AiFixError":           aiFixErr,
 		"AutoTriggerAiFix":     autoTriggerAiFix,
 	}

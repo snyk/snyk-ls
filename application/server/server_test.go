@@ -354,6 +354,7 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -418,6 +419,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -671,6 +673,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -695,6 +698,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		Token:                       "token",
@@ -724,6 +728,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -935,6 +940,11 @@ func sendFileSavedMessage(t *testing.T, c *config.Config, filePath types.FilePat
 		di.ScanStateAggregator(),
 		featureflag.NewFakeService()))
 
+	// Populate folder config with SAST settings after adding the folder
+	folderConfig := c.FolderConfig(fileDir)
+	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
+	_ = c.UpdateFolderConfig(folderConfig)
+
 	_, err := loc.Client.Call(ctx, textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {
 		t.Fatal(err)
@@ -966,6 +976,7 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
 	c := testutil.IntegTest(t)
 	loc, _ := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	testutil.CreateDummyProgressListener(t)
 	file := testsupport.CreateTempFile(t, t.TempDir())
 	w := c.Workspace()
@@ -1033,6 +1044,7 @@ func checkForSnykScan(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder
 func Test_IntegrationHoverResults(t *testing.T) {
 	c := testutil.IntegTest(t)
 	loc, _ := setupServer(t, c)
+	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
