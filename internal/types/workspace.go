@@ -24,6 +24,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
+//go:generate go tool github.com/golang/mock/mockgen -destination=mock_types/workspace_mock.go -package=mock_types github.com/snyk/snyk-ls/internal/types Workspace,Folder
+
 type FolderStatus int
 
 type Clearer interface {

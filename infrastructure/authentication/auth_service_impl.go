@@ -133,7 +133,22 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 	event.Extension = map[string]any{
 		"auth::auth-type": string(a.c.AuthenticationMethod()),
 	}
-	analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), event, nil)
+
+	// Send to first folder's org only, since authentication is not folder-specific, but analytics have to be sent to a
+	// specific org, so the first folder's org has as good a chance as any to work and not 404.
+	// TODO - This is a temporary solution to avoid inflating analytics counts.
+	ws := a.c.Workspace()
+	if ws != nil {
+		folders := ws.Folders()
+		if len(folders) > 0 {
+			firstFolderOrg := a.c.FolderOrganization(folders[0].Path())
+			analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), firstFolderOrg, event, nil)
+			return
+		}
+	}
+
+	// Fallback: If no folders, send with empty org to use the user's preferred org from the web UI
+	analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), "", event, nil)
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
