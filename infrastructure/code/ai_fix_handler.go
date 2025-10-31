@@ -98,7 +98,12 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 			return c.Engine().GetNetworkAccess().GetHttpClient()
 		}),
 	)
-	explanations, err := deepCodeLLMBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs, Endpoint: getExplainEndpoint(c, issue.GetContentRoot())})
+	endpoint, err := getExplainEndpoint(c, issue.GetContentRoot())
+	if err != nil {
+		logger.Error().Err(err).Msgf("Failed to get explain endpoint for issue %s", issue.GetID())
+		return
+	}
+	explanations, err := deepCodeLLMBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs, Endpoint: endpoint})
 	if err != nil {
 		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.GetID())
 		return
@@ -112,17 +117,21 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	}
 }
 
-func getExplainEndpoint(c *config.Config, folder types.FilePath) *url.URL {
-	org := c.FolderOrganization(folder)
+func getExplainEndpoint(c *config.Config, contentRoot types.FilePath) (*url.URL, error) {
+	workspaceFolder := c.Workspace().GetFolderContaining(contentRoot)
+	if workspaceFolder == nil {
+		return nil, fmt.Errorf("no folder found for content root: %s", contentRoot)
+	}
+	org := c.FolderOrganization(workspaceFolder.Path())
 	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", c.SnykApi(), org))
 	if err != nil {
-		return &url.URL{}
+		return nil, fmt.Errorf("failed to parse explain endpoint URL: %w", err)
 	}
 	queryParams := url.Values{}
 	queryParams.Add("version", ExplainApiVersion)
 	endpoint.RawQuery = queryParams.Encode()
 
-	return endpoint
+	return endpoint, nil
 }
 
 func getDiffListFromSuggestions(suggestions []llm.AutofixUnifiedDiffSuggestion, diffs []string) []string {

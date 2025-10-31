@@ -126,7 +126,12 @@ func (cmd *submitIgnoreRequest) initializeCreateConfiguration(gafConfig configur
 		return nil, err
 	}
 
-	gafConfig.Set(configuration.ORGANIZATION, cmd.c.FolderOrganization(contentRoot))
+	workspaceFolder := cmd.c.Workspace().GetFolderContaining(contentRoot)
+	if workspaceFolder == nil {
+		return nil, fmt.Errorf("no folder found for content root: %s", contentRoot)
+	}
+	folderOrg := cmd.c.FolderOrganization(workspaceFolder.Path())
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 	gafConfig.Set(ignore_workflow.FindingsIdKey, findingId)
 
 	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
@@ -163,10 +168,12 @@ func (cmd *submitIgnoreRequest) initializeEditConfigurations(gafConfig configura
 		return nil, err
 	}
 
-	folderOrg := cmd.c.FolderOrganization(contentRoot)
-	if folderOrg != "" {
-		gafConfig.Set(configuration.ORGANIZATION, folderOrg)
+	workspaceFolder := cmd.c.Workspace().GetFolderContaining(contentRoot)
+	if workspaceFolder == nil {
+		return nil, fmt.Errorf("no folder found for content root: %s", contentRoot)
 	}
+	folderOrg := cmd.c.FolderOrganization(workspaceFolder.Path())
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
 	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
 	gafConfig = addCreateAndUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
@@ -198,10 +205,12 @@ func (cmd *submitIgnoreRequest) initializeDeleteConfiguration(gafConfig configur
 		return nil, fmt.Errorf("ignoreId should be a string")
 	}
 
-	folderOrg := cmd.c.FolderOrganization(contentRoot)
-	if folderOrg != "" {
-		gafConfig.Set(configuration.ORGANIZATION, folderOrg)
+	workspaceFolder := cmd.c.Workspace().GetFolderContaining(contentRoot)
+	if workspaceFolder == nil {
+		return nil, fmt.Errorf("no folder found for content root: %s", contentRoot)
 	}
+	folderOrg := cmd.c.FolderOrganization(workspaceFolder.Path())
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
 	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
 	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
@@ -305,6 +314,14 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 
 func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error, path types.FilePath) {
 	event := analytics.NewAnalyticsEventParam("Create ignore", err, path)
-	folderOrg := cmd.c.FolderOrganization(path)
+	workspaceFolder := cmd.c.Workspace().GetFolderContaining(path)
+	var folderOrg string
+	if workspaceFolder != nil {
+		folderOrg = cmd.c.FolderOrganization(workspaceFolder.Path())
+	} else {
+		// Fallback to sending the analytics to the user's preferred org from the web UI,
+		// these analytics are not exposed in customer TopCoat reports, so this is fine.
+		folderOrg = ""
+	}
 	analytics.SendAnalytics(cmd.c.Engine(), cmd.c.DeviceID(), folderOrg, event, err)
 }
