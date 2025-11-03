@@ -131,6 +131,9 @@ func (cmd *submitIgnoreRequest) initializeCreateConfiguration(gafConfig configur
 		return nil, fmt.Errorf("no folder found for content root: %s", contentRoot)
 	}
 	folderOrg := cmd.c.FolderOrganization(workspaceFolder.Path())
+	if folderOrg == "" {
+		return nil, fmt.Errorf("no organization configured for folder: %s", workspaceFolder.Path())
+	}
 	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 	gafConfig.Set(ignore_workflow.FindingsIdKey, findingId)
 
@@ -173,6 +176,9 @@ func (cmd *submitIgnoreRequest) initializeEditConfigurations(gafConfig configura
 		return nil, fmt.Errorf("no folder found for content root: %s", contentRoot)
 	}
 	folderOrg := cmd.c.FolderOrganization(workspaceFolder.Path())
+	if folderOrg == "" {
+		return nil, fmt.Errorf("no organization configured for folder: %s", workspaceFolder.Path())
+	}
 	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
 	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
@@ -210,6 +216,9 @@ func (cmd *submitIgnoreRequest) initializeDeleteConfiguration(gafConfig configur
 		return nil, fmt.Errorf("no folder found for content root: %s", contentRoot)
 	}
 	folderOrg := cmd.c.FolderOrganization(workspaceFolder.Path())
+	if folderOrg == "" {
+		return nil, fmt.Errorf("no organization configured for folder: %s", workspaceFolder.Path())
+	}
 	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
 	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
