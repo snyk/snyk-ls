@@ -123,6 +123,9 @@ func getExplainEndpoint(c *config.Config, contentRoot types.FilePath) (*url.URL,
 		return nil, fmt.Errorf("no folder found for content root: %s", contentRoot)
 	}
 	org := c.FolderOrganization(workspaceFolder.Path())
+	if org == "" {
+		return nil, fmt.Errorf("no organization configured for folder: %s", workspaceFolder.Path())
+	}
 	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", c.SnykApi(), org))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse explain endpoint URL: %w", err)
