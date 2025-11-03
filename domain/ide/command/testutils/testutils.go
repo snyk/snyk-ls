@@ -43,15 +43,17 @@ func SetupFakeWorkspace(t *testing.T, c *config.Config, folderCount int) (
 	t.Helper()
 
 	// Create mock dependencies
+	instrumentor := performance.NewInstrumentor()
 	notifier = notification.NewMockNotifier()
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	sc := scanner.NewTestScanner()
 	hoverService := hover.NewFakeHoverService()
+	ffService := featureflag.NewFakeService()
 
 	// Create workspace
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureflag.NewFakeService())
+	w := workspace.New(c, instrumentor, sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, ffService)
 
 	// Create and add folders with fake paths
 	safeTestName := testsupport.PathSafeTestName(t)

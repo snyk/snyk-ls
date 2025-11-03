@@ -422,6 +422,8 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 
 	// Capture analytics WF's GAF config to verify folder org (using channel for safe goroutine communication)
 	capturedGAFConfigCh := make(chan configuration.Configuration, 1)
+	t.Cleanup(func() { close(capturedGAFConfigCh) })
+
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
 		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
 		gomock.Any(),

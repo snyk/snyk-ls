@@ -23,13 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-	context2 "github.com/snyk/snyk-ls/internal/context"
-	"github.com/snyk/snyk-ls/internal/testsupport"
-
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
@@ -42,16 +35,22 @@ import (
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/internal/types"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	context2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -602,13 +601,26 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	engineMock := workflow.NewWorkFlowEngine(gafConfig)
 	c.SetEngine(engineMock)
 
-	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
+	notifier := notification.NewNotifier()
+	f, _ := NewMockFolderWithScanNotifier(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
+
+	const testFolderOrg = "test-org"
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		FolderPath:                  f.path,
+		PreferredOrg:                testFolderOrg,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
+
 	filePath := types.FilePath(filepath.Join(string(f.path), "path1"))
 	mockCodeIssue := NewMockIssue("id1", filePath)
 
 	data := types.ScanData{
 		Product:           product.ProductOpenSource,
 		Issues:            []types.Issue{mockCodeIssue},
+		Path:              f.path,
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
@@ -626,40 +638,50 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	ic.SetTestSummary(summary)
 	ic.SetType("Analytics")
 
-	entered := make(chan struct{})
-	_, err := engineMock.Register(localworkflows.WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)),
+	capturedGAFConfigCh := make(chan configuration.Configuration, 1)
+	t.Cleanup(func() { close(capturedGAFConfigCh) })
+
+	_, err = engineMock.Register(localworkflows.WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)),
 		func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
-			actualV2InstrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
-
-			require.NoError(t, err)
-
-			require.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
-			require.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
-			require.Equal(t, "Success", actualV2InstrumentationObject.Data.Attributes.Interaction.Status)
-			require.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Attributes.Interaction.Type)
-			require.Equal(t, []string{data.Product.ToProductCodename(), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
-			require.Equal(t, "Analytics", actualV2InstrumentationObject.Data.Type)
-			require.Empty(t, actualV2InstrumentationObject.Data.Attributes.Interaction.Errors)
-			require.Equal(t, []map[string]interface{}{{"name": "medium", "count": 1}}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Results)
-
-			close(entered)
+			// Capture the GAF config to verify organization
+			capturedGAFConfigCh <- invocation.GetConfiguration()
 			return nil, nil
 		})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = engineMock.Init()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Act
 	f.ProcessResults(t.Context(), data)
-	maxWaitTime := 10 * time.Second
 
-	select {
-	case <-entered:
-	case <-time.After(maxWaitTime):
-		t.Fatalf("time out. condition wasn't met. current timeout value is: %s", maxWaitTime)
-	}
+	// Wait for async analytics sending
+	var capturedGAFConfig configuration.Configuration
+	require.Eventually(t, func() bool {
+		select {
+		case capturedGAFConfig = <-capturedGAFConfigCh:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond, "analytics should have been sent")
+
+	// Assert: Verify analytics payload (ic is still in scope, so we can verify it directly)
+	actualV2InstrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
+	require.NoError(t, err)
+	require.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
+	require.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
+	require.Equal(t, "Success", actualV2InstrumentationObject.Data.Attributes.Interaction.Status)
+	require.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Attributes.Interaction.Type)
+	require.Equal(t, []string{data.Product.ToProductCodename(), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
+	require.Equal(t, "Analytics", actualV2InstrumentationObject.Data.Type)
+	require.Empty(t, actualV2InstrumentationObject.Data.Attributes.Interaction.Errors)
+	require.Equal(t, []map[string]any{{"name": "medium", "count": 1}}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Results)
+
+	// Assert: Verify analytics sent with correct folder org
+	actualOrg := capturedGAFConfig.Get(configuration.ORGANIZATION)
+	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
 
 func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
@@ -667,10 +689,22 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 
 	engineMock, gafConfig := testutil.SetUpEngineMock(t, c)
 
-	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
+	notifier := notification.NewNotifier()
+	f, _ := NewMockFolderWithScanNotifier(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
+
+	const testFolderOrg = "test-org"
+	err := storedconfig.UpdateFolderConfig(gafConfig, &types.FolderConfig{
+		FolderPath:                  f.path,
+		PreferredOrg:                testFolderOrg,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
 
 	scanData := types.ScanData{
 		Product:           product.ProductOpenSource,
+		Path:              f.path,
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
@@ -678,21 +712,47 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
 	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+
+	// Capture analytics WF's data and config (using channel for safe goroutine communication)
+	type analyticsCapture struct {
+		data   []workflow.Data
+		config configuration.Configuration
+	}
+	capturedCh := make(chan analyticsCapture, 1)
+	t.Cleanup(func() { close(capturedCh) })
+
 	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
 		Times(1).
 		Do(func(id workflow.Identifier, data []workflow.Data, config configuration.Configuration) {
-			require.Len(t, data, 1)
-			payload := string(data[0].GetPayload().([]byte))
-			require.NotEmpty(t, payload)
-			require.Contains(t, payload, "scan_source")
-			require.Contains(t, payload, "scan_type")
+			capturedCh <- analyticsCapture{data: data, config: config}
 		})
 
 	ctx := context2.NewContextWithScanSource(context2.NewContextWithDeltaScanType(t.Context(), context2.WorkingDirectory), context2.LLM)
 
 	// Act
 	f.ProcessResults(ctx, scanData)
-	time.Sleep(time.Second)
+
+	// Wait for async analytics sending
+	var captured analyticsCapture
+	require.Eventually(t, func() bool {
+		select {
+		case captured = <-capturedCh:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond, "analytics should have been sent")
+
+	// Assert: Verify payload contains scan_source and scan_type
+	require.Len(t, captured.data, 1)
+	payload := string(captured.data[0].GetPayload().([]byte))
+	require.NotEmpty(t, payload)
+	require.Contains(t, payload, "scan_source")
+	require.Contains(t, payload, "scan_type")
+
+	// Assert: Verify analytics sent with correct folder org
+	actualOrg := captured.config.Get(configuration.ORGANIZATION)
+	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
 
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
@@ -733,6 +793,8 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	// Capture analytics WF's GAF config to verify folder org (using channel for safe goroutine communication)
 	capturedGAFConfigCh := make(chan configuration.Configuration, 1)
+	t.Cleanup(func() { close(capturedGAFConfigCh) })
+
 	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
 		Times(1).
 		Do(func(_ workflow.Identifier, _ []workflow.Data, potentialGAFConfig any) {
@@ -768,6 +830,15 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	// Assert: Verify analytics sent with correct folder org
 	actualOrg := capturedGAFConfig.Get(configuration.ORGANIZATION)
 	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
+}
+
+// setupWorkspaceWithFolder creates a workspace and adds the given folder to it
+func setupWorkspaceWithFolder(c *config.Config, folder *Folder, notifier noti.Notifier) {
+	w := New(c, performance.NewInstrumentor(), scanner.NewTestScanner(), hover.NewFakeHoverService(),
+		scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(),
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	c.SetWorkspace(w)
+	w.AddFolder(folder)
 }
 
 func NewMockFolder(c *config.Config, notifier noti.Notifier) *Folder {
