@@ -206,8 +206,8 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		}
 
 		if !toolDef.IgnoreAuth {
-			_, whoAmiErr := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
-			if whoAmiErr != nil {
+			user, whoAmiErr := authentication.CallWhoAmI(&logger, invocationCtx.GetEngine())
+			if whoAmiErr != nil || user == nil {
 				return mcp.NewToolResultText("User not authenticated. Please run 'snyk_auth' first"), nil
 			}
 		}
