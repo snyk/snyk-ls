@@ -380,9 +380,7 @@ func (m *McpLLMBinding) snykTrustHandler(invocationCtx workflow.InvocationContex
 
 func getAuthMsg(config configuration.Configuration, activeUser *authentication.ActiveUser) string {
 	user := activeUser.UserName
-	if activeUser.UserName != "" {
-		user = activeUser.UserName
-	} else if activeUser.Name != "" {
+	if activeUser.Name != "" {
 		user = activeUser.Name
 	}
 
