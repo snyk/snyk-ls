@@ -54,9 +54,16 @@ func (cmd *codeFixFeedback) Execute(_ context.Context) (any, error) {
 		c := config.CurrentConfig()
 		c.Logger().Info().Str("fixId", fixId).Str("feedback", feedback).Msg("Submitting autofix feedback")
 
-		host, err := code.GetCodeApiUrl(c)
+		// Get folder from the persistent AiFixHandler using the fix results
+		folder, err := cmd.getFolderFromFixId(c, fixId)
 		if err != nil {
-			c.Logger().Error().Str("fixId", fixId).Str("host", host).Err(err).Msg("Failed to get endpoint from host")
+			c.Logger().Warn().Err(err).Str("fixId", fixId).Msg("Failed to determine folder for feedback, using default org")
+			folder = ""
+		}
+
+		host, err := code.GetCodeApiUrlForFolder(c, folder)
+		if err != nil {
+			c.Logger().Error().Str("fixId", fixId).Str("host", host).Str("folder", string(folder)).Err(err).Msg("Failed to get endpoint from host")
 		}
 
 		deepCodeLLMBinding := llm.NewDeepcodeLLMBinding(
@@ -71,7 +78,7 @@ func (cmd *codeFixFeedback) Execute(_ context.Context) (any, error) {
 			FixID:               fixId,
 			Result:              feedback,
 			Host:                host,
-			CodeRequestContext:  code.NewAutofixCodeRequestContext(""),
+			CodeRequestContext:  code.NewAutofixCodeRequestContext(folder),
 			IdeExtensionDetails: code.GetAutofixIdeExtensionDetails(c),
 		}
 
@@ -82,4 +89,41 @@ func (cmd *codeFixFeedback) Execute(_ context.Context) (any, error) {
 	}()
 
 	return nil, nil
+}
+
+// getFolderFromFixId retrieves the folder path by looking up the fix results from the persistent HtmlRenderer.
+// The HtmlRenderer is a singleton that persists across the application lifecycle,
+// so the AiFixHandler maintains the fix results even after the original command completes.
+func (cmd *codeFixFeedback) getFolderFromFixId(c *config.Config, fixId string) (types.FilePath, error) {
+	// Get the persistent HtmlRenderer which contains the AiFixHandler with stored fix results
+	// Pass nil for FF service since we're only reading from existing state, not creating a new renderer
+	htmlRenderer, err := code.GetHTMLRenderer(c, nil)
+	if err != nil {
+		return "", fmt.Errorf("HTML renderer not initialized: %w", err)
+	}
+
+	// Get the file path from the fix results stored in the AiFixHandler
+	filePath, _, err := htmlRenderer.AiFixHandler.GetResults(fixId)
+	if err != nil {
+		return "", fmt.Errorf("fix results not found: %w", err)
+	}
+
+	if filePath == "" {
+		return "", fmt.Errorf("fix results contain empty file path")
+	}
+
+	// Determine which workspace folder contains this file
+	ws := c.Workspace()
+	if ws == nil {
+		return "", fmt.Errorf("no workspace configured")
+	}
+
+	folder := ws.GetFolderContaining(types.FilePath(filePath))
+	if folder == nil {
+		return "", fmt.Errorf("file %s not in any workspace folder", filePath)
+	}
+
+	folderPath := folder.Path()
+	c.Logger().Debug().Str("fixId", fixId).Str("filePath", filePath).Str("folder", string(folderPath)).Msg("Determined folder from fix results")
+	return folderPath, nil
 }

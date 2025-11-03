@@ -32,9 +32,6 @@ import (
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -155,20 +152,8 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		return issues, err
 	}
 
-	// Clone the GAF configuration so that we can use the per-folder organization for the SAST lookup.
-	gafConfig := sc.C.Engine().GetConfiguration().Clone()
-	gafConfig.Set(configuration.ORGANIZATION, sc.C.FolderOrganization(folderPath))
-
-	response, err := gafConfig.GetWithError(code_workflow.ConfigurationSastSettings)
-	if err != nil {
-		return nil, err
-	}
-
-	sastResponse, ok := response.(*sast_contract.SastResponse)
-	if !ok {
-		return nil, errors.New("Failed to get the sast settings")
-	}
-
+	// Get SAST settings from feature flag service using folder configuration
+	sastResponse := sc.featureFlagService.GetSastSettingsFromFolderConfig(folderPath)
 	if sastResponse == nil {
 		return issues, errors.New("Failed to get the sast settings")
 	}
