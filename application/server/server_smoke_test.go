@@ -600,7 +600,10 @@ func substituteDepGraphFlow(t *testing.T, c *config.Config, cloneTargetDirString
 			t.Fatalf("couldn't retrieve the depgraph %s: ", err.Error())
 		}
 		depGraphData := workflow.NewData(depGraphDataID, "application/json", depGraphJson)
-		depGraphData.SetMetaData("Content-Location", strings.TrimSpace(displayTargetFile))
+		normalisedTargetFile := strings.TrimSpace(displayTargetFile)
+		depGraphData.SetMetaData("Content-Location", normalisedTargetFile)
+		depGraphData.SetMetaData("normalisedTargetFile", normalisedTargetFile) //Required for cli-extension-os-flow
+
 		return []workflow.Data{depGraphData}, nil
 	}
 
