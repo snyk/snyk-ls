@@ -40,7 +40,7 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath,
 
 	gafConfig.Set(configuration.WORKING_DIRECTORY, string(workDir))
 	gafConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
-	gafConfig.Set(configuration.INPUT_DIRECTORY, string(workDir))
+	gafConfig.Set(configuration.INPUT_DIRECTORY, []string{string(workDir)})
 	gafConfig.Set(configuration.ORGANIZATION, c.FolderOrganization(workDir))
 	gafConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
 

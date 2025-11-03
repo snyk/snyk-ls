@@ -548,20 +548,20 @@ func extractUpgradePackage(finding testapi.FindingData) []string {
 		return nil
 	}
 
-	// Get the actions from fix attributes
-	actions := fixData.Attributes.Actions
-	if actions == nil {
+	// Get the action from fix attributes
+	action := fixData.Attributes.Action
+	if action == nil {
 		return nil
 	}
 
-	// Check if this is an upgrade_package action
-	disc, err := actions.Discriminator()
-	if err != nil || disc != "upgrade_package" {
+	// Check if this is an upgrade_package_advice action
+	disc, err := action.Discriminator()
+	if err != nil || disc != "upgrade_package_advice" {
 		return nil
 	}
 
-	// Extract the upgrade package action
-	upgradeAction, err := actions.AsUpgradePackageAction()
+	// Extract the upgrade package advice
+	upgradeAction, err := action.AsUpgradePackageAdvice()
 	if err != nil {
 		return nil
 	}
