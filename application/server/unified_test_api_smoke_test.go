@@ -196,6 +196,7 @@ func setRiskScoreFeatureFlagsFromGafConfig(t *testing.T, c *config.Config, clone
 }
 
 func setupOSSComparisonTest(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder) {
+	t.Helper()
 	c := testutil.SmokeTest(t, tokenSecretNameForRiskScore)
 	testutil.CreateDummyProgressListener(t)
 	endpoint := os.Getenv("SNYK_API")
@@ -487,102 +488,6 @@ func collectDiagnosticFieldComparisons(title string, unified, legacy types.Diagn
 	comparisons = append(comparisons, collectScanIssueComparisons(title, unified.Data, legacy.Data)...)
 
 	return comparisons
-}
-
-func compareDiagnosticFields(unified, legacy types.Diagnostic) []string {
-	var diffs []string
-
-	// Compare Range
-	if unified.Range != legacy.Range {
-		diffs = append(diffs, "  📍 Range:")
-		diffs = append(diffs, compareRanges(unified.Range, legacy.Range)...)
-	}
-
-	// Compare Severity
-	if unified.Severity != legacy.Severity {
-		diffs = append(diffs, formatFieldDiff("Severity", unified.Severity, legacy.Severity))
-	}
-
-	// Compare Code
-	if !compareAny(unified.Code, legacy.Code) {
-		diffs = append(diffs, formatFieldDiff("Code", unified.Code, legacy.Code))
-	}
-
-	// Compare Source
-	if unified.Source != legacy.Source {
-		diffs = append(diffs, formatFieldDiff("Source", unified.Source, legacy.Source))
-	}
-
-	// Compare Message
-	if unified.Message != legacy.Message {
-		diffs = append(diffs, formatFieldDiff("Message", unified.Message, legacy.Message))
-	}
-
-	// Compare CodeDescription
-	if unified.CodeDescription != legacy.CodeDescription {
-		diffs = append(diffs, formatFieldDiff("CodeDescription.Href", unified.CodeDescription.Href, legacy.CodeDescription.Href))
-	}
-
-	// Compare Tags
-	if !compareTags(unified.Tags, legacy.Tags) {
-		diffs = append(diffs, formatFieldDiff("Tags", unified.Tags, legacy.Tags))
-	}
-
-	// Compare RelatedInformation
-	relatedDiffs := compareRelatedInformation(unified.RelatedInformation, legacy.RelatedInformation)
-	if len(relatedDiffs) > 0 {
-		diffs = append(diffs, "  📎 RelatedInformation:")
-		diffs = append(diffs, relatedDiffs...)
-	}
-
-	// Compare Data (ScanIssue)
-	dataDiffs := compareScanIssue(unified.Data, legacy.Data)
-	if len(dataDiffs) > 0 {
-		diffs = append(diffs, "  📊 Data (ScanIssue):")
-		diffs = append(diffs, dataDiffs...)
-	}
-
-	return diffs
-}
-
-func compareRanges(unified, legacy sglsp.Range) []string {
-	var diffs []string
-
-	if unified.Start != legacy.Start {
-		diffs = append(diffs, formatFieldDiff("    Start",
-			formatPosition(unified.Start),
-			formatPosition(legacy.Start)))
-	}
-
-	if unified.End != legacy.End {
-		diffs = append(diffs, formatFieldDiff("    End",
-			formatPosition(unified.End),
-			formatPosition(legacy.End)))
-	}
-
-	return diffs
-}
-
-func compareRelatedInformation(unified, legacy []types.DiagnosticRelatedInformation) []string {
-	var diffs []string
-
-	if len(unified) != len(legacy) {
-		diffs = append(diffs, formatFieldDiff("    Length", len(unified), len(legacy)))
-		return diffs
-	}
-
-	for i := range unified {
-		if unified[i].Location != legacy[i].Location {
-			diffs = append(diffs, formatFieldDiff(fmt.Sprintf("    [%d].Location", i),
-				unified[i].Location, legacy[i].Location))
-		}
-		if unified[i].Message != legacy[i].Message {
-			diffs = append(diffs, formatFieldDiff(fmt.Sprintf("    [%d].Message", i),
-				unified[i].Message, legacy[i].Message))
-		}
-	}
-
-	return diffs
 }
 
 func collectRelatedInformationComparisons(title string, unified, legacy []types.DiagnosticRelatedInformation) []FieldComparison {
@@ -1299,94 +1204,6 @@ func collectStringArrayComparison(title, fieldPath string, unified, legacy []str
 	return comparisons
 }
 
-func compareScanIssue(unified, legacy types.ScanIssue) []string {
-	var diffs []string
-
-	if unified.Id != legacy.Id {
-		diffs = append(diffs, formatFieldDiff("    Id", unified.Id, legacy.Id))
-	}
-
-	if unified.Title != legacy.Title {
-		diffs = append(diffs, formatFieldDiff("    Title", unified.Title, legacy.Title))
-	}
-
-	if unified.Severity != legacy.Severity {
-		diffs = append(diffs, formatFieldDiff("    Severity", unified.Severity, legacy.Severity))
-	}
-
-	if unified.FilePath != legacy.FilePath {
-		diffs = append(diffs, formatFieldDiff("    FilePath", unified.FilePath, legacy.FilePath))
-	}
-
-	if unified.ContentRoot != legacy.ContentRoot {
-		diffs = append(diffs, formatFieldDiff("    ContentRoot", unified.ContentRoot, legacy.ContentRoot))
-	}
-
-	if unified.Range != legacy.Range {
-		diffs = append(diffs, "    Range:")
-		rangeDiffs := compareRanges(unified.Range, legacy.Range)
-		for _, rd := range rangeDiffs {
-			diffs = append(diffs, "  "+rd)
-		}
-	}
-
-	if unified.IsIgnored != legacy.IsIgnored {
-		diffs = append(diffs, formatFieldDiff("    IsIgnored", unified.IsIgnored, legacy.IsIgnored))
-	}
-
-	if unified.IsNew != legacy.IsNew {
-		diffs = append(diffs, formatFieldDiff("    IsNew", unified.IsNew, legacy.IsNew))
-	}
-
-	ignoreDiffs := compareIgnoreDetails(unified.IgnoreDetails, legacy.IgnoreDetails)
-	if len(ignoreDiffs) > 0 {
-		diffs = append(diffs, "    IgnoreDetails:")
-		diffs = append(diffs, ignoreDiffs...)
-	}
-
-	if unified.FilterableIssueType != legacy.FilterableIssueType {
-		diffs = append(diffs, formatFieldDiff("    FilterableIssueType",
-			unified.FilterableIssueType, legacy.FilterableIssueType))
-	}
-
-	if !compareAny(unified.AdditionalData, legacy.AdditionalData) {
-		diffs = append(diffs, formatFieldDiff("    AdditionalData",
-			unified.AdditionalData, legacy.AdditionalData))
-	}
-
-	return diffs
-}
-
-func compareIgnoreDetails(unified, legacy types.IgnoreDetails) []string {
-	var diffs []string
-
-	if unified.Category != legacy.Category {
-		diffs = append(diffs, formatFieldDiff("      Category", unified.Category, legacy.Category))
-	}
-
-	if unified.Reason != legacy.Reason {
-		diffs = append(diffs, formatFieldDiff("      Reason", unified.Reason, legacy.Reason))
-	}
-
-	if unified.Expiration != legacy.Expiration {
-		diffs = append(diffs, formatFieldDiff("      Expiration", unified.Expiration, legacy.Expiration))
-	}
-
-	if !unified.IgnoredOn.Equal(legacy.IgnoredOn) {
-		diffs = append(diffs, formatFieldDiff("      IgnoredOn", unified.IgnoredOn, legacy.IgnoredOn))
-	}
-
-	if unified.IgnoredBy != legacy.IgnoredBy {
-		diffs = append(diffs, formatFieldDiff("      IgnoredBy", unified.IgnoredBy, legacy.IgnoredBy))
-	}
-
-	if unified.Status != legacy.Status {
-		diffs = append(diffs, formatFieldDiff("      Status", unified.Status, legacy.Status))
-	}
-
-	return diffs
-}
-
 func compareTags(unified, legacy []types.DiagnosticTag) bool {
 	if len(unified) != len(legacy) {
 		return false
@@ -1532,8 +1349,8 @@ func writeComparisonFiles(t *testing.T, comparisons []FieldComparison) error {
 	defer csvWriter.Flush()
 
 	// Write CSV header
-	if err := csvWriter.Write([]string{"Matched", "Diagnostic Title", "Field Path", "Unified Value", "Legacy Value"}); err != nil {
-		return fmt.Errorf("failed to write CSV header: %w", err)
+	if writeErr := csvWriter.Write([]string{"Matched", "Diagnostic Title", "Field Path", "Unified Value", "Legacy Value"}); writeErr != nil {
+		return fmt.Errorf("failed to write CSV header: %w", writeErr)
 	}
 
 	// Write CSV rows
@@ -1542,14 +1359,14 @@ func writeComparisonFiles(t *testing.T, comparisons []FieldComparison) error {
 		if !fc.Matched {
 			matchedStr = "❌"
 		}
-		if err := csvWriter.Write([]string{
+		if writeErr := csvWriter.Write([]string{
 			matchedStr,
 			fc.DiagnosticTitle,
 			fc.FieldPath,
 			fc.UnifiedValue,
 			fc.LegacyValue,
-		}); err != nil {
-			return fmt.Errorf("failed to write CSV row: %w", err)
+		}); writeErr != nil {
+			return fmt.Errorf("failed to write CSV row: %w", writeErr)
 		}
 	}
 

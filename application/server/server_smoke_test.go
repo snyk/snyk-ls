@@ -554,6 +554,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 }
 
 func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
+	t.Helper()
 	foundFolderConfig := false
 	for _, notification := range notifications {
 		var folderConfigsParam types.FolderConfigsParam
