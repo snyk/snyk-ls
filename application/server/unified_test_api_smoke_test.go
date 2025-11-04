@@ -244,6 +244,7 @@ type FieldComparison struct {
 	LegacyValue     string
 }
 
+//nolint:gocyclo // High complexity is necessary for thorough field-by-field diagnostic comparison
 func compareAndReportDiagnostics(t *testing.T, unified, legacy []types.Diagnostic) ComparisonResult {
 	t.Helper()
 
@@ -558,6 +559,7 @@ func collectRelatedInformationComparisons(title string, unified, legacy []types.
 	return comparisons
 }
 
+//nolint:gocyclo // High complexity due to many field-by-field comparisons needed for thorough scan issue validation
 func collectScanIssueComparisons(title string, unified, legacy types.ScanIssue) []FieldComparison {
 	var comparisons []FieldComparison
 
@@ -773,6 +775,7 @@ func collectIgnoreDetailsComparisons(title string, unified, legacy types.IgnoreD
 	return comparisons
 }
 
+//nolint:gocyclo // High complexity due to many field comparisons needed for thorough OSS issue data validation
 func collectOssIssueDataComparisons(title string, unified, legacy types.OssIssueData) []FieldComparison {
 	var comparisons []FieldComparison
 
@@ -1327,6 +1330,7 @@ func joinStrings(strs []string, sep string) string {
 	return result
 }
 
+//nolint:gocyclo // High complexity necessary for grouping, categorizing, and formatting comparison statistics
 func writeComparisonFiles(t *testing.T, comparisons []FieldComparison) error {
 	t.Helper()
 
@@ -1549,6 +1553,8 @@ func escapeMarkdown(s string) string {
 }
 
 // extractContextFieldsFromSingleDiagnostic extracts context fields from a diagnostic that exists only in one flow
+//
+//nolint:gocyclo // High complexity needed for extracting and formatting multiple context fields with conditional logic
 func extractContextFieldsFromSingleDiagnostic(title string, diag types.Diagnostic, isUnified bool) []FieldComparison {
 	var comparisons []FieldComparison
 

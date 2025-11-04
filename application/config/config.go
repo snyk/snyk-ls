@@ -331,7 +331,8 @@ func initWorkflows(c *Config) error {
 		return err
 	}
 
-	if err := localworkflows.InitCodeWorkflow(c.engine); err != nil {
+	err = localworkflows.InitCodeWorkflow(c.engine)
+	if err != nil {
 		return err
 	}
 
