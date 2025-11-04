@@ -35,6 +35,7 @@ type AuthenticationFunction func() (string, error)
 type ActiveUser struct {
 	Id       string `json:"id"`
 	UserName string `json:"username,omitempty"`
+	Name     string `json:"name,omitempty"`
 	Orgs     []struct {
 		Name  string `json:"name,omitempty"`
 		Id    string `json:"id,omitempty"`
