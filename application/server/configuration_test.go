@@ -1086,3 +1086,113 @@ func Test_updateFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *testing.T)
 	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true after user sets org")
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
 }
+
+// Test MCP Configuration Settings
+func Test_MCPConfiguration_ParseAutoConfigureSnykMcpServer(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	t.Run("When autoConfigureSnykMcpServer is 'true'", func(t *testing.T) {
+		settings := types.Settings{
+			AutoConfigureSnykMcpServer: "true",
+		}
+
+		writeSettings(c, settings, "test")
+
+		assert.True(t, c.IsAutoConfigureMcpEnabled())
+	})
+
+	t.Run("When autoConfigureSnykMcpServer is 'false'", func(t *testing.T) {
+		settings := types.Settings{
+			AutoConfigureSnykMcpServer: "false",
+		}
+
+		writeSettings(c, settings, "test")
+
+		assert.False(t, c.IsAutoConfigureMcpEnabled())
+	})
+
+	t.Run("When autoConfigureSnykMcpServer is empty", func(t *testing.T) {
+		settings := types.Settings{
+			AutoConfigureSnykMcpServer: "",
+		}
+
+		writeSettings(c, settings, "test")
+
+		// Default should be false
+		assert.False(t, c.IsAutoConfigureMcpEnabled())
+	})
+}
+
+func Test_MCPConfiguration_ParseSecureAtInceptionExecutionFrequency(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	t.Run("When secureAtInceptionExecutionFrequency is set", func(t *testing.T) {
+		settings := types.Settings{
+			SecureAtInceptionExecutionFrequency: "always",
+		}
+
+		writeSettings(c, settings, "test")
+
+		assert.Equal(t, "always", c.GetSecureAtInceptionExecutionFrequency())
+	})
+
+	t.Run("When secureAtInceptionExecutionFrequency is empty", func(t *testing.T) {
+		settings := types.Settings{
+			SecureAtInceptionExecutionFrequency: "",
+		}
+
+		writeSettings(c, settings, "test")
+
+		// Default should be empty string
+		assert.Equal(t, "", c.GetSecureAtInceptionExecutionFrequency())
+	})
+
+	t.Run("When secureAtInceptionExecutionFrequency has different values", func(t *testing.T) {
+		testCases := []string{"always", "onceinworkspace", "never"}
+
+		for _, value := range testCases {
+			settings := types.Settings{
+				SecureAtInceptionExecutionFrequency: value,
+			}
+
+			writeSettings(c, settings, "test")
+
+			assert.Equal(t, value, c.GetSecureAtInceptionExecutionFrequency())
+		}
+	})
+}
+
+func Test_MCPConfiguration_ConfigChangeDetection(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	t.Run("Detects autoConfigureSnykMcpServer change", func(t *testing.T) {
+		// Set initial value
+		c.SetAutoConfigureMcpEnabled(false)
+
+		// Change value
+		settings := types.Settings{
+			AutoConfigureSnykMcpServer: "true",
+		}
+		c.SetLSPInitialized(true) // Mark as initialized for analytics
+		writeSettings(c, settings, "test")
+
+		assert.True(t, c.IsAutoConfigureMcpEnabled())
+	})
+
+	t.Run("Detects secureAtInceptionExecutionFrequency change", func(t *testing.T) {
+		// Set initial value
+		c.SetSecureAtInceptionExecutionFrequency("always")
+
+		// Change value
+		settings := types.Settings{
+			SecureAtInceptionExecutionFrequency: "onceinworkspace",
+		}
+		c.SetLSPInitialized(true) // Mark as initialized for analytics
+		writeSettings(c, settings, "test")
+
+		assert.Equal(t, "onceinworkspace", c.GetSecureAtInceptionExecutionFrequency())
+	})
+}

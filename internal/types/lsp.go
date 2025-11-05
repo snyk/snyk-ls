@@ -38,6 +38,13 @@ type McpServerURLParams struct {
 	URL string `json:"url"`
 }
 
+type SnykConfigureMcpParams struct {
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env"`
+	IdeName string            `json:"ideName"` // "cursor", "windsurf", "vscode"
+}
+
 type TextDocumentSaveReason int
 
 type DiagnosticResult struct {
@@ -645,11 +652,13 @@ type Settings struct {
 	SnykCodeApi                      string               `json:"snykCodeApi,omitempty"`
 	EnableSnykLearnCodeActions       string               `json:"enableSnykLearnCodeActions,omitempty"`
 	EnableSnykOSSQuickFixCodeActions string               `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
-	EnableSnykOpenBrowserActions     string               `json:"enableSnykOpenBrowserActions,omitempty"`
-	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"` // should this be global?
-	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
-	HoverVerbosity                   *int                 `json:"hoverVerbosity,omitempty"`
-	OutputFormat                     *string              `json:"outputFormat,omitempty"`
+	EnableSnykOpenBrowserActions        string               `json:"enableSnykOpenBrowserActions,omitempty"`
+	EnableDeltaFindings                 string               `json:"enableDeltaFindings,omitempty"` // should this be global?
+	RequiredProtocolVersion             string               `json:"requiredProtocolVersion,omitempty"`
+	HoverVerbosity                      *int                 `json:"hoverVerbosity,omitempty"`
+	OutputFormat                        *string              `json:"outputFormat,omitempty"`
+	AutoConfigureSnykMcpServer          string               `json:"autoConfigureSnykMcpServer,omitempty"`
+	SecureAtInceptionExecutionFrequency string               `json:"secureAtInceptionExecutionFrequency,omitempty"`
 	// Global settings end
 
 	// Folder specific settings start

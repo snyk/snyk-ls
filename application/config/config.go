@@ -200,12 +200,14 @@ type Config struct {
 	hoverVerbosity                   int
 	offline                          bool
 	ws                               types.Workspace
-	mcpServerEnabled                 bool
-	mcpBaseURL                       *url.URL
-	isLSPInitialized                 bool
-	snykAgentFixEnabled              bool
-	cachedOriginalPath               string
-	userSettingsPath                 string
+	mcpServerEnabled                    bool
+	mcpBaseURL                          *url.URL
+	isLSPInitialized                    bool
+	snykAgentFixEnabled                 bool
+	cachedOriginalPath                  string
+	userSettingsPath                    string
+	autoConfigureMcpEnabled             bool
+	secureAtInceptionExecutionFrequency string
 }
 
 func CurrentConfig() *Config {
@@ -1428,4 +1430,28 @@ func (c *Config) IsSnykAgentFixEnabled() bool {
 
 func (c *Config) EmptyToken() bool {
 	return !c.NonEmptyToken()
+}
+
+func (c *Config) IsAutoConfigureMcpEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.autoConfigureMcpEnabled
+}
+
+func (c *Config) SetAutoConfigureMcpEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.autoConfigureMcpEnabled = enabled
+}
+
+func (c *Config) GetSecureAtInceptionExecutionFrequency() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.secureAtInceptionExecutionFrequency
+}
+
+func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.secureAtInceptionExecutionFrequency = frequency
 }
