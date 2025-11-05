@@ -17,7 +17,6 @@
 package code
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -57,7 +56,7 @@ func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, er
 		return c.SnykCodeApi(), nil
 	}
 	if folder == "" {
-		return "", fmt.Errorf("folder is required in a fedramp environment")
+		return "", fmt.Errorf("specifying a folder is required in a fedramp environment")
 	}
 
 	u, err := url.Parse(c.SnykCodeApi())
@@ -67,14 +66,9 @@ func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, er
 
 	u.Host = codeApiRegex.ReplaceAllString(u.Host, "api.")
 
-	workspaceFolder := c.Workspace().GetFolderContaining(folder)
-	if workspaceFolder == nil {
-		return "", fmt.Errorf("no workspace folder found for path: %s", folder)
-	}
-	org := c.FolderOrganization(workspaceFolder.Path())
-
-	if org == "" {
-		return "", errors.New("organization is required in a fedramp environment")
+	org, err := c.FolderOrganizationForSubPath(folder)
+	if err != nil {
+		return "", fmt.Errorf("organization is required in a fedramp environment: %w", err)
 	}
 
 	u.Path = "/hidden/orgs/" + org + "/code"

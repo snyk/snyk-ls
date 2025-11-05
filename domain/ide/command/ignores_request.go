@@ -126,13 +126,9 @@ func (cmd *submitIgnoreRequest) initializeCreateConfiguration(gafConfig configur
 		return nil, err
 	}
 
-	workspaceFolder := cmd.c.Workspace().GetFolderContaining(contentRoot)
-	if workspaceFolder == nil {
-		return nil, fmt.Errorf("no folder found for content root: %s", contentRoot)
-	}
-	folderOrg := cmd.c.FolderOrganization(workspaceFolder.Path())
-	if folderOrg == "" {
-		return nil, fmt.Errorf("no organization configured for folder: %s", workspaceFolder.Path())
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(contentRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
 	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 	gafConfig.Set(ignore_workflow.FindingsIdKey, findingId)
@@ -171,13 +167,9 @@ func (cmd *submitIgnoreRequest) initializeEditConfigurations(gafConfig configura
 		return nil, err
 	}
 
-	workspaceFolder := cmd.c.Workspace().GetFolderContaining(contentRoot)
-	if workspaceFolder == nil {
-		return nil, fmt.Errorf("no folder found for content root: %s", contentRoot)
-	}
-	folderOrg := cmd.c.FolderOrganization(workspaceFolder.Path())
-	if folderOrg == "" {
-		return nil, fmt.Errorf("no organization configured for folder: %s", workspaceFolder.Path())
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(contentRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
 	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
@@ -211,13 +203,9 @@ func (cmd *submitIgnoreRequest) initializeDeleteConfiguration(gafConfig configur
 		return nil, fmt.Errorf("ignoreId should be a string")
 	}
 
-	workspaceFolder := cmd.c.Workspace().GetFolderContaining(contentRoot)
-	if workspaceFolder == nil {
-		return nil, fmt.Errorf("no folder found for content root: %s", contentRoot)
-	}
-	folderOrg := cmd.c.FolderOrganization(workspaceFolder.Path())
-	if folderOrg == "" {
-		return nil, fmt.Errorf("no organization configured for folder: %s", workspaceFolder.Path())
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(contentRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
 	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
@@ -323,11 +311,8 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 
 func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error, path types.FilePath) {
 	event := analytics.NewAnalyticsEventParam("Create ignore", err, path)
-	workspaceFolder := cmd.c.Workspace().GetFolderContaining(path)
-	var folderOrg string
-	if workspaceFolder != nil {
-		folderOrg = cmd.c.FolderOrganization(workspaceFolder.Path())
-	} else {
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(path)
+	if err != nil {
 		// Fallback to sending the analytics to the user's preferred org from the web UI,
 		// these analytics are not exposed in customer TopCoat reports, so this is fine.
 		folderOrg = ""

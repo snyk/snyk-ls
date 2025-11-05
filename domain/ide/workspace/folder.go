@@ -451,14 +451,9 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 		logger.Error().Err(err).Msg("Failed to marshal analytics")
 	}
 
-	workspaceFolder := c.Workspace().GetFolderContaining(data.Path)
-	if workspaceFolder == nil {
-		logger.Warn().Str("path", string(data.Path)).Msg("Cannot send analytics: no workspace folder found for path")
-		return
-	}
-	folderOrg := c.FolderOrganization(workspaceFolder.Path())
-	if folderOrg == "" {
-		logger.Warn().Str("path", string(workspaceFolder.Path())).Msg("Cannot send analytics: no organization configured for folder")
+	folderOrg, err := c.FolderOrganizationForSubPath(data.Path)
+	if err != nil {
+		logger.Warn().Str("path", string(data.Path)).Err(err).Msg("Cannot send analytics: failed to get folder organization")
 		return
 	}
 	err = analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), folderOrg, v2InstrumentationData)

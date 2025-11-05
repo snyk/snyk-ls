@@ -1338,6 +1338,26 @@ func (c *Config) FolderOrganizationSlug(path types.FilePath) string {
 	return clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
 }
 
+// FolderOrganizationForSubPath returns the organization for the workspace folder containing the given path.
+// Returns an error if the workspace is nil, if no folder contains the path, or if no organization can be determined.
+func (c *Config) FolderOrganizationForSubPath(path types.FilePath) (string, error) {
+	if c.Workspace() == nil {
+		return "", fmt.Errorf("workspace is nil, so cannot determine organization for path: %s", path)
+	}
+
+	workspaceFolder := c.Workspace().GetFolderContaining(path)
+	if workspaceFolder == nil {
+		return "", fmt.Errorf("cannot determine organization, no workspace folder found for path: %s", path)
+	}
+
+	folderOrg := c.FolderOrganization(workspaceFolder.Path())
+	if folderOrg == "" {
+		return "", fmt.Errorf("no organization was able to be determined for folder: %s", workspaceFolder.Path())
+	}
+
+	return folderOrg, nil
+}
+
 func (c *Config) HoverVerbosity() int {
 	c.m.RLock()
 	defer c.m.RUnlock()

@@ -40,14 +40,13 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		assert.Equal(t, c.SnykCodeApi(), actual)
 	})
 
-	t.Run("should return error when folder is empty in FedRAMP", func(t *testing.T) {
+	t.Run("should return error when folder path argument is the empty string in FedRAMP", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		c.UpdateApiEndpoints("https://api.snykgov.io")
 		c.SetOrganization("test-org")
 
 		_, err := GetCodeApiUrlForFolder(c, "")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "folder is required in a fedramp environment")
+		assert.ErrorContains(t, err, "specifying a folder is required in a fedramp environment")
 	})
 
 	t.Run("should return error when workspace folder not found in FedRAMP", func(t *testing.T) {
@@ -68,8 +67,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 		// Path that doesn't exist in any workspace folder
 		_, err = GetCodeApiUrlForFolder(c, "/nonexistent/path")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "no workspace folder found for path")
+		assert.ErrorContains(t, err, "no workspace folder found for path")
 	})
 
 	t.Run("should return error when organization not configured in FedRAMP", func(t *testing.T) {
@@ -88,8 +86,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = GetCodeApiUrlForFolder(c, folderPaths[0])
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "organization is required in a fedramp environment")
+		assert.ErrorContains(t, err, "organization is required in a fedramp environment")
 	})
 
 	t.Run("should use correct folder org when passing subdirectory in FedRAMP", func(t *testing.T) {
