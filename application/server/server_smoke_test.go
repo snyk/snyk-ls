@@ -40,7 +40,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
@@ -843,42 +842,10 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 	cloneTargetDirString := string(cloneTargetDir)
-	if err != nil {
-		t.Fatal(err, "Couldn't setup test repo")
-	}
-
-	folder := types.WorkspaceFolder{
-		Name: "Test Repo",
-		Uri:  uri.PathToUri(cloneTargetDir),
-	}
-
-	clientParams := types.InitializeParams{
-		WorkspaceFolders: []types.WorkspaceFolder{folder},
-		InitializationOptions: types.Settings{
-			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       os.Getenv("SNYK_TOKEN"),
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-		},
-	}
-
-	_, _ = loc.Client.Call(ctx, "initialize", clientParams)
 
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, "app.js"))
-
-	w := c.Workspace()
-	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService())
-	w.AddFolder(f)
-
-	// Populate folder config with SAST settings after adding the folder
-	folderConfig := c.FolderConfig(cloneTargetDir)
-	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
-	_ = c.UpdateFolderConfig(folderConfig)
-
-	c.SetLSPInitialized(true)
 
 	_ = textDocumentDidSave(t, &loc, testPath)
 
