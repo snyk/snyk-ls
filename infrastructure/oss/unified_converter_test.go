@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -131,9 +132,18 @@ func Test_UnifiedIssue_HasUpgradeQuickFixAction(t *testing.T) {
 	require.NoError(t, err)
 	path := filepath.Join(workDir, "package.json")
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
+
+	// Create learn service mock and inject into context (merge with existing dependencies)
+	ctrl := gomock.NewController(t)
+	learnMock := mock_learn.NewMockService(ctrl)
+	learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	deps, _ := ctx2.DependenciesFromContext(ctx)
+	deps[ctx2.DepLearnService] = learnMock
+	ctx = ctx2.NewContextWithDependencies(ctx, deps)
+
 	problems := asProblemsMap(ctx, []testapi.FindingData{finding})
 	require.NotEmpty(t, problems)
-	// Enable OSS quick-fix actions (deps already injected by UnitTestWithCtx)
+	// Enable OSS quick-fix actions
 	c.SetSnykOSSQuickFixCodeActionsEnabled(true)
 
 	// Pick first problem group
@@ -182,6 +192,15 @@ func Test_UnifiedIssue_ProducesUpgradeCodeLens(t *testing.T) {
 	require.NoError(t, err)
 	path := filepath.Join(workDir, "package.json")
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(path))
+
+	// Create learn service mock and inject into context (merge with existing dependencies)
+	ctrl := gomock.NewController(t)
+	learnMock := mock_learn.NewMockService(ctrl)
+	learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	deps, _ := ctx2.DependenciesFromContext(ctx)
+	deps[ctx2.DepLearnService] = learnMock
+	ctx = ctx2.NewContextWithDependencies(ctx, deps)
+
 	problems := asProblemsMap(ctx, []testapi.FindingData{finding})
 	require.NotEmpty(t, problems)
 	// Enable OSS quick-fix actions
@@ -192,7 +211,7 @@ func Test_UnifiedIssue_ProducesUpgradeCodeLens(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, issue)
 
-		// deps already injected by UnitTestWithCtx
+		// deps already injected above
 		enriched := addUnifiedOssQuickFixesAndLenses(ctx, []types.Issue{issue})
 		require.Len(t, enriched, 1)
 		enrichedIssue := enriched[0]
