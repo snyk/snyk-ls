@@ -157,9 +157,31 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 		return engineUrl
 	}
 
+	// #IDE-1488 Fix for production debugging issue on the EU server.
+	if isApiSubdomain(defaultUrl, customUrl) {
+		return defaultUrl
+	}
+
 	// Otherwise, return the custom URL set by the user.
 	// FedRAMP and single tenant environments.
 	return customUrl
+}
+
+func isApiSubdomain(domain, subdomain string) bool {
+	domain = strings.TrimPrefix(domain, "https://")
+	subdomain = strings.TrimPrefix(subdomain, "https://")
+
+	if !strings.HasPrefix(domain, "api.") || !strings.HasPrefix(subdomain, "api.") {
+		return false
+	}
+
+	domain = strings.TrimPrefix(domain, "api.")
+	subdomain = strings.TrimPrefix(subdomain, "api.")
+
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	subdomain = strings.ToLower(strings.TrimSpace(subdomain))
+
+	return strings.HasSuffix(subdomain, "."+domain)
 }
 
 func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
