@@ -19,12 +19,21 @@ package oss
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/ast"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -73,8 +82,108 @@ func processOsTestWorkFlowData(
 				if err != nil {
 					return nil, fmt.Errorf("couldn't convert test result to issues: %w", err)
 				}
+				// Enrich issues with quick-fix code actions and codelenses (unified path)
+				issues = addUnifiedOssQuickFixesAndLenses(ctx, issues)
 			}
 		}
 	}
 	return issues, nil
+}
+
+// addUnifiedOssQuickFixesAndLenses attaches OSS quick-fix code actions and related codelenses
+// to issues produced by the unified converter, reusing the legacy OSS machinery.
+func addUnifiedOssQuickFixesAndLenses(ctx context.Context, issues []types.Issue) []types.Issue {
+	if len(issues) == 0 {
+		return issues
+	}
+	cfg := config.CurrentConfig()
+	if !cfg.IsSnykOSSQuickFixCodeActionsEnabled() {
+		return issues
+	}
+
+	learnService, errorReporter := resolveDependencies(ctx)
+	enriched := make([]types.Issue, 0, len(issues))
+	for _, it := range issues {
+		enrichedIssue := enrichIssueWithCodeActions(it, learnService, errorReporter)
+		enriched = append(enriched, enrichedIssue)
+	}
+	return enriched
+}
+
+// resolveDependencies extracts learn service and error reporter from context
+func resolveDependencies(ctx context.Context) (learn.Service, error_reporting.ErrorReporter) {
+	var learnService learn.Service
+	var errorReporter error_reporting.ErrorReporter
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return learnService, errorReporter
+	}
+	if dep := deps[ctx2.DepLearnService]; dep != nil {
+		if svc, ok := dep.(learn.Service); ok {
+			learnService = svc
+		}
+	}
+	if dep := deps[ctx2.DepErrorReporter]; dep != nil {
+		if rep, ok := dep.(error_reporting.ErrorReporter); ok {
+			errorReporter = rep
+		}
+	}
+	return learnService, errorReporter
+}
+
+// enrichIssueWithCodeActions adds code actions and lenses to a single issue
+func enrichIssueWithCodeActions(issue types.Issue, learnService learn.Service, errorReporter error_reporting.ErrorReporter) types.Issue {
+	if issue.GetProduct() != product.ProductOpenSource {
+		return issue
+	}
+
+	ossData, ok := issue.GetAdditionalData().(snyk.OssIssueData)
+	if !ok {
+		return issue
+	}
+
+	node := computeDependencyNode(issue, ossData)
+	actions := AddCodeActionsFromOssIssueData(ossData, issue.GetID(), learnService, errorReporter, issue.GetAffectedFilePath(), node)
+	if len(actions) == 0 {
+		return issue
+	}
+
+	issue.SetCodeActions(actions)
+	lenses := createCodeLensesFromActions(actions, issue.GetAffectedFilePath(), node)
+	if len(lenses) > 0 {
+		issue.SetCodelensCommands(lenses)
+	}
+	return issue
+}
+
+// computeDependencyNode finds the AST node for the dependency
+func computeDependencyNode(issue types.Issue, ossData snyk.OssIssueData) *ast.Node {
+	affected := issue.GetAffectedFilePath()
+	depPath := ossData.From
+	content, readErr := os.ReadFile(string(affected))
+	if readErr != nil {
+		config.CurrentConfig().Logger().Debug().Err(readErr).Str("file", string(affected)).Msg("cannot read file for quick-fix enrichment")
+		return nil
+	}
+	l := config.CurrentConfig().Logger().With().Logger()
+	return getDependencyNode(&l, affected, ossData.PackageManager, depPath, content)
+}
+
+// createCodeLensesFromActions creates code lens commands from upgrade code actions
+func createCodeLensesFromActions(actions []types.CodeAction, affectedFilePath types.FilePath, node *ast.Node) []types.CommandData {
+	var lenses []types.CommandData
+	rangeFromNode := getRangeFromNode(node)
+	for _, codeAction := range actions {
+		if codeAction != nil && strings.Contains(codeAction.GetTitle(), "Upgrade to") {
+			lenses = append(lenses, types.CommandData{
+				Title:         codeAction.GetTitle(),
+				CommandId:     types.CodeFixCommand,
+				Arguments:     []any{codeAction.GetUuid(), affectedFilePath, rangeFromNode},
+				GroupingKey:   codeAction.GetGroupingKey(),
+				GroupingType:  codeAction.GetGroupingType(),
+				GroupingValue: codeAction.GetGroupingValue(),
+			})
+		}
+	}
+	return lenses
 }

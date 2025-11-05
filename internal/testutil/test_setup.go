@@ -35,6 +35,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/constants"
+	internal_er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/storage"
 	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
@@ -84,8 +85,12 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 		progress.CleanupChannels()
 	})
 
+	// Create error reporter for tests
+	// Note: Learn service is not provided here to avoid import cycle with infrastructure/learn tests.
+	// Tests that need a learn service should create their own mock (see oss_test.go getLearnMock for example).
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepConfig: c,
+		ctx2.DepConfig:        c,
+		ctx2.DepErrorReporter: internal_er.NewTestErrorReporter(),
 	})
 	ctx = ctx2.NewContextWithLogger(ctx, c.Logger())
 	return c, ctx
