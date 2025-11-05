@@ -18,19 +18,25 @@ package command
 
 import (
 	"encoding/json"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
-	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -40,24 +46,42 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		// Setup workspace with 2 folders
-		testutils.SetupFakeWorkspace(t, c, 2)
+		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 2)
 
 		testInput := "some data"
 		cmd := setupReportAnalyticsCommand(t, c, testInput)
 
 		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-		// Expect 2 calls total: 1 for authentication analytics, 1 for the test payload (both to first folder's org)
-		mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS,
-			gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+
+		// Configure first folder with a specific org
+		firstFolderOrg := "test-first-folder-org"
+		err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{
+			FolderPath:                  folderPaths[0],
+			PreferredOrg:                firstFolderOrg,
+			OrgMigratedFromGlobalConfig: true,
+			OrgSetByUser:                true,
+		}, c.Logger())
+		require.NoError(t, err)
+
+		// Capture workflow invocations to verify first folder's org is used
+		// We expect 2 calls: 1 for authentication analytics, and 1 for the payload itself
+		capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 2)
 		mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 		output, err := cmd.Execute(t.Context())
 		require.NoError(t, err)
 		require.Emptyf(t, output, "output should be empty")
+
+		// Verify both analytics calls used first folder's org
+		for i := range 2 {
+			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent ("+strconv.Itoa(i+1)+"th time)")
+			actualOrg := captured.Config.Get(configuration.ORGANIZATION)
+			require.Equal(t, firstFolderOrg, actualOrg, "analytics should be sent to first folder's org")
+		}
 	})
 
-	t.Run("sends analytics with empty org when no folders", func(t *testing.T) {
+	t.Run("sends analytics to user preferred org when no folders", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		// Setup workspace with no folders
@@ -68,14 +92,22 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 
 		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-		// Expect 2 calls: 1 for authentication analytics, 1 for the test payload
-		mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS,
-			gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+
+		// Capture workflow invocations to verify empty org (which means user's preferred org from web UI)
+		// We expect 2 calls: 1 for authentication analytics, and 1 for the payload itself
+		capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 2)
 		mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 		output, err := cmd.Execute(t.Context())
 		require.NoError(t, err)
 		require.Emptyf(t, output, "output should be empty")
+
+		// Verify both analytics calls used empty org (which GAF will resolve to the user's preferred org from the web UI)
+		for i := range 2 {
+			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent ("+strconv.Itoa(i+1)+"th time)")
+			actualOrg := captured.Config.Get(configuration.ORGANIZATION)
+			require.Equal(t, "", actualOrg, "analytics should be sent with empty org (GAF will resolve to user's preferred org from the web UI)")
+		}
 	})
 }
 

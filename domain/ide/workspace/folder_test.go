@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/spf13/pflag"
@@ -72,7 +71,9 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 
 func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	path2 := types.FilePath(filepath.Join(string(f.path), "path2"))
@@ -97,7 +98,9 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 
 func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	filePath := types.FilePath("dummy/path1")
 	data := types.ScanData{
@@ -117,7 +120,9 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 
 func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	path2 := types.FilePath(filepath.Join(string(f.path), "path2"))
@@ -142,7 +147,9 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 
 func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	data := types.ScanData{
@@ -165,7 +172,9 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 
 func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	path2 := types.FilePath(filepath.Join(string(f.path), "path2"))
@@ -202,7 +211,9 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	severityFilter := types.NewSeverityFilter(true, false, true, false)
 	c.SetSeverityFilter(&severityFilter)
 
-	f := NewMockFolder(c, notification.NewNotifier())
+	notifier := notification.NewNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	data := types.ScanData{
@@ -303,7 +314,9 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 
 func Test_Clear(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewNotifier())
+	notifier := notification.NewNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	path2 := types.FilePath(filepath.Join(string(f.path), "path2"))
@@ -353,7 +366,7 @@ func Test_Clear(t *testing.T) {
 func Test_IsTrusted_shouldReturnFalseByDefault(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetTrustedFolderFeatureEnabled(true)
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewMockFolder(c, notification.NewMockNotifier())
 	assert.False(t, f.IsTrusted())
 }
 
@@ -361,7 +374,7 @@ func Test_IsTrusted_shouldReturnTrueForPathContainedInTrustedFolders(t *testing.
 	c := testutil.UnitTest(t)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]types.FilePath{"dummy"})
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewMockFolder(c, notification.NewMockNotifier())
 	assert.True(t, f.IsTrusted())
 }
 
@@ -512,7 +525,9 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 	filePath := types.FilePath(filepath.Join(string(f.path), "path1"))
 	mockOpenSourceIssue := NewMockIssue("id1", filePath)
 	removedIssueType := product.FilterableIssueTypeOpenSource
@@ -551,7 +566,9 @@ func Test_processResults_ShouldSendSuccess(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
 
-	f, scanNotifier := NewMockFolderWithScanNotifier(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f, scanNotifier := NewMockFolderWithScanNotifier(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 	var path = "path1"
 	mockCodeIssue := NewMockIssue("id1", types.FilePath(filepath.Join(string(f.path), path)))
 
@@ -572,7 +589,9 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
 
-	f, scanNotifier := NewMockFolderWithScanNotifier(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f, scanNotifier := NewMockFolderWithScanNotifier(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 	const filePath = "path1"
 	mockCodeIssue := NewMockIssue("id1", filePath)
 
@@ -638,13 +657,13 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	ic.SetTestSummary(summary)
 	ic.SetType("Analytics")
 
-	capturedGAFConfigCh := make(chan configuration.Configuration, 1)
-	t.Cleanup(func() { close(capturedGAFConfigCh) })
+	capturedCh := make(chan configuration.Configuration, 1)
+	t.Cleanup(func() { close(capturedCh) })
 
 	_, err = engineMock.Register(localworkflows.WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)),
 		func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
 			// Capture the GAF config to verify organization
-			capturedGAFConfigCh <- invocation.GetConfiguration()
+			capturedCh <- invocation.GetConfiguration()
 			return nil, nil
 		})
 
@@ -657,15 +676,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	f.ProcessResults(t.Context(), data)
 
 	// Wait for async analytics sending
-	var capturedGAFConfig configuration.Configuration
-	require.Eventually(t, func() bool {
-		select {
-		case capturedGAFConfig = <-capturedGAFConfigCh:
-			return true
-		default:
-			return false
-		}
-	}, time.Second, 10*time.Millisecond, "analytics should have been sent")
+	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
 
 	// Assert: Verify analytics payload (ic is still in scope, so we can verify it directly)
 	actualV2InstrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
@@ -680,7 +691,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	require.Equal(t, []map[string]any{{"name": "medium", "count": 1}}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Results)
 
 	// Assert: Verify analytics sent with correct folder org
-	actualOrg := capturedGAFConfig.Get(configuration.ORGANIZATION)
+	actualOrg := captured.Get(configuration.ORGANIZATION)
 	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
 
@@ -714,18 +725,7 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 	// Capture analytics WF's data and config (using channel for safe goroutine communication)
-	type analyticsCapture struct {
-		data   []workflow.Data
-		config configuration.Configuration
-	}
-	capturedCh := make(chan analyticsCapture, 1)
-	t.Cleanup(func() { close(capturedCh) })
-
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
-		Times(1).
-		Do(func(id workflow.Identifier, data []workflow.Data, config configuration.Configuration) {
-			capturedCh <- analyticsCapture{data: data, config: config}
-		})
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	ctx := context2.NewContextWithScanSource(context2.NewContextWithDeltaScanType(t.Context(), context2.WorkingDirectory), context2.LLM)
 
@@ -733,41 +733,38 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 	f.ProcessResults(ctx, scanData)
 
 	// Wait for async analytics sending
-	var captured analyticsCapture
-	require.Eventually(t, func() bool {
-		select {
-		case captured = <-capturedCh:
-			return true
-		default:
-			return false
-		}
-	}, time.Second, 10*time.Millisecond, "analytics should have been sent")
+	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
 
 	// Assert: Verify payload contains scan_source and scan_type
-	require.Len(t, captured.data, 1)
-	payload := string(captured.data[0].GetPayload().([]byte))
+	require.Len(t, captured.Input, 1)
+	payload := string(captured.Input[0].GetPayload().([]byte))
 	require.NotEmpty(t, payload)
-	require.Contains(t, payload, "scan_source")
-	require.Contains(t, payload, "scan_type")
+	assert.Contains(t, payload, "scan_source")
+	assert.Contains(t, payload, "scan_type")
 
 	// Assert: Verify analytics sent with correct folder org
-	actualOrg := captured.config.Get(configuration.ORGANIZATION)
+	actualOrg := captured.Config.Get(configuration.ORGANIZATION)
 	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
 
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
+	notifier := notification.NewNotifier()
+	f, _ := NewMockFolderWithScanNotifier(c, notifier)
 
 	engineMock, gafConfig := testutil.SetUpEngineMock(t, c)
+
+	// Setup workspace with folder for analytics
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	// Configure folder-specific org
 	const testFolderOrg = "test-folder-org-uuid"
 	folderConfig := &types.FolderConfig{
-		FolderPath:   f.Path(),
-		PreferredOrg: testFolderOrg,
-		OrgSetByUser: true,
+		FolderPath:                  f.Path(),
+		PreferredOrg:                testFolderOrg,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
 	}
 	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
 	require.NoError(t, err, "failed to configure folder org")
@@ -791,20 +788,8 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
 	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
-	// Capture analytics WF's GAF config to verify folder org (using channel for safe goroutine communication)
-	capturedGAFConfigCh := make(chan configuration.Configuration, 1)
-	t.Cleanup(func() { close(capturedGAFConfigCh) })
-
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
-		Times(1).
-		Do(func(_ workflow.Identifier, _ []workflow.Data, potentialGAFConfig any) {
-			// Safe type assertion
-			if capturedGAFConfig, ok := potentialGAFConfig.(configuration.Configuration); ok {
-				capturedGAFConfigCh <- capturedGAFConfig
-			} else {
-				t.Errorf("expected configuration.Configuration, got %T", potentialGAFConfig)
-			}
-		}).Return(nil, nil)
+	// Capture analytics WF's data and config to verify folder org
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	// Act
 	f.ProcessResults(t.Context(), scanData)
@@ -816,19 +801,9 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	require.Equal(t, 2, scanData.GetSeverityIssueCounts()[types.Critical].Open)
 	require.Equal(t, 1, scanData.GetSeverityIssueCounts()[types.Critical].Ignored)
 
-	// Wait for async analytics sending
-	var capturedGAFConfig configuration.Configuration
-	require.Eventually(t, func() bool {
-		select {
-		case capturedGAFConfig = <-capturedGAFConfigCh:
-			return true
-		default:
-			return false
-		}
-	}, time.Second, 10*time.Millisecond, "analytics should have been sent")
-
-	// Assert: Verify analytics sent with correct folder org
-	actualOrg := capturedGAFConfig.Get(configuration.ORGANIZATION)
+	// Wait for async analytics sending and verify org
+	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
+	actualOrg := captured.Config.Get(configuration.ORGANIZATION)
 	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
 

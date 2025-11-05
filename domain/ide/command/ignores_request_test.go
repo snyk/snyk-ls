@@ -17,6 +17,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -420,22 +421,8 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
-	// Capture analytics WF's GAF config to verify folder org (using channel for safe goroutine communication)
-	capturedGAFConfigCh := make(chan configuration.Configuration, 1)
-	t.Cleanup(func() { close(capturedGAFConfigCh) })
-
-	mockEngine.EXPECT().InvokeWithInputAndConfig(
-		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
-		gomock.Any(),
-		gomock.Any(),
-	).Times(1).Do(func(_ any, _ any, potentialGAFConfig any) {
-		// Safe type assertion
-		if capturedGAFConfig, ok := potentialGAFConfig.(configuration.Configuration); ok {
-			capturedGAFConfigCh <- capturedGAFConfig
-		} else {
-			t.Errorf("expected configuration.Configuration, got %T", potentialGAFConfig)
-		}
-	}).Return(nil, nil)
+	// Capture analytics WF's data and config to verify folder org
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	cmd := &submitIgnoreRequest{
 		c: c,
@@ -445,16 +432,7 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	cmd.sendIgnoreRequestAnalytics(nil, folderPath)
 
 	// Assert: Verify analytics sent with correct folder org
-	var capturedGAFConfig configuration.Configuration
-	require.Eventually(t, func() bool {
-		select {
-		case capturedGAFConfig = <-capturedGAFConfigCh:
-			return true
-		default:
-			return false
-		}
-	}, time.Second, 10*time.Millisecond, "analytics should have been sent")
-
-	actualOrg := capturedGAFConfig.Get(configuration.ORGANIZATION)
+	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
+	actualOrg := captured.Config.Get(configuration.ORGANIZATION)
 	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
