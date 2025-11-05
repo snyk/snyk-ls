@@ -341,6 +341,12 @@ func TestGetApiUrl(t *testing.T) {
 			engineUrl:      "",
 			expectedResult: customUrl,
 		},
+		{
+			name:           "Default URL when custom URL is subdomain",
+			customUrl:      "https://api.eu.snyk.io",
+			engineUrl:      "",
+			expectedResult: defaultUrl, // equals to "https://api.snyk.io"
+		},
 	}
 
 	for _, tt := range tests {
