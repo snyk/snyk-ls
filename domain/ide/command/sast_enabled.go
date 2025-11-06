@@ -18,7 +18,6 @@ package command
 
 import (
 	"context"
-	"errors"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
@@ -27,7 +26,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 )
 
 type sastEnabled struct {
@@ -42,22 +40,12 @@ func (cmd *sastEnabled) Command() types.CommandData {
 }
 
 func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
-	isAuthenticated := cmd.authenticationService.IsAuthenticated()
-
-	if !isAuthenticated {
-		cmd.logger.Info().Str("method", "sastEnabled.Execute").Msg("not authenticated, skipping sast check")
-		return nil, nil
-	}
-
-	response, err := cmd.gafConfig.GetWithError(code_workflow.ConfigurationSastSettings)
-	if err != nil {
-		return nil, err
-	}
-
-	sastResponse, ok := response.(*sast_contract.SastResponse)
-	if !ok {
-		return nil, errors.New("Failed to parse the sast settings")
-	}
-
-	return sastResponse, nil
+	// Always return SAST enabled (true) to IDEs
+	return &sast_contract.SastResponse{
+		SastEnabled:                 true,
+		LocalCodeEngine:             sast_contract.LocalCodeEngine{Enabled: false},
+		ReportFalsePositivesEnabled: false,
+		AutofixEnabled:              false,
+		SupportedLanguages:          []string{},
+	}, nil
 }
