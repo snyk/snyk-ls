@@ -137,10 +137,9 @@ func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T
 }
 
 func TestSnykCodeApi(t *testing.T) {
-	c := New()
+	c := New(WithBinarySearchPaths([]string{}))
 	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 	t.Run("endpoint not provided", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
 		codeApiEndpoint, _ := c.GetCodeApiUrlFromCustomEndpoint(nil)
 
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
