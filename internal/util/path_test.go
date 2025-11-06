@@ -158,6 +158,12 @@ func createCommonTestCases(tempDir string) []testCase {
 			expectError: true,
 			errorMsg:    "dangerous character detected in",
 		},
+		{
+			name:        "Dollar sign in non-UNC path should fail",
+			input:       "/Users/foo$bar/test",
+			expectError: true,
+			errorMsg:    "dangerous character detected in",
+		},
 	}
 }
 
@@ -167,12 +173,31 @@ func TestValidatePathLenient(t *testing.T) {
 	// Create common test cases with path validation error prefix
 	testCases := createCommonTestCases(tempDir)
 
-	// Add lenient path specific test case
+	// Add lenient path specific test cases
 	testCases = append(testCases, testCase{
 		name:        "Empty path allowed",
 		input:       "",
 		expectError: false,
 	})
+
+	// Add Windows UNC admin share test cases (only for lenient, as they don't exist on non-Windows)
+	testCases = append(testCases,
+		testCase{
+			name:        "Windows UNC admin share C$",
+			input:       "\\\\localhost\\C$\\Users\\test",
+			expectError: false,
+		},
+		testCase{
+			name:        "Windows UNC admin share D$",
+			input:       "\\\\server\\D$\\path\\to\\file",
+			expectError: false,
+		},
+		testCase{
+			name:        "Windows UNC admin share with forward slashes",
+			input:       "//localhost/C$/Users/test",
+			expectError: false,
+		},
+	)
 
 	runValidationTest(t, ValidatePathLenient, testCases)
 }
