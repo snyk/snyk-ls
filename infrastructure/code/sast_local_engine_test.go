@@ -29,8 +29,6 @@ import (
 )
 
 func TestIsLocalEngine(t *testing.T) {
-	c := testutil.UnitTest(t)
-
 	localEngineURL := "http://local.engine"
 	mockedSastResponse := &sast_contract.SastResponse{
 		SastEnabled: true,
@@ -60,6 +58,7 @@ func TestIsLocalEngine(t *testing.T) {
 	})
 
 	t.Run("should update Snyk Code API if local-engine is enabled", func(t *testing.T) {
+		c := testutil.UnitTest(t)
 		mockedSastResponse.SastEnabled = true
 		mockedSastResponse.LocalCodeEngine.Enabled = true
 		updateCodeApiLocalEngine(c, mockedSastResponse)
