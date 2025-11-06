@@ -32,6 +32,7 @@ import (
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -145,15 +146,20 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	logger := sc.C.Logger().With().Str("method", "code.Scan").Logger()
 	if !sc.C.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
 
-	// Get SAST settings from feature flag service using folder configuration
-	sastResponse := sc.featureFlagService.GetSastSettingsFromFolderConfig(folderPath)
+	// Get SAST settings from folder config if provided, otherwise from feature flag service
+	var sastResponse *sast_contract.SastResponse
+	if folderConfig != nil && folderConfig.SastSettings != nil {
+		sastResponse = folderConfig.SastSettings
+	} else {
+		sastResponse = sc.featureFlagService.GetSastSettingsFromFolderConfig(folderPath)
+	}
 	if sastResponse == nil {
 		return issues, errors.New("Failed to get the sast settings")
 	}

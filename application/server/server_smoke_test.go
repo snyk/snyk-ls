@@ -780,11 +780,17 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 
 	setUniqueCliPath(t, c)
 
+	orgId := os.Getenv("SNYK_ORG_ID")
+	if orgId == "" {
+		orgId = c.Organization()
+	}
+
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.Settings{
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       c.Token(),
+			Organization:                orgId,
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
@@ -885,9 +891,8 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
-	c.SetSnykOssEnabled(false)
-	c.SetSnykIacEnabled(false)
 	c.SetDeltaFindingsEnabled(true)
+	testutil.EnableSastAndAutoFix(c)
 	cleanupChannels()
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
@@ -901,9 +906,6 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 	newFileInCurrentDir(t, cloneTargetDirString, fileWithNewVulns, string(sourceContent))
 
-	c.SetSnykOssEnabled(false)
-	c.SetSnykIacEnabled(false)
-	c.SetManageBinariesAutomatically(false)
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
 	ensureInitialized(t, c, loc, initParams, nil)
