@@ -780,17 +780,12 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 
 	setUniqueCliPath(t, c)
 
-	orgId := os.Getenv("SNYK_ORG_ID")
-	if orgId == "" {
-		orgId = c.Organization()
-	}
-
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.Settings{
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       c.Token(),
-			Organization:                orgId,
+			Organization:                c.Organization(),
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
