@@ -152,6 +152,11 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		return issues, err
 	}
 
+	if folderConfig == nil || folderConfig.SastSettings == nil {
+		logger.Error().Str("folderPath", string(folderPath)).Msg("folder config or SAST settings is nil")
+		return issues, errors.New("folder config or SAST settings not available")
+	}
+
 	if !sc.isSastEnabled(folderConfig.SastSettings) {
 		return issues, errors.New("SAST is not enabled")
 	}
