@@ -223,6 +223,9 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		path := folderConfig.FolderPath
 
 		storedConfig := c.FolderConfig(path)
+		// Never trust the IDE for what the FFs and SAST settings are
+		folderConfig.FeatureFlags = storedConfig.FeatureFlags
+		folderConfig.SastSettings = storedConfig.SastSettings
 
 		// Folder config might be new or changed, so (re)resolve the org before saving it.
 		// We should also check that the folder's org is still valid if the globally set org has changed.
