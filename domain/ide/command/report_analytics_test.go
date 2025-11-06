@@ -95,8 +95,10 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		}
 	})
 
-	t.Run("sends analytics to user preferred org when no folders", func(t *testing.T) {
+	t.Run("falls back to global org when no folders", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+
+		const testGlobalOrg = "test-global-org"
 
 		// Setup workspace with no folders
 		testutils.SetupFakeWorkspace(t, c, 0)
@@ -107,7 +109,10 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 
-		// Capture workflow invocations to verify empty org (which means user's preferred org from web UI)
+		// Set a global org
+		c.SetOrganization(testGlobalOrg)
+
+		// Capture workflow invocations to verify global org fallback
 		// We expect 2 calls: 1 for authentication analytics, and 1 for the payload itself
 		capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 2)
 		mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
@@ -116,7 +121,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		require.NoError(t, err)
 		require.Emptyf(t, output, "output should be empty")
 
-		// Verify both analytics calls used empty org (which GAF will resolve to the user's preferred org from the web UI)
+		// Verify both analytics calls used global org fallback
 		for i := range 2 {
 			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent (call %d of 2)", i+1)
 
@@ -134,7 +139,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 			}
 
 			actualOrg := captured.Config.Get(configuration.ORGANIZATION)
-			assert.Equal(t, "", actualOrg, "analytics (call %d of 2, expected to be %s) should be sent with empty org (GAF will resolve to user's preferred org)", i+1, analyticsType)
+			assert.Equal(t, testGlobalOrg, actualOrg, "analytics (call %d of 2, expected to be %s) should fall back to global org", i+1, analyticsType)
 		}
 	})
 }

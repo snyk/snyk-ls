@@ -60,7 +60,7 @@ func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any,
 		}
 	}
 
-	// Fallback: If no workspace or no folders, send with empty path (empty org triggers GAF fallback to user's preferred org from the web UI)
+	// Fallback: If no workspace or no folders, send with empty path (will use global org as a fallback)
 	go SendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, "", triggerSource)
 }
 
@@ -86,7 +86,16 @@ func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, n
 	extension["config::"+field+"::triggerSource"] = triggerSource.String()
 
 	event.Extension = extension
-	folderOrg := c.FolderOrganization(path)
+
+	// If path is empty (no folder context), use global org directly as a fallback,
+	// this is fine since these analytics are not exposed in customer TopCoat reports, and are only consumed by us.
+	var folderOrg string
+	if path == "" {
+		folderOrg = c.Organization()
+	} else {
+		folderOrg = c.FolderOrganization(path)
+	}
+
 	SendAnalytics(c.Engine(), c.DeviceID(), folderOrg, event, nil)
 }
 

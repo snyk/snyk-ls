@@ -403,7 +403,7 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 
-	const testFolderOrg = "test-folder-org-uuid"
+	const testFolderOrg = "test-folder-org"
 
 	// Setup fake workspace with the folder
 	_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
@@ -435,4 +435,43 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
 	actualOrg := captured.Config.Get(configuration.ORGANIZATION)
 	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
+}
+
+func Test_submitIgnoreRequest_SendsAnalyticsWithGlobalOrgFallback(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
+
+	const testGlobalOrg = "test-global-org"
+
+	// Setup fake workspace with one folder, but we'll send analytics for a path outside of it
+	testutils.SetupFakeWorkspace(t, c, 1)
+
+	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+
+	// Set a global org in the config
+	c.SetOrganization(testGlobalOrg)
+
+	// Capture analytics WF's data and config to verify global org is used
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
+
+	cmd := &submitIgnoreRequest{
+		c: c,
+	}
+
+	// Act: Send ignore request analytics for a path not in any workspace folder.
+	// Note: This is an unrealistic scenario in production (IDE should only send ignore requests
+	// for files within the workspace), but tests defensive behavior to ensure we don't crash
+	// and still send analytics with global org fallback if workspace context is unavailable.
+	pathNotInWorkspace := types.FilePath("/some/random/path/outside/workspace/file.txt")
+	cmd.sendIgnoreRequestAnalytics(nil, pathNotInWorkspace)
+
+	// Assert: Verify analytics sent with global org as fallback
+	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
+	actualOrg := captured.Config.Get(configuration.ORGANIZATION)
+	assert.Equal(t, testGlobalOrg, actualOrg, "analytics should fall back to global org when folder org cannot be determined")
 }

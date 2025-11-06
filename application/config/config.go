@@ -1312,11 +1312,17 @@ func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
 // the folder, it returns the global organization (which if unset, GAF will return the default org).
 func (c *Config) FolderOrganization(path types.FilePath) string {
-	fc := c.FolderConfig(path)
-	if fc == nil {
-		// Should never happen, but as a safety net, return the global org.
+	if path == "" {
+		c.Logger().Warn().Str("method", "FolderOrganization").Str("path", "").Msg("called with empty path, returning the global organization as a safety net")
 		return c.Organization()
 	}
+
+	fc := c.FolderConfig(path)
+	if fc == nil {
+		c.Logger().Warn().Str("method", "FolderOrganization").Str("path", string(path)).Msg("called with path that could not produce a folder config, returning the global organization as a safety net")
+		return c.Organization()
+	}
+
 	if fc.OrgSetByUser {
 		if fc.PreferredOrg == "" {
 			return c.Organization()

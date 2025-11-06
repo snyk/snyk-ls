@@ -147,8 +147,8 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 		}
 	}
 
-	// Fallback: If no folders, send with empty org to use the user's preferred org from the web UI
-	analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), "", event, nil)
+	// Fallback: If no folders, send with global org (user's preferred org from the web UI if not explicitly set)
+	analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), a.c.Organization(), event, nil)
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {

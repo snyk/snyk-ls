@@ -313,9 +313,9 @@ func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error, path types
 	event := analytics.NewAnalyticsEventParam("Create ignore", err, path)
 	folderOrg, err := cmd.c.FolderOrganizationForSubPath(path)
 	if err != nil {
-		// Fallback to sending the analytics to the user's preferred org from the web UI,
+		// Fallback to sending the analytics to the global org,
 		// these analytics are not exposed in customer TopCoat reports, so this is fine.
-		folderOrg = ""
+		folderOrg = cmd.c.Organization()
 	}
 	analytics.SendAnalytics(cmd.c.Engine(), cmd.c.DeviceID(), folderOrg, event, err)
 }

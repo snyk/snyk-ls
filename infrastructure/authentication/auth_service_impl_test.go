@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -82,19 +81,19 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 	// Shared test constants
 	const (
-		firstFolderOrg  = "first-folder-org-uuid"
-		secondFolderOrg = "second-folder-org-uuid"
-		globalOrg       = "global-org-should-not-be-used"
+		firstFolderOrg  = "first-folder-org"
+		secondFolderOrg = "second-folder-org"
+		globalOrg       = "global-org"
 	)
 
 	testCases := []struct {
 		name        string
-		setupWs     func(t *testing.T, ctrl *gomock.Controller, engineConfig configuration.Configuration, logger *zerolog.Logger) types.Workspace
+		setupWs     func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace
 		expectedOrg string
 	}{
 		{
 			name: "uses first folder specific org",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, engineConfig configuration.Configuration, logger *zerolog.Logger) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
 				t.Helper()
 
 				folder1Path := types.FilePath("/fake/folder1")
@@ -111,13 +110,13 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 					OrgSetByUser: true,
 				}
 
-				err := storedconfig.UpdateFolderConfig(engineConfig, folder1Config, logger)
+				err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder1Config, c.Logger())
 				require.NoError(t, err, "failed to configure first folder org")
-				err = storedconfig.UpdateFolderConfig(engineConfig, folder2Config, logger)
+				err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder2Config, c.Logger())
 				require.NoError(t, err, "failed to configure second folder org")
 
 				// Set a different global org to ensure folder-specific org takes precedence
-				engineConfig.Set(configuration.ORGANIZATION, globalOrg)
+				c.SetOrganization(globalOrg)
 
 				// Setup mock workspace with the 2 folders
 				mockFolder1 := mock_types.NewMockFolder(ctrl)
@@ -134,25 +133,31 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			expectedOrg: firstFolderOrg,
 		},
 		{
-			name: "falls back to empty org when no folders",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, engineConfig configuration.Configuration, logger *zerolog.Logger) types.Workspace {
+			name: "falls back to global org when no folders",
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
 				t.Helper()
+				// Set a global org
+				c.SetOrganization(globalOrg)
+
 				// Setup workspace with NO folders (empty slice)
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
 				mockWorkspace.EXPECT().Folders().Return([]types.Folder{}).AnyTimes()
 
 				return mockWorkspace
 			},
-			expectedOrg: "",
+			expectedOrg: globalOrg,
 		},
 		{
-			name: "falls back to empty org when nil workspace",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, engineConfig configuration.Configuration, logger *zerolog.Logger) types.Workspace {
+			name: "falls back to global org when nil workspace",
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
 				t.Helper()
+				// Set a global org
+				c.SetOrganization(globalOrg)
+
 				// Return nil workspace
 				return nil
 			},
-			expectedOrg: "",
+			expectedOrg: globalOrg,
 		},
 	}
 
@@ -167,12 +172,12 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
 			mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 
-			// Setup workspace (test case specific) and set it on config
-			ws := tc.setupWs(t, ctrl, engineConfig, c.Logger())
-			c.SetWorkspace(ws)
-
 			mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 			mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+
+			// Setup workspace (test case specific) and set it on config
+			ws := tc.setupWs(t, ctrl, c)
+			c.SetWorkspace(ws)
 
 			// Capture analytics WF's data and config to verify folder org
 			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
