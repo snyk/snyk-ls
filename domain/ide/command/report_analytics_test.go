@@ -18,11 +18,11 @@ package command
 
 import (
 	"encoding/json"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -75,9 +75,23 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 
 		// Verify both analytics calls used first folder's org
 		for i := range 2 {
-			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent ("+strconv.Itoa(i+1)+"th time)")
+			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent (call %d of 2)", i+1)
+
+			var analyticsType string
+			if i == 0 {
+				analyticsType = "authentication"
+			} else {
+				analyticsType = "payload"
+				if assert.Len(t, captured.Input, 1, "payload analytics should have exactly one input") {
+					payload, ok := captured.Input[0].GetPayload().([]byte)
+					if assert.True(t, ok, "payload should be []byte") {
+						assert.Equal(t, testInput, string(payload), "payload analytics should contain our test input")
+					}
+				}
+			}
+
 			actualOrg := captured.Config.Get(configuration.ORGANIZATION)
-			require.Equal(t, firstFolderOrg, actualOrg, "analytics should be sent to first folder's org")
+			assert.Equal(t, firstFolderOrg, actualOrg, "analytics (call %d of 2, expected to be %s) should be sent to first folder's org", i+1, analyticsType)
 		}
 	})
 
@@ -104,9 +118,23 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 
 		// Verify both analytics calls used empty org (which GAF will resolve to the user's preferred org from the web UI)
 		for i := range 2 {
-			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent ("+strconv.Itoa(i+1)+"th time)")
+			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent (call %d of 2)", i+1)
+
+			var analyticsType string
+			if i == 0 {
+				analyticsType = "authentication"
+			} else {
+				analyticsType = "payload"
+				if assert.Len(t, captured.Input, 1, "payload analytics should have exactly one input") {
+					payload, ok := captured.Input[0].GetPayload().([]byte)
+					if assert.True(t, ok, "payload should be []byte") {
+						assert.Equal(t, testInput, string(payload), "payload analytics should contain our test input")
+					}
+				}
+			}
+
 			actualOrg := captured.Config.Get(configuration.ORGANIZATION)
-			require.Equal(t, "", actualOrg, "analytics should be sent with empty org (GAF will resolve to user's preferred org from the web UI)")
+			assert.Equal(t, "", actualOrg, "analytics (call %d of 2, expected to be %s) should be sent with empty org (GAF will resolve to user's preferred org)", i+1, analyticsType)
 		}
 	})
 }

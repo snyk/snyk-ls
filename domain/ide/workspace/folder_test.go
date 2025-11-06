@@ -25,14 +25,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
-	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -614,18 +612,18 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	gafConfig := configuration.NewWithOpts(
-		configuration.WithAutomaticEnv(),
-	)
-	engineMock := workflow.NewWorkFlowEngine(gafConfig)
-	c.SetEngine(engineMock)
+	engineMock, gafConfig := testutil.SetUpEngineMock(t, c)
+
+	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
+	engineMock.EXPECT().GetWorkflows().AnyTimes()
+	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 	notifier := notification.NewNotifier()
 	f, _ := NewMockFolderWithScanNotifier(c, notifier)
 	setupWorkspaceWithFolder(c, f, notifier)
 
 	const testFolderOrg = "test-org"
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+	err := storedconfig.UpdateFolderConfig(gafConfig, &types.FolderConfig{
 		FolderPath:                  f.path,
 		PreferredOrg:                testFolderOrg,
 		OrgSetByUser:                true,
@@ -657,20 +655,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	ic.SetTestSummary(summary)
 	ic.SetType("Analytics")
 
-	capturedCh := make(chan configuration.Configuration, 1)
-	t.Cleanup(func() { close(capturedCh) })
-
-	_, err = engineMock.Register(localworkflows.WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)),
-		func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
-			// Capture the GAF config to verify organization
-			capturedCh <- invocation.GetConfiguration()
-			return nil, nil
-		})
-
-	require.NoError(t, err)
-
-	err = engineMock.Init()
-	require.NoError(t, err)
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	// Act
 	f.ProcessResults(t.Context(), data)
@@ -678,20 +663,20 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	// Wait for async analytics sending
 	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
 
-	// Assert: Verify analytics payload (ic is still in scope, so we can verify it directly)
+	// Assert: Verify analytics payload
 	actualV2InstrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
 	require.NoError(t, err)
-	require.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
-	require.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
-	require.Equal(t, "Success", actualV2InstrumentationObject.Data.Attributes.Interaction.Status)
-	require.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Attributes.Interaction.Type)
-	require.Equal(t, []string{data.Product.ToProductCodename(), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
-	require.Equal(t, "Analytics", actualV2InstrumentationObject.Data.Type)
-	require.Empty(t, actualV2InstrumentationObject.Data.Attributes.Interaction.Errors)
-	require.Equal(t, []map[string]any{{"name": "medium", "count": 1}}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Results)
+	assert.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
+	assert.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
+	assert.Equal(t, "Success", actualV2InstrumentationObject.Data.Attributes.Interaction.Status)
+	assert.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Attributes.Interaction.Type)
+	assert.Equal(t, []string{data.Product.ToProductCodename(), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
+	assert.Equal(t, "Analytics", actualV2InstrumentationObject.Data.Type)
+	assert.Empty(t, actualV2InstrumentationObject.Data.Attributes.Interaction.Errors)
+	assert.Equal(t, []map[string]any{{"name": "medium", "count": 1}}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Results)
 
 	// Assert: Verify analytics sent with correct folder org
-	actualOrg := captured.Get(configuration.ORGANIZATION)
+	actualOrg := captured.Config.Get(configuration.ORGANIZATION)
 	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
 

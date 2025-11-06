@@ -44,10 +44,7 @@ func RequireEventuallyReceive[T any](t *testing.T, ch <-chan T, waitFor, tick ti
 	}, waitFor, tick, msgAndArgs...)
 
 	if channelClosed {
-		if len(msgAndArgs) > 0 {
-			t.Log(msgAndArgs...)
-		}
-		t.Fatal("Channel was closed before receiving a value (context printed above)")
+		require.Fail(t, "Channel was closed before receiving a value", msgAndArgs...)
 	}
 
 	return capturedValue

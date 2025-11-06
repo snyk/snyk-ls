@@ -54,7 +54,8 @@ func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 
 		// Send to first folder's org since analytics are sent to a specific org,
 		// the first folder's org has as good a chance as any to work and not 404.
-		// Pre-built payloads don't have folder context and are not folder-specific.
+		// Payloads from the IDEs don't have folder context, are not folder-specific, are not org specific,
+		// and do not appear in any TopCoat reports, the analytics are only consumed by us.
 		// TODO - This is a temporary solution to avoid inflating analytics counts.
 		ws := c.Workspace()
 		if ws != nil {
