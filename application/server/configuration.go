@@ -28,6 +28,7 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/google/go-cmp/cmp"
 	"github.com/rs/zerolog"
+	"github.com/snyk/snyk-ls/internal/mcp"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -47,7 +48,6 @@ const (
 	configActivateSnykOpenSource              = "activateSnykOpenSource"
 	configAdditionalParameters                = "additionalParameters"
 	configAuthenticationMethod                = "authenticationMethod"
-	configAutoConfigureSnykMcpServer          = "autoConfigureSnykMcpServer"
 	configBaseBranch                          = "baseBranch"
 	configEnableDeltaFindings                 = "enableDeltaFindings"
 	configEnableSnykLearnCodeActions          = "enableSnykLearnCodeActions"
@@ -62,9 +62,10 @@ const (
 	configOrganization                        = "organization"
 	configPreferredOrg                        = "preferredOrg"
 	configReferenceFolderPath                 = "referenceFolderPath"
-	configSecureAtInceptionExecutionFrequency = "secureAtInceptionExecutionFrequency"
 	configSendErrorReports                    = "sendErrorReports"
 	configSnykCodeApi                         = "snykCodeApi"
+	configAutoConfigureSnykMcpServer          = "autoConfigureSnykMcpServer"
+	configSecureAtInceptionExecutionFrequency = "secureAtInceptionExecutionFrequency"
 )
 
 func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
@@ -754,6 +755,6 @@ func updateMcpConfiguration(c *config.Config, settings types.Settings, triggerSo
 
 	// Trigger MCP configuration if settings changed
 	if mcpConfigChanged {
-		config.ConfigureMcp(c)
+		mcp.ConfigureMcp(c)
 	}
 }

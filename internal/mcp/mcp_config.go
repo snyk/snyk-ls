@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-package config
+package mcp
 
 import (
+	_ "embed"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -24,7 +25,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -39,47 +40,11 @@ type mcpConfig struct {
 	McpServers map[string]mcpServer `json:"mcpServers"`
 }
 
-const snykRulesAlwaysApply = `---
-alwaysApply: true
-always_on: true
-trigger: always_on
-applyTo: "**"
-description: Snyk Security At Inception
----
+//go:embed rules/always_apply.md
+var snykRulesAlwaysApply string
 
-# Project security best practices
-
-- Always run snyk_code_scan tool for new first party code that is generated in a Snyk-supported language.
-- If any security issues are found based on newly introduced or modified code or dependencies, attempt to fix the issues using the results context from Snyk.
-- Rescan the code after fixing the issues to ensure that the issues were fixed and that there are no newly introduced issues.
-- Repeat this process until no new issues are found.
-`
-
-const snykRulesSmartApply = `---
-alwaysApply: false
-trigger: model_decision
-description: BEFORE declaring task complete and IF there are significant code changes: ensure best security practices are met
----
-
-# Project security best practices
-
-
-- BEFORE declaring task complete: Run snyk_code_scan tool when a significant change has been made in first party code.
-- This shoule only apply for Snyk-supported coding language
-- If any security issues are found based on newly introduced or modified code or dependencies, attempt to fix the issues using the results context from Snyk.
-- Rescan the code after fixing the issues to ensure that the issues were fixed and that there are no newly introduced issues.
-- Repeat this process until no new issues are found.
-`
-
-// shouldConfigureMcp checks if MCP should be configured based on settings
-func shouldConfigureMcp(c *Config) bool {
-	return c.IsAutoConfigureMcpEnabled()
-}
-
-// getMcpCommand returns the CLI path for MCP
-func getMcpCommand(c *Config) string {
-	return c.CliSettings().Path()
-}
+//go:embed rules/smart_apply.md
+var snykRulesSmartApply string
 
 // getMcpArgs returns the arguments for MCP server
 func getMcpArgs() []string {
@@ -87,7 +52,7 @@ func getMcpArgs() []string {
 }
 
 // getMcpEnv builds environment variables for MCP
-func getMcpEnv(c *Config) map[string]string {
+func getMcpEnv(c *config.Config) map[string]string {
 	env := make(map[string]string)
 
 	// Add organization if configured
@@ -122,8 +87,8 @@ func getMcpEnv(c *Config) map[string]string {
 }
 
 // ConfigureMcp configures MCP for the appropriate IDE
-func ConfigureMcp(c *Config) {
-	if !shouldConfigureMcp(c) {
+func ConfigureMcp(c *config.Config) {
+	if !c.IsAutoConfigureMcpEnabled() {
 		return
 	}
 
@@ -132,12 +97,12 @@ func ConfigureMcp(c *Config) {
 
 	logger.Debug().Str("ideName", ideName).Msg("Configuring MCP")
 
-	switch ideName {
+	switch strings.ToLower(ideName) {
 	case "cursor":
 		configureCursor(c, &logger)
 	case "windsurf":
 		configureWindsurf(c, &logger)
-	case "vscode":
+	case "visual studio code":
 		configureCopilot(c, &logger)
 	default:
 		logger.Warn().Str("ideName", ideName).Msg("Unknown IDE, skipping MCP configuration")
@@ -145,7 +110,7 @@ func ConfigureMcp(c *Config) {
 }
 
 // configureCursor writes MCP configuration to Cursor's config file
-func configureCursor(c *Config, logger *zerolog.Logger) {
+func configureCursor(c *config.Config, logger *zerolog.Logger) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to get user home directory")
@@ -153,7 +118,7 @@ func configureCursor(c *Config, logger *zerolog.Logger) {
 	}
 
 	configPath := filepath.Join(homeDir, ".cursor", "mcp.json")
-	command := getMcpCommand(c)
+	command := c.CliSettings().Path()
 	args := getMcpArgs()
 	env := getMcpEnv(c)
 
@@ -165,12 +130,11 @@ func configureCursor(c *Config, logger *zerolog.Logger) {
 
 	logger.Debug().Str("configPath", configPath).Msg("Ensured Cursor MCP config")
 
-	// Handle rules file management for Cursor
 	configureRulesFiles(c, logger, filepath.Join(".cursor", "rules", "snyk_rules.mdc"), ".cursor/rules/snyk_rules.mdc")
 }
 
 // configureWindsurf writes MCP configuration to Windsurf's config file
-func configureWindsurf(c *Config, logger *zerolog.Logger) {
+func configureWindsurf(c *config.Config, logger *zerolog.Logger) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to get user home directory")
@@ -186,7 +150,7 @@ func configureWindsurf(c *Config, logger *zerolog.Logger) {
 		return
 	}
 
-	command := getMcpCommand(c)
+	command := c.CliSettings().Path()
 	args := getMcpArgs()
 	env := getMcpEnv(c)
 
@@ -203,14 +167,14 @@ func configureWindsurf(c *Config, logger *zerolog.Logger) {
 }
 
 // configureCopilot sends notification to VS Code extension to register MCP server
-func configureCopilot(c *Config, logger *zerolog.Logger) {
+func configureCopilot(c *config.Config, logger *zerolog.Logger) {
 	// For VS Code, we need to use the VS Code API (vscode.lm.registerMcpServerDefinitionProvider)
 	// which can only be called from the extension. Send notification to extension.
 	params := types.SnykConfigureMcpParams{
-		Command: getMcpCommand(c),
+		Command: c.CliSettings().Path(),
 		Args:    getMcpArgs(),
 		Env:     getMcpEnv(c),
-		IdeName: "vscode",
+		IdeName: c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT),
 	}
 
 	logger.Debug().Interface("params", params).Msg("Sending MCP configuration to VS Code extension")
@@ -327,21 +291,21 @@ func mapsEqual(a, b map[string]string) bool {
 
 // getRulesContent returns the appropriate rules content based on execution frequency
 func getRulesContent(frequency string) string {
-	if frequency == "always" {
+	if frequency == "On Code Generation" {
 		return snykRulesAlwaysApply
 	}
 	return snykRulesSmartApply
 }
 
 // configureRulesFiles handles rules file management for all IDEs
-func configureRulesFiles(c *Config, logger *zerolog.Logger, rulesRelativePath string, gitignoreEntry string) {
+func configureRulesFiles(c *config.Config, logger *zerolog.Logger, rulesRelativePath string, gitignoreEntry string) {
 	frequency := c.GetSecureAtInceptionExecutionFrequency()
-	if frequency == "manual" {
+	if frequency == "Manual" {
 		return
 	}
 
 	// Get workspace roots
-	workspaceFolders := c.Engine().GetWorkspaceFolders()
+	workspaceFolders := c.Workspace().Folders()
 	if len(workspaceFolders) == 0 {
 		logger.Debug().Msg("No workspace folders found, skipping rules file management")
 		return
@@ -350,8 +314,7 @@ func configureRulesFiles(c *Config, logger *zerolog.Logger, rulesRelativePath st
 	rulesContent := getRulesContent(frequency)
 
 	for _, folder := range workspaceFolders {
-		workspaceRoot := uri.PathFromUri(folder)
-
+		workspaceRoot := string(folder.Path())
 		// Write rules file
 		rulesPath := filepath.Join(workspaceRoot, rulesRelativePath)
 		if err := ensureRulesFile(c, rulesPath, rulesContent); err != nil {
@@ -368,7 +331,7 @@ func configureRulesFiles(c *Config, logger *zerolog.Logger, rulesRelativePath st
 }
 
 // ensureRulesFile writes the rules file to the specified path
-func ensureRulesFile(c *Config, rulesPath string, content string) error {
+func ensureRulesFile(c *config.Config, rulesPath string, content string) error {
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(rulesPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -397,7 +360,7 @@ func ensureRulesFile(c *Config, rulesPath string, content string) error {
 }
 
 // ensureGitignore adds entries to .gitignore if they don't exist
-func ensureGitignore(c *Config, workspaceRoot string, entries []string) error {
+func ensureGitignore(c *config.Config, workspaceRoot string, entries []string) error {
 	gitignorePath := filepath.Join(workspaceRoot, ".gitignore")
 
 	// Read existing .gitignore
