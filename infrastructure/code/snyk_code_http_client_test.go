@@ -135,7 +135,11 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		for _, instance := range snykgovInstances {
 			inputList := []string{
 				"https://" + instance + ".io/api/v1",
+				"https://" + instance + ".io/api",
+				"https://app." + instance + ".io/api/v1",
 				"https://app." + instance + ".io/api",
+				"https://api." + instance + ".io/api/v1",
+				"https://api." + instance + ".io/v1",
 				"https://api." + instance + ".io",
 			}
 
@@ -181,7 +185,11 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		for _, instance := range deeproxyInstances {
 			inputList := []string{
 				"https://" + instance + ".io/api/v1",
+				"https://" + instance + ".io/api",
+				"https://app." + instance + ".io/api/v1",
 				"https://app." + instance + ".io/api",
+				"https://api." + instance + ".io/api/v1",
+				"https://api." + instance + ".io/v1",
 				"https://api." + instance + ".io",
 			}
 
