@@ -44,7 +44,6 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 func Test_GetCodeLensForPath(t *testing.T) {
 	c := testutil.IntegTest(t)
 	di.TestInit(t) // IntegTest doesn't automatically inits DI
-	testutil.OnlyEnableCode(t, c)
 	testutil.EnableSastAndAutoFix(c)
 	// this is using the real progress channel, so we need to listen to it
 	dummyProgressListeners(t)
@@ -55,13 +54,23 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	filePath, dir := code.TempWorkdirWithIssues(t)
 	folder := workspace.NewFolder(c, dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService())
 	c.Workspace().AddFolder(folder)
+
+	// as code is only enabled if sast settings are enabled, and sast settings are checked in folder config
+	// and sast settings are added in the `testutil.OnlyEnableCode` function, we need to call it after
+	// adding the workspace folder
+	testutil.OnlyEnableCode(t, c)
+
 	folder.ScanFile(t.Context(), filePath)
 
-	assert.NotNil(t, folder.IssuesForFile(filePath))
+	if folder.IssuesForFile(filePath) == nil {
+		t.Fatal("issues for file should not be nil")
+	}
 
 	lenses := GetFor(filePath)
 
-	assert.NotNil(t, lenses)
+	if lenses == nil {
+		t.Fatal("lenses should not be nil")
+	}
 	assert.Equal(t, 1, len(lenses))
 	assert.Equal(t, lenses[0].Command.Title, code.FixIssuePrefix+code.DontUsePrintStackTrace)
 }
