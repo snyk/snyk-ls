@@ -23,6 +23,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -55,6 +56,10 @@ func (cmd *featureFlagStatus) Execute(_ context.Context) (any, error) {
 	ffStr, ok := args[0].(string)
 	if !ok {
 		return nil, errors.New("invalid feature flag name argument")
+	}
+
+	if ffStr == featureflag.SnykCodeConsistentIgnores {
+		return snyk_api.FFResponse{Ok: true}, nil
 	}
 
 	ff := snyk_api.FeatureFlagType(ffStr)
