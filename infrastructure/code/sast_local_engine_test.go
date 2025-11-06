@@ -25,59 +25,45 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
-	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestIsLocalEngine(t *testing.T) {
 	c := testutil.UnitTest(t)
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
-		ApiError:    nil,
-	}
 
+	localEngineURL := "http://local.engine"
 	mockedSastResponse := &sast_contract.SastResponse{
 		SastEnabled: true,
 		LocalCodeEngine: sast_contract.LocalCodeEngine{
 			AllowCloudUpload: false,
-			Url:              "http://local.engine",
+			Url:              localEngineURL,
 			Enabled:          true,
 		},
 	}
 
-	scanner := &Scanner{
-		SnykApiClient: apiClient,
-		errorReporter: newTestCodeErrorReporter(),
-		notifier:      notification.NewNotifier(),
-		C:             c,
-	}
-
 	t.Run("should return true if SAST and local engine is enabled is disabled", func(t *testing.T) {
-		enabled := scanner.isLocalEngineEnabled(mockedSastResponse)
+		enabled := isLocalEngineEnabled(mockedSastResponse)
 		assert.True(t, enabled)
 	})
 
 	t.Run("should return false if SAST is enabled local engine is disabled", func(t *testing.T) {
 		mockedSastResponse.LocalCodeEngine.Enabled = false
-		enabled := scanner.isLocalEngineEnabled(mockedSastResponse)
+		enabled := isLocalEngineEnabled(mockedSastResponse)
 		assert.False(t, enabled)
 	})
 
 	t.Run("should return false if SAST is enabled local engine is disabled", func(t *testing.T) {
 		mockedSastResponse.LocalCodeEngine.Enabled = true
 		mockedSastResponse.SastEnabled = false
-		enabled := scanner.isLocalEngineEnabled(mockedSastResponse)
+		enabled := isLocalEngineEnabled(mockedSastResponse)
 		assert.False(t, enabled)
 	})
 
 	t.Run("should update Snyk Code API if local-engine is enabled", func(t *testing.T) {
 		mockedSastResponse.SastEnabled = true
 		mockedSastResponse.LocalCodeEngine.Enabled = true
-		scanner.updateCodeApiLocalEngine(mockedSastResponse)
-		assert.Equal(t, mockedSastResponse.LocalCodeEngine.Url, c.SnykCodeApi())
-		additionalAuthUrls := c.Engine().GetConfiguration().GetStringSlice(configuration.
-			AUTHENTICATION_ADDITIONAL_URLS)
-		assert.True(t, slices.Contains(additionalAuthUrls, mockedSastResponse.LocalCodeEngine.Url))
+		updateCodeApiLocalEngine(c, mockedSastResponse)
+		additionalAuthUrls := c.Engine().GetConfiguration().GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+		assert.True(t, slices.Contains(additionalAuthUrls, localEngineURL))
 	})
 }

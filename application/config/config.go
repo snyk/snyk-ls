@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -169,7 +170,6 @@ type Config struct {
 	logFile                          *os.File
 	snykCodeAnalysisTimeout          time.Duration
 	snykApiUrl                       string
-	snykCodeApiUrl                   string
 	token                            string
 	deviceId                         string
 	clientCapabilities               types.ClientCapabilities
@@ -454,13 +454,6 @@ func (c *Config) SnykApi() string {
 	return c.snykApiUrl
 }
 
-func (c *Config) SnykCodeApi() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.snykCodeApiUrl
-}
-
 func (c *Config) Endpoint() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -560,33 +553,9 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		cfg := c.engine.GetConfiguration()
 		cfg.Set(configuration.API_URL, snykApiUrl)
 		cfg.Set(configuration.WEB_APP_URL, c.SnykUI())
-
-		// Update Code API endpoint
-		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(snykApiUrl)
-		if err != nil {
-			c.Logger().Error().Err(err).Msg("Couldn't obtain Snyk Code API url from CLI endpoint.")
-		}
-
-		c.SetSnykCodeApi(snykCodeApiUrl)
 		return true
 	}
 	return false
-}
-
-func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	if snykCodeApiUrl == "" {
-		c.snykCodeApiUrl = DefaultDeeproxyApiUrl
-		return
-	}
-	c.snykCodeApiUrl = snykCodeApiUrl
-
-	config := c.engine.GetConfiguration()
-	additionalURLs := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-	additionalURLs = append(additionalURLs, c.snykCodeApiUrl)
-	config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
 }
 
 func (c *Config) SetErrorReportingEnabled(enabled bool) {
@@ -808,19 +777,19 @@ func (c *Config) DisableLoggingToFile() {
 
 func (c *Config) SetConfigFile(configFile string) { c.configFile = configFile }
 
-func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
-	// Code API endpoint can be set via env variable for debugging using local API instance
+func (c *Config) GetCodeApiUrlFromCustomEndpoint(sastResponse *sast_contract.SastResponse) (string, error) {
+	// Code API sastResponse can be set via env variable for debugging using local API instance
 	deeproxyEnvVarUrl := strings.Trim(os.Getenv(deeproxyApiUrlKey), "/")
 	if deeproxyEnvVarUrl != "" {
 		return deeproxyEnvVarUrl, nil
 	}
 
-	if endpoint == "" {
-		return DefaultDeeproxyApiUrl, nil
+	if sastResponse != nil && sastResponse.SastEnabled && sastResponse.LocalCodeEngine.Enabled {
+		return sastResponse.LocalCodeEngine.Url, nil
 	}
 
 	// Use Snyk API endpoint to determine deeproxy API URL
-	return getCustomEndpointUrlFromSnykApi(endpoint, "deeproxy")
+	return getCustomEndpointUrlFromSnykApi(c.Endpoint(), "deeproxy")
 }
 
 func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, error) {

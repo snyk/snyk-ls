@@ -31,19 +31,19 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
-	"github.com/snyk/snyk-ls/domain/ide/command/mock_command"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 var sampleSettings = types.Settings{
@@ -108,7 +108,6 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
 	assert.True(t, c.IsErrorReportingEnabled())
 	assert.Equal(t, "token", c.Token())
-	assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
 	assert.Equal(t, sampleSettings.EnableSnykLearnCodeActions, strconv.FormatBool(c.IsSnykLearnCodeActionsEnabled()))
 }
 
@@ -145,7 +144,6 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.Equal(t, c.SnykApi(), conf.GetString(configuration.API_URL))
 	assert.True(t, c.IsErrorReportingEnabled())
 	assert.Equal(t, "token", c.Token())
-	assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
 	assert.Equal(t, sampleSettings.EnableSnykLearnCodeActions, strconv.FormatBool(c.IsSnykLearnCodeActionsEnabled()))
 }
 
@@ -182,6 +180,12 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
 
+		mockResolver := command.Service().GetOrgResolver().(*mock_types.MockOrgResolver)
+		mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{
+			Id:   expectedOrgId,
+			Name: t.Name(),
+		}, nil).AnyTimes()
+
 		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
 		nonDefaultSeverityFilter := types.NewSeverityFilter(false, true, false, true)
@@ -211,7 +215,6 @@ func Test_UpdateSettings(t *testing.T) {
 			RuntimeVersion:               "1.8.0_275",
 			ScanningMode:                 "manual",
 			AuthenticationMethod:         types.FakeAuthentication,
-			SnykCodeApi:                  sampleSettings.SnykCodeApi,
 			EnableSnykOpenBrowserActions: "true",
 			HoverVerbosity:               &hoverVerbosity, // default is 3
 			OutputFormat:                 &outputFormat,   // default is markdown
@@ -259,7 +262,6 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, settings.RuntimeName, c.RuntimeName())
 		assert.Equal(t, settings.RuntimeVersion, c.RuntimeVersion())
 		assert.False(t, c.IsAutoScanEnabled())
-		assert.Equal(t, sampleSettings.SnykCodeApi, c.SnykCodeApi())
 		assert.Equal(t, true, c.IsSnykOpenBrowserActionEnabled())
 		assert.Equal(t, *settings.HoverVerbosity, c.HoverVerbosity())
 		assert.Equal(t, *settings.OutputFormat, c.Format())
@@ -292,14 +294,6 @@ func Test_UpdateSettings(t *testing.T) {
 
 		assert.Equal(t, 3, c.HoverVerbosity())
 		assert.Equal(t, c.Format(), config.FormatMd)
-	})
-
-	t.Run("empty snyk code api is ignored and default is used", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-
-		UpdateSettings(c, types.Settings{}, "test")
-
-		assert.Equal(t, config.DefaultDeeproxyApiUrl, c.SnykCodeApi())
 	})
 
 	t.Run("blank organization is ignored", func(t *testing.T) {
@@ -487,13 +481,12 @@ func setupMockOrgResolver(t *testing.T, orgId, orgName string) {
 	})
 
 	ctrl := gomock.NewController(t)
-	mockResolver := mock_command.NewMockOrgResolver(ctrl)
+	mockResolver := mock_types.NewMockOrgResolver(ctrl)
 	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{
 		Id:   orgId,
 		Name: orgName,
 	}, nil).AnyTimes()
-	mockService := types.NewCommandServiceMock()
-	mockService.SetOrgResolver(mockResolver)
+	mockService := types.NewCommandServiceMock(mockResolver)
 	command.SetService(mockService)
 }
 

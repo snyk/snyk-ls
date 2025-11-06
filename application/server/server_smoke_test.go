@@ -760,7 +760,7 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIss
 }
 
 func isNotStandardRegion(c *config.Config) bool {
-	return c.SnykCodeApi() != "https://deeproxy.snyk.io"
+	return c.Endpoint() != "https://api.snyk.io" && c.Endpoint() != ""
 }
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
