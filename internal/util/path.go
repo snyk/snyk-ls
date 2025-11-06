@@ -116,11 +116,46 @@ func PathKey(p types.FilePath) types.FilePath {
 // validateDangerousCharacters checks for dangerous characters in a string
 func validateDangerousCharacters(input string) error {
 	for _, char := range dangerousChars {
-		if strings.Contains(input, char) {
-			return fmt.Errorf("dangerous character detected in '%s': %s", input, char)
+		if !strings.Contains(input, char) {
+			continue
 		}
+
+		// Special case: $ is allowed in Windows UNC administrative share paths (e.g., \\server\C$\path)
+		if char == "$" && isWindowsUNCAdminShare(input) {
+			continue
+		}
+
+		return fmt.Errorf("dangerous character detected in '%s': %s", input, char)
 	}
 	return nil
+}
+
+// isWindowsUNCAdminShare checks if the path is a Windows UNC administrative share path
+// These paths have the format \\server\C$\... where C$ is the administrative share
+func isWindowsUNCAdminShare(path string) bool {
+	// Check if it starts with \\ (UNC path)
+	if !strings.HasPrefix(path, "\\\\") && !strings.HasPrefix(path, "//") {
+		return false
+	}
+
+	// Check if it contains a drive letter followed by $ (e.g., C$, D$, etc.)
+	// Pattern: \\server\X$ where X is a drive letter
+	parts := strings.Split(strings.ReplaceAll(path, "/", "\\"), "\\")
+	if len(parts) < 4 {
+		return false
+	}
+
+	// parts[0] and parts[1] are empty (from leading \\)
+	// parts[2] is the server name
+	// parts[3] should be the share name (e.g., C$)
+	shareName := parts[3]
+	if len(shareName) == 2 && shareName[1] == '$' {
+		// Check if first character is a drive letter (A-Z, case insensitive)
+		driveLetter := shareName[0]
+		return (driveLetter >= 'A' && driveLetter <= 'Z') || (driveLetter >= 'a' && driveLetter <= 'z')
+	}
+
+	return false
 }
 
 // validatePathExistence checks path existence based on the specified type

@@ -179,6 +179,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("All settings are updated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
+		setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 
 		mockResolver := command.Service().GetOrgResolver().(*mock_types.MockOrgResolver)
 		mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{
@@ -486,8 +487,17 @@ func setupMockOrgResolver(t *testing.T, orgId, orgName string) {
 		Id:   orgId,
 		Name: orgName,
 	}, nil).AnyTimes()
-	mockService := types.NewCommandServiceMock(mockResolver)
-	command.SetService(mockService)
+
+	// Get the existing service or create a new mock
+	svc := command.Service()
+	if mockSvc, ok := svc.(*types.CommandServiceMock); ok {
+		// If it's already a mock service, just update the resolver
+		mockSvc.SetOrgResolver(mockResolver)
+	} else {
+		// Otherwise, create a new mock service
+		mockService := types.NewCommandServiceMock(mockResolver)
+		command.SetService(mockService)
+	}
 }
 
 // Common test setup for updateFolderConfig tests

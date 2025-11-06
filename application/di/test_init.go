@@ -47,7 +47,6 @@ import (
 	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func TestInit(t *testing.T) {
@@ -95,8 +94,9 @@ func TestInit(t *testing.T) {
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(c)
-	mockOrgResolver := mock_types.NewMockOrgResolver(ctrl)
-	command.SetService(types.NewCommandServiceMock(mockOrgResolver))
+	orgResolver := command.NewLDXSyncOrgResolver()
+	mockCommandService := types.NewCommandServiceMock(orgResolver)
+	command.SetService(mockCommandService)
 	// don't use getters or it'll deadlock
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
 	c.SetWorkspace(w)

@@ -27,8 +27,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-
-	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 const (
@@ -125,7 +123,7 @@ type CommandServiceMock struct {
 	orgResolver      OrgResolver
 }
 
-func NewCommandServiceMock(orgResolver *mock_types.MockOrgResolver) *CommandServiceMock {
+func NewCommandServiceMock(orgResolver OrgResolver) *CommandServiceMock {
 	return &CommandServiceMock{
 		orgResolver: orgResolver,
 	}

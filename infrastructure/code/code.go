@@ -153,11 +153,12 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		return issues, err
 	}
 
-	// Get SAST settings from feature flag service using folder configuration
-	sastResponse := sc.featureFlagService.GetSastSettingsFromFolderConfig(folderPath)
-	if sastResponse == nil {
-		return issues, errors.New("Failed to get the sast settings")
+	if folderConfig == nil || folderConfig.SastSettings == nil {
+		logger.Error().Str("folderPath", string(folderPath)).Msg("folder config or SAST settings is nil")
+		return issues, errors.New("folder config or SAST settings not available")
 	}
+
+	sastResponse := folderConfig.SastSettings
 
 	if !sc.isSastEnabled(sastResponse) {
 		return issues, errors.New("SAST is not enabled")
