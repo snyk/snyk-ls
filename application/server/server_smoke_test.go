@@ -866,6 +866,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykOssEnabled(false)
 	c.SetSnykIacEnabled(false)
+	testutil.EnableSastAndAutoFix(c)
 	cleanupChannels()
 	di.Init()
 
