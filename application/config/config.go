@@ -36,6 +36,7 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -303,7 +304,8 @@ func initWorkFlowEngine(c *Config) {
 
 	err := initWorkflows(c)
 	if err != nil {
-		c.Logger().Err(err).Msg("unable to initialize workflows")
+		// we use the global logger, as we are in config setup, so we don't want to cause a deadlock
+		log.Err(err).Msg("unable to initialize workflows")
 	}
 
 	err = c.engine.Init()
@@ -332,8 +334,6 @@ func initWorkflows(c *Config) error {
 	}
 
 	err = localworkflows.InitCodeWorkflow(c.engine)
-
-	err = osflows.Init(c.engine)
 	if err != nil {
 		return err
 	}
