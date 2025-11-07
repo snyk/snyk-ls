@@ -43,7 +43,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	c.SetSnykIacEnabled(false)
 	c.SetSnykOssEnabled(true)
 	di.Init()
-
+	t.Setenv("SNYK_LOG_LEVEL", "info")
 	lspClient := srv.Client
 
 	// create clones and make them workspace folders

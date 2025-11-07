@@ -105,6 +105,8 @@ func (c CommandData) GetGroupingType() GroupingType {
 
 type CommandName string
 
+//go:generate go tool github.com/golang/mock/mockgen -destination=mock_types/org_resolver_mock.go -package=mock_types github.com/snyk/snyk-ls/internal/types OrgResolver
+
 // OrgResolver defines the interface for organization resolution
 type OrgResolver interface {
 	ResolveOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, dir string) (ldx_sync_config.Organization, error)
@@ -121,8 +123,10 @@ type CommandServiceMock struct {
 	orgResolver      OrgResolver
 }
 
-func NewCommandServiceMock() *CommandServiceMock {
-	return &CommandServiceMock{}
+func NewCommandServiceMock(orgResolver OrgResolver) *CommandServiceMock {
+	return &CommandServiceMock{
+		orgResolver: orgResolver,
+	}
 }
 
 func (service *CommandServiceMock) ExecuteCommandData(_ context.Context, command CommandData, _ Server) (any, error) {

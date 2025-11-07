@@ -502,15 +502,6 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource
 			analytics.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
 		}
 	}
-
-	// a custom set snyk code api (e.g. for testing) always overwrites automatic config
-	if settings.SnykCodeApi != "" {
-		oldCodeApi := c.SnykCodeApi()
-		c.SetSnykCodeApi(settings.SnykCodeApi)
-		if oldCodeApi != settings.SnykCodeApi && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configSnykCodeApi, oldCodeApi, settings.SnykCodeApi, triggerSource)
-		}
-	}
 }
 
 func updateOrganization(c *config.Config, settings types.Settings, triggerSource string) {
