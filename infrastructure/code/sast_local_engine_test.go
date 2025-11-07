@@ -59,7 +59,7 @@ func TestIsLocalEngine(t *testing.T) {
 		mockedSastResponse.LocalCodeEngine.Enabled = true
 		updateCodeApiLocalEngine(c, mockedSastResponse)
 		additionalAuthUrls := c.Engine().GetConfiguration().GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-		assert.True(t, slices.Contains(additionalAuthUrls, localEngineURL))
+		assert.Truef(t, slices.Contains(additionalAuthUrls, localEngineURL), "additionalAuthUrls: %v, expected %s", additionalAuthUrls, localEngineURL)
 	})
 }
 
