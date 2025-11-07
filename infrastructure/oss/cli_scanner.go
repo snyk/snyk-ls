@@ -279,12 +279,13 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	cmd := cliScanner.cli.ExpandParametersFromConfig([]string{
 		cliScanner.config.CliSettings().Path(),
 		"test",
+		"--json",
 	})
 
 	args = cliScanner.updateArgs(path, args, folderConfig)
 	args = append(args, cliScanner.config.CliSettings().AdditionalOssParameters...)
-	args = append(args, "--json")
 
+	processedArgs := []string{}
 	// now add all additional parameters, skipping blacklisted ones
 	for _, parameter := range args {
 		if storedConfig.SliceContainsParam(cmd, parameter) {
@@ -305,9 +306,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 			allProjectsParamAllowed = false
 		}
 
-		if parameter != allProjectsParam {
-			cmd = append(cmd, parameter)
-		}
+		processedArgs = append(processedArgs, parameter)
 	}
 
 	// only append --all-projects, if it's not on the global blacklist
@@ -317,6 +316,8 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	if allProjectsParamAllowed {
 		cmd = append(cmd, allProjectsParam)
 	}
+
+	cmd = append(cmd, processedArgs...)
 
 	return cmd
 }
