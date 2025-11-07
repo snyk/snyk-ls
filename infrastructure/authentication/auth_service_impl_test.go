@@ -48,9 +48,7 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	gafConfig := c.Engine().GetConfiguration()
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 	// Expect analytics to be sent exactly once (to first folder's org, or empty org if no folders)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
@@ -170,10 +168,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			c := testutil.UnitTest(t)
 			gafConfig := c.Engine().GetConfiguration()
 			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
-			mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-
-			mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-			mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+			mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 			// Setup workspace (test case specific) and set it on config
 			ws := tc.setupWs(t, ctrl, c)

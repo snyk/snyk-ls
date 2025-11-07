@@ -179,10 +179,34 @@ func OnlyEnableCode(t *testing.T, c *config.Config) {
 	c.SetSnykCodeEnabled(true)
 }
 
+// SetUpEngineMock creates and configures a mock GAF engine for testing.
+// It sets up common expectations (GetConfiguration, GetLogger) and ensures the mock engine's
+// configuration shares the same storage as the original config, allowing folder configurations
+// to be persisted and read correctly across both objects.
+// The mock engine is automatically set on the provided config.
 func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {
 	t.Helper()
-	mockEngine, engineConfig := testsupport.SetupEngineMock(t)
+
+	// Create mock engine and configuration
+	ctrl := gomock.NewController(t)
+	mockEngine := mocks.NewMockEngine(ctrl)
+	engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+
+	// Set up the common expectation that GetConfiguration returns the configuration we just created
+	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	// Set up the common expectation that GetLogger returns c's logger
+	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+
+	// The new engineConfig needs to share the same storage as c's original engine config,
+	// otherwise folder configs saved to engineConfig won't be visible to c.
+	// Copy the storage setup from c's engine to the new engineConfig.
+	originalConfig := c.Engine().GetConfiguration()
+	engineConfig.Set(constants.DataHome, originalConfig.GetString(constants.DataHome))
+	engineConfig.SetStorage(originalConfig.GetStorage())
+
+	// Set the mock engine on the config provided
 	c.SetEngine(mockEngine)
+
 	return mockEngine, engineConfig
 }
 

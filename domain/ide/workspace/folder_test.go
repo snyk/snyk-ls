@@ -614,9 +614,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 
 	engineMock, gafConfig := testutil.SetUpEngineMock(t, c)
 
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
-	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 	notifier := notification.NewNotifier()
 	f, _ := NewMockFolderWithScanNotifier(c, notifier)
@@ -705,9 +703,7 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 		SendAnalytics:     true,
 	}
 
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
-	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 	// Capture analytics WF's data and config (using channel for safe goroutine communication)
 	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
@@ -769,9 +765,7 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 		SendAnalytics:     true,
 	}
 
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
-	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 	// Capture analytics WF's data and config to verify folder org
 	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)

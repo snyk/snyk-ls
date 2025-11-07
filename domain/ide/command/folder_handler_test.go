@@ -72,9 +72,7 @@ func setupMockOrgResolverWithError(t *testing.T, err error) {
 
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver
 	expectedOrg := ldx_sync_config.Organization{
@@ -114,9 +112,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with no folders
 	notifier, _ := testutils.SetupFakeWorkspace(t, c, 0)
@@ -133,9 +129,7 @@ func setupOrgResolverTest(t *testing.T, orgID, orgName, orgSlug string, isDefaul
 	t.Helper()
 
 	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	testutil.SetUpEngineMock(t, c)
 
 	expectedOrg := ldx_sync_config.Organization{
 		Id:        orgID,
@@ -179,9 +173,7 @@ func Test_SetAutoBestOrgFromLdxSync_NonDefaultOrg(t *testing.T) {
 // Test GetBestOrgFromLdxSync error handling
 func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver to return error
 	setupMockOrgResolverWithError(t, assert.AnError)
@@ -198,9 +190,7 @@ func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 // Test GetBestOrgFromLdxSync fallback when resolver is nil
 func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, gafConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(gafConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, gafConfig := testutil.SetUpEngineMock(t, c)
 
 	// Set organization in GAF config
 	expectedOrgId := "fallback-org-id"
@@ -228,9 +218,7 @@ func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
 // Test sendFolderConfigs with LDX-Sync error (should continue with other folders)
 func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver to return error
 	setupMockOrgResolverWithError(t, assert.AnError)
@@ -263,9 +251,7 @@ func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 // Test sendFolderConfigs with multiple folders and different org configurations
 func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver to return different orgs based on input path
 	originalService := Service()
@@ -385,8 +371,7 @@ func Test_isOrgDefault(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := testutil.UnitTest(t)
-			mockEngine, gafConfig := testutil.SetUpEngineMock(t, c)
-			mockEngine.EXPECT().GetConfiguration().Return(gafConfig).AnyTimes()
+			_, gafConfig := testutil.SetUpEngineMock(t, c)
 
 			// Setup mock default values for org config - these will not be overridden by a GAF config clone, which the function does.
 			gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(tt.setDefaultOrgValue))

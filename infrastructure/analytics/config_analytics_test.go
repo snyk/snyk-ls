@@ -234,10 +234,7 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
-			mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-
-			mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-			mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+			mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 			// Setup workspace (test case specific) and set it on config
 			ws := tc.setupWs(t, ctrl, c)

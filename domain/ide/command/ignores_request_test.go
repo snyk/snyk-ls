@@ -418,9 +418,6 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, c.Logger())
 	require.NoError(t, err, "failed to configure folder org")
 
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
-
 	// Capture analytics WF's data and config to verify folder org
 	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
@@ -443,15 +440,12 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithGlobalOrgFallback(t *testing.T) 
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 	const testGlobalOrg = "test-global-org"
 
 	// Setup fake workspace with one folder, but we'll send analytics for a path outside of it
 	testutils.SetupFakeWorkspace(t, c, 1)
-
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 	// Set a global org in the config
 	c.SetOrganization(testGlobalOrg)

@@ -46,7 +46,6 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 
 		// Setup workspace with 2 folders
 		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 2)
@@ -100,8 +99,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 
 		const testGlobalOrg = "test-global-org"
 
-		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+		mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 		// Setup workspace with no folders
 		testutils.SetupFakeWorkspace(t, c, 0)
@@ -166,9 +164,7 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 
 	cmd := setupReportAnalyticsCommand(t, c, string(marshal))
 
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 	// Expect authentication analytics (1 time, to first folder's org only)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
