@@ -55,6 +55,10 @@ func issueSeverity(snykSeverity string) types.Severity {
 func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, error) {
 	folderConfig := c.FolderConfig(folder)
 
+	if folderConfig == nil {
+		return c.Endpoint(), nil
+	}
+
 	var endpoint string
 	var err error
 	if isLocalEngineEnabled(folderConfig.SastSettings) {
