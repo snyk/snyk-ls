@@ -27,19 +27,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/samber/lo"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
-
-	"github.com/snyk/snyk-ls/internal/util"
-
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
 	"github.com/samber/lo"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
