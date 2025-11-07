@@ -110,15 +110,19 @@ func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (
 // MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration
 // based on the global organization setting and the LDX-Sync result.
 func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.FolderConfig) {
+	logger := c.Logger().With().Str("method", "MigrateFolderConfigOrgSettings").Str("FolderPath", string(folderConfig.FolderPath)).Logger()
+
 	// Edge case when user provided folder config on initialize params or
 	// the user is changing settings while unauthenticated
 	if folderConfig.OrgSetByUser {
 		// we take what they set and simply save it as migrated.
+		logger.Debug().Msg("OrgSetByUser already true, marking as migrated")
 		folderConfig.OrgMigratedFromGlobalConfig = true
 		return
 	} else if folderConfig.PreferredOrg != "" {
 		// they may have just changed the preferred org field while unauthenticated, still treat it as opting out of auto-org
 		// or provided initialize params had Preferred org defined but OrgSetByUser = false, so we fix it
+		logger.Debug().Msg("PreferredOrg set but OrgSetByUser false, opting user out of auto-org and marking as migrated")
 		folderConfig.OrgSetByUser = true
 		folderConfig.OrgMigratedFromGlobalConfig = true
 		return
@@ -129,7 +133,7 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 	// Check if the configured organization is the default org
 	isDefaultOrUnknown, err := isOrgDefault(c, globalOrg)
 	if err != nil {
-		c.Logger().Err(err).Msg("unable to determine if organization is default")
+		logger.Err(err).Str("globalOrg", globalOrg).Msg("unable to determine if global organization is default (usually means the user is not logged in) - skipping migration")
 		return
 	}
 
@@ -144,6 +148,11 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 	}
 
 	folderConfig.OrgMigratedFromGlobalConfig = true
+	logger.Debug().
+		Bool("OrgSetByUser", folderConfig.OrgSetByUser).
+		Str("PreferredOrg", folderConfig.PreferredOrg).
+		Bool("OrgMigratedFromGlobalConfig", folderConfig.OrgMigratedFromGlobalConfig).
+		Msg("Completed folder config org migration")
 }
 
 // isOrgDefault Returns true if the org provided is either:
@@ -152,7 +161,10 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 // 3. the same slug as the user's default org
 // Note, the function does not check whether the string provided is a valid or real org.
 func isOrgDefault(c *config.Config, organization string) (bool, error) {
+	logger := c.Logger().With().Str("method", "isOrgDefault").Str("organization", organization).Logger()
+
 	if organization == "" {
+		logger.Debug().Msg("Organization is empty string, treating as default")
 		return true, nil
 	}
 
@@ -166,17 +178,23 @@ func isOrgDefault(c *config.Config, organization string) (bool, error) {
 		return false, fmt.Errorf("could not retrieve the user's default organization")
 	}
 	if organization == defaultOrgUUID {
+		logger.Debug().Msg("Organization matches default org UUID")
 		return true, nil
 	}
 
 	defaultOrgSlug := clonedGAFConfig.GetString(configuration.ORGANIZATION_SLUG)
 	if defaultOrgSlug == "" {
-		return false, fmt.Errorf("could not retrieve the user's default organization slug")
+		return false, fmt.Errorf("could not retrieve the user's default organization slug when attempted for the default org UUID %s", defaultOrgUUID)
 	}
 	if organization == defaultOrgSlug {
+		logger.Debug().Msg("Organization matches default org slug")
 		return true, nil
 	}
 
+	logger.Debug().
+		Str("defaultOrgUUID", defaultOrgUUID).
+		Str("defaultOrgSlug", defaultOrgSlug).
+		Msg("Organization does not match default org (neither UUID nor slug)")
 	return false, nil
 }
 
