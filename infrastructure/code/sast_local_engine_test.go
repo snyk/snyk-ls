@@ -30,27 +30,22 @@ import (
 
 func TestIsLocalEngine(t *testing.T) {
 	localEngineURL := "http://local.engine"
-	mockedSastResponse := &sast_contract.SastResponse{
-		SastEnabled: true,
-		LocalCodeEngine: sast_contract.LocalCodeEngine{
-			AllowCloudUpload: false,
-			Url:              localEngineURL,
-			Enabled:          true,
-		},
-	}
 
 	t.Run("should return true if SAST and local engine is enabled is disabled", func(t *testing.T) {
+		mockedSastResponse := createMockedSastResponse(localEngineURL)
 		enabled := isLocalEngineEnabled(mockedSastResponse)
 		assert.True(t, enabled)
 	})
 
 	t.Run("should return false if SAST is enabled local engine is disabled", func(t *testing.T) {
+		mockedSastResponse := createMockedSastResponse(localEngineURL)
 		mockedSastResponse.LocalCodeEngine.Enabled = false
 		enabled := isLocalEngineEnabled(mockedSastResponse)
 		assert.False(t, enabled)
 	})
 
 	t.Run("should return false if SAST is enabled local engine is disabled", func(t *testing.T) {
+		mockedSastResponse := createMockedSastResponse(localEngineURL)
 		mockedSastResponse.LocalCodeEngine.Enabled = true
 		mockedSastResponse.SastEnabled = false
 		enabled := isLocalEngineEnabled(mockedSastResponse)
@@ -59,10 +54,23 @@ func TestIsLocalEngine(t *testing.T) {
 
 	t.Run("should update Snyk Code API if local-engine is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		mockedSastResponse := createMockedSastResponse(localEngineURL)
 		mockedSastResponse.SastEnabled = true
 		mockedSastResponse.LocalCodeEngine.Enabled = true
 		updateCodeApiLocalEngine(c, mockedSastResponse)
 		additionalAuthUrls := c.Engine().GetConfiguration().GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
 		assert.True(t, slices.Contains(additionalAuthUrls, localEngineURL))
 	})
+}
+
+func createMockedSastResponse(localEngineURL string) *sast_contract.SastResponse {
+	mockedSastResponse := &sast_contract.SastResponse{
+		SastEnabled: true,
+		LocalCodeEngine: sast_contract.LocalCodeEngine{
+			AllowCloudUpload: false,
+			Url:              localEngineURL,
+			Enabled:          true,
+		},
+	}
+	return mockedSastResponse
 }
