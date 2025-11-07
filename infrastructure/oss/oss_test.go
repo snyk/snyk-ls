@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -321,7 +322,8 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			_, _ = scanner.Scan(t.Context(), types.FilePath(p), types.FilePath(folderPath), nil)
+			ctx := EnrichContextForTest(t, t.Context(), c, workingDir)
+			_, _ = scanner.Scan(ctx, types.FilePath(p), types.FilePath(folderPath), nil)
 			wg.Done()
 		}()
 	}
@@ -329,6 +331,19 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, 1, fakeCli.GetFinishedScans())
+}
+
+func EnrichContextForTest(t *testing.T, ctx context.Context, c *config.Config, folderPath string) context.Context {
+	t.Helper()
+	// add logger to context
+	newCtx := ctx2.NewContextWithLogger(t.Context(), c.Logger())
+
+	// add scanner dependencies to context
+	folderConfig := c.FolderConfig(types.FilePath(folderPath))
+	newCtx = ctx2.NewContextWithDependencies(ctx, map[string]any{
+		ctx2.DepFolderConfig: folderConfig,
+	})
+	return newCtx
 }
 
 func sampleIssue() ossIssue {
@@ -435,12 +450,11 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	targetFile, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
+	ctx = EnrichContextForTest(t, ctx, c, workingDir)
 	_, _ = scanner.Scan(ctx, types.FilePath(targetFile), "", nil)
 
 	// Assert
-	assert.Eventually(t, func() bool {
-		return fakeCli.GetFinishedScans() >= 2
-	}, 3*time.Second, 50*time.Millisecond)
+	assert.Eventually(t, func() bool { return fakeCli.GetFinishedScans() >= 2 }, 3*time.Second, 50*time.Millisecond)
 }
 
 func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
@@ -483,6 +497,8 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	t.Cleanup(cancel2)
 
 	// Act
+	ctx1 = EnrichContextForTest(t, ctx1, c, workingDir)
+	ctx2 = EnrichContextForTest(t, ctx2, c, workingDir)
 	scanner.scheduleRefreshScan(ctx1, types.FilePath(targetPath))
 	scanner.scheduleRefreshScan(ctx2, types.FilePath(targetPath))
 
@@ -527,7 +543,8 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	filePath, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
-	analysis, err := scanner.Scan(t.Context(), types.FilePath(filePath), "", nil)
+	ctx := EnrichContextForTest(t, t.Context(), c, workingDir)
+	analysis, err := scanner.Scan(ctx, types.FilePath(filePath), "", nil)
 
 	// Assert
 	assert.NoError(t, err)

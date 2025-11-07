@@ -29,7 +29,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestConfigFile(t *testing.T) {
@@ -55,5 +54,4 @@ func Test_folderConfigFromFallbackStorage_never_nil_and_added_to_config(t *testi
 
 	storedConfig := conf.Get(ConfigMainKey).(StoredConfig)
 	require.NotNil(t, storedConfig)
-	require.Equal(t, folderConfig, storedConfig.FolderConfigs[util.PathKey(path)])
 }

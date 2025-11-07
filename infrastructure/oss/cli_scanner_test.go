@@ -170,8 +170,8 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 
 			actual := getAbsTargetFilePath(
 				c.Logger(),
-				tc.displayTargetFile,
 				filepath.Join(base, adjustedPath),
+				tc.displayTargetFile,
 				types.FilePath(filepath.Join(base, adjustedWorkDir)),
 				types.FilePath(filepath.Join(base, adjustedPath)),
 			)

@@ -74,6 +74,7 @@ func Test_Scan(t *testing.T) {
 	c.ConfigureLogging(nil)
 	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
 
+	ctx = oss.EnrichContextForTest(t, ctx, c, workingDir)
 	issues, _ := scanner.Scan(ctx, types.FilePath(path), types.FilePath(workingDir), nil)
 
 	assert.NotEqual(t, 0, len(issues))

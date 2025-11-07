@@ -145,9 +145,21 @@ func (cliScanner *CLIScanner) Product() product.Product {
 }
 
 // TODO remove params from scan interface, once every scanner has these things in context and can extract it from there
-func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
+func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, workDir types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	logger := cliScanner.getLogger(ctx)
 	ctx = cliScanner.enrichContext(ctx)
+
+	// Add path to context so it can be used by scheduled scans
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workDir, path)
+
+	if folderConfig != nil {
+		deps, found := ctx2.DependenciesFromContext(ctx)
+		if !found {
+			deps = map[string]any{}
+		}
+		deps[ctx2.DepFolderConfig] = folderConfig
+		ctx = ctx2.NewContextWithDependencies(ctx, deps)
+	}
 
 	if !cliScanner.config.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
@@ -203,6 +215,9 @@ func (cliScanner *CLIScanner) scanInternal(
 		logger.Debug().Msg("Canceling OSS scan - OSS scanner received cancellation signal")
 		return []types.Issue{}, nil
 	}
+
+	// save parent context for scheduling refresh scan
+	parentCtx := ctx
 
 	// create cancelable progress tracker
 	ctx, cancel := context.WithCancel(ctx)
@@ -285,7 +300,7 @@ func (cliScanner *CLIScanner) scanInternal(
 
 	// scan again after cache expiry
 	if issues != nil {
-		cliScanner.scheduleRefreshScan(ctx, path)
+		cliScanner.scheduleRefreshScan(parentCtx, path)
 	}
 	return issues, nil
 }
@@ -588,7 +603,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 				return
 			}
 
-			if ctx.Err() != nil {
+			if newCtx.Err() != nil {
 				logger.Info().Msg("Scheduled scan canceled")
 				return
 			}
