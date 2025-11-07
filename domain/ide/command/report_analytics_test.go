@@ -45,14 +45,14 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 	t.Run("sends analytics to first folder org", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
+		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
+		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+
 		// Setup workspace with 2 folders
 		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 2)
 
 		testInput := "some data"
 		cmd := setupReportAnalyticsCommand(t, c, testInput)
-
-		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 
 		// Configure first folder with a specific org
 		firstFolderOrg := "test-first-folder-org"
@@ -100,14 +100,14 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 
 		const testGlobalOrg = "test-global-org"
 
+		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
+		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+
 		// Setup workspace with no folders
 		testutils.SetupFakeWorkspace(t, c, 0)
 
 		testInput := "some data"
 		cmd := setupReportAnalyticsCommand(t, c, testInput)
-
-		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-		mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 
 		// Set a global org
 		c.SetOrganization(testGlobalOrg)
