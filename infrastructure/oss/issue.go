@@ -20,6 +20,7 @@ import (
 	_ "embed"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/rs/zerolog"
 
@@ -137,6 +138,15 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 	return r
 }
 
+// as issue cache can be updated outside of context, and it's not
+// supporting concurrent operations, let's only do additions to any
+// cache using this mutex.
+//
+// currently convertScanResultToIssues is the only place where a
+// packageIssueCache is changed at all, so the mutex is defined here
+// to keep it close to the code that needs it.
+var packageIssueCacheMutex sync.Mutex
+
 func convertScanResultToIssues(logger *zerolog.Logger, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string) []types.Issue {
 	var issues []types.Issue
 
@@ -154,7 +164,9 @@ func convertScanResultToIssues(logger *zerolog.Logger, res *scanResult, workDir 
 		}
 		node := getDependencyNode(logger, targetFilePath, issue, fileContent)
 		snykIssue := toIssue(workDir, targetFilePath, issue, res, node, ls, ep, format)
+		packageIssueCacheMutex.Lock()
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
+		packageIssueCacheMutex.Unlock()
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true
 	}
