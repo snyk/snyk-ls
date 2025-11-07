@@ -99,7 +99,12 @@ func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (
 	engine := c.Engine()
 	gafConfig := engine.GetConfiguration()
 
-	return Service().GetOrgResolver().ResolveOrganization(gafConfig, engine, c.Logger(), string(folderConfig.FolderPath))
+	resolver := Service().GetOrgResolver()
+	if resolver != nil {
+		return resolver.ResolveOrganization(gafConfig, engine, c.Logger(), string(folderConfig.FolderPath))
+	}
+	fallbackOrg := gafConfig.GetString(configuration.ORGANIZATION)
+	return ldx_sync_config.Organization{Id: fallbackOrg}, nil
 }
 
 // MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration

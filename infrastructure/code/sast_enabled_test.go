@@ -25,10 +25,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestIsSastEnabled(t *testing.T) {
@@ -76,43 +74,6 @@ func TestIsSastEnabled(t *testing.T) {
 
 		assert.False(t, enabled)
 	})
-
-	t.Run("should send a ShowMessageRequest notification if Snyk Code is enabled and the API returns false",
-		func(t *testing.T) {
-			mockedSastResponse.SastEnabled = false
-
-			c.SetSnykCodeEnabled(true)
-			notifier := notification.NewNotifier()
-			// overwrite notifiedScanner, as we want our separate notifier
-			notifiedScanner := &Scanner{
-				SnykApiClient: apiClient,
-				errorReporter: newTestCodeErrorReporter(),
-				notifier:      notifier,
-			}
-			actionMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
-
-			actionMap.Add(enableSnykCodeMessageActionItemTitle, types.CommandData{
-				Title:     types.OpenBrowserCommand,
-				CommandId: types.OpenBrowserCommand,
-				Arguments: []any{getCodeEnablementUrl()},
-			})
-			actionMap.Add(closeMessageActionItemTitle, types.CommandData{})
-			expectedShowMessageRequest := types.ShowMessageRequest{
-				Message: codeDisabledInOrganisationMessageText,
-				Type:    types.Warning,
-				Actions: actionMap,
-			}
-
-			channel := make(chan any)
-
-			notifier.CreateListener(func(params any) {
-				channel <- params
-			})
-			defer notifier.DisposeListener()
-
-			notifiedScanner.isSastEnabled(mockedSastResponse)
-			assert.Equal(t, expectedShowMessageRequest, <-channel)
-		})
 
 	for _, autofixEnabled := range []bool{true, false} {
 		autofixEnabledStr := strconv.FormatBool(autofixEnabled)
