@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	codeClientHTTP "github.com/snyk/code-client-go/http"
@@ -34,6 +35,7 @@ type AiFixHandler struct {
 	currentIssueId    string
 	explainCancelFunc context.CancelFunc
 	autoTriggerAiFix  bool
+	mu                sync.RWMutex
 }
 
 type AiStatus string
@@ -58,10 +60,15 @@ type aiResultState struct {
 const explainTimeout = 5 * time.Minute
 
 func (fixHandler *AiFixHandler) GetCurrentIssueId() string {
+	fixHandler.mu.RLock()
+	defer fixHandler.mu.RUnlock()
 	return fixHandler.currentIssueId
 }
 
 func (fixHandler *AiFixHandler) GetResults(fixId string) (filePath string, diff string, err error) {
+	fixHandler.mu.RLock()
+	defer fixHandler.mu.RUnlock()
+
 	for _, suggestion := range fixHandler.aiFixDiffState.result {
 		if suggestion.FixId == fixId {
 			for k, v := range suggestion.UnifiedDiffsPerFile {
@@ -84,8 +91,12 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 		return
 	}
 	contextWithCancel, cancelFunc := context.WithTimeout(ctx, explainTimeout)
-	fixHandler.explainCancelFunc = cancelFunc
 	defer cancelFunc()
+
+	fixHandler.mu.Lock()
+	fixHandler.explainCancelFunc = cancelFunc
+	fixHandler.mu.Unlock()
+
 	if len(suggestions) == 0 {
 		return
 	}
@@ -146,25 +157,66 @@ func getDiffListFromSuggestions(suggestions []llm.AutofixUnifiedDiffSuggestion, 
 }
 
 func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, suggestions []llm.AutofixUnifiedDiffSuggestion, err error, callback func()) {
+	fixHandler.mu.Lock()
 	fixHandler.aiFixDiffState = aiResultState{status: state, result: suggestions, err: err}
+	fixHandler.mu.Unlock()
+
 	if callback != nil {
 		callback()
 	}
 }
 
+func (fixHandler *AiFixHandler) GetAutoTriggerAiFix() bool {
+	fixHandler.mu.RLock()
+	defer fixHandler.mu.RUnlock()
+	return fixHandler.autoTriggerAiFix
+}
+
 func (fixHandler *AiFixHandler) SetAutoTriggerAiFix(isEnabled bool) {
+	fixHandler.mu.Lock()
+	defer fixHandler.mu.Unlock()
 	fixHandler.autoTriggerAiFix = isEnabled
 }
 
+func (fixHandler *AiFixHandler) GetAiFixDiffStatus() AiStatus {
+	fixHandler.mu.RLock()
+	defer fixHandler.mu.RUnlock()
+	return fixHandler.aiFixDiffState.status
+}
+
+func (fixHandler *AiFixHandler) GetAiFixDiffError() error {
+	fixHandler.mu.RLock()
+	defer fixHandler.mu.RUnlock()
+	return fixHandler.aiFixDiffState.err
+}
+
+func (fixHandler *AiFixHandler) GetAiFixDiffResult() []llm.AutofixUnifiedDiffSuggestion {
+	fixHandler.mu.RLock()
+	defer fixHandler.mu.RUnlock()
+	return fixHandler.aiFixDiffState.result
+}
+
 func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue types.Issue) {
-	if issue.GetAdditionalData().GetKey() == fixHandler.currentIssueId {
+	issueKey := issue.GetAdditionalData().GetKey()
+
+	fixHandler.mu.RLock()
+	isSameIssue := issueKey == fixHandler.currentIssueId
+	fixHandler.mu.RUnlock()
+
+	if isSameIssue {
 		return
 	}
 
+	fixHandler.mu.Lock()
 	fixHandler.aiFixDiffState = aiResultState{status: AiFixNotStarted}
-	fixHandler.currentIssueId = issue.GetAdditionalData().GetKey()
-	if fixHandler.explainCancelFunc != nil {
-		fixHandler.explainCancelFunc()
-	}
+	fixHandler.currentIssueId = issueKey
+
+	// Make a copy of the explain cancel function to avoid race conditions
+	localExplainCancelFunc := fixHandler.explainCancelFunc
 	fixHandler.explainCancelFunc = nil
+	fixHandler.mu.Unlock()
+
+	if localExplainCancelFunc != nil {
+		localExplainCancelFunc()
+	}
 }

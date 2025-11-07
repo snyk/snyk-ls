@@ -145,28 +145,27 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	logger := sc.C.Logger().With().Str("method", "code.Scan").Logger()
 	if !sc.C.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
 
-	// Get SAST settings from feature flag service using folder configuration
-	sastResponse := sc.featureFlagService.GetSastSettingsFromFolderConfig(folderPath)
-	if sastResponse == nil {
-		return issues, errors.New("Failed to get the sast settings")
+	if folderConfig == nil || folderConfig.SastSettings == nil {
+		logger.Error().Str("folderPath", string(folderPath)).Msg("folder config or SAST settings is nil")
+		return issues, errors.New("folder config or SAST settings not available")
 	}
 
-	if !sc.isSastEnabled(sastResponse) {
+	if !sc.isSastEnabled(folderConfig.SastSettings) {
 		return issues, errors.New("SAST is not enabled")
 	}
 
-	if sc.isLocalEngineEnabled(sastResponse) {
-		sc.updateCodeApiLocalEngine(sastResponse)
+	if sc.isLocalEngineEnabled(folderConfig.SastSettings) {
+		sc.updateCodeApiLocalEngine(folderConfig.SastSettings)
 	}
 
-	sc.C.SetSnykAgentFixEnabled(sastResponse.AutofixEnabled)
+	sc.C.SetSnykAgentFixEnabled(folderConfig.SastSettings.AutofixEnabled)
 
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[folderPath] == nil {

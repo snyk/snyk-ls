@@ -32,7 +32,6 @@ OVERRIDE_GOCI_LINT_V := v1.64.8
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
-NOCACHE := ""
 TIMEOUT := "-timeout=45m"
 
 
@@ -76,7 +75,7 @@ lint-fix: $(TOOLS_BIN)/golangci-lint
 test:
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
-	@go test $(NOCACHE) $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
+	go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
 
 .PHONY: race-test
 race-test:
@@ -84,7 +83,7 @@ race-test:
 	@mkdir -p $(BUILD_DIR)
 	@export INTEG_TESTS=true
 	@export SMOKE_TESTS=true
-	@go test $(NOCACHE) $(TIMEOUT) -race -failfast ./...
+	go test $(TIMEOUT) -race -failfast ./...
 
 .PHONY: proxy-test
 proxy-test:
@@ -94,7 +93,7 @@ proxy-test:
 
 instance-test:
 	@echo "==> Running instance tests"
-	@export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
+	export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
 	@curl -sSL https://static.snyk.io/eclipse/stable/p2.index
 
 ## generate: Regenerate generated files (e.g. mocks).

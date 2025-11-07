@@ -26,36 +26,31 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/samber/lo"
-
-	"github.com/snyk/snyk-ls/internal/util"
-
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
+	"github.com/samber/lo"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	"github.com/snyk/snyk-ls/internal/testsupport"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_SmokeInstanceTest(t *testing.T) {
@@ -790,6 +785,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 		InitializationOptions: types.Settings{
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       c.Token(),
+			Organization:                c.Organization(),
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
@@ -847,37 +843,10 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 	cloneTargetDirString := string(cloneTargetDir)
-	if err != nil {
-		t.Fatal(err, "Couldn't setup test repo")
-	}
-
-	folder := types.WorkspaceFolder{
-		Name: "Test Repo",
-		Uri:  uri.PathToUri(cloneTargetDir),
-	}
-
-	clientParams := types.InitializeParams{
-		WorkspaceFolders: []types.WorkspaceFolder{folder},
-		InitializationOptions: types.Settings{
-			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       os.Getenv("SNYK_TOKEN"),
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-		},
-	}
-
-	_, _ = loc.Client.Call(ctx, "initialize", clientParams)
 
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, "app.js"))
-
-	w := c.Workspace()
-	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService())
-	w.AddFolder(f)
-
-	c.SetLSPInitialized(true)
 
 	_ = textDocumentDidSave(t, &loc, testPath)
 
@@ -892,6 +861,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykOssEnabled(false)
 	c.SetSnykIacEnabled(false)
+	testutil.EnableSastAndAutoFix(c)
 	cleanupChannels()
 	di.Init()
 
@@ -917,9 +887,8 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
-	c.SetSnykOssEnabled(false)
-	c.SetSnykIacEnabled(false)
 	c.SetDeltaFindingsEnabled(true)
+	testutil.EnableSastAndAutoFix(c)
 	cleanupChannels()
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
@@ -933,9 +902,6 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 	newFileInCurrentDir(t, cloneTargetDirString, fileWithNewVulns, string(sourceContent))
 
-	c.SetSnykOssEnabled(false)
-	c.SetSnykIacEnabled(false)
-	c.SetManageBinariesAutomatically(false)
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
 	ensureInitialized(t, c, loc, initParams, nil)
@@ -1190,7 +1156,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			FolderPath: repo,
 		}
 
-		expectedOrg := uuid.NewString()
+		expectedOrg := "00000000-0000-0000-0000-000000000001"
 
 		// Pre-populate storage with a folder config to simulate migration
 		setupFunc := func(c *config.Config) {
@@ -1203,7 +1169,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
 			repo: func(fc types.FolderConfig) {
-				require.True(t, fc.OrgSetByUser)
+				require.True(t, fc.OrgSetByUser, "OrgSetByUser should be true for non-default org")
 				require.Equal(t, expectedOrg, fc.PreferredOrg)
 				require.NotEmpty(t, fc.AutoDeterminedOrg)
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
