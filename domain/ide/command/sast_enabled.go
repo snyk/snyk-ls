@@ -45,7 +45,7 @@ func (cmd *sastEnabled) Execute(_ context.Context) (any, error) {
 		SastEnabled:                 true,
 		LocalCodeEngine:             sast_contract.LocalCodeEngine{Enabled: false},
 		ReportFalsePositivesEnabled: false,
-		AutofixEnabled:              false,
+		AutofixEnabled:              true,
 		SupportedLanguages:          []string{},
 	}, nil
 }
