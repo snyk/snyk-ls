@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -54,6 +55,7 @@ func TestIsLocalEngine(t *testing.T) {
 
 	t.Run("should update Snyk Code API if local-engine is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		t.Setenv(config.DeeproxyApiUrlKey, "")
 		mockedSastResponse := createMockedSastResponse(localEngineURL)
 		mockedSastResponse.SastEnabled = true
 		mockedSastResponse.LocalCodeEngine.Enabled = true

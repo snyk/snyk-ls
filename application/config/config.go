@@ -59,7 +59,7 @@ import (
 )
 
 const (
-	deeproxyApiUrlKey     = "DEEPROXY_API_URL"
+	DeeproxyApiUrlKey     = "DEEPROXY_API_URL"
 	FormatHtml            = "html"
 	FormatMd              = "md"
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
@@ -779,8 +779,9 @@ func (c *Config) SetConfigFile(configFile string) { c.configFile = configFile }
 
 func (c *Config) GetCodeApiUrlFromCustomEndpoint(sastResponse *sast_contract.SastResponse) (string, error) {
 	// Code API sastResponse can be set via env variable for debugging using local API instance
-	deeproxyEnvVarUrl := strings.Trim(os.Getenv(deeproxyApiUrlKey), "/")
+	deeproxyEnvVarUrl := strings.Trim(os.Getenv(DeeproxyApiUrlKey), "/")
 	if deeproxyEnvVarUrl != "" {
+		c.logger.Debug().Str("deeproxyEnvVarUrl", deeproxyEnvVarUrl).Msg("using deeproxy env variable for code api url")
 		return deeproxyEnvVarUrl, nil
 	}
 
