@@ -51,6 +51,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -375,7 +376,7 @@ func getDownloadURL(c *config.Config, protocolVersion string) (u string) {
 	runsEmbeddedFromCLI := gafConfig.Get(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION
 
 	if runsEmbeddedFromCLI {
-		return install.GetCLIDownloadURLForProtocol(c, install.DefaultBaseURL, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient(), protocolVersion)
+		return install.GetCLIDownloadURLForProtocol(c, constants.SNYK_CLI_DOWNLOAD_BASE_URL, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient(), protocolVersion)
 	} else {
 		return install.GetLSDownloadURLForProtocol(c, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient(), protocolVersion)
 	}

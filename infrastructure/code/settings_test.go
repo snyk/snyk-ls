@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -31,8 +32,8 @@ func Test_getCodeEnablementUrl_CustomEndpoint(t *testing.T) {
 	path := "/manage/snyk-code?from=VS_CODE"
 
 	t.Run("api subdomain", func(t *testing.T) {
-		c.UpdateApiEndpoints("https://api.snyk.io")
-		assert.Equal(t, "https://app.snyk.io"+path, getCodeEnablementUrl())
+		c.UpdateApiEndpoints(constants.SNYK_API_URL)
+		assert.Equal(t, constants.SNYK_UI_URL+path, getCodeEnablementUrl())
 	})
 
 	t.Run("Custom endpoint configuration", func(t *testing.T) {

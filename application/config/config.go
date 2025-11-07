@@ -50,6 +50,7 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
 	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
@@ -58,15 +59,12 @@ import (
 )
 
 const (
-	deeproxyApiUrlKey     = "DEEPROXY_API_URL"
-	FormatHtml            = "html"
-	FormatMd              = "md"
-	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
-	DefaultSnykApiUrl     = "https://api.snyk.io"
-	DefaultSnykUiUrl      = "https://app.snyk.io"
-	DefaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
-	pathListSeparator     = string(os.PathListSeparator)
-	windows               = "windows"
+	deeproxyApiUrlKey  = "DEEPROXY_API_URL"
+	FormatHtml         = "html"
+	FormatMd           = "md"
+	snykCodeTimeoutKey = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
+	pathListSeparator  = string(os.PathListSeparator)
+	windows            = "windows"
 )
 
 var (
@@ -77,8 +75,8 @@ var (
 	mutex                          = &sync.Mutex{}
 	LicenseInformation             = "License information\n FILLED DURING BUILD"
 	analyticsPermittedEnvironments = map[string]bool{
-		"api.snyk.io":    true,
-		"api.us.snyk.io": true,
+		strings.TrimPrefix(constants.SNYK_API_URL, "https://"):    true,
+		strings.TrimPrefix(constants.SNYK_API_US_URL, "https://"): true,
 	}
 )
 
@@ -283,7 +281,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c.addDefaults()
 	c.filterSeverity = types.DefaultSeverityFilter()
 	c.issueViewOptions = types.DefaultIssueViewOptions()
-	c.UpdateApiEndpoints(DefaultSnykApiUrl)
+	c.UpdateApiEndpoints(constants.SNYK_API_URL)
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
 	c.hoverVerbosity = 3
@@ -474,7 +472,7 @@ func (c *Config) SnykUI() string {
 
 	snykUiUrl, err := getCustomEndpointUrlFromSnykApi(c.snykApiUrl, "app")
 	if err != nil || snykUiUrl == "" {
-		return DefaultSnykUiUrl
+		return constants.SNYK_UI_URL
 	}
 
 	return snykUiUrl
@@ -548,7 +546,7 @@ func (c *Config) SetCliSettings(settings *CliSettings) {
 
 func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 	if snykApiUrl == "" {
-		snykApiUrl = DefaultSnykApiUrl
+		snykApiUrl = constants.SNYK_API_URL
 	}
 
 	if snykApiUrl != c.snykApiUrl {
@@ -578,7 +576,7 @@ func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
 	defer c.m.Unlock()
 
 	if snykCodeApiUrl == "" {
-		c.snykCodeApiUrl = DefaultDeeproxyApiUrl
+		c.snykCodeApiUrl = constants.SNYK_DEEPROXY_API_URL
 		return
 	}
 	c.snykCodeApiUrl = snykCodeApiUrl
@@ -816,7 +814,7 @@ func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
 	}
 
 	if endpoint == "" {
-		return DefaultDeeproxyApiUrl, nil
+		return constants.SNYK_DEEPROXY_API_URL, nil
 	}
 
 	// Use Snyk API endpoint to determine deeproxy API URL

@@ -44,6 +44,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -60,7 +61,7 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 	endpoint := os.Getenv("SNYK_API")
 	if endpoint == "" {
-		t.Setenv("SNYK_API", "https://api.snyk.io")
+		t.Setenv("SNYK_API", constants.SNYK_API_URL)
 	}
 	runSmokeTest(t, c, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint)
 }
@@ -83,7 +84,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 
 	endpoint := os.Getenv("SNYK_API")
 	if endpoint == "" {
-		t.Setenv("SNYK_API", "https://api.snyk.io")
+		t.Setenv("SNYK_API", constants.SNYK_API_URL)
 	}
 
 	tests := []test{
@@ -755,7 +756,7 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIss
 }
 
 func isNotStandardRegion(c *config.Config) bool {
-	return c.SnykCodeApi() != "https://deeproxy.snyk.io"
+	return c.SnykCodeApi() != constants.SNYK_DEEPROXY_API_URL
 }
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {

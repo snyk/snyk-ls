@@ -30,9 +30,8 @@ import (
 	http2 "github.com/snyk/code-client-go/http"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/constants"
 )
-
-const DefaultBaseURL = "https://downloads.snyk.io"
 
 // Release represents a Snyk CLI release with assets.
 type Release struct {
@@ -73,7 +72,7 @@ type LSReleaseMetadata struct {
 
 func NewCLIRelease(httpClient func() *http.Client) *CLIRelease {
 	return &CLIRelease{
-		baseURL:    DefaultBaseURL,
+		baseURL:    constants.SNYK_CLI_DOWNLOAD_BASE_URL,
 		httpClient: httpClient,
 	}
 }
@@ -112,7 +111,7 @@ func (r *CLIRelease) GetLatestReleaseByChannel(releaseChannel string, fipsAvaila
 
 func getBaseURL(baseURL string, fipsAvailable bool) string {
 	if fipsAvailable {
-		baseURL = path.Join(DefaultBaseURL, "/fips")
+		baseURL = path.Join(constants.SNYK_CLI_DOWNLOAD_BASE_URL, "/fips")
 	}
 	return baseURL
 }
@@ -153,7 +152,7 @@ func GetLSDownloadURL(c *config.Config, httpClient http2.HTTPClient) string {
 // GetCLIDownloadURLForProtocol returns the CLI download URL for a specific protocol version
 func GetCLIDownloadURLForProtocol(c *config.Config, baseURL string, httpClient http2.HTTPClient, protocolVersion string) string {
 	logger := c.Logger().With().Str("method", "getCLIDownloadURLForProtocol").Logger()
-	defaultFallBack := "https://github.com/snyk/cli/releases"
+	defaultFallBack := constants.GITHUB_CLI_RELEASES_URL
 	releaseChannel := getDistributionChannel(c)
 	versionURL := fmt.Sprintf("%s/cli/%s/ls-protocol-version-%s", baseURL, releaseChannel, protocolVersion)
 
@@ -191,8 +190,8 @@ func GetCLIDownloadURLForProtocol(c *config.Config, baseURL string, httpClient h
 func GetLSDownloadURLForProtocol(c *config.Config, httpClient http2.HTTPClient, protocolVersion string) string {
 	logger := c.Logger().With().Str("method", "GetLSDownloadURLForProtocol").Logger()
 	logger.Debug().Str("protocolVersion", protocolVersion).Msg("getting LS download URL for protocol version")
-	defaultFallBack := "https://github.com/snyk/snyk-ls/releases"
-	baseURL := fmt.Sprintf("https://static.snyk.io/snyk-ls/%s", protocolVersion)
+	defaultFallBack := constants.GITHUB_LS_RELEASES_URL
+	baseURL := fmt.Sprintf("%s/%s", constants.SNYK_LS_DOWNLOAD_BASE_URL, protocolVersion)
 	metadataURL := fmt.Sprintf("%s/metadata.json", baseURL)
 	bodyReader := &bytes.Buffer{}
 

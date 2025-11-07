@@ -34,6 +34,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	analytics2 "github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -144,7 +145,7 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
-	defaultUrl := config.DefaultSnykApiUrl
+	defaultUrl := constants.SNYK_API_URL
 	customUrl = strings.TrimRight(customUrl, "/ ")
 
 	// If the custom URL is not changed (equals default) and no engine URL is provided,

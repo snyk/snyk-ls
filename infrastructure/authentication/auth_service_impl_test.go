@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -73,7 +73,7 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 }
 
 func Test_AuthURL(t *testing.T) {
-	expectedURL := "https://app.snyk.io/login?token=test"
+	expectedURL := constants.SNYK_UI_URL + "/login?token=test"
 
 	c := testutil.UnitTest(t)
 	provider := &FakeAuthenticationProvider{ExpectedAuthURL: expectedURL, C: c}
@@ -139,7 +139,7 @@ func Test_UpdateCredentials(t *testing.T) {
 		token := "some_other_token"
 		service.UpdateCredentials(token, true, true)
 
-		expectedNotification := types.AuthenticationParams{Token: token, ApiUrl: config.DefaultSnykApiUrl}
+		expectedNotification := types.AuthenticationParams{Token: token, ApiUrl: constants.SNYK_API_URL}
 		assert.Equal(t, expectedNotification, mockNotifier.SentMessages()[0])
 	})
 
@@ -159,7 +159,7 @@ func Test_UpdateCredentials(t *testing.T) {
 
 func Test_Authenticate(t *testing.T) {
 	t.Run("Get endpoint from GAF config and set in snyk-ls configuration ", func(t *testing.T) {
-		apiEndpoint := "https://api.eu.snyk.io"
+		apiEndpoint := constants.SNYK_API_EU_URL
 		c := testutil.UnitTest(t)
 		c.Engine().GetConfiguration().Set(configuration.API_URL, apiEndpoint)
 
@@ -172,7 +172,7 @@ func Test_Authenticate(t *testing.T) {
 		}
 
 		uiEndpoint := c.SnykUI()
-		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
+		assert.Equal(t, constants.SNYK_UI_EU_URL, uiEndpoint)
 	})
 }
 
@@ -271,7 +271,7 @@ func TestHandleInvalidCredentials(t *testing.T) {
 }
 
 func TestGetApiUrl(t *testing.T) {
-	defaultUrl := config.DefaultSnykApiUrl
+	defaultUrl := constants.SNYK_API_URL
 	customUrl := "https://custom.snyk.io"
 	engineUrl := "https://engine.snyk.io"
 

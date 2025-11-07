@@ -21,14 +21,12 @@ import (
 	"net/url"
 	"regexp"
 
-	"github.com/snyk/snyk-ls/internal/types"
-
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const (
-	completeStatus     = "COMPLETE"
-	codeDescriptionURL = "https://docs.snyk.io/scan-using-snyk/snyk-code/snyk-code-security-rules"
+	completeStatus = "COMPLETE"
 )
 
 var (

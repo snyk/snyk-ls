@@ -34,6 +34,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -630,7 +631,7 @@ func getSarifResponseJson(filePath types.FilePath) string {
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
 	filePath, issues, resp := setupConversionTests(t, c, true)
-	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
+	issueDescriptionURL, _ := url.Parse(constants.SNYK_DOCS_CODE_RULES_URL)
 	references := referencesForSampleSarifResponse()
 
 	issue := issues[0]

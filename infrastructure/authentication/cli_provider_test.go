@@ -20,11 +20,12 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestCliAuthenticationProvider_AuthenticationMethod(t *testing.T) {
@@ -67,7 +68,7 @@ func TestSetAuthURLCmd(t *testing.T) {
 		c := testutil.UnitTest(t)
 		provider := &CliAuthenticationProvider{c: c}
 
-		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+		var expectedURL = constants.SNYK_UI_URL + "/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
 		actualURL := provider.getAuthURL(expectedURL)
 
@@ -89,8 +90,8 @@ func TestSetAuthURLCmd(t *testing.T) {
 		c := testutil.UnitTest(t)
 		provider := &CliAuthenticationProvider{c: c}
 
-		var stringWithURL = "If auth does not automatically redirect you, copy this auth link: https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
-		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+		var stringWithURL = "If auth does not automatically redirect you, copy this auth link: " + constants.SNYK_UI_URL + "/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
+		var expectedURL = constants.SNYK_UI_URL + "/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
 		actualURL := provider.getAuthURL(stringWithURL)
 
@@ -128,10 +129,10 @@ func TestBuildCLICmd(t *testing.T) {
 		c := testutil.UnitTest(t)
 		ctx := t.Context()
 		provider := &CliAuthenticationProvider{c: c}
-		c.UpdateApiEndpoints("https://api.eu.snyk.io")
+		c.UpdateApiEndpoints(constants.SNYK_API_EU_URL)
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 
-		assert.Contains(t, cmd.Env, "SNYK_API=https://api.eu.snyk.io")
+		assert.Contains(t, cmd.Env, "SNYK_API="+constants.SNYK_API_EU_URL)
 	})
 }

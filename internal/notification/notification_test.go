@@ -23,10 +23,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var params = types.AuthenticationParams{Token: "test event", ApiUrl: "https://api.snyk.io"}
+var params = types.AuthenticationParams{Token: "test event", ApiUrl: constants.SNYK_API_URL}
 
 func TestSendReceive(t *testing.T) {
 	n := NewNotifier()

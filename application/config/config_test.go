@@ -32,6 +32,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -139,31 +140,31 @@ func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T
 func TestSnykCodeApi(t *testing.T) {
 	t.Run("endpoint not provided", func(t *testing.T) {
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
-		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
+		assert.Equal(t, constants.SNYK_DEEPROXY_API_URL, codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided without 'app' prefix", func(t *testing.T) {
 		endpoint := "https://snyk.io/api/v1"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
-		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
+		assert.Equal(t, constants.SNYK_DEEPROXY_API_URL, codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix with v1 suffix", func(t *testing.T) {
 		endpoint := "https://app.snyk.io/api/v1"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
-		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
+		assert.Equal(t, constants.SNYK_DEEPROXY_API_URL, codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix without v1 suffix", func(t *testing.T) {
 		endpoint := "https://app.snyk.io/api"
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
-		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
+		assert.Equal(t, constants.SNYK_DEEPROXY_API_URL, codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'api' prefix", func(t *testing.T) {
-		endpoint := "https://api.snyk.io"
+		endpoint := constants.SNYK_API_URL
 		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
-		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
+		assert.Equal(t, constants.SNYK_DEEPROXY_API_URL, codeApiEndpoint)
 	})
 
 	t.Run("proxy endpoint provided via 'DEEPROXY_API_URL' environment variable", func(t *testing.T) {
@@ -241,14 +242,14 @@ func Test_IsFedramp(t *testing.T) {
 	t.Run("short hostname", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		c.UpdateApiEndpoints("https://api.snyk.io")
+		c.UpdateApiEndpoints(constants.SNYK_API_URL)
 		assert.False(t, c.IsFedramp())
 	})
 
 	t.Run("fedramp hostname", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		c.UpdateApiEndpoints("https://api.fedramp.snykgov.io")
+		c.UpdateApiEndpoints(constants.SNYK_API_FEDRAMP_URL)
 		assert.True(t, c.IsFedramp())
 	})
 
@@ -264,14 +265,14 @@ func Test_IsAnalyticsPermitted(t *testing.T) {
 	t.Run("Analytics not permitted for EU app", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		assert.True(t, c.UpdateApiEndpoints("https://app.eu.snyk.io/api"))
+		assert.True(t, c.UpdateApiEndpoints(constants.SNYK_UI_EU_URL+"/api"))
 		assert.False(t, c.IsAnalyticsPermitted())
 	})
 
 	t.Run("Analytics not permitted for EU api", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		assert.True(t, c.UpdateApiEndpoints("https://api.eu.snyk.io"))
+		assert.True(t, c.UpdateApiEndpoints(constants.SNYK_API_EU_URL))
 		assert.False(t, c.IsAnalyticsPermitted())
 	})
 
@@ -285,7 +286,7 @@ func Test_IsAnalyticsPermitted(t *testing.T) {
 	t.Run("Analytics permitted US hostname", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		assert.True(t, c.UpdateApiEndpoints("https://app.us.snyk.io/api"))
+		assert.True(t, c.UpdateApiEndpoints(constants.SNYK_UI_US_URL+"/api"))
 		assert.True(t, c.IsAnalyticsPermitted())
 	})
 }
@@ -295,42 +296,42 @@ func TestSnykUiEndpoint(t *testing.T) {
 	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 	t.Run("Default Api Endpoint with /api prefix", func(t *testing.T) {
 		uiEndpoint := c.SnykUI()
-		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
+		assert.Equal(t, constants.SNYK_UI_URL, uiEndpoint)
 	})
 
 	t.Run("API endpoint provided without 'app' prefix", func(t *testing.T) {
 		apiEndpoint := "https://snyk.io/api/v1"
 		c.UpdateApiEndpoints(apiEndpoint)
 		uiEndpoint := c.SnykUI()
-		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
+		assert.Equal(t, constants.SNYK_UI_URL, uiEndpoint)
 	})
 
 	t.Run("API endpoint provided with 'app' prefix with v1 suffix", func(t *testing.T) {
 		apiEndpoint := "https://app.snyk.io/api/v1"
 		c.UpdateApiEndpoints(apiEndpoint)
 		uiEndpoint := c.SnykUI()
-		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
+		assert.Equal(t, constants.SNYK_UI_URL, uiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix without v1 suffix", func(t *testing.T) {
 		apiEndpoint := "https://app.snyk.io/api"
 		c.UpdateApiEndpoints(apiEndpoint)
 		uiEndpoint := c.SnykUI()
-		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
+		assert.Equal(t, constants.SNYK_UI_URL, uiEndpoint)
 	})
 
 	t.Run("Api endpoint provided with 'api' prefix", func(t *testing.T) {
-		apiEndpoint := "https://api.snyk.io"
+		apiEndpoint := constants.SNYK_API_URL
 		c.UpdateApiEndpoints(apiEndpoint)
 		uiEndpoint := c.SnykUI()
-		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
+		assert.Equal(t, constants.SNYK_UI_URL, uiEndpoint)
 	})
 
 	t.Run("Api endpoint provided with 'api' and 'eu' prefix", func(t *testing.T) {
-		apiEndpoint := "https://api.eu.snyk.io"
+		apiEndpoint := constants.SNYK_API_EU_URL
 		c.UpdateApiEndpoints(apiEndpoint)
 		uiEndpoint := c.SnykUI()
-		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
+		assert.Equal(t, constants.SNYK_UI_EU_URL, uiEndpoint)
 		assert.Equal(t, c.SnykUI(), c.engine.GetConfiguration().Get(configuration.WEB_APP_URL))
 	})
 
@@ -338,14 +339,14 @@ func TestSnykUiEndpoint(t *testing.T) {
 		apiEndpoint := ""
 		c.UpdateApiEndpoints(apiEndpoint)
 		uiEndpoint := c.SnykUI()
-		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
+		assert.Equal(t, constants.SNYK_UI_URL, uiEndpoint)
 	})
 
 	t.Run("Fedramp API Endpoint provided with 'api' prefix", func(t *testing.T) {
-		apiEndpoint := "https://api.fedramp.snykgov.io"
+		apiEndpoint := constants.SNYK_API_FEDRAMP_URL
 		c.UpdateApiEndpoints(apiEndpoint)
 		uiEndpoint := c.SnykUI()
-		assert.Equal(t, "https://app.fedramp.snykgov.io", uiEndpoint)
+		assert.Equal(t, constants.SNYK_UI_FEDRAMP_URL, uiEndpoint)
 	})
 }
 

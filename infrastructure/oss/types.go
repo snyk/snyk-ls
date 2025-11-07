@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -124,10 +125,6 @@ func (r AppliedPolicyRules) toAppliedPolicyRules() snyk.AppliedPolicyRules {
 	}
 }
 
-var (
-	LearnLicenseUrl = "https://learn.snyk.io/lesson/license-policy-management/?loc=ide"
-)
-
 type Annotation struct {
 	Value  string `json:"value,omitempty"`
 	Reason string `json:"reason,omitempty"`
@@ -177,7 +174,7 @@ func (i *ossIssue) isLicenseIssue() bool {
 
 func (i *ossIssue) getLessonURL() string {
 	if i.isLicenseIssue() {
-		return LearnLicenseUrl
+		return constants.SNYK_LEARN_LICENSE_URL
 	}
 	return i.lesson.Url
 }
@@ -270,7 +267,7 @@ func (i *ossIssue) GetExtendedMessage(issue ossIssue) string {
 func (i *ossIssue) createCveLink() string {
 	var formattedCve string
 	for _, c := range i.Identifiers.CVE {
-		formattedCve += fmt.Sprintf("| [%s](https://cve.mitre.org/cgi-bin/cvename.cgi?name=%s)", c, c)
+		formattedCve += fmt.Sprintf("| [%s](%s?name=%s)", c, constants.CVE_MITRE_BASE_URL, c) //nolint:misspell // MITRE is the organization name
 	}
 	return formattedCve
 }
@@ -280,7 +277,7 @@ func (i *ossIssue) createIssueUrlMarkdown() string {
 }
 
 func (i *ossIssue) CreateIssueURL() *url.URL {
-	parse, err := url.Parse("https://snyk.io/vuln/" + i.Id)
+	parse, err := url.Parse(constants.SNYK_VULN_DB_BASE_URL + "/" + i.Id)
 	if err != nil {
 		config.CurrentConfig().Logger().Err(err).Msg("Unable to create issue link for issue:" + i.Id)
 	}
@@ -304,7 +301,7 @@ func (i *ossIssue) createCweLink() string {
 	var formattedCwe string
 	for _, c := range i.Identifiers.CWE {
 		id := strings.Replace(c, "CWE-", "", -1)
-		formattedCwe += fmt.Sprintf("| [%s](https://cwe.mitre.org/data/definitions/%s.html)", c, id)
+		formattedCwe += fmt.Sprintf("| [%s](%s/%s.html)", c, constants.CWE_MITRE_BASE_URL, id) //nolint:misspell // MITRE is the organization name
 	}
 	return formattedCwe
 }

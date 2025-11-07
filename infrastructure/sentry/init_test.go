@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -46,7 +47,7 @@ func Test_Sentry_BeforeSend(t *testing.T) {
 	assert.Equal(t, testEvent, result)
 
 	c.SetErrorReportingEnabled(true)
-	c.UpdateApiEndpoints("https://api.fedramp.snykgov.io")
+	c.UpdateApiEndpoints(constants.SNYK_API_FEDRAMP_URL)
 	result = beforeSend(testEvent, nil)
 	assert.Equal(t, (*sentry.Event)(nil), result)
 

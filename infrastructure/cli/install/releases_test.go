@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
@@ -104,7 +105,7 @@ func Test_getLSDownloadURLTest(t *testing.T) {
 		httpClient.EXPECT().Do(mock.MatchedBy(func(i interface{}) bool {
 			req := i.(*http.Request)
 			return req.Method == http.MethodGet &&
-				req.URL.String() == fmt.Sprintf("https://static.snyk.io/snyk-ls/%s/metadata.json", config.LsProtocolVersion)
+				req.URL.String() == fmt.Sprintf("%s/%s/metadata.json", constants.SNYK_LS_DOWNLOAD_BASE_URL, config.LsProtocolVersion)
 		})).Return(&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(bytes.NewReader(metadataJson)),
@@ -116,14 +117,14 @@ func Test_getLSDownloadURLTest(t *testing.T) {
 		}
 
 		expectedURL := fmt.Sprintf(
-			"https://static.snyk.io/snyk-ls/%s/snyk-ls_%s_%s_%s%s",
+			"%s/%s/snyk-ls_%s_%s_%s%s",
+			constants.SNYK_LS_DOWNLOAD_BASE_URL,
 			config.LsProtocolVersion,
 			metadata.Version,
 			runtime.GOOS,
 			runtime.GOARCH,
 			extIfNecessary,
 		)
-
 		downloadURL := GetLSDownloadURL(c, httpClient)
 
 		require.Equal(t, expectedURL, downloadURL)
@@ -143,18 +144,18 @@ func Test_GetCLIDownloadURL(t *testing.T) {
 			Body:       io.NopCloser(bytes.NewReader([]byte(`1.234`))),
 		}, nil).Times(1)
 
-		actual := GetCLIDownloadURL(c, DefaultBaseURL, httpClient)
+		actual := GetCLIDownloadURL(c, constants.SNYK_CLI_DOWNLOAD_BASE_URL, httpClient)
 
-		assert.Equal(t, "https://github.com/snyk/cli/releases", actual)
+		assert.Equal(t, constants.GITHUB_CLI_RELEASES_URL, actual)
 	})
 	t.Run("CLI, stable, non fips", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		version := "v1.234"
 		httpClient, name := setupCLIDownloadURLTest(t, "stable", version, c)
 
-		actual := GetCLIDownloadURL(c, DefaultBaseURL, httpClient)
+		actual := GetCLIDownloadURL(c, constants.SNYK_CLI_DOWNLOAD_BASE_URL, httpClient)
 
-		assert.Equal(t, "https://downloads.snyk.io/cli/v1.234/"+name, actual)
+		assert.Equal(t, constants.SNYK_CLI_DOWNLOAD_BASE_URL+"/cli/v1.234/"+name, actual)
 	})
 	t.Run("CLI, preview, non fips", func(t *testing.T) {
 		c := testutil.UnitTest(t)
@@ -162,9 +163,9 @@ func Test_GetCLIDownloadURL(t *testing.T) {
 		version := fmt.Sprintf("v1.234-%s.", releaseChannel)
 		httpClient, name := setupCLIDownloadURLTest(t, releaseChannel, version, c)
 
-		actual := GetCLIDownloadURL(c, DefaultBaseURL, httpClient)
+		actual := GetCLIDownloadURL(c, constants.SNYK_CLI_DOWNLOAD_BASE_URL, httpClient)
 
-		assert.Equal(t, "https://downloads.snyk.io/cli/v1.234-preview./"+name, actual)
+		assert.Equal(t, constants.SNYK_CLI_DOWNLOAD_BASE_URL+"/cli/v1.234-preview./"+name, actual)
 	})
 }
 
@@ -176,7 +177,7 @@ func setupCLIDownloadURLTest(t *testing.T, releaseChannel, version string, c *co
 	httpClient := mocks.NewMockHTTPClient(ctrl)
 	httpClient.EXPECT().Do(mock.MatchedBy(func(i interface{}) bool {
 		req := i.(*http.Request)
-		return req.URL.String() == fmt.Sprintf("https://downloads.snyk.io/cli/%s/ls-protocol-version-%s", releaseChannel, config.LsProtocolVersion) &&
+		return req.URL.String() == fmt.Sprintf("%s/cli/%s/ls-protocol-version-%s", constants.SNYK_CLI_DOWNLOAD_BASE_URL, releaseChannel, config.LsProtocolVersion) &&
 			req.Method == http.MethodGet
 	})).Return(&http.Response{
 		StatusCode: http.StatusOK,

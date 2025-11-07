@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/snyk/snyk-ls/internal/constants"
 )
 
 // GitHubRelease represents a GitHub release
@@ -57,7 +59,7 @@ func (g *GitHubClient) FetchReleases(owner, repo string, since time.Time) ([]Git
 	perPage := 100
 
 	for {
-		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?page=%d&per_page=%d", owner, repo, page, perPage)
+		url := fmt.Sprintf("%s/repos/%s/%s/releases?page=%d&per_page=%d", constants.GITHUB_API_BASE_URL, owner, repo, page, perPage)
 
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {

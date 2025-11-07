@@ -22,13 +22,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_GetLearnEndpoint(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.UpdateApiEndpoints("https://api.snyk.io")
+	c.UpdateApiEndpoints(constants.SNYK_API_URL)
 	gafConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
 	cut := New(gafConfig, logger, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
@@ -36,7 +37,7 @@ func Test_GetLearnEndpoint(t *testing.T) {
 	endpoint, err := cut.LearnEndpoint()
 
 	assert.NoError(t, err)
-	assert.Equal(t, "https://api.snyk.io/v1/learn", endpoint)
+	assert.Equal(t, constants.SNYK_API_URL+"/v1/learn", endpoint)
 }
 
 func getRealOSSLookupParams() *LessonLookupParams {
@@ -59,7 +60,7 @@ func getRealCodeLookupParams() LessonLookupParams {
 
 func Test_GetLesson(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
-	c.UpdateApiEndpoints("https://api.snyk.io")
+	c.UpdateApiEndpoints(constants.SNYK_API_URL)
 	gafConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
 	cut := New(gafConfig, logger, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)

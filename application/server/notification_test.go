@@ -30,6 +30,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -154,7 +155,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var expected = types.AuthenticationParams{Token: "test token", ApiUrl: "https://api.snyk.io"}
+	var expected = types.AuthenticationParams{Token: "test token", ApiUrl: constants.SNYK_API_URL}
 
 	c.SetLSPInitialized(true)
 

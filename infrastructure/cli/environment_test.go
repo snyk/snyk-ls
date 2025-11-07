@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -49,7 +50,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		c.SetAuthenticationMethod(types.OAuthAuthentication)
 		c.SetOrganization("testOrg")
-		c.UpdateApiEndpoints("https://api.eu.snyk.io")
+		c.UpdateApiEndpoints(constants.SNYK_API_EU_URL)
 		c.SetIntegrationName(expectedIntegrationName)
 		c.SetIntegrationVersion(expectedIntegrationVersion)
 		c.SetIdeVersion(expectedIdeVersion)
@@ -66,7 +67,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		assert.Contains(t, updatedEnv, ApiEnvVar+"=https://api.eu.snyk.io")
+		assert.Contains(t, updatedEnv, ApiEnvVar+"="+constants.SNYK_API_EU_URL)
 		token, err := c.TokenAsOAuthToken()
 		require.NoError(t, err)
 		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)

@@ -39,13 +39,14 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/filesystem"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func createRuleLink() (u *url.URL) {
-	u, err := url.Parse(codeDescriptionURL)
+	u, err := url.Parse(constants.SNYK_DOCS_CODE_RULES_URL)
 	if err != nil {
 		return u
 	}

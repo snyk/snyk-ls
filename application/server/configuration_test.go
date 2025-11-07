@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/command/mock_command"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -194,7 +195,7 @@ func Test_UpdateSettings(t *testing.T) {
 			ActivateSnykCode:             "false",
 			ActivateSnykIac:              "false",
 			Insecure:                     "true",
-			Endpoint:                     "https://api.snyk.io",
+			Endpoint:                     constants.SNYK_API_URL,
 			AdditionalParams:             "--all-projects -d",
 			AdditionalEnv:                "a=b;c=d",
 			Path:                         "addPath",
@@ -242,7 +243,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, false, c.IsSnykIacEnabled())
 		assert.Equal(t, true, c.CliSettings().Insecure)
 		assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
-		assert.Equal(t, "https://api.snyk.io", c.SnykApi())
+		assert.Equal(t, constants.SNYK_API_URL, c.SnykApi())
 		assert.Equal(t, "b", os.Getenv("a"))
 		assert.Equal(t, "d", os.Getenv("c"))
 		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), "addPath"+string(os.PathListSeparator)))
@@ -300,7 +301,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 		UpdateSettings(c, types.Settings{}, "test")
 
-		assert.Equal(t, config.DefaultDeeproxyApiUrl, c.SnykCodeApi())
+		assert.Equal(t, constants.SNYK_DEEPROXY_API_URL, c.SnykCodeApi())
 	})
 
 	t.Run("blank organization is ignored", func(t *testing.T) {

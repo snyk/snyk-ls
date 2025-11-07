@@ -20,12 +20,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func Test_getExplain_Endpoint(t *testing.T) {
@@ -36,7 +36,7 @@ func Test_getExplain_Endpoint(t *testing.T) {
 		folder := types.FilePath(t.TempDir())
 		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{FolderPath: folder, PreferredOrg: orgUUID, OrgSetByUser: true}, c.Logger())
 		actualEndpoint := getExplainEndpoint(c, folder).String()
-		expectedEndpoint := "https://api.snyk.io/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"
+		expectedEndpoint := constants.SNYK_API_URL + "/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"
 		assert.Equal(t, expectedEndpoint, actualEndpoint)
 	})
 }
