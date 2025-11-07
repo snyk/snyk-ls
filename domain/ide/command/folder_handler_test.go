@@ -254,8 +254,7 @@ func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
 	t.Cleanup(func() {
 		SetService(originalService)
 	})
-	mockService := types.NewCommandServiceMock()
-	mockService.SetOrgResolver(nil)
+	mockService := types.NewCommandServiceMock(nil)
 	SetService(mockService)
 
 	folderConfig := &types.FolderConfig{
