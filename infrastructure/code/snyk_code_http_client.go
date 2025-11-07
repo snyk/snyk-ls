@@ -50,18 +50,33 @@ func issueSeverity(snykSeverity string) types.Severity {
 	return sev
 }
 
-// GetCodeApiUrl returns the code API URL.
-func GetCodeApiUrl(c *config.Config) (string, error) {
-	return GetCodeApiUrlForFolder(c, "")
-}
-
 // GetCodeApiUrlForFolder returns the code API URL. In FedRAMP, it uses the organization from the given folder
 // when set; otherwise it falls back to the global organization for backward compatibility.
 func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, error) {
-	if !c.IsFedramp() {
-		return c.SnykCodeApi(), nil
+	folderConfig := c.FolderConfig(folder)
+
+	if folderConfig == nil {
+		return c.Endpoint(), nil
 	}
-	u, err := url.Parse(c.SnykCodeApi())
+
+	var endpoint string
+	var err error
+	if isLocalEngineEnabled(folderConfig.SastSettings) {
+		endpoint = updateCodeApiLocalEngine(c, folderConfig.SastSettings)
+	} else {
+		endpoint, err = c.GetCodeApiUrlFromCustomEndpoint(folderConfig.SastSettings)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if !c.IsFedramp() {
+		return endpoint, nil
+	}
+
+	// we should not have SCLE in fedramp, but this code may still run and it should work even with SCLE
+
+	u, err := url.Parse(endpoint)
 	if err != nil {
 		return "", err
 	}

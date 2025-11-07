@@ -18,6 +18,7 @@ package code
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -157,15 +158,17 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		return issues, errors.New("folder config or SAST settings not available")
 	}
 
-	if !sc.isSastEnabled(folderConfig.SastSettings) {
+	sastResponse := folderConfig.SastSettings
+
+	if !sc.isSastEnabled(sastResponse) {
 		return issues, errors.New("SAST is not enabled")
 	}
 
-	if sc.isLocalEngineEnabled(folderConfig.SastSettings) {
-		sc.updateCodeApiLocalEngine(folderConfig.SastSettings)
+	if isLocalEngineEnabled(sastResponse) {
+		updateCodeApiLocalEngine(sc.C, sastResponse)
 	}
 
-	sc.C.SetSnykAgentFixEnabled(folderConfig.SastSettings.AutofixEnabled)
+	sc.C.SetSnykAgentFixEnabled(sastResponse.AutofixEnabled)
 
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[folderPath] == nil {
@@ -443,21 +446,28 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 
 // createCodeConfig creates a new codeConfig with Organization populated from folder configuration
 // and delegates other values to the language server config
-func (sc *Scanner) createCodeConfig(path types.FilePath) codeClientConfig.Config {
+func (sc *Scanner) createCodeConfig(path types.FilePath) (codeClientConfig.Config, error) {
 	// Get organization from folder configuration for the specific path
 	organization := sc.C.FolderOrganization(path)
+	codeApiURL, err := GetCodeApiUrlForFolder(sc.C, path)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to get code api url for folder %s", path)
+		sc.C.Logger().Error().Msg(msg)
+		return nil, err
+	}
 
 	// Create a lazy config that delegates to the language server config
 	return &CodeConfig{
 		orgForFolder: organization,
 		lsConfig:     sc.C,
-	}
+		codeApiUrl:   codeApiURL,
+	}, nil
 }
 
 // CreateCodeScanner creates a real code scanner with Organization populated from folder configuration
 func CreateCodeScanner(scanner *Scanner, path types.FilePath) codeClient.CodeScanner {
 	// Create a new codeConfig with Organization populated from folder configuration
-	codeConfig := scanner.createCodeConfig(path)
+	codeConfig, _ := scanner.createCodeConfig(path)
 
 	// Create a new HTTP client
 	httpClient := codeClientHTTP.NewHTTPClient(

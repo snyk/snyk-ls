@@ -810,7 +810,7 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIss
 }
 
 func isNotStandardRegion(c *config.Config) bool {
-	return c.SnykCodeApi() != "https://deeproxy.snyk.io"
+	return c.Endpoint() != "https://api.snyk.io" && c.Endpoint() != ""
 }
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
@@ -1523,8 +1523,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(*config.Config)) {
 	t.Helper()
-	t.Setenv("SNYK_LOG_LEVEL", "debug")
-	c.SetLogLevel(zerolog.LevelDebugValue)
+	t.Setenv("SNYK_LOG_LEVEL", "info")
+	c.SetLogLevel(zerolog.LevelInfoValue)
 	c.ConfigureLogging(loc.Server)
 	gafConfig := c.Engine().GetConfiguration()
 	gafConfig.Set(configuration.DEBUG, c.Logger().GetLevel() == zerolog.DebugLevel)

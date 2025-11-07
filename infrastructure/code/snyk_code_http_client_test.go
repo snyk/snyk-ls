@@ -17,19 +17,25 @@
 package code
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/storage"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestGetCodeApiUrl(t *testing.T) {
-	c := testutil.UnitTest(t)
-
 	t.Run("Snykgov instances code api url generation", func(t *testing.T) {
 		t.Setenv("DEEPROXY_API_URL", "")
+		c := testutil.UnitTest(t)
 
 		var snykgovInstances = []string{
 			"snykgov",
@@ -49,15 +55,13 @@ func TestGetCodeApiUrl(t *testing.T) {
 			}
 
 			for _, input := range inputList {
-				random, _ := uuid.NewRandom()
-				orgUUID := random.String()
-
+				orgUUID, folder, err := createTempDirFolderConfig(t, c, input)
+				assert.NoError(t, err)
 				c.UpdateApiEndpoints(input)
-				c.SetOrganization(orgUUID)
 
 				expected := "https://api." + instance + ".io/hidden/orgs/" + orgUUID + "/code"
 
-				actual, err := GetCodeApiUrl(c)
+				actual, err := GetCodeApiUrlForFolder(c, types.FilePath(folder))
 				assert.Nil(t, err)
 				assert.Contains(t, actual, expected)
 			}
@@ -66,7 +70,7 @@ func TestGetCodeApiUrl(t *testing.T) {
 
 	t.Run("Deeproxy instances code api url generation", func(t *testing.T) {
 		t.Setenv("DEEPROXY_API_URL", "")
-
+		c := testutil.UnitTest(t)
 		var deeproxyInstances = []string{
 			"snyk",
 			"au.snyk",
@@ -88,9 +92,11 @@ func TestGetCodeApiUrl(t *testing.T) {
 			expected := "https://deeproxy." + instance + ".io"
 
 			for _, input := range inputList {
+				_, folder, err := createTempDirFolderConfig(t, c, input)
+				assert.NoError(t, err)
 				c.UpdateApiEndpoints(input)
 
-				actual, err := GetCodeApiUrl(c)
+				actual, err := GetCodeApiUrlForFolder(c, types.FilePath(folder))
 				assert.Nil(t, err)
 				assert.Contains(t, actual, expected)
 			}
@@ -98,7 +104,45 @@ func TestGetCodeApiUrl(t *testing.T) {
 	})
 
 	t.Run("Default deeprox url for code api", func(t *testing.T) {
-		url, _ := GetCodeApiUrl(c)
-		assert.Equal(t, c.SnykCodeApi(), url)
+		c := testutil.UnitTest(t)
+		_, folder, err := createTempDirFolderConfig(t, c, "")
+		assert.NoError(t, err)
+		url, _ := GetCodeApiUrlForFolder(c, types.FilePath(folder))
+		assert.Equal(t, config.DefaultDeeproxyApiUrl, url)
 	})
+}
+
+func createTempDirFolderConfig(t *testing.T, c *config.Config, endpoint string) (string, string, error) {
+	t.Helper()
+	random, _ := uuid.NewRandom()
+	orgUUID := random.String()
+	folder := t.TempDir()
+	storageFile := filepath.Join(t.TempDir(), "testStorage")
+	storage, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
+	require.NoError(t, err)
+	c.SetStorage(storage)
+
+	configuration := c.Engine().GetConfiguration()
+	logger := c.Logger()
+	folderConfig, err := storedconfig.GetOrCreateFolderConfig(configuration, types.FilePath(folder), logger)
+	require.NoError(t, err)
+
+	sastResponse := sast_contract.SastResponse{
+		SastEnabled: true,
+		LocalCodeEngine: sast_contract.LocalCodeEngine{
+			AllowCloudUpload: false,
+			Url:              endpoint,
+			Enabled:          false,
+		},
+		Org:                         orgUUID,
+		SupportedLanguages:          nil,
+		ReportFalsePositivesEnabled: false,
+		AutofixEnabled:              false,
+	}
+	folderConfig.SastSettings = &sastResponse
+	folderConfig.OrgSetByUser = true
+	folderConfig.PreferredOrg = orgUUID
+	folderConfig.AutoDeterminedOrg = orgUUID
+	storedconfig.UpdateFolderConfig(configuration, folderConfig, logger)
+	return orgUUID, folder, err
 }

@@ -30,7 +30,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command/mock_command"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -43,6 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -55,9 +55,9 @@ func setupMockOrgResolver(t *testing.T, org ldx_sync_config.Organization) {
 	})
 
 	ctrl := gomock.NewController(t)
-	mockResolver := mock_command.NewMockOrgResolver(ctrl)
+	mockResolver := mock_types.NewMockOrgResolver(ctrl)
 	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(org, nil).AnyTimes()
-	mockService := types.NewCommandServiceMock()
+	mockService := types.NewCommandServiceMock(nil)
 	mockService.SetOrgResolver(mockResolver)
 	SetService(mockService)
 }
@@ -71,9 +71,9 @@ func setupMockOrgResolverWithError(t *testing.T, err error) {
 	})
 
 	ctrl := gomock.NewController(t)
-	mockResolver := mock_command.NewMockOrgResolver(ctrl)
+	mockResolver := mock_types.NewMockOrgResolver(ctrl)
 	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{}, err).AnyTimes()
-	mockService := types.NewCommandServiceMock()
+	mockService := types.NewCommandServiceMock(nil)
 	mockService.SetOrgResolver(mockResolver)
 	SetService(mockService)
 }
@@ -238,6 +238,35 @@ func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	require.Error(t, err)
 }
 
+// Test GetBestOrgFromLdxSync fallback when resolver is nil
+func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
+	c := testutil.UnitTest(t)
+	mockEngine, gafConfig := testutil.SetUpEngineMock(t, c)
+	mockEngine.EXPECT().GetConfiguration().Return(gafConfig).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+
+	// Set organization in GAF config
+	expectedOrgId := "fallback-org-id"
+	gafConfig.Set(configuration.ORGANIZATION, expectedOrgId)
+
+	// Ensure no resolver is set (default state)
+	originalService := Service()
+	t.Cleanup(func() {
+		SetService(originalService)
+	})
+	mockService := types.NewCommandServiceMock(nil)
+	SetService(mockService)
+
+	folderConfig := &types.FolderConfig{
+		FolderPath: types.FilePath(t.TempDir()),
+	}
+
+	org, err := GetBestOrgFromLdxSync(c, folderConfig)
+
+	require.NoError(t, err)
+	assert.Equal(t, expectedOrgId, org.Id, "Should fallback to GAF config organization")
+}
+
 // Test sendFolderConfigs with LDX-Sync error (should continue with other folders)
 func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 	c := testutil.UnitTest(t)
@@ -287,7 +316,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	})
 
 	ctrl := gomock.NewController(t)
-	mockResolver := mock_command.NewMockOrgResolver(ctrl)
+	mockResolver := mock_types.NewMockOrgResolver(ctrl)
 	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string) (ldx_sync_config.Organization, error) {
 			return ldx_sync_config.Organization{
@@ -297,7 +326,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 				IsDefault: util.Ptr(false),
 			}, nil
 		}).AnyTimes()
-	mockService := types.NewCommandServiceMock()
+	mockService := types.NewCommandServiceMock(nil)
 	mockService.SetOrgResolver(mockResolver)
 	SetService(mockService)
 
