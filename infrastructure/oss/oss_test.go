@@ -400,6 +400,22 @@ func Test_prepareScanCommand(t *testing.T) {
 		assert.Contains(t, cmd, "--file=asdf")
 	})
 
+	t.Run("support `--`", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+
+		settings := config.CliSettings{
+			AdditionalOssParameters: []string{"-d", "--", "-PappBuild=true", "-Prules=false", "-x"},
+			C:                       c,
+		}
+		c.SetCliSettings(&settings)
+
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+
+		assert.Contains(t, cmd, "--")
+		assert.Equal(t, "-x", cmd[len(cmd)-1])
+	})
+
 	t.Run("Uses --all-projects by default", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
@@ -413,7 +429,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
 
 		assert.Contains(t, cmd, "--all-projects")
-		assert.Len(t, cmd, 4)
+		assert.Lenf(t, cmd, 6, "cmd: %v", cmd)
 	})
 }
 

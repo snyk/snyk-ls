@@ -238,6 +238,36 @@ func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	require.Error(t, err)
 }
 
+// Test GetBestOrgFromLdxSync fallback when resolver is nil
+func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
+	c := testutil.UnitTest(t)
+	mockEngine, gafConfig := testutil.SetUpEngineMock(t, c)
+	mockEngine.EXPECT().GetConfiguration().Return(gafConfig).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+
+	// Set organization in GAF config
+	expectedOrgId := "fallback-org-id"
+	gafConfig.Set(configuration.ORGANIZATION, expectedOrgId)
+
+	// Ensure no resolver is set (default state)
+	originalService := Service()
+	t.Cleanup(func() {
+		SetService(originalService)
+	})
+	mockService := types.NewCommandServiceMock()
+	mockService.SetOrgResolver(nil)
+	SetService(mockService)
+
+	folderConfig := &types.FolderConfig{
+		FolderPath: types.FilePath(t.TempDir()),
+	}
+
+	org, err := GetBestOrgFromLdxSync(c, folderConfig)
+
+	require.NoError(t, err)
+	assert.Equal(t, expectedOrgId, org.Id, "Should fallback to GAF config organization")
+}
+
 // Test sendFolderConfigs with LDX-Sync error (should continue with other folders)
 func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 	c := testutil.UnitTest(t)
