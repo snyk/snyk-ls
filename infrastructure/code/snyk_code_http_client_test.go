@@ -136,11 +136,12 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 			inputList := []string{
 				"https://" + instance + ".io/api/v1",
 				"https://" + instance + ".io/api",
-				"https://app." + instance + ".io/api/v1",
 				"https://app." + instance + ".io/api",
+				"https://app." + instance + ".io/api/v1",
 				"https://api." + instance + ".io/api/v1",
 				"https://api." + instance + ".io/v1",
 				"https://api." + instance + ".io",
+				"https://api." + instance + ".io?something=here",
 			}
 
 			for _, input := range inputList {
@@ -186,11 +187,12 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 			inputList := []string{
 				"https://" + instance + ".io/api/v1",
 				"https://" + instance + ".io/api",
-				"https://app." + instance + ".io/api/v1",
 				"https://app." + instance + ".io/api",
+				"https://app." + instance + ".io/api/v1",
 				"https://api." + instance + ".io/api/v1",
 				"https://api." + instance + ".io/v1",
 				"https://api." + instance + ".io",
+				"https://api." + instance + ".io?something=here",
 			}
 
 			expected := "https://deeproxy." + instance + ".io"
