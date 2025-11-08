@@ -336,11 +336,11 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 func EnrichContextForTest(t *testing.T, ctx context.Context, c *config.Config, folderPath string) context.Context {
 	t.Helper()
 	// add logger to context
-	newCtx := ctx2.NewContextWithLogger(t.Context(), c.Logger())
+	newCtx := ctx2.NewContextWithLogger(ctx, c.Logger())
 
 	// add scanner dependencies to context
 	folderConfig := c.FolderConfig(types.FilePath(folderPath))
-	newCtx = ctx2.NewContextWithDependencies(ctx, map[string]any{
+	newCtx = ctx2.NewContextWithDependencies(newCtx, map[string]any{
 		ctx2.DepFolderConfig: folderConfig,
 	})
 	return newCtx
