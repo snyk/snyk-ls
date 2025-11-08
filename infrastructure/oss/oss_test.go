@@ -317,11 +317,11 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 
 	// Act
 	for i := 0; i < concurrentScanRequests; i++ {
-		// Adding a short delay so the cancel listener will start before a new scan is sending the cancel signal
-		time.Sleep(100 * time.Millisecond)
 
 		wg.Add(1)
 		go func() {
+			// Adding a short delay so the cancel listener will start before a new scan is sending the cancel signal
+			time.Sleep(200 * time.Millisecond)
 			ctx := EnrichContextForTest(t, t.Context(), c, workingDir)
 			_, _ = scanner.Scan(ctx, types.FilePath(p), types.FilePath(folderPath), nil)
 			wg.Done()

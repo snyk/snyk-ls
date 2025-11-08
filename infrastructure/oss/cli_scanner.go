@@ -217,10 +217,10 @@ func (cliScanner *CLIScanner) scanInternal(
 	}
 
 	// save parent context for scheduling refresh scan
-	parentCtx := ctx
+	parentCtx := s.Context()
 
 	// create cancelable progress tracker
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(s.Context())
 	defer cancel()
 
 	p := progress.NewTracker(true)
@@ -264,14 +264,6 @@ func (cliScanner *CLIScanner) scanInternal(
 		return []types.Issue{}, nil
 	}
 
-	// mark scan done
-	defer func() {
-		cliScanner.mutex.Lock()
-		logger.Debug().Msgf("Scan %v is done", i)
-		newScan.SetDone()
-		cliScanner.mutex.Unlock()
-	}()
-
 	// determine which scanner to use
 	useLegacyScan := !folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"]
 	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨🚨🚨🚨 oss scan usage 🚨🚨🚨🚨")
@@ -281,14 +273,14 @@ func (cliScanner *CLIScanner) scanInternal(
 	if useLegacyScan {
 		logger.Info().Msg("⚠️ using legacy OSS scanner")
 
-		output, err = cliScanner.legacyScan(s.Context(), path, cmd, workDir)
+		output, err = cliScanner.legacyScan(ctx, path, cmd, workDir)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
 			return []types.Issue{}, err
 		}
 	} else {
 		logger.Info().Msg("🐉🪰using new ostest scanner")
-		output, err = cliScanner.ostestScan(s.Context(), path, cmd, workDir)
+		output, err = cliScanner.ostestScan(ctx, path, cmd, workDir)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
 			return []types.Issue{}, err
@@ -297,6 +289,12 @@ func (cliScanner *CLIScanner) scanInternal(
 
 	// convert scan results into issues
 	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workDir, path, cliScanner.config.Format())
+
+	// mark scan done
+	cliScanner.mutex.Lock()
+	logger.Debug().Msgf("Scan %v is done", i)
+	newScan.SetDone()
+	cliScanner.mutex.Unlock()
 
 	// scan again after cache expiry
 	if issues != nil {
