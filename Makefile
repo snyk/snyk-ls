@@ -38,7 +38,8 @@ TIMEOUT := "-timeout=45m"
 ## tools: Install required tooling.
 .PHONY: tools
 tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
-	@echo "Please make sure to install NPM locally to be able to run analytics verification Ampli."
+	@pre-commit install
+	@pre-commit install --hook-type pre-push
 
 $(TOOLS_BIN)/go-licenses:
 	@echo "==> Installing go-licenses"
