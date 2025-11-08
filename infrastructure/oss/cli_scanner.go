@@ -423,7 +423,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 	path types.FilePath,
 	format string,
 ) (issues []types.Issue) {
-	issues, err := UnmarshallAndRetrieveAnalysis(
+	issues, err := ProcessScanResults(
 		ctx,
 		scanOutput,
 		workDir,

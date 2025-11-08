@@ -150,18 +150,18 @@ func convertScanResultToIssues(logger *zerolog.Logger, res *scanResult, workDir 
 
 	duplicateCheckMap := map[string]bool{}
 
-	for _, issue := range res.Vulnerabilities {
-		if issue.IsIgnored {
-			logger.Debug().Msgf("skipping ignored issue %s", issue.Id)
+	for _, ossLegacyIssue := range res.Vulnerabilities {
+		if ossLegacyIssue.IsIgnored {
+			logger.Debug().Msgf("skipping ignored issue %s", ossLegacyIssue.Id)
 			continue
 		}
-		packageKey := issue.PackageName + "@" + issue.Version
-		duplicateKey := string(targetFilePath) + "|" + issue.Id + "|" + issue.PackageName
+		packageKey := ossLegacyIssue.PackageName + "@" + ossLegacyIssue.Version
+		duplicateKey := string(targetFilePath) + "|" + ossLegacyIssue.Id + "|" + ossLegacyIssue.PackageName
 		if duplicateCheckMap[duplicateKey] {
 			continue
 		}
-		node := getDependencyNode(logger, targetFilePath, issue.PackageManager, issue.From, fileContent)
-		snykIssue := toIssue(workDir, targetFilePath, issue, res, node, learnService, ep, format)
+		node := getDependencyNode(logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent)
+		snykIssue := toIssue(workDir, targetFilePath, ossLegacyIssue, res, node, learnService, ep, format)
 		packageIssueCacheMutex.Lock()
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		packageIssueCacheMutex.Unlock()

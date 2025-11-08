@@ -38,7 +38,7 @@ import (
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
 func ConvertJSONToIssues(logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
 	// Call the standalone version of unmarshallAndRetrieveAnalysis
-	issues, _ := UnmarshallAndRetrieveAnalysis(
+	issues, _ := ProcessScanResults(
 		context.Background(),
 		jsonData,
 		types.FilePath(workDir),
@@ -54,10 +54,11 @@ func ConvertJSONToIssues(logger *zerolog.Logger, jsonData []byte, learnService l
 	return issues, nil
 }
 
-// UnmarshallAndRetrieveAnalysis is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
-// that can be used without a CLIScanner instance
+// ProcessScanResults takes the results from the scanner and transforms them into
+// our internal issue format. It also populates the given package cache with the
+// found problems per package.
 //   - scanOutput: the output of the scan (can be either a []byte or []workflow.Data)
-func UnmarshallAndRetrieveAnalysis(
+func ProcessScanResults(
 	ctx context.Context,
 	scanOutput any,
 	workDir types.FilePath,
