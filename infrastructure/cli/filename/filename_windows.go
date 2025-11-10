@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+// Package filename implements os specific filename functionality
 package filename
 
 const ExecutableName = "snyk-win.exe"
