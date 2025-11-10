@@ -1495,7 +1495,7 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 	assert.NoError(t, err)
 
 	// Filter out old stored folder configs and only keep the ones from initParams
-	storedConfig, getSCErr := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+	storedConfig, getSCErr := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	if getSCErr == nil {
 		filteredConfigs := make(map[types.FilePath]*types.FolderConfig)
 		for _, fc := range initParams.InitializationOptions.FolderConfigs {
@@ -1572,7 +1572,7 @@ func sendModifiedFolderConfiguration(
 	modification func(folderConfigs map[types.FilePath]*types.FolderConfig),
 ) {
 	t.Helper()
-	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	require.NoError(t, err)
 	modification(storedConfig.FolderConfigs)
 	sendConfigurationDidChange(t, loc, types.Settings{

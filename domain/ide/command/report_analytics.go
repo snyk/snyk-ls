@@ -52,8 +52,8 @@ func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 			return nil, fmt.Errorf("error converting argument to string. %v", arg)
 		}
 
-		// Send to first folder's org since analytics are sent to a specific org,
-		// the first folder's org has as good a chance as any to work and not 404.
+		// Send to any folder's org since analytics are sent to a specific org,
+		// any folder's org has as good a chance as any other to work and not 404.
 		// Payloads from the IDEs don't have folder context, are not folder-specific, are not org specific,
 		// and do not appear in any TopCoat reports, the analytics are only consumed by us.
 		// TODO - This is a temporary solution to avoid inflating analytics counts.
@@ -61,10 +61,10 @@ func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 		if ws != nil {
 			folders := ws.Folders()
 			if len(folders) > 0 {
-				firstFolderOrg := c.FolderOrganization(folders[0].Path())
-				err := analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), firstFolderOrg, []byte(payload))
+				aFolderOrg := c.FolderOrganization(folders[0].Path())
+				err := analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), aFolderOrg, []byte(payload))
 				if err != nil {
-					logger.Err(err).Str("firstFolderOrg", firstFolderOrg).Msg("error sending analytics to API")
+					logger.Err(err).Str("aFolderOrg", aFolderOrg).Msg("error sending analytics to API")
 					return nil, err
 				}
 				continue

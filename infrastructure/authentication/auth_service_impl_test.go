@@ -79,9 +79,8 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 	// Shared test constants
 	const (
-		firstFolderOrg  = "first-folder-org"
-		secondFolderOrg = "second-folder-org"
-		globalOrg       = "global-org"
+		testFolderOrg = "test-folder-org"
+		globalOrg     = "global-org"
 	)
 
 	testCases := []struct {
@@ -90,7 +89,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 		expectedOrg string
 	}{
 		{
-			name: "uses first folder specific org",
+			name: "uses any folder specific org",
 			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
 				t.Helper()
 
@@ -99,19 +98,19 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 
 				folder1Config := &types.FolderConfig{
 					FolderPath:   folder1Path,
-					PreferredOrg: firstFolderOrg,
+					PreferredOrg: testFolderOrg,
 					OrgSetByUser: true,
 				}
 				folder2Config := &types.FolderConfig{
 					FolderPath:   folder2Path,
-					PreferredOrg: secondFolderOrg,
+					PreferredOrg: testFolderOrg,
 					OrgSetByUser: true,
 				}
 
 				err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder1Config, c.Logger())
-				require.NoError(t, err, "failed to configure first folder org")
+				require.NoError(t, err, "failed to configure first folder's org")
 				err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder2Config, c.Logger())
-				require.NoError(t, err, "failed to configure second folder org")
+				require.NoError(t, err, "failed to configure second folder's org")
 
 				// Set a different global org to ensure folder-specific org takes precedence
 				c.SetOrganization(globalOrg)
@@ -124,11 +123,12 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 				mockFolder2.EXPECT().Path().Return(folder2Path).AnyTimes()
 
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+				// FYI, mock returns deterministic slice order, but real Workspace.Folders() returns the slice in a random order
 				mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder1, mockFolder2}).AnyTimes()
 
 				return mockWorkspace
 			},
-			expectedOrg: firstFolderOrg,
+			expectedOrg: testFolderOrg,
 		},
 		{
 			name: "falls back to global org when no folders",

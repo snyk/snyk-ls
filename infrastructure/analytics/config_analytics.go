@@ -48,8 +48,8 @@ func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any,
 		return
 	}
 
-	// Send to first folder's org only, since global config changes are not folder-specific, but analytics have to be sent
-	// to a specific org, so the first folder's org has as good a chance as any to work and not 404.
+	// Send to any folder's org, since global config changes are not folder-specific, but analytics have to be sent
+	// to a specific org, so any folder's org has as good a chance as any other to work and not 404.
 	// TODO - This is a temporary solution to avoid inflating analytics counts.
 	ws := c.Workspace()
 	if ws != nil {

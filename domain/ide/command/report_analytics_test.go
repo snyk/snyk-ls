@@ -42,7 +42,7 @@ import (
 )
 
 func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
-	t.Run("sends analytics to first folder org", func(t *testing.T) {
+	t.Run("sends analytics to any folder org", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
@@ -53,17 +53,19 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		testInput := "some data"
 		cmd := setupReportAnalyticsCommand(t, c, testInput)
 
-		// Configure first folder with a specific org
-		firstFolderOrg := "test-first-folder-org"
-		err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{
-			FolderPath:                  folderPaths[0],
-			PreferredOrg:                firstFolderOrg,
-			OrgMigratedFromGlobalConfig: true,
-			OrgSetByUser:                true,
-		}, c.Logger())
-		require.NoError(t, err)
+		// Configure both folders with the same org (since we rely on Folders(), which returns slice in a random order)
+		testFolderOrg := "test-folder-org"
+		for _, folderPath := range folderPaths {
+			err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{
+				FolderPath:                  folderPath,
+				PreferredOrg:                testFolderOrg,
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                true,
+			}, c.Logger())
+			require.NoError(t, err)
+		}
 
-		// Capture workflow invocations to verify first folder's org is used
+		// Capture workflow invocations to verify folder's org is used
 		// We expect 2 calls: 1 for authentication analytics, and 1 for the payload itself
 		capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 2)
 		mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
@@ -72,7 +74,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		require.NoError(t, err)
 		require.Emptyf(t, output, "output should be empty")
 
-		// Verify both analytics calls used first folder's org
+		// Verify both analytics calls used the configured folder org
 		for i := range 2 {
 			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent (call %d of 2)", i+1)
 
@@ -90,7 +92,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 			}
 
 			actualOrg := captured.Config.Get(configuration.ORGANIZATION)
-			assert.Equal(t, firstFolderOrg, actualOrg, "analytics (call %d of 2, expected to be %s) should be sent to first folder's org", i+1, analyticsType)
+			assert.Equal(t, testFolderOrg, actualOrg, "analytics (call %d of 2, expected to be %s) should be sent to the folder org", i+1, analyticsType)
 		}
 	})
 

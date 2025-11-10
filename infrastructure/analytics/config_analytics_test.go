@@ -146,12 +146,11 @@ func TestSendConfigChangedAnalytics(t *testing.T) {
 func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 	// Shared test constants
 	const (
-		firstFolderOrg  = "first-folder-org"
-		secondFolderOrg = "second-folder-org"
-		globalOrg       = "global-org"
-		configName      = "testConfig"
-		oldValue        = "old-value"
-		newValue        = "new-value"
+		testFolderOrg = "test-folder-org"
+		globalOrg     = "global-org"
+		configName    = "testConfig"
+		oldValue      = "old-value"
+		newValue      = "new-value"
 	)
 
 	testCases := []struct {
@@ -160,29 +159,28 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 		expectedOrg string
 	}{
 		{
-			name: "uses first folder org in multi-folder workspace",
+			name: "uses any folder org in multi-folder workspace",
 			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
 				t.Helper()
 
 				folder1Path := types.FilePath("/fake/folder1")
 				folder2Path := types.FilePath("/fake/folder2")
 
-				// Set folder-specific orgs using storedconfig
 				folder1Config := &types.FolderConfig{
 					FolderPath:   folder1Path,
-					PreferredOrg: firstFolderOrg,
+					PreferredOrg: testFolderOrg,
 					OrgSetByUser: true,
 				}
 				folder2Config := &types.FolderConfig{
 					FolderPath:   folder2Path,
-					PreferredOrg: secondFolderOrg,
+					PreferredOrg: testFolderOrg,
 					OrgSetByUser: true,
 				}
 
 				err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder1Config, c.Logger())
-				require.NoError(t, err, "failed to configure first folder org")
+				require.NoError(t, err, "failed to configure first folder's org")
 				err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder2Config, c.Logger())
-				require.NoError(t, err, "failed to configure second folder org")
+				require.NoError(t, err, "failed to configure second folder's org")
 
 				// Setup mock workspace with the 2 folders
 				mockFolder1 := mock_types.NewMockFolder(ctrl)
@@ -192,11 +190,12 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 				mockFolder2.EXPECT().Path().Return(folder2Path).AnyTimes()
 
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+				// FYI, mock returns deterministic slice order, but real Workspace.Folders() returns the slice in a random order
 				mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder1, mockFolder2}).AnyTimes()
 
 				return mockWorkspace
 			},
-			expectedOrg: firstFolderOrg,
+			expectedOrg: testFolderOrg,
 		},
 		{
 			name: "falls back to global org when no folders",

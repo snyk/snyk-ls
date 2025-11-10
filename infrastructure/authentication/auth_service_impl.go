@@ -141,15 +141,15 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 		"auth::auth-type": string(a.c.AuthenticationMethod()),
 	}
 
-	// Send to first folder's org only, since authentication is not folder-specific, but analytics have to be sent to a
-	// specific org, so the first folder's org has as good a chance as any to work and not 404.
+	// Send to any folder's org, since authentication is not folder-specific, but analytics have to be sent to a
+	// specific org, so any folder's org has as good a chance as any other to work and not 404.
 	// TODO - This is a temporary solution to avoid inflating analytics counts.
 	ws := a.c.Workspace()
 	if ws != nil {
 		folders := ws.Folders()
 		if len(folders) > 0 {
-			firstFolderOrg := a.c.FolderOrganization(folders[0].Path())
-			analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), firstFolderOrg, event, nil)
+			aFolderOrg := a.c.FolderOrganization(folders[0].Path())
+			analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), aFolderOrg, event, nil)
 			return
 		}
 	}

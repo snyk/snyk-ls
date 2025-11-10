@@ -52,7 +52,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
-	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -298,7 +298,7 @@ func initWorkFlowEngine(c *Config) {
 		configuration.WithAutomaticEnv(),
 	)
 
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
@@ -1201,17 +1201,18 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 	conf := c.engine.GetConfiguration()
 	conf.SetStorage(s)
 	c.m.Unlock()
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
 
 	// now refresh from storage
-	err := s.Refresh(conf, storedConfig.ConfigMainKey)
+	err := s.Refresh(conf, storedconfig.ConfigMainKey)
 	if err != nil {
 		c.logger.Err(err).Msg("unable to load stored config")
 	}
 
-	sc, err := storedConfig.GetStoredConfig(conf, c.logger)
+	// During storage initialization, create config if it doesn't exist
+	sc, err := storedconfig.GetStoredConfig(conf, c.logger, false)
 	c.logger.Debug().Any("storedConfig", sc).Send()
 
 	if err != nil {
@@ -1295,10 +1296,12 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 	c.isOpenBrowserActionEnabled = enable
 }
 
+// FolderConfig gets or creates a new folder config for the given folder path.
+// Will cause a rewrite to storage, for read-only operations, use storedconfig.GetFolderConfigWithOptions instead.
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	var folderConfig *types.FolderConfig
 	var err error
-	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
+	folderConfig, err = storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
 	if err != nil {
 		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
@@ -1306,7 +1309,7 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 }
 
 func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
-	return storedConfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
+	return storedconfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
 }
 
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
@@ -1317,9 +1320,17 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 		return c.Organization()
 	}
 
-	fc := c.FolderConfig(path)
+	fc, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
+		CreateIfNotExist: false,
+		ReadOnly:         true,
+		EnrichFromGit:    false,
+	})
+	if err != nil {
+		c.Logger().Warn().Err(err).Str("method", "FolderOrganization").Str("path", string(path)).Msg("error getting folder config, returning the global organization as a safety net")
+		return c.Organization()
+	}
 	if fc == nil {
-		c.Logger().Warn().Str("method", "FolderOrganization").Str("path", string(path)).Msg("called with path that could not produce a folder config, returning the global organization as a safety net")
+		c.Logger().Debug().Str("method", "FolderOrganization").Str("path", string(path)).Msg("no folder config in storage, returning the global organization as a safety net")
 		return c.Organization()
 	}
 
