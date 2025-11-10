@@ -21,6 +21,7 @@ import (
 	"errors"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -63,5 +64,5 @@ func (a *FakeAuthenticationProvider) AuthenticationMethod() types.Authentication
 }
 
 func NewFakeCliAuthenticationProvider(c *config.Config) *FakeAuthenticationProvider {
-	return &FakeAuthenticationProvider{ExpectedAuthURL: "https://app.snyk.io/login?token=someToken", C: c}
+	return &FakeAuthenticationProvider{ExpectedAuthURL: constants.SNYK_UI_URL + "/login?token=someToken", C: c}
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -652,7 +653,7 @@ func extractLicense(finding testapi.FindingData) string {
 
 // createIssueURL creates the Snyk issue description URL
 func createIssueURL(id string) *url.URL {
-	u, err := url.Parse(fmt.Sprintf("https://snyk.io/vuln/%s", id))
+	u, err := url.Parse(fmt.Sprintf("%s/%s", constants.SNYK_VULN_DB_BASE_URL, id))
 	if err != nil {
 		return nil
 	}

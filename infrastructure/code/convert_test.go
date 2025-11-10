@@ -773,8 +773,8 @@ func Test_rule_cwe(t *testing.T) {
 			Cwe: []string{"CWE-23", "CWE-24"},
 		}}
 		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
-		assert.Contains(t, sarifConverter.cwe(cut), "https://cwe.mitre.org/data/definitions/23.html")
-		assert.Contains(t, sarifConverter.cwe(cut), "https://cwe.mitre.org/data/definitions/24.html")
+		assert.Contains(t, sarifConverter.cwe(cut), constants.CWE_MITRE_BASE_URL+"/23.html") //nolint:misspell // MITRE is the organization name
+		assert.Contains(t, sarifConverter.cwe(cut), constants.CWE_MITRE_BASE_URL+"/24.html") //nolint:misspell // MITRE is the organization name
 	})
 	t.Run("dont display CWEs if not reported", func(t *testing.T) {
 		cut := codeClientSarif.Rule{Properties: codeClientSarif.RuleProperties{

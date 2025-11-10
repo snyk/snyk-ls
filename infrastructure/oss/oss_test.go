@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -295,7 +296,7 @@ func Test_toHover_asHTML(t *testing.T) {
 	assert.Equal(
 		t,
 		"\n### testIssue: <p>THOU SHALL NOT PASS</p>\n affecting pkg package \n### Vulnerability  | [CWE-123]("+
-			"https://cwe.mitre.org/data/definitions/123.html) | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \n<p>Getting into Moria is an issue!</p>\n",
+			constants.CWE_MITRE_BASE_URL+"/123.html) | [testIssue]("+constants.SNYK_VULN_DB_BASE_URL+"/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \n<p>Getting into Moria is an issue!</p>\n", //nolint:misspell // MITRE is the organization name
 		h,
 	)
 }
@@ -309,8 +310,8 @@ func Test_toHover_asMarkdown(t *testing.T) {
 
 	assert.Equal(
 		t,
-		"\n### testIssue: THOU SHALL NOT PASS affecting pkg package \n### Vulnerability  | [CWE-123](https://cwe.mitre."+
-			"org/data/definitions/123.html) | [testIssue](https://snyk.io/vuln/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \nGetting into Moria is an issue!",
+		"\n### testIssue: THOU SHALL NOT PASS affecting pkg package \n### Vulnerability  | [CWE-123]("+
+			constants.CWE_MITRE_BASE_URL+"/123.html) | [testIssue]("+constants.SNYK_VULN_DB_BASE_URL+"/testIssue) \n **Fixed in: Not Fixed | Exploit maturity: LOW** \nGetting into Moria is an issue!", //nolint:misspell // MITRE is the organization name
 		h,
 	)
 }

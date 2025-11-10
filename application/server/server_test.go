@@ -49,6 +49,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -1153,7 +1154,7 @@ func Test_getDownloadURL(t *testing.T) {
 
 		downloadURL := getDownloadURL(c, config.LsProtocolVersion)
 
-		prefix := "https://static.snyk.io/snyk-ls/12/snyk-ls"
+		prefix := constants.SNYK_LS_DOWNLOAD_BASE_URL + "/12/snyk-ls"
 		assert.True(t, strings.HasPrefix(downloadURL, prefix), downloadURL+" does not start with "+prefix)
 	})
 }

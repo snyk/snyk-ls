@@ -46,6 +46,9 @@ jobs:
       - name: Lint source code
         run: make lint
 
+      - name: Check for hard-coded URLs
+        run: ./scripts/check-hardcoded-urls.sh
+
   unit-tests:
     name: unit tests
     needs: [lint]

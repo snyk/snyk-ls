@@ -121,7 +121,7 @@ func (s *SarifConverter) cwe(r codeClientSarif.Rule) string {
 		builder.WriteString(fmt.Sprintf(
 			"[%s](%s)",
 			cwe,
-			fmt.Sprintf("https://cwe.mitre.org/data/definitions/%s.html", strings.Split(cwe, "-")[1])))
+			fmt.Sprintf("%s/%s.html", constants.CWE_MITRE_BASE_URL, strings.Split(cwe, "-")[1]))) //nolint:misspell // MITRE is the organization name
 	}
 	builder.WriteString("\n\n\n")
 	return builder.String()

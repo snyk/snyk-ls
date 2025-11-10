@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/snyk/snyk-ls/internal/constants"
 )
 
 // CLIVersionMapper maps protocol versions to CLI versions
@@ -67,7 +69,7 @@ func (m *CLIVersionMapper) GetCLIVersion(protocolVersion string) (string, error)
 // fetchCLIVersion fetches the CLI version from Snyk API
 func (m *CLIVersionMapper) fetchCLIVersion(protocolVersion string) (string, error) {
 	// Use stable channel for CLI versions
-	url := fmt.Sprintf("https://downloads.snyk.io/cli/stable/ls-protocol-version-%s", protocolVersion)
+	url := fmt.Sprintf("%s/cli/stable/ls-protocol-version-%s", constants.SNYK_CLI_DOWNLOAD_BASE_URL, protocolVersion)
 
 	resp, err := m.httpClient.Get(url)
 	if err != nil {

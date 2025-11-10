@@ -475,7 +475,7 @@ func startOfflineDetection(c *config.Config) { //nolint:unused // this is gonna 
 		}
 
 		for {
-			u := "https://downloads.snyk.io/cli/stable/version" // FIXME: which URL to use?
+			u := constants.SNYK_CLI_DOWNLOAD_BASE_URL + "/cli/stable/version"
 			response, err := client.Get(u)
 			if err != nil {
 				if !c.Offline() {

@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -93,26 +94,27 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 }
 
 func getTestAsset() *Release {
+	baseURL := constants.SNYK_CLI_DOWNLOAD_BASE_URL
 	r := &Release{
 		Assets: &ReleaseAssets{
 			MacOS: &ReleaseAsset{
-				URL:          "https://downloads.snyk.io/cli/v1.1276.0/snyk-macos",
+				URL:          baseURL + "/cli/v1.1276.0/snyk-macos",
 				ChecksumInfo: "00c7f96ce389cff3f79e920ba345efef2ab78f80ffebd8922082dfca07ed3af0  snyk-macos",
 			},
 			MacOSARM64: &ReleaseAsset{
-				URL:          "https://downloads.snyk.io/cli/v1.1276.0/snyk-macos-arm64",
+				URL:          baseURL + "/cli/v1.1276.0/snyk-macos-arm64",
 				ChecksumInfo: "691b455a8fdcfb31089ca460658d060b51c58b2e37dc757e8b5434ca0a9b80cf  snyk-macos-arm64",
 			},
 			Linux: &ReleaseAsset{
-				URL:          "https://downloads.snyk.io/cli/v1.1276.0/snyk-linux",
+				URL:          baseURL + "/cli/v1.1276.0/snyk-linux",
 				ChecksumInfo: "4ade26062f3631bf04ca6a75a7c560752585d2aed025a6a4be97517dbb4701ce  snyk-linux",
 			},
 			LinuxARM64: &ReleaseAsset{
-				URL:          "https://downloads.snyk.io/cli/v1.1276.0/snyk-linux-arm64",
+				URL:          baseURL + "/cli/v1.1276.0/snyk-linux-arm64",
 				ChecksumInfo: "c26cc7e49354c24d4eeaec41445c612f3b93ad782482fbf9f7d38947815f01a8  snyk-linux-arm64",
 			},
 			Windows: &ReleaseAsset{
-				URL:          "https://downloads.snyk.io/cli/v1.1276.0/snyk-win.exe",
+				URL:          baseURL + "/cli/v1.1276.0/snyk-win.exe",
 				ChecksumInfo: "76f38b24fe996dcdcb6750f005f2f07044c7a01b7f355d59f88104611a2c9d65  snyk-win.exe",
 			},
 		},
