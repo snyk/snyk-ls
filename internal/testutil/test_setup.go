@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package testutil implements test setup functionality
 package testutil
 
 import (

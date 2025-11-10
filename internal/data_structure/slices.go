@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package data_structure implements data structure functionality
 package data_structure
 
 // Unique returns a new slice containing only the unique elements of the input slice.

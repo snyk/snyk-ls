@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package converter implements conversions between Snyk and LSP types
 package converter
 
 import (
@@ -404,12 +405,13 @@ func ToHovers(issues []types.Issue) (hovers []hover.Hover[hover.Context]) {
 		}
 
 		hoverOutputFormat := c.Format()
-		if hoverOutputFormat == config.FormatHtml {
+		switch hoverOutputFormat {
+		case config.FormatHtml:
 			message = string(markdown.ToHTML([]byte(message), nil, nil))
-		} else if hoverOutputFormat == config.FormatMd {
+		case config.FormatMd:
 			// sanitize the message, substitute <br> with line break
 			message = htmlEndingRegExp.ReplaceAllString(message, "\n\n")
-		} else {
+		default:
 			// if anything else (e.g. plain), strip markdown
 			message = stripmd.Strip(message)
 		}

@@ -391,9 +391,10 @@ func TestMap_IntToInt(t *testing.T) {
 func TestMap_IntToString(t *testing.T) {
 	input := []int{1, 2, 3}
 	result := Map(input, func(x int) string {
-		if x == 1 {
+		switch x {
+		case 1:
 			return "one"
-		} else if x == 2 {
+		case 2:
 			return "two"
 		}
 		return "three"

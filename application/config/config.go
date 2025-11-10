@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package config implements the configuration functionality
 package config
 
 import (

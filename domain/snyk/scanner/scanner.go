@@ -278,7 +278,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 					Product:           s.Product(),
 					Issues:            foundIssues,
 					Err:               scanError,
-					DurationMs:        time.Duration(scanSpan.GetDurationMs()),
+					Duration:          time.Duration(scanSpan.GetDurationMs()),
 					TimestampFinished: time.Now().UTC(),
 					Path:              folderPath,
 					IsDeltaScan:       sc.c.IsDeltaFindingsEnabled(),

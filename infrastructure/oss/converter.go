@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package oss implements the OSS scanner
 package oss
 
 import (

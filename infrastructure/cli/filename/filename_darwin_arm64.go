@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package filename implements os specific filename functionality
 package filename
 
 const ExecutableName = "snyk-macos-arm64"

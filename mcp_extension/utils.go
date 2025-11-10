@@ -88,19 +88,20 @@ func buildArg(key string, param convertedToolParameter) string {
 func createToolFromDefinition(toolDef *SnykMcpToolsDefinition) mcp.Tool {
 	opts := []mcp.ToolOption{mcp.WithDescription(toolDef.Description)}
 	for _, param := range toolDef.Params {
-		if param.Type == "string" {
+		switch param.Type {
+		case "string":
 			if param.IsRequired {
 				opts = append(opts, mcp.WithString(param.Name, mcp.Required(), mcp.Description(param.Description)))
 			} else {
 				opts = append(opts, mcp.WithString(param.Name, mcp.Description(param.Description)))
 			}
-		} else if param.Type == "boolean" {
+		case "boolean":
 			if param.IsRequired {
 				opts = append(opts, mcp.WithBoolean(param.Name, mcp.Required(), mcp.Description(param.Description)))
 			} else {
 				opts = append(opts, mcp.WithBoolean(param.Name, mcp.Description(param.Description)))
 			}
-		} else if param.Type == "number" {
+		case "number":
 			if param.IsRequired {
 				opts = append(opts, mcp.WithNumber(param.Name, mcp.Required(), mcp.Description(param.Description)))
 			} else {

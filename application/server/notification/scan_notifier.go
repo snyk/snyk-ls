@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package notification implements the scan notifications
 package notification
 
 import (

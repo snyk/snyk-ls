@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package context implements context management for Snyk
 package context
 
 import (

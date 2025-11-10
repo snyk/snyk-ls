@@ -534,7 +534,7 @@ func collectRelatedInformationComparisons(title string, unified, legacy []types.
 		}
 
 		// Only add if location doesn't match
-		if !(hasUnified && hasLegacy && unified[i].Location == legacy[i].Location) {
+		if !hasUnified || !hasLegacy || unified[i].Location != legacy[i].Location {
 			comparisons = append(comparisons, FieldComparison{
 				DiagnosticTitle: title,
 				FieldPath:       fmt.Sprintf("RelatedInformation[%d].Location", i),
@@ -545,7 +545,7 @@ func collectRelatedInformationComparisons(title string, unified, legacy []types.
 		}
 
 		// Only add if message doesn't match
-		if !(hasUnified && hasLegacy && unified[i].Message == legacy[i].Message) {
+		if !hasUnified || !hasLegacy || unified[i].Message != legacy[i].Message {
 			comparisons = append(comparisons, FieldComparison{
 				DiagnosticTitle: title,
 				FieldPath:       fmt.Sprintf("RelatedInformation[%d].Message", i),

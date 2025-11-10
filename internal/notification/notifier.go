@@ -1,3 +1,4 @@
+// Package notification implements notification functionality for Snyk
 package notification
 
 import (
