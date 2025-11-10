@@ -218,3 +218,11 @@ func EnableSastAndAutoFix(c *config.Config) {
 		&sast_contract.SastResponse{SastEnabled: true, AutofixEnabled: true},
 	)
 }
+
+func SkipLocally(t *testing.T) {
+	t.Helper()
+	ciVar := os.Getenv("CI")
+	if ciVar == "" {
+		t.Skip("not running in CI, skipping test")
+	}
+}

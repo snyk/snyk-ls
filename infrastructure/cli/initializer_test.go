@@ -103,6 +103,7 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 }
 
 func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
+	testutil.SkipLocally(t)
 	c := testutil.SmokeTest(t, "")
 
 	// arrange
