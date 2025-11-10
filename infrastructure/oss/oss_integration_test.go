@@ -39,7 +39,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// This is an integration test that downloads and installs the CLI if necessary
+// This is a smoke test that downloads and installs the CLI if necessary
 // it uses real CLI output for verification of functionality
 func Test_Scan(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
