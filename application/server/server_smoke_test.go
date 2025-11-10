@@ -1525,7 +1525,7 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 	t.Helper()
 	t.Setenv("SNYK_LOG_LEVEL", "info")
 	c.SetLogLevel(zerolog.LevelInfoValue)
-	c.ConfigureLogging(loc.Server)
+	c.ConfigureLogging(nil) // we don't need to send logs to the client
 	gafConfig := c.Engine().GetConfiguration()
 	gafConfig.Set(configuration.DEBUG, c.Logger().GetLevel() == zerolog.DebugLevel)
 
