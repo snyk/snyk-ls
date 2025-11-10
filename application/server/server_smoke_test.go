@@ -147,11 +147,12 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			secretTokenName := ""
+			tokenSecretName := ""
 			if tc.useConsistentIgnores {
-				secretTokenName = "SNYK_TOKEN_CONSISTENT_IGNORES"
+				tokenSecretName = "SNYK_TOKEN_CONSISTENT_IGNORES"
 			}
-			c := testutil.SmokeTest(t, secretTokenName)
+
+			c := testutil.SmokeTest(t, tokenSecretName)
 			runSmokeTest(t, c, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "")
 		})
 	}
