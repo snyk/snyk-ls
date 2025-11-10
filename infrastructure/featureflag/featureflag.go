@@ -52,7 +52,6 @@ type ExternalCallsProvider interface {
 
 type Service interface {
 	GetFromFolderConfig(folderPath types.FilePath, flag string) bool
-	GetSastSettingsFromFolderConfig(folderPath types.FilePath) *sast_contract.SastResponse
 	PopulateFolderConfig(folderConfig *types.FolderConfig)
 	FlushCache()
 }
@@ -200,15 +199,6 @@ func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string
 	}
 
 	return v
-}
-
-func (s *serviceImpl) GetSastSettingsFromFolderConfig(folderPath types.FilePath) *sast_contract.SastResponse {
-	folderConfig := s.c.FolderConfig(folderPath)
-	if folderConfig.SastSettings == nil {
-		// Return default struct - error already logged during population
-		return &sast_contract.SastResponse{}
-	}
-	return folderConfig.SastSettings
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
