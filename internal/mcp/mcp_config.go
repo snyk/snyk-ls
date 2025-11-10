@@ -91,26 +91,25 @@ func ConfigureMcp(c *config.Config) {
 	if !c.IsAutoConfigureMcpEnabled() {
 		return
 	}
-
-	ideName := c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT)
 	logger := c.Logger().With().Str("method", "ConfigureMcp").Logger()
 
-	logger.Debug().Str("ideName", ideName).Msg("Configuring MCP")
+	ideName := strings.ToLower(c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT))
 
-	switch strings.ToLower(ideName) {
-	case "cursor":
-		configureCursor(c, &logger)
-	case "windsurf":
-		configureWindsurf(c, &logger)
-	case "visual studio code":
-		configureCopilot(c, &logger)
-	default:
+	if strings.Contains(ideName, "cursor") {
+		configureCursor(c)
+	} else if strings.Contains(ideName, "windsurf") {
+		configureWindsurf(c)
+	} else if strings.Contains(ideName, "visual studio code") {
+		configureCopilot(c)
+	} else {
 		logger.Warn().Str("ideName", ideName).Msg("Unknown IDE, skipping MCP configuration")
 	}
 }
 
 // configureCursor writes MCP configuration to Cursor's config file
-func configureCursor(c *config.Config, logger *zerolog.Logger) {
+func configureCursor(c *config.Config) {
+	logger := c.Logger().With().Str("method", "configureCursor").Logger()
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to get user home directory")
@@ -122,7 +121,7 @@ func configureCursor(c *config.Config, logger *zerolog.Logger) {
 	args := getMcpArgs()
 	env := getMcpEnv(c)
 
-	err = ensureMcpServerInJson(configPath, "Snyk", command, args, env, logger)
+	err = ensureMcpServerInJson(configPath, "Snyk", command, args, env, &logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to update Cursor MCP config")
 		return
@@ -130,11 +129,13 @@ func configureCursor(c *config.Config, logger *zerolog.Logger) {
 
 	logger.Debug().Str("configPath", configPath).Msg("Ensured Cursor MCP config")
 
-	configureRulesFiles(c, logger, filepath.Join(".cursor", "rules", "snyk_rules.mdc"), ".cursor/rules/snyk_rules.mdc")
+	configureRulesFiles(c, &logger, filepath.Join(".cursor", "rules", "snyk_rules.mdc"), ".cursor/rules/snyk_rules.mdc")
 }
 
 // configureWindsurf writes MCP configuration to Windsurf's config file
-func configureWindsurf(c *config.Config, logger *zerolog.Logger) {
+func configureWindsurf(c *config.Config) {
+	logger := c.Logger().With().Str("method", "configureWindsurf").Logger()
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to get user home directory")
@@ -154,7 +155,7 @@ func configureWindsurf(c *config.Config, logger *zerolog.Logger) {
 	args := getMcpArgs()
 	env := getMcpEnv(c)
 
-	err = ensureMcpServerInJson(configPath, "Snyk", command, args, env, logger)
+	err = ensureMcpServerInJson(configPath, "Snyk", command, args, env, &logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to update Windsurf MCP config")
 		return
@@ -163,11 +164,13 @@ func configureWindsurf(c *config.Config, logger *zerolog.Logger) {
 	logger.Debug().Str("configPath", configPath).Msg("Ensured Windsurf MCP config")
 
 	// Handle rules file management for Windsurf
-	configureRulesFiles(c, logger, filepath.Join(".windsurf", "rules", "snyk_rules.md"), ".windsurf/rules/snyk_rules.md")
+	configureRulesFiles(c, &logger, filepath.Join(".windsurf", "rules", "snyk_rules.md"), ".windsurf/rules/snyk_rules.md")
 }
 
 // configureCopilot sends notification to VS Code extension to register MCP server
-func configureCopilot(c *config.Config, logger *zerolog.Logger) {
+func configureCopilot(c *config.Config) {
+	logger := c.Logger().With().Str("method", "configureCopilot").Logger()
+
 	// For VS Code, we need to use the VS Code API (vscode.lm.registerMcpServerDefinitionProvider)
 	// which can only be called from the extension. Send notification to extension.
 	params := types.SnykConfigureMcpParams{
@@ -178,10 +181,10 @@ func configureCopilot(c *config.Config, logger *zerolog.Logger) {
 	}
 
 	logger.Debug().Interface("params", params).Msg("Sending MCP configuration to VS Code extension")
-	di.Notifier().Send(params)
+	go di.Notifier().Send(params)
 
 	// Handle rules file management for VS Code Copilot
-	configureRulesFiles(c, logger, filepath.Join(".github", "instructions", "snyk_rules.instructions.md"), ".github/instructions/snyk_rules.instructions.md")
+	configureRulesFiles(c, &logger, filepath.Join(".github", "instructions", "snyk_rules.instructions.md"), ".github/instructions/snyk_rules.instructions.md")
 }
 
 // ensureMcpServerInJson ensures the Snyk MCP server is configured in a JSON config file
