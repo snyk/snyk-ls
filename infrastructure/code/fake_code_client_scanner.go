@@ -33,7 +33,6 @@ import (
 
 type FakeCodeScannerClient struct {
 	UploadAndAnalyzeWasCalled bool
-	rootPath                  types.FilePath
 }
 
 const (
@@ -427,6 +426,6 @@ func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(
 }
 
 // NewFakeCodeScannerClient creates a fake code scanner for testing
-func NewFakeCodeScannerClient(_ *Scanner, path types.FilePath) (codeClient.CodeScanner, error) {
-	return &FakeCodeScannerClient{rootPath: path}, nil
+func NewFakeCodeScannerClient(_ *Scanner, _ *types.FolderConfig) (codeClient.CodeScanner, error) {
+	return &FakeCodeScannerClient{}, nil
 }

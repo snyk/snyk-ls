@@ -157,8 +157,9 @@ func TestUploadAndAnalyze(t *testing.T) {
 			filePath, path := TempWorkdirWithIssues(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(string(path))
 			files := []string{string(filePath)}
+			folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
 
-			issues, _ := scanner.UploadAndAnalyze(t.Context(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+			issues, _ := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 2, len(issues))
@@ -190,7 +191,8 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	testTracker := progress.NewTestTracker(channel, cancelChannel)
 
 	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
-	issues, _ := scanner.UploadAndAnalyze(t.Context(), workDir, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
+	folderConfig := &types.FolderConfig{FolderPath: workDir, PreferredOrg: "test-org"}
+	issues, _ := scanner.UploadAndAnalyze(t.Context(), workDir, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
 	assert.False(t, issues[0].GetIsIgnored())
 	assert.Nil(t, issues[0].GetIgnoreDetails())
 	assert.Equal(t, true, issues[1].GetIsIgnored())
@@ -464,9 +466,10 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			},
 		)
 		files := []string{string(filePath)}
+		folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(t.Context(), "", sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+		issues, _ := scanner.UploadAndAnalyze(t.Context(), "", folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 
 		// Default is to have 0 actions from analysis + 0 from autofix
 		assert.Len(t, issues[0].GetCodeActions(), 0)
@@ -488,9 +491,10 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 		filePath, path := TempWorkdirWithIssues(t)
 		files := []string{string(filePath)}
+		folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
 
 		// execute
-		issues, err := scanner.UploadAndAnalyze(t.Context(), path, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+		issues, err := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 		require.NoError(t, err)
 
 		// Only one of the returned issues is Autofix eligible; see getSarifResponseJson2 in fake_code_client_scanner.go.
