@@ -39,10 +39,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// Test_SnykCli_GetCommand_UsesFolderOrganization verifies that getCommand() adds
-// the correct --org flag based on FolderOrganization() for different folders.
+// Test_SnykCli_GetCommand_UsesFolderOrganization is an INTEGRATION TEST that verifies
+// getCommand() adds the correct --org flag based on FolderOrganization() for different folders.
+// This test uses testutil.UnitTest() to avoid making actual API calls.
 func Test_SnykCli_GetCommand_UsesFolderOrganization(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.UnitTest(t)
 	ctx := t.Context()
 
 	er := error_reporting.NewTestErrorReporter()
@@ -129,10 +130,10 @@ func Test_SnykCli_GetCommand_ReplacesExistingOrgFlag(t *testing.T) {
 
 // Test_ExtensionExecutor_DoExecute_UsesFolderOrganization is an INTEGRATION TEST that verifies
 // ExtensionExecutor.doExecute() sets the correct org in legacyCLIConfig based on FolderOrganization()
-// for multiple different folders. This test uses testutil.SmokeTest() for comprehensive setup.
+// for multiple different folders. This test uses testutil.UnitTest() to avoid making actual API calls.
 // For unit tests with single folder scenarios, see cli_extension_executor_test.go
 func Test_ExtensionExecutor_DoExecute_UsesFolderOrganization(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.UnitTest(t)
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
@@ -153,10 +154,10 @@ func Test_ExtensionExecutor_DoExecute_UsesFolderOrganization(t *testing.T) {
 
 // Test_ExtensionExecutor_DoExecute_FallsBackToGlobalOrg is an INTEGRATION TEST that verifies
 // ExtensionExecutor.doExecute() falls back to global org when no folder-specific org is configured.
-// This test uses testutil.SmokeTest() for comprehensive setup.
+// This test uses testutil.UnitTest() to avoid making actual API calls.
 // For unit tests with single folder scenarios, see cli_extension_executor_test.go
 func Test_ExtensionExecutor_DoExecute_FallsBackToGlobalOrg(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.UnitTest(t)
 
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
 

@@ -27,9 +27,10 @@ import (
 
 // Test_CodeConfig_UsesFolderOrganization is an INTEGRATION TEST that verifies
 // createCodeConfig() sets the correct organization in CodeConfig based on FolderOrganization()
-// for different folders. This test uses testutil.SmokeTest() for comprehensive setup.
+// for different folders. This test uses testutil.UnitTest() to avoid making actual API calls,
+// as it only tests configuration initialization methods, not the full workflow execution.
 func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
 
 	// Set up two folders with different orgs
@@ -60,9 +61,9 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 
 // Test_CodeConfig_FallsBackToGlobalOrg is an INTEGRATION TEST that verifies
 // createCodeConfig() falls back to global org when no folder-specific org is configured.
-// This test uses testutil.SmokeTest() for comprehensive setup.
+// This test uses testutil.UnitTest() to avoid making actual API calls.
 func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
 
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
@@ -82,9 +83,9 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 
 // Test_GetCodeApiUrlForFolder_UsesFolderOrganization is an INTEGRATION TEST that verifies
 // GetCodeApiUrlForFolder() uses the folder-specific organization for FedRAMP endpoints.
-// This test uses testutil.SmokeTest() for comprehensive setup.
+// This test uses testutil.UnitTest() to avoid making actual API calls.
 func Test_GetCodeApiUrlForFolder_UsesFolderOrganization(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.UnitTest(t)
 
 	// Set up FedRAMP environment
 	c.UpdateApiEndpoints("https://api.snykgov.io")
@@ -108,9 +109,9 @@ func Test_GetCodeApiUrlForFolder_UsesFolderOrganization(t *testing.T) {
 
 // Test_GetExplainEndpoint_UsesFolderOrganization is an INTEGRATION TEST that verifies
 // getExplainEndpoint() uses the folder-specific organization for AI fix explain endpoints.
-// This test uses testutil.SmokeTest() for comprehensive setup.
+// This test uses testutil.UnitTest() to avoid making actual API calls.
 func Test_GetExplainEndpoint_UsesFolderOrganization(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.UnitTest(t)
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
@@ -131,9 +132,9 @@ func Test_GetExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 
 // Test_GetExplainEndpoint_FallsBackToGlobalOrg is an INTEGRATION TEST that verifies
 // getExplainEndpoint() falls back to global org when no folder-specific org is configured.
-// This test uses testutil.SmokeTest() for comprehensive setup.
+// This test uses testutil.UnitTest() to avoid making actual API calls.
 func Test_GetExplainEndpoint_FallsBackToGlobalOrg(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.UnitTest(t)
 
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
 

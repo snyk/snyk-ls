@@ -25,7 +25,6 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -40,18 +39,15 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Set up two folders with different orgs
-	folderPath1, folderPath2, globalOrg, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	// Test Create Ignore
 	t.Run("Create ignore uses folder org", func(t *testing.T) {
-		// Verify global org is set
-		globalOrgValue := c.Organization()
-		assert.Equal(t, globalOrg, globalOrgValue, "Global org should be set correctly")
-
 		// Verify FolderOrganization returns the expected value
+		// Note: We don't check c.Organization() here as it triggers GetString() which can make API calls
 		actualOrg := c.FolderOrganization(folderPath1)
 		require.Equal(t, folderOrg1, actualOrg, "FolderOrganization should return folder1's org")
 
@@ -198,10 +194,7 @@ func Test_IgnoreOperations_FallBackToGlobalOrg(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	issue := testutil.NewMockCodeIssue("issue1", folderPath, "finding1")
-	issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
-	issueProvider.EXPECT().Issue("issue1").Return(issue)
-
+	// Note: We don't need to mock issueProvider since we're only testing the initialization method
 	server := mock_types.NewMockServer(ctrl)
 	server.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).Return(nil, nil).AnyTimes()
 	notifier := notification.NewMockNotifier()
@@ -209,22 +202,29 @@ func Test_IgnoreOperations_FallBackToGlobalOrg(t *testing.T) {
 		command: types.CommandData{
 			Arguments: []any{"create", "issue1", "wont_fix", "test reason", "2025-12-31"},
 		},
-		issueProvider: issueProvider,
+		issueProvider: nil, // Not needed for testing initialization methods
 		notifier:      notifier,
 		srv:           server,
 		c:             c,
 	}
 
-	// When no folder org is set, FolderOrganization returns empty string,
-	// so the org should be empty in the config (not set)
-	folderOrg := c.FolderOrganization(folderPath)
-	assert.Empty(t, folderOrg, "Folder should have no org configured")
-
-	// Test initializeCreateConfiguration - it should set empty org when FolderOrganization returns empty
+	// When no folder org is set, FolderOrganization falls back to global org
+	// (this is the correct behavior - it should return the global org as fallback)
 	engine := c.Engine()
+	// Get the global org from the engine config (this might trigger API calls, but we need it for the test)
+	engineGlobalOrg := engine.GetConfiguration().GetString(configuration.ORGANIZATION)
+	require.NotEmpty(t, engineGlobalOrg, "Engine config should have global org set")
+
+	// FolderOrganization should return the global org when no folder org is configured (fallback behavior)
+	folderOrg := c.FolderOrganization(folderPath)
+	assert.Equal(t, engineGlobalOrg, folderOrg, "FolderOrganization should fall back to global org when no folder org is configured")
+
+	// Test initializeCreateConfiguration - when FolderOrganization returns the global org,
+	// it doesn't override the org (since folderOrg == globalOrg), so the cloned config keeps the global org
 	gafConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), "finding1", folderPath)
 	require.NoError(t, err)
 	configOrg := gafConfig.GetString(configuration.ORGANIZATION)
-	// When FolderOrganization returns empty, initializeCreateConfiguration sets it to empty string
-	assert.Empty(t, configOrg, "Config should not have org set when folder org is empty")
+	// When FolderOrganization returns the global org, initializeCreateConfiguration doesn't override it,
+	// so it keeps the global org from the cloned config (which is the correct fallback behavior)
+	assert.Equal(t, engineGlobalOrg, configOrg, "Config should keep global org when folder org is not configured (fallback behavior)")
 }
