@@ -23,36 +23,27 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+const testOrgUUID = "00000000-0000-0000-0000-000000000001"
+
 func TestGetCodeApiUrlForFolder(t *testing.T) {
-	t.Run("should return Snyk Code API URL for non-FedRAMP", func(t *testing.T) {
+	t.Run("should return an error when folder path argument is an empty string", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		c.UpdateApiEndpoints("https://api.snyk.io")
-
-		// Any folder should work for non-FedRAMP
-		actual, err := GetCodeApiUrlForFolder(c, "/some/path")
-		assert.NoError(t, err)
-		assert.Equal(t, c.SnykCodeApi(), actual)
-	})
-
-	t.Run("should return error when folder path argument is the empty string in FedRAMP", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		c.UpdateApiEndpoints("https://api.snykgov.io")
-		c.SetOrganization("test-org")
 
 		_, err := GetCodeApiUrlForFolder(c, "")
-		assert.ErrorContains(t, err, "specifying a folder is required in a fedramp environment")
+		assert.ErrorContains(t, err, "no folder specified when trying to determine Snyk Code API URL")
 	})
 
-	t.Run("should return error when workspace folder not found in FedRAMP", func(t *testing.T) {
+	t.Run("should return an error when workspace folder not found", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		c.UpdateApiEndpoints("https://api.snykgov.io")
-		c.SetOrganization("test-org")
 
 		// Setup workspace with a folder, but try to access a different path
 		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
@@ -126,6 +117,21 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		assert.Equal(t, expected, actual)
 	})
 
+	t.Run("should return SCLE URL as-is in non-FedRAMP when local engine is enabled", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.UpdateApiEndpoints("https://api.snyk.io")
+
+		const localEngineURL = "http://localhost:8080"
+		folder, err := setupFakeWorkspaceFolderWithSAST(t, c, localEngineURL)
+		require.NoError(t, err)
+
+		actual, err := GetCodeApiUrlForFolder(c, folder)
+		require.NoError(t, err)
+
+		// In non-FedRAMP, SCLE URL should be returned as-is
+		assert.Equal(t, localEngineURL, actual)
+	})
+
 	t.Run("Snykgov instances code api url generation with various URL formats", func(t *testing.T) {
 		var snykgovInstances = []string{
 			"snykgov",
@@ -150,26 +156,13 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 					t.Setenv("DEEPROXY_API_URL", "")
 
-					random, _ := uuid.NewRandom()
-					orgUUID := random.String()
-
+					folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
+					require.NoError(t, err)
 					c.UpdateApiEndpoints(input)
 
-					// Setup workspace with folder for FedRAMP testing
-					_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
-					folderPath := folderPaths[0]
+					expected := "https://api." + instance + ".io/hidden/orgs/" + testOrgUUID + "/code"
 
-					err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-						FolderPath:                  folderPath,
-						PreferredOrg:                orgUUID,
-						OrgMigratedFromGlobalConfig: true,
-						OrgSetByUser:                true,
-					}, c.Logger())
-					require.NoError(t, err)
-
-					expected := "https://api." + instance + ".io/hidden/orgs/" + orgUUID + "/code"
-
-					actual, err := GetCodeApiUrlForFolder(c, folderPath)
+					actual, err := GetCodeApiUrlForFolder(c, folder)
 					require.NoError(t, err)
 					assert.Contains(t, actual, expected)
 				})
@@ -203,10 +196,11 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 					t.Setenv("DEEPROXY_API_URL", "")
 
+					folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
+					require.NoError(t, err)
 					c.UpdateApiEndpoints(input)
 
-					// For non-FedRAMP, any folder works
-					actual, err := GetCodeApiUrlForFolder(c, "/some/path")
+					actual, err := GetCodeApiUrlForFolder(c, folder)
 					require.NoError(t, err)
 					assert.Contains(t, actual, expected)
 				})
@@ -216,10 +210,44 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 	t.Run("Default deeproxy url for code api", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-
-		// For non-FedRAMP, any folder works
-		url, err := GetCodeApiUrlForFolder(c, "/some/path")
+		folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
 		require.NoError(t, err)
-		assert.Equal(t, c.SnykCodeApi(), url)
+
+		url, err := GetCodeApiUrlForFolder(c, folder)
+		require.NoError(t, err)
+		assert.Equal(t, config.DefaultDeeproxyApiUrl, url)
 	})
+}
+
+func setupFakeWorkspaceFolderWithSAST(t *testing.T, c *config.Config, localEngineURL string) (types.FilePath, error) {
+	t.Helper()
+
+	_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+	folderPath := folderPaths[0]
+
+	sastResponse := sast_contract.SastResponse{
+		SastEnabled: true,
+		LocalCodeEngine: sast_contract.LocalCodeEngine{
+			AllowCloudUpload: false,
+			Url:              localEngineURL,
+			Enabled:          localEngineURL != "",
+		},
+		Org:                         testOrgUUID,
+		SupportedLanguages:          nil,
+		ReportFalsePositivesEnabled: false,
+		AutofixEnabled:              false,
+	}
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		PreferredOrg:                testOrgUUID,
+		AutoDeterminedOrg:           testOrgUUID,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+		SastSettings:                &sastResponse,
+	}
+
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+
+	return folderPath, err
 }

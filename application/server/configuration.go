@@ -223,6 +223,9 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		path := folderConfig.FolderPath
 
 		storedConfig := c.FolderConfig(path)
+		// Never trust the IDE for what the FFs and SAST settings are
+		folderConfig.FeatureFlags = storedConfig.FeatureFlags
+		folderConfig.SastSettings = storedConfig.SastSettings
 
 		// Folder config might be new or changed, so (re)resolve the org before saving it.
 		// We should also check that the folder's org is still valid if the globally set org has changed.
@@ -500,15 +503,6 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource
 		// Send analytics for endpoint change if it actually changed
 		if oldEndpoint != snykApiUrl && c.IsLSPInitialized() {
 			analytics.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
-		}
-	}
-
-	// a custom set snyk code api (e.g. for testing) always overwrites automatic config
-	if settings.SnykCodeApi != "" {
-		oldCodeApi := c.SnykCodeApi()
-		c.SetSnykCodeApi(settings.SnykCodeApi)
-		if oldCodeApi != settings.SnykCodeApi && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configSnykCodeApi, oldCodeApi, settings.SnykCodeApi, triggerSource)
 		}
 	}
 }

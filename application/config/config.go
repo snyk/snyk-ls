@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -58,7 +59,7 @@ import (
 )
 
 const (
-	deeproxyApiUrlKey     = "DEEPROXY_API_URL"
+	DeeproxyApiUrlKey     = "DEEPROXY_API_URL"
 	FormatHtml            = "html"
 	FormatMd              = "md"
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
@@ -169,7 +170,6 @@ type Config struct {
 	logFile                          *os.File
 	snykCodeAnalysisTimeout          time.Duration
 	snykApiUrl                       string
-	snykCodeApiUrl                   string
 	token                            string
 	deviceId                         string
 	clientCapabilities               types.ClientCapabilities
@@ -454,13 +454,6 @@ func (c *Config) SnykApi() string {
 	return c.snykApiUrl
 }
 
-func (c *Config) SnykCodeApi() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.snykCodeApiUrl
-}
-
 func (c *Config) Endpoint() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -560,33 +553,9 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		cfg := c.engine.GetConfiguration()
 		cfg.Set(configuration.API_URL, snykApiUrl)
 		cfg.Set(configuration.WEB_APP_URL, c.SnykUI())
-
-		// Update Code API endpoint
-		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(snykApiUrl)
-		if err != nil {
-			c.Logger().Error().Err(err).Msg("Couldn't obtain Snyk Code API url from CLI endpoint.")
-		}
-
-		c.SetSnykCodeApi(snykCodeApiUrl)
 		return true
 	}
 	return false
-}
-
-func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	if snykCodeApiUrl == "" {
-		c.snykCodeApiUrl = DefaultDeeproxyApiUrl
-		return
-	}
-	c.snykCodeApiUrl = snykCodeApiUrl
-
-	config := c.engine.GetConfiguration()
-	additionalURLs := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-	additionalURLs = append(additionalURLs, c.snykCodeApiUrl)
-	config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
 }
 
 func (c *Config) SetErrorReportingEnabled(enabled bool) {
@@ -808,19 +777,20 @@ func (c *Config) DisableLoggingToFile() {
 
 func (c *Config) SetConfigFile(configFile string) { c.configFile = configFile }
 
-func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
-	// Code API endpoint can be set via env variable for debugging using local API instance
-	deeproxyEnvVarUrl := strings.Trim(os.Getenv(deeproxyApiUrlKey), "/")
+func (c *Config) GetCodeApiUrlFromCustomEndpoint(sastResponse *sast_contract.SastResponse) (string, error) {
+	// Code API sastResponse can be set via env variable for debugging using local API instance
+	deeproxyEnvVarUrl := strings.Trim(os.Getenv(DeeproxyApiUrlKey), "/")
 	if deeproxyEnvVarUrl != "" {
+		c.logger.Debug().Str("deeproxyEnvVarUrl", deeproxyEnvVarUrl).Msg("using deeproxy env variable for code api url")
 		return deeproxyEnvVarUrl, nil
 	}
 
-	if endpoint == "" {
-		return DefaultDeeproxyApiUrl, nil
+	if sastResponse != nil && sastResponse.SastEnabled && sastResponse.LocalCodeEngine.Enabled {
+		return sastResponse.LocalCodeEngine.Url, nil
 	}
 
 	// Use Snyk API endpoint to determine deeproxy API URL
-	return getCustomEndpointUrlFromSnykApi(endpoint, "deeproxy")
+	return getCustomEndpointUrlFromSnykApi(c.Endpoint(), "deeproxy")
 }
 
 func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, error) {
@@ -1310,6 +1280,23 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 
 func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
 	return storedconfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
+}
+
+// FolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
+// The path parameter can be a subdirectory or file within a workspace folder.
+// Returns an error if the workspace is nil or if no workspace folder contains the path.
+func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
+	if c.Workspace() == nil {
+		return nil, fmt.Errorf("workspace is nil, so cannot determine folder config for path: %s", path)
+	}
+
+	workspaceFolder := c.Workspace().GetFolderContaining(path)
+	if workspaceFolder == nil {
+		return nil, fmt.Errorf("no workspace folder found for path: %s", path)
+	}
+
+	folderConfig := c.FolderConfig(workspaceFolder.Path())
+	return folderConfig, nil
 }
 
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for

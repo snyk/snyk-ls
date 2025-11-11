@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	// Autofix is disabled by default
-	defaultAutofixEnabled = false
+	// Autofix is enabled by default
+	defaultAutofixEnabled = true
 )
 
 var (

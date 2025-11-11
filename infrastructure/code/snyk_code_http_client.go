@@ -49,17 +49,45 @@ func issueSeverity(snykSeverity string) types.Severity {
 	return sev
 }
 
-// GetCodeApiUrlForFolder returns the code API URL. In FedRAMP, it uses the organization from the given folder.
-// The folder parameter can be a subdirectory; this function will find the workspace folder containing it.
+// GetCodeApiUrlForFolder returns the Snyk Code API URL for the given folder.
+// The folder parameter can be a subdirectory or file path; this function will find the workspace folder containing it.
+// The URL is determined in the following order:
+//   - If local code engine (SCLE) is enabled in 	the folder's SAST settings, we use the local engine endpoint
+//   - If a custom endpoint from the folder's SAST settings is configured, we use the custom endpoint
+//   - In non-FedRAMP environments, we return these as is
+//   - In FedRAMP environments, the folder's organization is included in the URL path
+//
+// Returns an error if:
+//   - folder is empty
+//   - no workspace folder can be found for the given path
+//   - in FedRAMP, if no organization can be determined for the folder
 func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, error) {
-	if !c.IsFedramp() {
-		return c.SnykCodeApi(), nil
-	}
 	if folder == "" {
-		return "", fmt.Errorf("specifying a folder is required in a fedramp environment")
+		return "", fmt.Errorf("no folder specified when trying to determine Snyk Code API URL")
 	}
 
-	u, err := url.Parse(c.SnykCodeApi())
+	folderConfig, err := c.FolderConfigForSubPath(folder)
+	if err != nil {
+		return "", err
+	}
+
+	var endpoint string
+	if isLocalEngineEnabled(folderConfig.SastSettings) {
+		endpoint = updateCodeApiLocalEngine(c, folderConfig.SastSettings)
+	} else {
+		endpoint, err = c.GetCodeApiUrlFromCustomEndpoint(folderConfig.SastSettings)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if !c.IsFedramp() {
+		return endpoint, nil
+	}
+
+	// we should not have SCLE in fedramp, but this code may still run and it should work even with SCLE
+
+	u, err := url.Parse(endpoint)
 	if err != nil {
 		return "", err
 	}

@@ -177,6 +177,17 @@ func OnlyEnableCode(t *testing.T, c *config.Config) {
 	c.SetSnykIacEnabled(false)
 	c.SetSnykOssEnabled(false)
 	c.SetSnykCodeEnabled(true)
+	for _, folder := range c.Workspace().Folders() {
+		folderConfig := c.FolderConfig(folder.Path())
+		folderConfig.SastSettings = &sast_contract.SastResponse{
+			SastEnabled: true,
+			LocalCodeEngine: sast_contract.LocalCodeEngine{
+				Enabled: false,
+			},
+			AutofixEnabled: true,
+		}
+		storedConfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	}
 }
 
 // SetUpEngineMock creates and configures a mock GAF engine for testing.

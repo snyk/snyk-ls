@@ -77,6 +77,7 @@ var (
 	scanStateAggregator         scanstates.Aggregator
 	scanStateChangeEmitter      scanstates.ScanStateChangeEmitter
 	snykCli                     cli.Executor
+	orgResolver                 types.OrgResolver
 )
 
 func Init() {
@@ -140,7 +141,7 @@ func initApplication(c *config.Config) {
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService)
-	orgResolver := command.NewLDXSyncOrgResolver()
+	orgResolver = command.NewLDXSyncOrgResolver()
 	command.SetService(command.NewService(authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, orgResolver))
 }
 
