@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -43,7 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/sdk"
-	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -251,7 +250,7 @@ func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs
 			// if the sdk needs additional parameters, add them (Python plugin, I look at you. Yes, you)
 			// the given parameters take precedence, meaning, a given python configuration will overrule
 			// the automatically determined config
-			isDuplicateParam := storedConfig.SliceContainsParam(commandLineArgs, parameter)
+			isDuplicateParam := storedconfig.SliceContainsParam(commandLineArgs, parameter)
 			if !isDuplicateParam {
 				commandLineArgs = append(commandLineArgs, parameter)
 			}
@@ -288,7 +287,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	processedArgs := []string{}
 	// now add all additional parameters, skipping blacklisted ones
 	for _, parameter := range args {
-		if storedConfig.SliceContainsParam(cmd, parameter) {
+		if storedconfig.SliceContainsParam(cmd, parameter) {
 			continue
 		}
 
