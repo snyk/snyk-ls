@@ -63,6 +63,11 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 	t.Run("should return error when organization not configured in FedRAMP", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+
+		// Clear env since it takes priority over the config.
+		t.Setenv(config.DeeproxyApiUrlKey, "")
+
+		// Set up the API URL to use for the test.
 		c.UpdateApiEndpoints("https://api.snykgov.io")
 
 		// Setup workspace but configure folder without org
@@ -82,6 +87,11 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 	t.Run("should use correct folder org when passing subdirectory in FedRAMP", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+
+		// Clear env since it takes priority over the config.
+		t.Setenv(config.DeeproxyApiUrlKey, "")
+
+		// Set up the API URL to use for the test.
 		c.UpdateApiEndpoints("https://api.snykgov.io")
 
 		// Setup workspace with 2 folders
@@ -119,6 +129,11 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 	t.Run("should return SCLE URL as-is in non-FedRAMP when local engine is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+
+		// Clear env since it takes priority over local engine.
+		t.Setenv(config.DeeproxyApiUrlKey, "")
+
+		// Set up the API URL to use for the test.
 		c.UpdateApiEndpoints("https://api.snyk.io")
 
 		const localEngineURL = "http://localhost:8080"
@@ -154,7 +169,8 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 				t.Run(instance+" with "+input, func(t *testing.T) {
 					c := testutil.UnitTest(t)
 
-					t.Setenv("DEEPROXY_API_URL", "")
+					// Clear env since it takes priority over the config.
+					t.Setenv(config.DeeproxyApiUrlKey, "")
 
 					folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
 					require.NoError(t, err)
@@ -194,7 +210,8 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 				t.Run(instance+" with "+input, func(t *testing.T) {
 					c := testutil.UnitTest(t)
 
-					t.Setenv("DEEPROXY_API_URL", "")
+					// Clear env since it takes priority over the config.
+					t.Setenv(config.DeeproxyApiUrlKey, "")
 
 					folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
 					require.NoError(t, err)
@@ -210,6 +227,10 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 	t.Run("Default deeproxy url for code api", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+
+		// Clear env since it takes priority over default deeproxy url.
+		t.Setenv(config.DeeproxyApiUrlKey, "")
+
 		folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
 		require.NoError(t, err)
 
