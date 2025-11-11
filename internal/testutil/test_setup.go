@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/constants"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -251,4 +252,18 @@ func SkipLocally(t *testing.T) {
 	if ciVar == "" {
 		t.Skip("not running in CI, skipping test")
 	}
+// NewMockCodeIssue creates a mock Code issue with the given ID, content root, and finding ID.
+// This is useful for tests that need Code issues with finding IDs (e.g., ignore operations).
+func NewMockCodeIssue(issueId string, contentRoot types.FilePath, findingId string) types.Issue {
+	issue := &snyk.Issue{
+		ID:          issueId,
+		ContentRoot: contentRoot,
+		AdditionalData: snyk.CodeIssueData{
+			Key:    "test-key",
+			Title:  "Test Issue",
+			RuleId: "test-rule-id",
+		},
+	}
+	issue.SetFindingId(findingId)
+	return issue
 }
