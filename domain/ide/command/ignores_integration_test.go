@@ -27,7 +27,6 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -39,35 +38,7 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 
 	// Set up two folders with different orgs
-	folderPath1 := types.FilePath(t.TempDir())
-	folderPath2 := types.FilePath(t.TempDir())
-
-	globalOrg := "00000000-0000-0000-0000-000000000001"
-	folderOrg1 := "00000000-0000-0000-0000-000000000002"
-	folderOrg2 := "00000000-0000-0000-0000-000000000003" // Set global org as a UUID (no API resolution needed)
-
-	// Set a global org that is different from folder orgs
-	c.SetOrganization(globalOrg)
-
-	// Configure folder 1 with its own org
-	folderConfig1 := &types.FolderConfig{
-		FolderPath:                  folderPath1,
-		PreferredOrg:                folderOrg1,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig1, c.Logger())
-	require.NoError(t, err)
-
-	// Configure folder 2 with a different org
-	folderConfig2 := &types.FolderConfig{
-		FolderPath:                  folderPath2,
-		PreferredOrg:                folderOrg2,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig2, c.Logger())
-	require.NoError(t, err)
+	folderPath1, folderPath2, globalOrg, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -222,11 +193,7 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 func Test_IgnoreOperations_FallBackToGlobalOrg(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 
-	folderPath := types.FilePath(t.TempDir())
-	const globalOrg = "00000000-0000-0000-0000-000000000004"
-
-	// Set only global org, no folder-specific org
-	c.SetOrganization(globalOrg)
+	folderPath, _ := testutil.SetupGlobalOrgOnly(t, c)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -35,7 +35,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -51,35 +50,7 @@ func Test_SnykCli_GetCommand_UsesFolderOrganization(t *testing.T) {
 	cliExecutor := cli.NewExecutor(c, er, notifier).(*cli.SnykCli)
 
 	// Set up two folders with different orgs
-	folderPath1 := types.FilePath(t.TempDir())
-	folderPath2 := types.FilePath(t.TempDir())
-
-	globalOrg := "00000000-0000-0000-0000-000000000001"
-	folderOrg1 := "00000000-0000-0000-0000-000000000002"
-	folderOrg2 := "00000000-0000-0000-0000-000000000003"
-
-	// Set a global org that is different from folder orgs
-	c.SetOrganization(globalOrg)
-
-	// Configure folder 1 with its own org
-	folderConfig1 := &types.FolderConfig{
-		FolderPath:                  folderPath1,
-		PreferredOrg:                folderOrg1,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig1, c.Logger())
-	require.NoError(t, err)
-
-	// Configure folder 2 with a different org
-	folderConfig2 := &types.FolderConfig{
-		FolderPath:                  folderPath2,
-		PreferredOrg:                folderOrg2,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig2, c.Logger())
-	require.NoError(t, err)
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
 
 	// Test folder 1: verify getCommand() adds --org flag with folder org
 	baseCmd := []string{"snyk", "test", "--json"}
@@ -130,19 +101,10 @@ func Test_SnykCli_GetCommand_ReplacesExistingOrgFlag(t *testing.T) {
 	notifier := notification.NewMockNotifier()
 	cliExecutor := cli.NewExecutor(c, er, notifier).(*cli.SnykCli)
 
-	folderPath := types.FilePath(t.TempDir())
 	const folderOrg = "folder-org-replacement"
 	const existingOrg = "existing-org"
 
-	// Configure folder with its own org
-	folderConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                folderOrg,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
-	require.NoError(t, err)
+	folderPath := testutil.SetupFolderWithOrg(t, c, folderOrg)
 
 	// Test with a command that already has an --org flag
 	baseCmd := []string{"snyk", "test", "--json", "--org=" + existingOrg}
@@ -173,35 +135,7 @@ func Test_ExtensionExecutor_DoExecute_UsesFolderOrganization(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 
 	// Set up two folders with different orgs
-	folderPath1 := types.FilePath(t.TempDir())
-	folderPath2 := types.FilePath(t.TempDir())
-
-	globalOrg := "00000000-0000-0000-0000-000000000001"
-	folderOrg1 := "00000000-0000-0000-0000-000000000002"
-	folderOrg2 := "00000000-0000-0000-0000-000000000003"
-
-	// Set a global org that is different from folder orgs
-	c.SetOrganization(globalOrg)
-
-	// Configure folder 1 with its own org
-	folderConfig1 := &types.FolderConfig{
-		FolderPath:                  folderPath1,
-		PreferredOrg:                folderOrg1,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig1, c.Logger())
-	require.NoError(t, err)
-
-	// Configure folder 2 with a different org
-	folderConfig2 := &types.FolderConfig{
-		FolderPath:                  folderPath2,
-		PreferredOrg:                folderOrg2,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig2, c.Logger())
-	require.NoError(t, err)
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
 
 	// Test folder 1: verify doExecute() sets org in config
 	cmd1 := []string{"snyk", "test"}
@@ -224,11 +158,7 @@ func Test_ExtensionExecutor_DoExecute_UsesFolderOrganization(t *testing.T) {
 func Test_ExtensionExecutor_DoExecute_FallsBackToGlobalOrg(t *testing.T) {
 	c := testutil.SmokeTest(t, false)
 
-	folderPath := types.FilePath(t.TempDir())
-	const globalOrg = "00000000-0000-0000-0000-000000000004"
-
-	// Set only global org, no folder-specific org
-	c.SetOrganization(globalOrg)
+	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
 
 	// Test: verify doExecute() uses global org as fallback
 	cmd := []string{"snyk", "test"}
