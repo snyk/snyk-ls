@@ -39,6 +39,7 @@ type mockExternalCallsProvider struct {
 	sastSettingsByOrg   map[string]*sast_contract.SastResponse
 	sastErr             error
 	folderOrg           string
+	folderOrgByPath     map[string]string // Maps folder path to org for testing different folders
 
 	// Call counters to verify no unnecessary external calls
 	ignoreApprovalCalls int
@@ -99,6 +100,12 @@ func (m *mockExternalCallsProvider) getSastSettings(org string) (*sast_contract.
 }
 
 func (m *mockExternalCallsProvider) folderOrganization(path types.FilePath) string {
+	// If folderOrgByPath is set, use it to return org based on path
+	if m.folderOrgByPath != nil {
+		if org, ok := m.folderOrgByPath[string(path)]; ok {
+			return org
+		}
+	}
 	return m.folderOrg
 }
 
@@ -701,4 +708,72 @@ func TestFetchSastSettings(t *testing.T) {
 		assert.Contains(t, service.orgToSastSettings, org)
 		assert.Len(t, service.orgToSastSettings, 1)
 	})
+}
+
+func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Set up two folders with different orgs
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+
+	// Create a mock provider that returns different orgs based on folder path
+	mockProvider := &mockExternalCallsProvider{
+		ignoreApprovalByOrg: make(map[string]bool),
+		featureFlagsByOrg:   make(map[string]map[string]bool),
+		sastSettingsByOrg:   make(map[string]*sast_contract.SastResponse),
+		folderOrgByPath: map[string]string{
+			string(folderPath1): folderOrg1,
+			string(folderPath2): folderOrg2,
+		},
+	}
+
+	// Configure different feature flags for each org
+	mockProvider.featureFlagsByOrg[folderOrg1] = map[string]bool{
+		SnykCodeConsistentIgnores: true,
+		SnykCodeInlineIgnore:      false,
+	}
+	mockProvider.featureFlagsByOrg[folderOrg2] = map[string]bool{
+		SnykCodeConsistentIgnores: false,
+		SnykCodeInlineIgnore:      true,
+	}
+
+	service := &serviceImpl{
+		c:                 c,
+		provider:          mockProvider,
+		orgToFlag:         make(map[string]map[string]bool),
+		orgToSastSettings: make(map[string]*sast_contract.SastResponse),
+		mutex:             &sync.Mutex{},
+	}
+
+	// Populate folder config for folder 1
+	folderConfig1 := &types.FolderConfig{
+		FolderPath: folderPath1,
+	}
+	service.PopulateFolderConfig(folderConfig1)
+
+	// Verify folder1 got flags from folderOrg1
+	assert.NotNil(t, folderConfig1.FeatureFlags)
+	assert.True(t, folderConfig1.FeatureFlags[SnykCodeConsistentIgnores], "Folder1 should have SnykCodeConsistentIgnores=true from folderOrg1")
+	assert.False(t, folderConfig1.FeatureFlags[SnykCodeInlineIgnore], "Folder1 should have SnykCodeInlineIgnore=false from folderOrg1")
+
+	// Verify fetch was called with folderOrg1
+	assert.Contains(t, service.orgToFlag, folderOrg1, "Service should have cached flags for folderOrg1")
+
+	// Populate folder config for folder 2
+	folderConfig2 := &types.FolderConfig{
+		FolderPath: folderPath2,
+	}
+	service.PopulateFolderConfig(folderConfig2)
+
+	// Verify folder2 got flags from folderOrg2
+	assert.NotNil(t, folderConfig2.FeatureFlags)
+	assert.False(t, folderConfig2.FeatureFlags[SnykCodeConsistentIgnores], "Folder2 should have SnykCodeConsistentIgnores=false from folderOrg2")
+	assert.True(t, folderConfig2.FeatureFlags[SnykCodeInlineIgnore], "Folder2 should have SnykCodeInlineIgnore=true from folderOrg2")
+
+	// Verify fetch was called with folderOrg2
+	assert.Contains(t, service.orgToFlag, folderOrg2, "Service should have cached flags for folderOrg2")
+
+	// Verify both orgs are cached separately
+	assert.Len(t, service.orgToFlag, 2, "Service should have cached flags for both orgs")
+	assert.NotEqual(t, folderConfig1.FeatureFlags[SnykCodeConsistentIgnores], folderConfig2.FeatureFlags[SnykCodeConsistentIgnores], "Folders should have different flag values based on their orgs")
 }
