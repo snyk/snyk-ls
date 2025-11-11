@@ -59,9 +59,6 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 	assert.NotEqual(t, folderOrg1, folderOrg2, "Folder orgs should be different")
 }
 
-// Test_CodeConfig_FallsBackToGlobalOrg is an INTEGRATION TEST that verifies
-// createCodeConfig() falls back to global org when no folder-specific org is configured.
-// This test uses testutil.UnitTest() to avoid making actual API calls.
 func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
@@ -81,9 +78,6 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	assert.Equal(t, globalOrg, configOrg, "CodeConfig should fall back to global org when no folder org is set")
 }
 
-// Test_GetCodeApiUrlForFolder_UsesFolderOrganization is an INTEGRATION TEST that verifies
-// GetCodeApiUrlForFolder() uses the folder-specific organization for FedRAMP endpoints.
-// This test uses testutil.UnitTest() to avoid making actual API calls.
 func Test_GetCodeApiUrlForFolder_UsesFolderOrganization(t *testing.T) {
 	c := testutil.UnitTest(t)
 
@@ -107,9 +101,6 @@ func Test_GetCodeApiUrlForFolder_UsesFolderOrganization(t *testing.T) {
 	assert.NotEqual(t, apiUrl1, apiUrl2, "API URLs for different folders should be different")
 }
 
-// Test_GetExplainEndpoint_UsesFolderOrganization is an INTEGRATION TEST that verifies
-// getExplainEndpoint() uses the folder-specific organization for AI fix explain endpoints.
-// This test uses testutil.UnitTest() to avoid making actual API calls.
 func Test_GetExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 	c := testutil.UnitTest(t)
 
@@ -130,9 +121,6 @@ func Test_GetExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 	assert.NotEqual(t, endpoint1Str, endpoint2Str, "Explain endpoints for different folders should be different")
 }
 
-// Test_GetExplainEndpoint_FallsBackToGlobalOrg is an INTEGRATION TEST that verifies
-// getExplainEndpoint() falls back to global org when no folder-specific org is configured.
-// This test uses testutil.UnitTest() to avoid making actual API calls.
 func Test_GetExplainEndpoint_FallsBackToGlobalOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 
@@ -142,4 +130,46 @@ func Test_GetExplainEndpoint_FallsBackToGlobalOrg(t *testing.T) {
 	endpoint := getExplainEndpoint(c, folderPath)
 	endpointStr := endpoint.String()
 	assert.Contains(t, endpointStr, "/rest/orgs/"+globalOrg+"/explain-fix", "Explain endpoint should fall back to global org when no folder org is set")
+}
+
+func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Set up two folders with different orgs
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+
+	// Test folder 1: verify NewAutofixCodeRequestContext() uses folder1's org
+	requestContext1 := NewAutofixCodeRequestContext(folderPath1)
+	require.NotNil(t, requestContext1)
+	assert.Equal(t, folderOrg1, requestContext1.Org.PublicId, "Request context for folder1 should use folder1's org")
+	assert.Equal(t, "IDE", requestContext1.Initiator, "Request context should have correct initiator")
+	assert.Equal(t, "language-server", requestContext1.Flow, "Request context should have correct flow")
+
+	// Test folder 2: verify NewAutofixCodeRequestContext() uses folder2's org
+	requestContext2 := NewAutofixCodeRequestContext(folderPath2)
+	require.NotNil(t, requestContext2)
+	assert.Equal(t, folderOrg2, requestContext2.Org.PublicId, "Request context for folder2 should use folder2's org")
+	assert.Equal(t, "IDE", requestContext2.Initiator, "Request context should have correct initiator")
+	assert.Equal(t, "language-server", requestContext2.Flow, "Request context should have correct flow")
+
+	// Verify different folders get different orgs
+	assert.NotEqual(t, requestContext1.Org.PublicId, requestContext2.Org.PublicId, "Different folders should have different orgs in request context")
+}
+
+func Test_NewAutofixCodeRequestContext_FallsBackToGlobalOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Set up a global org but no folder orgs
+	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
+
+	// Verify FolderOrganization() returns the global org (fallback)
+	folderOrg := c.FolderOrganization(folderPath)
+	assert.Equal(t, globalOrg, folderOrg, "FolderOrganization() should fall back to global org when no folder org is configured")
+
+	// Verify NewAutofixCodeRequestContext() uses the global org
+	requestContext := NewAutofixCodeRequestContext(folderPath)
+	require.NotNil(t, requestContext)
+	assert.Equal(t, globalOrg, requestContext.Org.PublicId, "Request context should fall back to global org when no folder org is configured")
+	assert.Equal(t, "IDE", requestContext.Initiator, "Request context should have correct initiator")
+	assert.Equal(t, "language-server", requestContext.Flow, "Request context should have correct flow")
 }
