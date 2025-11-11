@@ -427,6 +427,6 @@ func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(
 }
 
 // NewFakeCodeScannerClient creates a fake code scanner for testing
-func NewFakeCodeScannerClient(_ *Scanner, path types.FilePath) codeClient.CodeScanner {
-	return &FakeCodeScannerClient{rootPath: path}
+func NewFakeCodeScannerClient(_ *Scanner, path types.FilePath) (codeClient.CodeScanner, error) {
+	return &FakeCodeScannerClient{rootPath: path}, nil
 }

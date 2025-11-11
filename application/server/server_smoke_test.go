@@ -523,6 +523,8 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 		testPath = types.FilePath(filepath.Join(cloneTargetDirString, file1))
 		waitForNetwork(c)
 		textDocumentDidSave(t, &loc, testPath)
+		// Check scan completed successfully
+		checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
 		// serve diagnostics from file scan
 		assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 	}
@@ -531,10 +533,10 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	testPath = types.FilePath(filepath.Join(cloneTargetDirString, file2))
 	waitForNetwork(c)
 	textDocumentDidSave(t, &loc, testPath)
+	// Check scan completed successfully
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
 	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
 
-	// check for snyk code scan message
-	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	// check for autofix diff on mt-us
@@ -684,6 +686,8 @@ func waitForDeltaScan(t *testing.T, agg scanstates.Aggregator) {
 func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
 	t.Helper()
 	var notifications []jrpc2.Request
+	var finalScanParams *types.SnykScanParams
+
 	assert.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
@@ -691,13 +695,21 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecord
 			_ = n.UnmarshalParams(&scanParams)
 			if scanParams.Product != p.ToProductCodename() ||
 				scanParams.FolderPath != types.FilePath(cloneTargetDir) ||
-				scanParams.Status != "success" {
+				scanParams.Status == types.InProgress {
 				continue
 			}
+			finalScanParams = &scanParams
 			return true
 		}
 		return false
 	}, 5*time.Minute, 10*time.Millisecond)
+
+	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
+	require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
+		"Scan failed - Product: %s, Folder: %s, Error: %s",
+		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.ErrorMessage)
+	require.Equal(t, types.Success, finalScanParams.Status,
+		"Unexpected scan status: %s", finalScanParams.Status)
 }
 
 func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, p product.Product, folderPath types.FilePath) []types.ScanIssue {
