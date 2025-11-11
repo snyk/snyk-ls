@@ -151,7 +151,8 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *con
 		t.Fatal(err)
 	}
 	c.ConfigureLogging(nil)
-	c.SetToken(testsupport.GetEnvironmentToken(tokenSecretName))
+	token := testsupport.GetEnvironmentToken(tokenSecretName)
+	c.SetToken(token)
 	c.SetAuthenticationMethod(types.TokenAuthentication)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)

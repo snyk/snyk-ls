@@ -21,8 +21,10 @@ import (
 )
 
 func GetEnvironmentToken(secretName string) string {
-	if len(secretName) > 0 {
-		return os.Getenv(secretName)
+	secretValue := os.Getenv(secretName)
+	if len(secretValue) > 0 {
+		return secretValue
 	}
-	return os.Getenv("SNYK_TOKEN")
+	token := os.Getenv("SNYK_TOKEN")
+	return token
 }
