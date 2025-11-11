@@ -523,10 +523,9 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 		testPath = types.FilePath(filepath.Join(cloneTargetDirString, file1))
 		waitForNetwork(c)
 		textDocumentDidSave(t, &loc, testPath)
-		// Check scan completed successfully
-		checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
 		// serve diagnostics from file scan
-		assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+		require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond,
+			"Diagnostics not published for file %s", file1)
 	}
 
 	jsonRPCRecorder.ClearNotifications()
@@ -535,8 +534,8 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	textDocumentDidSave(t, &loc, testPath)
 	// Check scan completed successfully
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
-	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
-
+	require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond,
+		"Diagnostics not published for file %s", file2)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	// check for autofix diff on mt-us
@@ -688,7 +687,8 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecord
 	var notifications []jrpc2.Request
 	var finalScanParams *types.SnykScanParams
 
-	assert.Eventually(t, func() bool {
+	// Wait for scan to complete (success or error)
+	require.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
 			var scanParams types.SnykScanParams
@@ -702,7 +702,8 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecord
 			return true
 		}
 		return false
-	}, 5*time.Minute, 10*time.Millisecond)
+	}, 5*time.Minute, 10*time.Millisecond,
+		"Scan did not complete for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 
 	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 	require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
