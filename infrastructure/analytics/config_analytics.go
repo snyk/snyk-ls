@@ -22,8 +22,27 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
+// TriggerSource represents the source of a configuration change for analytics purposes
+type TriggerSource string
+
+const (
+	// TriggerSourceInitialize indicates settings are being initialized (first load, LSP init)
+	TriggerSourceInitialize TriggerSource = "initialize"
+
+	// TriggerSourceIDE indicates settings were changed by the IDE or user
+	TriggerSourceIDE TriggerSource = "ide"
+
+	// TriggerSourceTest indicates the change is from a test scenario
+	TriggerSourceTest TriggerSource = "test"
+)
+
+// String returns the string representation of the trigger source
+func (a TriggerSource) String() string {
+	return string(a)
+}
+
 // SendConfigChangedAnalytics sends analytics for primitive values only
-func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any, newVal any, triggerSource string) {
+func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any, newVal any, triggerSource TriggerSource) {
 	// Don't send analytics if old and new values are identical
 	if util.AreValuesEqual(oldVal, newVal) {
 		return
@@ -40,7 +59,7 @@ func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any,
 }
 
 // SendConfigChangedAnalyticsEvent sends a single analytics event for a config change
-func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}, path types.FilePath, triggerSource string) {
+func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue any, path types.FilePath, triggerSource TriggerSource) {
 	// Don't send analytics if old and new values are the same
 	if util.AreValuesEqual(oldValue, newValue) {
 		return
@@ -58,14 +77,14 @@ func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, n
 	extension := make(map[string]any)
 	extension["config::"+field+"::oldValue"] = oldValue
 	extension["config::"+field+"::newValue"] = newValue
-	extension["config::"+field+"::triggerSource"] = triggerSource
+	extension["config::"+field+"::triggerSource"] = triggerSource.String()
 
 	event.Extension = extension
 	SendAnalytics(c.Engine(), c.DeviceID(), event, nil)
 }
 
 // SendAnalyticsForFields sends analytics for struct fields
-func SendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, newValue *T, triggerSource string, fieldMappings map[string]func(*T) any) {
+func SendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, newValue *T, triggerSource TriggerSource, fieldMappings map[string]func(*T) any) {
 	for fieldName, getter := range fieldMappings {
 		oldVal := getter(oldValue)
 		newVal := getter(newValue)
