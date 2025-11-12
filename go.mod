@@ -32,7 +32,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/cli-extension-os-flows v0.0.0-20251106112350-f5dd1a008e8e
 	github.com/snyk/code-client-go v1.24.4
-	github.com/snyk/go-application-framework v0.0.0-20251106151324-5a1e1a9195d1
+	github.com/snyk/go-application-framework v0.0.0-20251111182643-d9cce9ffbd64
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
