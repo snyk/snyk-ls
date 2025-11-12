@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package maven implements the Maven parser
 package maven
 
 import (

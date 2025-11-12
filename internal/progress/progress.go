@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package progress implements the progress functionality
 package progress
 
 import (

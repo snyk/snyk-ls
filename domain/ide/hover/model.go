@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package hover implements the hover functionality
 package hover
 
 import (

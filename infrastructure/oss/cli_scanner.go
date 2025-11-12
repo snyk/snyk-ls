@@ -29,13 +29,13 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -99,7 +99,7 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 		packageScanMutex:        &sync.Mutex{},
 		scheduledScanMtx:        &sync.Mutex{},
 		runningScans:            map[types.FilePath]*scans.ScanProgress{},
-		refreshScanWaitDuration: 24 * time.Hour,
+		refreshScanWaitDuration: 6 * time.Hour,
 		scanCount:               1,
 		learnService:            learnService,
 		notifier:                notifier,
@@ -144,8 +144,23 @@ func (cliScanner *CLIScanner) Product() product.Product {
 	return product.ProductOpenSource
 }
 
-func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
-	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.scan").Logger()
+// TODO remove params from scan interface, once every scanner has these things in context and can extract it from there
+func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, workDir types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+	logger := cliScanner.getLogger(ctx)
+	ctx = cliScanner.enrichContext(ctx)
+
+	// Add path to context so it can be used by scheduled scans
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workDir, path)
+
+	if folderConfig != nil {
+		deps, found := ctx2.DependenciesFromContext(ctx)
+		if !found {
+			deps = map[string]any{}
+		}
+		deps[ctx2.DepFolderConfig] = folderConfig
+		ctx = ctx2.NewContextWithDependencies(ctx, deps)
+	}
+
 	if !cliScanner.config.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
@@ -155,24 +170,57 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, _ t
 		logger.Debug().Msgf("OSS Scan not supported for %s", path)
 		return issues, nil
 	}
-	return cliScanner.scanInternal(ctx, path, cliScanner.prepareScanCommand, folderConfig)
+	return cliScanner.scanInternal(ctx, cliScanner.prepareScanCommand)
 }
 
-func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path types.FilePath, commandFunc func(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) []string, folderConfig *types.FolderConfig) ([]types.Issue, error) {
-	method := "cliScanner.Scan"
-	logger := cliScanner.config.Logger().With().Str("method", method).Logger()
+func (cliScanner *CLIScanner) getLogger(ctx context.Context) zerolog.Logger {
+	givenLogger := ctx2.LoggerFromContext(ctx)
+	if givenLogger == nil {
+		givenLogger = cliScanner.config.Logger()
+	}
+	logger := givenLogger.With().Str("method", "CLIScanner.scan").Logger()
+	return logger
+}
 
+func (cliScanner *CLIScanner) scanInternal(
+	ctx context.Context,
+	commandFunc func(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) []string,
+) ([]types.Issue, error) {
+	method := "cliScanner.Scan"
+	logger := cliScanner.getLogger(ctx).With().Str("method", method).Logger()
+
+	// get data from context
+	path := ctx2.FilePathFromContext(ctx)
+	deps, found := ctx2.DependenciesFromContext(ctx)
+	if !found {
+		const msg = "dependencies not found in context"
+		logger.Error().Msg(msg)
+		return []types.Issue{}, errors.New(msg)
+	}
+
+	folderConfig, ok := deps[ctx2.DepFolderConfig].(*types.FolderConfig)
+	if !ok {
+		const msg = "folderConfig not found in context"
+		logger.Error().Msg(msg)
+		return []types.Issue{}, errors.New(msg)
+	}
+
+	// now start the scanning
 	s := cliScanner.instrumentor.StartSpan(ctx, method)
 	defer cliScanner.instrumentor.Finish(s)
-	logger.Debug().Str("method", method).Msg("started.")
-	defer logger.Debug().Str("method", method).Msg("done.")
+	logger.Debug().Msg("started.")
+	defer logger.Debug().Msg("done.")
 
 	if ctx.Err() != nil {
 		logger.Debug().Msg("Canceling OSS scan - OSS scanner received cancellation signal")
 		return []types.Issue{}, nil
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
+	// save parent context for scheduling refresh scan
+	parentCtx := s.Context()
+
+	// create cancelable progress tracker
+	ctx, cancel := context.WithCancel(s.Context())
 	defer cancel()
 
 	p := progress.NewTracker(true)
@@ -180,24 +228,26 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path types.FileP
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
 
+	// normalize & determine paths
 	filePath, err := filepath.Abs(string(path))
 	if err != nil {
-		logger.Err(err).Str("method", method).
-			Msg("Error while extracting file absolutePath")
+		logger.Err(err).Msg("Error while extracting file absolutePath")
 	}
 
 	var workDir types.FilePath
 
+	// TODO: why don't we use the given work dir?
 	if uri.IsDirectory(path) {
 		workDir = path
 	} else {
 		workDir = types.FilePath(filepath.Dir(filePath))
 	}
 
+	// cancel running scans on same workdir
 	cliScanner.mutex.Lock()
 	i := cliScanner.scanCount
 	previousScan, wasFound := cliScanner.runningScans[workDir]
-	if wasFound && !previousScan.IsDone() { // If there's already a scan for the current workdir, we want to cancel it and restart it
+	if wasFound && !previousScan.IsDone() {
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewScanProgress()
@@ -207,6 +257,54 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path types.FileP
 	cliScanner.mutex.Unlock()
 
 	cmd := commandFunc([]string{string(workDir)}, map[string]bool{"": true}, workDir, folderConfig)
+
+	// check if scan was canceled
+	if ctx.Err() != nil {
+		logger.Debug().Msg("Canceling OSS scan - OSS scanner received cancellation signal")
+		return []types.Issue{}, nil
+	}
+
+	// determine which scanner to use
+	useLegacyScan := !folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"]
+	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨🚨🚨🚨 oss scan usage 🚨🚨🚨🚨")
+
+	// do actual scan
+	var output any
+	if useLegacyScan {
+		logger.Info().Msg("⚠️ using legacy OSS scanner")
+
+		output, err = cliScanner.legacyScan(ctx, path, cmd, workDir)
+		if err != nil {
+			logger.Err(err).Msg("Error while scanning for OSS issues")
+			return []types.Issue{}, err
+		}
+	} else {
+		logger.Info().Msg("🐉🪰using new ostest scanner")
+		output, err = cliScanner.ostestScan(ctx, path, cmd, workDir)
+		if err != nil {
+			logger.Err(err).Msg("Error while scanning for OSS issues")
+			return []types.Issue{}, err
+		}
+	}
+
+	// convert scan results into issues
+	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workDir, path, cliScanner.config.Format())
+
+	// mark scan done
+	cliScanner.mutex.Lock()
+	logger.Debug().Msgf("Scan %v is done", i)
+	newScan.SetDone()
+	cliScanner.mutex.Unlock()
+
+	// scan again after cache expiry
+	if issues != nil {
+		cliScanner.scheduleRefreshScan(parentCtx, path)
+	}
+	return issues, nil
+}
+
+func (cliScanner *CLIScanner) legacyScan(ctx context.Context, path types.FilePath, cmd []string, workDir types.FilePath) ([]byte, error) {
+	logger := cliScanner.config.Logger().With().Str("method", "cliScanner.legacyScan").Logger()
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
@@ -216,21 +314,11 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, path types.FileP
 				return nil, handledErr
 			}
 		} else { // If scan was canceled, return empty results
-			return []types.Issue{}, nil
+			logger.Info().Msg("OSS scan was canceled, returning empty issues")
+			return []byte{}, nil
 		}
 	}
-
-	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, res, workDir, path, cliScanner.config.Format())
-
-	cliScanner.mutex.Lock()
-	logger.Debug().Msgf("Scan %v is done", i)
-	newScan.SetDone()
-	cliScanner.mutex.Unlock()
-
-	if issues != nil {
-		cliScanner.scheduleRefreshScan(context.Background(), path)
-	}
-	return issues, nil
+	return res, nil
 }
 
 func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs []string, folderConfig *types.FolderConfig) []string {
@@ -326,15 +414,16 @@ func (cliScanner *CLIScanner) isSupported(path types.FilePath) bool {
 	return uri.IsDirectory(path) || cliScanner.supportedFiles[filepath.Base(string(path))]
 }
 
-func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
-	res []byte,
+func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
+	ctx context.Context,
+	scanOutput any,
 	workDir types.FilePath,
 	path types.FilePath,
 	format string,
 ) (issues []types.Issue) {
-	issues = UnmarshallAndRetrieveAnalysis(
+	issues, err := ProcessScanResults(
 		ctx,
-		res,
+		scanOutput,
 		workDir,
 		path,
 		cliScanner.config.Logger(),
@@ -344,6 +433,11 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 		true, // readFiles = true for CLIScanner
 		format,
 	)
+
+	if err != nil {
+		cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
+		return []types.Issue{}
+	}
 
 	// Add vulnerability counts to cache (CLIScanner-specific behavior)
 	if len(issues) > 0 {
@@ -355,50 +449,50 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context,
 	return issues
 }
 
-func getAbsTargetFilePath(logger *zerolog.Logger, scanResult scanResult, workDir types.FilePath, path types.FilePath) types.FilePath {
-	if scanResult.DisplayTargetFile == "" && path != "" {
+func getAbsTargetFilePath(logger *zerolog.Logger, resultPath, displayTargetFile string, workDir, path types.FilePath) types.FilePath {
+	if displayTargetFile == "" && path != "" {
 		return path
 	}
-	displayTargetFile := determineTargetFile(scanResult.DisplayTargetFile)
+	newDisplayTargetFile := determineTargetFile(displayTargetFile)
 
 	// if displayTargetFile is an absolute path, no need to do anything more
-	isAbs := filepath.IsAbs(displayTargetFile)
+	isAbs := filepath.IsAbs(newDisplayTargetFile)
 	if isAbs {
-		return types.FilePath(displayTargetFile)
+		return types.FilePath(newDisplayTargetFile)
 	}
 
-	relative, err := filepath.Rel(string(workDir), displayTargetFile)
+	relative, err := filepath.Rel(string(workDir), newDisplayTargetFile)
 	if err != nil || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		logger.Trace().Err(err).Msgf("path is not relative to %s", workDir)
 		// now we try out stuff
 		// if displayTargetFile is not relative, let's try to join path with basename
-		basePath := filepath.Base(displayTargetFile)
-		scanResultPath := scanResult.Path
-		tryOutPath := filepath.Join(scanResultPath, displayTargetFile)
+		basePath := filepath.Base(newDisplayTargetFile)
+		scanResultPath := resultPath
+		tryOutPath := filepath.Join(scanResultPath, newDisplayTargetFile)
 		_, tryOutErr := os.Stat(tryOutPath)
 		if tryOutErr != nil {
-			logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to path: %s failed", displayTargetFile, scanResultPath)
+			logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to path: %s failed", newDisplayTargetFile, scanResultPath)
 			tryOutPath = filepath.Join(scanResultPath, basePath)
 			_, tryOutErr := os.Stat(tryOutPath)
 			if tryOutErr != nil {
 				logger.Trace().Err(err).Msgf("joining basePath: %s to path: %s failed", basePath, scanResultPath)
 				// if that doesn't work, let's try full path and full display target file
-				tryOutPath = filepath.Join(string(workDir), displayTargetFile)
+				tryOutPath = filepath.Join(string(workDir), newDisplayTargetFile)
 				_, tryOutErr = os.Stat(tryOutPath)
 				if tryOutErr != nil {
-					logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed.", displayTargetFile, workDir)
+					logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed.", newDisplayTargetFile, workDir)
 					tryOutPath = filepath.Join(string(workDir), basePath)
 					_, tryOutErr = os.Stat(tryOutPath)
 					if tryOutErr != nil {
-						logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed. Falling back to returning: %s", displayTargetFile, workDir, displayTargetFile)
-						tryOutPath = displayTargetFile // we give up and return the display target file
+						logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed. Falling back to returning: %s", newDisplayTargetFile, workDir, newDisplayTargetFile)
+						tryOutPath = newDisplayTargetFile // we give up and return the display target file
 					}
 				}
 			}
 		}
 		isAbs = filepath.IsAbs(tryOutPath)
 		if !isAbs {
-			logger.Error().Msgf("couldn't determine absolute file path for: %s", scanResult.DisplayTargetFile)
+			logger.Error().Msgf("couldn't determine absolute file path for: %s", newDisplayTargetFile)
 			return ""
 		}
 		return types.FilePath(tryOutPath)
@@ -485,7 +579,7 @@ func determineTargetFile(displayTargetFile string) string {
 // The timer is reset if a new scan is scheduled before the previous one is executed.
 // Canceling the context will stop the timer and abort the scheduled scan.
 func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path types.FilePath) {
-	logger := cliScanner.config.Logger().With().Str("method", "cliScanner.scheduleRefreshScan").Logger()
+	logger := cliScanner.getLogger(ctx)
 	cliScanner.scheduledScanMtx.Lock()
 	if cliScanner.scheduledScan != nil {
 		// Cancel previously scheduled scan
@@ -495,6 +589,10 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 	timer := time.NewTimer(cliScanner.refreshScanWaitDuration)
 	cliScanner.scheduledScan = timer
 	cliScanner.scheduledScanMtx.Unlock()
+
+	// decouple scheduled scan from session but keep context values
+	newCtx := ctx2.Clone(ctx, context.Background())
+
 	go func() {
 		select {
 		case <-timer.C:
@@ -503,12 +601,12 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 				return
 			}
 
-			if ctx.Err() != nil {
+			if newCtx.Err() != nil {
 				logger.Info().Msg("Scheduled scan canceled")
 				return
 			}
 
-			span := cliScanner.instrumentor.NewTransaction(context.WithValue(ctx, cliScanner.Product(), cliScanner),
+			span := cliScanner.instrumentor.NewTransaction(context.WithValue(newCtx, cliScanner.Product(), cliScanner),
 				string(cliScanner.Product()),
 				"cliScanner.scheduleNewScanIn")
 			defer cliScanner.instrumentor.Finish(span)
@@ -521,4 +619,17 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 			return
 		}
 	}()
+}
+
+func (cliScanner *CLIScanner) enrichContext(ctx context.Context) context.Context {
+	dependenciesFromContext, found := ctx2.DependenciesFromContext(ctx)
+	if !found {
+		dependenciesFromContext = map[string]any{}
+	}
+	dependenciesFromContext[ctx2.DepLearnService] = cliScanner.learnService
+	dependenciesFromContext[ctx2.DepErrorReporter] = cliScanner.errorReporter
+	dependenciesFromContext[ctx2.DepCLIExecutor] = cliScanner.cli
+	dependenciesFromContext[ctx2.DepConfig] = cliScanner.config
+
+	return ctx2.NewContextWithDependencies(ctx, dependenciesFromContext)
 }

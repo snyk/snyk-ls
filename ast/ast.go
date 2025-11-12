@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package ast implements abstract syntax tree functionality
 package ast
 
 import "fmt"

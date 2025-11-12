@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package snyk implements the Snyk Domain types & functionality
 package snyk
 
 import (
