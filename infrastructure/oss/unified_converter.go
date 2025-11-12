@@ -68,7 +68,12 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 			logger.Warn().Msg("failed to get ecosystem")
 			continue
 		}
-		ecosystemStr := ecoData.(string)
+		ecosystemStr, ok := ecoData.(string)
+		if !ok {
+			logger.Warn().Msg("failed to get ecosystem")
+			continue
+		}
+
 		problem, err := getProblem(trIssue)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get and convert primary problem: %w", err)
