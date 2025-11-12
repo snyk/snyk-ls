@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package scanner defines the scanner interface and common functionality used in all scanners
 package scanner
 
 import (

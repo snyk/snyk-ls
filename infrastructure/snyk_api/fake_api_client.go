@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package snyk_api implements the Snyk API client
 package snyk_api
 
 import (

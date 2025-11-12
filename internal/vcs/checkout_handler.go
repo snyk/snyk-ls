@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package vcs implements VCS integration
 package vcs
 
 import (

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package authentication implements authentication functionality
 package authentication
 
 import (

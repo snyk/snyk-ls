@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package encoding implements encoding functionality
 package encoding
 
 import (

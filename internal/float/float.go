@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package float implements float functionality
 package float
 
 import "math"

@@ -1,3 +1,4 @@
+// Package watcher implements file watcher functionality
 package watcher
 
 import (

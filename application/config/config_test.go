@@ -358,8 +358,8 @@ func TestConfig_shouldUpdateOAuth2Token(t *testing.T) {
 	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 
 	token := oauth2.Token{
-		AccessToken:  "a",
-		RefreshToken: "b",
+		AccessToken:  "aaa",
+		RefreshToken: "bbb",
 		Expiry:       time.Now().Add(time.Hour),
 	}
 

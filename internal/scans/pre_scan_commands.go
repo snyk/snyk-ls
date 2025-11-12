@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package scans contains functionality related to Snyk scans
 package scans
 
 import (

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package sentry implements the Sentry error reporting functionality
 package sentry
 
 import (
