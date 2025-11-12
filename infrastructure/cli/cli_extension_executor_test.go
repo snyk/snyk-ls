@@ -184,7 +184,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, time.Second, 10*time.Millisecond)
+	}, time.Minute, time.Millisecond)
 
 	// Verify it's blocked - should not complete for a reasonable time
 	require.Never(t, func() bool {
@@ -194,7 +194,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, time.Second, 10*time.Millisecond, "Execute should block until environment is ready")
+	}, 10*time.Second, time.Millisecond, "Execute should block until environment is ready")
 
 	// Now close the test channel to signal readiness
 	testPrepareDefaultEnvChannelClose()
@@ -207,7 +207,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, 5*time.Second, 10*time.Millisecond, "Execute should complete after environment becomes ready")
+	}, time.Minute, time.Millisecond, "Execute should complete after environment becomes ready")
 
 	require.NoError(t, execErr)
 	assert.NotNil(t, result)

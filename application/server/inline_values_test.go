@@ -45,6 +45,7 @@ func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
 }
 
 func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
+	testutil.SkipLocally(t)
 	c := testutil.IntegTest(t)
 	loc, _ := setupServer(t, c)
 	di.Init()

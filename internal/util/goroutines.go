@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package util implements utility functions
 package util
 
 import (

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package mcp_extension implements the MCP extension
 package mcp_extension
 
 import (

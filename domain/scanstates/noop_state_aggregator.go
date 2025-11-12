@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package scanstates implements scan state management
 package scanstates
 
 import (

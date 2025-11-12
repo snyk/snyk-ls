@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package storedconfig implements stored configuration functionality
 package storedconfig
 
 import (

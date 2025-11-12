@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package product contains general product names and information for Snyk product lines
 package product
 
 import "strings"

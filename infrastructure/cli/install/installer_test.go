@@ -149,6 +149,7 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 }
 
 func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
+	testutil.SkipLocally(t)
 	c := testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
 

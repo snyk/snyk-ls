@@ -1,3 +1,4 @@
+// Package testsupport contains test helpers for Snyk
 package testsupport
 
 import (

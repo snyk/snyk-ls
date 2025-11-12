@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package cli_constants provides constants for the CLI
 package cli_constants
 
 const (

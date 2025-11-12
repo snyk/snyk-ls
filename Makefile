@@ -28,7 +28,7 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 
 TOOLS_BIN := $(shell pwd)/.bin
 
-OVERRIDE_GOCI_LINT_V := v1.64.8
+OVERRIDE_GOCI_LINT_V := v2.6.1
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
@@ -38,7 +38,12 @@ TIMEOUT := "-timeout=45m"
 ## tools: Install required tooling.
 .PHONY: tools
 tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
-	@echo "Please make sure to install NPM locally to be able to run analytics verification Ampli."
+
+.PHONY: hooks
+hooks:
+	@pre-commit install
+	@pre-commit install --hook-type pre-push
+
 
 $(TOOLS_BIN)/go-licenses:
 	@echo "==> Installing go-licenses"

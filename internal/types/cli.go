@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package types provides commonly used types
 package types
 
 import "encoding/json"

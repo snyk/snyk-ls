@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package delta implements delta scanning
 package delta
 
 import "github.com/snyk/snyk-ls/internal/types"

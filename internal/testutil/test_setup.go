@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
+// Package testutil implements test setup functionality
 package testutil
 
 import (
+	"context"
 	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
 
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -42,16 +45,22 @@ import (
 
 func IntegTest(t *testing.T) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, testsupport.IntegTestEnvVar, false)
+	return prepareTestHelper(t, testsupport.IntegTestEnvVar, "")
 }
 
 // TODO: remove useConsistentIgnores once we have fully rolled out the feature
-func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
+func SmokeTest(t *testing.T, tokenSecretName string) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, useConsistentIgnores)
+	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
 }
 
 func UnitTest(t *testing.T) *config.Config {
+	t.Helper()
+	c, _ := UnitTestWithCtx(t)
+	return c
+}
+
+func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	t.Helper()
 	c := config.New(config.WithBinarySearchPaths([]string{}))
 	err := c.WaitForDefaultEnv(t.Context())
@@ -75,7 +84,12 @@ func UnitTest(t *testing.T) *config.Config {
 		cleanupFakeCliFile(c)
 		progress.CleanupChannels()
 	})
-	return c
+
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepConfig: c,
+	})
+	ctx = ctx2.NewContextWithLogger(ctx, c.Logger())
+	return c, ctx
 }
 
 func cleanupFakeCliFile(c *config.Config) {
@@ -124,7 +138,7 @@ func CreateDummyProgressListener(t *testing.T) {
 	}()
 }
 
-func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *config.Config {
+func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *config.Config {
 	t.Helper()
 	if os.Getenv(envVar) == "" {
 		t.Logf("%s is not set", envVar)
@@ -137,7 +151,8 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 		t.Fatal(err)
 	}
 	c.ConfigureLogging(nil)
-	c.SetToken(testsupport.GetEnvironmentToken(useConsistentIgnores))
+	token := testsupport.GetEnvironmentToken(tokenSecretName)
+	c.SetToken(token)
 	c.SetAuthenticationMethod(types.TokenAuthentication)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
@@ -203,4 +218,12 @@ func EnableSastAndAutoFix(c *config.Config) {
 		code_workflow.ConfigurationSastSettings,
 		&sast_contract.SastResponse{SastEnabled: true, AutofixEnabled: true},
 	)
+}
+
+func SkipLocally(t *testing.T) {
+	t.Helper()
+	ciVar := os.Getenv("CI")
+	if ciVar == "" {
+		t.Skip("not running in CI, skipping test")
+	}
 }

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package utils provides utilities and is mainly used for delta scanning
 package utils
 
 import (

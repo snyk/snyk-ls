@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package fflags implements the feature flag functionality
 package fflags
 
 import (

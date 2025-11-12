@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package uri implements URI handling for Snyk
 package uri
 
 import (
