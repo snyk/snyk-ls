@@ -1524,8 +1524,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(*config.Config)) {
 	t.Helper()
-	t.Setenv("SNYK_LOG_LEVEL", "debug")
-	c.SetLogLevel(zerolog.LevelDebugValue)
+	t.Setenv("SNYK_LOG_LEVEL", "info")
+	c.SetLogLevel(zerolog.LevelInfoValue)
 	c.ConfigureLogging(nil) // we don't need to send logs to the client
 	gafConfig := c.Engine().GetConfiguration()
 	gafConfig.Set(configuration.DEBUG, c.Logger().GetLevel() == zerolog.DebugLevel)
