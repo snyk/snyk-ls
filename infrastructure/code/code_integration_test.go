@@ -27,10 +27,9 @@ import (
 
 // Test_CodeConfig_UsesFolderOrganization is an INTEGRATION TEST that verifies
 // createCodeConfig() sets the correct organization in CodeConfig based on FolderOrganization()
-// for different folders. This test uses testutil.UnitTest() to avoid making actual API calls,
-// as it only tests configuration initialization methods, not the full workflow execution.
+// for different folders. This test uses testutil.IntegTest() to run in the integration test suite.
 func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 	c.SetSnykCodeEnabled(true)
 
 	// Set up two folders with different orgs
@@ -41,15 +40,23 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 		C: c,
 	}
 
+	// Get FolderConfig for folder 1
+	folderConfig1 := c.FolderConfig(folderPath1)
+	require.NotNil(t, folderConfig1, "FolderConfig for folder1 should not be nil")
+
 	// Test folder 1: verify createCodeConfig() sets org in CodeConfig
-	codeConfig1, err := scanner.createCodeConfig(folderPath1)
+	codeConfig1, err := scanner.createCodeConfig(folderConfig1)
 	require.NoError(t, err)
 	require.NotNil(t, codeConfig1)
 	configOrg1 := codeConfig1.Organization()
 	assert.Equal(t, folderOrg1, configOrg1, "CodeConfig for folder1 should use folder1's org")
 
+	// Get FolderConfig for folder 2
+	folderConfig2 := c.FolderConfig(folderPath2)
+	require.NotNil(t, folderConfig2, "FolderConfig for folder2 should not be nil")
+
 	// Test folder 2: verify createCodeConfig() sets different org in CodeConfig
-	codeConfig2, err := scanner.createCodeConfig(folderPath2)
+	codeConfig2, err := scanner.createCodeConfig(folderConfig2)
 	require.NoError(t, err)
 	require.NotNil(t, codeConfig2)
 	configOrg2 := codeConfig2.Organization()
@@ -60,7 +67,7 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 }
 
 func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 	c.SetSnykCodeEnabled(true)
 
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
@@ -70,8 +77,12 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 		C: c,
 	}
 
+	// Get FolderConfig for the folder
+	folderConfig := c.FolderConfig(folderPath)
+	require.NotNil(t, folderConfig, "FolderConfig should not be nil")
+
 	// Test: verify createCodeConfig() uses global org as fallback
-	codeConfig, err := scanner.createCodeConfig(folderPath)
+	codeConfig, err := scanner.createCodeConfig(folderConfig)
 	require.NoError(t, err)
 	require.NotNil(t, codeConfig)
 	configOrg := codeConfig.Organization()
@@ -79,7 +90,7 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 }
 
 func Test_GetCodeApiUrlForFolder_UsesFolderOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 
 	// Set up FedRAMP environment
 	c.UpdateApiEndpoints("https://api.snykgov.io")
@@ -102,7 +113,7 @@ func Test_GetCodeApiUrlForFolder_UsesFolderOrganization(t *testing.T) {
 }
 
 func Test_GetExplainEndpoint_UsesFolderOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
@@ -122,7 +133,7 @@ func Test_GetExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 }
 
 func Test_GetExplainEndpoint_FallsBackToGlobalOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
 
@@ -133,7 +144,7 @@ func Test_GetExplainEndpoint_FallsBackToGlobalOrg(t *testing.T) {
 }
 
 func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
@@ -157,7 +168,7 @@ func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
 }
 
 func Test_NewAutofixCodeRequestContext_FallsBackToGlobalOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 
 	// Set up a global org but no folder orgs
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
@@ -178,7 +189,7 @@ func Test_NewAutofixCodeRequestContext_FallsBackToGlobalOrg(t *testing.T) {
 // SarifConverter.toIssues() sets ContentRoot correctly for different folders, ensuring
 // issues are associated with the correct folder (and thus the correct org via FolderOrganization()).
 func Test_SarifConverter_UsesFolderOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 	c.SetSnykCodeEnabled(true)
 
 	// Set up two folders with different orgs
@@ -257,7 +268,7 @@ func Test_SarifConverter_UsesFolderOrganization(t *testing.T) {
 // for a folder without a folder-specific org, the ContentRoot is still set correctly,
 // allowing FolderOrganization() to fall back to the global org.
 func Test_SarifConverter_FallsBackToGlobalOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 	c.SetSnykCodeEnabled(true)
 
 	// Set up a global org but no folder orgs

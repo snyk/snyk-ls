@@ -33,10 +33,9 @@ import (
 
 // Test_IgnoreOperations_UseFolderOrganization is an INTEGRATION TEST that verifies
 // ignore create/edit/delete operations use the folder-specific org in the workflow configuration.
-// This test uses testutil.UnitTest() to avoid making actual API calls, as it only tests
-// configuration initialization methods, not the full workflow execution.
+// This test uses testutil.IntegTest() to run in the integration test suite.
 func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
@@ -184,10 +183,9 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 
 // Test_IgnoreOperations_FallBackToGlobalOrg is an INTEGRATION TEST that verifies
 // ignore operations fall back to global org when no folder-specific org is configured.
-// This test uses testutil.UnitTest() to avoid making actual API calls, as it only tests
-// configuration initialization methods, not the full workflow execution.
+// This test uses testutil.IntegTest() to run in the integration test suite.
 func Test_IgnoreOperations_FallBackToGlobalOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 
 	folderPath, _ := testutil.SetupGlobalOrgOnly(t, c)
 

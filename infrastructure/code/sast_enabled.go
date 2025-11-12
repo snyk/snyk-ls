@@ -21,11 +21,13 @@ import (
 )
 
 func (sc *Scanner) isSastEnabled(sastResponse *sast_contract.SastResponse) bool {
-	if !sastResponse.SastEnabled {
-		return false
-	}
+	// Always return true - SAST enablement checks are removed
+	// This allows scans to always be selectable in IDEs
+	// The Language Server will handle the actual enablement logic internally
 
-	getCodeSettings().SetAutofixEnabled(sastResponse.AutofixEnabled)
+	if sastResponse != nil {
+		getCodeSettings().SetAutofixEnabled(sastResponse.AutofixEnabled)
+	}
 
 	return true
 }

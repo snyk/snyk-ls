@@ -711,7 +711,7 @@ func TestFetchSastSettings(t *testing.T) {
 }
 
 func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)

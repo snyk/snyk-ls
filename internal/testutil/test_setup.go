@@ -252,6 +252,8 @@ func SkipLocally(t *testing.T) {
 	if ciVar == "" {
 		t.Skip("not running in CI, skipping test")
 	}
+}
+
 // NewMockCodeIssue creates a mock Code issue with the given ID, content root, and finding ID.
 // This is useful for tests that need Code issues with finding IDs (e.g., ignore operations).
 func NewMockCodeIssue(issueId string, contentRoot types.FilePath, findingId string) types.Issue {
@@ -297,7 +299,7 @@ func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPa
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedConfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig1, c.Logger())
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig1, c.Logger())
 	require.NoError(t, err)
 
 	// Configure folder 2 with a different org
@@ -307,7 +309,7 @@ func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPa
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err = storedConfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig2, c.Logger())
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig2, c.Logger())
 	require.NoError(t, err)
 
 	return folderPath1, folderPath2, globalOrg, folderOrg1, folderOrg2
@@ -326,7 +328,7 @@ func SetupFolderWithOrg(t *testing.T, c *config.Config, orgUUID string) types.Fi
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedConfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	require.NoError(t, err)
 
 	return folderPath

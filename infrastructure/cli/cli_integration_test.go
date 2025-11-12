@@ -15,8 +15,8 @@
  */
 
 // Package cli_test contains integration tests for the CLI infrastructure components.
-// These tests use testutil.SmokeTest() for comprehensive setup and verify end-to-end behavior,
-// including interactions between multiple folders with different organizations.
+// These tests use testutil.IntegTest() to run in the integration test suite and verify
+// end-to-end behavior, including interactions between multiple folders with different organizations.
 // For unit tests with single folder scenarios, see cli_extension_executor_test.go in the cli package.
 package cli_test
 
@@ -41,9 +41,9 @@ import (
 
 // Test_SnykCli_GetCommand_UsesFolderOrganization is an INTEGRATION TEST that verifies
 // getCommand() adds the correct --org flag based on FolderOrganization() for different folders.
-// This test uses testutil.UnitTest() to avoid making actual API calls.
+// This test uses testutil.IntegTest() to run in the integration test suite.
 func Test_SnykCli_GetCommand_UsesFolderOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 	ctx := t.Context()
 
 	er := error_reporting.NewTestErrorReporter()
@@ -95,7 +95,7 @@ func Test_SnykCli_GetCommand_UsesFolderOrganization(t *testing.T) {
 // Test_SnykCli_GetCommand_ReplacesExistingOrgFlag verifies that getCommand() replaces
 // an existing --org flag with the folder-specific org.
 func Test_SnykCli_GetCommand_ReplacesExistingOrgFlag(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.IntegTest(t)
 	ctx := t.Context()
 
 	er := error_reporting.NewTestErrorReporter()
@@ -128,12 +128,8 @@ func Test_SnykCli_GetCommand_ReplacesExistingOrgFlag(t *testing.T) {
 	assert.Equal(t, 1, orgCount, "Command should contain exactly one --org flag")
 }
 
-// Test_ExtensionExecutor_DoExecute_UsesFolderOrganization is an INTEGRATION TEST that verifies
-// ExtensionExecutor.doExecute() sets the correct org in legacyCLIConfig based on FolderOrganization()
-// for multiple different folders. This test uses testutil.UnitTest() to avoid making actual API calls.
-// For unit tests with single folder scenarios, see cli_extension_executor_test.go
 func Test_ExtensionExecutor_DoExecute_UsesFolderOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
@@ -152,12 +148,8 @@ func Test_ExtensionExecutor_DoExecute_UsesFolderOrganization(t *testing.T) {
 	assert.NotEqual(t, folderOrg1, folderOrg2, "Folder orgs should be different")
 }
 
-// Test_ExtensionExecutor_DoExecute_FallsBackToGlobalOrg is an INTEGRATION TEST that verifies
-// ExtensionExecutor.doExecute() falls back to global org when no folder-specific org is configured.
-// This test uses testutil.UnitTest() to avoid making actual API calls.
-// For unit tests with single folder scenarios, see cli_extension_executor_test.go
 func Test_ExtensionExecutor_DoExecute_FallsBackToGlobalOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
+	c := testutil.IntegTest(t)
 
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
 
@@ -167,9 +159,6 @@ func Test_ExtensionExecutor_DoExecute_FallsBackToGlobalOrg(t *testing.T) {
 	assert.Equal(t, globalOrg, capturedOrg, "ExtensionExecutor should fall back to global org when no folder org is set")
 }
 
-// executeAndCaptureConfig is a helper function for INTEGRATION TESTS that executes ExtensionExecutor
-// and captures the organization and working directory values passed to the workflow.
-// This captures the actual config values passed to the workflow to verify folder-specific org usage.
 func executeAndCaptureConfig(t *testing.T, c *config.Config, cmd []string, workingDir types.FilePath) (capturedOrg interface{}, capturedWorkingDir string) {
 	t.Helper()
 
