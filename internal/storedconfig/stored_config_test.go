@@ -105,6 +105,7 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 		ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
 			product.ProductOpenSource: scanCommandConfig,
 		},
+		FeatureFlags: map[string]bool{},
 	}
 
 	logger := zerolog.New(zerolog.NewTestWriter(t))

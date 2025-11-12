@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package html implements HTML functionality for the IDE clients
 package html
 
 import "html/template"

@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	codeClient "github.com/snyk/code-client-go"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -97,12 +98,6 @@ func setupTestScanner(t *testing.T) *Scanner {
 	// Mock Clone() for compatibility with existing code
 	mockConfig.EXPECT().Clone().Return(mockConfig).AnyTimes()
 
-	learnMock := mock_learn.NewMockService(gomock.NewController(t))
-	learnMock.
-		EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{}, nil).AnyTimes()
-
 	// Set up feature flag service with SAST settings
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.SastSettings = &sast_contract.SastResponse{SastEnabled: true}
@@ -111,7 +106,7 @@ func setupTestScanner(t *testing.T) *Scanner {
 		performance.NewInstrumentor(),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		newTestCodeErrorReporter(),
-		learnMock,
+		setupMockLearnServiceNoLessons(t),
 		fakeFeatureFlagService,
 		notification.NewNotifier(),
 		NewCodeInstrumentor(),
@@ -136,11 +131,6 @@ func TestUploadAndAnalyze(t *testing.T) {
 	channel := make(chan types.ProgressParams, 10000)
 	cancelChannel := make(chan bool, 1)
 	testTracker := progress.NewTestTracker(channel, cancelChannel)
-	learnMock := mock_learn.NewMockService(gomock.NewController(t))
-	learnMock.
-		EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{}, nil).AnyTimes()
 
 	t.Run(
 		"should retrieve from backend", func(t *testing.T) {
@@ -148,7 +138,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 				performance.NewInstrumentor(),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
 				newTestCodeErrorReporter(),
-				learnMock,
+				setupMockLearnServiceNoLessons(t),
 				featureflag.NewFakeService(),
 				notification.NewNotifier(),
 				NewCodeInstrumentor(),
@@ -159,7 +149,8 @@ func TestUploadAndAnalyze(t *testing.T) {
 			files := []string{string(filePath)}
 			folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
 
-			issues, _ := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+			issues, err := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+			require.NoError(t, err)
 
 			assert.NotNil(t, issues)
 			assert.Equal(t, 2, len(issues))
@@ -177,12 +168,6 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	c := testutil.UnitTest(t)
-	learnMock := mock_learn.NewMockService(gomock.NewController(t))
-	learnMock.
-		EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{}, nil).AnyTimes()
-	testutil.UnitTest(t)
 	filePath, workDir := TempWorkdirWithIssues(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(string(workDir))
 	files := []string{string(filePath)}
@@ -190,9 +175,22 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	cancelChannel := make(chan bool, 1)
 	testTracker := progress.NewTestTracker(channel, cancelChannel)
 
-	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+	scanner := New(
+		c,
+		performance.NewInstrumentor(),
+		&snyk_api.FakeApiClient{CodeEnabled: true},
+		newTestCodeErrorReporter(),
+		setupMockLearnServiceNoLessons(t),
+		featureflag.NewFakeService(),
+		notification.NewNotifier(),
+		NewCodeInstrumentor(),
+		newTestCodeErrorReporter(),
+		NewFakeCodeScannerClient,
+	)
+
 	folderConfig := &types.FolderConfig{FolderPath: workDir, PreferredOrg: "test-org"}
-	issues, _ := scanner.UploadAndAnalyze(t.Context(), workDir, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
+	issues, err := scanner.UploadAndAnalyze(t.Context(), workDir, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
+	require.NoError(t, err)
 	assert.False(t, issues[0].GetIsIgnored())
 	assert.Nil(t, issues[0].GetIgnoreDetails())
 	assert.Equal(t, true, issues[1].GetIsIgnored())
@@ -295,13 +293,18 @@ func Test_Scan(t *testing.T) {
 			fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = tc.cciEnabled
 			fakeFeatureFlagService.SastSettings = &sast_contract.SastResponse{SastEnabled: true}
 
-			learnMock := mock_learn.NewMockService(gomock.NewController(t))
-			learnMock.
-				EXPECT().
-				GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-				Return(&learn.Lesson{}, nil).AnyTimes()
-
-			scanner := New(c, performance.NewInstrumentor(), snykApiMock, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+			scanner := New(
+				c,
+				performance.NewInstrumentor(),
+				snykApiMock,
+				newTestCodeErrorReporter(),
+				setupMockLearnServiceNoLessons(t),
+				fakeFeatureFlagService,
+				notification.NewNotifier(),
+				NewCodeInstrumentor(),
+				newTestCodeErrorReporter(),
+				NewFakeCodeScannerClient,
+			)
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
 			issues, err := scanner.Scan(t.Context(), "", tempDir, getTestFolderConfig(tempDir))
@@ -445,12 +448,6 @@ func autofixSetupAndCleanup(t *testing.T, c *config.Config) {
 }
 
 func TestUploadAnalyzeWithAutofix(t *testing.T) {
-	learnMock := mock_learn.NewMockService(gomock.NewController(t))
-	learnMock.
-		EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{}, nil).AnyTimes()
-
 	t.Run("should not add autofix after analysis when not enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		channel := make(chan types.ProgressParams, 10000)
@@ -458,7 +455,17 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
 
 		autofixSetupAndCleanup(t, c)
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner := New(
+			c,
+			performance.NewInstrumentor(),
+			&snyk_api.FakeApiClient{CodeEnabled: true},
+			newTestCodeErrorReporter(),
+			setupMockLearnServiceNoLessons(t),
+			featureflag.NewFakeService(),
+			notification.NewNotifier(),
+			NewCodeInstrumentor(),
+			newTestCodeErrorReporter(), NewFakeCodeScannerClient,
+		)
 		filePath, path := TempWorkdirWithIssues(t)
 		t.Cleanup(
 			func() {
@@ -469,7 +476,8 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
 
 		// execute
-		issues, _ := scanner.UploadAndAnalyze(t.Context(), "", folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+		issues, err := scanner.UploadAndAnalyze(t.Context(), "", folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+		require.NoError(t, err)
 
 		// Default is to have 0 actions from analysis + 0 from autofix
 		assert.Len(t, issues[0].GetCodeActions(), 0)
@@ -488,7 +496,18 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		autofixSetupAndCleanup(t, c)
 		getCodeSettings().isAutofixEnabled.Set(true)
 
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner := New(
+			c,
+			performance.NewInstrumentor(),
+			&snyk_api.FakeApiClient{CodeEnabled: true},
+			newTestCodeErrorReporter(),
+			setupMockLearnServiceNoLessons(t),
+			featureflag.NewFakeService(),
+			notification.NewNotifier(),
+			NewCodeInstrumentor(),
+			newTestCodeErrorReporter(),
+			NewFakeCodeScannerClient,
+		)
 		filePath, path := TempWorkdirWithIssues(t)
 		files := []string{string(filePath)}
 		folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
@@ -509,6 +528,67 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		assert.Equal(t, action.GetCommand().Arguments, expectedCodeAction.GetCommand().Arguments)
 	},
 	)
+}
+
+func TestDeltaScanUsesFolderOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	channel := make(chan types.ProgressParams, 10000)
+	cancelChannel := make(chan bool, 1)
+	testTracker := progress.NewTestTracker(channel, cancelChannel)
+
+	// Set up the workspace folder and folder config with an org
+	workspaceFolderPath := types.FilePath(t.TempDir())
+	folderConfig := &types.FolderConfig{
+		FolderPath:   workspaceFolderPath,
+		PreferredOrg: "workspace-org-123",
+	}
+
+	// Create a separate temp directory with a dummy file for a delta scan to run on
+	tempScanDir := t.TempDir()
+	dummyFile := filepath.Join(tempScanDir, "test.java")
+	err := os.WriteFile(dummyFile, []byte("class Test {}"), 0644)
+	require.NoError(t, err)
+
+	// Track which folderConfig was passed to the code scanner
+	var capturedFolderConfig *types.FolderConfig
+	mockCodeScanner := func(sc *Scanner, fc *types.FolderConfig) (codeClient.CodeScanner, error) {
+		capturedFolderConfig = fc
+		return NewFakeCodeScannerClient(sc, fc)
+	}
+
+	scanner := New(
+		c,
+		performance.NewInstrumentor(),
+		&snyk_api.FakeApiClient{CodeEnabled: true},
+		newTestCodeErrorReporter(),
+		setupMockLearnServiceNoLessons(t),
+		featureflag.NewFakeService(),
+		notification.NewNotifier(),
+		NewCodeInstrumentor(),
+		newTestCodeErrorReporter(),
+		mockCodeScanner,
+	)
+
+	// Simulate delta scan: scan path is the temp directory, but folderConfig has workspace folder
+	files := []string{dummyFile}
+	_, err = scanner.UploadAndAnalyze(
+		t.Context(),
+		types.FilePath(tempScanDir), // Scan path is temp dir (simulating delta scan)
+		folderConfig,                // But folder config has workspace folder
+		sliceToChannel(files),
+		map[types.FilePath]bool{},
+		false,
+		testTracker,
+	)
+	require.NoError(t, err)
+
+	// Verify: The code scanner should have received the workspace folderConfig, not the temp dir
+	require.NotNil(t, capturedFolderConfig, "codeScanner should have been called with a folderConfig")
+	assert.Equal(t, workspaceFolderPath, capturedFolderConfig.FolderPath,
+		"Code scanner should use workspace folder from folderConfig, not the temp scan directory")
+	assert.Equal(t, "workspace-org-123", capturedFolderConfig.PreferredOrg,
+		"Code scanner should use org from folderConfig")
 }
 
 func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
@@ -673,10 +753,18 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		folderConfig := setupFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
 		folderConfig.SastSettings = fakeFeatureFlagService.SastSettings
 
-		learnMock := mock_learn.NewMockService(ctrl)
-		learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&learn.Lesson{}, nil).AnyTimes()
-
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner := New(
+			c,
+			performance.NewInstrumentor(),
+			&snyk_api.FakeApiClient{CodeEnabled: true},
+			newTestCodeErrorReporter(),
+			setupMockLearnServiceNoLessons(t),
+			fakeFeatureFlagService,
+			notification.NewNotifier(),
+			NewCodeInstrumentor(),
+			newTestCodeErrorReporter(),
+			NewFakeCodeScannerClient,
+		)
 
 		_, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
 		assert.NoError(t, err)
@@ -726,9 +814,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		folderConfig2 := setupFolderConfig(t, mockConfig, c.Logger(), tempDir2, org2)
 		folderConfig2.SastSettings = fakeFeatureFlagService2.SastSettings
 
-		learnMock := mock_learn.NewMockService(ctrl)
-		learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&learn.Lesson{}, nil).AnyTimes()
-
+		learnMock := setupMockLearnServiceNoLessons(t)
 		scanner1 := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService1, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 		scanner2 := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService2, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 
@@ -743,4 +829,15 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		assert.ErrorContains(t, err2, "SAST is not enabled")
 		assert.Empty(t, issues2)
 	})
+}
+
+// setupMockLearnServiceNoLessons creates a mock learn service that returns an empty lesson for any GetLesson call.
+// This is the default setup used by most tests that don't care about the learn service behavior.
+func setupMockLearnServiceNoLessons(t *testing.T) *mock_learn.MockService {
+	t.Helper()
+	learnMock := mock_learn.NewMockService(gomock.NewController(t))
+	learnMock.EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&learn.Lesson{}, nil).AnyTimes()
+	return learnMock
 }

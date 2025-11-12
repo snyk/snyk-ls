@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package constants provides constants
 package constants
 
 const DataHome = "SNYKLS_INTERNAL_DATAHOME"

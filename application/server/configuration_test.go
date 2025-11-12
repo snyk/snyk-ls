@@ -287,7 +287,7 @@ func Test_UpdateSettings(t *testing.T) {
 		// Same logic applies to folder2
 		assert.True(t, folderConfig2.OrgMigratedFromGlobalConfig, "Should be migrated after update")
 
-		assert.Eventually(t, func() bool { return "a fancy token" == c.Token() }, time.Second*5, time.Millisecond)
+		assert.Eventually(t, func() bool { return c.Token() == "a fancy token" }, time.Second*5, time.Millisecond)
 	})
 
 	t.Run("hover defaults are set", func(t *testing.T) {

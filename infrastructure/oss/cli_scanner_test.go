@@ -168,10 +168,13 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 				require.NoError(t, os.WriteFile(absFile, []byte(tc.displayTargetFileInWorkDir), 0666))
 			}
 
-			actual := getAbsTargetFilePath(c.Logger(), scanResult{
-				DisplayTargetFile: tc.displayTargetFile,
-				Path:              filepath.Join(base, adjustedPath),
-			}, types.FilePath(filepath.Join(base, adjustedWorkDir)), types.FilePath(filepath.Join(base, adjustedPath)))
+			actual := getAbsTargetFilePath(
+				c.Logger(),
+				filepath.Join(base, adjustedPath),
+				tc.displayTargetFile,
+				types.FilePath(filepath.Join(base, adjustedWorkDir)),
+				types.FilePath(filepath.Join(base, adjustedPath)),
+			)
 			assert.Equal(t, expected, actual)
 		})
 	}

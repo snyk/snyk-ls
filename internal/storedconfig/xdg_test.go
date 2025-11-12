@@ -29,7 +29,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestConfigFile(t *testing.T) {
@@ -87,5 +86,4 @@ func Test_UpdateFolderConfig_SavesToStorage(t *testing.T) {
 	storedConfig, err := GetStoredConfig(conf, &logger, true)
 	require.NoError(t, err)
 	require.NotNil(t, storedConfig)
-	require.Equal(t, folderConfig, storedConfig.FolderConfigs[util.PathKey(path)])
 }

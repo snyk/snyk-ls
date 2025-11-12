@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package server
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -31,7 +32,9 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
 	"github.com/samber/lo"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -54,7 +57,7 @@ import (
 )
 
 func Test_SmokeInstanceTest(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	ossFile := "package.json"
 	codeFile := "app.js"
 	testutil.CreateDummyProgressListener(t)
@@ -144,7 +147,12 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c := testutil.SmokeTest(t, false)
+			tokenSecretName := ""
+			if tc.useConsistentIgnores {
+				tokenSecretName = "SNYK_TOKEN_CONSISTENT_IGNORES"
+			}
+
+			c := testutil.SmokeTest(t, tokenSecretName)
 			runSmokeTest(t, c, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "")
 		})
 	}
@@ -153,7 +161,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 func Test_SmokePreScanCommand(t *testing.T) {
 	t.Run("executes pre scan command if configured", func(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRpcRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(false)
 		c.SetSnykOssEnabled(true)
@@ -202,7 +210,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 func Test_SmokeIssueCaching(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRPCRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(true)
 		c.SetSnykOssEnabled(true)
@@ -277,7 +285,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	})
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRPCRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(true)
 		c.SetSnykOssEnabled(true)
@@ -344,7 +352,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 }
 
 func Test_SmokeExecuteCLICommand(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, _ := setupServer(t, c)
 	c.EnableSnykCodeSecurity(false)
 	c.SetSnykIacEnabled(false)
@@ -489,36 +497,21 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 
 	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc, c)
 	cloneTargetDirString := (string)(cloneTargetDir)
+
 	waitForScan(t, cloneTargetDirString, c)
 
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
 	assert.Greater(t, len(notifications), 0)
 
-	foundFolderConfig := false
-	for _, notification := range notifications {
-		var folderConfigsParam types.FolderConfigsParam
-		err := notification.UnmarshalParams(&folderConfigsParam)
-		require.NoError(t, err)
+	assert.Eventuallyf(t, func() bool {
+		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
+	}, time.Second*5, time.Second, "did not receive folder configs")
 
-		for _, folderConfig := range folderConfigsParam.FolderConfigs {
-			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
-			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
-
-			// Normalize both paths for comparison since folder config paths are now normalized
-			normalizedCloneTargetDir := util.PathKey(cloneTargetDir)
-			if folderConfig.FolderPath == normalizedCloneTargetDir {
-				foundFolderConfig = true
-				break
-			}
-		}
-
-		if foundFolderConfig {
-			break
-		}
-	}
-	assert.Truef(t, foundFolderConfig, "could not find folder config for %s", cloneTargetDirString)
-	jsonRPCRecorder.ClearNotifications()
 	var testPath types.FilePath
+
+	// ------------------------------------------------------
+	// check snyk open source diagnostics (file1)
+	// ------------------------------------------------------
 	if file1 != "" {
 		testPath = types.FilePath(filepath.Join(cloneTargetDirString, file1))
 		waitForNetwork(c)
@@ -529,6 +522,10 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	}
 
 	jsonRPCRecorder.ClearNotifications()
+
+	// ------------------------------------------------------
+	// check snyk code diagnostics (file2)
+	// ------------------------------------------------------
 	testPath = types.FilePath(filepath.Join(cloneTargetDirString, file2))
 	waitForNetwork(c)
 	textDocumentDidSave(t, &loc, testPath)
@@ -551,6 +548,65 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDirString, loc)
 	}
 	waitForDeltaScan(t, di.ScanStateAggregator())
+}
+
+func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
+	t.Helper()
+	foundFolderConfig := false
+	for _, notification := range notifications {
+		var folderConfigsParam types.FolderConfigsParam
+		err := notification.UnmarshalParams(&folderConfigsParam)
+		require.NoError(t, err)
+
+		for _, folderConfig := range folderConfigsParam.FolderConfigs {
+			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
+			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
+
+			// Normalize both paths for comparison since folder config paths are now normalized
+			normalizedCloneTargetDir := util.PathKey(cloneTargetDir)
+			if folderConfig.FolderPath == normalizedCloneTargetDir {
+				foundFolderConfig = true
+				break
+			}
+		}
+
+		if foundFolderConfig {
+			break
+		}
+	}
+	return foundFolderConfig
+}
+
+var (
+	// now register it with the engine
+	depGraphWorkFlowID = workflow.NewWorkflowIdentifier("depgraph")
+	depGraphDataID     = workflow.NewTypeIdentifier(depGraphWorkFlowID, "depgraph")
+)
+
+// substituteDepGraphFlow generate depgraph. necessary, as depgraph workflow needs legacycli workflow which
+// does not work without the TypeScript CLI
+func substituteDepGraphFlow(t *testing.T, c *config.Config, cloneTargetDirString, displayTargetFile string) {
+	t.Helper()
+
+	flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+	callback := func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
+		cmd := exec.CommandContext(t.Context(), c.CliSettings().Path(), "depgraph")
+		cmd.Dir = cloneTargetDirString
+		cmd.Env = os.Environ()
+		depGraphJson, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("couldn't retrieve the depgraph %s: ", err.Error())
+		}
+		depGraphData := workflow.NewData(depGraphDataID, "application/json", depGraphJson)
+		normalisedTargetFile := strings.TrimSpace(displayTargetFile)
+		depGraphData.SetMetaData("Content-Location", normalisedTargetFile)
+		depGraphData.SetMetaData("normalisedTargetFile", normalisedTargetFile) //Required for cli-extension-os-flow
+
+		return []workflow.Data{depGraphData}, nil
+	}
+
+	_, err := c.Engine().Register(depGraphWorkFlowID, flagset, callback)
+	require.NoError(t, err)
 }
 
 func waitForNetwork(c *config.Config) {
@@ -850,7 +906,7 @@ func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 }
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	cleanupChannels()
@@ -897,7 +953,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetDeltaFindingsEnabled(true)
@@ -940,7 +996,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetDeltaFindingsEnabled(true)
@@ -970,7 +1026,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetDeltaFindingsEnabled(true)
@@ -998,7 +1054,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykIacEnabled(false)
 	cleanupChannels()
@@ -1060,7 +1116,7 @@ func requireFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.
 func Test_SmokeOrgSelection(t *testing.T) {
 	setupOrgSelectionTest := func(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
 		t.Helper()
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRpcRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(false)
 		c.SetSnykOssEnabled(true)
@@ -1481,11 +1537,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(*config.Config)) {
 	t.Helper()
-	t.Setenv("SNYK_LOG_LEVEL", "info")
-	c.SetLogLevel(zerolog.LevelInfoValue)
-	c.ConfigureLogging(loc.Server)
+	t.Setenv("SNYK_LOG_LEVEL", "debug")
+	c.SetLogLevel(zerolog.LevelDebugValue)
+	c.ConfigureLogging(nil) // we don't need to send logs to the client
 	gafConfig := c.Engine().GetConfiguration()
-	gafConfig.Set(configuration.DEBUG, false)
+	gafConfig.Set(configuration.DEBUG, c.Logger().GetLevel() == zerolog.DebugLevel)
 
 	documentURI := initParams.WorkspaceFolders[0].Uri
 	commitHash := getCurrentCommitHash(t, uri.PathFromUri(documentURI))

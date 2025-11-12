@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package config implements the configuration functionality
 package config
 
 import (
@@ -36,6 +37,8 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -294,9 +297,7 @@ func initWorkFlowEngine(c *Config) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	conf := configuration.NewWithOpts(
-		configuration.WithAutomaticEnv(),
-	)
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
@@ -304,7 +305,8 @@ func initWorkFlowEngine(c *Config) {
 
 	err := initWorkflows(c)
 	if err != nil {
-		c.Logger().Err(err).Msg("unable to initialize workflows")
+		// we use the global logger, as we are in config setup, so we don't want to cause a deadlock
+		log.Err(err).Msg("unable to initialize workflows")
 	}
 
 	err = c.engine.Init()
@@ -333,6 +335,11 @@ func initWorkflows(c *Config) error {
 	}
 
 	err = localworkflows.InitCodeWorkflow(c.engine)
+	if err != nil {
+		return err
+	}
+
+	err = osflows.Init(c.engine)
 	if err != nil {
 		return err
 	}

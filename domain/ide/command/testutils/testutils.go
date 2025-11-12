@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package testutils provides test utilities for command package tests.
 package testutils
 
 import (

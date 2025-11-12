@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package analytics implements analytics functionality
 package analytics
 
 import (

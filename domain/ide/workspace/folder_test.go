@@ -41,7 +41,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	context2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
-	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -787,7 +786,7 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 }
 
 // setupWorkspaceWithFolder creates a workspace and adds the given folder to it
-func setupWorkspaceWithFolder(c *config.Config, folder *Folder, notifier noti.Notifier) {
+func setupWorkspaceWithFolder(c *config.Config, folder *Folder, notifier notification.Notifier) {
 	w := New(c, performance.NewInstrumentor(), scanner.NewTestScanner(), hover.NewFakeHoverService(),
 		scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(),
 		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
@@ -795,11 +794,11 @@ func setupWorkspaceWithFolder(c *config.Config, folder *Folder, notifier noti.No
 	w.AddFolder(folder)
 }
 
-func NewMockFolder(c *config.Config, notifier noti.Notifier) *Folder {
+func NewMockFolder(c *config.Config, notifier notification.Notifier) *Folder {
 	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
 }
 
-func NewMockFolderWithScanNotifier(c *config.Config, notifier noti.Notifier) (*Folder, *scanner.MockScanNotifier) {
+func NewMockFolderWithScanNotifier(c *config.Config, notifier notification.Notifier) (*Folder, *scanner.MockScanNotifier) {
 	scanNotifier := scanner.NewMockScanNotifier()
 	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanNotifier, notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService()), scanNotifier
 }

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package logging implements the logging functionality for MCP server
 package logging
 
 import (

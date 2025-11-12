@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package codelens implements the codelens functionality
 package codelens
 
 import (

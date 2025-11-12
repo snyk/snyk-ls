@@ -148,7 +148,6 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 
 func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	logger := sc.C.Logger().With().Str("method", "code.Scan").Logger()
-
 	if !sc.C.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
@@ -369,7 +368,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 	defer sc.Instrumentor.Finish(span)
 
 	requestId := span.GetTraceId() // use span trace id as code-request-id
-	logger.Info().Str("requestId", requestId).Str("path", string(path)).Msg("Starting Code analysis.")
+	logger.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
 
 	target, err := scan.NewRepositoryTarget(string(path))
 	if err != nil {
@@ -455,13 +454,13 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 		return nil, fmt.Errorf("folder config is required to create code config")
 	}
 
+	// TODO - we are being inefficient and re-fetching the folder config in the function calls instead of passing it in
 	workspaceFolderPath := folderConfig.FolderPath
 	organization := sc.C.FolderOrganization(workspaceFolderPath)
 	if organization == "" {
 		return nil, fmt.Errorf("no organization found for workspace folder %s", workspaceFolderPath)
 	}
 
-	// Get Code API URL for the workspace folder (not the scan path)
 	codeApiURL, err := GetCodeApiUrlForFolder(sc.C, workspaceFolderPath)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to get code api url for workspace folder %s", workspaceFolderPath)
