@@ -173,3 +173,145 @@ func Test_NewAutofixCodeRequestContext_FallsBackToGlobalOrg(t *testing.T) {
 	assert.Equal(t, "IDE", requestContext.Initiator, "Request context should have correct initiator")
 	assert.Equal(t, "language-server", requestContext.Flow, "Request context should have correct flow")
 }
+
+// Test_SarifConverter_UsesFolderOrganization verifies
+// SarifConverter.toIssues() sets ContentRoot correctly for different folders, ensuring
+// issues are associated with the correct folder (and thus the correct org via FolderOrganization()).
+func Test_SarifConverter_UsesFolderOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+
+	// Set up two folders with different orgs
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+
+	// Create a minimal SARIF response for testing
+	sarifJSON := `{
+		"$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+		"version": "2.1.0",
+		"runs": [{
+			"tool": {
+				"driver": {
+					"name": "SnykCode",
+					"rules": [{
+						"id": "test-rule",
+						"properties": {
+							"categories": ["Security"]
+						}
+					}]
+				}
+			},
+			"results": [{
+				"ruleId": "test-rule",
+				"level": "error",
+				"message": {
+					"text": "Test issue"
+				},
+				"locations": [{
+					"physicalLocation": {
+						"artifactLocation": {
+							"uri": "test.java"
+						},
+						"region": {
+							"startLine": 1,
+							"startColumn": 1,
+							"endLine": 1,
+							"endColumn": 10
+						}
+					}
+				}]
+			}]
+		}]
+	}`
+
+	// Convert SARIF to issues for folder 1
+	issues1, err := ConvertSARIFJSONToIssues(c.Logger(), c.HoverVerbosity(), []byte(sarifJSON), string(folderPath1))
+	require.NoError(t, err)
+	require.NotEmpty(t, issues1, "Should have at least one issue")
+
+	// Verify ContentRoot is set to folder1's path
+	for _, issue := range issues1 {
+		assert.Equal(t, folderPath1, issue.GetContentRoot(), "Issue ContentRoot should be set to folder1's path")
+		// Verify we can get the correct org from the ContentRoot
+		orgFromContentRoot := c.FolderOrganization(issue.GetContentRoot())
+		assert.Equal(t, folderOrg1, orgFromContentRoot, "FolderOrganization() should return folder1's org from ContentRoot")
+	}
+
+	// Convert SARIF to issues for folder 2
+	issues2, err := ConvertSARIFJSONToIssues(c.Logger(), c.HoverVerbosity(), []byte(sarifJSON), string(folderPath2))
+	require.NoError(t, err)
+	require.NotEmpty(t, issues2, "Should have at least one issue")
+
+	// Verify ContentRoot is set to folder2's path
+	for _, issue := range issues2 {
+		assert.Equal(t, folderPath2, issue.GetContentRoot(), "Issue ContentRoot should be set to folder2's path")
+		// Verify we can get the correct org from the ContentRoot
+		orgFromContentRoot := c.FolderOrganization(issue.GetContentRoot())
+		assert.Equal(t, folderOrg2, orgFromContentRoot, "FolderOrganization() should return folder2's org from ContentRoot")
+	}
+
+	// Verify different folders produce issues with different ContentRoots
+	assert.NotEqual(t, issues1[0].GetContentRoot(), issues2[0].GetContentRoot(), "Issues from different folders should have different ContentRoots")
+}
+
+// Test_SarifConverter_FallsBackToGlobalOrg verifies that when converting SARIF to issues
+// for a folder without a folder-specific org, the ContentRoot is still set correctly,
+// allowing FolderOrganization() to fall back to the global org.
+func Test_SarifConverter_FallsBackToGlobalOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+
+	// Set up a global org but no folder orgs
+	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
+
+	// Create a minimal SARIF response for testing
+	sarifJSON := `{
+		"$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+		"version": "2.1.0",
+		"runs": [{
+			"tool": {
+				"driver": {
+					"name": "SnykCode",
+					"rules": [{
+						"id": "test-rule",
+						"properties": {
+							"categories": ["Security"]
+						}
+					}]
+				}
+			},
+			"results": [{
+				"ruleId": "test-rule",
+				"level": "error",
+				"message": {
+					"text": "Test issue"
+				},
+				"locations": [{
+					"physicalLocation": {
+						"artifactLocation": {
+							"uri": "test.java"
+						},
+						"region": {
+							"startLine": 1,
+							"startColumn": 1,
+							"endLine": 1,
+							"endColumn": 10
+						}
+					}
+				}]
+			}]
+		}]
+	}`
+
+	// Convert SARIF to issues
+	issues, err := ConvertSARIFJSONToIssues(c.Logger(), c.HoverVerbosity(), []byte(sarifJSON), string(folderPath))
+	require.NoError(t, err)
+	require.NotEmpty(t, issues, "Should have at least one issue")
+
+	// Verify ContentRoot is set to the folder path
+	for _, issue := range issues {
+		assert.Equal(t, folderPath, issue.GetContentRoot(), "Issue ContentRoot should be set to folder path")
+		// Verify FolderOrganization() falls back to global org
+		orgFromContentRoot := c.FolderOrganization(issue.GetContentRoot())
+		assert.Equal(t, globalOrg, orgFromContentRoot, "FolderOrganization() should fall back to global org when no folder org is configured")
+	}
+}
