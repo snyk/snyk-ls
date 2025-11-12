@@ -20,9 +20,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
+	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -67,12 +67,11 @@ func processOsTestWorkFlowData(
 	var issues []types.Issue
 	var err error
 	for _, data := range scanOutput {
-		if testResults, ok := data.GetPayload().([]testapi.TestResult); ok {
-			for _, testResult := range testResults {
-				issues, err = convertTestResultToIssues(ctx, testResult, packageIssueCache)
-				if err != nil {
-					return nil, fmt.Errorf("couldn't convert test result to issues: %w", err)
-				}
+		testResults := ufm.GetTestResultsFromWorkflowData(data)
+		for _, testResult := range testResults {
+			issues, err = convertTestResultToIssues(ctx, testResult, packageIssueCache)
+			if err != nil {
+				return nil, fmt.Errorf("couldn't convert test result to issues: %w", err)
 			}
 		}
 	}
