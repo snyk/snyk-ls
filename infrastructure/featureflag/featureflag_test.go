@@ -255,7 +255,7 @@ func TestFlushCache(t *testing.T) {
 
 		service.FlushCache()
 
-		assert.Empty(t, service.orgToFlag)
+		assert.Len(t, service.orgToFlag.GetAll(), 0)
 	})
 
 	t.Run("clears SAST settings", func(t *testing.T) {
@@ -268,7 +268,7 @@ func TestFlushCache(t *testing.T) {
 
 		service.FlushCache()
 
-		assert.Empty(t, service.orgToSastSettings)
+		assert.Len(t, service.orgToSastSettings.GetAll(), 0)
 	})
 
 	t.Run("concurrent flush during fetch is thread-safe", func(t *testing.T) {
@@ -505,7 +505,8 @@ func TestFetchSastSettings(t *testing.T) {
 		assert.Equal(t, settings1, settings2)
 
 		// Cache should contain the org
-		assert.Contains(t, service.orgToSastSettings, org)
+		_, b := service.orgToSastSettings.Get(org)
+		assert.True(t, b)
 	})
 
 	t.Run("different orgs have separate caches", func(t *testing.T) {
@@ -539,10 +540,6 @@ func TestFetchSastSettings(t *testing.T) {
 		assert.NotNil(t, settings2)
 
 		// Cache should have both orgs
-		assert.Contains(t, service.orgToSastSettings, org1)
-		assert.Contains(t, service.orgToSastSettings, org2)
-		assert.Len(t, service.orgToSastSettings, 2)
-
 		actualOrg1, b := service.orgToSastSettings.Get(org1)
 		assert.True(t, b)
 		actualOrg2, b := service.orgToSastSettings.Get(org2)
@@ -580,7 +577,8 @@ func TestFetchSastSettings(t *testing.T) {
 		wg.Wait()
 
 		// Should only have one cache entry
-		assert.Contains(t, service.orgToSastSettings, org)
-		assert.Len(t, service.orgToSastSettings, 1)
+		_, b := service.orgToSastSettings.Get(org)
+		assert.True(t, b)
+		assert.Len(t, service.orgToSastSettings.GetAll(), 1)
 	})
 }
