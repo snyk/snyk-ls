@@ -18,8 +18,11 @@ package featureflag
 
 import (
 	"fmt"
+	"maps"
 	"sync"
+	"time"
 
+	"github.com/erni27/imcache"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
@@ -101,25 +104,49 @@ func (p *externalCallsProvider) folderOrganization(path types.FilePath) string {
 type serviceImpl struct {
 	c                 *config.Config
 	provider          ExternalCallsProvider
-	orgToFlag         map[string]map[string]bool
-	orgToSastSettings map[string]*sast_contract.SastResponse
+	orgToFlag         *imcache.Cache[string, map[string]bool]
+	orgToSastSettings *imcache.Cache[string, *sast_contract.SastResponse]
 	mutex             *sync.Mutex
 }
 
-func New(c *config.Config) Service {
-	return &serviceImpl{
+type Option func(*serviceImpl)
+
+func WithProvider(provider ExternalCallsProvider) Option {
+	return func(s *serviceImpl) {
+		s.provider = provider
+	}
+}
+
+func New(c *config.Config, opts ...Option) *serviceImpl {
+	ffCache := imcache.New[string, map[string]bool]()
+	sastResponseCache := imcache.New[string, *sast_contract.SastResponse]()
+
+	// default values
+	service := &serviceImpl{
 		c:                 c,
 		provider:          &externalCallsProvider{c: c},
-		orgToFlag:         make(map[string]map[string]bool),
-		orgToSastSettings: make(map[string]*sast_contract.SastResponse),
+		orgToFlag:         ffCache,
+		orgToSastSettings: sastResponseCache,
 		mutex:             &sync.Mutex{},
 	}
+
+	for _, opt := range opts {
+		opt(service)
+	}
+
+	return service
 }
 
 func (s *serviceImpl) fetch(org string) map[string]bool {
 	s.mutex.Lock()
-	s.orgToFlag[org] = make(map[string]bool)
+	orgFlags, found := s.orgToFlag.Get(org)
+	if found {
+		clone := maps.Clone(orgFlags)
+		s.mutex.Unlock()
+		return clone
+	}
 	s.mutex.Unlock()
+	orgFlags = make(map[string]bool)
 
 	var wg sync.WaitGroup
 	wg.Add(len(Flags))
@@ -145,8 +172,8 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 
 			s.mutex.Lock()
 			// Check if cache was flushed while we were fetching
-			if s.orgToFlag[org] != nil {
-				s.orgToFlag[org][flag] = enabled
+			if orgFlags != nil {
+				orgFlags[flag] = enabled
 			}
 			s.mutex.Unlock()
 		}()
@@ -155,7 +182,8 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 	wg.Wait()
 
 	s.mutex.Lock()
-	result := s.orgToFlag[org]
+	s.orgToFlag.Set(org, orgFlags, imcache.WithExpiration(time.Minute))
+	result := orgFlags
 	s.mutex.Unlock()
 
 	return result
@@ -163,8 +191,8 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 
 func (s *serviceImpl) fetchSastSettings(org string) (*sast_contract.SastResponse, error) {
 	s.mutex.Lock()
-	cached := s.orgToSastSettings[org]
-	if cached != nil {
+	cached, found := s.orgToSastSettings.Get(org)
+	if found {
 		s.mutex.Unlock()
 		return cached, nil
 	}
@@ -176,7 +204,7 @@ func (s *serviceImpl) fetchSastSettings(org string) (*sast_contract.SastResponse
 	}
 
 	s.mutex.Lock()
-	s.orgToSastSettings[org] = sastResponse
+	s.orgToSastSettings.Set(org, sastResponse, imcache.WithExpiration(time.Minute))
 	s.mutex.Unlock()
 
 	return sastResponse, nil
@@ -185,8 +213,8 @@ func (s *serviceImpl) fetchSastSettings(org string) (*sast_contract.SastResponse
 func (s *serviceImpl) FlushCache() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.orgToFlag = make(map[string]map[string]bool)
-	s.orgToSastSettings = make(map[string]*sast_contract.SastResponse)
+	s.orgToFlag.RemoveAll()
+	s.orgToSastSettings.RemoveAll()
 }
 
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
