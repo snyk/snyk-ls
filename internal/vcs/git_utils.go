@@ -26,7 +26,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -81,7 +81,7 @@ func hasUncommitedChanges(repo *git.Repository) bool {
 }
 
 func GetBaseBranchName(conf configuration.Configuration, folderPath types.FilePath, logger *zerolog.Logger) string {
-	folderConfig, err := storedConfig.GetOrCreateFolderConfig(conf, folderPath, logger)
+	folderConfig, err := storedconfig.GetOrCreateFolderConfig(conf, folderPath, logger)
 	if err != nil {
 		return "master"
 	}

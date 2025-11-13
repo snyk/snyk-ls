@@ -38,7 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/storage"
-	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -182,7 +182,7 @@ func redirectConfigAndDataHome(t *testing.T, c *config.Config) {
 	storageFile := filepath.Join(t.TempDir(), "testStorage")
 	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
 	require.NoError(t, err)
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.SetStorage(s)
 }
 
@@ -200,7 +200,7 @@ func OnlyEnableCode(t *testing.T, c *config.Config) {
 			},
 			AutofixEnabled: true,
 		}
-		storedConfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+		storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	}
 }
 
