@@ -126,7 +126,11 @@ func (cmd *submitIgnoreRequest) initializeCreateConfiguration(gafConfig configur
 		return nil, err
 	}
 
-	gafConfig.Set(configuration.ORGANIZATION, cmd.c.FolderOrganization(contentRoot))
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(contentRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get folder organization: %w", err)
+	}
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 	gafConfig.Set(ignore_workflow.FindingsIdKey, findingId)
 
 	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
@@ -163,10 +167,11 @@ func (cmd *submitIgnoreRequest) initializeEditConfigurations(gafConfig configura
 		return nil, err
 	}
 
-	folderOrg := cmd.c.FolderOrganization(contentRoot)
-	if folderOrg != "" {
-		gafConfig.Set(configuration.ORGANIZATION, folderOrg)
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(contentRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
 	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
 	gafConfig = addCreateAndUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
@@ -198,10 +203,11 @@ func (cmd *submitIgnoreRequest) initializeDeleteConfiguration(gafConfig configur
 		return nil, fmt.Errorf("ignoreId should be a string")
 	}
 
-	folderOrg := cmd.c.FolderOrganization(contentRoot)
-	if folderOrg != "" {
-		gafConfig.Set(configuration.ORGANIZATION, folderOrg)
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(contentRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
 	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
 	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
