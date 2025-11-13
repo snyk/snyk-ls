@@ -30,7 +30,6 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	sglsp "github.com/sourcegraph/go-lsp"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -49,7 +48,49 @@ const (
 )
 
 func TestUnifiedTestApiSmokeTest(t *testing.T) {
+	// Results captured from the first two sub-tests for comparison
+	// You must run the first two sub-tests before running the third sub-test
+	unifiedTestStarted := false
+	var unifiedDiagnostics []types.Diagnostic
+	legacyTestStarted := false
+	var legacyDiagnostics []types.Diagnostic
+
+	t.Run("1. Unified Test API scan (with risk score)", func(t *testing.T) {
+		unifiedTestStarted = true
+		unifiedDiagnostics = runOSSComparisonTest(t, true)
+	})
+
+	t.Run("2. Legacy scan (without risk score)", func(t *testing.T) {
+		legacyTestStarted = true
+		legacyDiagnostics = runOSSComparisonTest(t, false)
+	})
+
+	t.Run("3. Compare diagnostics from both scans", func(t *testing.T) {
+		_ = testutil.SmokeTest(t, tokenSecretNameForRiskScore)
+
+		if !unifiedTestStarted || !legacyTestStarted {
+			t.Fatalf("One or both of the sub-tests were not run: unifiedTestStarted=%v, legacyTestStarted=%v", unifiedTestStarted, legacyTestStarted)
+		}
+
+		if len(unifiedDiagnostics) == 0 && len(legacyDiagnostics) == 0 {
+			t.Fatalf("No diagnostics to compare - previous sub-tests may have failed: unifiedDiagnostics=%d, legacyDiagnostics=%d", len(unifiedDiagnostics), len(legacyDiagnostics))
+		}
+
+		compareResult := compareAndReportDiagnostics(t, unifiedDiagnostics, legacyDiagnostics)
+		if !compareResult.Match {
+			t.Logf("Diagnostics comparison failed:\n%s", compareResult.Report)
+		}
+	})
+}
+
+func runOSSComparisonTest(t *testing.T, unifiedScan bool) []types.Diagnostic {
+	t.Helper()
+
 	c, loc, jsonRPCRecorder := setupOSSComparisonTest(t)
+	defer func() {
+		_ = loc.Client.Close()
+		loc.Server.Stop()
+	}()
 
 	// -----------------------------------------
 	// setup test repo
@@ -67,28 +108,30 @@ func TestUnifiedTestApiSmokeTest(t *testing.T) {
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
-		substituteDepGraphFlow(t, c, cloneTargetDirString, manifestFile)
+		if unifiedScan {
+			substituteDepGraphFlow(t, c, cloneTargetDirString, manifestFile)
+		}
 		c.SetAutomaticScanning(false)
 		c.SetDeltaFindingsEnabled(false)
 	})
 
-	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
-
-	assert.Eventuallyf(t, func() bool {
-		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+	require.Eventuallyf(t, func() bool {
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
 		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
-	}, time.Minute, time.Millisecond, "did not receive folder configs for unified test api scan")
+	}, time.Minute, time.Millisecond, "did not receive folder configs")
 
 	if t.Failed() {
 		t.FailNow()
 	}
 
 	// -----------------------------------------
-	// unified test api scan
+	// Set feature flags
 	// -----------------------------------------
+	setRiskScoreFeatureFlagsFromGafConfig(t, c, cloneTargetDirString, unifiedScan)
 
-	setRiskScoreFeatureFlagsFromGafConfig(t, c, cloneTargetDirString, true)
-
+	// -----------------------------------------
+	// Scan
+	// -----------------------------------------
 	_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   "snyk.workspaceFolder.scan",
 		Arguments: []any{cloneTargetDirString},
@@ -101,98 +144,12 @@ func TestUnifiedTestApiSmokeTest(t *testing.T) {
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, manifestFile))
 
 	// Wait for scan to complete AND for diagnostics to be published
-	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Second)
+	require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Second)
 
-	notifications = jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
-	if len(notifications) < 1 {
-		t.Fatal("expected at least one notification")
-	}
+	diagnosticsNotifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+	require.NotEmpty(t, diagnosticsNotifications, "expected at least one notification")
 
-	unifiedDiagnostics := extractDiagnostics(t, notifications, testPath)
-	jsonRPCRecorder.ClearNotifications()
-	_ = loc.Client.Close()
-	loc.Server.Stop()
-
-	// -----------------------------------------
-	// legacy scan - reset
-	// -----------------------------------------
-
-	if t.Failed() {
-		t.FailNow()
-	}
-
-	c, loc, jsonRPCRecorder = setupOSSComparisonTest(t)
-
-	// -----------------------------------------
-	// initialize language server
-	// -----------------------------------------
-	initParams = prepareInitParams(t, cloneTargetDir, c)
-	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
-		c.SetAutomaticScanning(false)
-		c.SetDeltaFindingsEnabled(false)
-	})
-
-	assert.Eventuallyf(t, func() bool {
-		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
-		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
-	}, time.Minute, time.Millisecond, "did not receive folder configs for unified test api scan")
-
-	if t.Failed() {
-		t.FailNow()
-	}
-
-	setRiskScoreFeatureFlagsFromGafConfig(t, c, cloneTargetDirString, false)
-
-	_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
-		Command:   "snyk.workspaceFolder.scan",
-		Arguments: []any{cloneTargetDirString},
-	})
-	require.NoError(t, err)
-
-	waitForScan(t, cloneTargetDirString, c)
-
-	// Wait for scan to complete AND for diagnostics to be published
-	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Second)
-
-	// save diagnostics
-	legacyNotifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
-	if len(notifications) < 1 {
-		t.Fatal("expected at least one notification")
-	}
-
-	legacyDiagnostics := extractDiagnostics(t, legacyNotifications, testPath)
-
-	// -----------------------------------------
-	// compare diagnostics
-	// -----------------------------------------
-
-	if t.Failed() {
-		t.FailNow()
-	}
-
-	compareResult := compareAndReportDiagnostics(t, unifiedDiagnostics, legacyDiagnostics)
-	if !compareResult.Match {
-		t.Logf("Diagnostics comparison failed:\n%s", compareResult.Report)
-	}
-}
-
-func setRiskScoreFeatureFlagsFromGafConfig(t *testing.T, c *config.Config, cloneTargetDirString string, enabled bool) {
-	t.Helper()
-
-	// -----------------------------------------
-	// Set feature flags
-	// -----------------------------------------
-	engine := c.Engine()
-	gafConfig := engine.GetConfiguration()
-	gafConfig.Set(FeatureFlagRiskScore, enabled)
-	gafConfig.Set(FeatureFlagRiskScoreInCLI, enabled)
-	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
-	folderConfig.FeatureFlags[FeatureFlagRiskScore] = gafConfig.GetBool(FeatureFlagRiskScore)
-	folderConfig.FeatureFlags[FeatureFlagRiskScoreInCLI] = gafConfig.GetBool(FeatureFlagRiskScoreInCLI)
-	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
-	if err != nil {
-		t.Fatal(err, "unable to update folder config")
-	}
+	return extractDiagnostics(t, diagnosticsNotifications, testPath)
 }
 
 func setupOSSComparisonTest(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder) {
@@ -214,6 +171,22 @@ func setupOSSComparisonTest(t *testing.T) (*config.Config, server.Local, *testsu
 	cleanupChannels()
 	di.Init()
 	return c, loc, jsonRPCRecorder
+}
+
+func setRiskScoreFeatureFlagsFromGafConfig(t *testing.T, c *config.Config, cloneTargetDirString string, enabled bool) {
+	t.Helper()
+
+	engine := c.Engine()
+	gafConfig := engine.GetConfiguration()
+	gafConfig.Set(FeatureFlagRiskScore, enabled)
+	gafConfig.Set(FeatureFlagRiskScoreInCLI, enabled)
+	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
+	folderConfig.FeatureFlags["useExperimentalRiskScore"] = engine.GetConfiguration().GetBool(FeatureFlagRiskScore)
+	folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"] = engine.GetConfiguration().GetBool(FeatureFlagRiskScoreInCLI)
+	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
+	if err != nil {
+		t.Fatal(err, "unable to update folder config")
+	}
 }
 
 func extractDiagnostics(t *testing.T, notifications []jrpc2.Request, testPath types.FilePath) []types.Diagnostic {
