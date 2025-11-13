@@ -154,6 +154,7 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *con
 	token := testsupport.GetEnvironmentToken(tokenSecretName)
 	c.SetToken(token)
 	c.SetAuthenticationMethod(types.TokenAuthentication)
+	c.SetAutomaticAuthentication(false)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
 	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, true)))
