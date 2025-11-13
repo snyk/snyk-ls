@@ -244,7 +244,7 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 		if invocationCtx.GetConfiguration().IsSet(OUTPUT_DIR_PARAM) {
 			filePath, fileErr := handleFileOutput(logger, invocationCtx, workingDir, toolDef, output)
 			if fileErr != nil {
-				return nil, err
+				return nil, fileErr
 			}
 			return mcp.NewToolResultText(fmt.Sprintf("Scan result written to: %s", filePath)), nil
 		}
