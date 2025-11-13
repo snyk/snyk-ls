@@ -697,7 +697,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
 		assert.Error(t, err)
-		assert.ErrorContains(t, err, "SAST is not enabled")
+		assert.ErrorContains(t, err, "Snyk Code is not enabled for this organization")
 		assert.Empty(t, issues)
 	})
 
@@ -736,7 +736,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		// Scan with org2 (should fail since SAST is disabled)
 		issues2, err2 := scanner2.Scan(t.Context(), types.FilePath("test2.go"), tempDir2, folderConfig2)
 		assert.Error(t, err2)
-		assert.ErrorContains(t, err2, "SAST is not enabled")
+		assert.ErrorContains(t, err2, "Snyk Code is not enabled for this organization")
 		assert.Empty(t, issues2)
 	})
 }

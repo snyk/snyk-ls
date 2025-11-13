@@ -1154,6 +1154,8 @@ type SnykScanParams struct {
 	ErrorMessage string `json:"errorMessage,omitempty"`
 	// CliError contains structured error information from the CLI
 	CliError *CliError `json:"cliError,omitempty"`
+	// ShowNotification is for IDE to decide to display a notification or not
+	ShowNotification bool `json:"showNotification,omitempty"`
 }
 
 type ScanIssue struct { // TODO - convert this to a generic type

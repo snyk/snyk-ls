@@ -20,8 +20,11 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/samber/lo"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -51,13 +54,17 @@ func (n *scanNotifier) SendError(product product.Product, folderPath types.FileP
 		cliError = nil
 	}
 
+	// Default to showing notification, but suppress for silent errors
+	showNotification := !lo.Contains(utils.SilentErrors, errorMessage)
+
 	n.notifier.Send(
 		types.SnykScanParams{
-			Status:       types.ErrorStatus,
-			Product:      product.ToProductCodename(),
-			FolderPath:   folderPath,
-			ErrorMessage: errorMessage,
-			CliError:     cliError,
+			Status:           types.ErrorStatus,
+			Product:          product.ToProductCodename(),
+			FolderPath:       folderPath,
+			ErrorMessage:     errorMessage,
+			CliError:         cliError,
+			ShowNotification: showNotification,
 		},
 	)
 }
