@@ -545,6 +545,11 @@ func TestFetchSastSettings(t *testing.T) {
 		actualOrg2, b := service.orgToSastSettings.Get(org2)
 		assert.True(t, b)
 
+		actualOrg1, b := service.orgToSastSettings.Get(org1)
+		assert.True(t, b)
+		actualOrg2, b := service.orgToSastSettings.Get(org2)
+		assert.True(t, b)
+
 		// Explicitly verify caches are distinct entries with different values
 		assert.Equal(t, settings1, actualOrg1, "org1 SAST cache should match settings1")
 		assert.Equal(t, settings2, actualOrg2, "org2 SAST cache should match settings2")
