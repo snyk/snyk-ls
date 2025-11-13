@@ -84,6 +84,7 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 			logger.Warn().Err(err).Msg("failed to get introducing finding")
 			continue
 		}
+
 		dependencyPath := extractDependencyPath(introducingFinding)
 		myRange, err := getRange(ctx, string(affectedFilePath), ecosystemStr, dependencyPath)
 		if err != nil {
@@ -170,11 +171,16 @@ func getIntroducingFinding(issue testapi.Issue, problem *testapi.SnykVulnProblem
 }
 
 func getProblem(issue testapi.Issue) (*testapi.SnykVulnProblem, error) {
-	problem, err := issue.GetPrimaryProblem().AsSnykVulnProblem()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get and convert primary problem: %w", err)
+	for _, problem := range issue.GetProblems() {
+		valueByDiscriminator, err := problem.ValueByDiscriminator()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get problem by discriminator: %w", err)
+		}
+		if p, ok := valueByDiscriminator.(testapi.SnykVulnProblem); ok {
+			return &p, nil
+		}
 	}
-	return &problem, nil
+	return nil, fmt.Errorf("no snyk vuln problem found in issue")
 }
 
 func getRange(ctx context.Context, affectedFilePath, packageManager string, dependencyPath []string) (types.Range, error) {

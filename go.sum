@@ -289,6 +289,8 @@ github.com/skeema/knownhosts v1.3.1 h1:X2osQ+RAjK76shCbvhHHHVl3ZlgDm8apHEHFqRjnB
 github.com/skeema/knownhosts v1.3.1/go.mod h1:r7KTdC8l4uxWRyK2TpQZ/1o5HaSzh06ePQNxPwTcfiY=
 github.com/snyk/cli-extension-os-flows v0.0.0-20251111161917-55366f295dd6 h1:gZEGnUxmUQL6kRczjVsZ17saVEt4q+BjnHl9YuAJFW4=
 github.com/snyk/cli-extension-os-flows v0.0.0-20251111161917-55366f295dd6/go.mod h1:zzzpxTldp5eASBcjgWw6KL2RDWXK/09x6q7s2wpF3EQ=
+github.com/snyk/cli-extension-os-flows v0.0.0-20251112185644-508309df0847 h1:HcdbYCSwBGMylI6o3jO5Z6LImdwJvu2vH2hlCcVg0js=
+github.com/snyk/cli-extension-os-flows v0.0.0-20251112185644-508309df0847/go.mod h1:zzzpxTldp5eASBcjgWw6KL2RDWXK/09x6q7s2wpF3EQ=
 github.com/snyk/code-client-go v1.24.4 h1:19rmeqZFvjQMKaAmSZ0CdYZb1d0ENsDad2Cp32jeWOA=
 github.com/snyk/code-client-go v1.24.4/go.mod h1:uMlmMToe4uuNhNLs+yxjM3WFbytna+ytDWhpbnNwTSk=
 github.com/snyk/error-catalog-golang-public v0.0.0-20251008132755-b542bb643649 h1:kS6bSbjvfMTc8vqIZzHXzTHKh4kLKt27m0tsJ8T3WQc=

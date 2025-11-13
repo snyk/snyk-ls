@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -265,7 +266,7 @@ func (cliScanner *CLIScanner) scanInternal(
 	}
 
 	// determine which scanner to use
-	useLegacyScan := !folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"]
+	useLegacyScan := !folderConfig.FeatureFlags[featureflag.UseExperimentalRiskScoreInCLI]
 	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨🚨🚨🚨 oss scan usage 🚨🚨🚨🚨")
 
 	// do actual scan

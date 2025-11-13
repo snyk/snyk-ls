@@ -27,19 +27,24 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const (
-	SnykCodeConsistentIgnores string = "snykCodeConsistentIgnores"
-	SnykCodeInlineIgnore      string = "snykCodeInlineIgnore"
-	IgnoreApprovalEnabled     string = "internal_iaw_enabled"
+	SnykCodeConsistentIgnores     string = "snykCodeConsistentIgnores"
+	SnykCodeInlineIgnore          string = "snykCodeInlineIgnore"
+	IgnoreApprovalEnabled         string = "internal_iaw_enabled"
+	UseExperimentalRiskScoreInCLI string = "useExperimentalRiskScoreInCLI"
+	UseExperimentalRiskScore      string = "useExperimentalRiskScore"
 )
 
 var Flags = []string{
 	SnykCodeConsistentIgnores,
 	SnykCodeInlineIgnore,
 	IgnoreApprovalEnabled,
+	UseExperimentalRiskScoreInCLI,
+	UseExperimentalRiskScore,
 }
 
 // ExternalCallsProvider abstracts configuration and API calls for testability
@@ -113,12 +118,6 @@ func New(c *config.Config) Service {
 
 func (s *serviceImpl) fetch(org string) map[string]bool {
 	s.mutex.Lock()
-	cached := s.orgToFlag[org]
-	if cached != nil {
-		s.mutex.Unlock()
-		return cached
-	}
-
 	s.orgToFlag[org] = make(map[string]bool)
 	s.mutex.Unlock()
 
@@ -202,6 +201,7 @@ func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
+	logger := s.c.Logger().With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
 	org := s.provider.folderOrganization(folderConfig.FolderPath)
 
 	// Fetch feature flags and SAST settings in parallel
@@ -230,8 +230,13 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	folderConfig.FeatureFlags = flags
 
 	if sastErr != nil {
-		s.c.Logger().Err(sastErr).Str("method", "PopulateFolderConfig").Msgf("couldn't get SAST settings for org %s", org)
+		logger.Err(sastErr).Msgf("couldn't get SAST settings for org %s", org)
 	} else {
 		folderConfig.SastSettings = sastSettings
+	}
+
+	err := storedconfig.UpdateFolderConfig(s.c.Engine().GetConfiguration(), folderConfig, &logger)
+	if err != nil {
+		logger.Err(err).Msgf("couldn't update folder config for path %s", folderConfig.FolderPath)
 	}
 }
