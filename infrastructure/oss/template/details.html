@@ -66,14 +66,14 @@
         <a class="cvssscore styled-link"  rel="noopener noreferrer" href="{{.CvssCalculatorUrl}}">CVSS {{.CvssScore}}</a>
         {{end}}
 
-        {{if ne .RiskScore 0 }}
-        <span class="delimiter"> </span>
-        <span class="delimiter">Risk score {{.RiskScore}}</span>
-        {{end}}
-
         <span class="delimiter"> </span>
         <a class="styled-link"  rel="noopener noreferrer"
           href="https://snyk.io/vuln/{{.IssueId}}">{{.IssueId}}</a>
+
+        {{if ne .RiskScore 0 }}
+        <span class="delimiter"> </span>
+        <div>Risk score: {{.RiskScore}}</div>
+        {{end}}
       </div>
       {{ if .LessonUrl }}
       <div class="sn-learn" id="learn">
