@@ -40,7 +40,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -664,7 +663,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	engineMock, gafConfig := setUpEngineMock(t, c)
+	engineMock, _ := testutil.SetUpEngineMock(t, c)
 
 	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
 
@@ -674,9 +673,7 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 		SendAnalytics:     true,
 	}
 
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
-	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
 		Times(1).
 		Do(func(id workflow.Identifier, data []workflow.Data, config configuration.Configuration) {
@@ -697,7 +694,7 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	engineMock, gafConfig := setUpEngineMock(t, c)
+	engineMock, _ := testutil.SetUpEngineMock(t, c)
 
 	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
 
@@ -715,9 +712,7 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 		SendAnalytics:     true,
 	}
 
-	engineMock.EXPECT().GetConfiguration().AnyTimes().Return(gafConfig)
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
-	engineMock.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
 		Times(1)
 
@@ -771,13 +766,4 @@ func NewMockIssueWithIgnored(id string, path types.FilePath, ignored bool) *snyk
 func GetValueFromMap(m *xsync.MapOf[types.FilePath, []types.Issue], key types.FilePath) []types.Issue {
 	value, _ := m.Load(key)
 	return value
-}
-
-func setUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {
-	t.Helper()
-	ctrl := gomock.NewController(t)
-	mockEngine := mocks.NewMockEngine(ctrl)
-	engineConfig := c.Engine().GetConfiguration()
-	c.SetEngine(mockEngine)
-	return mockEngine, engineConfig
 }
