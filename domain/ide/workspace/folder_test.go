@@ -49,7 +49,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
-	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -736,11 +735,11 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	time.Sleep(time.Second)
 }
 
-func NewMockFolder(c *config.Config, notifier noti.Notifier) *Folder {
+func NewMockFolder(c *config.Config, notifier notification.Notifier) *Folder {
 	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
 }
 
-func NewMockFolderWithScanNotifier(c *config.Config, notifier noti.Notifier) (*Folder, *scanner.MockScanNotifier) {
+func NewMockFolderWithScanNotifier(c *config.Config, notifier notification.Notifier) (*Folder, *scanner.MockScanNotifier) {
 	scanNotifier := scanner.NewMockScanNotifier()
 	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanNotifier, notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService()), scanNotifier
 }

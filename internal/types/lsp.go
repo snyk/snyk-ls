@@ -1011,7 +1011,7 @@ type CodeActionData uuid.UUID
 type CodeActionTriggerKind float64
 
 /**
- * Params to show a document.
+ * ShowDocumentParams defines specifics to show a document.
  *
  * @since 3.16.0
  */

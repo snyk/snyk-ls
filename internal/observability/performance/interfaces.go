@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package performance implements performance instrumentation and tracing
 package performance
 
 import (

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package di implements the dependency injection functionality
 package di
 
 import (
@@ -45,7 +46,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/internal/notification"
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
 	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
@@ -70,7 +70,7 @@ var (
 	codeActionService           *codeaction.CodeActionsService
 	fileWatcher                 *watcher.FileWatcher
 	initMutex                   = &sync.Mutex{}
-	notifier                    notification.Notifier
+	notifier                    domainNotify.Notifier
 	codeInstrumentor            codeClientObservability.Instrumentor
 	codeErrorReporter           codeClientObservability.ErrorReporter
 	scanPersister               persistence.ScanSnapshotPersister
@@ -150,7 +150,7 @@ TODO Accessors: This should go away, since all dependencies should be satisfied 
 they can be returned by the test helper for unit/integration tests
 */
 
-func Notifier() notification.Notifier {
+func Notifier() domainNotify.Notifier {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return notifier

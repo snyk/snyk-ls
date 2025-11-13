@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// This package defines basic interfaces to a file system.
+// Package filesystem defines basic interfaces to a file system.
 package filesystem
 
 import (

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package trust implements the trust functionality for MCP
 package trust
 
 import (

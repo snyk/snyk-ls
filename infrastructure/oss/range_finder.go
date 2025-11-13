@@ -37,7 +37,7 @@ type DefaultFinder struct {
 
 // getDependencyNode will return the dependency node with range information
 // in case of maven, the node will also contain tree links information for the whole dep tree
-func getDependencyNode(logger *zerolog.Logger, path types.FilePath, issue ossIssue, fileContent []byte) *ast.Node {
+func getDependencyNode(logger *zerolog.Logger, path types.FilePath, packageManager string, from []string, fileContent []byte) *ast.Node {
 	var finder RangeFinder
 
 	if len(fileContent) == 0 {
@@ -45,7 +45,7 @@ func getDependencyNode(logger *zerolog.Logger, path types.FilePath, issue ossIss
 	}
 
 	pathAsString := string(path)
-	switch issue.PackageManager {
+	switch packageManager {
 	case "npm":
 		finder = &NpmRangeFinder{uri: path, fileContent: fileContent}
 	case "maven":
@@ -58,7 +58,7 @@ func getDependencyNode(logger *zerolog.Logger, path types.FilePath, issue ossIss
 		finder = &DefaultFinder{path: path, fileContent: fileContent, logger: logger}
 	}
 
-	introducingPackageName, introducingVersion := introducingPackageAndVersion(issue)
+	introducingPackageName, introducingVersion := introducingPackageAndVersion(from, packageManager)
 
 	currentDep, parsedTree := finder.find(introducingPackageName, introducingVersion)
 
@@ -66,13 +66,13 @@ func getDependencyNode(logger *zerolog.Logger, path types.FilePath, issue ossIss
 	// we go recurse to the parent of it
 	if currentDep == nil && parsedTree != nil && parsedTree.ParentTree != nil {
 		tree := parsedTree.ParentTree
-		currentDep = getDependencyNode(logger, types.FilePath(tree.Document), issue, []byte(tree.Root.Value))
+		currentDep = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, from, []byte(tree.Root.Value))
 	}
 
 	// recurse until a dependency with version was found
 	if currentDep != nil && currentDep.Value == "" && currentDep.Tree != nil && currentDep.Tree.ParentTree != nil {
 		tree := currentDep.Tree.ParentTree
-		currentDep.LinkedParentDependencyNode = getDependencyNode(logger, types.FilePath(tree.Document), issue, []byte(tree.Root.Value))
+		currentDep.LinkedParentDependencyNode = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, from, []byte(tree.Root.Value))
 	}
 
 	return currentDep

@@ -133,10 +133,10 @@ type Annotation struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []snyk.OssIssueData, affectedFilePath types.FilePath) snyk.OssIssueData {
+func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []snyk.OssIssueData, affectedFilePath types.FilePath, issueRange types.Range) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
 
-	additionalData.Key = util.GetIssueKey(i.Id, string(affectedFilePath), i.LineNumber, i.LineNumber, 0, 0)
+	additionalData.Key = util.GetIssueKey(i.Id, string(affectedFilePath), issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character)
 	additionalData.Title = i.Title
 	additionalData.Name = i.Name
 	additionalData.Identifiers = snyk.Identifiers{
@@ -303,14 +303,14 @@ func (i *ossIssue) createFixedIn() string {
 func (i *ossIssue) createCweLink() string {
 	var formattedCwe string
 	for _, c := range i.Identifiers.CWE {
-		id := strings.Replace(c, "CWE-", "", -1)
+		id := strings.ReplaceAll(c, "CWE-", "")
 		formattedCwe += fmt.Sprintf("| [%s](https://cwe.mitre.org/data/definitions/%s.html)", c, id)
 	}
 	return formattedCwe
 }
 
 func (i *ossIssue) ToIssueSeverity() types.Severity {
-	sev, ok := issuesSeverity[i.Severity]
+	sev, ok := types.IssuesSeverity[i.Severity]
 	if !ok {
 		return types.Low
 	}

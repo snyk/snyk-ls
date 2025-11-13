@@ -34,7 +34,7 @@ func NewFindingsEnricher() *FindingsEnricher {
 	return &FindingsEnricher{}
 }
 
-func (_ FindingsEnricher) EnrichWithId(issueList []Identifiable) []Identifiable {
+func (FindingsEnricher) EnrichWithId(issueList []Identifiable) []Identifiable {
 	for i := range issueList {
 		if issueList[i].GetGlobalIdentity() == "" {
 			issueList[i].SetGlobalIdentity(uuid.New().String())
@@ -44,7 +44,7 @@ func (_ FindingsEnricher) EnrichWithId(issueList []Identifiable) []Identifiable 
 	return issueList
 }
 
-func (_ FindingsEnricher) EnrichWithIsNew(allCurrentIssues, newIssues []Identifiable) []Identifiable {
+func (FindingsEnricher) EnrichWithIsNew(allCurrentIssues, newIssues []Identifiable) []Identifiable {
 	for i := range allCurrentIssues {
 		for j := range newIssues {
 			// everything in delta list is new

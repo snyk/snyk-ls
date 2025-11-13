@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package persistence implements persistence functionality
 package persistence
 
 import (
