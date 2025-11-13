@@ -9,8 +9,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -81,40 +84,50 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 	tests := []struct {
 		name           string
 		arguments      []any
-		expectedConfig map[string]interface{}
+		expectedConfig map[string]any
 		expectedError  error
 	}{
 		{
 			name:      "Successful creation",
 			arguments: []any{"create", "issueId", "wont_fix", "reason", "expiration"},
-			expectedConfig: map[string]interface{}{
+			expectedConfig: map[string]any{
 				ignore_workflow.FindingsIdKey:     "finding123",
 				ignore_workflow.EnrichResponseKey: true,
 				ignore_workflow.InteractiveKey:    false,
-				configuration.INPUT_DIRECTORY:     "/test/content/root",
 				ignore_workflow.IgnoreTypeKey:     "wont_fix",
 				ignore_workflow.ReasonKey:         "reason",
 				ignore_workflow.ExpirationKey:     "expiration",
 			},
-			expectedError: nil,
 		},
 		{
-			name:           "insufficient arguments",
-			arguments:      []any{"create", "issueId", "wont_fix", "reason"},
-			expectedConfig: nil,
-			expectedError:  errors.New("insufficient arguments for ignore-create workflow"),
+			name:          "insufficient arguments",
+			arguments:     []any{"create", "issueId", "wont_fix", "reason"},
+			expectedError: errors.New("insufficient arguments for ignore-create workflow"),
 		},
 		{
-			name:           "GetCommandArgs fails",
-			arguments:      []any{"create", "issueId", 123, "reason", "expiration"},
-			expectedConfig: nil,
-			expectedError:  errors.New("ignoreType should be a string"),
+			name:          "GetCommandArgs fails",
+			arguments:     []any{"create", "issueId", 123, "reason", "expiration"},
+			expectedError: errors.New("ignoreType should be a string"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := testutil.UnitTest(t)
+
+			// Setup fake workspace
+			_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+			contentRoot := folderPaths[0]
+
+			// Configure folder with org
+			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+				FolderPath:                  contentRoot,
+				PreferredOrg:                "test-org",
+				OrgSetByUser:                true,
+				OrgMigratedFromGlobalConfig: true,
+			}, c.Logger())
+			require.NoError(t, err)
+
 			cmd := &submitIgnoreRequest{
 				command: types.CommandData{
 					Arguments: tt.arguments,
@@ -123,16 +136,21 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 			}
 
 			gafConfig := c.Engine().GetConfiguration()
-			config, err := cmd.initializeCreateConfiguration(gafConfig, "finding123", "/test/content/root")
+			config, err := cmd.initializeCreateConfiguration(gafConfig, "finding123", contentRoot)
 
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, config)
+
+				// Check all expected config values
 				for key, expectedValue := range tt.expectedConfig {
 					assert.Equal(t, expectedValue, config.Get(key))
 				}
+
+				// Verify INPUT_DIRECTORY is set to the contentRoot we passed
+				assert.Equal(t, string(contentRoot), config.Get(configuration.INPUT_DIRECTORY))
 			}
 		})
 	}

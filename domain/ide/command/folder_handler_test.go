@@ -17,7 +17,6 @@
 package command
 
 import (
-	"strconv"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -30,16 +29,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
-	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -78,41 +70,6 @@ func setupMockOrgResolverWithError(t *testing.T, err error) {
 	SetService(mockService)
 }
 
-// setupTestWorkspace creates a test workspace with the specified number of folders
-func setupTestWorkspace(t *testing.T, c *config.Config, folderCount int) (
-	notifier *notification.MockNotifier,
-	folderPaths []types.FilePath,
-) {
-	t.Helper()
-
-	// Create mock dependencies
-	notifier = notification.NewMockNotifier()
-	scanNotifier := scanner.NewMockScanNotifier()
-	scanPersister := persistence.NewNopScanPersister()
-	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	sc := scanner.NewTestScanner()
-	hoverService := hover.NewFakeHoverService()
-
-	// Create workspace
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureflag.NewFakeService())
-
-	// Create and add folders
-	safeTestName := testsupport.PathSafeTestName(t)
-	folderPaths = make([]types.FilePath, folderCount)
-	for i := range folderCount {
-		folderPath := types.FilePath(t.TempDir())
-		folderPaths[i] = folderPath
-		folderName := safeTestName + "_test-folder_" + strconv.Itoa(i)
-		folder := workspace.NewFolder(c, folderPath, folderName, sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureflag.NewFakeService())
-		w.AddFolder(folder)
-	}
-
-	// Set workspace on config
-	c.SetWorkspace(w)
-
-	return notifier, folderPaths
-}
-
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
@@ -129,7 +86,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	setupMockOrgResolver(t, expectedOrg)
 
 	// Setup workspace with a folder
-	notifier, folderPaths := setupTestWorkspace(t, c, 1)
+	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
@@ -162,7 +119,7 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 	// Setup workspace with no folders
-	notifier, _ := setupTestWorkspace(t, c, 0)
+	notifier, _ := testutils.SetupFakeWorkspace(t, c, 0)
 
 	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
@@ -278,7 +235,7 @@ func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 	setupMockOrgResolverWithError(t, assert.AnError)
 
 	// Setup workspace with a folder
-	notifier, folderPaths := setupTestWorkspace(t, c, 1)
+	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
@@ -331,7 +288,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	SetService(mockService)
 
 	// Setup workspace with multiple folders
-	notifier, folderPaths := setupTestWorkspace(t, c, 2)
+	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 2)
 
 	logger := c.Logger()
 
