@@ -50,20 +50,30 @@ const (
 func TestUnifiedTestApiSmokeTest(t *testing.T) {
 	// Results captured from the first two sub-tests for comparison
 	// You must run the first two sub-tests before running the third sub-test
+	unifiedTestStarted := false
 	var unifiedDiagnostics []types.Diagnostic
+	legacyTestStarted := false
 	var legacyDiagnostics []types.Diagnostic
 
 	t.Run("1. Unified Test API scan (with risk score)", func(t *testing.T) {
+		unifiedTestStarted = true
 		unifiedDiagnostics = runOSSComparisonTest(t, true)
 	})
 
 	t.Run("2. Legacy scan (without risk score)", func(t *testing.T) {
+		legacyTestStarted = true
 		legacyDiagnostics = runOSSComparisonTest(t, false)
 	})
 
 	t.Run("3. Compare diagnostics from both scans", func(t *testing.T) {
+		_ = testutil.SmokeTest(t, tokenSecretNameForRiskScore)
+
+		if !unifiedTestStarted || !legacyTestStarted {
+			t.Fatalf("One or both of the sub-tests were not run: unifiedTestStarted=%v, legacyTestStarted=%v", unifiedTestStarted, legacyTestStarted)
+		}
+
 		if len(unifiedDiagnostics) == 0 && len(legacyDiagnostics) == 0 {
-			t.Fatal("No diagnostics to compare - previous sub-tests may have failed or not run")
+			t.Fatalf("No diagnostics to compare - previous sub-tests may have failed: unifiedDiagnostics=%d, legacyDiagnostics=%d", len(unifiedDiagnostics), len(legacyDiagnostics))
 		}
 
 		compareResult := compareAndReportDiagnostics(t, unifiedDiagnostics, legacyDiagnostics)
