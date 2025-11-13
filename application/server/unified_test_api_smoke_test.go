@@ -30,7 +30,6 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	sglsp "github.com/sourcegraph/go-lsp"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -82,10 +81,8 @@ func TestUnifiedTestApiSmokeTest(t *testing.T) {
 			c.SetDeltaFindingsEnabled(false)
 		})
 
-		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
-
-		assert.Eventuallyf(t, func() bool {
-			notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+		require.Eventuallyf(t, func() bool {
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
 			return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
 		}, time.Minute, time.Millisecond, "did not receive folder configs for unified test api scan")
 
@@ -111,14 +108,12 @@ func TestUnifiedTestApiSmokeTest(t *testing.T) {
 		testPath := types.FilePath(filepath.Join(cloneTargetDirString, manifestFile))
 
 		// Wait for scan to complete AND for diagnostics to be published
-		assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Second)
+		require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Second)
 
-		notifications = jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
-		if len(notifications) < 1 {
-			t.Fatal("expected at least one notification")
-		}
+		unifiedDiagNotifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+		require.NotEmpty(t, unifiedDiagNotifications, "expected at least one notification")
 
-		unifiedDiagnostics = extractDiagnostics(t, notifications, testPath)
+		unifiedDiagnostics = extractDiagnostics(t, unifiedDiagNotifications, testPath)
 	})
 
 	t.Run("2. Legacy scan (without risk score)", func(t *testing.T) {
@@ -147,9 +142,8 @@ func TestUnifiedTestApiSmokeTest(t *testing.T) {
 			c.SetDeltaFindingsEnabled(false)
 		})
 
-		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
-		assert.Eventuallyf(t, func() bool {
-			notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+		require.Eventuallyf(t, func() bool {
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
 			return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
 		}, time.Minute, time.Millisecond, "did not receive folder configs for unified test api scan")
 
@@ -170,14 +164,12 @@ func TestUnifiedTestApiSmokeTest(t *testing.T) {
 		testPath := types.FilePath(filepath.Join(cloneTargetDirString, manifestFile))
 
 		// Wait for scan to complete AND for diagnostics to be published
-		assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Second)
+		require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Second)
 
-		legacyNotifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
-		if len(notifications) < 1 {
-			t.Fatal("expected at least one notification")
-		}
+		legacyDiagNotifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+		require.NotEmpty(t, legacyDiagNotifications, "expected at least one notification")
 
-		legacyDiagnostics = extractDiagnostics(t, legacyNotifications, testPath)
+		legacyDiagnostics = extractDiagnostics(t, legacyDiagNotifications, testPath)
 	})
 
 	t.Run("3. Compare diagnostics from both scans", func(t *testing.T) {
