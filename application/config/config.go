@@ -38,6 +38,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/oauth2"
+
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -50,13 +52,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"golang.org/x/oauth2"
-
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
-	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -299,7 +299,7 @@ func initWorkFlowEngine(c *Config) {
 
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
@@ -1178,17 +1178,17 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 	conf := c.engine.GetConfiguration()
 	conf.SetStorage(s)
 	c.m.Unlock()
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
 
 	// now refresh from storage
-	err := s.Refresh(conf, storedConfig.ConfigMainKey)
+	err := s.Refresh(conf, storedconfig.ConfigMainKey)
 	if err != nil {
 		c.logger.Err(err).Msg("unable to load stored config")
 	}
 
-	sc, err := storedConfig.GetStoredConfig(conf, c.logger)
+	sc, err := storedconfig.GetStoredConfig(conf, c.logger)
 	c.logger.Debug().Any("storedConfig", sc).Send()
 
 	if err != nil {
@@ -1275,7 +1275,7 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	var folderConfig *types.FolderConfig
 	var err error
-	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
+	folderConfig, err = storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
 	if err != nil {
 		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
@@ -1283,7 +1283,7 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 }
 
 func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
-	return storedConfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
+	return storedconfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
 }
 
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
