@@ -135,16 +135,16 @@ jobs:
           .github/upload-to-s3.sh
 
       # creating PR in cli repository needs ssh agent
-#      - uses: webfactory/ssh-agent@v0.9.0
-#        if: github.event_name != 'workflow_dispatch'
-#        with:
-#          ssh-private-key: ${{ secrets.TEAM_IDE_USER_SSH }}
-#
-#      - name: Create PR in CLI to integrate LS
-#        if: github.event_name != 'workflow_dispatch'
-#        env:
-#          GH_TOKEN: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
-#          GITHUB_TOKEN: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
-#          PUB_SIGNING_KEY: ${{ secrets.TEAM_IDE_USER_SSH_PUB }}
-#        run: |
-#          .github/create-cli-pr.sh
+      - uses: webfactory/ssh-agent@v0.9.0
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          ssh-private-key: ${{ secrets.TEAM_IDE_USER_SSH }}
+
+      - name: Create PR in CLI to integrate LS
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
+          GITHUB_TOKEN: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
+          PUB_SIGNING_KEY: ${{ secrets.TEAM_IDE_USER_SSH_PUB }}
+        run: |
+          .github/create-cli-pr.sh
