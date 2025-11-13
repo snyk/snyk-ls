@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -240,8 +241,36 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 
 		output = m.enhanceOutput(&logger, toolDef, output, err == nil, workingDir, includeIgnores)
 
+		if invocationCtx.GetConfiguration().IsSet(OUTPUT_DIR_PARAM) {
+			filePath, fileErr := handleFileOutput(logger, invocationCtx, workingDir, toolDef, output)
+			if fileErr != nil {
+				return nil, err
+			}
+			return mcp.NewToolResultText(fmt.Sprintf("Scan result written to: %s", filePath)), nil
+		}
+
 		return mcp.NewToolResultText(output), nil
 	}
+}
+
+func handleFileOutput(logger zerolog.Logger, invocationCtx workflow.InvocationContext, workingDir string, toolDef SnykMcpToolsDefinition, toolOutput string) (string, error) {
+	outputDir := invocationCtx.GetConfiguration().GetString(OUTPUT_DIR_PARAM)
+	baseDirName := filepath.Base(workingDir)
+	fileName := fmt.Sprintf("scan_output_%s_%s.json", baseDirName, toolDef.Name)
+	var path string
+	if strings.ToLower(outputDir) == "temp" {
+		path = filepath.Join(os.TempDir(), fileName)
+	} else if filepath.IsAbs(outputDir) {
+		path = filepath.Join(outputDir, fileName)
+	} else {
+		path = filepath.Join(workingDir, outputDir, fileName)
+	}
+	err := os.WriteFile(path, []byte(toolOutput), 0644)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to write output to file")
+		return "", err
+	}
+	return path, nil
 }
 
 // enhanceOutput enhances the scan output with structured issue data
