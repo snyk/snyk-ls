@@ -49,7 +49,7 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 		c.UpdateApiEndpoints(base)
 
 		// invoke function under test
-		err = SendAnalyticsToAPI(c.Engine(), c.DeviceID(), v2InstrumentationData)
+		err = SendAnalyticsToAPI(c.Engine(), c.DeviceID(), orgUUID, v2InstrumentationData)
 		assert.NoError(t, err)
 
 		return nil
@@ -103,7 +103,7 @@ func TestAnalyticsPluginInstalled(t *testing.T) {
 		c.UpdateApiEndpoints(base)
 
 		// invoke function under test
-		err = SendAnalyticsToAPI(c.Engine(), c.DeviceID(), inputData)
+		err = SendAnalyticsToAPI(c.Engine(), c.DeviceID(), orgUUID, inputData)
 		assert.NoError(t, err)
 
 		return nil

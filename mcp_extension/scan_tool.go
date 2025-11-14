@@ -369,7 +369,9 @@ func (m *McpLLMBinding) snykSendFeedback(invocationCtx workflow.InvocationContex
 			"mcp::preventedIssuesCount":  int(preventedCount),
 			"mcp::remediatedIssuesCount": int(remediatedCount),
 		}
-		go analytics.SendAnalytics(invocationCtx.GetEngine(), "", event, nil)
+		// MCP doesn't have the concept of folder orgs, so just use org from GAF config
+		org := invocationCtx.GetConfiguration().GetString(configuration.ORGANIZATION)
+		go analytics.SendAnalytics(invocationCtx.GetEngine(), "", org, event, nil)
 
 		return mcp.NewToolResultText("Successfully sent feedback"), nil
 	}

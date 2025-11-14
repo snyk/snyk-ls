@@ -311,5 +311,11 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 
 func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error, path types.FilePath) {
 	event := analytics.NewAnalyticsEventParam("Create ignore", err, path)
-	analytics.SendAnalytics(cmd.c.Engine(), cmd.c.DeviceID(), event, err)
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(path)
+	if err != nil {
+		// Fallback to sending the analytics to the global org,
+		// these analytics are not exposed in customer TopCoat reports, so this is fine.
+		folderOrg = cmd.c.Organization()
+	}
+	analytics.SendAnalytics(cmd.c.Engine(), cmd.c.DeviceID(), folderOrg, event, err)
 }

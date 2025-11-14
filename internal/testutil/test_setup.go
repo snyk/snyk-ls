@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/constants"
@@ -234,6 +235,45 @@ func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configu
 	c.SetEngine(mockEngine)
 
 	return mockEngine, engineConfig
+}
+
+// WorkflowCapture holds the input data and config captured from a workflow invocation
+type WorkflowCapture struct {
+	Input  []workflow.Data
+	Config configuration.Configuration
+}
+
+// MockAndCaptureWorkflowInvocation sets up a mock expectation to capture workflow invocations.
+// It returns a channel that will receive the captured input data and config from each invocation.
+// The channel is automatically closed via t.Cleanup().
+func MockAndCaptureWorkflowInvocation(
+	t *testing.T,
+	mockEngine *mocks.MockEngine,
+	workflowID workflow.Identifier,
+	times int,
+) chan WorkflowCapture {
+	t.Helper()
+
+	ch := make(chan WorkflowCapture, times)
+	t.Cleanup(func() { close(ch) })
+
+	mockEngine.EXPECT().InvokeWithInputAndConfig(workflowID, gomock.Any(), gomock.Any()).
+		Times(times).
+		Do(func(_ any, potentialWorkflowData any, potentialGAFConfig any) {
+			workflowData, ok := potentialWorkflowData.([]workflow.Data)
+			if !ok {
+				t.Fatalf("Expected []workflow.Data as second argument to InvokeWithInputAndConfig, got %T", potentialWorkflowData)
+				return
+			}
+			gafConfig, ok := potentialGAFConfig.(configuration.Configuration)
+			if !ok {
+				t.Fatalf("Expected configuration.Configuration as third argument to InvokeWithInputAndConfig, got %T", potentialGAFConfig)
+				return
+			}
+			ch <- WorkflowCapture{Input: workflowData, Config: gafConfig}
+		}).Return(nil, nil)
+
+	return ch
 }
 
 // Enables SAST and AutoFix. Used in tests where scan results are provided by code.getSarifResponseJson2, and so we need

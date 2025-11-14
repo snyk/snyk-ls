@@ -40,18 +40,50 @@ func TestConfigFile(t *testing.T) {
 	require.Equal(t, expected, actual)
 }
 
-func Test_folderConfigFromFallbackStorage_never_nil_and_added_to_config(t *testing.T) {
+func Test_folderConfigFromFallbackStorage_NotNilIfCreateIfNotExist(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	tempDir := t.TempDir()
 	path := types.FilePath(tempDir)
 
-	folderConfig, err := folderConfigFromStorage(conf, path, &logger)
+	// Get the folder config from storage for a folder that doesn't exist yet and verify we get a result back
+	folderConfig, err := folderConfigFromStorage(conf, path, &logger, true)
+	require.NoError(t, err)
+	require.NotNil(t, folderConfig)
+}
 
+func Test_folderConfigFromFallbackStorage_NilIfDoNotCreate(t *testing.T) {
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	tempDir := t.TempDir()
+	path := types.FilePath(tempDir)
+
+	// Don't create a folder config in storage for a folder that doesn't exist when createIfNotExist=false
+	folderConfig, err := folderConfigFromStorage(conf, path, &logger, false)
+	require.NoError(t, err)
+	require.Nil(t, folderConfig, "folderConfig should be nil when createIfNotExist=false and config doesn't exist")
+}
+
+func Test_UpdateFolderConfig_SavesToStorage(t *testing.T) {
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	tempDir := t.TempDir()
+	path := types.FilePath(tempDir)
+
+	// Get the folder config from storage for a folder that doesn't exist yet and verify we get a result back
+	folderConfig, err := folderConfigFromStorage(conf, path, &logger, true)
 	require.NoError(t, err)
 	require.NotNil(t, folderConfig)
 
-	storedConfig := conf.Get(ConfigMainKey).(StoredConfig)
+	// Persist the config to storage
+	err = UpdateFolderConfig(conf, folderConfig, &logger)
+	require.NoError(t, err)
+
+	// Retrieve the config from storage and verify it was persisted
+	storedConfig, err := GetStoredConfig(conf, &logger, true)
+	require.NoError(t, err)
 	require.NotNil(t, storedConfig)
 }
