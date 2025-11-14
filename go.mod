@@ -132,6 +132,6 @@ require (
 
 tool github.com/golang/mock/mockgen
 
-replace github.com/snyk/go-application-framework => ../go-application-framework
+//replace github.com/snyk/go-application-framework => ../go-application-framework
 
 //replace github.com/snyk/code-client-go => ../code-client-go

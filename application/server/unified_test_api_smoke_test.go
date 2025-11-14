@@ -96,7 +96,6 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	// -----------------------------------------
 	// setup test repo
 	// -----------------------------------------
-	cloneTargetDir := types.FilePath(dir)
 	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(dir), testsupport.NodejsGoof, "0336589", c.Logger(), true)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -111,9 +110,7 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
-		if unifiedScan {
-			substituteDepGraphFlow(t, c, cloneTargetDirString, manifestFile)
-		}
+		substituteDepGraphFlow(t, c, cloneTargetDirString, manifestFile)
 		c.SetAutomaticScanning(false)
 		c.SetDeltaFindingsEnabled(false)
 	})

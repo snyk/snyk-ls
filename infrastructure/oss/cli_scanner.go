@@ -267,7 +267,7 @@ func (cliScanner *CLIScanner) scanInternal(
 
 	// determine which scanner to use
 	useLegacyScan := !folderConfig.FeatureFlags[featureflag.UseExperimentalRiskScoreInCLI]
-	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨🚨🚨🚨 oss scan usage 🚨🚨🚨🚨")
+	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨 oss scan usage 🚨")
 
 	// do actual scan
 	var output any

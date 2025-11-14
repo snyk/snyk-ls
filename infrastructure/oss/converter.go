@@ -86,20 +86,24 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 	for _, scanResult := range scanResults {
 		targetFilePath := getAbsTargetFilePath(&logger, scanResult.Path, scanResult.DisplayTargetFile, workDir, filePath)
 
-		var fileContent []byte
-
-		if targetFilePath != "" && readFiles && uri.IsRegularFile(targetFilePath) {
-			fileContent, err = os.ReadFile(string(targetFilePath))
-			if err != nil {
-				logger.Error().Err(err).Str("filePath", string(targetFilePath)).Msg("Failed to read file")
-			}
-		}
+		fileContent := getFileContent(targetFilePath, readFiles, logger)
 
 		issues := convertScanResultToIssues(c, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format)
 		allIssues = append(allIssues, issues...)
 	}
 
 	return allIssues, nil
+}
+
+func getFileContent(targetFilePath types.FilePath, readFiles bool, logger zerolog.Logger) []byte {
+	if targetFilePath != "" && readFiles && uri.IsRegularFile(targetFilePath) {
+		fc, err := os.ReadFile(string(targetFilePath))
+		if err != nil {
+			logger.Error().Err(err).Str("filePath", string(targetFilePath)).Msg("Failed to read file")
+		}
+		return fc
+	}
+	return []byte{}
 }
 
 // UnmarshallOssJson is a standalone version of CLIScanner.unmarshallOssJson

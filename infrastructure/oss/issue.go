@@ -77,7 +77,7 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 		}
 	}
 
-	d := &snyk.Issue{
+	snykIssue := &snyk.Issue{
 		ID:                  issue.Id,
 		Message:             message,
 		FormattedMessage:    issue.GetExtendedMessage(issue),
@@ -94,11 +94,24 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 		LessonUrl:           additionalData.Lesson,
 		AdditionalData:      additionalData,
 	}
-	fingerprint := utils.CalculateFingerprintFromAdditionalData(d)
-	d.SetFingerPrint(fingerprint)
+	fingerprint := utils.CalculateFingerprintFromAdditionalData(snykIssue)
+	snykIssue.SetFingerPrint(fingerprint)
 
+	addCodeActionsAndLenses(c, learnService, ep, affectedFilePath, issueDepNode, snykIssue)
+
+	return snykIssue
+}
+
+func addCodeActionsAndLenses(
+	c *config.Config,
+	learnService learn.Service,
+	ep error_reporting.ErrorReporter,
+	affectedFilePath types.FilePath,
+	issueDepNode *ast.Node,
+	issue *snyk.Issue,
+) {
 	// this needs to be first so that the lesson from Snyk Learn is added
-	codeActions := GetCodeActions(c, learnService, ep, affectedFilePath, issueDepNode, d)
+	codeActions := GetCodeActions(c, learnService, ep, affectedFilePath, issueDepNode, issue)
 
 	var codelensCommands []types.CommandData
 	for _, codeAction := range codeActions {
@@ -109,7 +122,7 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 				Arguments: []any{
 					codeAction.GetUuid(),
 					affectedFilePath,
-					rangeFromNode,
+					getRangeFromNode(issueDepNode),
 				},
 				GroupingKey:   codeAction.GetGroupingKey(),
 				GroupingType:  codeAction.GetGroupingType(),
@@ -117,11 +130,8 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 			})
 		}
 	}
-
-	d.CodeActions = codeActions
-	d.CodelensCommands = codelensCommands
-
-	return d
+	issue.CodeActions = codeActions
+	issue.CodelensCommands = codelensCommands
 }
 
 func getRangeFromNode(issueDepNode *ast.Node) types.Range {
