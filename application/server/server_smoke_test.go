@@ -630,6 +630,8 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, types.FilePath(cloneTargetDir))
 	atLeastOneQuickfixActionFound := false
+	errorhandlerCheckHit := false
+	tapCheckHit := false
 	for _, issue := range issueList {
 		params := sglsp.CodeActionParams{
 			TextDocument: sglsp.TextDocumentIdentifier{
@@ -651,16 +653,18 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 				atLeastOneQuickfixActionFound = true
 			}
 
-			// "cfenv": "^1.0.4", 1 fixable issue
-			if issue.Range.Start.Line == 19 && isQuickfixAction {
+			// "errorhandler": "^1.2.0" on line 25 - test singular "1 issue" vs plural "1 issues"
+			if issue.Range.Start.Line == 25 && isQuickfixAction {
 				assert.Contains(t, action.Title, "and fix 1 issue")
 				assert.NotContains(t, action.Title, "and fix 1 issues")
+				errorhandlerCheckHit = true
 			}
 
 			// "tap": "^11.1.3", 12 fixable, 11 unfixable
 			if issue.Range.Start.Line == 46 && isQuickfixAction {
 				assert.Contains(t, action.Title, "and fix ")
 				assert.Contains(t, action.Title, " issues")
+				tapCheckHit = true
 			}
 		}
 		// no issues should have more than one quickfix
@@ -672,6 +676,8 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 		time.Sleep(60 * time.Millisecond)
 	}
 	assert.Truef(t, atLeastOneQuickfixActionFound, "expected to find at least one code action")
+	assert.Truef(t, errorhandlerCheckHit, "expected to hit errorhandler singular check")
+	assert.Truef(t, tapCheckHit, "expected to hit tap plural check")
 }
 
 func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
