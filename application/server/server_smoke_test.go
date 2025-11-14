@@ -651,10 +651,10 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 				atLeastOneQuickfixActionFound = true
 			}
 
-			// "cfenv": "^1.0.4", 1 fixable issue
+			// "cfenv": "^1.0.4", 2 fixable issue
 			if issue.Range.Start.Line == 19 && isQuickfixAction {
-				assert.Contains(t, action.Title, "and fix 1 issue")
-				assert.NotContains(t, action.Title, "and fix 1 issues")
+				assert.Contains(t, action.Title, "and fix 2 issue")
+				assert.NotContains(t, action.Title, "and fix 2 issue")
 			}
 
 			// "tap": "^11.1.3", 12 fixable, 11 unfixable
