@@ -1238,6 +1238,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			c.SetOrganization(expectedOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 			require.NoError(t, err)
+			c.SetAutoOrgEnabledByDefault(true) // Enable post-EA behavior for this test, IDE-1548
 		}
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
@@ -1255,7 +1256,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - adding folder with existing stored config. Making sure PreferredOrg is preserved", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
-		ensureInitialized(t, c, loc, initParams, nil)
+		setupFunc := func(c *config.Config) {
+			c.SetAutoOrgEnabledByDefault(true) // Enable post-EA behavior for this test, IDE-1548
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
 			require.Empty(t, fc.PreferredOrg)
@@ -1379,7 +1384,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 		t.Setenv("SNYK_TOKEN", "")
 
-		ensureInitialized(t, c, loc, initParams, nil)
+		setupFunc := func(c *config.Config) {
+			c.SetAutoOrgEnabledByDefault(true) // Enable post-EA behavior for this test, IDE-1548
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
 
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
