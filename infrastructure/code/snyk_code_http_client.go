@@ -21,9 +21,8 @@ import (
 	"net/url"
 	"regexp"
 
-	"github.com/snyk/snyk-ls/internal/types"
-
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const (
@@ -50,8 +49,18 @@ func issueSeverity(snykSeverity string) types.Severity {
 	return sev
 }
 
-// GetCodeApiUrlForFolder returns the code API URL. In FedRAMP, it uses the organization from the given folder
-// when set; otherwise it falls back to the global organization for backward compatibility.
+// GetCodeApiUrlForFolder returns the Snyk Code API URL for the given folder.
+// The folder parameter can be a subdirectory or file path; this function will find the workspace folder containing it.
+// The URL is determined in the following order:
+//   - If local code engine (SCLE) is enabled in the folder's SAST settings, we use the local engine endpoint
+//   - If a custom endpoint from the folder's SAST settings is configured, we use the custom endpoint
+//   - In non-FedRAMP environments, we return these as is
+//   - In FedRAMP environments, the folder's organization is included in the URL path
+//
+// Returns an error if:
+//   - folder is empty
+//   - no workspace folder can be found for the given path
+//   - in FedRAMP, if no organization can be determined for the folder
 func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, error) {
 	if folder == "" {
 		return "", fmt.Errorf("no folder specified when trying to determine Snyk Code API URL")

@@ -517,7 +517,8 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 		waitForNetwork(c)
 		textDocumentDidSave(t, &loc, testPath)
 		// serve diagnostics from file scan
-		assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+		require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond,
+			"Diagnostics not published for file %s", file1)
 	}
 
 	jsonRPCRecorder.ClearNotifications()
@@ -528,15 +529,15 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	testPath = types.FilePath(filepath.Join(cloneTargetDirString, file2))
 	waitForNetwork(c)
 	textDocumentDidSave(t, &loc, testPath)
-	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
-
-	// check for snyk code scan message
+	// Check scan completed successfully
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
+	require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond,
+		"Diagnostics not published for file %s", file2)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	// check for autofix diff on mt-us
 	if hasVulns {
-		checkAutofixDiffs(t, c, issueList, loc, cloneTargetDir, jsonRPCRecorder)
+		checkAutofixDiffs(t, c, issueList, loc, jsonRPCRecorder)
 	}
 
 	checkFeatureFlagStatus(t, c, &loc)
@@ -630,6 +631,8 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, types.FilePath(cloneTargetDir))
 	atLeastOneQuickfixActionFound := false
+	errorhandlerCheckHit := false
+	tapCheckHit := false
 	for _, issue := range issueList {
 		params := sglsp.CodeActionParams{
 			TextDocument: sglsp.TextDocumentIdentifier{
@@ -651,16 +654,18 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 				atLeastOneQuickfixActionFound = true
 			}
 
-			// "cfenv": "^1.0.4", 1 fixable issue
-			if issue.Range.Start.Line == 19 && isQuickfixAction {
+			// "errorhandler": "^1.2.0" on line 25 - test singular "1 issue" vs plural "1 issues"
+			if issue.Range.Start.Line == 25 && isQuickfixAction {
 				assert.Contains(t, action.Title, "and fix 1 issue")
 				assert.NotContains(t, action.Title, "and fix 1 issues")
+				errorhandlerCheckHit = true
 			}
 
 			// "tap": "^11.1.3", 12 fixable, 11 unfixable
 			if issue.Range.Start.Line == 46 && isQuickfixAction {
 				assert.Contains(t, action.Title, "and fix ")
 				assert.Contains(t, action.Title, " issues")
+				tapCheckHit = true
 			}
 		}
 		// no issues should have more than one quickfix
@@ -672,6 +677,8 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 		time.Sleep(60 * time.Millisecond)
 	}
 	assert.Truef(t, atLeastOneQuickfixActionFound, "expected to find at least one code action")
+	assert.Truef(t, errorhandlerCheckHit, "expected to hit errorhandler singular check")
+	assert.Truef(t, tapCheckHit, "expected to hit tap plural check")
 }
 
 func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
@@ -740,20 +747,32 @@ func waitForDeltaScan(t *testing.T, agg scanstates.Aggregator) {
 func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
 	t.Helper()
 	var notifications []jrpc2.Request
-	assert.Eventually(t, func() bool {
+	var finalScanParams *types.SnykScanParams
+
+	// Wait for scan to complete (success or error)
+	require.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
 			var scanParams types.SnykScanParams
 			_ = n.UnmarshalParams(&scanParams)
 			if scanParams.Product != p.ToProductCodename() ||
 				scanParams.FolderPath != types.FilePath(cloneTargetDir) ||
-				scanParams.Status != "success" {
+				scanParams.Status == types.InProgress {
 				continue
 			}
+			finalScanParams = &scanParams
 			return true
 		}
 		return false
-	}, 5*time.Minute, 10*time.Millisecond)
+	}, 5*time.Minute, 10*time.Millisecond,
+		"Scan did not complete for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
+
+	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
+	require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
+		"Scan failed - Product: %s, Folder: %s, Error: %s",
+		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.ErrorMessage)
+	require.Equal(t, types.Success, finalScanParams.Status,
+		"Unexpected scan status: %s", finalScanParams.Status)
 }
 
 func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, p product.Product, folderPath types.FilePath) []types.ScanIssue {
@@ -779,7 +798,7 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 	return issueList
 }
 
-func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, folderPath types.FilePath, recorder *testsupport.JsonRPCRecorder) {
+func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, recorder *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	if isNotStandardRegion(c) {
 		return
