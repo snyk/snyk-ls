@@ -537,7 +537,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 
 	// check for autofix diff on mt-us
 	if hasVulns {
-		checkAutofixDiffs(t, c, issueList, loc, cloneTargetDir, jsonRPCRecorder)
+		checkAutofixDiffs(t, c, issueList, loc, jsonRPCRecorder)
 	}
 
 	checkFeatureFlagStatus(t, c, &loc)
@@ -798,7 +798,7 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 	return issueList
 }
 
-func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, folderPath types.FilePath, recorder *testsupport.JsonRPCRecorder) {
+func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, recorder *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	if isNotStandardRegion(c) {
 		return

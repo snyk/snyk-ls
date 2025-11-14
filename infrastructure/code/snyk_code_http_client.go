@@ -52,7 +52,7 @@ func issueSeverity(snykSeverity string) types.Severity {
 // GetCodeApiUrlForFolder returns the Snyk Code API URL for the given folder.
 // The folder parameter can be a subdirectory or file path; this function will find the workspace folder containing it.
 // The URL is determined in the following order:
-//   - If local code engine (SCLE) is enabled in 	the folder's SAST settings, we use the local engine endpoint
+//   - If local code engine (SCLE) is enabled in the folder's SAST settings, we use the local engine endpoint
 //   - If a custom endpoint from the folder's SAST settings is configured, we use the custom endpoint
 //   - In non-FedRAMP environments, we return these as is
 //   - In FedRAMP environments, the folder's organization is included in the URL path
