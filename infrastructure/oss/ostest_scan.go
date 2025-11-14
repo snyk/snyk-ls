@@ -43,6 +43,7 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath,
 	gafConfig.Set(configuration.INPUT_DIRECTORY, []string{string(workDir)})
 	gafConfig.Set(configuration.ORGANIZATION, c.FolderOrganization(workDir))
 	gafConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
+	gafConfig.Set("no-output", true)
 
 	// this is hard coded here, as the extension does not export its ID
 	// see: https://github.com/snyk/cli-extension-os-flows/blob/main/internal/commands/ostest/workflow.go#L45

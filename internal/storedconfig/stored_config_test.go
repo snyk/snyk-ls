@@ -1,5 +1,5 @@
 /*
- * 2025 Snyk Limited
+ * © 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 func Test_GetOrCreateFolderConfig_shouldIntegrateGitBranchInformation(t *testing.T) {
 	dir := types.FilePath(t.TempDir())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-	repo, err := SetupCustomTestRepo(t, dir, "https://github.com/snyk-labs/nodejs-goof", "", &logger)
+	repo, err := SetupCustomTestRepo(t, dir, "https://github.com/snyk-labs/nodejs-goof", "", &logger, false)
 	require.NoError(t, err)
 
 	conf, _ := SetupConfigurationWithStorage(t)

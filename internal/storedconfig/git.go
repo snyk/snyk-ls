@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,12 +107,22 @@ func enrichFromGit(logger *zerolog.Logger, folderConfig *types.FolderConfig) *ty
 	return folderConfig
 }
 
-func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targetCommit string, logger *zerolog.Logger) (types.FilePath, error) {
+func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targetCommit string, logger *zerolog.Logger, useRootDirDirectly bool) (types.FilePath, error) {
 	t.Helper()
 	tempDir := filepath.Join(string(rootDir), util.Sha256First16Hash(t.Name()))
-	assert.NoError(t, os.MkdirAll(tempDir, 0755))
 	repoDir := "1"
 	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
+
+	if useRootDirDirectly {
+		tempDir = string(rootDir)
+		absoluteCloneRepoDir = filepath.Join(tempDir, repoDir)
+		stat, err := os.Stat(absoluteCloneRepoDir)
+		if err == nil && stat.IsDir() {
+			// exists, return
+			return types.FilePath(absoluteCloneRepoDir), nil
+		}
+	}
+	assert.NoError(t, os.MkdirAll(tempDir, 0755))
 	cmd := []string{"clone", "-v", url, repoDir}
 	logger.Debug().Interface("cmd", cmd).Msg("clone command")
 	clone := exec.Command("git", cmd...)

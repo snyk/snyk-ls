@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			dir := types.FilePath(t.TempDir())
-			repo, err := storedconfig.SetupCustomTestRepo(t, dir, testsupport.NodejsGoof, "", c.Logger())
+			repo, err := storedconfig.SetupCustomTestRepo(t, dir, testsupport.NodejsGoof, "", c.Logger(), false)
 			require.NoError(t, err)
 			folder := types.WorkspaceFolder{
 				Name: fmt.Sprintf("Test Repo %d", intermediateIndex),

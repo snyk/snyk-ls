@@ -20,17 +20,19 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 	"slices"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/float"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -47,106 +49,175 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 		return nil, fmt.Errorf("couldn't create issues from test result: %w", err)
 	}
 
+	workDir, filePath, affectedFilePath, err := getAffectedFilePath(ctx, testResult)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get affected file path: %w", err)
+	}
+
+	issues := []types.Issue{}
+	for _, trIssue := range issuesFromTestResult {
+		issue := processIssue(ctx, trIssue, logger, affectedFilePath, filePath, workDir)
+		issues = append(issues, issue)
+	}
+	return issues, nil
+}
+
+func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Logger, affectedFilePath types.FilePath, filePath types.FilePath, workDir types.FilePath) *snyk.Issue {
+	ecoData, found := trIssue.GetData(testapi.DataKeyTechnology)
+	if !found {
+		logger.Warn().Msg("failed to get ecosystem")
+		return nil
+	}
+	ecosystemStr, ok := ecoData.(string)
+	if !ok {
+		logger.Warn().Msg("failed to get ecosystem")
+		return nil
+	}
+
+	genericProblem := trIssue.GetPrimaryProblem()
+	if genericProblem == nil {
+		logger.Warn().Msg("failed to get primary problem")
+		return nil
+	}
+
+	vulnProblem, err := genericProblem.AsSnykVulnProblem()
+	if err != nil {
+		logger.Warn().Msg("failed to get snyk vuln problem")
+		return nil
+	}
+
+	problem := &vulnProblem
+
+	introducingFinding, err := getIntroducingFinding(trIssue, problem)
+	if err != nil {
+		logger.Warn().Err(err).Msg("failed to get introducing finding")
+		return nil
+	}
+
+	dependencyPath := extractDependencyPath(introducingFinding)
+	fileContent := getFileContent(affectedFilePath, true, logger)
+	dependencyNode := getDependencyNode(&logger, filePath, ecosystemStr, dependencyPath, fileContent)
+	myRange := getRangeFromNode(dependencyNode)
+
+	title := trIssue.GetTitle()
+	ossIssueData, err := buildOssIssueData(ctx, trIssue, problem, introducingFinding, affectedFilePath, myRange, ecosystemStr)
+	if err != nil {
+		logger.Warn().Err(err).Msg("failed to build oss issue data")
+	}
+
+	// populate matching issues, we include the first primary finding
+	ossIssueData.MatchingIssues = []snyk.OssIssueData{}
+	for _, finding := range trIssue.GetFindings() {
+		issueData, err := buildOssIssueData(ctx, trIssue, problem, finding, affectedFilePath, myRange, ecosystemStr)
+		if err != nil {
+			logger.Warn().Err(err).Msg("failed to build oss issue data")
+		}
+		ossIssueData.MatchingIssues = append(ossIssueData.MatchingIssues, issueData)
+	}
+
+	remediationAdvice := getRemediationAdvice(ossIssueData)
+	// TODO: add ignore details once provenance and granularity are clarified
+	//ignoreDetails := trIssue.GetIgnoreDetails()
+	//isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
+	message := buildMessage(title, problem.PackageName, remediationAdvice)
+	severity := types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())]
+	formattedMessage := GetExtendedMessage(
+		problem.Id,
+		title,
+		trIssue.GetDescription(),
+		severity.String(),
+		ossIssueData.PackageName,
+		ossIssueData.Identifiers.CVE,
+		ossIssueData.Identifiers.CWE,
+		ossIssueData.FixedIn,
+	)
+
+	references := extractReferences(problem)
+	issueDescriptionURL := createIssueURL(problem.Id)
+
+	issue := &snyk.Issue{
+		ID:                  trIssue.GetID(),
+		Severity:            severity,
+		IssueType:           types.DependencyVulnerability,
+		IsIgnored:           false,
+		IsNew:               false,
+		Range:               myRange,
+		Message:             message,
+		FormattedMessage:    formattedMessage,
+		ContentRoot:         workDir,
+		AffectedFilePath:    affectedFilePath,
+		Product:             product.ProductOpenSource,
+		References:          references,
+		IssueDescriptionURL: issueDescriptionURL,
+		Ecosystem:           ecosystemStr,
+		CWEs:                ossIssueData.Identifiers.CWE,
+		CVEs:                ossIssueData.Identifiers.CVE,
+		AdditionalData:      ossIssueData,
+		LessonUrl:           ossIssueData.Lesson,
+		FindingId:           introducingFinding.Id.String(),
+	}
+
+	// add code actions
+	skipActions := false
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		logger.Error().Msg("failed to get dependencies, skipping code actions")
+		skipActions = true
+	}
+
+	c, ok := deps[ctx2.DepConfig].(*config.Config)
+	if !ok {
+		logger.Error().Msg("failed to get dependencies, skipping code actions")
+		skipActions = true
+	}
+
+	learnService, ok := deps[ctx2.DepLearnService].(learn.Service)
+	if !ok {
+		logger.Error().Msg("failed to get learn service, skipping code actions")
+		skipActions = true
+	}
+
+	errorReporter, ok := deps[ctx2.DepErrorReporter].(error_reporting.ErrorReporter)
+	if !ok {
+		logger.Error().Msg("failed to get error reporter, skipping code actions")
+		skipActions = true
+	}
+
+	if !skipActions {
+		addCodeActionsAndLenses(c, learnService, errorReporter, affectedFilePath, dependencyNode, issue)
+	}
+
+	// Calculate fingerprint
+	fingerprint := utils.CalculateFingerprintFromAdditionalData(issue)
+	issue.SetFingerPrint(fingerprint)
+	return issue
+}
+
+// getAffectedFilePath returns the affected file path for a test result
+// return values:
+// - workDir: the workspace directory
+// - filePath: the file path of the test result
+// - affectedFilePath: the affected file path
+// - error: the error if any
+func getAffectedFilePath(ctx context.Context, testResult testapi.TestResult) (types.FilePath, types.FilePath, types.FilePath, error) {
+	logger := ctx2.LoggerFromContext(ctx).With().
+		Str("method", "getAffectedFilePath").
+		Str("testID", testResult.GetTestID().String()).Logger()
+
 	subject, err := testResult.GetTestSubject().AsDepGraphSubject()
 	if err != nil {
 		msg := "failed to fetch test subject"
 		logger.Error().Err(err).Msg(msg)
-		return nil, fmt.Errorf(msg+": %w", err)
+		return "", "", "", fmt.Errorf(msg+": %w", err)
 	}
 
 	workDir := ctx2.WorkDirFromContext(ctx)
 	filePath := ctx2.FilePathFromContext(ctx)
-
 	displayTargetFile := subject.Locator.Paths[0]
 	logger.Debug().Str("displayTargetFile", displayTargetFile).Msg("displayTargetFile")
+
 	affectedFilePath := getAbsTargetFilePath(&logger, string(workDir), displayTargetFile, workDir, filePath)
-
-	issues := []types.Issue{}
-	for _, trIssue := range issuesFromTestResult {
-		ecoData, found := trIssue.GetData(testapi.DataKeyTechnology)
-		if !found {
-			logger.Warn().Msg("failed to get ecosystem")
-			continue
-		}
-		ecosystemStr, ok := ecoData.(string)
-		if !ok {
-			logger.Warn().Msg("failed to get ecosystem")
-			continue
-		}
-
-		problem, err := getProblem(trIssue)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get and convert primary problem: %w", err)
-		}
-
-		introducingFinding, err := getIntroducingFinding(trIssue, problem)
-		if err != nil {
-			logger.Warn().Err(err).Msg("failed to get introducing finding")
-			continue
-		}
-		dependencyPath := extractDependencyPath(introducingFinding)
-		myRange, err := getRange(ctx, string(affectedFilePath), ecosystemStr, dependencyPath)
-		if err != nil {
-			logger.Warn().Err(err).Msg("failed to get range")
-		}
-
-		title := trIssue.GetTitle()
-		ossIssueData, err := buildOssIssueData(ctx, trIssue, problem, introducingFinding, affectedFilePath, myRange, ecosystemStr)
-		if err != nil {
-			logger.Warn().Err(err).Msg("failed to build oss issue data")
-			continue
-		}
-
-		// populate matching issues, we include the first primary finding
-		ossIssueData.MatchingIssues = []snyk.OssIssueData{}
-		for _, finding := range trIssue.GetFindings() {
-			issueData, err := buildOssIssueData(ctx, trIssue, problem, finding, affectedFilePath, myRange, ecosystemStr)
-			if err != nil {
-				logger.Warn().Err(err).Msg("failed to build oss issue data")
-				continue
-			}
-			ossIssueData.MatchingIssues = append(ossIssueData.MatchingIssues, issueData)
-		}
-
-		remediationAdvice := getRemediationAdvice(ossIssueData)
-		//ignoreDetails := trIssue.GetIgnoreDetails()
-		//isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
-		message := buildMessage(title, problem.PackageName, remediationAdvice)
-		formattedMessage := buildFormattedMessage(problem, ecosystemStr, title, trIssue.GetDescription(), trIssue.GetSeverity())
-		references := extractReferences(problem)
-		issueDescriptionURL := createIssueURL(problem.Id)
-		lessonURL := Lesson(ctx, problem, ossIssueData.Identifiers.CWE, ossIssueData.Identifiers.CVE, ecosystemStr)
-
-		issue := &snyk.Issue{
-			ID:                  trIssue.GetID(),
-			Severity:            types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())],
-			IssueType:           types.DependencyVulnerability,
-			IsIgnored:           false,
-			IsNew:               false,
-			Range:               myRange,
-			Message:             message,
-			FormattedMessage:    formattedMessage,
-			ContentRoot:         workDir,
-			AffectedFilePath:    affectedFilePath,
-			Product:             product.ProductOpenSource,
-			References:          references,
-			IssueDescriptionURL: issueDescriptionURL,
-			CodeActions:         nil,
-			CodelensCommands:    nil,
-			Ecosystem:           ecosystemStr,
-			CWEs:                ossIssueData.Identifiers.CWE,
-			CVEs:                ossIssueData.Identifiers.CVE,
-			AdditionalData:      ossIssueData,
-			LessonUrl:           lessonURL,
-			FindingId:           introducingFinding.Id.String(),
-		}
-
-		// Calculate fingerprint
-		fingerprint := utils.CalculateFingerprintFromAdditionalData(issue)
-		issue.SetFingerPrint(fingerprint)
-		issues = append(issues, issue)
-	}
-	return issues, nil
+	return workDir, filePath, affectedFilePath, nil
 }
 
 func getIntroducingFinding(issue testapi.Issue, problem *testapi.SnykVulnProblem) (*testapi.FindingData, error) {
@@ -167,41 +238,6 @@ func getIntroducingFinding(issue testapi.Issue, problem *testapi.SnykVulnProblem
 	}
 	// no findings found that are direct dependencies, we just take the first now
 	return findings[0], nil
-}
-
-func getProblem(issue testapi.Issue) (*testapi.SnykVulnProblem, error) {
-	problem, err := issue.GetPrimaryProblem().AsSnykVulnProblem()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get and convert primary problem: %w", err)
-	}
-	return &problem, nil
-}
-
-func getRange(ctx context.Context, affectedFilePath, packageManager string, dependencyPath []string) (types.Range, error) {
-	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "getRangeFromRangeFinder").Logger()
-	content, err := os.ReadFile(affectedFilePath)
-	if err != nil {
-		logger.Error().Err(err).Msg("failed to read file")
-		return types.Range{}, err
-	}
-
-	node := getDependencyNode(&logger, types.FilePath(affectedFilePath), packageManager, dependencyPath, content)
-	if node == nil {
-		logger.Error().Msg("failed to get dependency node")
-		return types.Range{}, fmt.Errorf("failed to get dependency node")
-	}
-
-	r := types.Range{
-		Start: types.Position{
-			Line:      node.Line,
-			Character: node.StartChar,
-		},
-		End: types.Position{
-			Line:      node.Line,
-			Character: node.EndChar,
-		},
-	}
-	return r, nil
 }
 
 // buildMessage builds the short message for the issue
@@ -448,12 +484,12 @@ func buildOssIssueData(
 		Language:           extractLanguageFromEcosystem(problem.Ecosystem),
 		Details:            attrs.Description,
 		MatchingIssues:     []snyk.OssIssueData{}, // populated in caller
-		Lesson:             "",
 		Remediation:        buildRemediationAdvice(finding, problem, ecosystem),
 		AppliedPolicyRules: extractAppliedPolicyRules(),
 		RiskScore:          trIssue.GetRiskScore(),
 	}
 
+	data.Lesson = Lesson(ctx, problem, data.Identifiers.CWE, data.Identifiers.CVE, ecosystem)
 	return data, nil
 }
 
@@ -618,42 +654,6 @@ func extractAppliedPolicyRules() snyk.AppliedPolicyRules {
 	// For now, return empty struct as policy rules are not critical for initial converter implementation
 	// This can be enhanced once the actual PolicyModification structure is better understood
 	return snyk.AppliedPolicyRules{}
-}
-
-// buildFormattedMessage builds the comprehensive formatted message with all details
-func buildFormattedMessage(problem *testapi.SnykVulnProblem, ecosystem, title, description, severity string) string {
-	var message strings.Builder
-
-	// Title and description
-	message.WriteString(fmt.Sprintf("## %s\n\n", title))
-	message.WriteString(fmt.Sprintf("%s\n\n", description))
-
-	// Package information
-	message.WriteString(fmt.Sprintf("**Package**: %s@%s\n", problem.PackageName, problem.PackageVersion))
-	message.WriteString(fmt.Sprintf("**Ecosystem**: %s\n", ecosystem))
-
-	// Severity and CVSS
-	message.WriteString(fmt.Sprintf("**Severity**: %s", severity))
-	if problem.CvssBaseScore > 0 {
-		message.WriteString(fmt.Sprintf(" (CVSS Score: %.1f)\n", problem.CvssBaseScore))
-	} else {
-		message.WriteString("\n")
-	}
-
-	// Fixed versions
-	if len(problem.InitiallyFixedInVersions) > 0 {
-		message.WriteString(fmt.Sprintf("\n**Fixed in**: %s\n", strings.Join(problem.InitiallyFixedInVersions, ", ")))
-	}
-
-	// Exploit maturity
-	maturityLevels := problem.ExploitDetails.MaturityLevels
-	if len(maturityLevels) > 0 {
-		for _, level := range maturityLevels {
-			message.WriteString(fmt.Sprintf("\n**Exploit Maturity**: %s\n", level.Type))
-		}
-	}
-
-	return message.String()
 }
 
 // extractLicense extracts license information from finding problems
