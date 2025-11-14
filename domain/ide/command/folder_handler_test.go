@@ -17,7 +17,6 @@
 package command
 
 import (
-	"strconv"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -30,16 +29,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
-	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -78,46 +70,9 @@ func setupMockOrgResolverWithError(t *testing.T, err error) {
 	SetService(mockService)
 }
 
-// setupTestWorkspace creates a test workspace with the specified number of folders
-func setupTestWorkspace(t *testing.T, c *config.Config, folderCount int) (
-	notifier *notification.MockNotifier,
-	folderPaths []types.FilePath,
-) {
-	t.Helper()
-
-	// Create mock dependencies
-	notifier = notification.NewMockNotifier()
-	scanNotifier := scanner.NewMockScanNotifier()
-	scanPersister := persistence.NewNopScanPersister()
-	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	sc := scanner.NewTestScanner()
-	hoverService := hover.NewFakeHoverService()
-
-	// Create workspace
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureflag.NewFakeService())
-
-	// Create and add folders
-	safeTestName := testsupport.PathSafeTestName(t)
-	folderPaths = make([]types.FilePath, folderCount)
-	for i := range folderCount {
-		folderPath := types.FilePath(t.TempDir())
-		folderPaths[i] = folderPath
-		folderName := safeTestName + "_test-folder_" + strconv.Itoa(i)
-		folder := workspace.NewFolder(c, folderPath, folderName, sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureflag.NewFakeService())
-		w.AddFolder(folder)
-	}
-
-	// Set workspace on config
-	c.SetWorkspace(w)
-
-	return notifier, folderPaths
-}
-
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver
 	expectedOrg := ldx_sync_config.Organization{
@@ -129,7 +84,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	setupMockOrgResolver(t, expectedOrg)
 
 	// Setup workspace with a folder
-	notifier, folderPaths := setupTestWorkspace(t, c, 1)
+	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
@@ -157,12 +112,10 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, _ = testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with no folders
-	notifier, _ := setupTestWorkspace(t, c, 0)
+	notifier, _ := testutils.SetupFakeWorkspace(t, c, 0)
 
 	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
@@ -176,9 +129,7 @@ func setupOrgResolverTest(t *testing.T, orgID, orgName, orgSlug string, isDefaul
 	t.Helper()
 
 	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, _ = testutil.SetUpEngineMock(t, c)
 
 	expectedOrg := ldx_sync_config.Organization{
 		Id:        orgID,
@@ -222,9 +173,7 @@ func Test_SetAutoBestOrgFromLdxSync_NonDefaultOrg(t *testing.T) {
 // Test GetBestOrgFromLdxSync error handling
 func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, _ = testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver to return error
 	setupMockOrgResolverWithError(t, assert.AnError)
@@ -241,9 +190,7 @@ func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 // Test GetBestOrgFromLdxSync fallback when resolver is nil
 func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, gafConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(gafConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, gafConfig := testutil.SetUpEngineMock(t, c)
 
 	// Set organization in GAF config
 	expectedOrgId := "fallback-org-id"
@@ -270,15 +217,13 @@ func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
 // Test sendFolderConfigs with LDX-Sync error (should continue with other folders)
 func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver to return error
 	setupMockOrgResolverWithError(t, assert.AnError)
 
 	// Setup workspace with a folder
-	notifier, folderPaths := setupTestWorkspace(t, c, 1)
+	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
@@ -305,9 +250,7 @@ func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 // Test sendFolderConfigs with multiple folders and different org configurations
 func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver to return different orgs based on input path
 	originalService := Service()
@@ -331,7 +274,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	SetService(mockService)
 
 	// Setup workspace with multiple folders
-	notifier, folderPaths := setupTestWorkspace(t, c, 2)
+	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 2)
 
 	logger := c.Logger()
 
@@ -427,8 +370,7 @@ func Test_isOrgDefault(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := testutil.UnitTest(t)
-			mockEngine, gafConfig := testutil.SetUpEngineMock(t, c)
-			mockEngine.EXPECT().GetConfiguration().Return(gafConfig).AnyTimes()
+			_, gafConfig := testutil.SetUpEngineMock(t, c)
 
 			// Setup mock default values for org config - these will not be overridden by a GAF config clone, which the function does.
 			gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(tt.setDefaultOrgValue))
