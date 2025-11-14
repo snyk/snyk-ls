@@ -240,11 +240,14 @@ Right now the language server supports the following actions:
     "status": "error",
     "product": "code",
     "folderPath": "/a/path/to/folder",
-    "errorMessage": "An error occurred",
-    "cliError": {
-      "code": "CLI_ERROR_CODE",
-      "message": "An error occurred"
-    },
+    "presentableError": {
+      "cliError": {
+        "code": "CLI_ERROR_CODE",
+        "error": "An error occurred"
+      },
+      "showNotification": true,
+      "treeNodeSuffixError": "(failed)"
+    }
   }
   ```
 - Summary Panel Status Notification

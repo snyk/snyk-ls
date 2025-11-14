@@ -17,11 +17,29 @@
 package utils
 
 const (
-	// ErrSnykCodeNotEnabled is returned when Snyk Code is not enabled for the organization
 	ErrSnykCodeNotEnabled = "Snyk Code is not enabled for this organization"
+	ErrNoReferenceBranch  = "must specify reference for delta scans"
+	ErrNoRepo             = "repository does not exist"
 )
 
-// SilentErrors contains error messages that should not trigger IDE notifications
-var SilentErrors = []string{
-	ErrSnykCodeNotEnabled,
+// ErrorMetadata contains metadata about how to handle specific errors
+type ErrorMetadata struct {
+	ShowNotification bool
+	TreeRootSuffix   string
+}
+
+// ErrorConfig maps error messages to their metadata
+var ErrorConfig = map[string]ErrorMetadata{
+	ErrSnykCodeNotEnabled: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(disabled at Snyk)",
+	},
+	ErrNoReferenceBranch: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(no reference branch)",
+	},
+	ErrNoRepo: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(repository not found)",
+	},
 }
