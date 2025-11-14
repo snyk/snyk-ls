@@ -112,7 +112,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
-	testutil.SetUpEngineMock(t, c)
+	_, _ = testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with no folders
 	notifier, _ := testutils.SetupFakeWorkspace(t, c, 0)
@@ -129,7 +129,7 @@ func setupOrgResolverTest(t *testing.T, orgID, orgName, orgSlug string, isDefaul
 	t.Helper()
 
 	c := testutil.UnitTest(t)
-	testutil.SetUpEngineMock(t, c)
+	_, _ = testutil.SetUpEngineMock(t, c)
 
 	expectedOrg := ldx_sync_config.Organization{
 		Id:        orgID,
@@ -173,7 +173,7 @@ func Test_SetAutoBestOrgFromLdxSync_NonDefaultOrg(t *testing.T) {
 // Test GetBestOrgFromLdxSync error handling
 func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	c := testutil.UnitTest(t)
-	testutil.SetUpEngineMock(t, c)
+	_, _ = testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver to return error
 	setupMockOrgResolverWithError(t, assert.AnError)

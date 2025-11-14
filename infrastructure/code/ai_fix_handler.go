@@ -128,8 +128,8 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 	}
 }
 
-func getExplainEndpoint(c *config.Config, contentRoot types.FilePath) (*url.URL, error) {
-	org, err := c.FolderOrganizationForSubPath(contentRoot)
+func getExplainEndpoint(c *config.Config, folder types.FilePath) (*url.URL, error) {
+	org, err := c.FolderOrganizationForSubPath(folder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
