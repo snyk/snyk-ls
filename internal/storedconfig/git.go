@@ -114,7 +114,13 @@ func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targe
 	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
 
 	if useRootDirDirectly {
-		absoluteCloneRepoDir = string(rootDir)
+		tempDir = string(rootDir)
+		absoluteCloneRepoDir = filepath.Join(tempDir, repoDir)
+		stat, err := os.Stat(absoluteCloneRepoDir)
+		if err == nil && stat.IsDir() {
+			// exists, return
+			return types.FilePath(absoluteCloneRepoDir), nil
+		}
 	}
 	assert.NoError(t, os.MkdirAll(tempDir, 0755))
 	cmd := []string{"clone", "-v", url, repoDir}
