@@ -78,9 +78,18 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 	}
 
 	snykIssue := &snyk.Issue{
-		ID:                  issue.Id,
-		Message:             message,
-		FormattedMessage:    issue.GetExtendedMessage(issue),
+		ID:      issue.Id,
+		Message: message,
+		FormattedMessage: GetExtendedMessage(
+			issue.Id,
+			issue.Title,
+			issue.Description,
+			issue.Severity,
+			issue.PackageName,
+			issue.Identifiers.CVE,
+			issue.Identifiers.CWE,
+			issue.FixedIn,
+		),
 		Range:               rangeFromNode,
 		Severity:            issue.ToIssueSeverity(),
 		ContentRoot:         workDir,

@@ -229,13 +229,9 @@ func (i *ossIssue) getOutdatedDependencyMessage() string {
 func (i *ossIssue) GetRemediation() string {
 	upgradeMessage := i.getUpgradeMessage()
 	isOutdated := upgradeMessage != "" && len(i.UpgradePath) > 1 && len(i.From) > 1 && i.UpgradePath[1] == i.From[1]
-	if i.IsUpgradable || i.IsPatchable {
+	if i.IsUpgradable {
 		if isOutdated {
-			if i.IsPatchable {
-				return upgradeMessage
-			} else {
-				return i.getOutdatedDependencyMessage()
-			}
+			return i.getOutdatedDependencyMessage()
 		} else {
 			return upgradeMessage
 		}
@@ -243,33 +239,30 @@ func (i *ossIssue) GetRemediation() string {
 	return "No remediation advice available"
 }
 
-func (i *ossIssue) GetExtendedMessage(issue ossIssue) string {
-	title := issue.Title
-	description := issue.Description
-
+func GetExtendedMessage(id, title, description, severity, packageName string, cves, cwes, fixedIn []string) string {
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
 	}
 	summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
-		issue.createCveLink(),
-		issue.createCweLink(),
-		createIssueUrlMarkdown(i.Id),
-		issue.createFixedIn(),
-		strings.ToUpper(issue.Severity),
+		createCveLink(cves),
+		createCweLink(cwes),
+		createIssueUrlMarkdown(id),
+		createFixedIn(fixedIn),
+		strings.ToUpper(severity),
 	)
 
 	return fmt.Sprintf("\n### %s: %s affecting %s package \n%s \n%s",
-		issue.Id,
+		id,
 		title,
-		issue.PackageName,
+		packageName,
 		summary,
 		description)
 }
 
-func (i *ossIssue) createCveLink() string {
+func createCveLink(cves []string) string {
 	var formattedCve string
-	for _, c := range i.Identifiers.CVE {
+	for _, c := range cves {
 		formattedCve += fmt.Sprintf("| [%s](https://cve.mitre.org/cgi-bin/cvename.cgi?name=%s)", c, c)
 	}
 	return formattedCve
@@ -287,22 +280,22 @@ func CreateIssueURL(vulnID string) *url.URL {
 	return parse
 }
 
-func (i *ossIssue) createFixedIn() string {
+func createFixedIn(fixedIn []string) string {
 	var f string
-	if len(i.FixedIn) < 1 {
+	if len(fixedIn) < 1 {
 		f += "Not Fixed"
 	} else {
-		f += "@" + i.FixedIn[0]
-		for _, version := range i.FixedIn[1:] {
+		f += "@" + fixedIn[0]
+		for _, version := range fixedIn[1:] {
 			f += fmt.Sprintf(", %s", version)
 		}
 	}
 	return f
 }
 
-func (i *ossIssue) createCweLink() string {
+func createCweLink(cwes []string) string {
 	var formattedCwe string
-	for _, c := range i.Identifiers.CWE {
+	for _, c := range cwes {
 		id := strings.ReplaceAll(c, "CWE-", "")
 		formattedCwe += fmt.Sprintf("| [%s](https://cwe.mitre.org/data/definitions/%s.html)", c, id)
 	}

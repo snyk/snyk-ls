@@ -120,14 +120,24 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	//ignoreDetails := trIssue.GetIgnoreDetails()
 	//isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
 	message := buildMessage(title, problem.PackageName, remediationAdvice)
-	formattedMessage := buildFormattedMessage(problem, ecosystemStr, title, trIssue.GetDescription(), trIssue.GetSeverity())
+	severity := types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())]
+	formattedMessage := GetExtendedMessage(
+		problem.Id,
+		title,
+		trIssue.GetDescription(),
+		severity.String(),
+		ossIssueData.PackageName,
+		ossIssueData.Identifiers.CVE,
+		ossIssueData.Identifiers.CWE,
+		ossIssueData.FixedIn,
+	)
+
 	references := extractReferences(problem)
 	issueDescriptionURL := createIssueURL(problem.Id)
-	lessonURL := Lesson(ctx, problem, ossIssueData.Identifiers.CWE, ossIssueData.Identifiers.CVE, ecosystemStr)
 
 	issue := &snyk.Issue{
 		ID:                  trIssue.GetID(),
-		Severity:            types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())],
+		Severity:            severity,
 		IssueType:           types.DependencyVulnerability,
 		IsIgnored:           false,
 		IsNew:               false,
@@ -139,13 +149,11 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		Product:             product.ProductOpenSource,
 		References:          references,
 		IssueDescriptionURL: issueDescriptionURL,
-		CodeActions:         nil,
-		CodelensCommands:    nil,
 		Ecosystem:           ecosystemStr,
 		CWEs:                ossIssueData.Identifiers.CWE,
 		CVEs:                ossIssueData.Identifiers.CVE,
 		AdditionalData:      ossIssueData,
-		LessonUrl:           lessonURL,
+		LessonUrl:           ossIssueData.Lesson,
 		FindingId:           introducingFinding.Id.String(),
 	}
 
@@ -476,12 +484,12 @@ func buildOssIssueData(
 		Language:           extractLanguageFromEcosystem(problem.Ecosystem),
 		Details:            attrs.Description,
 		MatchingIssues:     []snyk.OssIssueData{}, // populated in caller
-		Lesson:             "",
 		Remediation:        buildRemediationAdvice(finding, problem, ecosystem),
 		AppliedPolicyRules: extractAppliedPolicyRules(),
 		RiskScore:          trIssue.GetRiskScore(),
 	}
 
+	data.Lesson = Lesson(ctx, problem, data.Identifiers.CWE, data.Identifiers.CVE, ecosystem)
 	return data, nil
 }
 
@@ -646,42 +654,6 @@ func extractAppliedPolicyRules() snyk.AppliedPolicyRules {
 	// For now, return empty struct as policy rules are not critical for initial converter implementation
 	// This can be enhanced once the actual PolicyModification structure is better understood
 	return snyk.AppliedPolicyRules{}
-}
-
-// buildFormattedMessage builds the comprehensive formatted message with all details
-func buildFormattedMessage(problem *testapi.SnykVulnProblem, ecosystem, title, description, severity string) string {
-	var message strings.Builder
-
-	// Title and description
-	message.WriteString(fmt.Sprintf("## %s\n\n", title))
-	message.WriteString(fmt.Sprintf("%s\n\n", description))
-
-	// Package information
-	message.WriteString(fmt.Sprintf("**Package**: %s@%s\n", problem.PackageName, problem.PackageVersion))
-	message.WriteString(fmt.Sprintf("**Ecosystem**: %s\n", ecosystem))
-
-	// Severity and CVSS
-	message.WriteString(fmt.Sprintf("**Severity**: %s", severity))
-	if problem.CvssBaseScore > 0 {
-		message.WriteString(fmt.Sprintf(" (CVSS Score: %.1f)\n", problem.CvssBaseScore))
-	} else {
-		message.WriteString("\n")
-	}
-
-	// Fixed versions
-	if len(problem.InitiallyFixedInVersions) > 0 {
-		message.WriteString(fmt.Sprintf("\n**Fixed in**: %s\n", strings.Join(problem.InitiallyFixedInVersions, ", ")))
-	}
-
-	// Exploit maturity
-	maturityLevels := problem.ExploitDetails.MaturityLevels
-	if len(maturityLevels) > 0 {
-		for _, level := range maturityLevels {
-			message.WriteString(fmt.Sprintf("\n**Exploit Maturity**: %s\n", level.Type))
-		}
-	}
-
-	return message.String()
 }
 
 // extractLicense extracts license information from finding problems

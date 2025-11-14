@@ -278,7 +278,16 @@ func Test_toHover_asHTML(t *testing.T) {
 	c.SetFormat(config.FormatHtml)
 
 	var issue = sampleIssue()
-	h := issue.GetExtendedMessage(issue)
+	h := GetExtendedMessage(
+		issue.Id,
+		issue.Title,
+		issue.Description,
+		issue.Severity,
+		issue.PackageName,
+		issue.Identifiers.CVE,
+		issue.Identifiers.CWE,
+		issue.FixedIn,
+	)
 
 	assert.Equal(
 		t,
@@ -293,7 +302,16 @@ func Test_toHover_asMarkdown(t *testing.T) {
 	c.SetFormat(config.FormatMd)
 
 	var issue = sampleIssue()
-	h := issue.GetExtendedMessage(issue)
+	h := GetExtendedMessage(
+		issue.Id,
+		issue.Title,
+		issue.Description,
+		issue.Severity,
+		issue.PackageName,
+		issue.Identifiers.CVE,
+		issue.Identifiers.CWE,
+		issue.FixedIn,
+	)
 
 	assert.Equal(
 		t,
