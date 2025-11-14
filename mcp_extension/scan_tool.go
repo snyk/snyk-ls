@@ -246,7 +246,7 @@ func (m *McpLLMBinding) defaultHandler(invocationCtx workflow.InvocationContext,
 			if fileErr != nil {
 				return nil, fileErr
 			}
-			return mcp.NewToolResultText(fmt.Sprintf("Scan result written to: %s", filePath)), nil
+			return mcp.NewToolResultText(fmt.Sprintf("Scan results written locally, Read them from: %s", filePath)), nil
 		}
 
 		return mcp.NewToolResultText(output), nil
