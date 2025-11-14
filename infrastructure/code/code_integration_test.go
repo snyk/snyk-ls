@@ -119,12 +119,14 @@ func Test_GetExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
 
 	// Test folder 1: verify getExplainEndpoint() includes folder1's org
-	endpoint1 := getExplainEndpoint(c, folderPath1)
+	endpoint1, err := getExplainEndpoint(c, folderPath1)
+	require.NoError(t, err)
 	endpoint1Str := endpoint1.String()
 	assert.Contains(t, endpoint1Str, "/rest/orgs/"+folderOrg1+"/explain-fix", "Explain endpoint for folder1 should include folder1's org")
 
 	// Test folder 2: verify getExplainEndpoint() includes folder2's org
-	endpoint2 := getExplainEndpoint(c, folderPath2)
+	endpoint2, err := getExplainEndpoint(c, folderPath2)
+	require.NoError(t, err)
 	endpoint2Str := endpoint2.String()
 	assert.Contains(t, endpoint2Str, "/rest/orgs/"+folderOrg2+"/explain-fix", "Explain endpoint for folder2 should include folder2's org")
 
@@ -138,7 +140,8 @@ func Test_GetExplainEndpoint_FallsBackToGlobalOrg(t *testing.T) {
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
 
 	// Test: verify getExplainEndpoint() uses global org as fallback
-	endpoint := getExplainEndpoint(c, folderPath)
+	endpoint, err := getExplainEndpoint(c, folderPath)
+	require.NoError(t, err)
 	endpointStr := endpoint.String()
 	assert.Contains(t, endpointStr, "/rest/orgs/"+globalOrg+"/explain-fix", "Explain endpoint should fall back to global org when no folder org is set")
 }
