@@ -278,9 +278,6 @@ func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPa
 
 	// Use valid UUIDs (hex characters only) to avoid API resolution issues in tests
 	// These are valid UUIDs that won't trigger slug resolution
-	// "skippy" encoded in hex: s->5, k->b, i->1, p->d, p->d, y->f
-	// Pattern: 5b1ddf (skippy) followed by zeros and unique endings
-	// Valid hex characters: 0-9, a-f (h is NOT valid!)
 	globalOrg = "5b1ddf00-0000-0000-0000-000000000001"
 	folderOrg1 = "5b1ddf00-0000-0000-0000-000000000002"
 	folderOrg2 = "5b1ddf00-0000-0000-0000-000000000003"

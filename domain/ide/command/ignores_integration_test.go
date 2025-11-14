@@ -27,6 +27,7 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	workspaceutil "github.com/snyk/snyk-ls/internal/testutil/workspace"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
@@ -39,6 +40,10 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+
+	// Set up workspace with the folders
+	// This is required for FolderOrganizationForSubPath to work (used by initializeCreateConfiguration, initializeEditConfigurations, initializeDeleteConfiguration)
+	workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -188,6 +193,10 @@ func Test_IgnoreOperations_FallBackToGlobalOrg(t *testing.T) {
 	c := testutil.IntegTest(t)
 
 	folderPath, _ := testutil.SetupGlobalOrgOnly(t, c)
+
+	// Set up workspace with the folder
+	// This is required for FolderOrganizationForSubPath to work (used by initializeCreateConfiguration)
+	workspaceutil.SetupWorkspace(t, c, folderPath)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

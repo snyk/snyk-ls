@@ -24,16 +24,10 @@ import (
 
 	"github.com/snyk/code-client-go/llm"
 
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	workspaceutil "github.com/snyk/snyk-ls/internal/testutil/workspace"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -83,7 +77,7 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFixIdNotFound(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	setupWorkspaceWithFolders(t, c, []string{"/workspace/folder1", "/workspace/folder2"})
+	workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -102,7 +96,7 @@ func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	setupWorkspaceWithFolders(t, c, []string{"/workspace/folder1", "/workspace/folder2"})
+	workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -134,7 +128,7 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFileNotInAnyFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	setupWorkspaceWithFolders(t, c, []string{"/workspace/folder1", "/workspace/folder2"})
+	workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -166,7 +160,7 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with multiple folders
-	setupWorkspaceWithFolders(t, c, []string{"/workspace/project1", "/workspace/project2", "/workspace/project3"})
+	workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/project1"), types.FilePath("/workspace/project2"), types.FilePath("/workspace/project3"))
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -207,45 +201,4 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 	result3, err := cmd.getFolderFromFixId(c, testFixId3)
 	require.NoError(t, err)
 	assert.Equal(t, types.FilePath("/workspace/project3"), result3)
-}
-
-// setupWorkspaceWithFolders creates a workspace with the specified folder paths
-func setupWorkspaceWithFolders(t *testing.T, c *config.Config, folderPaths []string) {
-	t.Helper()
-
-	sc := &scanner.TestScanner{}
-	scanNotifier := scanner.NewMockScanNotifier()
-	scanPersister := persistence.NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
-	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	fakeFFService := featureflag.NewFakeService()
-
-	w := workspace.New(
-		c,
-		performance.NewInstrumentor(),
-		sc,
-		nil,
-		scanNotifier,
-		notification.NewMockNotifier(),
-		scanPersister,
-		scanStateAggregator,
-		fakeFFService,
-	)
-
-	for _, folderPath := range folderPaths {
-		folder := workspace.NewFolder(
-			c,
-			types.FilePath(folderPath),
-			folderPath,
-			sc,
-			nil,
-			scanNotifier,
-			notification.NewMockNotifier(),
-			scanPersister,
-			scanStateAggregator,
-			fakeFFService,
-		)
-		w.AddFolder(folder)
-	}
-
-	c.SetWorkspace(w)
 }

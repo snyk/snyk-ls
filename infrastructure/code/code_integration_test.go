@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
+	workspaceutil "github.com/snyk/snyk-ls/internal/testutil/workspace"
 )
 
 // Test_CodeConfig_UsesFolderOrganization is an INTEGRATION TEST that verifies
@@ -34,6 +35,10 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+
+	// Set up workspace with the folders
+	// This is required for FolderOrganizationForSubPath to work
+	workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Create a scanner to test createCodeConfig
 	scanner := &Scanner{
@@ -72,6 +77,10 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
 
+	// Set up workspace with the folder
+	// This is required for FolderOrganizationForSubPath to work (used by GetCodeApiUrlForFolder)
+	workspaceutil.SetupWorkspace(t, c, folderPath)
+
 	// Create a scanner to test createCodeConfig
 	scanner := &Scanner{
 		C: c,
@@ -98,6 +107,10 @@ func Test_GetCodeApiUrlForFolder_UsesFolderOrganization(t *testing.T) {
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
 
+	// Set up workspace with the folders
+	// This is required for FolderOrganizationForSubPath to work
+	workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
+
 	// Test folder 1: verify GetCodeApiUrlForFolder() includes folder1's org in FedRAMP URL
 	apiUrl1, err := GetCodeApiUrlForFolder(c, folderPath1)
 	require.NoError(t, err)
@@ -117,6 +130,10 @@ func Test_GetExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+
+	// Set up workspace with the folders
+	// This is required for FolderOrganizationForSubPath to work
+	workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Test folder 1: verify getExplainEndpoint() includes folder1's org
 	endpoint1, err := getExplainEndpoint(c, folderPath1)
@@ -139,6 +156,10 @@ func Test_GetExplainEndpoint_FallsBackToGlobalOrg(t *testing.T) {
 
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
 
+	// Set up workspace with the folder
+	// This is required for FolderOrganizationForSubPath to work
+	workspaceutil.SetupWorkspace(t, c, folderPath)
+
 	// Test: verify getExplainEndpoint() uses global org as fallback
 	endpoint, err := getExplainEndpoint(c, folderPath)
 	require.NoError(t, err)
@@ -151,6 +172,10 @@ func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+
+	// Set up workspace with the folders
+	// This is required for FolderOrganizationForSubPath to work
+	workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Test folder 1: verify NewAutofixCodeRequestContext() uses folder1's org
 	requestContext1 := NewAutofixCodeRequestContext(folderPath1)
