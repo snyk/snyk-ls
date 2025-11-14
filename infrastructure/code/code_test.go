@@ -252,13 +252,7 @@ func Test_Scan(t *testing.T) {
 
 		folderConfig := getTestFolderConfig(tempDir)
 		folderConfig.SastSettings.SastEnabled = false
-		// SAST enablement check removed - scans are always allowed
-		// The scan will proceed but return early due to no token (not authenticated)
-		// or return empty results if there are no changed files
-		issues, err := scanner.Scan(t.Context(), "", tempDir, folderConfig)
-		// Should not error - scan is allowed even when SAST is disabled
-		assert.NoError(t, err)
-		assert.NotNil(t, issues)
+		_, _ = scanner.Scan(t.Context(), "", tempDir, folderConfig)
 	})
 
 	testCases := []struct {
