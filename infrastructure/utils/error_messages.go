@@ -21,7 +21,16 @@ const (
 	ErrSnykCodeNotEnabled = "Snyk Code is not enabled for this organization"
 )
 
-// SilentErrors contains error messages that should not trigger IDE notifications
-var SilentErrors = []string{
-	ErrSnykCodeNotEnabled,
+// ErrorMetadata contains metadata about how to handle specific errors
+type ErrorMetadata struct {
+	ShowNotification bool
+	TreeRootSuffix   string
+}
+
+// ErrorConfig maps error messages to their metadata
+var ErrorConfig = map[string]ErrorMetadata{
+	ErrSnykCodeNotEnabled: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(disabled at Snyk)",
+	},
 }
