@@ -1,5 +1,5 @@
 /*
- * © 2022-2023 Snyk Limited
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -254,7 +254,7 @@ func (i *ossIssue) GetExtendedMessage(issue ossIssue) string {
 	summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
 		issue.createCveLink(),
 		issue.createCweLink(),
-		issue.createIssueUrlMarkdown(),
+		createIssueUrlMarkdown(i.Id),
 		issue.createFixedIn(),
 		strings.ToUpper(issue.Severity),
 	)
@@ -275,14 +275,14 @@ func (i *ossIssue) createCveLink() string {
 	return formattedCve
 }
 
-func (i *ossIssue) createIssueUrlMarkdown() string {
-	return fmt.Sprintf("| [%s](%s)", i.Id, i.CreateIssueURL().String())
+func createIssueUrlMarkdown(vulnID string) string {
+	return fmt.Sprintf("| [%s](%s)", vulnID, CreateIssueURL(vulnID).String())
 }
 
-func (i *ossIssue) CreateIssueURL() *url.URL {
-	parse, err := url.Parse("https://snyk.io/vuln/" + i.Id)
+func CreateIssueURL(vulnID string) *url.URL {
+	parse, err := url.Parse("https://snyk.io/vuln/" + vulnID)
 	if err != nil {
-		config.CurrentConfig().Logger().Err(err).Msg("Unable to create issue link for issue:" + i.Id)
+		config.CurrentConfig().Logger().Err(err).Msg("Unable to create issue link for issue:" + vulnID)
 	}
 	return parse
 }

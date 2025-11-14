@@ -422,18 +422,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 	path types.FilePath,
 	format string,
 ) (issues []types.Issue) {
-	issues, err := ProcessScanResults(
-		ctx,
-		scanOutput,
-		workDir,
-		path,
-		cliScanner.config.Logger(),
-		cliScanner.errorReporter,
-		cliScanner.learnService,
-		cliScanner.packageIssueCache,
-		true, // readFiles = true for CLIScanner
-		format,
-	)
+	issues, err := ProcessScanResults(ctx, scanOutput, cliScanner.errorReporter, cliScanner.learnService, cliScanner.packageIssueCache, true, format)
 
 	if err != nil {
 		cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)

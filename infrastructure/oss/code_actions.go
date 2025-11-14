@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,10 +32,15 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath types.FilePath, issueDepNode *ast.Node) (actions []types.CodeAction) {
-	c := config.CurrentConfig()
+func GetCodeActions(c *config.Config, learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath types.FilePath, issueDepNode *ast.Node, issue types.Issue) (actions []types.CodeAction) {
 	if issueDepNode == nil {
-		c.Logger().Debug().Str("issue", i.Id).Msg("skipping adding code action, as issueDepNode is empty")
+		c.Logger().Debug().Str("issue", issue.GetRuleID()).Msg("skipping adding code action, as issueDepNode is empty")
+		return actions
+	}
+
+	ossIssueData, ok := issue.GetAdditionalData().(snyk.OssIssueData)
+	if !ok {
+		c.Logger().Warn().Str("issue", issue.GetRuleID()).Msg("skipping adding code action as ossIssueData is missing")
 		return actions
 	}
 
@@ -45,21 +50,37 @@ func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting
 	if issueDepNode.Tree != nil && issueDepNode.Value == "" {
 		fixNode := issueDepNode.LinkedParentDependencyNode
 		if fixNode != nil {
-			quickFixAction = i.AddQuickFixAction(types.FilePath(fixNode.Tree.Document), getRangeFromNode(fixNode), []byte(fixNode.Tree.Root.Value), true)
+			quickFixAction = AddQuickFixAction(
+				types.FilePath(fixNode.Tree.Document),
+				getRangeFromNode(fixNode),
+				[]byte(fixNode.Tree.Root.Value),
+				true,
+				ossIssueData.PackageManager,
+				ossIssueData.From,
+				ossIssueData.UpgradePath,
+			)
 		}
 	} else {
-		quickFixAction = i.AddQuickFixAction(affectedFilePath, getRangeFromNode(issueDepNode), nil, false)
+		quickFixAction = AddQuickFixAction(
+			affectedFilePath,
+			getRangeFromNode(issueDepNode),
+			nil,
+			false,
+			ossIssueData.PackageManager,
+			ossIssueData.From,
+			ossIssueData.UpgradePath,
+		)
 	}
 	if quickFixAction != nil {
 		actions = append(actions, quickFixAction)
 	}
 
 	if c.IsSnykOpenBrowserActionEnabled() {
-		title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", i.Title, i.PackageName)
+		title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", ossIssueData.Title, ossIssueData.PackageName)
 		command := &types.CommandData{
 			Title:     title,
 			CommandId: types.OpenBrowserCommand,
-			Arguments: []any{i.CreateIssueURL().String()},
+			Arguments: []any{CreateIssueURL(issue.GetRuleID()).String()},
 		}
 
 		action, err := snyk.NewCodeAction(title, nil, command)
@@ -70,7 +91,16 @@ func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting
 		}
 	}
 
-	codeAction := i.AddSnykLearnAction(learnService, ep)
+	codeAction := AddSnykLearnAction(
+		learnService,
+		ep,
+		ossIssueData.Title,
+		ossIssueData.PackageManager,
+		issue.GetRuleID(),
+		ossIssueData.Identifiers.CWE,
+		ossIssueData.Identifiers.CVE,
+	)
+
 	if codeAction != nil {
 		actions = append(actions, codeAction)
 	}
@@ -78,9 +108,17 @@ func (i *ossIssue) AddCodeActions(learnService learn.Service, ep error_reporting
 	return actions
 }
 
-func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_reporting.ErrorReporter) (action types.CodeAction) {
+func AddSnykLearnAction(
+	learnService learn.Service,
+	ep error_reporting.ErrorReporter,
+	title string,
+	packageManager string,
+	vulnId string,
+	cwes []string,
+	cves []string,
+) (action types.CodeAction) {
 	if config.CurrentConfig().IsSnykLearnCodeActionsEnabled() {
-		lesson, err := learnService.GetLesson(i.PackageManager, i.Id, i.Identifiers.CWE, i.Identifiers.CVE, types.DependencyVulnerability)
+		lesson, err := learnService.GetLesson(packageManager, vulnId, cwes, cves, types.DependencyVulnerability)
 		if err != nil {
 			msg := "failed to get lesson"
 			config.CurrentConfig().Logger().Err(err).Msg(msg)
@@ -89,31 +127,30 @@ func (i *ossIssue) AddSnykLearnAction(learnService learn.Service, ep error_repor
 		}
 
 		if lesson != nil && lesson.Url != "" {
-			title := fmt.Sprintf("Learn more about %s (Snyk)", i.Title)
+			t := fmt.Sprintf("Learn more about %s (Snyk)", title)
 			action = &snyk.CodeAction{
-				Title:         title,
-				OriginalTitle: title,
+				Title:         t,
+				OriginalTitle: t,
 				Command: &types.CommandData{
-					Title:     title,
+					Title:     t,
 					CommandId: types.OpenBrowserCommand,
 					Arguments: []any{lesson.Url},
 				},
 			}
-			i.lesson = lesson
 			config.CurrentConfig().Logger().Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
 		}
 	}
 	return action
 }
 
-func (i *ossIssue) AddQuickFixAction(affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, addFileNameToFixTitle bool) types.CodeAction {
+func AddQuickFixAction(affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any) types.CodeAction {
 	logger := config.CurrentConfig().Logger().With().Str("method", "oss.AddQuickFixAction").Logger()
 	if !config.CurrentConfig().IsSnykOSSQuickFixCodeActionsEnabled() {
 		return nil
 	}
 	logger.Debug().Msg("create deferred quickfix code action")
 	filePathString := string(affectedFilePath)
-	quickfixEdit := i.getQuickfixEdit(affectedFilePath)
+	quickfixEdit := getQuickfixEdit(affectedFilePath, upgradePath, dependencyPath, packageManager)
 	if quickfixEdit == "" {
 		return nil
 	}
@@ -142,7 +179,7 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath types.FilePath, issueRange
 	}
 
 	// our grouping key for oss quickfixes is the dependency name
-	groupingKey, groupingValue, err := i.getUpgradedPathParts()
+	groupingKey, groupingValue, err := getUpgradedPathParts(upgradePath)
 	if err != nil {
 		logger.Warn().Err(err).Msg("could not get the upgrade path, so cannot add quickfix.")
 		return nil
@@ -156,28 +193,28 @@ func (i *ossIssue) AddQuickFixAction(affectedFilePath types.FilePath, issueRange
 	return &action
 }
 
-func (i *ossIssue) getQuickfixEdit(affectedFilePath types.FilePath) string {
+func getQuickfixEdit(affectedFilePath types.FilePath, upgradePath []any, dependencyPath []string, packageManager any) string {
 	logger := config.CurrentConfig().Logger().With().Str("method", "oss.getQuickfixEdit").Logger()
-	hasUpgradePath := len(i.UpgradePath) > 1
+	hasUpgradePath := len(upgradePath) > 1
 	if !hasUpgradePath {
 		return ""
 	}
 
-	// UpgradePath[0] is the upgrade for the package that was scanned
-	// UpgradePath[1] is the upgrade for the root dependency
-	depName, depVersion, err := i.getUpgradedPathParts()
+	// upgradePath[0] is the upgrade for the package that was scanned
+	// upgradePath[1] is the upgrade for the root dependency
+	depName, depVersion, err := getUpgradedPathParts(upgradePath)
 	if err != nil {
 		logger.Warn().Err(err).Msg("could not get the upgrade path, so cannot add quickfix.")
 		return ""
 	}
-	logger.Debug().Msgf("comparing %s with %s", i.UpgradePath[1], i.From[1])
+	logger.Debug().Msgf("comparing %s with %s", upgradePath[1], dependencyPath[1])
 	// from[1] contains the package that caused this issue
-	normalizedCurrentVersion := strings.Split(i.From[1], "@")[1]
+	normalizedCurrentVersion := strings.Split(dependencyPath[1], "@")[1]
 	if semver.Compare("v"+depVersion, "v"+normalizedCurrentVersion) == 0 {
 		logger.Warn().Msg("proposed upgrade version is the same version as the current, not adding quickfix")
 		return ""
 	}
-	switch i.PackageManager {
+	switch packageManager {
 	case "npm", "yarn", "yarn-workspace":
 		return fmt.Sprintf("\"%s\": \"%s\"", depName, depVersion)
 	case "maven":
@@ -193,15 +230,15 @@ func (i *ossIssue) getQuickfixEdit(affectedFilePath types.FilePath) string {
 		depName = depNameSplit[len(depNameSplit)-1]
 		return fmt.Sprintf("%s:%s", depName, depVersion)
 	}
-	if i.PackageManager == "gomodules" {
+	if packageManager == "gomodules" {
 		return fmt.Sprintf("v%s", depVersion)
 	}
 
 	return ""
 }
 
-func (i *ossIssue) getUpgradedPathParts() (string, string, error) {
-	s, ok := i.UpgradePath[1].(string)
+func getUpgradedPathParts(upgradePath []any) (string, string, error) {
+	s, ok := upgradePath[1].(string)
 	if !ok {
 		return "", "", errors.New("invalid upgrade path, could not cast to string")
 	}

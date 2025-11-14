@@ -74,10 +74,19 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 			continue
 		}
 
-		problem, err := getProblem(trIssue)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get and convert primary problem: %w", err)
+		genericProblem := trIssue.GetPrimaryProblem()
+		if genericProblem == nil {
+			logger.Warn().Msg("failed to get primary problem")
+			continue
 		}
+
+		vulnProblem, err := genericProblem.AsSnykVulnProblem()
+		if err != nil {
+			logger.Warn().Msg("failed to get snyk vuln problem")
+			continue
+		}
+
+		problem := &vulnProblem
 
 		introducingFinding, err := getIntroducingFinding(trIssue, problem)
 		if err != nil {
