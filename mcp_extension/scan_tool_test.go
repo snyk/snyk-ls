@@ -1361,7 +1361,7 @@ func TestHandleFileOutput(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		invocationCtx := mocks.NewMockInvocationContext(ctrl)
 		config := configuration.New()
-		config.Set(OUTPUT_DIR_PARAM, "temp")
+		config.Set(OUTPUT_DIR_PARAM, "ostemp")
 		invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 
 		workingDir := t.TempDir()
@@ -1436,7 +1436,7 @@ func TestHandleFileOutput(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		invocationCtx := mocks.NewMockInvocationContext(ctrl)
 		config := configuration.New()
-		config.Set(OUTPUT_DIR_PARAM, "temp")
+		config.Set(OUTPUT_DIR_PARAM, "ostemp")
 		invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 
 		// Create a temp dir with a specific name
@@ -1466,7 +1466,7 @@ func TestHandleFileOutput(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				invocationCtx := mocks.NewMockInvocationContext(ctrl)
 				config := configuration.New()
-				config.Set(OUTPUT_DIR_PARAM, "temp")
+				config.Set(OUTPUT_DIR_PARAM, "ostemp")
 				invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 
 				workingDir := t.TempDir()
@@ -1498,7 +1498,7 @@ func TestHandleFileOutput(t *testing.T) {
 	})
 
 	t.Run("CaseInsensitiveTempCheck", func(t *testing.T) {
-		tempVariants := []string{"temp", "TEMP", "Temp", "TeMp"}
+		tempVariants := []string{"ostemp", "osTEMP", "OsTemp", "osTeMp"}
 
 		for _, tempVariant := range tempVariants {
 			t.Run(tempVariant, func(t *testing.T) {

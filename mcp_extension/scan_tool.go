@@ -258,7 +258,7 @@ func handleFileOutput(logger zerolog.Logger, invocationCtx workflow.InvocationCo
 	baseDirName := filepath.Base(workingDir)
 	fileName := fmt.Sprintf("scan_output_%s_%s.json", baseDirName, toolDef.Name)
 	var path string
-	if strings.ToLower(outputDir) == "temp" {
+	if strings.ToLower(outputDir) == "ostemp" {
 		path = filepath.Join(os.TempDir(), fileName)
 	} else if filepath.IsAbs(outputDir) {
 		path = filepath.Join(outputDir, fileName)
