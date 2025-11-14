@@ -112,6 +112,20 @@ func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (
 func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.FolderConfig) {
 	logger := c.Logger().With().Str("method", "MigrateFolderConfigOrgSettings").Str("FolderPath", string(folderConfig.FolderPath)).Logger()
 
+	if !c.AutoOrgEnabledByDefault() {
+		// EA rollout behavior (IDE-1548): When auto-org is not enabled by default, skip migration
+		// but still track explicit user changes to preserve them post-EA
+		if !folderConfig.OrgSetByUser {
+			logger.Debug().Msg("User has just explicitly opted into auto-org during EA, marking folder as migrated.")
+			folderConfig.OrgMigratedFromGlobalConfig = true
+		} else if folderConfig.PreferredOrg != "" {
+			logger.Debug().Msg("User has just explicitly set a preferred org at the folder level during EA, marking folder as migrated.")
+			folderConfig.OrgMigratedFromGlobalConfig = true
+			folderConfig.OrgSetByUser = true // During EA on a folder not marked as migrated this should already be true, but just in case.
+		}
+		return
+	}
+
 	// Edge case when user provided folder config on initialize params or
 	// the user is changing settings while unauthenticated
 	if folderConfig.OrgSetByUser {
