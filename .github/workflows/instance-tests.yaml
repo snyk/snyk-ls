@@ -25,6 +25,7 @@ on:
 jobs:
   instance-tests:
     strategy:
+      fail-fast: false
       matrix:
         environment: [Standard, MT1, MT3]
     name: instance tests
