@@ -61,6 +61,8 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 			ActivateSnykIac:             "false",
 			EnableTrustedFoldersFeature: "false",
 			Token:                       os.Getenv("SNYK_TOKEN"),
+			AuthenticationMethod:        types.TokenAuthentication,
+			AutomaticAuthentication:     "false",
 			CliPath:                     filepath.Join(t.TempDir(), discovery.ExecutableName(false)),
 		},
 	}
