@@ -222,7 +222,7 @@ func executeAndCaptureConfig(t *testing.T, c *config.Config, cmd []string, worki
 	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		gafConf := invocation.GetConfiguration()
 		// Get the raw value without triggering resolution
-		capturedOrg = gafConf.Get(configuration.ORGANIZATION)
+		capturedOrg = gafConf.GetString(configuration.ORGANIZATION)
 		capturedWorkingDir = gafConf.GetString(configuration.WORKING_DIRECTORY)
 		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
 		return []workflow.Data{data}, nil
