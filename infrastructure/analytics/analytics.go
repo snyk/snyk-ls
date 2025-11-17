@@ -24,7 +24,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/snyk/go-application-framework/pkg/analytics"
-	configuration2 "github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -63,7 +63,7 @@ func NewAnalyticsEventParam(interactionType string, err error, path types.FilePa
 	}
 }
 
-func SendAnalyticsToAPI(engine workflow.Engine, deviceId string, payload []byte) error {
+func SendAnalyticsToAPI(engine workflow.Engine, deviceId string, organization string, payload []byte) error {
 	logger := engine.GetLogger().With().Str("method", "analytics.sendAnalyticsToAPI").Logger()
 
 	var eventsParam types.AnalyticsEventParam
@@ -95,13 +95,15 @@ func SendAnalyticsToAPI(engine workflow.Engine, deviceId string, payload []byte)
 			payload,
 		)
 	}
-	configuration := engine.GetConfiguration().Clone()
-	configuration.Set(configuration2.FLAG_EXPERIMENTAL, true)
+	clonedGAFConfig := engine.GetConfiguration().Clone()
+	clonedGAFConfig.Set(configuration.FLAG_EXPERIMENTAL, true)
+	clonedGAFConfig.Set(configuration.ORGANIZATION, organization)
+
 	analyticsMu.Lock()
 	_, err = engine.InvokeWithInputAndConfig(
 		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
 		[]workflow.Data{inputData},
-		configuration,
+		clonedGAFConfig,
 	)
 	analyticsMu.Unlock()
 
@@ -142,7 +144,7 @@ func PayloadForAnalyticsEventParam(engine workflow.Engine, deviceId string, para
 	return ic
 }
 
-func SendAnalytics(engine workflow.Engine, deviceId string, event types.AnalyticsEventParam, err error) {
+func SendAnalytics(engine workflow.Engine, deviceId string, organization string, event types.AnalyticsEventParam, err error) {
 	logger := engine.GetLogger().With().Str("method", "analytics.SendAnalytics").Logger()
 	ic := PayloadForAnalyticsEventParam(engine, deviceId, event)
 
@@ -162,7 +164,7 @@ func SendAnalytics(engine workflow.Engine, deviceId string, event types.Analytic
 		return
 	}
 
-	err = SendAnalyticsToAPI(engine, deviceId, bytes)
+	err = SendAnalyticsToAPI(engine, deviceId, organization, bytes)
 	if err != nil {
 		logger.Err(err).Msg("Failed to send analytics")
 	}
