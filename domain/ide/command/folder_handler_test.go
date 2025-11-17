@@ -17,6 +17,7 @@
 package command
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -31,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -388,4 +390,121 @@ func Test_isOrgDefault(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_MigrateFolderConfigOrgSettings_EAMode_MigrationSkipped(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  types.FilePath(t.TempDir()),
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: false,
+		PreferredOrg:                "",
+	}
+
+	// Action
+	MigrateFolderConfigOrgSettings(c, folderConfig)
+
+	// Assert: Migration should be skipped, no fields modified
+	assert.True(t, folderConfig.OrgSetByUser, "OrgSetByUser should remain unchanged")
+	assert.False(t, folderConfig.OrgMigratedFromGlobalConfig, "Should remain unmigrated in EA mode")
+	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should remain unchanged")
+}
+
+func Test_MigrateFolderConfigOrgSettings_PostEAMode_DefaultOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup: Use immutable defaults so isOrgDefault() can clone config, set org="", and still retrieve the default org
+	gafConfig := c.Engine().GetConfiguration()
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("default-org-uuid"))
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("default-org-slug"))
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  types.FilePath(t.TempDir()),
+		OrgSetByUser:                false,
+		OrgMigratedFromGlobalConfig: false,
+		PreferredOrg:                "",
+	}
+
+	// Action
+	MigrateFolderConfigOrgSettings(c, folderConfig)
+
+	// Assert: User is using default org, should opt into auto-org
+	assert.False(t, folderConfig.OrgSetByUser, "OrgSetByUser should be false (opt into auto-org)")
+	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should be empty (using auto-org)")
+	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
+}
+
+func Test_MigrateFolderConfigOrgSettings_PostEAMode_NonDefaultOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup: Use a regular (mutable) DefaultValueFunction so Set() can override it
+	// When isOrgDefault clones config and sets org="", it will get "default-org-uuid"
+	// But when we Set() a value, c.Organization() will return the set value
+	gafConfig := c.Engine().GetConfiguration()
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existingValue any) (any, error) {
+		if existingValue != nil && existingValue != "" {
+			return existingValue, nil
+		}
+		return "default-org-uuid", nil
+	})
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("default-org-slug"))
+
+	// Set the user's non-default org
+	c.SetOrganization("non-default-org-id")
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  types.FilePath(t.TempDir()),
+		OrgSetByUser:                false,
+		OrgMigratedFromGlobalConfig: false,
+		PreferredOrg:                "",
+	}
+
+	// Action
+	MigrateFolderConfigOrgSettings(c, folderConfig)
+
+	// Assert: User explicitly set non-default org, should opt out and copy org
+	assert.True(t, folderConfig.OrgSetByUser, "OrgSetByUser should be true (user explicitly set)")
+	assert.Equal(t, "non-default-org-id", folderConfig.PreferredOrg, "PreferredOrg should be copied from global")
+	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
+}
+
+func Test_MigrateFolderConfigOrgSettings_PostEAMode_Unauthenticated_MigrationSkipped(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+
+	// Setup: Unauthenticated state - using default value functions that return errors where API calls would be
+	gafConfig := c.Engine().GetConfiguration()
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existingValue any) (any, error) {
+		if existingValue != nil && existingValue != "" {
+			return existingValue, nil
+		}
+		return "", fmt.Errorf("unable to retrieve org ID: API request failed (status: 401)")
+	})
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, func(c configuration.Configuration, existingValue any) (any, error) {
+		if existingValue != nil && existingValue != "" {
+			return existingValue, nil
+		}
+		return "", fmt.Errorf("unable to retrieve org slug: API request failed (status: 401)")
+	})
+
+	// User has a custom global org set
+	gafConfig.Set(configuration.ORGANIZATION, "custom-org-id")
+
+	// Setup: Pre-feature folder with zero-value fields (never read during EA)
+	folderConfig := &types.FolderConfig{
+		FolderPath: types.FilePath(t.TempDir()),
+	}
+
+	// Action
+	MigrateFolderConfigOrgSettings(c, folderConfig)
+
+	// Assert: Migration should be skipped when isOrgDefault fails (line 191 in folder_handler.go)
+	assert.False(t, folderConfig.OrgMigratedFromGlobalConfig, "Should remain unmigrated (migration skipped)")
+	assert.False(t, folderConfig.OrgSetByUser, "OrgSetByUser should remain false")
+	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should remain empty")
 }

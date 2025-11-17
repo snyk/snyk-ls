@@ -192,6 +192,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	folderConfig := &types.FolderConfig{FolderPath: workDir, PreferredOrg: "test-org"}
 	issues, err := scanner.UploadAndAnalyze(t.Context(), workDir, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
 	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(issues), 2, "scan should return at least 2 issues")
 	assert.False(t, issues[0].GetIsIgnored())
 	assert.Nil(t, issues[0].GetIgnoreDetails())
 	assert.Equal(t, true, issues[1].GetIsIgnored())
@@ -479,6 +480,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		// execute
 		issues, err := scanner.UploadAndAnalyze(t.Context(), "", folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 		require.NoError(t, err)
+		require.NotEmpty(t, issues, "scan should return at least one issue")
 
 		// Default is to have 0 actions from analysis + 0 from autofix
 		assert.Len(t, issues[0].GetCodeActions(), 0)
@@ -516,6 +518,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		// execute
 		issues, err := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(issues), 2, "scan should return at least 2 issues")
 
 		// Only one of the returned issues is Autofix eligible; see getSarifResponseJson2 in fake_code_client_scanner.go.
 		assert.Len(t, issues[0].GetCodeActions(), 1)
