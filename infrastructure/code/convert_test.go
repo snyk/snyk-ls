@@ -754,7 +754,8 @@ func setupConversionTests(t *testing.T, c *config.Config, activateSnykCodeSecuri
 	}
 
 	issues, err = sarifConverter.toIssues(temp)
-	assert.Nil(t, err)
+	require.NoError(t, err)
+	require.NotEmpty(t, issues, "should have some issues from setup")
 
 	return path, issues, analysisResponse
 }
