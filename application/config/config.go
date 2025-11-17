@@ -1310,7 +1310,7 @@ func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfi
 // the folder, it returns the global organization (which if unset, GAF will return the default org).
 func (c *Config) FolderOrganization(path types.FilePath) string {
 	if path == "" {
-		c.Logger().Warn().Str("method", "FolderOrganization").Str("path", "").Msg("called with empty path, returning the global organization as a safety net")
+		c.Logger().Warn().Str("method", "FolderOrganization").Str("path", "").Msg("called with empty path, falling back to global organization")
 		return c.Organization()
 	}
 
@@ -1320,11 +1320,11 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 		EnrichFromGit:    false,
 	})
 	if err != nil {
-		c.Logger().Warn().Err(err).Str("method", "FolderOrganization").Str("path", string(path)).Msg("error getting folder config, returning the global organization as a safety net")
+		c.Logger().Warn().Err(err).Str("method", "FolderOrganization").Str("path", string(path)).Msg("error getting folder config, falling back to global organization")
 		return c.Organization()
 	}
 	if fc == nil {
-		c.Logger().Debug().Str("method", "FolderOrganization").Str("path", string(path)).Msg("no folder config in storage, returning the global organization as a safety net")
+		c.Logger().Debug().Str("method", "FolderOrganization").Str("path", string(path)).Msg("no folder config in storage, falling back to global organization")
 		return c.Organization()
 	}
 
