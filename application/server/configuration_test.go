@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -1094,8 +1095,7 @@ func Test_updateFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *testing.T)
 func Test_updateFolderConfig_EAMode_UnmigratedUserOptsIntoAutoOrg(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
-	// EA mode setup
-	setup.c.SetAutoOrgEnabledByDefault(false)
+	setup.c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
 
 	// Setup: EA default folder (auto-org disabled, not migrated, no org)
 	setup.createStoredConfig("", false, true)
@@ -1124,8 +1124,7 @@ func Test_updateFolderConfig_EAMode_UnmigratedUserOptsIntoAutoOrg(t *testing.T) 
 func Test_updateFolderConfig_EAMode_UnmigratedUserSetsPreferredOrg(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
-	// EA mode setup
-	setup.c.SetAutoOrgEnabledByDefault(false)
+	setup.c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
 
 	// Setup: EA default folder (auto-org disabled, not migrated, no org)
 	setup.createStoredConfig("", false, true)
@@ -1158,8 +1157,7 @@ func Test_updateFolderConfig_PostEAMode_Unauthenticated_UnmigratedUserSetsPrefer
 	engineConfig := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(t.TempDir())
 
-	// Post-EA mode setup
-	c.SetAutoOrgEnabledByDefault(true)
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 
 	// Set up mock org resolver that returns error (simulates unauthenticated/failed resolution)
 	ctrl := gomock.NewController(t)

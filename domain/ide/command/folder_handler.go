@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -112,7 +113,7 @@ func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (
 func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.FolderConfig) {
 	logger := c.Logger().With().Str("method", "MigrateFolderConfigOrgSettings").Str("FolderPath", string(folderConfig.FolderPath)).Logger()
 
-	if !c.AutoOrgEnabledByDefault() {
+	if !c.Engine().GetConfiguration().GetBool(constants.AutoOrgEnabledByDefaultKey) {
 		// EA rollout behavior (IDE-1548): When auto-org is not enabled by default, skip migration
 		// but still track explicit user changes to preserve them post-EA
 		if !folderConfig.OrgSetByUser {

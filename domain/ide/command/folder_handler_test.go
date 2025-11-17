@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -393,7 +394,7 @@ func Test_isOrgDefault(t *testing.T) {
 
 func Test_MigrateFolderConfigOrgSettings_EAMode_MigrationSkipped(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetAutoOrgEnabledByDefault(false) // EA mode
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
 
 	folderConfig := &types.FolderConfig{
 		FolderPath:                  types.FilePath(t.TempDir()),
@@ -418,7 +419,7 @@ func Test_MigrateFolderConfigOrgSettings_PostEAMode_DefaultOrg(t *testing.T) {
 	gafConfig := c.Engine().GetConfiguration()
 	gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("default-org-uuid"))
 	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("default-org-slug"))
-	c.SetAutoOrgEnabledByDefault(true) // Post-EA mode
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 
 	folderConfig := &types.FolderConfig{
 		FolderPath:                  types.FilePath(t.TempDir()),
@@ -453,7 +454,7 @@ func Test_MigrateFolderConfigOrgSettings_PostEAMode_NonDefaultOrg(t *testing.T) 
 
 	// Set the user's non-default org
 	c.SetOrganization("non-default-org-id")
-	c.SetAutoOrgEnabledByDefault(true) // Post-EA mode
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 
 	folderConfig := &types.FolderConfig{
 		FolderPath:                  types.FilePath(t.TempDir()),
@@ -474,7 +475,7 @@ func Test_MigrateFolderConfigOrgSettings_PostEAMode_NonDefaultOrg(t *testing.T) 
 func Test_MigrateFolderConfigOrgSettings_PostEAMode_Unauthenticated_MigrationSkipped(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	c.SetAutoOrgEnabledByDefault(true) // Post-EA mode
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 
 	// Setup: Unauthenticated state - using default value functions that return errors where API calls would be
 	gafConfig := c.Engine().GetConfiguration()

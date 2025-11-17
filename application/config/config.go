@@ -54,7 +54,6 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
-	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -836,18 +835,6 @@ func (c *Config) Organization() string {
 
 func (c *Config) SetOrganization(organization string) {
 	c.engine.GetConfiguration().Set(configuration.ORGANIZATION, organization)
-}
-
-// AutoOrgEnabledByDefault returns whether automatic organization selection is enabled by default.
-// When false (EA mode, default), auto-org is disabled by default and migration is skipped (IDE-1548).
-// When true (post-EA), auto-org is enabled by default and migration runs normally.
-func (c *Config) AutoOrgEnabledByDefault() bool {
-	return c.engine.GetConfiguration().GetBool(constants.AutoOrgEnabledByDefaultKey)
-}
-
-// SetAutoOrgEnabledByDefault sets whether automatic organization selection is enabled by default.
-func (c *Config) SetAutoOrgEnabledByDefault(enabled bool) {
-	c.engine.GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, enabled)
 }
 
 func (c *Config) ManageBinariesAutomatically() bool {
