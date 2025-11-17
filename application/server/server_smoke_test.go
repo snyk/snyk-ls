@@ -47,6 +47,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -1238,6 +1239,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			c.SetOrganization(expectedOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 			require.NoError(t, err)
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 		}
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
@@ -1255,7 +1257,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - adding folder with existing stored config. Making sure PreferredOrg is preserved", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
-		ensureInitialized(t, c, loc, initParams, nil)
+		setupFunc := func(c *config.Config) {
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
 			require.Empty(t, fc.PreferredOrg)
@@ -1379,7 +1385,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 		t.Setenv("SNYK_TOKEN", "")
 
-		ensureInitialized(t, c, loc, initParams, nil)
+		setupFunc := func(c *config.Config) {
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
 
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)

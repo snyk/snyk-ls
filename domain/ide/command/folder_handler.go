@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -111,6 +112,20 @@ func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (
 // based on the global organization setting and the LDX-Sync result.
 func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.FolderConfig) {
 	logger := c.Logger().With().Str("method", "MigrateFolderConfigOrgSettings").Str("FolderPath", string(folderConfig.FolderPath)).Logger()
+
+	if !c.Engine().GetConfiguration().GetBool(constants.AutoOrgEnabledByDefaultKey) {
+		// EA rollout behavior (IDE-1548): When auto-org is not enabled by default, skip migration
+		// but still track explicit user changes to preserve them post-EA
+		if !folderConfig.OrgSetByUser {
+			logger.Debug().Msg("User has just explicitly opted into auto-org during EA, marking folder as migrated.")
+			folderConfig.OrgMigratedFromGlobalConfig = true
+		} else if folderConfig.PreferredOrg != "" {
+			logger.Debug().Msg("User has just explicitly set a preferred org at the folder level during EA, marking folder as migrated.")
+			folderConfig.OrgMigratedFromGlobalConfig = true
+			folderConfig.OrgSetByUser = true // During EA on a folder not marked as migrated this should already be true, but just in case.
+		}
+		return
+	}
 
 	// Edge case when user provided folder config on initialize params or
 	// the user is changing settings while unauthenticated
