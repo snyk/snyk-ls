@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package storage implements the GAF storage interface for configuration
 package storage
 
 import (

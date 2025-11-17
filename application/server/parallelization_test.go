@@ -38,12 +38,13 @@ import (
 )
 
 func Test_Concurrent_CLI_Runs(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	testutil.SkipLocally(t) // skip locally because it's downloading the cli
+	c := testutil.SmokeTest(t, "")
 	srv, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykIacEnabled(false)
 	c.SetSnykOssEnabled(true)
 	di.Init()
-
+	t.Setenv("SNYK_LOG_LEVEL", "info")
 	lspClient := srv.Client
 
 	// create clones and make them workspace folders

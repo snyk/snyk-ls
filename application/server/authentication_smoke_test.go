@@ -54,9 +54,9 @@ func Test_InvalidCredentialsNotExpiredSendMessageRequest(t *testing.T) {
 
 func getDummyOAuth2Token(expiry time.Time) oauth2.Token {
 	token := oauth2.Token{
-		AccessToken:  "a",
+		AccessToken:  "aaa",
 		TokenType:    "bearer",
-		RefreshToken: "c",
+		RefreshToken: "ccc",
 		Expiry:       expiry,
 	}
 	return token
@@ -64,7 +64,7 @@ func getDummyOAuth2Token(expiry time.Time) oauth2.Token {
 
 func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenString string) {
 	t.Helper()
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	srv, jsonRpcRecorder := setupServer(t, c)
 
 	c.SetSnykIacEnabled(false)

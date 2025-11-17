@@ -50,6 +50,10 @@ infrastructure/code/pacts/snykls-snykcodeapi.json
 infrastructure/analytics/pacts/snyk-ls-analyticsprovider.json
 infrastructure/oss/testdata/go.sum
 
+# Test generated comparison files
+application/server/diagnostic_comparison.csv
+application/server/diagnostic_comparison.md
+
 .qodo
 
 # Compatibility matrix cache

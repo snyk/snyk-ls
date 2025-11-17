@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package config implements the configuration functionality
 package config
 
 import (
@@ -36,29 +37,32 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"golang.org/x/oauth2"
+
+	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"golang.org/x/oauth2"
-
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
-	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const (
-	deeproxyApiUrlKey     = "DEEPROXY_API_URL"
+	DeeproxyApiUrlKey     = "DEEPROXY_API_URL"
 	FormatHtml            = "html"
 	FormatMd              = "md"
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
@@ -169,7 +173,6 @@ type Config struct {
 	logFile                          *os.File
 	snykCodeAnalysisTimeout          time.Duration
 	snykApiUrl                       string
-	snykCodeApiUrl                   string
 	token                            string
 	deviceId                         string
 	clientCapabilities               types.ClientCapabilities
@@ -294,17 +297,16 @@ func initWorkFlowEngine(c *Config) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	conf := configuration.NewWithOpts(
-		configuration.WithAutomaticEnv(),
-	)
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
 	err := initWorkflows(c)
 	if err != nil {
-		c.Logger().Err(err).Msg("unable to initialize workflows")
+		// we use the global logger, as we are in config setup, so we don't want to cause a deadlock
+		log.Err(err).Msg("unable to initialize workflows")
 	}
 
 	err = c.engine.Init()
@@ -333,6 +335,11 @@ func initWorkflows(c *Config) error {
 	}
 
 	err = localworkflows.InitCodeWorkflow(c.engine)
+	if err != nil {
+		return err
+	}
+
+	err = osflows.Init(c.engine)
 	if err != nil {
 		return err
 	}
@@ -454,13 +461,6 @@ func (c *Config) SnykApi() string {
 	return c.snykApiUrl
 }
 
-func (c *Config) SnykCodeApi() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.snykCodeApiUrl
-}
-
 func (c *Config) Endpoint() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -560,33 +560,9 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		cfg := c.engine.GetConfiguration()
 		cfg.Set(configuration.API_URL, snykApiUrl)
 		cfg.Set(configuration.WEB_APP_URL, c.SnykUI())
-
-		// Update Code API endpoint
-		snykCodeApiUrl, err := getCodeApiUrlFromCustomEndpoint(snykApiUrl)
-		if err != nil {
-			c.Logger().Error().Err(err).Msg("Couldn't obtain Snyk Code API url from CLI endpoint.")
-		}
-
-		c.SetSnykCodeApi(snykCodeApiUrl)
 		return true
 	}
 	return false
-}
-
-func (c *Config) SetSnykCodeApi(snykCodeApiUrl string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	if snykCodeApiUrl == "" {
-		c.snykCodeApiUrl = DefaultDeeproxyApiUrl
-		return
-	}
-	c.snykCodeApiUrl = snykCodeApiUrl
-
-	config := c.engine.GetConfiguration()
-	additionalURLs := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-	additionalURLs = append(additionalURLs, c.snykCodeApiUrl)
-	config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
 }
 
 func (c *Config) SetErrorReportingEnabled(enabled bool) {
@@ -808,19 +784,20 @@ func (c *Config) DisableLoggingToFile() {
 
 func (c *Config) SetConfigFile(configFile string) { c.configFile = configFile }
 
-func getCodeApiUrlFromCustomEndpoint(endpoint string) (string, error) {
-	// Code API endpoint can be set via env variable for debugging using local API instance
-	deeproxyEnvVarUrl := strings.Trim(os.Getenv(deeproxyApiUrlKey), "/")
+func (c *Config) GetCodeApiUrlFromCustomEndpoint(sastResponse *sast_contract.SastResponse) (string, error) {
+	// Code API sastResponse can be set via env variable for debugging using local API instance
+	deeproxyEnvVarUrl := strings.Trim(os.Getenv(DeeproxyApiUrlKey), "/")
 	if deeproxyEnvVarUrl != "" {
+		c.logger.Debug().Str("deeproxyEnvVarUrl", deeproxyEnvVarUrl).Msg("using deeproxy env variable for code api url")
 		return deeproxyEnvVarUrl, nil
 	}
 
-	if endpoint == "" {
-		return DefaultDeeproxyApiUrl, nil
+	if sastResponse != nil && sastResponse.SastEnabled && sastResponse.LocalCodeEngine.Enabled {
+		return sastResponse.LocalCodeEngine.Url, nil
 	}
 
 	// Use Snyk API endpoint to determine deeproxy API URL
-	return getCustomEndpointUrlFromSnykApi(endpoint, "deeproxy")
+	return getCustomEndpointUrlFromSnykApi(c.Endpoint(), "deeproxy")
 }
 
 func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, error) {
@@ -1201,17 +1178,18 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 	conf := c.engine.GetConfiguration()
 	conf.SetStorage(s)
 	c.m.Unlock()
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
 
 	// now refresh from storage
-	err := s.Refresh(conf, storedConfig.ConfigMainKey)
+	err := s.Refresh(conf, storedconfig.ConfigMainKey)
 	if err != nil {
 		c.logger.Err(err).Msg("unable to load stored config")
 	}
 
-	sc, err := storedConfig.GetStoredConfig(conf, c.logger)
+	// During storage initialization, create config if it doesn't exist
+	sc, err := storedconfig.GetStoredConfig(conf, c.logger, false)
 	c.logger.Debug().Any("storedConfig", sc).Send()
 
 	if err != nil {
@@ -1295,10 +1273,12 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 	c.isOpenBrowserActionEnabled = enable
 }
 
+// FolderConfig gets or creates a new folder config for the given folder path.
+// Will cause a rewrite to storage, for read-only operations, use storedconfig.GetFolderConfigWithOptions instead.
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	var folderConfig *types.FolderConfig
 	var err error
-	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
+	folderConfig, err = storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
 	if err != nil {
 		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
@@ -1306,17 +1286,48 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 }
 
 func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
-	return storedConfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
+	return storedconfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
+}
+
+// FolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
+// The path parameter can be a subdirectory or file within a workspace folder.
+// Returns an error if the workspace is nil or if no workspace folder contains the path.
+func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
+	if c.Workspace() == nil {
+		return nil, fmt.Errorf("workspace is nil, so cannot determine folder config for path: %s", path)
+	}
+
+	workspaceFolder := c.Workspace().GetFolderContaining(path)
+	if workspaceFolder == nil {
+		return nil, fmt.Errorf("no workspace folder found for path: %s", path)
+	}
+
+	folderConfig := c.FolderConfig(workspaceFolder.Path())
+	return folderConfig, nil
 }
 
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
 // the folder, it returns the global organization (which if unset, GAF will return the default org).
 func (c *Config) FolderOrganization(path types.FilePath) string {
-	fc := c.FolderConfig(path)
-	if fc == nil {
-		// Should never happen, but as a safety net, return the global org.
+	if path == "" {
+		c.Logger().Warn().Str("method", "FolderOrganization").Str("path", "").Msg("called with empty path, falling back to global organization")
 		return c.Organization()
 	}
+
+	fc, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
+		CreateIfNotExist: false,
+		ReadOnly:         true,
+		EnrichFromGit:    false,
+	})
+	if err != nil {
+		c.Logger().Warn().Err(err).Str("method", "FolderOrganization").Str("path", string(path)).Msg("error getting folder config, falling back to global organization")
+		return c.Organization()
+	}
+	if fc == nil {
+		c.Logger().Debug().Str("method", "FolderOrganization").Str("path", string(path)).Msg("no folder config in storage, falling back to global organization")
+		return c.Organization()
+	}
+
 	if fc.OrgSetByUser {
 		if fc.PreferredOrg == "" {
 			return c.Organization()
@@ -1336,6 +1347,26 @@ func (c *Config) FolderOrganizationSlug(path types.FilePath) string {
 	clonedConfig := c.Engine().GetConfiguration()
 	clonedConfig.Set(configuration.ORGANIZATION, c.FolderOrganization(path))
 	return clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
+}
+
+// FolderOrganizationForSubPath returns the organization for the workspace folder containing the given path.
+// Returns an error if the workspace is nil, if no folder contains the path, or if no organization can be determined.
+func (c *Config) FolderOrganizationForSubPath(path types.FilePath) (string, error) {
+	if c.Workspace() == nil {
+		return "", fmt.Errorf("workspace is nil, so cannot determine organization for path: %s", path)
+	}
+
+	workspaceFolder := c.Workspace().GetFolderContaining(path)
+	if workspaceFolder == nil {
+		return "", fmt.Errorf("cannot determine organization, no workspace folder found for path: %s", path)
+	}
+
+	folderOrg := c.FolderOrganization(workspaceFolder.Path())
+	if folderOrg == "" {
+		return "", fmt.Errorf("no organization was able to be determined for folder: %s", workspaceFolder.Path())
+	}
+
+	return folderOrg, nil
 }
 
 func (c *Config) HoverVerbosity() int {

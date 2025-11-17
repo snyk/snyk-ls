@@ -100,6 +100,13 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 }
 
 func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
+	if a.authProvider == nil {
+		err = errors.New("authentication provider is not configured")
+		a.c.Logger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
+		a.authCache.RemoveAll()
+		return "", err
+	}
+
 	token, err = a.authProvider.Authenticate(ctx)
 
 	if token == "" || err != nil {
@@ -133,7 +140,22 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 	event.Extension = map[string]any{
 		"auth::auth-type": string(a.c.AuthenticationMethod()),
 	}
-	analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), event, nil)
+
+	// Send to any folder's org, since authentication is not folder-specific, but analytics have to be sent to a
+	// specific org, so any folder's org has as good a chance as any other to work and not 404.
+	// TODO - This is a temporary solution to avoid inflating analytics counts.
+	ws := a.c.Workspace()
+	if ws != nil {
+		folders := ws.Folders()
+		if len(folders) > 0 {
+			aFolderOrg := a.c.FolderOrganization(folders[0].Path())
+			analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), aFolderOrg, event, nil)
+			return
+		}
+	}
+
+	// Fallback: If no folders, send with global org (user's preferred org from the web UI if not explicitly set)
+	analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), a.c.Organization(), event, nil)
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
@@ -390,10 +412,7 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 
 	logger.Debug().Msg("configuring providers")
 
-	authMethodChanged := false
-	if a.provider() == nil || a.provider().AuthenticationMethod() != c.AuthenticationMethod() {
-		authMethodChanged = true
-	}
+	authMethodChanged := a.provider() == nil || a.provider().AuthenticationMethod() != c.AuthenticationMethod()
 
 	// always set the provider even if the authentication method didn't change, to make sure that the provider is initialized with current config
 	if authMethodChanged {

@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// Package code implements code settings for Snyk
 package code
 
 import (
@@ -23,8 +25,8 @@ import (
 )
 
 const (
-	// Autofix is disabled by default
-	defaultAutofixEnabled = false
+	// Autofix is enabled by default
+	defaultAutofixEnabled = true
 )
 
 var (

@@ -98,8 +98,8 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir typ
 	}
 }
 
-func (t *TestExecutor) ExpandParametersFromConfig(_ []string) []string {
-	return nil
+func (t *TestExecutor) ExpandParametersFromConfig(args []string) []string {
+	return expandParametersFromConfig(args)
 }
 
 func (t *TestExecutor) HandleErrors(_ context.Context, _ string) (fail bool) {

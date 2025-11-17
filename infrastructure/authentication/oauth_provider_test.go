@@ -97,7 +97,7 @@ func (f *fakeOauthAuthenticator) fakeAuthenticate() error {
 		return errors.New("fake auth error")
 	}
 
-	token := &oauth2.Token{AccessToken: "a", TokenType: "b", RefreshToken: "c", Expiry: f.expiry}
+	token := &oauth2.Token{AccessToken: "aaa", TokenType: "bbb", RefreshToken: "ccc", Expiry: f.expiry}
 
 	tokenString, err := json.Marshal(token)
 	if err != nil {

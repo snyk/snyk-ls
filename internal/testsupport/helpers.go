@@ -1,13 +1,9 @@
+// Package testsupport contains test helpers for Snyk
 package testsupport
 
 import (
 	"runtime"
 	"testing"
-
-	"github.com/golang/mock/gomock"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/mocks"
 )
 
 const (
@@ -32,13 +28,4 @@ func OnlyOnWindows(t *testing.T, reason string) {
 	runtime.GOOS != "windows" {
 		t.Skipf("Only on windows, because %s", reason)
 	}
-}
-
-func SetupEngineMock(t *testing.T) (*mocks.MockEngine, configuration.Configuration) {
-	t.Helper()
-	ctrl := gomock.NewController(t)
-	mockEngine := mocks.NewMockEngine(ctrl)
-	engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	return mockEngine, engineConfig
 }

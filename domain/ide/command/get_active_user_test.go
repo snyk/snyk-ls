@@ -42,10 +42,8 @@ func Test_getActiveUser_Execute_User_found(t *testing.T) {
 
 	expectedUser, expectedUserData := whoamiWorkflowResponse(t)
 
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any())
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return(expectedUserData, nil)
 
 	actualUser, err := cmd.Execute(t.Context())
@@ -77,11 +75,9 @@ func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cmd := setupCommandWithAuthService(t, c)
 
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any())
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return([]workflow.Data{}, nil)
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 	actualUser, err := cmd.Execute(t.Context())
 
 	assert.Errorf(t, err, "cmd.Execute() error = %v", err)
@@ -92,12 +88,10 @@ func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cmd := setupCommandWithAuthService(t, c)
 
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any())
 	testError := errors.New("test error")
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return([]workflow.Data{}, testError)
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 	actualUser, err := cmd.Execute(t.Context())
 

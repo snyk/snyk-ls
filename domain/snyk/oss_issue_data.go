@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,7 @@ type OssIssueData struct {
 	Lesson             string             `json:"lesson,omitempty"`
 	Remediation        string             `json:"remediation"`
 	AppliedPolicyRules AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
+	RiskScore          uint16             `json:"riskScore,omitempty"`
 }
 
 func (o OssIssueData) GetKey() string {

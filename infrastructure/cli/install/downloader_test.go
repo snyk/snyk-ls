@@ -32,6 +32,7 @@ import (
 )
 
 func TestDownloader_Download(t *testing.T) {
+	testutil.SkipLocally(t)
 	c := testutil.IntegTest(t)
 	r := getTestAsset()
 	progressCh := make(chan types.ProgressParams, 100000)

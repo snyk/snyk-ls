@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -74,7 +75,7 @@ func Test_FindRange(t *testing.T) {
 	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
 	var p = "build.gradle"
-	node := getDependencyNode(c.Logger(), types.FilePath(p), issue, []byte(content))
+	node := getDependencyNode(c.Logger(), types.FilePath(p), issue.PackageManager, issue.From, []byte(content))
 	foundRange := getRangeFromNode(node)
 
 	assert.Equal(t, 3, foundRange.Start.Line)
@@ -83,20 +84,7 @@ func Test_FindRange(t *testing.T) {
 }
 
 func Test_introducingPackageAndVersion(t *testing.T) {
-	var issue = ossIssue{
-		Id:             "testIssue",
-		Name:           "SNYK-TEST-ISSUE-1",
-		Title:          "THOU SHALL NOT PASS",
-		Severity:       "1",
-		LineNumber:     0,
-		Description:    "Getting into Moria is an issue!",
-		References:     nil,
-		Version:        "",
-		PackageManager: "npm",
-		From:           []string{"goof@1.0.1", "lodash@4.17.4"},
-	}
-
-	actualPackage, actualVersion := introducingPackageAndVersion(issue)
+	actualPackage, actualVersion := introducingPackageAndVersion([]string{"goof@1.0.1", "lodash@4.17.4"}, "npm")
 	assert.Equal(t, "4.17.4", actualVersion)
 	assert.Equal(t, "lodash", actualPackage)
 }
@@ -197,7 +185,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 func Test_introducingPackageAndVersionJava(t *testing.T) {
 	issue := mavenTestIssue()
 
-	actualPackage, actualVersion := introducingPackageAndVersion(issue)
+	actualPackage, actualVersion := introducingPackageAndVersion(issue.From, issue.PackageManager)
 	assert.Equal(t, "4.17.4", actualVersion)
 	assert.Equal(t, "test", actualPackage)
 }
@@ -322,19 +310,19 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	folderPath := workingDir
 	fakeCli := cli.NewTestExecutor(c)
-	fakeCli.ExecuteDuration = time.Second
+	fakeCli.ExecuteDuration = time.Second * 2
 	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier())
 	wg := sync.WaitGroup{}
 	p, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
 	for i := 0; i < concurrentScanRequests; i++ {
-		// Adding a short delay so the cancel listener will start before a new scan is sending the cancel signal
-		time.Sleep(100 * time.Millisecond)
-
 		wg.Add(1)
 		go func() {
-			_, _ = scanner.Scan(t.Context(), types.FilePath(p), types.FilePath(folderPath), nil)
+			// Adding a short delay so the cancel listener will start before a new scan is sending the cancel signal
+			time.Sleep(200 * time.Millisecond)
+			ctx := EnrichContextForTest(t, t.Context(), c, workingDir)
+			_, _ = scanner.Scan(ctx, types.FilePath(p), types.FilePath(folderPath), nil)
 			wg.Done()
 		}()
 	}
@@ -342,6 +330,19 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, 1, fakeCli.GetFinishedScans())
+}
+
+func EnrichContextForTest(t *testing.T, ctx context.Context, c *config.Config, folderPath string) context.Context {
+	t.Helper()
+	// add logger to context
+	newCtx := ctx2.NewContextWithLogger(ctx, c.Logger())
+
+	// add scanner dependencies to context
+	folderConfig := c.FolderConfig(types.FilePath(folderPath))
+	newCtx = ctx2.NewContextWithDependencies(newCtx, map[string]any{
+		ctx2.DepFolderConfig: folderConfig,
+	})
+	return newCtx
 }
 
 func sampleIssue() ossIssue {
@@ -400,6 +401,22 @@ func Test_prepareScanCommand(t *testing.T) {
 		assert.Contains(t, cmd, "--file=asdf")
 	})
 
+	t.Run("support `--`", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+
+		settings := config.CliSettings{
+			AdditionalOssParameters: []string{"-d", "--", "-PappBuild=true", "-Prules=false", "-x"},
+			C:                       c,
+		}
+		c.SetCliSettings(&settings)
+
+		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+
+		assert.Contains(t, cmd, "--")
+		assert.Equal(t, "-x", cmd[len(cmd)-1])
+	})
+
 	t.Run("Uses --all-projects by default", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
@@ -413,7 +430,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
 
 		assert.Contains(t, cmd, "--all-projects")
-		assert.Len(t, cmd, 4)
+		assert.Lenf(t, cmd, 6, "cmd: %v", cmd)
 	})
 }
 
@@ -432,12 +449,11 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	targetFile, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
+	ctx = EnrichContextForTest(t, ctx, c, workingDir)
 	_, _ = scanner.Scan(ctx, types.FilePath(targetFile), "", nil)
 
 	// Assert
-	assert.Eventually(t, func() bool {
-		return fakeCli.GetFinishedScans() >= 2
-	}, 3*time.Second, 50*time.Millisecond)
+	assert.Eventually(t, func() bool { return fakeCli.GetFinishedScans() >= 2 }, 3*time.Second, 50*time.Millisecond)
 }
 
 func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
@@ -480,6 +496,8 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	t.Cleanup(cancel2)
 
 	// Act
+	ctx1 = EnrichContextForTest(t, ctx1, c, workingDir)
+	ctx2 = EnrichContextForTest(t, ctx2, c, workingDir)
 	scanner.scheduleRefreshScan(ctx1, types.FilePath(targetPath))
 	scanner.scheduleRefreshScan(ctx2, types.FilePath(targetPath))
 
@@ -524,7 +542,8 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	filePath, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
-	analysis, err := scanner.Scan(t.Context(), types.FilePath(filePath), "", nil)
+	ctx := EnrichContextForTest(t, t.Context(), c, workingDir)
+	analysis, err := scanner.Scan(ctx, types.FilePath(filePath), "", nil)
 
 	// Assert
 	assert.NoError(t, err)

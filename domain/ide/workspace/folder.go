@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package workspace implements an LSP workspace
 package workspace
 
 import (
@@ -430,7 +431,7 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 		Status:          string(gafanalytics.Success),
 		TargetId:        targetId,
 		TimestampMs:     data.TimestampFinished.UnixMilli(),
-		DurationMs:      int64(data.DurationMs),
+		DurationMs:      int64(data.Duration),
 		Extension:       extension,
 	}
 
@@ -451,7 +452,12 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 		logger.Error().Err(err).Msg("Failed to marshal analytics")
 	}
 
-	err = analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), v2InstrumentationData)
+	folderOrg, err := c.FolderOrganizationForSubPath(data.Path)
+	if err != nil {
+		logger.Warn().Str("path", string(data.Path)).Err(err).Msg("Cannot send analytics: failed to get folder organization")
+		return
+	}
+	err = analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), folderOrg, v2InstrumentationData)
 	if err != nil {
 		logger.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
 		return

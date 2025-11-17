@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package networking implements networking functionality for MCP
 package networking
 
 import (

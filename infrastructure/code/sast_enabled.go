@@ -17,37 +17,11 @@
 package code
 
 import (
-	"github.com/snyk/snyk-ls/internal/data_structure"
-	"github.com/snyk/snyk-ls/internal/types"
-
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
-const codeDisabledInOrganisationMessageText = "It looks like your organization has disabled Snyk Code. " +
-	"You can easily enable it by clicking on 'Enable Snyk Code'. " +
-	"This will open your organization settings in your browser."
-
-const enableSnykCodeMessageActionItemTitle types.MessageAction = "Enable Snyk Code"
-const closeMessageActionItemTitle types.MessageAction = "Close"
-
 func (sc *Scanner) isSastEnabled(sastResponse *sast_contract.SastResponse) bool {
 	if !sastResponse.SastEnabled {
-		// this is processed in the listener registered to translate into the right client protocol
-		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
-		commandData := types.CommandData{
-			Title:     types.OpenBrowserCommand,
-			CommandId: types.OpenBrowserCommand,
-			Arguments: []any{getCodeEnablementUrl()},
-		}
-
-		actionCommandMap.Add(enableSnykCodeMessageActionItemTitle, commandData)
-		actionCommandMap.Add(closeMessageActionItemTitle, types.CommandData{})
-
-		sc.notifier.Send(types.ShowMessageRequest{
-			Message: codeDisabledInOrganisationMessageText,
-			Type:    types.Warning,
-			Actions: actionCommandMap,
-		})
 		return false
 	}
 

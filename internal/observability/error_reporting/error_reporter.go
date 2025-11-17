@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package error_reporting implements error reporting functionality
 package error_reporting
 
 import "github.com/snyk/snyk-ls/internal/types"

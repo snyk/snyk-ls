@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package debounce implements debouncer functionality
 package debounce
 
 import (

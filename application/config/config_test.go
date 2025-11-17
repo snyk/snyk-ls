@@ -137,39 +137,42 @@ func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T
 }
 
 func TestSnykCodeApi(t *testing.T) {
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 	t.Run("endpoint not provided", func(t *testing.T) {
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
+		codeApiEndpoint, _ := c.GetCodeApiUrlFromCustomEndpoint(nil)
+
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided without 'app' prefix", func(t *testing.T) {
-		endpoint := "https://snyk.io/api/v1"
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
+		c.UpdateApiEndpoints("https://snyk.io/api/v1")
+		codeApiEndpoint, _ := c.GetCodeApiUrlFromCustomEndpoint(nil)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix with v1 suffix", func(t *testing.T) {
-		endpoint := "https://app.snyk.io/api/v1"
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
+		c.UpdateApiEndpoints("https://app.snyk.io/api/v1")
+		codeApiEndpoint, _ := c.GetCodeApiUrlFromCustomEndpoint(nil)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix without v1 suffix", func(t *testing.T) {
-		endpoint := "https://app.snyk.io/api"
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
+		c.UpdateApiEndpoints("https://app.snyk.io/api")
+		codeApiEndpoint, _ := c.GetCodeApiUrlFromCustomEndpoint(nil)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'api' prefix", func(t *testing.T) {
-		endpoint := "https://api.snyk.io"
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint(endpoint)
+		c.UpdateApiEndpoints("https://api.snyk.io")
+		codeApiEndpoint, _ := c.GetCodeApiUrlFromCustomEndpoint(nil)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("proxy endpoint provided via 'DEEPROXY_API_URL' environment variable", func(t *testing.T) {
 		customDeeproxyUrl := "https://deeproxy.custom.url.snyk.io"
 		t.Setenv("DEEPROXY_API_URL", customDeeproxyUrl)
-		codeApiEndpoint, _ := getCodeApiUrlFromCustomEndpoint("")
+		codeApiEndpoint, _ := c.GetCodeApiUrlFromCustomEndpoint(nil)
 		assert.Equal(t, customDeeproxyUrl, codeApiEndpoint)
 	})
 }
@@ -355,8 +358,8 @@ func TestConfig_shouldUpdateOAuth2Token(t *testing.T) {
 	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 
 	token := oauth2.Token{
-		AccessToken:  "a",
-		RefreshToken: "b",
+		AccessToken:  "aaa",
+		RefreshToken: "bbb",
 		Expiry:       time.Now().Add(time.Hour),
 	}
 

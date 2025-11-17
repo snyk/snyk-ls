@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package learn implements the Snyk Learn API Integration
 package learn
 
 import (

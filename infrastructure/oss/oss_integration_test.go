@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
@@ -39,10 +40,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// This is an integration test that downloads and installs the CLI if necessary
+// This is a smoke test that downloads and installs the CLI if necessary
 // it uses real CLI output for verification of functionality
 func Test_Scan(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	testutil.CreateDummyProgressListener(t)
 	c.SetFormat(config.FormatHtml)
 	ctx := t.Context()
@@ -74,10 +75,13 @@ func Test_Scan(t *testing.T) {
 	c.ConfigureLogging(nil)
 	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
 
-	issues, _ := scanner.Scan(ctx, types.FilePath(path), types.FilePath(workingDir), nil)
+	ctx = oss.EnrichContextForTest(t, ctx, c, workingDir)
+	issues, err := scanner.Scan(ctx, types.FilePath(path), types.FilePath(workingDir), nil)
+	require.NoError(t, err, "scan should succeed")
 
-	assert.NotEqual(t, 0, len(issues))
-	assert.True(t, strings.Contains(issues[0].GetMessage(), "<p>"))
+	require.NotEmpty(t, issues, "scan should return at least one issue")
+	assert.True(t, strings.Contains(issues[0].GetMessage(), "<p>"), "issue message should contain HTML formatting")
+
 	if spanRecorder, ok := instrumentor.(performance.SpanRecorder); ok {
 		spans := spanRecorder.Spans()
 		assert.Equal(t, "cliScanner.Scan", spans[0].GetOperation())

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package initialize implements initialization functionality
 package initialize
 
 type Initializer interface {

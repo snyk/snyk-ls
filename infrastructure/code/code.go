@@ -18,6 +18,7 @@ package code
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -91,7 +92,7 @@ type Scanner struct {
 	C                   *config.Config
 	codeInstrumentor    codeClientObservability.Instrumentor
 	codeErrorReporter   codeClientObservability.ErrorReporter
-	codeScanner         func(sc *Scanner, path types.FilePath) codeClient.CodeScanner
+	codeScanner         func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)
 }
 
 func (sc *Scanner) BundleHashes() map[types.FilePath]string {
@@ -109,7 +110,7 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, path types.FilePath) codeClient.CodeScanner) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)) *Scanner {
 	sc := &Scanner{
 		SnykApiClient:      apiClient,
 		errorReporter:      reporter,
@@ -145,25 +146,26 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	logger := sc.C.Logger().With().Str("method", "code.Scan").Logger()
 	if !sc.C.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
 
-	// Get SAST settings from feature flag service using folder configuration
-	sastResponse := sc.featureFlagService.GetSastSettingsFromFolderConfig(folderPath)
-	if sastResponse == nil {
-		return issues, errors.New("Failed to get the sast settings")
+	if folderConfig == nil || folderConfig.SastSettings == nil {
+		logger.Error().Str("folderPath", string(folderPath)).Msg("folder config or SAST settings is nil")
+		return issues, errors.New("folder config or SAST settings not available")
 	}
+
+	sastResponse := folderConfig.SastSettings
 
 	if !sc.isSastEnabled(sastResponse) {
 		return issues, errors.New("SAST is not enabled")
 	}
 
-	if sc.isLocalEngineEnabled(sastResponse) {
-		sc.updateCodeApiLocalEngine(sastResponse)
+	if isLocalEngineEnabled(sastResponse) {
+		updateCodeApiLocalEngine(sc.C, sastResponse)
 	}
 
 	sc.C.SetSnykAgentFixEnabled(sastResponse.AutofixEnabled)
@@ -201,7 +203,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
 	sc.changedFilesMutex.Unlock()
 
-	results, err := internalScan(ctx, sc, folderPath, logger, filesToBeScanned)
+	results, err := internalScan(ctx, sc, folderPath, folderConfig, logger, filesToBeScanned)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +216,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	return results, err
 }
 
-func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {
+func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, folderConfig *types.FolderConfig, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {
 	span := sc.Instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.Instrumentor.Finish(span)
 	ctx, cancel := context.WithCancel(span.Context())
@@ -249,7 +251,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 	}
 
 	codeConsistentIgnoresEnabled := sc.featureFlagService.GetFromFolderConfig(folderPath, featureflag.SnykCodeConsistentIgnores)
-	results, err = sc.UploadAndAnalyze(ctx, folderPath, files, filesToBeScanned, codeConsistentIgnoresEnabled, t)
+	results, err = sc.UploadAndAnalyze(ctx, folderPath, folderConfig, files, filesToBeScanned, codeConsistentIgnoresEnabled, t)
 
 	return results, err
 }
@@ -352,7 +354,7 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.
 	return false
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, files <-chan string, changedFiles map[types.FilePath]bool, codeConsistentIgnores bool, t *progress.Tracker) (issues []types.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig, files <-chan string, changedFiles map[types.FilePath]bool, codeConsistentIgnores bool, t *progress.Tracker) (issues []types.Issue, err error) {
 	if ctx.Err() != nil {
 		progress.Cancel(t.GetToken())
 		sc.C.Logger().Info().Msg("Canceling Code scanner received cancellation signal")
@@ -380,7 +382,10 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 	}
 
 	// Create a new code scanner with Organization populated from folder configuration
-	newCodeScanner := sc.codeScanner(sc, path)
+	newCodeScanner, err := sc.codeScanner(sc, folderConfig)
+	if err != nil {
+		return []types.Issue{}, fmt.Errorf("failed to create code scanner: %w", err)
+	}
 
 	var sarifResponse *sarif.SarifResponse
 	var bundleHash string
@@ -444,21 +449,40 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fi
 
 // createCodeConfig creates a new codeConfig with Organization populated from folder configuration
 // and delegates other values to the language server config
-func (sc *Scanner) createCodeConfig(path types.FilePath) codeClientConfig.Config {
-	// Get organization from folder configuration for the specific path
-	organization := sc.C.FolderOrganization(path)
+func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClientConfig.Config, error) {
+	if folderConfig == nil {
+		return nil, fmt.Errorf("folder config is required to create code config")
+	}
+
+	// TODO - we are being inefficient and re-fetching the folder config in the function calls instead of passing it in
+	workspaceFolderPath := folderConfig.FolderPath
+	organization := sc.C.FolderOrganization(workspaceFolderPath)
+	if organization == "" {
+		return nil, fmt.Errorf("no organization found for workspace folder %s", workspaceFolderPath)
+	}
+
+	codeApiURL, err := GetCodeApiUrlForFolder(sc.C, workspaceFolderPath)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to get code api url for workspace folder %s", workspaceFolderPath)
+		sc.C.Logger().Error().Msg(msg)
+		return nil, err
+	}
 
 	// Create a lazy config that delegates to the language server config
 	return &CodeConfig{
 		orgForFolder: organization,
 		lsConfig:     sc.C,
-	}
+		codeApiUrl:   codeApiURL,
+	}, nil
 }
 
 // CreateCodeScanner creates a real code scanner with Organization populated from folder configuration
-func CreateCodeScanner(scanner *Scanner, path types.FilePath) codeClient.CodeScanner {
+func CreateCodeScanner(scanner *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error) {
 	// Create a new codeConfig with Organization populated from folder configuration
-	codeConfig := scanner.createCodeConfig(path)
+	codeConfig, err := scanner.createCodeConfig(folderConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create a new HTTP client
 	httpClient := codeClientHTTP.NewHTTPClient(
@@ -476,5 +500,5 @@ func CreateCodeScanner(scanner *Scanner, path types.FilePath) codeClient.CodeSca
 		codeClient.WithLogger(scanner.C.Engine().GetLogger()),
 		codeClient.WithInstrumentor(scanner.codeInstrumentor),
 		codeClient.WithErrorReporter(scanner.codeErrorReporter),
-	)
+	), nil
 }

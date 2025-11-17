@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+// Package constants provides constants
 package constants
 
-const DataHome = "SNYKLS_INTERNAL_DATAHOME"
+const (
+	DataHome                   = "SNYKLS_INTERNAL_DATAHOME"
+	AutoOrgEnabledByDefaultKey = "SNYKLS_INTERNAL_AUTO_ORG_ENABLED_BY_DEFAULT" // IDE-1548: Config key for auto-org EA rollout
+)
