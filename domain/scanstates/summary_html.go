@@ -93,7 +93,7 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 		"TotalScansCount":                   state.TotalScansCount,
 		"RunningScansCount":                 state.ScansSuccessCount + state.ScansErrorCount,
 		"IsDeltaEnabled":                    isDeltaEnabled,
-		"IsSnykAgentFixEnabled":             renderer.c.IsSnykAgentFixEnabled(),
+		"IsSnykAgentFixEnabled":             renderer.isAutofixEnabledInAnyFolder(),
 	}
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
@@ -138,4 +138,19 @@ func fixableIssueCount(issues []types.Issue) (fixableIssueCount int) {
 		}
 	}
 	return fixableIssueCount
+}
+
+// isAutofixEnabledInAnyFolder checks if autofix is enabled in any folders' SAST settings
+func (renderer *HtmlRenderer) isAutofixEnabledInAnyFolder() bool {
+	if renderer.c.Workspace() == nil {
+		return false
+	}
+
+	for _, folder := range renderer.c.Workspace().Folders() {
+		folderConfig := renderer.c.FolderConfig(folder.Path())
+		if folderConfig != nil && folderConfig.SastSettings != nil && folderConfig.SastSettings.AutofixEnabled {
+			return true
+		}
+	}
+	return false
 }

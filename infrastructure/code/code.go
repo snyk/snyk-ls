@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package code provides Snyk Code (SAST) scanning functionality.
 package code
 
 import (
@@ -161,15 +162,13 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 
 	sastResponse := folderConfig.SastSettings
 
-	if !sc.isSastEnabled(sastResponse) {
+	if !sastResponse.SastEnabled {
 		return issues, errors.New(utils.ErrSnykCodeNotEnabled)
 	}
 
 	if isLocalEngineEnabled(sastResponse) {
 		updateCodeApiLocalEngine(sc.C, sastResponse)
 	}
-
-	sc.C.SetSnykAgentFixEnabled(sastResponse.AutofixEnabled)
 
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[folderPath] == nil {
@@ -442,6 +441,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 		requestId,
 		path,
 		sc.C,
+		folderConfig,
 	)
 	issueEnhancer.addIssueActions(ctx, issues)
 
