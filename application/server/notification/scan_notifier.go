@@ -23,6 +23,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -49,16 +50,28 @@ func (n *scanNotifier) SendError(product product.Product, folderPath types.FileP
 	err := json.Unmarshal([]byte(errorMessage), cliError)
 	if err != nil {
 		// no structured info available
-		cliError = nil
+		cliError.ErrorMessage = errorMessage
+	}
+
+	showNotification := true
+	treeNodeSuffix := "(scan failed)"
+
+	// Check if this error has specific metadata configured
+	if metadata, exists := utils.ErrorConfig[cliError.ErrorMessage]; exists {
+		showNotification = metadata.ShowNotification
+		treeNodeSuffix = metadata.TreeRootSuffix
 	}
 
 	n.notifier.Send(
 		types.SnykScanParams{
-			Status:       types.ErrorStatus,
-			Product:      product.ToProductCodename(),
-			FolderPath:   folderPath,
-			ErrorMessage: errorMessage,
-			CliError:     cliError,
+			Status:     types.ErrorStatus,
+			Product:    product.ToProductCodename(),
+			FolderPath: folderPath,
+			PresentableError: &types.PresentableError{
+				CliError:         *cliError,
+				ShowNotification: showNotification,
+				TreeNodeSuffix:   treeNodeSuffix,
+			},
 		},
 	)
 }

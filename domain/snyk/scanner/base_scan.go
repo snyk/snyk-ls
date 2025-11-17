@@ -23,13 +23,14 @@ import (
 
 	"github.com/gosimple/hashdir"
 
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
-var ErrMissingDeltaReference = errors.New("must specify reference for delta scans")
+var ErrMissingDeltaReference = errors.New(utils.ErrNoReferenceBranch)
 
 func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s types.ProductScanner, folderConfig *types.FolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
 	logger := sc.c.Logger().With().Str("method", "scanBaseBranch").Logger()
