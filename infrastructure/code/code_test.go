@@ -39,6 +39,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -562,7 +563,7 @@ func TestDeltaScanUsesFolderOrg(t *testing.T) {
 	// Create a separate temp directory with a dummy file for a delta scan to run on
 	tempScanDir := t.TempDir()
 	dummyFile := filepath.Join(tempScanDir, "test.java")
-	err := os.WriteFile(dummyFile, []byte("class Test {}"), 0644)
+	err := os.WriteFile(dummyFile, []byte("class Test {}"), 0o644)
 	require.NoError(t, err)
 
 	// Track which folderConfig was passed to the code scanner
@@ -804,7 +805,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
 		assert.Error(t, err)
-		assert.ErrorContains(t, err, "SAST is not enabled")
+		assert.ErrorContains(t, err, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues)
 	})
 
@@ -841,7 +842,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		// Scan with org2 (should fail since SAST is disabled)
 		issues2, err2 := scanner2.Scan(t.Context(), types.FilePath("test2.go"), tempDir2, folderConfig2)
 		assert.Error(t, err2)
-		assert.ErrorContains(t, err2, "SAST is not enabled")
+		assert.ErrorContains(t, err2, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues2)
 	})
 }

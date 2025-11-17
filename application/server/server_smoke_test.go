@@ -200,7 +200,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 					continue
 				}
 				// TODO: check right scan state and summary is sent
-				return strings.Contains(scanParams.ErrorMessage, "fork/exec")
+				return strings.Contains(scanParams.PresentableError.ErrorMessage, "fork/exec")
 			}
 
 			return false
@@ -601,7 +601,7 @@ func substituteDepGraphFlow(t *testing.T, c *config.Config, cloneTargetDirString
 		depGraphData := workflow.NewData(depGraphDataID, "application/json", depGraphJson)
 		normalisedTargetFile := strings.TrimSpace(displayTargetFile)
 		depGraphData.SetMetaData("Content-Location", normalisedTargetFile)
-		depGraphData.SetMetaData("normalisedTargetFile", normalisedTargetFile) //Required for cli-extension-os-flow
+		depGraphData.SetMetaData("normalisedTargetFile", normalisedTargetFile) // Required for cli-extension-os-flow
 
 		return []workflow.Data{depGraphData}, nil
 	}
@@ -770,8 +770,8 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecord
 
 	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 	require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
-		"Scan failed - Product: %s, Folder: %s, Error: %s",
-		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.ErrorMessage)
+		"Scan failed - Product: %s, Folder: %s, Error: %w",
+		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.PresentableError)
 	require.Equal(t, types.Success, finalScanParams.Status,
 		"Unexpected scan status: %s", finalScanParams.Status)
 }
