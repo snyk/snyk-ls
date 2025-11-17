@@ -65,7 +65,7 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	if endpoint == "" {
 		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
-	runSmokeTest(t, c, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint, true)
+	runSmokeTest(t, c, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint)
 }
 
 func Test_SmokeWorkspaceScan(t *testing.T) {
@@ -91,7 +91,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 
 	tests := []test{
 		{
-			name:                 "OSS_and_Code (legacy scanner)",
+			name:                 "OSS_and_Code",
 			repo:                 testsupport.NodejsGoof,
 			commit:               "0336589",
 			file1:                ossFile,
@@ -100,7 +100,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "OSS_and_Code (PHP Goof) (legacy scanner)",
+			name:                 "OSS_and_Code (PHP Goof)",
 			repo:                 "https://github.com/snyk-labs/php-goof.git",
 			commit:               "",
 			file1:                "composer.json",
@@ -109,7 +109,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "OSS_and_Code (native scanner)",
+			name:                 "OSS_and_Code_with_consistent_ignores",
 			repo:                 testsupport.NodejsGoof,
 			commit:               "0336589",
 			file1:                ossFile,
@@ -118,7 +118,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "IaC_and_Code (legacy scanner)",
+			name:                 "IaC_and_Code",
 			repo:                 "https://github.com/deepcodeg/snykcon-goof.git",
 			commit:               "eba8407",
 			file1:                iacFile,
@@ -127,7 +127,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             true,
 		},
 		{
-			name:                 "Code_without_vulns (legacy scanner)",
+			name:                 "Code_without_vulns",
 			repo:                 "https://github.com/imagec/simple-repo",
 			commit:               "75bcc55",
 			file1:                "",
@@ -136,7 +136,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			hasVulns:             false,
 		},
 		{
-			name:                 "IaC_and_Code (native scanner)",
+			name:                 "IaC_and_Code_with_consistent_ignores",
 			repo:                 "https://github.com/deepcodeg/snykcon-goof.git",
 			commit:               "eba8407",
 			file1:                iacFile,
@@ -147,8 +147,13 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c := testutil.SmokeTest(t, "")
-			runSmokeTest(t, c, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "", tc.useConsistentIgnores)
+			tokenSecretName := ""
+			if tc.useConsistentIgnores {
+				tokenSecretName = "SNYK_TOKEN_CONSISTENT_IGNORES"
+			}
+
+			c := testutil.SmokeTest(t, tokenSecretName)
+			runSmokeTest(t, c, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "")
 		})
 	}
 }
@@ -478,18 +483,11 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 	}, time.Second*600, time.Second)
 }
 
-func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string, useConsistentIgnores bool) {
+func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string) {
 	t.Helper()
 	if endpoint != "" && endpoint != "/v1" {
 		t.Setenv("SNYK_API", endpoint)
 	}
-
-	// Set feature flag for CCI as an immutable default value function.
-	// This controls whether to use the new native scanner implementation or legacy scanner.
-	// We need this approach, since we always run with a Snyk API token with CCI enabled on the user preferred org in the web UI.
-	gafConfig := c.Engine().GetConfiguration()
-	gafConfig.AddDefaultValue(configuration.FF_CODE_CONSISTENT_IGNORES, configuration.ImmutableDefaultValueFunction(useConsistentIgnores))
-
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(true)
