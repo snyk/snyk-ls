@@ -770,8 +770,8 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecord
 
 	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 	require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
-		"Scan failed - Product: %s, Folder: %s, Error: %s",
-		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.PresentableError.CliError.ErrorMessage)
+		"Scan failed - Product: %s, Folder: %s, Error: %w",
+		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.PresentableError)
 	require.Equal(t, types.Success, finalScanParams.Status,
 		"Unexpected scan status: %s", finalScanParams.Status)
 }
