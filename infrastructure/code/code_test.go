@@ -34,7 +34,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -440,22 +439,13 @@ func Test_IsEnabled(t *testing.T) {
 	)
 }
 
-func autofixSetupAndCleanup(t *testing.T, c *config.Config) {
-	t.Helper()
-	resetCodeSettings()
-	t.Cleanup(resetCodeSettings)
-	c.SetSnykCodeEnabled(true)
-	getCodeSettings().isAutofixEnabled.Set(false)
-}
-
 func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	t.Run("should not add autofix after analysis when not enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		c.SetSnykCodeEnabled(true)
 		channel := make(chan types.ProgressParams, 10000)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
-
-		autofixSetupAndCleanup(t, c)
 		scanner := New(
 			c,
 			performance.NewInstrumentor(),
@@ -474,7 +464,14 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			},
 		)
 		files := []string{string(filePath)}
-		folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
+		folderConfig := &types.FolderConfig{
+			FolderPath:   path,
+			PreferredOrg: "test-org",
+			SastSettings: &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: false,
+			},
+		}
 
 		// execute
 		issues, err := scanner.UploadAndAnalyze(t.Context(), "", folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
@@ -488,15 +485,23 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 
 	t.Run("should run autofix after analysis when is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		folderConfigWithAutofix := &types.FolderConfig{
+			FolderPath:   "",
+			PreferredOrg: "test-org",
+			SastSettings: &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: true,
+			},
+		}
 		issueEnhancer := IssueEnhancer{
 			instrumentor: performance.NewInstrumentor(),
 			c:            c,
+			folderConfig: folderConfigWithAutofix,
 		}
 		channel := make(chan types.ProgressParams, 10000)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
-		autofixSetupAndCleanup(t, c)
-		getCodeSettings().isAutofixEnabled.Set(true)
+		c.SetSnykCodeEnabled(true)
 
 		scanner := New(
 			c,
@@ -512,7 +517,14 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		)
 		filePath, path := TempWorkdirWithIssues(t)
 		files := []string{string(filePath)}
-		folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
+		folderConfig := &types.FolderConfig{
+			FolderPath:   path,
+			PreferredOrg: "test-org",
+			SastSettings: &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: true,
+			},
+		}
 
 		// execute
 		issues, err := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
