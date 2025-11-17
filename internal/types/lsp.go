@@ -1143,10 +1143,9 @@ const (
 )
 
 type PresentableError struct {
-	// CliError contains structured error information from the CLI
-	CliError CliError `json:"cliError"`
+	CliError `json:",inline"`
 	// ShowNotification is for IDE to decide to display a notification or not
-	ShowNotification bool `json:"showNotification,omitempty"`
+	ShowNotification bool `json:"showNotification"`
 	// TreeNodeSuffix is an optional suffix message to be displayed in the tree node in IDEs
 	TreeNodeSuffix string `json:"treeNodeSuffix"`
 }

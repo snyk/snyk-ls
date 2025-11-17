@@ -200,7 +200,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 					continue
 				}
 				// TODO: check right scan state and summary is sent
-				return strings.Contains(scanParams.PresentableError.CliError.ErrorMessage, "fork/exec")
+				return strings.Contains(scanParams.PresentableError.ErrorMessage, "fork/exec")
 			}
 
 			return false
