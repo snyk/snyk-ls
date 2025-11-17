@@ -24,23 +24,23 @@ import (
 	"path/filepath"
 	"testing"
 
-	ctx2 "github.com/snyk/snyk-ls/internal/context"
-	"github.com/snyk/snyk-ls/internal/util"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	"github.com/snyk/go-application-framework/pkg/mocks"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/constants"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/storage"
-	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func IntegTest(t *testing.T) *config.Config {
@@ -154,6 +154,7 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *con
 	token := testsupport.GetEnvironmentToken(tokenSecretName)
 	c.SetToken(token)
 	c.SetAuthenticationMethod(types.TokenAuthentication)
+	c.SetAutomaticAuthentication(false)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
 	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, true)))
@@ -182,7 +183,7 @@ func redirectConfigAndDataHome(t *testing.T, c *config.Config) {
 	storageFile := filepath.Join(t.TempDir(), "testStorage")
 	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
 	require.NoError(t, err)
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.SetStorage(s)
 }
 
@@ -200,14 +201,38 @@ func OnlyEnableCode(t *testing.T, c *config.Config) {
 			},
 			AutofixEnabled: true,
 		}
-		storedConfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+		storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	}
 }
 
+// SetUpEngineMock creates and configures a mock GAF engine for testing.
+// It sets up common expectations (GetConfiguration, GetLogger) and ensures the mock engine's
+// configuration shares the same storage as the original config, allowing folder configurations
+// to be persisted and read correctly across both objects.
+// The mock engine is automatically set on the provided config.
 func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {
 	t.Helper()
-	mockEngine, engineConfig := testsupport.SetupEngineMock(t)
+
+	// Create mock engine and configuration
+	ctrl := gomock.NewController(t)
+	mockEngine := mocks.NewMockEngine(ctrl)
+	engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+
+	// Set up the common expectation that GetConfiguration returns the configuration we just created
+	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	// Set up the common expectation that GetLogger returns c's logger
+	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+
+	// The new engineConfig needs to share the same storage as c's original engine config,
+	// otherwise folder configs saved to engineConfig won't be visible to c.
+	// Copy the storage setup from c's engine to the new engineConfig.
+	originalConfig := c.Engine().GetConfiguration()
+	engineConfig.Set(constants.DataHome, originalConfig.GetString(constants.DataHome))
+	engineConfig.SetStorage(originalConfig.GetStorage())
+
+	// Set the mock engine on the config provided
 	c.SetEngine(mockEngine)
+
 	return mockEngine, engineConfig
 }
 

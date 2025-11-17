@@ -38,6 +38,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/oauth2"
+
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -50,13 +52,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"golang.org/x/oauth2"
-
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
-	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -299,7 +299,7 @@ func initWorkFlowEngine(c *Config) {
 
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
 
@@ -1178,17 +1178,17 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 	conf := c.engine.GetConfiguration()
 	conf.SetStorage(s)
 	c.m.Unlock()
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
 
 	// now refresh from storage
-	err := s.Refresh(conf, storedConfig.ConfigMainKey)
+	err := s.Refresh(conf, storedconfig.ConfigMainKey)
 	if err != nil {
 		c.logger.Err(err).Msg("unable to load stored config")
 	}
 
-	sc, err := storedConfig.GetStoredConfig(conf, c.logger)
+	sc, err := storedconfig.GetStoredConfig(conf, c.logger)
 	c.logger.Debug().Any("storedConfig", sc).Send()
 
 	if err != nil {
@@ -1275,7 +1275,7 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	var folderConfig *types.FolderConfig
 	var err error
-	folderConfig, err = storedConfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
+	folderConfig, err = storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
 	if err != nil {
 		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
@@ -1283,7 +1283,24 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 }
 
 func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
-	return storedConfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
+	return storedconfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
+}
+
+// FolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
+// The path parameter can be a subdirectory or file within a workspace folder.
+// Returns an error if the workspace is nil or if no workspace folder contains the path.
+func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
+	if c.Workspace() == nil {
+		return nil, fmt.Errorf("workspace is nil, so cannot determine folder config for path: %s", path)
+	}
+
+	workspaceFolder := c.Workspace().GetFolderContaining(path)
+	if workspaceFolder == nil {
+		return nil, fmt.Errorf("no workspace folder found for path: %s", path)
+	}
+
+	folderConfig := c.FolderConfig(workspaceFolder.Path())
+	return folderConfig, nil
 }
 
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
@@ -1313,6 +1330,26 @@ func (c *Config) FolderOrganizationSlug(path types.FilePath) string {
 	clonedConfig := c.Engine().GetConfiguration()
 	clonedConfig.Set(configuration.ORGANIZATION, c.FolderOrganization(path))
 	return clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
+}
+
+// FolderOrganizationForSubPath returns the organization for the workspace folder containing the given path.
+// Returns an error if the workspace is nil, if no folder contains the path, or if no organization can be determined.
+func (c *Config) FolderOrganizationForSubPath(path types.FilePath) (string, error) {
+	if c.Workspace() == nil {
+		return "", fmt.Errorf("workspace is nil, so cannot determine organization for path: %s", path)
+	}
+
+	workspaceFolder := c.Workspace().GetFolderContaining(path)
+	if workspaceFolder == nil {
+		return "", fmt.Errorf("cannot determine organization, no workspace folder found for path: %s", path)
+	}
+
+	folderOrg := c.FolderOrganization(workspaceFolder.Path())
+	if folderOrg == "" {
+		return "", fmt.Errorf("no organization was able to be determined for folder: %s", workspaceFolder.Path())
+	}
+
+	return folderOrg, nil
 }
 
 func (c *Config) HoverVerbosity() int {

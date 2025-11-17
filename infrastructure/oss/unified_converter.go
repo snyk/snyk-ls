@@ -109,8 +109,8 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 		}
 
 		remediationAdvice := getRemediationAdvice(ossIssueData)
-		ignoreDetails := trIssue.GetIgnoreDetails()
-		isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
+		//ignoreDetails := trIssue.GetIgnoreDetails()
+		//isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
 		message := buildMessage(title, problem.PackageName, remediationAdvice)
 		formattedMessage := buildFormattedMessage(problem, ecosystemStr, title, trIssue.GetDescription(), trIssue.GetSeverity())
 		references := extractReferences(problem)
@@ -121,7 +121,7 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 			ID:                  trIssue.GetID(),
 			Severity:            types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())],
 			IssueType:           types.DependencyVulnerability,
-			IsIgnored:           isIgnored,
+			IsIgnored:           false,
 			IsNew:               false,
 			Range:               myRange,
 			Message:             message,

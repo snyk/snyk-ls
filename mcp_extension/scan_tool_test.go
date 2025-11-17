@@ -1348,6 +1348,176 @@ func TestSnykTrustHandler(t *testing.T) {
 	})
 }
 
+func TestHandleFileOutput(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+	testOutput := `{"test": "output", "issues": [{"id": "1", "severity": "high"}]}`
+
+	toolDef := SnykMcpToolsDefinition{
+		Name:        "snyk_code_scan",
+		Description: "Test tool",
+	}
+
+	t.Run("WriteToTempDirectory", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		invocationCtx := mocks.NewMockInvocationContext(ctrl)
+		config := configuration.New()
+		config.Set(OUTPUT_DIR_PARAM, "ostemp")
+		invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+
+		workingDir := t.TempDir()
+		filePath, err := handleFileOutput(logger, invocationCtx, workingDir, toolDef, testOutput)
+
+		require.NoError(t, err)
+		require.NotEmpty(t, filePath)
+		require.Contains(t, filePath, os.TempDir())
+		require.Contains(t, filePath, "scan_output_")
+		require.Contains(t, filePath, "snyk_code_scan.json")
+
+		// Verify file was created and contains correct content
+		content, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		require.Equal(t, testOutput, string(content))
+	})
+
+	t.Run("WriteToAbsolutePath", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		invocationCtx := mocks.NewMockInvocationContext(ctrl)
+		config := configuration.New()
+
+		outputDir := t.TempDir()
+		config.Set(OUTPUT_DIR_PARAM, outputDir)
+		invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+
+		workingDir := t.TempDir()
+		filePath, err := handleFileOutput(logger, invocationCtx, workingDir, toolDef, testOutput)
+
+		require.NoError(t, err)
+		require.NotEmpty(t, filePath)
+		require.Contains(t, filePath, outputDir)
+		require.Contains(t, filePath, "scan_output_")
+		require.Contains(t, filePath, "snyk_code_scan.json")
+
+		// Verify file was created and contains correct content
+		content, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		require.Equal(t, testOutput, string(content))
+	})
+
+	t.Run("WriteToRelativePath", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		invocationCtx := mocks.NewMockInvocationContext(ctrl)
+		config := configuration.New()
+
+		relativeDir := "output"
+		config.Set(OUTPUT_DIR_PARAM, relativeDir)
+		invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+
+		workingDir := t.TempDir()
+		// Create the output directory since handleFileOutput doesn't create it
+		err := os.Mkdir(filepath.Join(workingDir, relativeDir), 0755)
+		require.NoError(t, err)
+
+		filePath, err := handleFileOutput(logger, invocationCtx, workingDir, toolDef, testOutput)
+
+		require.NoError(t, err)
+		require.NotEmpty(t, filePath)
+		require.Contains(t, filePath, workingDir)
+		require.Contains(t, filePath, relativeDir)
+		require.Contains(t, filePath, "scan_output_")
+		require.Contains(t, filePath, "snyk_code_scan.json")
+
+		// Verify file was created and contains correct content
+		content, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		require.Equal(t, testOutput, string(content))
+	})
+
+	t.Run("FileNameIncludesWorkingDirBasename", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		invocationCtx := mocks.NewMockInvocationContext(ctrl)
+		config := configuration.New()
+		config.Set(OUTPUT_DIR_PARAM, "ostemp")
+		invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+
+		// Create a temp dir with a specific name
+		tempBase := t.TempDir()
+		workingDir := filepath.Join(tempBase, "my-project")
+		err := os.Mkdir(workingDir, 0755)
+		require.NoError(t, err)
+
+		filePath, err := handleFileOutput(logger, invocationCtx, workingDir, toolDef, testOutput)
+
+		require.NoError(t, err)
+		require.Contains(t, filePath, "my-project")
+	})
+
+	t.Run("DifferentToolNames", func(t *testing.T) {
+		testCases := []struct {
+			toolName     string
+			expectedName string
+		}{
+			{"snyk_code_scan", "snyk_code_scan.json"},
+			{"snyk_sca_scan", "snyk_sca_scan.json"},
+			{"snyk_iac_scan", "snyk_iac_scan.json"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.toolName, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				invocationCtx := mocks.NewMockInvocationContext(ctrl)
+				config := configuration.New()
+				config.Set(OUTPUT_DIR_PARAM, "ostemp")
+				invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+
+				workingDir := t.TempDir()
+				toolDefLocal := SnykMcpToolsDefinition{Name: tc.toolName}
+
+				filePath, err := handleFileOutput(logger, invocationCtx, workingDir, toolDefLocal, testOutput)
+
+				require.NoError(t, err)
+				require.Contains(t, filePath, tc.expectedName)
+			})
+		}
+	})
+
+	t.Run("ErrorWhenWriteFails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		invocationCtx := mocks.NewMockInvocationContext(ctrl)
+		config := configuration.New()
+
+		// Use an invalid path that will cause write to fail
+		invalidPath := "/invalid/readonly/path/that/does/not/exist"
+		config.Set(OUTPUT_DIR_PARAM, invalidPath)
+		invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+
+		workingDir := t.TempDir()
+		filePath, err := handleFileOutput(logger, invocationCtx, workingDir, toolDef, testOutput)
+
+		require.Error(t, err)
+		require.Empty(t, filePath)
+	})
+
+	t.Run("CaseInsensitiveTempCheck", func(t *testing.T) {
+		tempVariants := []string{"ostemp", "osTEMP", "OsTemp", "osTeMp"}
+
+		for _, tempVariant := range tempVariants {
+			t.Run(tempVariant, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				invocationCtx := mocks.NewMockInvocationContext(ctrl)
+				config := configuration.New()
+				config.Set(OUTPUT_DIR_PARAM, tempVariant)
+				invocationCtx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+
+				workingDir := t.TempDir()
+				filePath, err := handleFileOutput(logger, invocationCtx, workingDir, toolDef, testOutput)
+
+				require.NoError(t, err)
+				require.Contains(t, filePath, os.TempDir())
+			})
+		}
+	})
+}
+
 func whoamiWorkflowResponse(t *testing.T) (*authentication.ActiveUser, []workflow.Data) {
 	t.Helper()
 	expectedUser := authentication.ActiveUser{

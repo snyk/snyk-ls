@@ -44,12 +44,11 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	gafConfig := c.Engine().GetConfiguration()
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
 		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
-		mock.MatchedBy(func(i interface{}) bool {
+		mock.MatchedBy(func(i any) bool {
 			inputData, ok := i.([]workflow.Data)
 			require.Truef(t, ok, "input should be workflow data")
 			require.Lenf(t, inputData, 1, "should only have one input")

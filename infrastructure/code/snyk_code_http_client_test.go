@@ -17,26 +17,137 @@
 package code
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/storage"
+	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func TestGetCodeApiUrl(t *testing.T) {
-	t.Run("Snykgov instances code api url generation", func(t *testing.T) {
-		t.Setenv("DEEPROXY_API_URL", "")
+const testOrgUUID = "00000000-0000-0000-0000-000000000001"
+
+func TestGetCodeApiUrlForFolder(t *testing.T) {
+	t.Run("should return an error when folder path argument is an empty string", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
+		_, err := GetCodeApiUrlForFolder(c, "")
+		assert.ErrorContains(t, err, "no folder specified when trying to determine Snyk Code API URL")
+	})
+
+	t.Run("should return an error when workspace folder not found", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+
+		// Setup workspace with a folder, but try to access a different path
+		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+			FolderPath:                  folderPaths[0],
+			PreferredOrg:                "test-org",
+			OrgSetByUser:                true,
+			OrgMigratedFromGlobalConfig: true,
+		}, c.Logger())
+		require.NoError(t, err)
+
+		// Path that doesn't exist in any workspace folder
+		_, err = GetCodeApiUrlForFolder(c, "/nonexistent/path")
+		assert.ErrorContains(t, err, "no workspace folder found for path")
+	})
+
+	t.Run("should return error when organization not configured in FedRAMP", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+
+		// Clear env since it takes priority over the config.
+		t.Setenv(config.DeeproxyApiUrlKey, "")
+
+		// Set up the API URL to use for the test.
+		c.UpdateApiEndpoints("https://api.snykgov.io")
+
+		// Setup workspace but configure folder without org
+		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+			FolderPath:                  folderPaths[0],
+			PreferredOrg:                "",
+			OrgSetByUser:                false,
+			OrgMigratedFromGlobalConfig: true,
+		}, c.Logger())
+		require.NoError(t, err)
+
+		_, err = GetCodeApiUrlForFolder(c, folderPaths[0])
+		assert.ErrorContains(t, err, "organization is required in a fedramp environment")
+	})
+
+	t.Run("should use correct folder org when passing subdirectory in FedRAMP", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+
+		// Clear env since it takes priority over the config.
+		t.Setenv(config.DeeproxyApiUrlKey, "")
+
+		// Set up the API URL to use for the test.
+		c.UpdateApiEndpoints("https://api.snykgov.io")
+
+		// Setup workspace with 2 folders
+		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 2)
+
+		folder1UUID, _ := uuid.NewRandom()
+		folder2UUID, _ := uuid.NewRandom()
+
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+			FolderPath:                  folderPaths[0],
+			PreferredOrg:                folder1UUID.String(),
+			OrgSetByUser:                true,
+			OrgMigratedFromGlobalConfig: true,
+		}, c.Logger())
+		require.NoError(t, err)
+
+		err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+			FolderPath:                  folderPaths[1],
+			PreferredOrg:                folder2UUID.String(),
+			OrgSetByUser:                true,
+			OrgMigratedFromGlobalConfig: true,
+		}, c.Logger())
+		require.NoError(t, err)
+
+		// Pass subdirectory of second folder
+		subdirectory := types.FilePath(string(folderPaths[1]) + "/src/java")
+
+		actual, err := GetCodeApiUrlForFolder(c, subdirectory)
+		assert.NoError(t, err)
+
+		// Should use second folder's org
+		expected := "https://api.snykgov.io/hidden/orgs/" + folder2UUID.String() + "/code"
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("should return SCLE URL as-is in non-FedRAMP when local engine is enabled", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+
+		// Clear env since it takes priority over local engine.
+		t.Setenv(config.DeeproxyApiUrlKey, "")
+
+		// Set up the API URL to use for the test.
+		c.UpdateApiEndpoints("https://api.snyk.io")
+
+		const localEngineURL = "http://localhost:8080"
+		folder, err := setupFakeWorkspaceFolderWithSAST(t, c, localEngineURL)
+		require.NoError(t, err)
+
+		actual, err := GetCodeApiUrlForFolder(c, folder)
+		require.NoError(t, err)
+
+		// In non-FedRAMP, SCLE URL should be returned as-is
+		assert.Equal(t, localEngineURL, actual)
+	})
+
+	t.Run("Snykgov instances code api url generation with various URL formats", func(t *testing.T) {
 		var snykgovInstances = []string{
 			"snykgov",
 			"fedramp-alpha.snykgov",
@@ -55,26 +166,30 @@ func TestGetCodeApiUrl(t *testing.T) {
 			}
 
 			for _, input := range inputList {
-				orgUUID, folder, err := createTempDirFolderConfig(t, c, input)
-				assert.NoError(t, err)
-				c.UpdateApiEndpoints(input)
+				t.Run(instance+" with "+input, func(t *testing.T) {
+					c := testutil.UnitTest(t)
 
-				expected := "https://api." + instance + ".io/hidden/orgs/" + orgUUID + "/code"
+					// Clear env since it takes priority over the config.
+					t.Setenv(config.DeeproxyApiUrlKey, "")
 
-				actual, err := GetCodeApiUrlForFolder(c, types.FilePath(folder))
-				assert.Nil(t, err)
-				assert.Contains(t, actual, expected)
+					folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
+					require.NoError(t, err)
+					c.UpdateApiEndpoints(input)
+
+					expected := "https://api." + instance + ".io/hidden/orgs/" + testOrgUUID + "/code"
+
+					actual, err := GetCodeApiUrlForFolder(c, folder)
+					require.NoError(t, err)
+					assert.Contains(t, actual, expected)
+				})
 			}
 		}
 	})
 
 	t.Run("Deeproxy instances code api url generation", func(t *testing.T) {
-		t.Setenv("DEEPROXY_API_URL", "")
-		c := testutil.UnitTest(t)
 		var deeproxyInstances = []string{
 			"snyk",
 			"au.snyk",
-			"dev.snyk",
 		}
 
 		for _, instance := range deeproxyInstances {
@@ -92,57 +207,68 @@ func TestGetCodeApiUrl(t *testing.T) {
 			expected := "https://deeproxy." + instance + ".io"
 
 			for _, input := range inputList {
-				_, folder, err := createTempDirFolderConfig(t, c, input)
-				assert.NoError(t, err)
-				c.UpdateApiEndpoints(input)
+				t.Run(instance+" with "+input, func(t *testing.T) {
+					c := testutil.UnitTest(t)
 
-				actual, err := GetCodeApiUrlForFolder(c, types.FilePath(folder))
-				assert.Nil(t, err)
-				assert.Contains(t, actual, expected)
+					// Clear env since it takes priority over the config.
+					t.Setenv(config.DeeproxyApiUrlKey, "")
+
+					folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
+					require.NoError(t, err)
+					c.UpdateApiEndpoints(input)
+
+					actual, err := GetCodeApiUrlForFolder(c, folder)
+					require.NoError(t, err)
+					assert.Contains(t, actual, expected)
+				})
 			}
 		}
 	})
 
-	t.Run("Default deeprox url for code api", func(t *testing.T) {
+	t.Run("Default deeproxy url for code api", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		_, folder, err := createTempDirFolderConfig(t, c, "")
-		assert.NoError(t, err)
-		url, _ := GetCodeApiUrlForFolder(c, types.FilePath(folder))
+
+		// Clear env since it takes priority over default deeproxy url.
+		t.Setenv(config.DeeproxyApiUrlKey, "")
+
+		folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
+		require.NoError(t, err)
+
+		url, err := GetCodeApiUrlForFolder(c, folder)
+		require.NoError(t, err)
 		assert.Equal(t, config.DefaultDeeproxyApiUrl, url)
 	})
 }
 
-func createTempDirFolderConfig(t *testing.T, c *config.Config, endpoint string) (string, string, error) {
+func setupFakeWorkspaceFolderWithSAST(t *testing.T, c *config.Config, localEngineURL string) (types.FilePath, error) {
 	t.Helper()
-	random, _ := uuid.NewRandom()
-	orgUUID := random.String()
-	folder := t.TempDir()
-	storageFile := filepath.Join(t.TempDir(), "testStorage")
-	storage, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
-	require.NoError(t, err)
-	c.SetStorage(storage)
 
-	configuration := c.Engine().GetConfiguration()
-	logger := c.Logger()
-	folderConfig, err := storedconfig.GetOrCreateFolderConfig(configuration, types.FilePath(folder), logger)
-	require.NoError(t, err)
+	_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+	folderPath := folderPaths[0]
 
 	sastResponse := sast_contract.SastResponse{
 		SastEnabled: true,
 		LocalCodeEngine: sast_contract.LocalCodeEngine{
 			AllowCloudUpload: false,
-			Url:              endpoint,
-			Enabled:          false,
+			Url:              localEngineURL,
+			Enabled:          localEngineURL != "",
 		},
-		Org:                         orgUUID,
+		Org:                         testOrgUUID,
 		SupportedLanguages:          nil,
 		ReportFalsePositivesEnabled: false,
 		AutofixEnabled:              false,
 	}
-	folderConfig.SastSettings = &sastResponse
-	folderConfig.OrgSetByUser = true
-	folderConfig.PreferredOrg = orgUUID
-	folderConfig.AutoDeterminedOrg = orgUUID
-	storedconfig.UpdateFolderConfig(configuration, folderConfig, logger)
-	return orgUUID, folder, err
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		PreferredOrg:                testOrgUUID,
+		AutoDeterminedOrg:           testOrgUUID,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+		SastSettings:                &sastResponse,
+	}
+
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+
+	return folderPath, err
 }
