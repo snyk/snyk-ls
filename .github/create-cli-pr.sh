@@ -46,13 +46,16 @@ pushd $CLI_DIR
 
   git push -f --set-upstream origin $BRANCH
 
-  TITLE="chore(language-server): integrate LS"
-  PR=$(gh pr list --search "$TITLE" 2>&1 | grep -e "$TITLE" | cut -f1)
-  if [[ ! $PR  ]]; then
+  # Check if PR exists for this branch
+  PR=$(gh pr view $BRANCH --repo github.com/snyk/cli --json number --jq '.number' || true)
+  if [[ -z "$PR" ]]; then
     echo "Creating new PR"
+    TITLE="chore(language-server): integrate LS"
     gh pr create --repo github.com/snyk/cli --base main --head $BRANCH --title "$TITLE" --body "$BODY"
   else
+    echo "Updating existing PR #$PR"
     gh pr edit $PR --repo github.com/snyk/cli --body "$BODY"
   fi
+
   gh pr merge -m --auto --delete-branch
 popd
