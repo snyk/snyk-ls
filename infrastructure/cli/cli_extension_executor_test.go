@@ -293,3 +293,71 @@ func Test_ExtensionExecutor_HandlesEmptyWorkingDir(t *testing.T) {
 	assert.Empty(t, capturedWorkingDir, "Working directory should be empty")
 	assert.Equal(t, globalOrgUUID, capturedOrg, "Should use global org for empty workingDir")
 }
+
+func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+
+	// Set global org as a UUID
+	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
+	c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
+
+	// Create and store folder config with specific org UUID
+	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
+	storedCfg := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		PreferredOrg:                folderOrgUUID,
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
+	require.NoError(t, err)
+
+	// Capture the command args passed to the workflow
+	var capturedArgs []string
+	workflowId := workflow.NewWorkflowIdentifier("legacycli")
+	engine := c.Engine()
+	_, err = engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		gafConf := invocation.GetConfiguration()
+		capturedArgs = gafConf.GetStringSlice(configuration.RAW_CMD_ARGS)
+		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
+		return []workflow.Data{data}, nil
+	})
+	require.NoError(t, err)
+
+	executor := NewExtensionExecutor(c)
+	_, err = executor.Execute(t.Context(), []string{"snyk", "test"}, folderPath)
+	require.NoError(t, err)
+
+	// Verify the org flag was added to the command args
+	assert.Contains(t, capturedArgs, "--org="+folderOrgUUID, "Command args should contain folder org flag")
+}
+
+func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+
+	// Set global org as a UUID
+	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
+	c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
+
+	// Create and store folder config with a slug that will need resolution
+	// Using a slug format that would require API resolution
+	folderOrgSlug := "my-test-org-slug"
+	storedCfg := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		PreferredOrg:                folderOrgSlug,
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
+	require.NoError(t, err)
+
+	// Test - the resolution will fail because we don't have a real API connection
+	capturedOrg, _ := executeAndCaptureConfig(t, c, []string{"snyk", "test"}, folderPath)
+
+	// Verify we fell back to global org when resolution failed
+	assert.Equal(t, globalOrgUUID, capturedOrg, "Should fall back to global org when resolution fails")
+}
