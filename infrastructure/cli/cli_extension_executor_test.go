@@ -44,7 +44,6 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 
 	// Prepare
 	cmd := []string{"snyk", "test"}
-	expectedSnykCommand := cmd[1:]
 	actualSnykCommand := []string{}
 
 	expectedWorkingDir := types.FilePath("my work dir")
@@ -75,7 +74,11 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 
 	// Compare
 	assert.Equal(t, expectedPayload, actualData)
-	assert.Equal(t, expectedSnykCommand, actualSnykCommand)
+	// The command should contain "test" as the first argument
+	// It may also contain an --org flag if a folder or global org is configured
+	assert.Equal(t, actualSnykCommand[0], cmd[1], "Command should begin with 'test'")
+	assert.NotContains(t, actualSnykCommand, cmd[0], "command should not contain 'snyk'")
+	assert.True(t, len(actualSnykCommand) <= 2, "Command should have no more than two arguments")
 	assert.Equal(t, string(expectedWorkingDir), actualWorkingDir)
 }
 
