@@ -226,7 +226,7 @@ func getIntroducingFinding(issue testapi.Issue, problem *testapi.SnykVulnProblem
 		return nil, fmt.Errorf("no findings found in issue")
 	}
 
-	// we want to find the finding, that is a direct dependency and introduces the problem
+	// we want to find the first finding, that is a direct dependency and introduces the problem
 	for _, finding := range findings {
 		dependencyPath := extractDependencyPath(finding)
 		if len(dependencyPath) > 1 {
@@ -262,8 +262,8 @@ func buildMessage(title, packageName, remediation string) string {
 // Logic matches Legacy's GetRemediation() which checks IsUpgradable || IsPatchable
 func buildRemediationAdvice(finding *testapi.FindingData, problem *testapi.SnykVulnProblem, ecosystemStr string) string {
 	// Get the upgrade path from the API
-	upgradePath := buildUpgradePath(finding, problem)
 	dependencyPath := extractDependencyPath(finding)
+	upgradePath := buildUpgradePath(dependencyPath, finding)
 
 	// Extract the actual version from the finding
 	actualVersion := extractVersion(finding, problem)
@@ -313,7 +313,6 @@ func extractDependencyPath(finding *testapi.FindingData) []string {
 
 	for _, evidence := range finding.Attributes.Evidence {
 		disc, err := evidence.Discriminator()
-		// Try both "dependency_path"
 		if err == nil && disc == "dependency_path" {
 			depPath, err := evidence.AsDependencyPathEvidence()
 			if err == nil && depPath.Path != nil {
@@ -331,7 +330,7 @@ func extractDependencyPath(finding *testapi.FindingData) []string {
 }
 
 // extractUpgradePackage extracts upgrade path information from finding.Relationships.Fix
-func extractUpgradePackage(finding *testapi.FindingData) []string {
+func extractUpgradePackage(dependencyPath []string, finding *testapi.FindingData) []string {
 	// Check if finding has relationships and fix data
 	if finding.Relationships == nil || finding.Relationships.Fix == nil {
 		return nil
@@ -360,61 +359,50 @@ func extractUpgradePackage(finding *testapi.FindingData) []string {
 		return nil
 	}
 
-	// Get the first upgrade path (if available)
 	if len(upgradeAction.UpgradePaths) == 0 {
 		return nil
 	}
 
-	upgradePath := upgradeAction.UpgradePaths[0]
-	if len(upgradePath.DependencyPath) == 0 {
+	if len(dependencyPath) == 0 {
 		return nil
 	}
+	depPathPackageName := strings.Split(dependencyPath[1], "@")[0]
 
 	// Convert []testapi.Package to []string
-	var path []string
-	for _, pkg := range upgradePath.DependencyPath {
-		path = append(path, pkg.Name+"@"+pkg.Version)
+	for _, upgradePath := range upgradeAction.UpgradePaths {
+		path := upgradePath.DependencyPath
+		if len(path) > 0 && path[1].Name == depPathPackageName {
+			return convertToStringPath(path)
+		}
 	}
-	return path
+	return []string{}
+}
+
+func convertToStringPath(path []testapi.Package) []string {
+	var returnPath []string
+	for _, pkg := range path {
+		returnPath = append(returnPath, pkg.Name+"@"+pkg.Version)
+	}
+	return returnPath
 }
 
 // buildUpgradePath builds the upgrade path from the unified API fix data
 // Returns: [false, "intermediate1@version", "intermediate2@version", ..., "target@version"]
 // This matches Legacy CLI behavior which shows the full dependency path with upgraded versions
-func buildUpgradePath(finding *testapi.FindingData, vuln *testapi.SnykVulnProblem) []any {
-	// Get the dependency path (From field)
-	dependencyPath := extractDependencyPath(finding)
-	if len(dependencyPath) == 0 {
-		// Fallback when no dependency path is available
-		if len(vuln.InitiallyFixedInVersions) > 0 {
-			result := []any{false}
-			result = append(result, fmt.Sprintf("%s@%s", vuln.PackageName, vuln.InitiallyFixedInVersions[0]))
-			return result
-		}
-		return []any{}
-	}
-
-	// Extract upgrade path from the unified API
-	upgradePath := extractUpgradePackage(finding)
+func buildUpgradePath(dependencyPath []string, finding *testapi.FindingData) []any {
+	// Extract upgrade dependencyPath from the unified API
+	upgradePath := extractUpgradePackage(dependencyPath, finding)
 
 	// Build result matching Legacy format: [false, intermediate1@v1, intermediate2@v2, ..., target@version]
 	result := []any{false} // First element is always false (no patch)
 
-	// If we have upgrade path data from the API, use it
+	// If we have upgrade dependencyPath data from the API, use it
 	if len(upgradePath) > 1 {
-		// Add all packages from upgrade path except the root (skip index 0)
+		// Add all packages from upgrade dependencyPath except the root (skip index 0)
 		for i := 1; i < len(upgradePath); i++ {
 			result = append(result, upgradePath[i])
 		}
-	} else if len(vuln.InitiallyFixedInVersions) > 0 {
-		// Fallback: Use dependency path with upgraded version for target
-		// Replace last package with upgraded version
-		for i := 1; i < len(dependencyPath)-1; i++ {
-			result = append(result, dependencyPath[i])
-		}
-		result = append(result, fmt.Sprintf("%s@%s", vuln.PackageName, vuln.InitiallyFixedInVersions[0]))
 	}
-
 	return result
 }
 
@@ -433,7 +421,6 @@ func buildOssIssueData(
 
 	attrs := finding.Attributes
 
-	// Build key - use lineNumber for both start and end like legacy converter
 	key := util.GetIssueKey(
 		problem.Id,
 		string(affectedFilePath),
@@ -443,8 +430,9 @@ func buildOssIssueData(
 		issueRange.End.Character,
 	)
 
-	// Extract project name from dependency path (from[0])
 	dependencyPath := extractDependencyPath(finding)
+
+	// Extract project name from dependency path (from[0])
 	projectName := ""
 	if len(dependencyPath) > 0 {
 		// from[0] is "projectName@version", extract just the name
@@ -454,6 +442,8 @@ func buildOssIssueData(
 
 	slices.Sort(trIssue.GetCWEs())
 	slices.Sort(trIssue.GetCVEs())
+
+	upgradePath := buildUpgradePath(dependencyPath, finding)
 
 	data := snyk.OssIssueData{
 		Key:        key,
@@ -470,10 +460,10 @@ func buildOssIssueData(
 		License:            extractLicense(finding),
 		PackageManager:     ecosystem,
 		PackageName:        problem.PackageName,
-		From:               extractDependencyPath(finding),
+		From:               dependencyPath,
 		FixedIn:            problem.InitiallyFixedInVersions,
-		UpgradePath:        buildUpgradePath(finding, problem),
-		IsUpgradable:       len(problem.InitiallyFixedInVersions) > 0,
+		UpgradePath:        upgradePath,
+		IsUpgradable:       len(upgradePath) > 0,
 		CVSSv3:             extractCVSSv3(problem),
 		CvssScore:          float64(problem.CvssBaseScore),
 		CvssSources:        convertCvssSources(problem),
