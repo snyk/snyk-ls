@@ -47,7 +47,7 @@ pushd $CLI_DIR
   git push -f --set-upstream origin $BRANCH
 
   # Check if PR exists for this branch
-  PR=$(gh pr view $BRANCH --repo github.com/snyk/cli --json number --jq '.number' 2>/dev/null || true)
+  PR=$(gh pr view $BRANCH --repo github.com/snyk/cli --json number --jq '.number' || true)
   if [[ -z "$PR" ]]; then
     echo "Creating new PR"
     TITLE="chore(language-server): integrate LS"
