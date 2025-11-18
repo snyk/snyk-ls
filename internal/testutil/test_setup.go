@@ -254,22 +254,6 @@ func SkipLocally(t *testing.T) {
 	}
 }
 
-// NewMockCodeIssue creates a mock Code issue with the given ID, content root, and finding ID.
-// This is useful for tests that need Code issues with finding IDs (e.g., ignore operations).
-func NewMockCodeIssue(issueId string, contentRoot types.FilePath, findingId string) types.Issue {
-	issue := &snyk.Issue{
-		ID:          issueId,
-		ContentRoot: contentRoot,
-		AdditionalData: snyk.CodeIssueData{
-			Key:    "test-key",
-			Title:  "Test Issue",
-			RuleId: "test-rule-id",
-		},
-	}
-	issue.SetFindingId(findingId)
-	return issue
-}
-
 // SetupFoldersWithOrgs is a helper function for integration tests that sets up two folders
 // with different organizations. It returns the folder paths, org UUIDs, and the config.
 // The global org is set to a different value than the folder orgs to test isolation.
