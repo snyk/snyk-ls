@@ -34,7 +34,6 @@ import (
 	"github.com/gomarkdown/markdown"
 	pkgerrors "github.com/pkg/errors"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -147,10 +146,6 @@ func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FileP
 	iac.runningScans[documentURI] = newScan
 	iac.mutex.Unlock()
 
-	// Depending on whether this is a reference scan or a working directory scan, we might not have folder config for the
-	// target. Create it if needed, and use the organization settings from the passed in folderConfig.
-	iac.populateOrgForScannedFolderConfig(path, folderConfig)
-
 	scanResults, err := iac.doScan(ctx, documentURI, workspacePath)
 	p.Report(80)
 	if err != nil {
@@ -172,23 +167,6 @@ func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FileP
 	}
 
 	return issues, nil
-}
-
-func (iac *Scanner) populateOrgForScannedFolderConfig(path types.FilePath, folderConfig *types.FolderConfig) {
-	c := config.CurrentConfig()
-	scannedFolderConfig, _ := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
-		CreateIfNotExist: false,
-		ReadOnly:         false,
-		EnrichFromGit:    false,
-	})
-
-	if scannedFolderConfig == nil {
-		// Create a new folder config and copy the organization settings from the working directory folder config
-		scannedFolderConfig = c.FolderConfig(path)
-		scannedFolderConfig.OrgMigratedFromGlobalConfig = folderConfig.OrgMigratedFromGlobalConfig
-		scannedFolderConfig.OrgSetByUser = folderConfig.OrgSetByUser
-		scannedFolderConfig.PreferredOrg = folderConfig.PreferredOrg
-	}
 }
 
 func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []types.Issue, workspacePath types.FilePath) ([]types.Issue, error) {

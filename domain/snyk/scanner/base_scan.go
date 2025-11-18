@@ -22,6 +22,8 @@ import (
 	"errors"
 
 	"github.com/gosimple/hashdir"
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -84,6 +86,7 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	if s.Product() == product.ProductCode {
 		results, err = s.Scan(ctx, "", baseFolderPath, folderConfig)
 	} else {
+		sc.populateOrgForScannedFolderConfig(baseFolderPath, folderConfig)
 		results, err = s.Scan(ctx, baseFolderPath, "", folderConfig)
 	}
 	if err != nil {
@@ -94,6 +97,30 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	sc.persistScanResults(folderConfig, results, s)
 
 	return nil
+}
+
+func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(path types.FilePath, folderConfig *types.FolderConfig) {
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "populateOrgForScannedFolderConfig").Logger()
+	scannedFolderConfig, _ := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
+		CreateIfNotExist: false,
+		ReadOnly:         false,
+		EnrichFromGit:    false,
+	})
+
+	if scannedFolderConfig == nil {
+		// Create a new folder config and copy the organization settings from the working directory folder config
+		scannedFolderConfig = c.FolderConfig(path)
+		scannedFolderConfig.OrgMigratedFromGlobalConfig = folderConfig.OrgMigratedFromGlobalConfig
+		scannedFolderConfig.OrgSetByUser = folderConfig.OrgSetByUser
+		scannedFolderConfig.PreferredOrg = folderConfig.PreferredOrg
+
+		// Persist the folder config so it's available for future scans
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), scannedFolderConfig, &logger)
+		if err != nil {
+			logger.Err(err).Str("path", string(path)).Msg("failed to persist folder config for scanned directory")
+		}
+	}
 }
 
 func (sc *DelegatingConcurrentScanner) persistScanResults(
