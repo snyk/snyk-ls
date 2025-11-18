@@ -865,7 +865,7 @@ func Test_resolveOrgToUUID(t *testing.T) {
 
 		inputUUID := "550e8400-e29b-41d4-a716-446655440000"
 
-		result, err := resolveOrgToUUID(c, inputUUID)
+		result, err := c.ResolveOrgToUUID(inputUUID)
 
 		assert.NoError(t, err)
 		assert.Equal(t, inputUUID, result)
@@ -877,7 +877,7 @@ func Test_resolveOrgToUUID(t *testing.T) {
 
 		inputSlug := "invalid_slug"
 
-		result, err := resolveOrgToUUID(c, inputSlug)
+		result, err := c.ResolveOrgToUUID(inputSlug)
 
 		// When GAF cannot resolve the slug to a UUID, it will return an empty string or the slug itself
 		// Our function should detect this and return an error
@@ -892,7 +892,7 @@ func Test_resolveOrgToUUID(t *testing.T) {
 
 		inputEmpty := ""
 
-		result, err := resolveOrgToUUID(c, inputEmpty)
+		result, err := c.ResolveOrgToUUID(inputEmpty)
 
 		// Empty string is not a UUID, so it will try to resolve
 		// When unauthenticated or unable to resolve, GAF returns empty string

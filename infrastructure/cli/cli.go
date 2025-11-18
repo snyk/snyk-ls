@@ -111,21 +111,9 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 	envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
 	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
 
-	// If a folder-specific organization is configured, ensure the CLI receives it.
-	effectiveArgs := append([]string{}, cmd...)
+	effectiveArgs := cmd
 	if org := c.c.FolderOrganization(workingDir); org != "" {
-		// Check if an --org flag already exists; if so, replace its value; otherwise, append.
-		replaced := false
-		for i := range effectiveArgs {
-			if strings.HasPrefix(effectiveArgs[i], "--org=") {
-				effectiveArgs[i] = "--org=" + org
-				replaced = true
-				break
-			}
-		}
-		if !replaced {
-			effectiveArgs = append(effectiveArgs, "--org="+org)
-		}
+		effectiveArgs = getArgsWithOrgSubstitution(cmd, org)
 	}
 
 	command := exec.CommandContext(ctx, effectiveArgs[0], effectiveArgs[1:]...)
@@ -135,6 +123,26 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()
 	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Dir", command.Dir).Send()
 	return command, nil
+}
+
+func getArgsWithOrgSubstitution(cmd []string, org string) []string {
+	// If a folder-specific organization is configured, ensure the CLI receives it.
+	effectiveArgs := append([]string{}, cmd...)
+
+	// Check if an --org flag already exists; if so, replace its value; otherwise, append.
+	replaced := false
+	for i := range effectiveArgs {
+		if strings.HasPrefix(effectiveArgs[i], "--org=") {
+			effectiveArgs[i] = "--org=" + org
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		effectiveArgs = append(effectiveArgs, "--org="+org)
+	}
+
+	return effectiveArgs
 }
 
 func expandParametersFromConfig(base []string) []string {

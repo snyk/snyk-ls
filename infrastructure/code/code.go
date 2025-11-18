@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/erni27/imcache"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog"
@@ -36,8 +35,6 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
 	gafUtils "github.com/snyk/go-application-framework/pkg/utils"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -467,7 +464,7 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 
 	// Ensure the organization is a UUID, not a slug
 	// code-client-go expects a UUID and will panic if given a slug
-	orgUUID, err := resolveOrgToUUID(sc.C, organization)
+	orgUUID, err := sc.C.ResolveOrgToUUID(organization)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve organization to UUID for workspace folder %s: %w", workspaceFolderPath, err)
 	}
@@ -485,31 +482,6 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 		lsConfig:     sc.C,
 		codeApiUrl:   codeApiURL,
 	}, nil
-}
-
-// resolveOrgToUUID takes an organization value (which could be a UUID or a slug)
-// and returns the UUID. If the input is already a UUID, it returns it unchanged.
-// If it's a slug, it uses GAF configuration to resolve it to a UUID.
-func resolveOrgToUUID(c *config.Config, org string) (string, error) {
-	// Check if the organization is already a valid UUID
-	if _, err := uuid.Parse(org); err == nil {
-		// It's already a UUID, return it
-		return org, nil
-	}
-
-	// It's not a UUID, so it might be a slug. Use GAF to resolve it.
-	// When we set ORGANIZATION to a slug, GAF will resolve it to a UUID via its default value function
-	gafConfig := c.Engine().GetConfiguration()
-	clonedConfig := gafConfig.Clone()
-	clonedConfig.Set(configuration.ORGANIZATION, org)
-	resolvedOrg := clonedConfig.GetString(configuration.ORGANIZATION)
-
-	// Verify the resolved value is a UUID
-	if _, err := uuid.Parse(resolvedOrg); err != nil {
-		return "", fmt.Errorf("organization '%s' could not be resolved to a valid UUID: %w", org, err)
-	}
-
-	return resolvedOrg, nil
 }
 
 // CreateCodeScanner creates a real code scanner with Organization populated from folder configuration
