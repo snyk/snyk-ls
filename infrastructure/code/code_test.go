@@ -857,3 +857,47 @@ func setupMockLearnServiceNoLessons(t *testing.T) *mock_learn.MockService {
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	return learnMock
 }
+
+func Test_resolveOrgToUUID(t *testing.T) {
+	t.Run("returns UUID unchanged when input is already a UUID", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		testutil.SetUpEngineMock(t, c)
+
+		inputUUID := "550e8400-e29b-41d4-a716-446655440000"
+
+		result, err := resolveOrgToUUID(c, inputUUID)
+
+		assert.NoError(t, err)
+		assert.Equal(t, inputUUID, result)
+	})
+
+	t.Run("returns error when slug cannot be resolved to UUID", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		testutil.SetUpEngineMock(t, c)
+
+		inputSlug := "invalid_slug"
+
+		result, err := resolveOrgToUUID(c, inputSlug)
+
+		// When GAF cannot resolve the slug to a UUID, it will return an empty string or the slug itself
+		// Our function should detect this and return an error
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
+		assert.Empty(t, result)
+	})
+
+	t.Run("handles empty string", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		testutil.SetUpEngineMock(t, c)
+
+		inputEmpty := ""
+
+		result, err := resolveOrgToUUID(c, inputEmpty)
+
+		// Empty string is not a UUID, so it will try to resolve
+		// When unauthenticated or unable to resolve, GAF returns empty string
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
+		assert.Empty(t, result)
+	})
+}
