@@ -86,8 +86,8 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	if workingDir != "" {
 		folderOrg := c.c.FolderOrganization(workingDir)
 		if folderOrg != "" {
-            resolvedFolderOrg, err := c.c.ResolveOrgToUUID(folderOrg)
-			if err != nil {
+			resolvedFolderOrg, resolveErr := c.c.ResolveOrgToUUID(folderOrg)
+			if resolveErr != nil {
 				c.c.Logger().Warn().Err(err).Str("method", method).Str("folderOrg", folderOrg).Msg("failed to resolve folder organization to UUID, falling back to global organization")
 				legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
 			} else {
