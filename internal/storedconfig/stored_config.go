@@ -26,23 +26,57 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// GetOrCreateFolderConfig gets folder config from storage and merges it with Git data
-func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
-	l := logger.With().Str("method", "GetOrCreateFolderConfig").Logger()
+// GetFolderConfigOptions controls the behavior of folder config retrieval
+type GetFolderConfigOptions struct {
+	// CreateIfNotExist creates a new folder config if one doesn't exist.
+	// When ReadOnly=false: creates and saves to storage.
+	// When ReadOnly=true: creates in-memory but doesn't save.
+	CreateIfNotExist bool
+	// ReadOnly prevents any writes to storage.
+	// Configs are returned but not saved.
+	ReadOnly bool
+	// EnrichFromGit enriches the folder config with Git branch information.
+	EnrichFromGit bool
+}
 
-	folderConfig, err := folderConfigFromStorage(conf, path, &l)
+// GetFolderConfigWithOptions retrieves folder config from storage with specified behaviors
+func GetFolderConfigWithOptions(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, opts GetFolderConfigOptions) (*types.FolderConfig, error) {
+	l := logger.With().Str("method", "GetFolderConfigWithOptions").Logger()
+
+	folderConfig, err := folderConfigFromStorage(conf, path, &l, opts.CreateIfNotExist)
 	if err != nil {
 		return nil, err
 	}
 
-	folderConfig = enrichFromGit(&l, folderConfig)
+	// If folder config doesn't exist and we're not creating, return nil
+	if folderConfig == nil && !opts.CreateIfNotExist {
+		return nil, nil
+	}
 
-	err = UpdateFolderConfig(conf, folderConfig, &l)
-	if err != nil {
-		return nil, err
+	// Enrich from git if requested
+	if opts.EnrichFromGit {
+		folderConfig = enrichFromGit(&l, folderConfig)
+	}
+
+	// Update storage since we may have changed values like normalizing the path, enriching from git, etc., but skip if read-only mode.
+	if !opts.ReadOnly {
+		err = UpdateFolderConfig(conf, folderConfig, &l)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return folderConfig, nil
+}
+
+// GetOrCreateFolderConfig gets folder config from storage and merges it with Git data.
+// Creates the config if it doesn't exist and writes back to storage.
+func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
+	return GetFolderConfigWithOptions(conf, path, logger, GetFolderConfigOptions{
+		CreateIfNotExist: true,
+		ReadOnly:         false,
+		EnrichFromGit:    true,
+	})
 }
 
 // SliceContainsParam checks if the parameter name is equal by splitting the given

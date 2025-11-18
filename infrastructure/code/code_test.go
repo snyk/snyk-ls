@@ -34,12 +34,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -191,6 +191,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	folderConfig := &types.FolderConfig{FolderPath: workDir, PreferredOrg: "test-org"}
 	issues, err := scanner.UploadAndAnalyze(t.Context(), workDir, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
 	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(issues), 2, "scan should return at least 2 issues")
 	assert.False(t, issues[0].GetIsIgnored())
 	assert.Nil(t, issues[0].GetIgnoreDetails())
 	assert.Equal(t, true, issues[1].GetIsIgnored())
@@ -439,22 +440,13 @@ func Test_IsEnabled(t *testing.T) {
 	)
 }
 
-func autofixSetupAndCleanup(t *testing.T, c *config.Config) {
-	t.Helper()
-	resetCodeSettings()
-	t.Cleanup(resetCodeSettings)
-	c.SetSnykCodeEnabled(true)
-	getCodeSettings().isAutofixEnabled.Set(false)
-}
-
 func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	t.Run("should not add autofix after analysis when not enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		c.SetSnykCodeEnabled(true)
 		channel := make(chan types.ProgressParams, 10000)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
-
-		autofixSetupAndCleanup(t, c)
 		scanner := New(
 			c,
 			performance.NewInstrumentor(),
@@ -473,11 +465,19 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			},
 		)
 		files := []string{string(filePath)}
-		folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
+		folderConfig := &types.FolderConfig{
+			FolderPath:   path,
+			PreferredOrg: "test-org",
+			SastSettings: &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: false,
+			},
+		}
 
 		// execute
 		issues, err := scanner.UploadAndAnalyze(t.Context(), "", folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 		require.NoError(t, err)
+		require.NotEmpty(t, issues, "scan should return at least one issue")
 
 		// Default is to have 0 actions from analysis + 0 from autofix
 		assert.Len(t, issues[0].GetCodeActions(), 0)
@@ -486,15 +486,23 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 
 	t.Run("should run autofix after analysis when is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		folderConfigWithAutofix := &types.FolderConfig{
+			FolderPath:   "",
+			PreferredOrg: "test-org",
+			SastSettings: &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: true,
+			},
+		}
 		issueEnhancer := IssueEnhancer{
 			instrumentor: performance.NewInstrumentor(),
 			c:            c,
+			folderConfig: folderConfigWithAutofix,
 		}
 		channel := make(chan types.ProgressParams, 10000)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
-		autofixSetupAndCleanup(t, c)
-		getCodeSettings().isAutofixEnabled.Set(true)
+		c.SetSnykCodeEnabled(true)
 
 		scanner := New(
 			c,
@@ -510,11 +518,19 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		)
 		filePath, path := TempWorkdirWithIssues(t)
 		files := []string{string(filePath)}
-		folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
+		folderConfig := &types.FolderConfig{
+			FolderPath:   path,
+			PreferredOrg: "test-org",
+			SastSettings: &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: true,
+			},
+		}
 
 		// execute
 		issues, err := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(issues), 2, "scan should return at least 2 issues")
 
 		// Only one of the returned issues is Autofix eligible; see getSarifResponseJson2 in fake_code_client_scanner.go.
 		assert.Len(t, issues[0].GetCodeActions(), 1)
@@ -547,7 +563,7 @@ func TestDeltaScanUsesFolderOrg(t *testing.T) {
 	// Create a separate temp directory with a dummy file for a delta scan to run on
 	tempScanDir := t.TempDir()
 	dummyFile := filepath.Join(tempScanDir, "test.java")
-	err := os.WriteFile(dummyFile, []byte("class Test {}"), 0644)
+	err := os.WriteFile(dummyFile, []byte("class Test {}"), 0o644)
 	require.NoError(t, err)
 
 	// Track which folderConfig was passed to the code scanner
@@ -789,7 +805,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
 		assert.Error(t, err)
-		assert.ErrorContains(t, err, "SAST is not enabled")
+		assert.ErrorContains(t, err, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues)
 	})
 
@@ -826,7 +842,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		// Scan with org2 (should fail since SAST is disabled)
 		issues2, err2 := scanner2.Scan(t.Context(), types.FilePath("test2.go"), tempDir2, folderConfig2)
 		assert.Error(t, err2)
-		assert.ErrorContains(t, err2, "SAST is not enabled")
+		assert.ErrorContains(t, err2, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues2)
 	})
 }

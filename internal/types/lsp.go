@@ -1142,6 +1142,14 @@ const (
 	ErrorStatus ScanStatus = "error"
 )
 
+type PresentableError struct {
+	CliError `json:",inline"`
+	// ShowNotification is for IDE to decide to display a notification or not
+	ShowNotification bool `json:"showNotification"`
+	// TreeNodeSuffix is an optional suffix message to be displayed in the tree node in IDEs
+	TreeNodeSuffix string `json:"treeNodeSuffix"`
+}
+
 // SnykScanParams is the type for the $/snyk/scan message
 type SnykScanParams struct {
 	// Status can be either InProgress, Success or ErrorStatus
@@ -1150,10 +1158,8 @@ type SnykScanParams struct {
 	Product string `json:"product"`
 	// FolderPath is the root-folder of the current scan
 	FolderPath FilePath `json:"folderPath"`
-	// Error Message
-	ErrorMessage string `json:"errorMessage,omitempty"`
-	// CliError contains structured error information from the CLI
-	CliError *CliError `json:"cliError,omitempty"`
+	// PresentableError structured error object for displaying it to the user
+	PresentableError *PresentableError `json:"presentableError,omitempty"`
 }
 
 type ScanIssue struct { // TODO - convert this to a generic type

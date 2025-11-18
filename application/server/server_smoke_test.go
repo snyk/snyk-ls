@@ -47,6 +47,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -199,7 +200,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 					continue
 				}
 				// TODO: check right scan state and summary is sent
-				return strings.Contains(scanParams.ErrorMessage, "fork/exec")
+				return strings.Contains(scanParams.PresentableError.ErrorMessage, "fork/exec")
 			}
 
 			return false
@@ -517,7 +518,8 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 		waitForNetwork(c)
 		textDocumentDidSave(t, &loc, testPath)
 		// serve diagnostics from file scan
-		assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+		require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond,
+			"Diagnostics not published for file %s", file1)
 	}
 
 	jsonRPCRecorder.ClearNotifications()
@@ -528,15 +530,15 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	testPath = types.FilePath(filepath.Join(cloneTargetDirString, file2))
 	waitForNetwork(c)
 	textDocumentDidSave(t, &loc, testPath)
-	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
-
-	// check for snyk code scan message
+	// Check scan completed successfully
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
+	require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond,
+		"Diagnostics not published for file %s", file2)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	// check for autofix diff on mt-us
 	if hasVulns {
-		checkAutofixDiffs(t, c, issueList, loc, cloneTargetDir, jsonRPCRecorder)
+		checkAutofixDiffs(t, c, issueList, loc, jsonRPCRecorder)
 	}
 
 	checkFeatureFlagStatus(t, c, &loc)
@@ -599,7 +601,7 @@ func substituteDepGraphFlow(t *testing.T, c *config.Config, cloneTargetDirString
 		depGraphData := workflow.NewData(depGraphDataID, "application/json", depGraphJson)
 		normalisedTargetFile := strings.TrimSpace(displayTargetFile)
 		depGraphData.SetMetaData("Content-Location", normalisedTargetFile)
-		depGraphData.SetMetaData("normalisedTargetFile", normalisedTargetFile) //Required for cli-extension-os-flow
+		depGraphData.SetMetaData("normalisedTargetFile", normalisedTargetFile) // Required for cli-extension-os-flow
 
 		return []workflow.Data{depGraphData}, nil
 	}
@@ -630,6 +632,8 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, types.FilePath(cloneTargetDir))
 	atLeastOneQuickfixActionFound := false
+	errorhandlerCheckHit := false
+	tapCheckHit := false
 	for _, issue := range issueList {
 		params := sglsp.CodeActionParams{
 			TextDocument: sglsp.TextDocumentIdentifier{
@@ -651,15 +655,18 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 				atLeastOneQuickfixActionFound = true
 			}
 
-			// "cfenv": "^1.2.4", 1 fixable issue, one unfixable
-			if issue.Range.Start.Line == 19 && isQuickfixAction {
-				assert.Contains(t, action.Title, "and fix 1 issue (1 unfixable)")
+			// "errorhandler": "^1.2.0" on line 25 - test singular "1 issue" vs plural "1 issues"
+			if issue.Range.Start.Line == 25 && isQuickfixAction {
+				assert.Contains(t, action.Title, "and fix 1 issue")
+				assert.NotContains(t, action.Title, "and fix 1 issues")
+				errorhandlerCheckHit = true
 			}
 
 			// "tap": "^11.1.3", 12 fixable, 11 unfixable
 			if issue.Range.Start.Line == 46 && isQuickfixAction {
 				assert.Contains(t, action.Title, "and fix ")
 				assert.Contains(t, action.Title, " issues")
+				tapCheckHit = true
 			}
 		}
 		// no issues should have more than one quickfix
@@ -671,6 +678,8 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 		time.Sleep(60 * time.Millisecond)
 	}
 	assert.Truef(t, atLeastOneQuickfixActionFound, "expected to find at least one code action")
+	assert.Truef(t, errorhandlerCheckHit, "expected to hit errorhandler singular check")
+	assert.Truef(t, tapCheckHit, "expected to hit tap plural check")
 }
 
 func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
@@ -739,20 +748,32 @@ func waitForDeltaScan(t *testing.T, agg scanstates.Aggregator) {
 func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
 	t.Helper()
 	var notifications []jrpc2.Request
-	assert.Eventually(t, func() bool {
+	var finalScanParams *types.SnykScanParams
+
+	// Wait for scan to complete (success or error)
+	require.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
 			var scanParams types.SnykScanParams
 			_ = n.UnmarshalParams(&scanParams)
 			if scanParams.Product != p.ToProductCodename() ||
 				scanParams.FolderPath != types.FilePath(cloneTargetDir) ||
-				scanParams.Status != "success" {
+				scanParams.Status == types.InProgress {
 				continue
 			}
+			finalScanParams = &scanParams
 			return true
 		}
 		return false
-	}, 5*time.Minute, 10*time.Millisecond)
+	}, 5*time.Minute, 10*time.Millisecond,
+		"Scan did not complete for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
+
+	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
+	require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
+		"Scan failed - Product: %s, Folder: %s, Error: %w",
+		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.PresentableError)
+	require.Equal(t, types.Success, finalScanParams.Status,
+		"Unexpected scan status: %s", finalScanParams.Status)
 }
 
 func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, p product.Product, folderPath types.FilePath) []types.ScanIssue {
@@ -778,7 +799,7 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 	return issueList
 }
 
-func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, folderPath types.FilePath, recorder *testsupport.JsonRPCRecorder) {
+func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, recorder *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	if isNotStandardRegion(c) {
 		return
@@ -1218,6 +1239,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			c.SetOrganization(expectedOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 			require.NoError(t, err)
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 		}
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
@@ -1235,7 +1257,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - adding folder with existing stored config. Making sure PreferredOrg is preserved", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
-		ensureInitialized(t, c, loc, initParams, nil)
+		setupFunc := func(c *config.Config) {
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
 			require.Empty(t, fc.PreferredOrg)
@@ -1359,7 +1385,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 		t.Setenv("SNYK_TOKEN", "")
 
-		ensureInitialized(t, c, loc, initParams, nil)
+		setupFunc := func(c *config.Config) {
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
 
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
@@ -1550,7 +1580,7 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 	assert.NoError(t, err)
 
 	// Filter out old stored folder configs and only keep the ones from initParams
-	storedConfig, getSCErr := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+	storedConfig, getSCErr := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	if getSCErr == nil {
 		filteredConfigs := make(map[types.FilePath]*types.FolderConfig)
 		for _, fc := range initParams.InitializationOptions.FolderConfigs {
@@ -1627,7 +1657,7 @@ func sendModifiedFolderConfiguration(
 	modification func(folderConfigs map[types.FilePath]*types.FolderConfig),
 ) {
 	t.Helper()
-	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	require.NoError(t, err)
 	modification(storedConfig.FolderConfigs)
 	sendConfigurationDidChange(t, loc, types.Settings{

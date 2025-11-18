@@ -206,7 +206,6 @@ type Config struct {
 	mcpServerEnabled                 bool
 	mcpBaseURL                       *url.URL
 	isLSPInitialized                 bool
-	snykAgentFixEnabled              bool
 	cachedOriginalPath               string
 	userSettingsPath                 string
 }
@@ -1189,7 +1188,8 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 		c.logger.Err(err).Msg("unable to load stored config")
 	}
 
-	sc, err := storedconfig.GetStoredConfig(conf, c.logger)
+	// During storage initialization, create config if it doesn't exist
+	sc, err := storedconfig.GetStoredConfig(conf, c.logger, false)
 	c.logger.Debug().Any("storedConfig", sc).Send()
 
 	if err != nil {
@@ -1273,6 +1273,8 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 	c.isOpenBrowserActionEnabled = enable
 }
 
+// FolderConfig gets or creates a new folder config for the given folder path.
+// Will cause a rewrite to storage, for read-only operations, use storedconfig.GetFolderConfigWithOptions instead.
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	var folderConfig *types.FolderConfig
 	var err error
@@ -1307,11 +1309,25 @@ func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfi
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
 // the folder, it returns the global organization (which if unset, GAF will return the default org).
 func (c *Config) FolderOrganization(path types.FilePath) string {
-	fc := c.FolderConfig(path)
-	if fc == nil {
-		// Should never happen, but as a safety net, return the global org.
+	if path == "" {
+		c.Logger().Warn().Str("method", "FolderOrganization").Str("path", "").Msg("called with empty path, falling back to global organization")
 		return c.Organization()
 	}
+
+	fc, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
+		CreateIfNotExist: false,
+		ReadOnly:         true,
+		EnrichFromGit:    false,
+	})
+	if err != nil {
+		c.Logger().Warn().Err(err).Str("method", "FolderOrganization").Str("path", string(path)).Msg("error getting folder config, falling back to global organization")
+		return c.Organization()
+	}
+	if fc == nil {
+		c.Logger().Debug().Str("method", "FolderOrganization").Str("path", string(path)).Msg("no folder config in storage, falling back to global organization")
+		return c.Organization()
+	}
+
 	if fc.OrgSetByUser {
 		if fc.PreferredOrg == "" {
 			return c.Organization()
@@ -1425,20 +1441,6 @@ func (c *Config) SetLSPInitialized(initialized bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.isLSPInitialized = initialized
-}
-
-func (c *Config) SetSnykAgentFixEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.snykAgentFixEnabled = enabled
-}
-
-func (c *Config) IsSnykAgentFixEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.snykAgentFixEnabled
 }
 
 func (c *Config) EmptyToken() bool {

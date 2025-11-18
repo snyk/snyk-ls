@@ -23,20 +23,24 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/snyk/go-application-framework/pkg/analytics"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
+	"github.com/snyk/go-application-framework/pkg/analytics"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
@@ -44,12 +48,12 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	gafConfig := c.Engine().GetConfiguration()
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+
+	// Expect analytics to be sent exactly once (to first folder's org, or empty org if no folders)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
 		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
-		mock.MatchedBy(func(i interface{}) bool {
+		mock.MatchedBy(func(i any) bool {
 			inputData, ok := i.([]workflow.Data)
 			require.Truef(t, ok, "input should be workflow data")
 			require.Lenf(t, inputData, 1, "should only have one input")
@@ -62,7 +66,7 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 			return true
 		}),
 		gomock.Any(),
-	).Return(nil, nil)
+	).Times(1).Return(nil, nil)
 
 	provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
 	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
@@ -70,6 +74,124 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	_, err := service.Authenticate(t.Context())
 
 	assert.NoError(t, err)
+}
+
+func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
+	// Shared test constants
+	const (
+		testFolderOrg = "test-folder-org"
+		globalOrg     = "global-org"
+	)
+
+	testCases := []struct {
+		name        string
+		setupWs     func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace
+		expectedOrg string
+	}{
+		{
+			name: "uses any folder specific org",
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+				t.Helper()
+
+				folder1Path := types.FilePath("/fake/folder1")
+				folder2Path := types.FilePath("/fake/folder2")
+
+				folder1Config := &types.FolderConfig{
+					FolderPath:   folder1Path,
+					PreferredOrg: testFolderOrg,
+					OrgSetByUser: true,
+				}
+				folder2Config := &types.FolderConfig{
+					FolderPath:   folder2Path,
+					PreferredOrg: testFolderOrg,
+					OrgSetByUser: true,
+				}
+
+				err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder1Config, c.Logger())
+				require.NoError(t, err, "failed to configure first folder's org")
+				err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder2Config, c.Logger())
+				require.NoError(t, err, "failed to configure second folder's org")
+
+				// Set a different global org to ensure folder-specific org takes precedence
+				c.SetOrganization(globalOrg)
+
+				// Setup mock workspace with the 2 folders
+				mockFolder1 := mock_types.NewMockFolder(ctrl)
+				mockFolder1.EXPECT().Path().Return(folder1Path).AnyTimes()
+
+				mockFolder2 := mock_types.NewMockFolder(ctrl)
+				mockFolder2.EXPECT().Path().Return(folder2Path).AnyTimes()
+
+				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+				// FYI, mock returns deterministic slice order, but real Workspace.Folders() returns the slice in a random order
+				mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder1, mockFolder2}).AnyTimes()
+
+				return mockWorkspace
+			},
+			expectedOrg: testFolderOrg,
+		},
+		{
+			name: "falls back to global org when no folders",
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+				t.Helper()
+				// Set a global org
+				c.SetOrganization(globalOrg)
+
+				// Setup workspace with NO folders (empty slice)
+				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+				mockWorkspace.EXPECT().Folders().Return([]types.Folder{}).AnyTimes()
+
+				return mockWorkspace
+			},
+			expectedOrg: globalOrg,
+		},
+		{
+			name: "falls back to global org when nil workspace",
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+				t.Helper()
+				// Set a global org
+				c.SetOrganization(globalOrg)
+
+				// Return nil workspace
+				return nil
+			},
+			expectedOrg: globalOrg,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange: Setup test environment
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+
+			c := testutil.UnitTest(t)
+			gafConfig := c.Engine().GetConfiguration()
+			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
+			mockEngine, _ := testutil.SetUpEngineMock(t, c)
+
+			// Setup workspace (test case specific) and set it on config
+			ws := tc.setupWs(t, ctrl, c)
+			c.SetWorkspace(ws)
+
+			// Capture analytics WF's data and config to verify folder org
+			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
+
+			provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
+			service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+			// Act: Authenticate (which triggers analytics)
+			_, err := service.Authenticate(t.Context())
+
+			// Assert: Verify authentication succeeded
+			assert.NoError(t, err, "authentication should succeed")
+
+			// Assert: Verify analytics were sent with correct org
+			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
+			actualOrg := captured.Config.Get(configuration.ORGANIZATION)
+			assert.Equal(t, tc.expectedOrg, actualOrg)
+		})
+	}
 }
 
 func Test_AuthURL(t *testing.T) {
