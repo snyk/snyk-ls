@@ -206,7 +206,6 @@ type Config struct {
 	mcpServerEnabled                 bool
 	mcpBaseURL                       *url.URL
 	isLSPInitialized                 bool
-	snykAgentFixEnabled              bool
 	cachedOriginalPath               string
 	userSettingsPath                 string
 }
@@ -1441,20 +1440,6 @@ func (c *Config) SetLSPInitialized(initialized bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.isLSPInitialized = initialized
-}
-
-func (c *Config) SetSnykAgentFixEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.snykAgentFixEnabled = enabled
-}
-
-func (c *Config) IsSnykAgentFixEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.snykAgentFixEnabled
 }
 
 func (c *Config) EmptyToken() bool {

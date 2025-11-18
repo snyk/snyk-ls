@@ -34,12 +34,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -440,22 +440,13 @@ func Test_IsEnabled(t *testing.T) {
 	)
 }
 
-func autofixSetupAndCleanup(t *testing.T, c *config.Config) {
-	t.Helper()
-	resetCodeSettings()
-	t.Cleanup(resetCodeSettings)
-	c.SetSnykCodeEnabled(true)
-	getCodeSettings().isAutofixEnabled.Set(false)
-}
-
 func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	t.Run("should not add autofix after analysis when not enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		c.SetSnykCodeEnabled(true)
 		channel := make(chan types.ProgressParams, 10000)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
-
-		autofixSetupAndCleanup(t, c)
 		scanner := New(
 			c,
 			performance.NewInstrumentor(),
@@ -474,7 +465,14 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			},
 		)
 		files := []string{string(filePath)}
-		folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
+		folderConfig := &types.FolderConfig{
+			FolderPath:   path,
+			PreferredOrg: "test-org",
+			SastSettings: &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: false,
+			},
+		}
 
 		// execute
 		issues, err := scanner.UploadAndAnalyze(t.Context(), "", folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
@@ -488,15 +486,23 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 
 	t.Run("should run autofix after analysis when is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		folderConfigWithAutofix := &types.FolderConfig{
+			FolderPath:   "",
+			PreferredOrg: "test-org",
+			SastSettings: &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: true,
+			},
+		}
 		issueEnhancer := IssueEnhancer{
 			instrumentor: performance.NewInstrumentor(),
 			c:            c,
+			folderConfig: folderConfigWithAutofix,
 		}
 		channel := make(chan types.ProgressParams, 10000)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel)
-		autofixSetupAndCleanup(t, c)
-		getCodeSettings().isAutofixEnabled.Set(true)
+		c.SetSnykCodeEnabled(true)
 
 		scanner := New(
 			c,
@@ -512,7 +518,14 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		)
 		filePath, path := TempWorkdirWithIssues(t)
 		files := []string{string(filePath)}
-		folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
+		folderConfig := &types.FolderConfig{
+			FolderPath:   path,
+			PreferredOrg: "test-org",
+			SastSettings: &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: true,
+			},
+		}
 
 		// execute
 		issues, err := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
@@ -550,7 +563,7 @@ func TestDeltaScanUsesFolderOrg(t *testing.T) {
 	// Create a separate temp directory with a dummy file for a delta scan to run on
 	tempScanDir := t.TempDir()
 	dummyFile := filepath.Join(tempScanDir, "test.java")
-	err := os.WriteFile(dummyFile, []byte("class Test {}"), 0644)
+	err := os.WriteFile(dummyFile, []byte("class Test {}"), 0o644)
 	require.NoError(t, err)
 
 	// Track which folderConfig was passed to the code scanner
@@ -792,7 +805,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
 		assert.Error(t, err)
-		assert.ErrorContains(t, err, "SAST is not enabled")
+		assert.ErrorContains(t, err, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues)
 	})
 
@@ -829,7 +842,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		// Scan with org2 (should fail since SAST is disabled)
 		issues2, err2 := scanner2.Scan(t.Context(), types.FilePath("test2.go"), tempDir2, folderConfig2)
 		assert.Error(t, err2)
-		assert.ErrorContains(t, err2, "SAST is not enabled")
+		assert.ErrorContains(t, err2, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues2)
 	})
 }
@@ -843,4 +856,48 @@ func setupMockLearnServiceNoLessons(t *testing.T) *mock_learn.MockService {
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	return learnMock
+}
+
+func Test_resolveOrgToUUID(t *testing.T) {
+	t.Run("returns UUID unchanged when input is already a UUID", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		testutil.SetUpEngineMock(t, c)
+
+		inputUUID := "550e8400-e29b-41d4-a716-446655440000"
+
+		result, err := resolveOrgToUUID(c, inputUUID)
+
+		assert.NoError(t, err)
+		assert.Equal(t, inputUUID, result)
+	})
+
+	t.Run("returns error when slug cannot be resolved to UUID", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		testutil.SetUpEngineMock(t, c)
+
+		inputSlug := "invalid_slug"
+
+		result, err := resolveOrgToUUID(c, inputSlug)
+
+		// When GAF cannot resolve the slug to a UUID, it will return an empty string or the slug itself
+		// Our function should detect this and return an error
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
+		assert.Empty(t, result)
+	})
+
+	t.Run("handles empty string", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		testutil.SetUpEngineMock(t, c)
+
+		inputEmpty := ""
+
+		result, err := resolveOrgToUUID(c, inputEmpty)
+
+		// Empty string is not a UUID, so it will try to resolve
+		// When unauthenticated or unable to resolve, GAF returns empty string
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
+		assert.Empty(t, result)
+	})
 }
