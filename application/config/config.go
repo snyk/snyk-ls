@@ -1372,7 +1372,6 @@ func (c *Config) FolderOrganizationForSubPath(path types.FilePath) (string, erro
 // and returns the UUID. If the input is already a UUID, it returns it unchanged.
 // If it's a slug, it uses GAF configuration to resolve it to a UUID.
 func (c *Config) ResolveOrgToUUID(org string) (string, error) {
-
 	// Check if the organization is already a valid UUID
 	if _, err := uuid.Parse(org); err == nil {
 		// It's already a UUID, return it

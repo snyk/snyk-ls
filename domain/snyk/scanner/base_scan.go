@@ -22,6 +22,7 @@ import (
 	"errors"
 
 	"github.com/gosimple/hashdir"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 

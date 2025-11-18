@@ -33,8 +33,9 @@ import (
 
 	"github.com/gomarkdown/markdown"
 	pkgerrors "github.com/pkg/errors"
-	"github.com/snyk/snyk-ls/infrastructure/utils"
 	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
