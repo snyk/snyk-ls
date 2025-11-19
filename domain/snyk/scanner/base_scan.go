@@ -87,7 +87,8 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	if s.Product() == product.ProductCode {
 		results, err = s.Scan(ctx, "", baseFolderPath, folderConfig)
 	} else {
-		sc.populateOrgForScannedFolderConfig(baseFolderPath, folderConfig)
+		// Ensure that we are using the correct org for the scanned folder config
+		sc.populateOrgForScannedFolderConfig(sc.c, baseFolderPath, folderConfig)
 		results, err = s.Scan(ctx, baseFolderPath, "", folderConfig)
 	}
 	if err != nil {
@@ -100,17 +101,25 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	return nil
 }
 
-func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(path types.FilePath, folderConfig *types.FolderConfig) {
-	c := config.CurrentConfig()
+// populateOrgForScannedFolderConfig creates a folder config for the scanned folder if it doesn't exist and populates
+// the org settings from the working directory folder config.
+// In delta scans, base branches might not have a folderConfig in storage, so the base scan would run using the default
+// org. This ensures we use the same org as for the working directory scans so that we can compare the results.
+func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(c *config.Config, path types.FilePath, folderConfig *types.FolderConfig) {
 	logger := c.Logger().With().Str("method", "populateOrgForScannedFolderConfig").Logger()
-	scannedFolderConfig, _ := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
+	scannedFolderConfig, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
 		CreateIfNotExist: false,
-		ReadOnly:         false,
+		ReadOnly:         true,
 		EnrichFromGit:    false,
 	})
 
+	if err != nil {
+		logger.Warn().Err(err).Str("path", string(path)).Msg("failed to get folder config for scanned directory")
+	}
+
 	if scannedFolderConfig == nil {
 		// Create a new folder config and copy the organization settings from the working directory folder config
+		logger.Debug().Str("path", string(path)).Msg("creating new folder config for scanned directory")
 		scannedFolderConfig = c.FolderConfig(path)
 		scannedFolderConfig.OrgMigratedFromGlobalConfig = folderConfig.OrgMigratedFromGlobalConfig
 		scannedFolderConfig.OrgSetByUser = folderConfig.OrgSetByUser
