@@ -22,13 +22,61 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// testCodeConfigUsesFolderOrg is a shared helper function that tests CodeConfig creation
+// uses the correct folder-specific org for a single folder scenario.
+func testCodeConfigUsesFolderOrg(
+	t *testing.T,
+	c *config.Config,
+	scanner *Scanner,
+	folderPath types.FilePath,
+	expectedOrg string,
+) {
+	t.Helper()
+
+	// Verify FolderOrganization() returns the expected org
+	folderOrg := c.FolderOrganization(folderPath)
+	assert.Equal(t, expectedOrg, folderOrg, "FolderOrganization should return folder's org")
+
+	// Get FolderConfig for the folder
+	folderConfig := c.FolderConfig(folderPath)
+	require.NotNil(t, folderConfig, "FolderConfig should not be nil")
+
+	// Verify the CodeConfig has the correct org
+	// This is what CreateCodeScanner uses internally, so we verify it first
+	codeConfig, err := scanner.createCodeConfig(folderConfig)
+	require.NoError(t, err, "createCodeConfig should succeed with folder's org")
+	require.NotNil(t, codeConfig, "CodeConfig should not be nil")
+
+	// Verify the org is correctly set in the config
+	configOrg := codeConfig.Organization()
+
+	// The org should be resolved to UUID (code-client-go expects UUID, not slug)
+	expectedOrgUUID, err := c.ResolveOrgToUUID(expectedOrg)
+	require.NoError(t, err, "Should be able to resolve folder's org to UUID")
+	assert.Equal(t, expectedOrgUUID, configOrg, "CodeConfig should use folder's org (as UUID)")
+
+	// Verify GetCodeApiUrlForFolder also uses the folder's org (this is called in createCodeConfig)
+	// This ensures the full flow from FolderOrganization -> createCodeConfig -> GetCodeApiUrlForFolder works
+	codeApiURL, err := GetCodeApiUrlForFolder(c, folderPath)
+	require.NoError(t, err, "GetCodeApiUrlForFolder should succeed")
+	require.NotEmpty(t, codeApiURL, "Code API URL should not be empty")
+
+	// Test: verify CreateCodeScanner() creates a scanner with folder's org
+	// This is the actual function used in the scanning flow (via codeScanner method in UploadAndAnalyze)
+	// Since we've already verified the config is correct, this confirms the full scanner creation works
+	codeScanner, err := CreateCodeScanner(scanner, folderConfig)
+	require.NoError(t, err, "CreateCodeScanner should succeed with folder's org")
+	require.NotNil(t, codeScanner, "CodeScanner should not be nil")
+}
+
 // Test_CodeConfig_UsesFolderOrganization is an INTEGRATION TEST that verifies
-// createCodeConfig() sets the correct organization in CodeConfig based on FolderOrganization()
-// for different folders. This test uses testutil.IntegTest() to run in the integration test suite.
+// CodeConfig creation uses the correct folder-specific organization for different folders.
 func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 	c := testutil.IntegTest(t)
 	c.SetSnykCodeEnabled(true)
@@ -37,35 +85,24 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
 
 	// Set up workspace with the folders
-	// This is required for FolderOrganizationForSubPath to work
+	// This is required for FolderOrganizationForSubPath to work (used by GetCodeApiUrlForFolder)
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
-	// Create a scanner to test createCodeConfig
+	// Create a scanner to test CreateCodeScanner (the actual function used in scanning)
+	// This is called via sc.codeScanner() in UploadAndAnalyze during actual scans
 	scanner := &Scanner{
 		C: c,
 	}
 
-	// Get FolderConfig for folder 1
-	folderConfig1 := c.FolderConfig(folderPath1)
-	require.NotNil(t, folderConfig1, "FolderConfig for folder1 should not be nil")
+	// Test folder 1
+	t.Run("folder 1", func(t *testing.T) {
+		testCodeConfigUsesFolderOrg(t, c, scanner, folderPath1, folderOrg1)
+	})
 
-	// Test folder 1: verify createCodeConfig() sets org in CodeConfig
-	codeConfig1, err := scanner.createCodeConfig(folderConfig1)
-	require.NoError(t, err)
-	require.NotNil(t, codeConfig1)
-	configOrg1 := codeConfig1.Organization()
-	assert.Equal(t, folderOrg1, configOrg1, "CodeConfig for folder1 should use folder1's org")
-
-	// Get FolderConfig for folder 2
-	folderConfig2 := c.FolderConfig(folderPath2)
-	require.NotNil(t, folderConfig2, "FolderConfig for folder2 should not be nil")
-
-	// Test folder 2: verify createCodeConfig() sets different org in CodeConfig
-	codeConfig2, err := scanner.createCodeConfig(folderConfig2)
-	require.NoError(t, err)
-	require.NotNil(t, codeConfig2)
-	configOrg2 := codeConfig2.Organization()
-	assert.Equal(t, folderOrg2, configOrg2, "CodeConfig for folder2 should use folder2's org")
+	// Test folder 2
+	t.Run("folder 2", func(t *testing.T) {
+		testCodeConfigUsesFolderOrg(t, c, scanner, folderPath2, folderOrg2)
+	})
 
 	// Verify the orgs are different
 	assert.NotEqual(t, folderOrg1, folderOrg2, "Folder orgs should be different")
