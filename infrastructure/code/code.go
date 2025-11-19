@@ -462,6 +462,13 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 		return nil, fmt.Errorf("no organization found for workspace folder %s", workspaceFolderPath)
 	}
 
+	// Ensure the organization is a UUID, not a slug
+	// code-client-go expects a UUID and will panic if given a slug
+	orgUUID, err := sc.C.ResolveOrgToUUID(organization)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve organization to UUID for workspace folder %s: %w", workspaceFolderPath, err)
+	}
+
 	codeApiURL, err := GetCodeApiUrlForFolder(sc.C, workspaceFolderPath)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to get code api url for workspace folder %s", workspaceFolderPath)
@@ -471,7 +478,7 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 
 	// Create a lazy config that delegates to the language server config
 	return &CodeConfig{
-		orgForFolder: organization,
+		orgForFolder: orgUUID,
 		lsConfig:     sc.C,
 		codeApiUrl:   codeApiURL,
 	}, nil

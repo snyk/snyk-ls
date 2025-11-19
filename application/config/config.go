@@ -1369,6 +1369,31 @@ func (c *Config) FolderOrganizationForSubPath(path types.FilePath) (string, erro
 	return folderOrg, nil
 }
 
+// ResolveOrgToUUID takes an organization value (which could be a UUID or a slug)
+// and returns the UUID. If the input is already a UUID, it returns it unchanged.
+// If it's a slug, it uses GAF configuration to resolve it to a UUID.
+func (c *Config) ResolveOrgToUUID(org string) (string, error) {
+	// Check if the organization is already a valid UUID
+	if _, err := uuid.Parse(org); err == nil {
+		// It's already a UUID, return it
+		return org, nil
+	}
+
+	// It's not a UUID, so it might be a slug. Use GAF to resolve it.
+	// When we set ORGANIZATION to a slug, GAF will resolve it to a UUID via its default value function
+	gafConfig := c.Engine().GetConfiguration()
+	clonedConfig := gafConfig.Clone()
+	clonedConfig.Set(configuration.ORGANIZATION, org)
+	resolvedOrg := clonedConfig.GetString(configuration.ORGANIZATION)
+
+	// Verify the resolved value is a UUID
+	if _, err := uuid.Parse(resolvedOrg); err != nil {
+		return "", fmt.Errorf("organization '%s' could not be resolved to a valid UUID: %w", org, err)
+	}
+
+	return resolvedOrg, nil
+}
+
 func (c *Config) HoverVerbosity() int {
 	c.m.RLock()
 	defer c.m.RUnlock()
