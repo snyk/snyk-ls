@@ -209,7 +209,7 @@ func getRemediationAdvice(issue snyk.OssIssueData) string {
 	isOutdated := hasUpgradePath && issue.UpgradePath[1] == issue.From[1]
 	remediationAdvice := "No remediation advice available"
 	upgradeMessage := ""
-	if issue.IsUpgradable || issue.IsPatchable {
+	if issue.IsUpgradable {
 		if hasUpgradePath {
 			upgradePath, ok := issue.UpgradePath[1].(string)
 			if ok {

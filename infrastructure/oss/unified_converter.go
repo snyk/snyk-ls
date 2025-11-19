@@ -100,7 +100,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	myRange := getRangeFromNode(dependencyNode)
 
 	title := trIssue.GetTitle()
-	ossIssueData, err := buildOssIssueData(ctx, trIssue, problem, introducingFinding, affectedFilePath, myRange, ecosystemStr)
+	ossIssueData, err := buildOssIssueData(ctx, trIssue, problem, introducingFinding, affectedFilePath, myRange, ecosystemStr, dependencyPath)
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to build oss issue data")
 	}
@@ -108,11 +108,18 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	// populate matching issues, we include the first primary finding
 	ossIssueData.MatchingIssues = []snyk.OssIssueData{}
 	for _, finding := range trIssue.GetFindings() {
-		issueData, err := buildOssIssueData(ctx, trIssue, problem, finding, affectedFilePath, myRange, ecosystemStr)
-		if err != nil {
-			logger.Warn().Err(err).Msg("failed to build oss issue data")
+		for _, evidence := range finding.Attributes.Evidence {
+			dependencyPathEvidence, err := evidence.AsDependencyPathEvidence()
+			if err != nil {
+				continue
+			}
+			stringPath := convertToStringPath(dependencyPathEvidence.Path)
+			issueData, err := buildOssIssueData(ctx, trIssue, problem, finding, affectedFilePath, myRange, ecosystemStr, stringPath)
+			if err != nil {
+				logger.Warn().Err(err).Msg("failed to build oss issue data")
+			}
+			ossIssueData.MatchingIssues = append(ossIssueData.MatchingIssues, issueData)
 		}
-		ossIssueData.MatchingIssues = append(ossIssueData.MatchingIssues, issueData)
 	}
 
 	remediationAdvice := getRemediationAdvice(ossIssueData)
@@ -260,11 +267,13 @@ func buildMessage(title, packageName, remediation string) string {
 // buildRemediationAdvice builds remediation advice text from the upgrade path
 // Matches legacy flow: uses UpgradePath[1] (the package to be upgraded)
 // Logic matches Legacy's GetRemediation() which checks IsUpgradable || IsPatchable
-func buildRemediationAdvice(finding *testapi.FindingData, problem *testapi.SnykVulnProblem, ecosystemStr string) string {
-	// Get the upgrade path from the API
-	dependencyPath := extractDependencyPath(finding)
-	upgradePath := buildUpgradePath(dependencyPath, finding)
-
+func buildRemediationAdvice(
+	finding *testapi.FindingData,
+	problem *testapi.SnykVulnProblem,
+	ecosystemStr string,
+	dependencyPath []string,
+	upgradePath []any,
+) string {
 	// Extract the actual version from the finding
 	actualVersion := extractVersion(finding, problem)
 
@@ -415,6 +424,7 @@ func buildOssIssueData(
 	affectedFilePath types.FilePath,
 	issueRange types.Range,
 	ecosystem string,
+	dependencyPath []string,
 ) (snyk.OssIssueData, error) {
 	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "buildOssIssueData").Logger()
 	logger.Debug().Interface("problem", problem.Id).Interface("finding", finding.Id).Msg("building oss issue data")
@@ -429,8 +439,6 @@ func buildOssIssueData(
 		issueRange.Start.Character,
 		issueRange.End.Character,
 	)
-
-	dependencyPath := extractDependencyPath(finding)
 
 	// Extract project name from dependency path (from[0])
 	projectName := ""
@@ -474,7 +482,7 @@ func buildOssIssueData(
 		Language:           extractLanguageFromEcosystem(problem.Ecosystem),
 		Details:            attrs.Description,
 		MatchingIssues:     []snyk.OssIssueData{}, // populated in caller
-		Remediation:        buildRemediationAdvice(finding, problem, ecosystem),
+		Remediation:        buildRemediationAdvice(finding, problem, ecosystem, dependencyPath, upgradePath),
 		AppliedPolicyRules: extractAppliedPolicyRules(),
 		RiskScore:          trIssue.GetRiskScore(),
 	}
