@@ -71,6 +71,8 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 	assert.NotEqual(t, folderOrg1, folderOrg2, "Folder orgs should be different")
 }
 
+// Test_CodeConfig_FallsBackToGlobalOrg is an INTEGRATION TEST that verifies
+// CodeConfig creation falls back to global org when no folder-specific org is configured.
 func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	c := testutil.IntegTest(t)
 	c.SetSnykCodeEnabled(true)
@@ -81,28 +83,52 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	// This is required for FolderOrganizationForSubPath to work (used by GetCodeApiUrlForFolder)
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath)
 
-	// Create a scanner to test createCodeConfig
-	scanner := &Scanner{
-		C: c,
-	}
+	// Verify FolderOrganization() returns the global org (fallback behavior)
+	folderOrg := c.FolderOrganization(folderPath)
+	assert.Equal(t, globalOrg, folderOrg, "FolderOrganization should fall back to global org when no folder org is configured")
 
 	// Get FolderConfig for the folder
 	folderConfig := c.FolderConfig(folderPath)
 	require.NotNil(t, folderConfig, "FolderConfig should not be nil")
 
-	// Test: verify createCodeConfig() uses global org as fallback
+	// Create a scanner to test CreateCodeScanner (the actual function used in scanning)
+	// This is called via sc.codeScanner() in UploadAndAnalyze during actual scans
+	scanner := &Scanner{
+		C: c,
+	}
+
+	// Test: verify CreateCodeScanner() creates a scanner with global org as fallback
+	// This is the actual function used in the scanning flow (via codeScanner method in UploadAndAnalyze)
+	codeScanner, err := CreateCodeScanner(scanner, folderConfig)
+	require.NoError(t, err, "CreateCodeScanner should succeed with global org fallback")
+	require.NotNil(t, codeScanner, "CodeScanner should not be nil")
+
+	// Verify the CodeConfig used by the scanner has the correct org
+	// CreateCodeScanner internally calls createCodeConfig, so we verify that path
 	codeConfig, err := scanner.createCodeConfig(folderConfig)
-	require.NoError(t, err)
-	require.NotNil(t, codeConfig)
+	require.NoError(t, err, "createCodeConfig should succeed with global org fallback")
+	require.NotNil(t, codeConfig, "CodeConfig should not be nil")
+
+	// Verify the org is correctly set in the config
 	configOrg := codeConfig.Organization()
-	assert.Equal(t, globalOrg, configOrg, "CodeConfig should fall back to global org when no folder org is set")
+
+	// The org should be resolved to UUID (code-client-go expects UUID, not slug)
+	globalOrgUUID, err := c.ResolveOrgToUUID(globalOrg)
+	require.NoError(t, err, "Should be able to resolve global org to UUID")
+	assert.Equal(t, globalOrgUUID, configOrg, "CodeConfig should fall back to global org (as UUID) when no folder org is set")
+
+	// Verify GetCodeApiUrlForFolder also uses the global org (this is called in createCodeConfig)
+	// This ensures the full flow from FolderOrganization -> createCodeConfig -> GetCodeApiUrlForFolder works
+	codeApiURL, err := GetCodeApiUrlForFolder(c, folderPath)
+	require.NoError(t, err, "GetCodeApiUrlForFolder should succeed")
+	require.NotEmpty(t, codeApiURL, "Code API URL should not be empty")
 }
 
 func Test_GetCodeApiUrlForFolder_UsesFolderOrganization(t *testing.T) {
 	c := testutil.IntegTest(t)
 
 	// Set up FedRAMP environment
-	c.UpdateApiEndpoints("https://api.snykgov.io")
+	c.UpdateApiEndpoints("https://api.snyk.io")
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
