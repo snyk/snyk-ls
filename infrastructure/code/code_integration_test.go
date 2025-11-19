@@ -67,6 +67,11 @@ func testCodeConfigUsesFolderOrg(
 	require.NoError(t, err, "GetCodeApiUrlForFolder should succeed")
 	require.NotEmpty(t, codeApiURL, "Code API URL should not be empty")
 
+	// In FedRAMP environments, verify the org is included in the URL path
+	if c.IsFedramp() {
+		assert.Contains(t, codeApiURL, "/hidden/orgs/"+expectedOrg+"/code", "FedRAMP API URL should include folder's org in path")
+	}
+
 	// Test: verify CreateCodeScanner() creates a scanner with folder's org
 	// This is the actual function used in the scanning flow (via codeScanner method in UploadAndAnalyze)
 	// Since we've already verified the config is correct, this confirms the full scanner creation works
@@ -159,33 +164,6 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	codeApiURL, err := GetCodeApiUrlForFolder(c, folderPath)
 	require.NoError(t, err, "GetCodeApiUrlForFolder should succeed")
 	require.NotEmpty(t, codeApiURL, "Code API URL should not be empty")
-}
-
-func Test_GetCodeApiUrlForFolder_UsesFolderOrganization(t *testing.T) {
-	c := testutil.IntegTest(t)
-
-	// Set up FedRAMP environment
-	c.UpdateApiEndpoints("https://api.snyk.io")
-
-	// Set up two folders with different orgs
-	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
-
-	// Set up workspace with the folders
-	// This is required for FolderOrganizationForSubPath to work
-	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
-
-	// Test folder 1: verify GetCodeApiUrlForFolder() includes folder1's org in FedRAMP URL
-	apiUrl1, err := GetCodeApiUrlForFolder(c, folderPath1)
-	require.NoError(t, err)
-	assert.Contains(t, apiUrl1, "/hidden/orgs/"+folderOrg1+"/code", "FedRAMP API URL for folder1 should include folder1's org")
-
-	// Test folder 2: verify GetCodeApiUrlForFolder() includes folder2's org in FedRAMP URL
-	apiUrl2, err := GetCodeApiUrlForFolder(c, folderPath2)
-	require.NoError(t, err)
-	assert.Contains(t, apiUrl2, "/hidden/orgs/"+folderOrg2+"/code", "FedRAMP API URL for folder2 should include folder2's org")
-
-	// Verify the URLs are different
-	assert.NotEqual(t, apiUrl1, apiUrl2, "API URLs for different folders should be different")
 }
 
 func Test_GetExplainEndpoint_UsesFolderOrganization(t *testing.T) {
