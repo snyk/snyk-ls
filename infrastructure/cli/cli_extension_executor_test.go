@@ -335,6 +335,7 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 
 	// Verify the org flag was added to the command args
 	assert.Contains(t, capturedArgs, "--org="+folderOrgUUID, "Command args should contain folder org flag")
+	assert.NotContains(t, capturedArgs, "--org="+globalOrgUUID, "Command args should not contain global org flag")
 }
 
 func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T) {
@@ -358,7 +359,6 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
 	require.NoError(t, err)
 
-	// Test - the resolution will fail because we don't have a real API connection
 	capturedOrg, _ := executeAndCaptureConfig(t, c, []string{"snyk", "test"}, folderPath)
 
 	// Verify we fell back to global org when resolution failed
