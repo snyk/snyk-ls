@@ -27,7 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/testutil/workspace"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -77,7 +77,7 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFixIdNotFound(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -96,7 +96,7 @@ func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -128,7 +128,7 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFileNotInAnyFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -160,7 +160,7 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with multiple folders
-	workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/project1"), types.FilePath("/workspace/project2"), types.FilePath("/workspace/project3"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/project1"), types.FilePath("/workspace/project2"), types.FilePath("/workspace/project3"))
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()

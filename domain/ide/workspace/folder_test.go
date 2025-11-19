@@ -803,7 +803,6 @@ func NewMockFolderWithScanNotifier(c *config.Config, notifier notification.Notif
 	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanNotifier, notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService()), scanNotifier
 }
 
-
 func GetValueFromMap(m *xsync.MapOf[types.FilePath, []types.Issue], key types.FilePath) []types.Issue {
 	value, _ := m.Load(key)
 	return value

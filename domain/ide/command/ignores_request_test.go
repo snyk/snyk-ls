@@ -14,11 +14,11 @@ import (
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
-	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
@@ -120,7 +120,8 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 			c := testutil.UnitTest(t)
 
 			// Setup fake workspace
-			_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+			folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+			_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 			contentRoot := folderPaths[0]
 
 			// Configure folder with org
@@ -406,7 +407,8 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	const testFolderOrg = "test-folder-org"
 
 	// Setup fake workspace with the folder
-	_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 	folderPath := folderPaths[0]
 
 	folderConfig := &types.FolderConfig{
@@ -445,7 +447,7 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithGlobalOrgFallback(t *testing.T) 
 	const testGlobalOrg = "test-global-org"
 
 	// Setup fake workspace with one folder, but we'll send analytics for a path outside of it
-	testutils.SetupFakeWorkspace(t, c, 1)
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/fake/test-folder-0"))
 
 	// Set a global org in the config
 	c.SetOrganization(testGlobalOrg)

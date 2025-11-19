@@ -35,9 +35,13 @@ import (
 
 // SetupWorkspace creates a minimal workspace if it doesn't exist and adds the given folder paths to it.
 // This is useful for tests that need a workspace but don't need organization configuration.
-// Returns the workspace that was created or already existed.
-func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePath) types.Workspace {
+// Returns the workspace that was created or already existed, and the notifier used.
+// If the workspace already exists, the notifier from the existing workspace is returned.
+func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePath) (types.Workspace, *notification.MockNotifier) {
 	t.Helper()
+
+	// Create a notifier that will be used for the workspace and folders
+	notifier := notification.NewMockNotifier()
 
 	// Create a minimal workspace if it doesn't exist
 	if c.Workspace() == nil {
@@ -47,7 +51,7 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 			&scanner.TestScanner{},
 			nil,
 			scanner.NewMockScanNotifier(),
-			notification.NewMockNotifier(),
+			notifier,
 			persistence.NewNopScanPersister(),
 			scanstates.NewNoopStateAggregator(),
 			featureflag.NewFakeService(),
@@ -68,7 +72,7 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 			&scanner.TestScanner{},
 			nil,
 			scanner.NewMockScanNotifier(),
-			notification.NewMockNotifier(),
+			notifier,
 			persistence.NewNopScanPersister(),
 			scanstates.NewNoopStateAggregator(),
 			featureflag.NewFakeService(),
@@ -76,5 +80,5 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 		c.Workspace().AddFolder(folder)
 	}
 
-	return c.Workspace()
+	return c.Workspace(), notifier
 }

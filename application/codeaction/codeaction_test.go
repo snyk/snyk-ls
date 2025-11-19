@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/testutil/workspace"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -101,7 +101,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	// Arrange
 	// Set up workspace with folder that contains the test file path
 	// The document URI is "file:///path/to/file", so the folder should be "/path/to"
-	workspaceutil.SetupWorkspace(t, c, types.FilePath("/path/to"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/path/to"))
 
 	ctrl := gomock.NewController(t)
 	var issues []types.Issue
@@ -276,7 +276,7 @@ func setupService(t *testing.T, c *config.Config) *codeaction.CodeActionsService
 	t.Helper()
 	// Set up workspace with folder that contains the test file path
 	// The document URI is "file:///path/to/file", so the folder should be "/path/to"
-	workspaceutil.SetupWorkspace(t, c, types.FilePath("/path/to"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/path/to"))
 
 	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return([]types.Issue{}).AnyTimes()
@@ -292,7 +292,7 @@ func setupWithSingleIssue(t *testing.T, c *config.Config, issue types.Issue) (*c
 
 	// Set up workspace with folder that contains the test file path
 	// The document URI is "file:///path/to/file", so the folder should be "/path/to"
-	workspaceutil.SetupWorkspace(t, c, types.FilePath("/path/to"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/path/to"))
 
 	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	issues := []types.Issue{issue}

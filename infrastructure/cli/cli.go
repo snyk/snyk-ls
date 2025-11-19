@@ -129,6 +129,8 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 // This allows tests to verify that the final command includes folder-specific org flags.
 func (c *SnykCli) GetCommandForTesting(ctx context.Context, cmd []string, workingDir types.FilePath) (*exec.Cmd, error) {
 	return c.getCommand(cmd, workingDir, ctx)
+}
+
 func getArgsWithOrgSubstitution(cmd []string, org string) []string {
 	// If a folder-specific organization is configured, ensure the CLI receives it.
 	effectiveArgs := append([]string{}, cmd...)

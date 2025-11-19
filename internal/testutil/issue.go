@@ -51,4 +51,3 @@ func NewMockIssueWithIgnored(id string, path types.FilePath, ignored bool) *snyk
 	issue.IsIgnored = ignored
 	return issue
 }
-

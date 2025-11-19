@@ -59,4 +59,3 @@ func ExecuteAndCaptureConfig(t *testing.T, c *config.Config, executor CLIExecuto
 
 	return capturedOrg, capturedWorkingDir
 }
-

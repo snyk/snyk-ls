@@ -338,7 +338,8 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 	require.NoError(t, err)
 
 	// Test - the resolution will fail because we don't have a real API connection
-	capturedOrg, _ := executeAndCaptureConfig(t, c, []string{"snyk", "test"}, folderPath)
+	executor := NewExtensionExecutor(c)
+	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify we fell back to global org when resolution failed
 	assert.Equal(t, globalOrgUUID, capturedOrg, "Should fall back to global org when resolution fails")
