@@ -68,6 +68,7 @@ func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir
 }
 
 func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingDir types.FilePath) ([]byte, error) {
+	method := "ExtensionExecutor.doExecute"
 	err := c.c.WaitForDefaultEnv(ctx)
 	if err != nil {
 		return []byte{}, err
@@ -79,14 +80,20 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	legacyCLI := workflow.NewWorkflowIdentifier("legacycli")
 	legacyCLIConfig := engine.GetConfiguration().Clone()
 	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, string(workingDir))
-	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
 	// Use folder-level organization if we are executing from within a project folder.
 	// If no folder-specific org is configured, fall back to global organization.
 	if workingDir != "" {
 		folderOrg := c.c.FolderOrganization(workingDir)
 		if folderOrg != "" {
-			legacyCLIConfig.Set(configuration.ORGANIZATION, folderOrg)
+			resolvedFolderOrg, resolveErr := c.c.ResolveOrgToUUID(folderOrg)
+			if resolveErr != nil {
+				c.c.Logger().Warn().Err(err).Str("method", method).Str("folderOrg", folderOrg).Msg("failed to resolve folder organization to UUID, falling back to global organization")
+				legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
+			} else {
+				legacyCLIConfig.Set(configuration.ORGANIZATION, resolvedFolderOrg)
+				cmd = getArgsWithOrgSubstitution(cmd, resolvedFolderOrg)
+			}
 		} else {
 			// Fall back to global organization if no folder-specific org is configured
 			legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
@@ -95,6 +102,7 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 		// If no working directory, use global organization
 		legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
 	}
+	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 
 	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
 	envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's

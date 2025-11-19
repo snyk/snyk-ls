@@ -23,33 +23,30 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-	context2 "github.com/snyk/snyk-ls/internal/context"
-	"github.com/snyk/snyk-ls/internal/testsupport"
-
-	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
-	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
-	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	context2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -71,7 +68,9 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 
 func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	path2 := types.FilePath(filepath.Join(string(f.path), "path2"))
@@ -96,7 +95,9 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 
 func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	filePath := types.FilePath("dummy/path1")
 	data := types.ScanData{
@@ -116,7 +117,9 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 
 func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	path2 := types.FilePath(filepath.Join(string(f.path), "path2"))
@@ -141,7 +144,9 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 
 func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	data := types.ScanData{
@@ -164,7 +169,9 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 
 func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	path2 := types.FilePath(filepath.Join(string(f.path), "path2"))
@@ -201,7 +208,9 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	severityFilter := types.NewSeverityFilter(true, false, true, false)
 	c.SetSeverityFilter(&severityFilter)
 
-	f := NewMockFolder(c, notification.NewNotifier())
+	notifier := notification.NewNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	data := types.ScanData{
@@ -302,7 +311,9 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 
 func Test_Clear(t *testing.T) {
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewNotifier())
+	notifier := notification.NewNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	path2 := types.FilePath(filepath.Join(string(f.path), "path2"))
@@ -352,7 +363,7 @@ func Test_Clear(t *testing.T) {
 func Test_IsTrusted_shouldReturnFalseByDefault(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetTrustedFolderFeatureEnabled(true)
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewMockFolder(c, notification.NewMockNotifier())
 	assert.False(t, f.IsTrusted())
 }
 
@@ -360,7 +371,7 @@ func Test_IsTrusted_shouldReturnTrueForPathContainedInTrustedFolders(t *testing.
 	c := testutil.UnitTest(t)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]types.FilePath{"dummy"})
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewMockFolder(c, notification.NewMockNotifier())
 	assert.True(t, f.IsTrusted())
 }
 
@@ -511,7 +522,9 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
-	f := NewMockFolder(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 	filePath := types.FilePath(filepath.Join(string(f.path), "path1"))
 	mockOpenSourceIssue := testutil.NewMockIssue("id1", filePath)
 	removedIssueType := product.FilterableIssueTypeOpenSource
@@ -550,7 +563,9 @@ func Test_processResults_ShouldSendSuccess(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
 
-	f, scanNotifier := NewMockFolderWithScanNotifier(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f, scanNotifier := NewMockFolderWithScanNotifier(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 	var path = "path1"
 	mockCodeIssue := testutil.NewMockIssue("id1", types.FilePath(filepath.Join(string(f.path), path)))
 
@@ -571,7 +586,9 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
 
-	f, scanNotifier := NewMockFolderWithScanNotifier(c, notification.NewMockNotifier())
+	notifier := notification.NewMockNotifier()
+	f, scanNotifier := NewMockFolderWithScanNotifier(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
 	const filePath = "path1"
 	mockCodeIssue := testutil.NewMockIssue("id1", filePath)
 
@@ -594,19 +611,30 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	gafConfig := configuration.NewWithOpts(
-		configuration.WithAutomaticEnv(),
-	)
-	engineMock := workflow.NewWorkFlowEngine(gafConfig)
-	c.SetEngine(engineMock)
+	engineMock, gafConfig := testutil.SetUpEngineMock(t, c)
 
-	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
+	engineMock.EXPECT().GetWorkflows().AnyTimes()
+
+	notifier := notification.NewNotifier()
+	f, _ := NewMockFolderWithScanNotifier(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
+
+	const testFolderOrg = "test-org"
+	err := storedconfig.UpdateFolderConfig(gafConfig, &types.FolderConfig{
+		FolderPath:                  f.path,
+		PreferredOrg:                testFolderOrg,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
+
 	filePath := types.FilePath(filepath.Join(string(f.path), "path1"))
 	mockCodeIssue := testutil.NewMockIssue("id1", filePath)
 
 	data := types.ScanData{
 		Product:           product.ProductOpenSource,
 		Issues:            []types.Issue{mockCodeIssue},
+		Path:              f.path,
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
@@ -624,83 +652,107 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	ic.SetTestSummary(summary)
 	ic.SetType("Analytics")
 
-	entered := make(chan struct{})
-	_, err := engineMock.Register(localworkflows.WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError)),
-		func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
-			actualV2InstrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
-
-			require.NoError(t, err)
-
-			require.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
-			require.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
-			require.Equal(t, "Success", actualV2InstrumentationObject.Data.Attributes.Interaction.Status)
-			require.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Attributes.Interaction.Type)
-			require.Equal(t, []string{data.Product.ToProductCodename(), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
-			require.Equal(t, "Analytics", actualV2InstrumentationObject.Data.Type)
-			require.Empty(t, actualV2InstrumentationObject.Data.Attributes.Interaction.Errors)
-			require.Equal(t, []map[string]interface{}{{"name": "medium", "count": 1}}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Results)
-
-			close(entered)
-			return nil, nil
-		})
-
-	assert.NoError(t, err)
-
-	err = engineMock.Init()
-	assert.NoError(t, err)
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	// Act
 	f.ProcessResults(t.Context(), data)
-	maxWaitTime := 10 * time.Second
 
-	select {
-	case <-entered:
-	case <-time.After(maxWaitTime):
-		t.Fatalf("time out. condition wasn't met. current timeout value is: %s", maxWaitTime)
-	}
+	// Wait for async analytics sending
+	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
+
+	// Assert: Verify analytics payload
+	actualV2InstrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
+	require.NoError(t, err)
+	assert.Equal(t, "snyk-ls", actualV2InstrumentationObject.Data.Attributes.Runtime.Application.Name)
+	assert.Equal(t, "dev", string(*actualV2InstrumentationObject.Data.Attributes.Interaction.Stage))
+	assert.Equal(t, "Success", actualV2InstrumentationObject.Data.Attributes.Interaction.Status)
+	assert.Equal(t, "Scan done", actualV2InstrumentationObject.Data.Attributes.Interaction.Type)
+	assert.Equal(t, []string{data.Product.ToProductCodename(), "test"}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Categories)
+	assert.Equal(t, "Analytics", actualV2InstrumentationObject.Data.Type)
+	assert.Empty(t, actualV2InstrumentationObject.Data.Attributes.Interaction.Errors)
+	assert.Equal(t, []map[string]any{{"name": "medium", "count": 1}}, *actualV2InstrumentationObject.Data.Attributes.Interaction.Results)
+
+	// Assert: Verify analytics sent with correct folder org
+	actualOrg := captured.Config.Get(configuration.ORGANIZATION)
+	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
 
 func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	engineMock, _ := testutil.SetUpEngineMock(t, c)
+	engineMock, gafConfig := testutil.SetUpEngineMock(t, c)
 
-	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
+	notifier := notification.NewNotifier()
+	f, _ := NewMockFolderWithScanNotifier(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
+
+	const testFolderOrg = "test-org"
+	err := storedconfig.UpdateFolderConfig(gafConfig, &types.FolderConfig{
+		FolderPath:                  f.path,
+		PreferredOrg:                testFolderOrg,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
 
 	scanData := types.ScanData{
 		Product:           product.ProductOpenSource,
+		Path:              f.path,
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
 	}
 
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
-		Times(1).
-		Do(func(id workflow.Identifier, data []workflow.Data, config configuration.Configuration) {
-			require.Len(t, data, 1)
-			payload := string(data[0].GetPayload().([]byte))
-			require.NotEmpty(t, payload)
-			require.Contains(t, payload, "scan_source")
-			require.Contains(t, payload, "scan_type")
-		})
+
+	// Capture analytics WF's data and config (using channel for safe goroutine communication)
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	ctx := context2.NewContextWithScanSource(context2.NewContextWithDeltaScanType(t.Context(), context2.WorkingDirectory), context2.LLM)
 
 	// Act
 	f.ProcessResults(ctx, scanData)
-	time.Sleep(time.Second)
+
+	// Wait for async analytics sending
+	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
+
+	// Assert: Verify payload contains scan_source and scan_type
+	require.Len(t, captured.Input, 1)
+	payload := string(captured.Input[0].GetPayload().([]byte))
+	require.NotEmpty(t, payload)
+	assert.Contains(t, payload, "scan_source")
+	assert.Contains(t, payload, "scan_type")
+
+	// Assert: Verify analytics sent with correct folder org
+	actualOrg := captured.Config.Get(configuration.ORGANIZATION)
+	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
 
 func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	engineMock, _ := testutil.SetUpEngineMock(t, c)
+	notifier := notification.NewNotifier()
+	f, _ := NewMockFolderWithScanNotifier(c, notifier)
 
-	f, _ := NewMockFolderWithScanNotifier(c, notification.NewNotifier())
+	engineMock, gafConfig := testutil.SetUpEngineMock(t, c)
+
+	// Setup workspace with folder for analytics
+	setupWorkspaceWithFolder(c, f, notifier)
+
+	// Configure folder-specific org
+	const testFolderOrg = "test-folder-org-uuid"
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  f.Path(),
+		PreferredOrg:                testFolderOrg,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}
+	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
+	require.NoError(t, err, "failed to configure folder org")
 
 	filePath := types.FilePath(filepath.Join(string(f.Path()), "dummy.java"))
 	scanData := types.ScanData{
 		Product: product.ProductOpenSource,
+		Path:    f.Path(),
 		Issues: []types.Issue{
 			&snyk.Issue{Severity: types.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
 			&snyk.Issue{Severity: types.Critical, Product: product.ProductOpenSource, AffectedFilePath: filePath, AdditionalData: snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()}},
@@ -713,21 +765,33 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	}
 
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
-	engineMock.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
-		Times(1)
+
+	// Capture analytics WF's data and config to verify folder org
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	// Act
 	f.ProcessResults(t.Context(), scanData)
 
-	// Assert
+	// Assert: Verify severity counts
 	require.NotEmpty(t, scanData.GetSeverityIssueCounts())
 	require.Equal(t, product.ProductOpenSource, scanData.Product)
 	require.Equal(t, 3, scanData.GetSeverityIssueCounts()[types.Critical].Total)
 	require.Equal(t, 2, scanData.GetSeverityIssueCounts()[types.Critical].Open)
 	require.Equal(t, 1, scanData.GetSeverityIssueCounts()[types.Critical].Ignored)
 
-	// wait for async analytics sending
-	time.Sleep(time.Second)
+	// Wait for async analytics sending and verify org
+	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
+	actualOrg := captured.Config.Get(configuration.ORGANIZATION)
+	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
+}
+
+// setupWorkspaceWithFolder creates a workspace and adds the given folder to it
+func setupWorkspaceWithFolder(c *config.Config, folder *Folder, notifier notification.Notifier) {
+	w := New(c, performance.NewInstrumentor(), scanner.NewTestScanner(), hover.NewFakeHoverService(),
+		scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(),
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	c.SetWorkspace(w)
+	w.AddFolder(folder)
 }
 
 func NewMockFolder(c *config.Config, notifier notification.Notifier) *Folder {

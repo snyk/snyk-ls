@@ -63,14 +63,7 @@ func (i *Initializer) Init() error {
 	}
 
 	// automatic authentication enabled && token is empty
-	err := i.authenticate(i.authenticationService, errorMessage)
-	if err != nil {
-		c.Logger().Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
-		i.notifier.SendError(err)
-		i.errorReporter.CaptureError(err)
-		return err
-	}
-	return nil
+	return i.authenticate(i.authenticationService, errorMessage)
 }
 
 func (i *Initializer) authenticate(authenticationService AuthenticationService, errorMessage string) error {
@@ -83,7 +76,7 @@ func (i *Initializer) authenticate(authenticationService AuthenticationService, 
 		}
 		i.notifier.SendError(err)
 		err = errors.Wrap(err, errorMessage)
-		i.c.Logger().Err(err).Msg(errorMessage)
+		i.c.Logger().Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
 		i.errorReporter.CaptureError(err)
 		return err
 	}

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package code provides Snyk Code (SAST) scanning functionality.
 package code
 
 import (
@@ -33,13 +34,14 @@ import (
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
-	"github.com/snyk/go-application-framework/pkg/utils"
+	gafUtils "github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -77,7 +79,7 @@ type Scanner struct {
 	changedPaths       map[types.FilePath]map[types.FilePath]bool // tracks files that were changed since the last scan per workspace folder
 	learnService       learn.Service
 	featureFlagService featureflag.Service
-	fileFilters        *xsync.MapOf[string, *utils.FileFilter]
+	fileFilters        *xsync.MapOf[string, *gafUtils.FileFilter]
 	notifier           notification.Notifier
 
 	// global map to store last used bundle hashes for each workspace folder
@@ -116,7 +118,7 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		errorReporter:      reporter,
 		runningScans:       map[types.FilePath]*ScanStatus{},
 		changedPaths:       map[types.FilePath]map[types.FilePath]bool{},
-		fileFilters:        xsync.NewMapOf[*utils.FileFilter](),
+		fileFilters:        xsync.NewMapOf[*gafUtils.FileFilter](),
 		learnService:       learnService,
 		featureFlagService: featureFlagService,
 		notifier:           notifier,
@@ -160,15 +162,13 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 
 	sastResponse := folderConfig.SastSettings
 
-	if !sc.isSastEnabled(sastResponse) {
-		return issues, errors.New("SAST is not enabled")
+	if !sastResponse.SastEnabled {
+		return issues, errors.New(utils.ErrSnykCodeNotEnabled)
 	}
 
 	if isLocalEngineEnabled(sastResponse) {
 		updateCodeApiLocalEngine(sc.C, sastResponse)
 	}
-
-	sc.C.SetSnykAgentFixEnabled(sastResponse.AutofixEnabled)
 
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[folderPath] == nil {
@@ -231,7 +231,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, f
 
 	fileFilter, _ := sc.fileFilters.Load(string(folderPath))
 	if fileFilter == nil {
-		fileFilter = utils.NewFileFilter(string(folderPath), &logger)
+		fileFilter = gafUtils.NewFileFilter(string(folderPath), &logger)
 		sc.fileFilters.Store(string(folderPath), fileFilter)
 	}
 
@@ -441,6 +441,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 		requestId,
 		path,
 		sc.C,
+		folderConfig,
 	)
 	issueEnhancer.addIssueActions(ctx, issues)
 
@@ -461,6 +462,13 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 		return nil, fmt.Errorf("no organization found for workspace folder %s", workspaceFolderPath)
 	}
 
+	// Ensure the organization is a UUID, not a slug
+	// code-client-go expects a UUID and will panic if given a slug
+	orgUUID, err := sc.C.ResolveOrgToUUID(organization)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve organization to UUID for workspace folder %s: %w", workspaceFolderPath, err)
+	}
+
 	codeApiURL, err := GetCodeApiUrlForFolder(sc.C, workspaceFolderPath)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to get code api url for workspace folder %s", workspaceFolderPath)
@@ -470,7 +478,7 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 
 	// Create a lazy config that delegates to the language server config
 	return &CodeConfig{
-		orgForFolder: organization,
+		orgForFolder: orgUUID,
 		lsConfig:     sc.C,
 		codeApiUrl:   codeApiURL,
 	}, nil

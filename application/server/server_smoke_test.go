@@ -47,6 +47,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -199,7 +200,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 					continue
 				}
 				// TODO: check right scan state and summary is sent
-				return strings.Contains(scanParams.ErrorMessage, "fork/exec")
+				return strings.Contains(scanParams.PresentableError.ErrorMessage, "fork/exec")
 			}
 
 			return false
@@ -600,7 +601,7 @@ func substituteDepGraphFlow(t *testing.T, c *config.Config, cloneTargetDirString
 		depGraphData := workflow.NewData(depGraphDataID, "application/json", depGraphJson)
 		normalisedTargetFile := strings.TrimSpace(displayTargetFile)
 		depGraphData.SetMetaData("Content-Location", normalisedTargetFile)
-		depGraphData.SetMetaData("normalisedTargetFile", normalisedTargetFile) //Required for cli-extension-os-flow
+		depGraphData.SetMetaData("normalisedTargetFile", normalisedTargetFile) // Required for cli-extension-os-flow
 
 		return []workflow.Data{depGraphData}, nil
 	}
@@ -769,8 +770,8 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecord
 
 	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 	require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
-		"Scan failed - Product: %s, Folder: %s, Error: %s",
-		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.ErrorMessage)
+		"Scan failed - Product: %s, Folder: %s, Error: %w",
+		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.PresentableError)
 	require.Equal(t, types.Success, finalScanParams.Status,
 		"Unexpected scan status: %s", finalScanParams.Status)
 }
@@ -1238,6 +1239,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			c.SetOrganization(expectedOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 			require.NoError(t, err)
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 		}
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
@@ -1255,7 +1257,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - adding folder with existing stored config. Making sure PreferredOrg is preserved", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
-		ensureInitialized(t, c, loc, initParams, nil)
+		setupFunc := func(c *config.Config) {
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
 			require.Empty(t, fc.PreferredOrg)
@@ -1379,7 +1385,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 		t.Setenv("SNYK_TOKEN", "")
 
-		ensureInitialized(t, c, loc, initParams, nil)
+		setupFunc := func(c *config.Config) {
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
 
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
@@ -1570,7 +1580,7 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 	assert.NoError(t, err)
 
 	// Filter out old stored folder configs and only keep the ones from initParams
-	storedConfig, getSCErr := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+	storedConfig, getSCErr := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	if getSCErr == nil {
 		filteredConfigs := make(map[types.FilePath]*types.FolderConfig)
 		for _, fc := range initParams.InitializationOptions.FolderConfigs {
@@ -1647,7 +1657,7 @@ func sendModifiedFolderConfiguration(
 	modification func(folderConfigs map[types.FilePath]*types.FolderConfig),
 ) {
 	t.Helper()
-	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	require.NoError(t, err)
 	modification(storedConfig.FolderConfigs)
 	sendConfigurationDidChange(t, loc, types.Settings{
