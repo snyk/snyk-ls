@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-// Package workspace provides workspace setup utilities for tests.
+// Package workspaceutil provides workspace setup utilities for tests.
 // This is in a separate package to avoid import cycles (testutil -> scanner -> authentication -> cli).
-package workspace
+package workspaceutil
 
 import (
 	"strconv"

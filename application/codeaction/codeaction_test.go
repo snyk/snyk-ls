@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	workspaceutil "github.com/snyk/snyk-ls/internal/testutil/workspace"
+	"github.com/snyk/snyk-ls/internal/testutil/workspace"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )

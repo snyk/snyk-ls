@@ -14,29 +14,18 @@
  * limitations under the License.
  */
 
-// Package cli_test contains integration tests for the CLI infrastructure components.
-// These tests use testutil.IntegTest() to run in the integration test suite and verify
-// end-to-end behavior, including interactions between multiple folders with different organizations.
-// For unit tests with single folder scenarios, see cli_extension_executor_test.go in the cli package.
-package cli_test
+package cli
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // Test_SnykCli_GetCommand_UsesFolderOrganization is an INTEGRATION TEST that verifies
@@ -48,7 +37,7 @@ func Test_SnykCli_GetCommand_UsesFolderOrganization(t *testing.T) {
 
 	er := error_reporting.NewTestErrorReporter()
 	notifier := notification.NewMockNotifier()
-	cliExecutor := cli.NewExecutor(c, er, notifier).(*cli.SnykCli)
+	cliExecutor := NewExecutor(c, er, notifier).(*SnykCli)
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
@@ -100,7 +89,7 @@ func Test_SnykCli_GetCommand_ReplacesExistingOrgFlag(t *testing.T) {
 
 	er := error_reporting.NewTestErrorReporter()
 	notifier := notification.NewMockNotifier()
-	cliExecutor := cli.NewExecutor(c, er, notifier).(*cli.SnykCli)
+	cliExecutor := NewExecutor(c, er, notifier).(*SnykCli)
 
 	const folderOrg = "folder-org-replacement"
 	const existingOrg = "existing-org"
@@ -114,17 +103,14 @@ func Test_SnykCli_GetCommand_ReplacesExistingOrgFlag(t *testing.T) {
 	require.NotNil(t, command)
 
 	// Verify the existing --org flag was replaced with folder org
-	foundOrg := false
 	orgCount := 0
 	for _, arg := range command.Args {
 		if strings.HasPrefix(arg, "--org=") {
 			orgValue := strings.TrimPrefix(arg, "--org=")
 			assert.Equal(t, folderOrg, orgValue, "Existing --org flag should be replaced with folder org")
-			foundOrg = true
 			orgCount++
 		}
 	}
-	assert.True(t, foundOrg, "Command should contain --org flag with folder org")
 	assert.Equal(t, 1, orgCount, "Command should contain exactly one --org flag")
 }
 
@@ -135,13 +121,14 @@ func Test_ExtensionExecutor_DoExecute_UsesFolderOrganization(t *testing.T) {
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
 
 	// Test folder 1: verify doExecute() sets org in config
+	executor := NewExtensionExecutor(c)
 	cmd1 := []string{"snyk", "test"}
-	capturedOrg1, _ := executeAndCaptureConfig(t, c, cmd1, folderPath1)
+	capturedOrg1, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, cmd1, folderPath1)
 	assert.Equal(t, folderOrg1, capturedOrg1, "ExtensionExecutor should use folder1's org in config")
 
 	// Test folder 2: verify doExecute() sets different org in config
 	cmd2 := []string{"snyk", "test"}
-	capturedOrg2, _ := executeAndCaptureConfig(t, c, cmd2, folderPath2)
+	capturedOrg2, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, cmd2, folderPath2)
 	assert.Equal(t, folderOrg2, capturedOrg2, "ExtensionExecutor should use folder2's org in config")
 
 	// Verify the orgs are different
@@ -154,29 +141,8 @@ func Test_ExtensionExecutor_DoExecute_FallsBackToGlobalOrg(t *testing.T) {
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
 
 	// Test: verify doExecute() uses global org as fallback
+	executor := NewExtensionExecutor(c)
 	cmd := []string{"snyk", "test"}
-	capturedOrg, _ := executeAndCaptureConfig(t, c, cmd, folderPath)
+	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, cmd, folderPath)
 	assert.Equal(t, globalOrg, capturedOrg, "ExtensionExecutor should fall back to global org when no folder org is set")
-}
-
-func executeAndCaptureConfig(t *testing.T, c *config.Config, cmd []string, workingDir types.FilePath) (capturedOrg interface{}, capturedWorkingDir string) {
-	t.Helper()
-
-	workflowId := workflow.NewWorkflowIdentifier("legacycli")
-	engine := c.Engine()
-	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
-		gafConf := invocation.GetConfiguration()
-		// Get the raw value without triggering resolution
-		capturedOrg = gafConf.GetString(configuration.ORGANIZATION)
-		capturedWorkingDir = gafConf.GetString(configuration.WORKING_DIRECTORY)
-		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
-		return []workflow.Data{data}, nil
-	})
-	require.NoError(t, err)
-
-	executor := cli.NewExtensionExecutor(c)
-	_, err = executor.Execute(t.Context(), cmd, workingDir)
-	require.NoError(t, err)
-
-	return capturedOrg, capturedWorkingDir
 }

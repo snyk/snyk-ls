@@ -17,14 +17,12 @@
 package server
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
@@ -53,15 +51,6 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 	dir, err := filepath.Abs("testdata")
 	assert.NoError(t, err)
 
-	// Use the token from the config that was set by IntegTest, not from environment
-	// This ensures consistency and avoids issues if SNYK_TOKEN env var is not set
-	token := c.Token()
-	if token == "" {
-		// Fallback to environment variable if config token is empty
-		token = os.Getenv("SNYK_TOKEN")
-	}
-	require.NotEmpty(t, token, "Token must be set for integration test")
-
 	discovery := install.Discovery{}
 	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(types.FilePath(dir)),
@@ -70,7 +59,7 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 			ActivateSnykOpenSource:      "true",
 			ActivateSnykIac:             "false",
 			EnableTrustedFoldersFeature: "false",
-			Token:                       token,
+			Token:                       c.Token(),
 			CliPath:                     filepath.Join(t.TempDir(), discovery.ExecutableName(false)),
 		},
 	}

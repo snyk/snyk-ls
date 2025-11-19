@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
-	workspaceutil "github.com/snyk/snyk-ls/internal/testutil/workspace"
+	"github.com/snyk/snyk-ls/internal/testutil/workspace"
 )
 
 // Test_CodeConfig_UsesFolderOrganization is an INTEGRATION TEST that verifies

@@ -756,8 +756,12 @@ func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
 	assert.True(t, folderConfig1.FeatureFlags[SnykCodeConsistentIgnores], "Folder1 should have SnykCodeConsistentIgnores=true from folderOrg1")
 	assert.False(t, folderConfig1.FeatureFlags[SnykCodeInlineIgnore], "Folder1 should have SnykCodeInlineIgnore=false from folderOrg1")
 
-	// Verify fetch was called with folderOrg1
+	// Verify fetch was called with folderOrg1 and cached the correct values
 	assert.Contains(t, service.orgToFlag, folderOrg1, "Service should have cached flags for folderOrg1")
+	assert.Contains(t, service.orgToFlag[folderOrg1], SnykCodeConsistentIgnores, "Service should have cached SnykCodeConsistentIgnores for folderOrg1")
+	assert.True(t, service.orgToFlag[folderOrg1][SnykCodeConsistentIgnores], "Service should have cached SnykCodeConsistentIgnores=true for folderOrg1")
+	assert.Contains(t, service.orgToFlag[folderOrg1], SnykCodeInlineIgnore, "Service should have cached SnykCodeInlineIgnore for folderOrg1")
+	assert.False(t, service.orgToFlag[folderOrg1][SnykCodeInlineIgnore], "Service should have cached SnykCodeInlineIgnore=false for folderOrg1")
 
 	// Populate folder config for folder 2
 	folderConfig2 := &types.FolderConfig{
@@ -770,8 +774,12 @@ func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
 	assert.False(t, folderConfig2.FeatureFlags[SnykCodeConsistentIgnores], "Folder2 should have SnykCodeConsistentIgnores=false from folderOrg2")
 	assert.True(t, folderConfig2.FeatureFlags[SnykCodeInlineIgnore], "Folder2 should have SnykCodeInlineIgnore=true from folderOrg2")
 
-	// Verify fetch was called with folderOrg2
+	// Verify fetch was called with folderOrg2 and cached the correct values
 	assert.Contains(t, service.orgToFlag, folderOrg2, "Service should have cached flags for folderOrg2")
+	assert.Contains(t, service.orgToFlag[folderOrg2], SnykCodeConsistentIgnores, "Service should have cached SnykCodeConsistentIgnores for folderOrg2")
+	assert.False(t, service.orgToFlag[folderOrg2][SnykCodeConsistentIgnores], "Service should have cached SnykCodeConsistentIgnores=false for folderOrg2")
+	assert.Contains(t, service.orgToFlag[folderOrg2], SnykCodeInlineIgnore, "Service should have cached SnykCodeInlineIgnore for folderOrg2")
+	assert.True(t, service.orgToFlag[folderOrg2][SnykCodeInlineIgnore], "Service should have cached SnykCodeInlineIgnore=true for folderOrg2")
 
 	// Verify both orgs are cached separately
 	assert.Len(t, service.orgToFlag, 2, "Service should have cached flags for both orgs")

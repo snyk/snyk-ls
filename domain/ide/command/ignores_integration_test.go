@@ -133,7 +133,7 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 	workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	// Test Create Ignore
 	t.Run("Create ignore uses folder org", func(t *testing.T) {
@@ -212,7 +212,7 @@ func Test_IgnoreOperations_FallBackToGlobalOrg(t *testing.T) {
 	workspaceutil.SetupWorkspace(t, c, folderPath)
 
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	// Note: We don't need to mock issueProvider since we're only testing the initialization method
 	server := mock_types.NewMockServer(ctrl)
