@@ -17,7 +17,6 @@
 package server
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -60,7 +59,7 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 			ActivateSnykOpenSource:      "true",
 			ActivateSnykIac:             "false",
 			EnableTrustedFoldersFeature: "false",
-			Token:                       os.Getenv("SNYK_TOKEN"),
+			Token:                       c.Token(),
 			CliPath:                     filepath.Join(t.TempDir(), discovery.ExecutableName(false)),
 		},
 	}

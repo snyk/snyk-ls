@@ -23,9 +23,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -36,7 +36,8 @@ func Test_getExplainEndpoint(t *testing.T) {
 		orgUUID := random.String()
 
 		// Setup fake workspace with the folder
-		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 		folder := folderPaths[0]
 
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
@@ -60,7 +61,8 @@ func Test_getExplainEndpoint(t *testing.T) {
 		c.UpdateApiEndpoints("https://test.snyk.io")
 
 		// Setup fake workspace with the folder
-		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 		folder := folderPaths[0]
 
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
@@ -81,7 +83,12 @@ func Test_getExplainEndpoint(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		// Setup fake workspace with 3 folders
-		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 3)
+		folderPaths := []types.FilePath{
+			types.FilePath("/fake/test-folder-0"),
+			types.FilePath("/fake/test-folder-1"),
+			types.FilePath("/fake/test-folder-2"),
+		}
+		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 		// Configure each folder with different orgs
 		folder1UUID, _ := uuid.NewRandom()
