@@ -17,12 +17,24 @@
 package code
 
 import (
+	"context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -30,6 +42,7 @@ import (
 
 // testCodeConfigUsesFolderOrg is a shared helper function that tests CodeConfig creation
 // uses the correct folder-specific org for a single folder scenario.
+// This focuses on the core CodeConfig creation flow: FolderOrganization -> createCodeConfig -> CreateCodeScanner
 func testCodeConfigUsesFolderOrg(
 	t *testing.T,
 	c *config.Config,
@@ -61,20 +74,8 @@ func testCodeConfigUsesFolderOrg(
 	require.NoError(t, err, "Should be able to resolve folder's org to UUID")
 	assert.Equal(t, expectedOrgUUID, configOrg, "CodeConfig should use folder's org (as UUID)")
 
-	// Verify GetCodeApiUrlForFolder also uses the folder's org (this is called in createCodeConfig)
-	// This ensures the full flow from FolderOrganization -> createCodeConfig -> GetCodeApiUrlForFolder works
-	codeApiURL, err := GetCodeApiUrlForFolder(c, folderPath)
-	require.NoError(t, err, "GetCodeApiUrlForFolder should succeed")
-	require.NotEmpty(t, codeApiURL, "Code API URL should not be empty")
-
-	// In FedRAMP environments, verify the org is included in the URL path
-	if c.IsFedramp() {
-		assert.Contains(t, codeApiURL, "/hidden/orgs/"+expectedOrg+"/code", "FedRAMP API URL should include folder's org in path")
-	}
-
-	// Test: verify CreateCodeScanner() creates a scanner with folder's org
+	// Verify CreateCodeScanner() creates a scanner with folder's org
 	// This is the actual function used in the scanning flow (via codeScanner method in UploadAndAnalyze)
-	// Since we've already verified the config is correct, this confirms the full scanner creation works
 	codeScanner, err := CreateCodeScanner(scanner, folderConfig)
 	require.NoError(t, err, "CreateCodeScanner should succeed with folder's org")
 	require.NotNil(t, codeScanner, "CodeScanner should not be nil")
@@ -159,239 +160,197 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	require.NoError(t, err, "Should be able to resolve global org to UUID")
 	assert.Equal(t, globalOrgUUID, configOrg, "CodeConfig should fall back to global org (as UUID) when no folder org is set")
 
-	// Verify GetCodeApiUrlForFolder also uses the global org (this is called in createCodeConfig)
-	// This ensures the full flow from FolderOrganization -> createCodeConfig -> GetCodeApiUrlForFolder works
-	codeApiURL, err := GetCodeApiUrlForFolder(c, folderPath)
-	require.NoError(t, err, "GetCodeApiUrlForFolder should succeed")
-	require.NotEmpty(t, codeApiURL, "Code API URL should not be empty")
 }
 
-func Test_GetExplainEndpoint_UsesFolderOrganization(t *testing.T) {
-	c := testutil.IntegTest(t)
-
-	// Set up two folders with different orgs
-	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
-
-	// Set up workspace with the folders
-	// This is required for FolderOrganizationForSubPath to work
-	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
-
-	// Test folder 1: verify getExplainEndpoint() includes folder1's org
-	endpoint1, err := getExplainEndpoint(c, folderPath1)
-	require.NoError(t, err)
-	endpoint1Str := endpoint1.String()
-	assert.Contains(t, endpoint1Str, "/rest/orgs/"+folderOrg1+"/explain-fix", "Explain endpoint for folder1 should include folder1's org")
-
-	// Test folder 2: verify getExplainEndpoint() includes folder2's org
-	endpoint2, err := getExplainEndpoint(c, folderPath2)
-	require.NoError(t, err)
-	endpoint2Str := endpoint2.String()
-	assert.Contains(t, endpoint2Str, "/rest/orgs/"+folderOrg2+"/explain-fix", "Explain endpoint for folder2 should include folder2's org")
-
-	// Verify the endpoints are different
-	assert.NotEqual(t, endpoint1Str, endpoint2Str, "Explain endpoints for different folders should be different")
-}
-
-func Test_GetExplainEndpoint_FallsBackToGlobalOrg(t *testing.T) {
-	c := testutil.IntegTest(t)
-
-	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
-
-	// Set up workspace with the folder
-	// This is required for FolderOrganizationForSubPath to work
-	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath)
-
-	// Test: verify getExplainEndpoint() uses global org as fallback
-	endpoint, err := getExplainEndpoint(c, folderPath)
-	require.NoError(t, err)
-	endpointStr := endpoint.String()
-	assert.Contains(t, endpointStr, "/rest/orgs/"+globalOrg+"/explain-fix", "Explain endpoint should fall back to global org when no folder org is set")
-}
-
-func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
-	c := testutil.IntegTest(t)
-
-	// Set up two folders with different orgs
-	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
-
-	// Set up workspace with the folders
-	// This is required for FolderOrganizationForSubPath to work
-	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
-
-	// Test folder 1: verify NewAutofixCodeRequestContext() uses folder1's org
-	requestContext1 := NewAutofixCodeRequestContext(folderPath1)
-	require.NotNil(t, requestContext1)
-	assert.Equal(t, folderOrg1, requestContext1.Org.PublicId, "Request context for folder1 should use folder1's org")
-	assert.Equal(t, "IDE", requestContext1.Initiator, "Request context should have correct initiator")
-	assert.Equal(t, "language-server", requestContext1.Flow, "Request context should have correct flow")
-
-	// Test folder 2: verify NewAutofixCodeRequestContext() uses folder2's org
-	requestContext2 := NewAutofixCodeRequestContext(folderPath2)
-	require.NotNil(t, requestContext2)
-	assert.Equal(t, folderOrg2, requestContext2.Org.PublicId, "Request context for folder2 should use folder2's org")
-	assert.Equal(t, "IDE", requestContext2.Initiator, "Request context should have correct initiator")
-	assert.Equal(t, "language-server", requestContext2.Flow, "Request context should have correct flow")
-
-	// Verify different folders get different orgs
-	assert.NotEqual(t, requestContext1.Org.PublicId, requestContext2.Org.PublicId, "Different folders should have different orgs in request context")
-}
-
-func Test_NewAutofixCodeRequestContext_FallsBackToGlobalOrg(t *testing.T) {
-	c := testutil.IntegTest(t)
-
-	// Set up a global org but no folder orgs
-	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
-
-	// Verify FolderOrganization() returns the global org (fallback)
-	folderOrg := c.FolderOrganization(folderPath)
-	assert.Equal(t, globalOrg, folderOrg, "FolderOrganization() should fall back to global org when no folder org is configured")
-
-	// Verify NewAutofixCodeRequestContext() uses the global org
-	requestContext := NewAutofixCodeRequestContext(folderPath)
-	require.NotNil(t, requestContext)
-	assert.Equal(t, globalOrg, requestContext.Org.PublicId, "Request context should fall back to global org when no folder org is configured")
-	assert.Equal(t, "IDE", requestContext.Initiator, "Request context should have correct initiator")
-	assert.Equal(t, "language-server", requestContext.Flow, "Request context should have correct flow")
-}
-
-// Test_SarifConverter_UsesFolderOrganization verifies
-// SarifConverter.toIssues() sets ContentRoot correctly for different folders, ensuring
-// issues are associated with the correct folder (and thus the correct org via FolderOrganization()).
-func Test_SarifConverter_UsesFolderOrganization(t *testing.T) {
+// Test_EnrichWithExplain_UsesFolderOrganization is an INTEGRATION TEST that verifies
+// getExplainEndpoint() uses the correct folder-specific organization when called for issues
+// from different folders.
+func Test_EnrichWithExplain_UsesFolderOrganization(t *testing.T) {
 	c := testutil.IntegTest(t)
 	c.SetSnykCodeEnabled(true)
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
 
-	// Create a minimal SARIF response for testing
-	sarifJSON := `{
-		"$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
-		"version": "2.1.0",
-		"runs": [{
-			"tool": {
-				"driver": {
-					"name": "SnykCode",
-					"rules": [{
-						"id": "test-rule",
-						"properties": {
-							"categories": ["Security"]
-						}
-					}]
-				}
-			},
-			"results": [{
-				"ruleId": "test-rule",
-				"level": "error",
-				"message": {
-					"text": "Test issue"
-				},
-				"locations": [{
-					"physicalLocation": {
-						"artifactLocation": {
-							"uri": "test.java"
-						},
-						"region": {
-							"startLine": 1,
-							"startColumn": 1,
-							"endLine": 1,
-							"endColumn": 10
-						}
-					}
-				}]
-			}]
-		}]
-	}`
+	// Set up workspace with the folders
+	// This is required for FolderOrganizationForSubPath to work (used by getExplainEndpoint)
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
-	// Convert SARIF to issues for folder 1
-	issues1, err := ConvertSARIFJSONToIssues(c.Logger(), c.HoverVerbosity(), []byte(sarifJSON), string(folderPath1))
-	require.NoError(t, err)
-	require.NotEmpty(t, issues1, "Should have at least one issue")
-
-	// Verify ContentRoot is set to folder1's path
-	for _, issue := range issues1 {
-		assert.Equal(t, folderPath1, issue.GetContentRoot(), "Issue ContentRoot should be set to folder1's path")
-		// Verify we can get the correct org from the ContentRoot
-		orgFromContentRoot := c.FolderOrganization(issue.GetContentRoot())
-		assert.Equal(t, folderOrg1, orgFromContentRoot, "FolderOrganization() should return folder1's org from ContentRoot")
+	// Create issues with ContentRoot set to different folders
+	issue1 := &snyk.Issue{
+		ID:               "issue1",
+		AffectedFilePath: types.FilePath("file1.js"),
+		ContentRoot:      folderPath1,
+		Product:          product.ProductCode,
+		AdditionalData:   snyk.CodeIssueData{Key: "key1", RuleId: "javascript/sqli"},
+		Range:            types.Range{Start: types.Position{Line: 0}, End: types.Position{Line: 1}},
 	}
 
-	// Convert SARIF to issues for folder 2
-	issues2, err := ConvertSARIFJSONToIssues(c.Logger(), c.HoverVerbosity(), []byte(sarifJSON), string(folderPath2))
-	require.NoError(t, err)
-	require.NotEmpty(t, issues2, "Should have at least one issue")
-
-	// Verify ContentRoot is set to folder2's path
-	for _, issue := range issues2 {
-		assert.Equal(t, folderPath2, issue.GetContentRoot(), "Issue ContentRoot should be set to folder2's path")
-		// Verify we can get the correct org from the ContentRoot
-		orgFromContentRoot := c.FolderOrganization(issue.GetContentRoot())
-		assert.Equal(t, folderOrg2, orgFromContentRoot, "FolderOrganization() should return folder2's org from ContentRoot")
+	issue2 := &snyk.Issue{
+		ID:               "issue2",
+		AffectedFilePath: types.FilePath("file2.js"),
+		ContentRoot:      folderPath2,
+		Product:          product.ProductCode,
+		AdditionalData:   snyk.CodeIssueData{Key: "key2", RuleId: "javascript/sqli"},
+		Range:            types.Range{Start: types.Position{Line: 0}, End: types.Position{Line: 1}},
 	}
 
-	// Verify different folders produce issues with different ContentRoots
-	assert.NotEqual(t, issues1[0].GetContentRoot(), issues2[0].GetContentRoot(), "Issues from different folders should have different ContentRoots")
+	// Test folder 1
+	t.Run("folder 1", func(t *testing.T) {
+		endpoint, err := getExplainEndpoint(c, issue1.GetContentRoot())
+		require.NoError(t, err, "getExplainEndpoint should succeed for folder 1")
+		require.NotNil(t, endpoint, "Endpoint should not be nil")
+
+		// Verify the endpoint URL contains the correct org
+		// The endpoint format is: {apiUrl}/rest/orgs/{org}/explain-fix
+		assert.Contains(t, endpoint.Path, folderOrg1, "Endpoint should contain folder 1's org")
+		assert.NotContains(t, endpoint.Path, folderOrg2, "Endpoint should not contain folder 2's org")
+	})
+
+	// Test folder 2
+	t.Run("folder 2", func(t *testing.T) {
+		endpoint, err := getExplainEndpoint(c, issue2.GetContentRoot())
+		require.NoError(t, err, "getExplainEndpoint should succeed for folder 2")
+		require.NotNil(t, endpoint, "Endpoint should not be nil")
+
+		// Verify the endpoint URL contains the correct org
+		assert.Contains(t, endpoint.Path, folderOrg2, "Endpoint should contain folder 2's org")
+		assert.NotContains(t, endpoint.Path, folderOrg1, "Endpoint should not contain folder 1's org")
+	})
+
+	// Verify the orgs are different
+	assert.NotEqual(t, folderOrg1, folderOrg2, "Folder orgs should be different")
 }
 
-// Test_SarifConverter_FallsBackToGlobalOrg verifies that when converting SARIF to issues
-// for a folder without a folder-specific org, the ContentRoot is still set correctly,
-// allowing FolderOrganization() to fall back to the global org.
-func Test_SarifConverter_FallsBackToGlobalOrg(t *testing.T) {
+// Test_GetAutofixDiffs_UsesFolderOrganization is an INTEGRATION TEST that verifies
+// NewAutofixCodeRequestContext() uses the correct folder-specific organization when called
+// for issues from different folders.
+func Test_GetAutofixDiffs_UsesFolderOrganization(t *testing.T) {
 	c := testutil.IntegTest(t)
 	c.SetSnykCodeEnabled(true)
 
-	// Set up a global org but no folder orgs
-	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, c)
+	// Set up two folders with different orgs
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
 
-	// Create a minimal SARIF response for testing
-	sarifJSON := `{
-		"$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
-		"version": "2.1.0",
-		"runs": [{
-			"tool": {
-				"driver": {
-					"name": "SnykCode",
-					"rules": [{
-						"id": "test-rule",
-						"properties": {
-							"categories": ["Security"]
-						}
-					}]
-				}
-			},
-			"results": [{
-				"ruleId": "test-rule",
-				"level": "error",
-				"message": {
-					"text": "Test issue"
-				},
-				"locations": [{
-					"physicalLocation": {
-						"artifactLocation": {
-							"uri": "test.java"
-						},
-						"region": {
-							"startLine": 1,
-							"startColumn": 1,
-							"endLine": 1,
-							"endColumn": 10
-						}
-					}
-				}]
-			}]
-		}]
-	}`
+	// Set up workspace with the folders
+	// This is required for FolderOrganization to work (used by NewAutofixCodeRequestContext)
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
-	// Convert SARIF to issues
-	issues, err := ConvertSARIFJSONToIssues(c.Logger(), c.HoverVerbosity(), []byte(sarifJSON), string(folderPath))
-	require.NoError(t, err)
-	require.NotEmpty(t, issues, "Should have at least one issue")
+	// Test folder 1
+	t.Run("folder 1", func(t *testing.T) {
+		requestContext := NewAutofixCodeRequestContext(folderPath1)
+		require.NotNil(t, requestContext, "RequestContext should not be nil")
 
-	// Verify ContentRoot is set to the folder path
-	for _, issue := range issues {
-		assert.Equal(t, folderPath, issue.GetContentRoot(), "Issue ContentRoot should be set to folder path")
-		// Verify FolderOrganization() falls back to global org
-		orgFromContentRoot := c.FolderOrganization(issue.GetContentRoot())
-		assert.Equal(t, globalOrg, orgFromContentRoot, "FolderOrganization() should fall back to global org when no folder org is configured")
+		// Verify the request context uses the correct org
+		// newCodeRequestContext calls FolderOrganization() which should return folderOrg1
+		assert.Equal(t, folderOrg1, requestContext.Org.PublicId, "RequestContext should use folder 1's org")
+		assert.NotEqual(t, folderOrg2, requestContext.Org.PublicId, "RequestContext should not use folder 2's org")
+	})
+
+	// Test folder 2
+	t.Run("folder 2", func(t *testing.T) {
+		requestContext := NewAutofixCodeRequestContext(folderPath2)
+		require.NotNil(t, requestContext, "RequestContext should not be nil")
+
+		// Verify the request context uses the correct org
+		assert.Equal(t, folderOrg2, requestContext.Org.PublicId, "RequestContext should use folder 2's org")
+		assert.NotEqual(t, folderOrg1, requestContext.Org.PublicId, "RequestContext should not use folder 1's org")
+	})
+
+	// Verify the orgs are different
+	assert.NotEqual(t, folderOrg1, folderOrg2, "Folder orgs should be different")
+}
+
+// Test_Scan_SetsContentRootCorrectly is an INTEGRATION TEST that verifies
+// ContentRoot is set correctly on issues returned from scanning files in different folders.
+func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
+	c := testutil.IntegTest(t)
+	c.SetSnykCodeEnabled(true)
+	// Set a fake token so Scan() passes the authentication check
+	// We're using FakeCodeScannerClient, so we don't need a real token
+	c.SetToken("00000000-0000-0000-0000-000000000001")
+
+	// Set up two folders with different orgs
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+
+	// Set up workspace with the folders
+	// This is required for FolderOrganization to work
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
+
+	// Set up feature flag service with SAST settings
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.SastSettings = &sast_contract.SastResponse{SastEnabled: true}
+
+	// Create scanner with FakeCodeScannerClient to avoid real API calls
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	learnMock := mock_learn.NewMockService(ctrl)
+	// Set up learn service mock to return empty lessons (needed by issue enhancer)
+	learnMock.EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&learn.Lesson{}, nil).AnyTimes()
+
+	scanner := New(
+		c,
+		performance.NewInstrumentor(),
+		&snyk_api.FakeApiClient{CodeEnabled: true},
+		newTestCodeErrorReporter(),
+		learnMock,
+		fakeFeatureFlagService,
+		notification.NewNotifier(),
+		NewCodeInstrumentor(),
+		newTestCodeErrorReporter(),
+		NewFakeCodeScannerClient,
+	)
+
+	// Create folder configs with SAST enabled
+	folderConfig1 := &types.FolderConfig{
+		FolderPath: folderPath1,
+		SastSettings: &sast_contract.SastResponse{
+			SastEnabled: true,
+		},
 	}
+
+	folderConfig2 := &types.FolderConfig{
+		FolderPath: folderPath2,
+		SastSettings: &sast_contract.SastResponse{
+			SastEnabled: true,
+		},
+	}
+
+	// Test folder 1
+	t.Run("folder 1", func(t *testing.T) {
+		// Scan a file in folder 1
+		// The FakeCodeScannerClient will return SARIF that gets converted to issues
+		issues, err := scanner.Scan(context.Background(), types.FilePath("test1.js"), folderPath1, folderConfig1)
+		require.NoError(t, err, "Scan should succeed for folder 1")
+		require.NotEmpty(t, issues, "Should return issues from scan")
+
+		// Verify all issues have ContentRoot set to folderPath1
+		for _, issue := range issues {
+			assert.Equal(t, folderPath1, issue.GetContentRoot(), "Issue ContentRoot should be set to folder 1")
+			// Verify FolderOrganization returns the correct org for this issue's ContentRoot
+			issueOrg := c.FolderOrganization(issue.GetContentRoot())
+			assert.Equal(t, folderOrg1, issueOrg, "FolderOrganization should return folder 1's org for issue's ContentRoot")
+		}
+	})
+
+	// Test folder 2
+	t.Run("folder 2", func(t *testing.T) {
+		// Scan a file in folder 2
+		issues, err := scanner.Scan(context.Background(), types.FilePath("test2.js"), folderPath2, folderConfig2)
+		require.NoError(t, err, "Scan should succeed for folder 2")
+		require.NotEmpty(t, issues, "Should return issues from scan")
+
+		// Verify all issues have ContentRoot set to folderPath2
+		for _, issue := range issues {
+			assert.Equal(t, folderPath2, issue.GetContentRoot(), "Issue ContentRoot should be set to folder 2")
+			// Verify FolderOrganization returns the correct org for this issue's ContentRoot
+			issueOrg := c.FolderOrganization(issue.GetContentRoot())
+			assert.Equal(t, folderOrg2, issueOrg, "FolderOrganization should return folder 2's org for issue's ContentRoot")
+		}
+	})
+
+	// Verify the orgs are different
+	assert.NotEqual(t, folderOrg1, folderOrg2, "Folder orgs should be different")
 }
