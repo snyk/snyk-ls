@@ -7,14 +7,14 @@ repos:
         name: lint-fix
         entry: make lint-fix
         language: system
-        stages: [ pre-commit, pre-push ]
+        stages: [pre-push]
         verbose: true
         pass_filenames: false
       - id: tests
         name: unit tests
-        entry: go test ./...
+        entry: go test -failfast ./...
         language: system
-        stages: [ pre-commit, pre-push ]
+        stages: [pre-push]
         verbose: true
         pass_filenames: false
   - repo: https://github.com/gitleaks/gitleaks

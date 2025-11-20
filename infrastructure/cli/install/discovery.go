@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package install implements the Snyk CLI installation functionality
 package install
 
 import (

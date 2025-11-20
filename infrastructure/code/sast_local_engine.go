@@ -17,15 +17,31 @@
 package code
 
 import (
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+
+	"github.com/snyk/snyk-ls/application/config"
 )
 
-func (sc *Scanner) isLocalEngineEnabled(sastResponse *sast_contract.SastResponse) bool {
-	sc.C.Logger().Debug().Any("sastResponse", sastResponse).Msg("sast response")
-	return sastResponse.SastEnabled && sastResponse.LocalCodeEngine.Enabled
+func isLocalEngineEnabled(sastResponse *sast_contract.SastResponse) bool {
+	return sastResponse != nil && sastResponse.SastEnabled && sastResponse.LocalCodeEngine.Enabled
 }
 
-func (sc *Scanner) updateCodeApiLocalEngine(sastResponse *sast_contract.SastResponse) {
-	sc.C.SetSnykCodeApi(sastResponse.LocalCodeEngine.Url)
-	sc.C.Logger().Debug().Str("snykCodeApi", sc.C.SnykCodeApi()).Msg("updated Snyk Code API Local Engine")
+func updateCodeApiLocalEngine(c *config.Config, sastResponse *sast_contract.SastResponse) string {
+	if !isLocalEngineEnabled(sastResponse) {
+		return ""
+	}
+
+	logger := c.Logger().With().Str("method", "updateCodeApiLocalEngine").Logger()
+	gafConfig := c.Engine().GetConfiguration()
+	url, err := c.GetCodeApiUrlFromCustomEndpoint(sastResponse)
+	if err != nil {
+		logger.Err(err).Msg("failed to get code api url")
+		return ""
+	}
+	additionalURLs := gafConfig.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+	additionalURLs = append(additionalURLs, url)
+	gafConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
+	logger.Debug().Str("snykCodeApi", url).Msg("updated Snyk Code API Local Engine")
+	return url
 }

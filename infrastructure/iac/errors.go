@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package iac implements the IAC scanner
 package iac
 
 const (

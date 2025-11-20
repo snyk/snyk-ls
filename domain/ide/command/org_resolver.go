@@ -26,8 +26,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-//go:generate go tool github.com/golang/mock/mockgen -destination=mock_command/org_resolver_mock.go -package=mock_command github.com/snyk/snyk-ls/internal/types OrgResolver
-
 // LDXSyncOrgResolver implements the OrgResolver interface using the GAF ldx_sync_config package
 type LDXSyncOrgResolver struct{}
 

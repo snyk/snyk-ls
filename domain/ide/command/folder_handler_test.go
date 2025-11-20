@@ -17,7 +17,7 @@
 package command
 
 import (
-	"strconv"
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -30,19 +30,13 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command/mock_command"
-	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
-	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -55,9 +49,9 @@ func setupMockOrgResolver(t *testing.T, org ldx_sync_config.Organization) {
 	})
 
 	ctrl := gomock.NewController(t)
-	mockResolver := mock_command.NewMockOrgResolver(ctrl)
+	mockResolver := mock_types.NewMockOrgResolver(ctrl)
 	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(org, nil).AnyTimes()
-	mockService := types.NewCommandServiceMock()
+	mockService := types.NewCommandServiceMock(nil)
 	mockService.SetOrgResolver(mockResolver)
 	SetService(mockService)
 }
@@ -71,53 +65,16 @@ func setupMockOrgResolverWithError(t *testing.T, err error) {
 	})
 
 	ctrl := gomock.NewController(t)
-	mockResolver := mock_command.NewMockOrgResolver(ctrl)
+	mockResolver := mock_types.NewMockOrgResolver(ctrl)
 	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{}, err).AnyTimes()
-	mockService := types.NewCommandServiceMock()
+	mockService := types.NewCommandServiceMock(nil)
 	mockService.SetOrgResolver(mockResolver)
 	SetService(mockService)
 }
 
-// setupTestWorkspace creates a test workspace with the specified number of folders
-func setupTestWorkspace(t *testing.T, c *config.Config, folderCount int) (
-	notifier *notification.MockNotifier,
-	folderPaths []types.FilePath,
-) {
-	t.Helper()
-
-	// Create mock dependencies
-	notifier = notification.NewMockNotifier()
-	scanNotifier := scanner.NewMockScanNotifier()
-	scanPersister := persistence.NewNopScanPersister()
-	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	sc := scanner.NewTestScanner()
-	hoverService := hover.NewFakeHoverService()
-
-	// Create workspace
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureflag.NewFakeService())
-
-	// Create and add folders
-	safeTestName := testsupport.PathSafeTestName(t)
-	folderPaths = make([]types.FilePath, folderCount)
-	for i := range folderCount {
-		folderPath := types.FilePath(t.TempDir())
-		folderPaths[i] = folderPath
-		folderName := safeTestName + "_test-folder_" + strconv.Itoa(i)
-		folder := workspace.NewFolder(c, folderPath, folderName, sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureflag.NewFakeService())
-		w.AddFolder(folder)
-	}
-
-	// Set workspace on config
-	c.SetWorkspace(w)
-
-	return notifier, folderPaths
-}
-
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver
 	expectedOrg := ldx_sync_config.Organization{
@@ -129,7 +86,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	setupMockOrgResolver(t, expectedOrg)
 
 	// Setup workspace with a folder
-	notifier, folderPaths := setupTestWorkspace(t, c, 1)
+	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
@@ -157,12 +114,10 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, _ = testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with no folders
-	notifier, _ := setupTestWorkspace(t, c, 0)
+	notifier, _ := testutils.SetupFakeWorkspace(t, c, 0)
 
 	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
@@ -176,9 +131,7 @@ func setupOrgResolverTest(t *testing.T, orgID, orgName, orgSlug string, isDefaul
 	t.Helper()
 
 	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, _ = testutil.SetUpEngineMock(t, c)
 
 	expectedOrg := ldx_sync_config.Organization{
 		Id:        orgID,
@@ -222,9 +175,7 @@ func Test_SetAutoBestOrgFromLdxSync_NonDefaultOrg(t *testing.T) {
 // Test GetBestOrgFromLdxSync error handling
 func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, _ = testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver to return error
 	setupMockOrgResolverWithError(t, assert.AnError)
@@ -238,18 +189,43 @@ func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	require.Error(t, err)
 }
 
+// Test GetBestOrgFromLdxSync fallback when resolver is nil
+func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
+	c := testutil.UnitTest(t)
+	_, gafConfig := testutil.SetUpEngineMock(t, c)
+
+	// Set organization in GAF config
+	expectedOrgId := "fallback-org-id"
+	gafConfig.Set(configuration.ORGANIZATION, expectedOrgId)
+
+	// Ensure no resolver is set (default state)
+	originalService := Service()
+	t.Cleanup(func() {
+		SetService(originalService)
+	})
+	mockService := types.NewCommandServiceMock(nil)
+	SetService(mockService)
+
+	folderConfig := &types.FolderConfig{
+		FolderPath: types.FilePath(t.TempDir()),
+	}
+
+	org, err := GetBestOrgFromLdxSync(c, folderConfig)
+
+	require.NoError(t, err)
+	assert.Equal(t, expectedOrgId, org.Id, "Should fallback to GAF config organization")
+}
+
 // Test sendFolderConfigs with LDX-Sync error (should continue with other folders)
 func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver to return error
 	setupMockOrgResolverWithError(t, assert.AnError)
 
 	// Setup workspace with a folder
-	notifier, folderPaths := setupTestWorkspace(t, c, 1)
+	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
@@ -276,9 +252,7 @@ func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 // Test sendFolderConfigs with multiple folders and different org configurations
 func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
-	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup mock organization resolver to return different orgs based on input path
 	originalService := Service()
@@ -287,7 +261,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	})
 
 	ctrl := gomock.NewController(t)
-	mockResolver := mock_command.NewMockOrgResolver(ctrl)
+	mockResolver := mock_types.NewMockOrgResolver(ctrl)
 	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string) (ldx_sync_config.Organization, error) {
 			return ldx_sync_config.Organization{
@@ -297,12 +271,12 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 				IsDefault: util.Ptr(false),
 			}, nil
 		}).AnyTimes()
-	mockService := types.NewCommandServiceMock()
+	mockService := types.NewCommandServiceMock(nil)
 	mockService.SetOrgResolver(mockResolver)
 	SetService(mockService)
 
 	// Setup workspace with multiple folders
-	notifier, folderPaths := setupTestWorkspace(t, c, 2)
+	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 2)
 
 	logger := c.Logger()
 
@@ -398,8 +372,7 @@ func Test_isOrgDefault(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := testutil.UnitTest(t)
-			mockEngine, gafConfig := testutil.SetUpEngineMock(t, c)
-			mockEngine.EXPECT().GetConfiguration().Return(gafConfig).AnyTimes()
+			_, gafConfig := testutil.SetUpEngineMock(t, c)
 
 			// Setup mock default values for org config - these will not be overridden by a GAF config clone, which the function does.
 			gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(tt.setDefaultOrgValue))
@@ -417,4 +390,121 @@ func Test_isOrgDefault(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_MigrateFolderConfigOrgSettings_EAMode_MigrationSkipped(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  types.FilePath(t.TempDir()),
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: false,
+		PreferredOrg:                "",
+	}
+
+	// Action
+	MigrateFolderConfigOrgSettings(c, folderConfig)
+
+	// Assert: Migration should be skipped, no fields modified
+	assert.True(t, folderConfig.OrgSetByUser, "OrgSetByUser should remain unchanged")
+	assert.False(t, folderConfig.OrgMigratedFromGlobalConfig, "Should remain unmigrated in EA mode")
+	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should remain unchanged")
+}
+
+func Test_MigrateFolderConfigOrgSettings_PostEAMode_DefaultOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup: Use immutable defaults so isOrgDefault() can clone config, set org="", and still retrieve the default org
+	gafConfig := c.Engine().GetConfiguration()
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("default-org-uuid"))
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("default-org-slug"))
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  types.FilePath(t.TempDir()),
+		OrgSetByUser:                false,
+		OrgMigratedFromGlobalConfig: false,
+		PreferredOrg:                "",
+	}
+
+	// Action
+	MigrateFolderConfigOrgSettings(c, folderConfig)
+
+	// Assert: User is using default org, should opt into auto-org
+	assert.False(t, folderConfig.OrgSetByUser, "OrgSetByUser should be false (opt into auto-org)")
+	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should be empty (using auto-org)")
+	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
+}
+
+func Test_MigrateFolderConfigOrgSettings_PostEAMode_NonDefaultOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup: Use a regular (mutable) DefaultValueFunction so Set() can override it
+	// When isOrgDefault clones config and sets org="", it will get "default-org-uuid"
+	// But when we Set() a value, c.Organization() will return the set value
+	gafConfig := c.Engine().GetConfiguration()
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existingValue any) (any, error) {
+		if existingValue != nil && existingValue != "" {
+			return existingValue, nil
+		}
+		return "default-org-uuid", nil
+	})
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("default-org-slug"))
+
+	// Set the user's non-default org
+	c.SetOrganization("non-default-org-id")
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  types.FilePath(t.TempDir()),
+		OrgSetByUser:                false,
+		OrgMigratedFromGlobalConfig: false,
+		PreferredOrg:                "",
+	}
+
+	// Action
+	MigrateFolderConfigOrgSettings(c, folderConfig)
+
+	// Assert: User explicitly set non-default org, should opt out and copy org
+	assert.True(t, folderConfig.OrgSetByUser, "OrgSetByUser should be true (user explicitly set)")
+	assert.Equal(t, "non-default-org-id", folderConfig.PreferredOrg, "PreferredOrg should be copied from global")
+	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
+}
+
+func Test_MigrateFolderConfigOrgSettings_PostEAMode_Unauthenticated_MigrationSkipped(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+
+	// Setup: Unauthenticated state - using default value functions that return errors where API calls would be
+	gafConfig := c.Engine().GetConfiguration()
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existingValue any) (any, error) {
+		if existingValue != nil && existingValue != "" {
+			return existingValue, nil
+		}
+		return "", fmt.Errorf("unable to retrieve org ID: API request failed (status: 401)")
+	})
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, func(c configuration.Configuration, existingValue any) (any, error) {
+		if existingValue != nil && existingValue != "" {
+			return existingValue, nil
+		}
+		return "", fmt.Errorf("unable to retrieve org slug: API request failed (status: 401)")
+	})
+
+	// User has a custom global org set
+	gafConfig.Set(configuration.ORGANIZATION, "custom-org-id")
+
+	// Setup: Pre-feature folder with zero-value fields (never read during EA)
+	folderConfig := &types.FolderConfig{
+		FolderPath: types.FilePath(t.TempDir()),
+	}
+
+	// Action
+	MigrateFolderConfigOrgSettings(c, folderConfig)
+
+	// Assert: Migration should be skipped when isOrgDefault fails (line 191 in folder_handler.go)
+	assert.False(t, folderConfig.OrgMigratedFromGlobalConfig, "Should remain unmigrated (migration skipped)")
+	assert.False(t, folderConfig.OrgSetByUser, "OrgSetByUser should remain false")
+	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should remain empty")
 }

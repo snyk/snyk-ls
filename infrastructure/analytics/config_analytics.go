@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package analytics implements analytics functionality
 package analytics
 
 import (
@@ -22,25 +23,50 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-// SendConfigChangedAnalytics sends analytics for primitive values only
-func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any, newVal any, triggerSource string) {
+// TriggerSource represents the source of a configuration change for analytics purposes
+type TriggerSource string
+
+const (
+	// TriggerSourceInitialize indicates settings are being initialized (first load, LSP init)
+	TriggerSourceInitialize TriggerSource = "initialize"
+
+	// TriggerSourceIDE indicates settings were changed by the IDE or user
+	TriggerSourceIDE TriggerSource = "ide"
+
+	// TriggerSourceTest indicates the change is from a test scenario
+	TriggerSourceTest TriggerSource = "test"
+)
+
+// String returns the string representation of the trigger source
+func (a TriggerSource) String() string {
+	return string(a)
+}
+
+// SendConfigChangedAnalytics sends analytics for primitive value global config changes
+func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any, newVal any, triggerSource TriggerSource) {
 	// Don't send analytics if old and new values are identical
 	if util.AreValuesEqual(oldVal, newVal) {
 		return
 	}
 
+	// Send to any folder's org, since global config changes are not folder-specific, but analytics have to be sent
+	// to a specific org, so any folder's org has as good a chance as any other to work and not 404.
+	// TODO - This is a temporary solution to avoid inflating analytics counts.
 	ws := c.Workspace()
-	if ws == nil {
-		return
+	if ws != nil {
+		folders := ws.Folders()
+		if len(folders) > 0 {
+			go SendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folders[0].Path(), triggerSource)
+			return
+		}
 	}
 
-	for _, folder := range ws.Folders() {
-		go SendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folder.Path(), triggerSource)
-	}
+	// Fallback: If no workspace or no folders, send with empty path (will use global org as a fallback)
+	go SendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, "", triggerSource)
 }
 
-// SendConfigChangedAnalyticsEvent sends a single analytics event for a config change
-func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue interface{}, path types.FilePath, triggerSource string) {
+// SendConfigChangedAnalyticsEvent sends a single analytics event for a primitive value config change for a given folder path
+func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue any, path types.FilePath, triggerSource TriggerSource) {
 	// Don't send analytics if old and new values are the same
 	if util.AreValuesEqual(oldValue, newValue) {
 		return
@@ -58,14 +84,24 @@ func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, n
 	extension := make(map[string]any)
 	extension["config::"+field+"::oldValue"] = oldValue
 	extension["config::"+field+"::newValue"] = newValue
-	extension["config::"+field+"::triggerSource"] = triggerSource
+	extension["config::"+field+"::triggerSource"] = triggerSource.String()
 
 	event.Extension = extension
-	SendAnalytics(c.Engine(), c.DeviceID(), event, nil)
+
+	// If path is empty (no folder context), use global org directly as a fallback,
+	// this is fine since these analytics are not exposed in customer TopCoat reports, and are only consumed by us.
+	var folderOrg string
+	if path == "" {
+		folderOrg = c.Organization()
+	} else {
+		folderOrg = c.FolderOrganization(path)
+	}
+
+	SendAnalytics(c.Engine(), c.DeviceID(), folderOrg, event, nil)
 }
 
 // SendAnalyticsForFields sends analytics for struct fields
-func SendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, newValue *T, triggerSource string, fieldMappings map[string]func(*T) any) {
+func SendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, newValue *T, triggerSource TriggerSource, fieldMappings map[string]func(*T) any) {
 	for fieldName, getter := range fieldMappings {
 		oldVal := getter(oldValue)
 		newVal := getter(newValue)

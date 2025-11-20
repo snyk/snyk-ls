@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package concurrency implements concurrency utilities
 package concurrency
 
 import (

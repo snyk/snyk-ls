@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package sdk implements SDK environment handling
 package sdk
 
 import (

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	codeClientConfig "github.com/snyk/code-client-go/config"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 )
@@ -13,6 +14,7 @@ import (
 type CodeConfig struct {
 	orgForFolder string
 	lsConfig     *config.Config
+	codeApiUrl   string
 }
 
 // Compile-time check to ensure CodeConfig implements codeClientConfig.Config
@@ -27,7 +29,11 @@ func (c *CodeConfig) IsFedramp() bool {
 }
 
 func (c *CodeConfig) SnykCodeApi() string {
-	return c.lsConfig.SnykCodeApi()
+	gafConfig := c.lsConfig.Engine().GetConfiguration()
+	additionalURLs := gafConfig.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+	additionalURLs = append(additionalURLs, c.codeApiUrl)
+	gafConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
+	return c.codeApiUrl
 }
 
 func (c *CodeConfig) SnykApi() string {

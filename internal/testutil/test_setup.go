@@ -14,44 +14,54 @@
  * limitations under the License.
  */
 
+// Package testutil implements test setup functionality
 package testutil
 
 import (
+	"context"
 	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/snyk/snyk-ls/internal/util"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/constants"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/storage"
-	storedConfig "github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func IntegTest(t *testing.T) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, testsupport.IntegTestEnvVar, false)
+	return prepareTestHelper(t, testsupport.IntegTestEnvVar, "")
 }
 
 // TODO: remove useConsistentIgnores once we have fully rolled out the feature
-func SmokeTest(t *testing.T, useConsistentIgnores bool) *config.Config {
+func SmokeTest(t *testing.T, tokenSecretName string) *config.Config {
 	t.Helper()
-	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, useConsistentIgnores)
+	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
 }
 
 func UnitTest(t *testing.T) *config.Config {
+	t.Helper()
+	c, _ := UnitTestWithCtx(t)
+	return c
+}
+
+func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	t.Helper()
 	c := config.New(config.WithBinarySearchPaths([]string{}))
 	err := c.WaitForDefaultEnv(t.Context())
@@ -75,7 +85,12 @@ func UnitTest(t *testing.T) *config.Config {
 		cleanupFakeCliFile(c)
 		progress.CleanupChannels()
 	})
-	return c
+
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepConfig: c,
+	})
+	ctx = ctx2.NewContextWithLogger(ctx, c.Logger())
+	return c, ctx
 }
 
 func cleanupFakeCliFile(c *config.Config) {
@@ -124,7 +139,7 @@ func CreateDummyProgressListener(t *testing.T) {
 	}()
 }
 
-func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *config.Config {
+func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *config.Config {
 	t.Helper()
 	if os.Getenv(envVar) == "" {
 		t.Logf("%s is not set", envVar)
@@ -137,8 +152,10 @@ func prepareTestHelper(t *testing.T, envVar string, useConsistentIgnores bool) *
 		t.Fatal(err)
 	}
 	c.ConfigureLogging(nil)
-	c.SetToken(testsupport.GetEnvironmentToken(useConsistentIgnores))
+	token := testsupport.GetEnvironmentToken(tokenSecretName)
+	c.SetToken(token)
 	c.SetAuthenticationMethod(types.TokenAuthentication)
+	c.SetAutomaticAuthentication(false)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
 	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, true)))
@@ -167,7 +184,7 @@ func redirectConfigAndDataHome(t *testing.T, c *config.Config) {
 	storageFile := filepath.Join(t.TempDir(), "testStorage")
 	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
 	require.NoError(t, err)
-	conf.PersistInStorage(storedConfig.ConfigMainKey)
+	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.SetStorage(s)
 }
 
@@ -176,13 +193,87 @@ func OnlyEnableCode(t *testing.T, c *config.Config) {
 	c.SetSnykIacEnabled(false)
 	c.SetSnykOssEnabled(false)
 	c.SetSnykCodeEnabled(true)
+	for _, folder := range c.Workspace().Folders() {
+		folderConfig := c.FolderConfig(folder.Path())
+		folderConfig.SastSettings = &sast_contract.SastResponse{
+			SastEnabled: true,
+			LocalCodeEngine: sast_contract.LocalCodeEngine{
+				Enabled: false,
+			},
+			AutofixEnabled: true,
+		}
+		storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	}
 }
 
+// SetUpEngineMock creates and configures a mock GAF engine for testing.
+// It sets up common expectations (GetConfiguration, GetLogger) and ensures the mock engine's
+// configuration shares the same storage as the original config, allowing folder configurations
+// to be persisted and read correctly across both objects.
+// The mock engine is automatically set on the provided config.
 func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configuration.Configuration) {
 	t.Helper()
-	mockEngine, engineConfig := testsupport.SetupEngineMock(t)
+
+	// Create mock engine and configuration
+	ctrl := gomock.NewController(t)
+	mockEngine := mocks.NewMockEngine(ctrl)
+	engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+
+	// Set up the common expectation that GetConfiguration returns the configuration we just created
+	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+	// Set up the common expectation that GetLogger returns c's logger
+	mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
+
+	// The new engineConfig needs to share the same storage as c's original engine config,
+	// otherwise folder configs saved to engineConfig won't be visible to c.
+	// Copy the storage setup from c's engine to the new engineConfig.
+	originalConfig := c.Engine().GetConfiguration()
+	engineConfig.Set(constants.DataHome, originalConfig.GetString(constants.DataHome))
+	engineConfig.SetStorage(originalConfig.GetStorage())
+
+	// Set the mock engine on the config provided
 	c.SetEngine(mockEngine)
+
 	return mockEngine, engineConfig
+}
+
+// WorkflowCapture holds the input data and config captured from a workflow invocation
+type WorkflowCapture struct {
+	Input  []workflow.Data
+	Config configuration.Configuration
+}
+
+// MockAndCaptureWorkflowInvocation sets up a mock expectation to capture workflow invocations.
+// It returns a channel that will receive the captured input data and config from each invocation.
+// The channel is automatically closed via t.Cleanup().
+func MockAndCaptureWorkflowInvocation(
+	t *testing.T,
+	mockEngine *mocks.MockEngine,
+	workflowID workflow.Identifier,
+	times int,
+) chan WorkflowCapture {
+	t.Helper()
+
+	ch := make(chan WorkflowCapture, times)
+	t.Cleanup(func() { close(ch) })
+
+	mockEngine.EXPECT().InvokeWithInputAndConfig(workflowID, gomock.Any(), gomock.Any()).
+		Times(times).
+		Do(func(_ any, potentialWorkflowData any, potentialGAFConfig any) {
+			workflowData, ok := potentialWorkflowData.([]workflow.Data)
+			if !ok {
+				t.Fatalf("Expected []workflow.Data as second argument to InvokeWithInputAndConfig, got %T", potentialWorkflowData)
+				return
+			}
+			gafConfig, ok := potentialGAFConfig.(configuration.Configuration)
+			if !ok {
+				t.Fatalf("Expected configuration.Configuration as third argument to InvokeWithInputAndConfig, got %T", potentialGAFConfig)
+				return
+			}
+			ch <- WorkflowCapture{Input: workflowData, Config: gafConfig}
+		}).Return(nil, nil)
+
+	return ch
 }
 
 // Enables SAST and AutoFix. Used in tests where scan results are provided by code.getSarifResponseJson2, and so we need
@@ -192,4 +283,12 @@ func EnableSastAndAutoFix(c *config.Config) {
 		code_workflow.ConfigurationSastSettings,
 		&sast_contract.SastResponse{SastEnabled: true, AutofixEnabled: true},
 	)
+}
+
+func SkipLocally(t *testing.T) {
+	t.Helper()
+	ciVar := os.Getenv("CI")
+	if ciVar == "" {
+		t.Skip("not running in CI, skipping test")
+	}
 }

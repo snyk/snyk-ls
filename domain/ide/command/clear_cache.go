@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package command implements the commands available for IDEs
 package command
 
 import (
@@ -64,12 +65,13 @@ func (cmd *clearCache) Execute(_ context.Context) (any, error) {
 		return nil, fmt.Errorf("invalid cache URI")
 	}
 
-	if cacheType == "" {
+	switch cacheType {
+	case "":
 		cmd.purgeInMemoryCache(&logger, parsedFolderUri)
 		cmd.purgePersistedCache(&logger, parsedFolderUri)
-	} else if cacheType == "inMemory" {
+	case "inMemory":
 		cmd.purgeInMemoryCache(&logger, parsedFolderUri)
-	} else if cacheType == "persisted" {
+	case "persisted":
 		cmd.purgePersistedCache(&logger, parsedFolderUri)
 	}
 

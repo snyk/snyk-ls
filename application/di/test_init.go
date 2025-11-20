@@ -22,10 +22,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 
-	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
-
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
 	appNotification "github.com/snyk/snyk-ls/application/server/notification"
@@ -34,6 +30,9 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
@@ -49,8 +48,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/types"
 )
-
-// TODO - this is becoming a hot mess we need to unify integ. test strategies
 
 func TestInit(t *testing.T) {
 	t.Helper()
@@ -79,7 +76,8 @@ func TestInit(t *testing.T) {
 	codeInstrumentor = code.NewCodeInstrumentor()
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
 	// mock Learn Service
-	learnMock := mock_learn.NewMockService(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	learnMock := mock_learn.NewMockService(ctrl)
 	learnMock.EXPECT().GetAllLessons().Return([]learn.Lesson{{}}, nil).AnyTimes()
 	learnMock.EXPECT().MaintainCacheFunc().AnyTimes()
 	learnMock.
@@ -90,13 +88,15 @@ func TestInit(t *testing.T) {
 	scanPersister = persistence.NopScanPersister{}
 	scanStateAggregator = scanstates.NewNoopStateAggregator()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
+	featureFlagService = featureflag.New(c)
 	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.NewFakeCodeScannerClient)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(c)
-	featureFlagService = featureflag.New(c)
-	command.SetService(&types.CommandServiceMock{})
+	orgResolver := command.NewLDXSyncOrgResolver()
+	mockCommandService := types.NewCommandServiceMock(orgResolver)
+	command.SetService(mockCommandService)
 	// don't use getters or it'll deadlock
 	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
 	c.SetWorkspace(w)

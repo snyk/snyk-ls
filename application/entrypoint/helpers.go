@@ -1,3 +1,4 @@
+// Package entrypoint implements the entrypoint functionality
 package entrypoint
 
 import (

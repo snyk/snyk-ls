@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package logging implements a zerolog writer that sends log messages to the LSP server
 package logging
 
 import (

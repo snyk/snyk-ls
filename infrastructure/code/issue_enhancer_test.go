@@ -23,6 +23,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -97,10 +99,16 @@ func Test_addIssueActions(t *testing.T) {
 	}
 
 	var setupCodeSettings = func() {
-		resetCodeSettings()
 		c.SetSnykCodeEnabled(true)
 		c.SetSnykLearnCodeActionsEnabled(false)
-		getCodeSettings().SetAutofixEnabled(true)
+		issueEnhancer.folderConfig = &types.FolderConfig{
+			FolderPath:   "",
+			PreferredOrg: "test-org",
+			SastSettings: &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: true,
+			},
+		}
 	}
 
 	var setupFakeIssues = func(isIgnored bool, isAutofixable bool) []types.Issue {
@@ -125,7 +133,6 @@ func Test_addIssueActions(t *testing.T) {
 
 	t.Run("Includes AI fixes if issue is not ignored", func(t *testing.T) {
 		setupCodeSettings()
-		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(false, true)
 
 		issueEnhancer.addIssueActions(t.Context(), fakeIssues)
@@ -139,7 +146,6 @@ func Test_addIssueActions(t *testing.T) {
 
 	t.Run("Does not include AI fixes if issue is not autofixable", func(t *testing.T) {
 		setupCodeSettings()
-		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(false, false)
 
 		issueEnhancer.addIssueActions(t.Context(), fakeIssues)
@@ -153,7 +159,6 @@ func Test_addIssueActions(t *testing.T) {
 
 	t.Run("Does not include AI fixes even if it is autofixable if issue is ignored", func(t *testing.T) {
 		setupCodeSettings()
-		defer t.Cleanup(resetCodeSettings)
 		fakeIssues := setupFakeIssues(true, true)
 
 		issueEnhancer.addIssueActions(t.Context(), fakeIssues)

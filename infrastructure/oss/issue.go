@@ -20,6 +20,7 @@ import (
 	_ "embed"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/rs/zerolog"
 
@@ -36,13 +37,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var issuesSeverity = map[string]types.Severity{
-	"critical": types.Critical,
-	"high":     types.High,
-	"low":      types.Low,
-	"medium":   types.Medium,
-}
-
 func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string) *snyk.Issue {
 	// this needs to be first so that the lesson from Snyk Learn is added
 	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueDepNode)
@@ -57,6 +51,7 @@ func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossI
 	}
 
 	var codelensCommands []types.CommandData
+	rangeFromNode := getRangeFromNode(issueDepNode)
 	for _, codeAction := range codeActions {
 		if strings.Contains(codeAction.GetTitle(), "Upgrade to") {
 			codelensCommands = append(codelensCommands, types.CommandData{
@@ -65,7 +60,7 @@ func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossI
 				Arguments: []any{
 					codeAction.GetUuid(),
 					affectedFilePath,
-					getRangeFromNode(issueDepNode),
+					rangeFromNode,
 				},
 				GroupingKey:   codeAction.GetGroupingKey(),
 				GroupingType:  codeAction.GetGroupingType(),
@@ -77,12 +72,16 @@ func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossI
 	matchingIssues := []snyk.OssIssueData{}
 	for _, otherIssue := range scanResult.Vulnerabilities {
 		if otherIssue.Id == issue.Id {
-			matchingIssues = append(matchingIssues, otherIssue.toAdditionalData(scanResult,
-				[]snyk.OssIssueData{}, affectedFilePath))
+			matchingIssues = append(matchingIssues, otherIssue.toAdditionalData(
+				scanResult,
+				[]snyk.OssIssueData{},
+				affectedFilePath,
+				rangeFromNode,
+			))
 		}
 	}
 
-	additionalData := issue.toAdditionalData(scanResult, matchingIssues, affectedFilePath)
+	additionalData := issue.toAdditionalData(scanResult, matchingIssues, affectedFilePath, rangeFromNode)
 
 	title := issue.Title
 	if format == config.FormatHtml {
@@ -105,7 +104,7 @@ func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossI
 		ID:                  issue.Id,
 		Message:             message,
 		FormattedMessage:    issue.GetExtendedMessage(issue),
-		Range:               getRangeFromNode(issueDepNode),
+		Range:               rangeFromNode,
 		Severity:            issue.ToIssueSeverity(),
 		ContentRoot:         workDir,
 		AffectedFilePath:    affectedFilePath,
@@ -137,24 +136,35 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 	return r
 }
 
-func convertScanResultToIssues(logger *zerolog.Logger, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, ls learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string) []types.Issue {
+// as issue cache can be updated outside of context, and it's not
+// supporting concurrent operations, let's only do additions to any
+// cache using this mutex.
+//
+// currently convertScanResultToIssues is the only place where a
+// packageIssueCache is changed at all, so the mutex is defined here
+// to keep it close to the code that needs it.
+var packageIssueCacheMutex sync.Mutex
+
+func convertScanResultToIssues(logger *zerolog.Logger, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string) []types.Issue {
 	var issues []types.Issue
 
 	duplicateCheckMap := map[string]bool{}
 
-	for _, issue := range res.Vulnerabilities {
-		if issue.IsIgnored {
-			logger.Debug().Msgf("skipping ignored issue %s", issue.Id)
+	for _, ossLegacyIssue := range res.Vulnerabilities {
+		if ossLegacyIssue.IsIgnored {
+			logger.Debug().Msgf("skipping ignored issue %s", ossLegacyIssue.Id)
 			continue
 		}
-		packageKey := issue.PackageName + "@" + issue.Version
-		duplicateKey := string(targetFilePath) + "|" + issue.Id + "|" + issue.PackageName
+		packageKey := ossLegacyIssue.PackageName + "@" + ossLegacyIssue.Version
+		duplicateKey := string(targetFilePath) + "|" + ossLegacyIssue.Id + "|" + ossLegacyIssue.PackageName
 		if duplicateCheckMap[duplicateKey] {
 			continue
 		}
-		node := getDependencyNode(logger, targetFilePath, issue, fileContent)
-		snykIssue := toIssue(workDir, targetFilePath, issue, res, node, ls, ep, format)
+		node := getDependencyNode(logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent)
+		snykIssue := toIssue(workDir, targetFilePath, ossLegacyIssue, res, node, learnService, ep, format)
+		packageIssueCacheMutex.Lock()
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
+		packageIssueCacheMutex.Unlock()
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true
 	}

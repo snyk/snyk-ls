@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package server
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -26,40 +27,38 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/samber/lo"
-
-	"github.com/snyk/snyk-ls/internal/util"
-
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
+	"github.com/samber/lo"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	"github.com/snyk/snyk-ls/internal/testsupport"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_SmokeInstanceTest(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	ossFile := "package.json"
 	codeFile := "app.js"
 	testutil.CreateDummyProgressListener(t)
@@ -149,7 +148,12 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c := testutil.SmokeTest(t, false)
+			tokenSecretName := ""
+			if tc.useConsistentIgnores {
+				tokenSecretName = "SNYK_TOKEN_CONSISTENT_IGNORES"
+			}
+
+			c := testutil.SmokeTest(t, tokenSecretName)
 			runSmokeTest(t, c, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "")
 		})
 	}
@@ -158,7 +162,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 func Test_SmokePreScanCommand(t *testing.T) {
 	t.Run("executes pre scan command if configured", func(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRpcRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(false)
 		c.SetSnykOssEnabled(true)
@@ -196,7 +200,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 					continue
 				}
 				// TODO: check right scan state and summary is sent
-				return strings.Contains(scanParams.ErrorMessage, "fork/exec")
+				return strings.Contains(scanParams.PresentableError.ErrorMessage, "fork/exec")
 			}
 
 			return false
@@ -207,7 +211,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 func Test_SmokeIssueCaching(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRPCRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(true)
 		c.SetSnykOssEnabled(true)
@@ -282,7 +286,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	})
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRPCRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(true)
 		c.SetSnykOssEnabled(true)
@@ -349,7 +353,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 }
 
 func Test_SmokeExecuteCLICommand(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, _ := setupServer(t, c)
 	c.EnableSnykCodeSecurity(false)
 	c.SetSnykIacEnabled(false)
@@ -494,11 +498,61 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 
 	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc, c)
 	cloneTargetDirString := (string)(cloneTargetDir)
+
 	waitForScan(t, cloneTargetDirString, c)
 
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
 	assert.Greater(t, len(notifications), 0)
 
+	assert.Eventuallyf(t, func() bool {
+		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
+	}, time.Second*5, time.Second, "did not receive folder configs")
+
+	var testPath types.FilePath
+
+	// ------------------------------------------------------
+	// check snyk open source diagnostics (file1)
+	// ------------------------------------------------------
+	if file1 != "" {
+		testPath = types.FilePath(filepath.Join(cloneTargetDirString, file1))
+		waitForNetwork(c)
+		textDocumentDidSave(t, &loc, testPath)
+		// serve diagnostics from file scan
+		require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond,
+			"Diagnostics not published for file %s", file1)
+	}
+
+	jsonRPCRecorder.ClearNotifications()
+
+	// ------------------------------------------------------
+	// check snyk code diagnostics (file2)
+	// ------------------------------------------------------
+	testPath = types.FilePath(filepath.Join(cloneTargetDirString, file2))
+	waitForNetwork(c)
+	textDocumentDidSave(t, &loc, testPath)
+	// Check scan completed successfully
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
+	require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond,
+		"Diagnostics not published for file %s", file2)
+	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
+
+	// check for autofix diff on mt-us
+	if hasVulns {
+		checkAutofixDiffs(t, c, issueList, loc, jsonRPCRecorder)
+	}
+
+	checkFeatureFlagStatus(t, c, &loc)
+
+	// check we only have one quickfix action in open source per line
+	if c.IsSnykOssEnabled() {
+		checkOnlyOneQuickFixCodeAction(t, jsonRPCRecorder, cloneTargetDirString, loc)
+		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDirString, loc)
+	}
+	waitForDeltaScan(t, di.ScanStateAggregator())
+}
+
+func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
+	t.Helper()
 	foundFolderConfig := false
 	for _, notification := range notifications {
 		var folderConfigsParam types.FolderConfigsParam
@@ -521,40 +575,39 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 			break
 		}
 	}
-	assert.Truef(t, foundFolderConfig, "could not find folder config for %s", cloneTargetDirString)
-	jsonRPCRecorder.ClearNotifications()
-	var testPath types.FilePath
-	if file1 != "" {
-		testPath = types.FilePath(filepath.Join(cloneTargetDirString, file1))
-		waitForNetwork(c)
-		textDocumentDidSave(t, &loc, testPath)
-		// serve diagnostics from file scan
-		assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+	return foundFolderConfig
+}
+
+var (
+	// now register it with the engine
+	depGraphWorkFlowID = workflow.NewWorkflowIdentifier("depgraph")
+	depGraphDataID     = workflow.NewTypeIdentifier(depGraphWorkFlowID, "depgraph")
+)
+
+// substituteDepGraphFlow generate depgraph. necessary, as depgraph workflow needs legacycli workflow which
+// does not work without the TypeScript CLI
+func substituteDepGraphFlow(t *testing.T, c *config.Config, cloneTargetDirString, displayTargetFile string) {
+	t.Helper()
+
+	flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+	callback := func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
+		cmd := exec.CommandContext(t.Context(), c.CliSettings().Path(), "depgraph")
+		cmd.Dir = cloneTargetDirString
+		cmd.Env = os.Environ()
+		depGraphJson, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("couldn't retrieve the depgraph %s: ", err.Error())
+		}
+		depGraphData := workflow.NewData(depGraphDataID, "application/json", depGraphJson)
+		normalisedTargetFile := strings.TrimSpace(displayTargetFile)
+		depGraphData.SetMetaData("Content-Location", normalisedTargetFile)
+		depGraphData.SetMetaData("normalisedTargetFile", normalisedTargetFile) // Required for cli-extension-os-flow
+
+		return []workflow.Data{depGraphData}, nil
 	}
 
-	jsonRPCRecorder.ClearNotifications()
-	testPath = types.FilePath(filepath.Join(cloneTargetDirString, file2))
-	waitForNetwork(c)
-	textDocumentDidSave(t, &loc, testPath)
-	assert.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
-
-	// check for snyk code scan message
-	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
-	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
-
-	// check for autofix diff on mt-us
-	if hasVulns {
-		checkAutofixDiffs(t, c, issueList, loc, cloneTargetDir, jsonRPCRecorder)
-	}
-
-	checkFeatureFlagStatus(t, c, &loc)
-
-	// check we only have one quickfix action in open source per line
-	if c.IsSnykOssEnabled() {
-		checkOnlyOneQuickFixCodeAction(t, jsonRPCRecorder, cloneTargetDirString, loc)
-		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDirString, loc)
-	}
-	waitForDeltaScan(t, di.ScanStateAggregator())
+	_, err := c.Engine().Register(depGraphWorkFlowID, flagset, callback)
+	require.NoError(t, err)
 }
 
 func waitForNetwork(c *config.Config) {
@@ -579,6 +632,8 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, types.FilePath(cloneTargetDir))
 	atLeastOneQuickfixActionFound := false
+	errorhandlerCheckHit := false
+	tapCheckHit := false
 	for _, issue := range issueList {
 		params := sglsp.CodeActionParams{
 			TextDocument: sglsp.TextDocumentIdentifier{
@@ -600,16 +655,18 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 				atLeastOneQuickfixActionFound = true
 			}
 
-			// "cfenv": "^1.0.4", 1 fixable issue
-			if issue.Range.Start.Line == 19 && isQuickfixAction {
+			// "errorhandler": "^1.2.0" on line 25 - test singular "1 issue" vs plural "1 issues"
+			if issue.Range.Start.Line == 25 && isQuickfixAction {
 				assert.Contains(t, action.Title, "and fix 1 issue")
 				assert.NotContains(t, action.Title, "and fix 1 issues")
+				errorhandlerCheckHit = true
 			}
 
 			// "tap": "^11.1.3", 12 fixable, 11 unfixable
 			if issue.Range.Start.Line == 46 && isQuickfixAction {
 				assert.Contains(t, action.Title, "and fix ")
 				assert.Contains(t, action.Title, " issues")
+				tapCheckHit = true
 			}
 		}
 		// no issues should have more than one quickfix
@@ -621,6 +678,8 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 		time.Sleep(60 * time.Millisecond)
 	}
 	assert.Truef(t, atLeastOneQuickfixActionFound, "expected to find at least one code action")
+	assert.Truef(t, errorhandlerCheckHit, "expected to hit errorhandler singular check")
+	assert.Truef(t, tapCheckHit, "expected to hit tap plural check")
 }
 
 func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
@@ -689,20 +748,32 @@ func waitForDeltaScan(t *testing.T, agg scanstates.Aggregator) {
 func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
 	t.Helper()
 	var notifications []jrpc2.Request
-	assert.Eventually(t, func() bool {
+	var finalScanParams *types.SnykScanParams
+
+	// Wait for scan to complete (success or error)
+	require.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
 			var scanParams types.SnykScanParams
 			_ = n.UnmarshalParams(&scanParams)
 			if scanParams.Product != p.ToProductCodename() ||
 				scanParams.FolderPath != types.FilePath(cloneTargetDir) ||
-				scanParams.Status != "success" {
+				scanParams.Status == types.InProgress {
 				continue
 			}
+			finalScanParams = &scanParams
 			return true
 		}
 		return false
-	}, 5*time.Minute, 10*time.Millisecond)
+	}, 5*time.Minute, 10*time.Millisecond,
+		"Scan did not complete for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
+
+	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
+	require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
+		"Scan failed - Product: %s, Folder: %s, Error: %w",
+		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.PresentableError)
+	require.Equal(t, types.Success, finalScanParams.Status,
+		"Unexpected scan status: %s", finalScanParams.Status)
 }
 
 func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, p product.Product, folderPath types.FilePath) []types.ScanIssue {
@@ -728,7 +799,7 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 	return issueList
 }
 
-func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, folderPath types.FilePath, recorder *testsupport.JsonRPCRecorder) {
+func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, recorder *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	if isNotStandardRegion(c) {
 		return
@@ -760,7 +831,7 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIss
 }
 
 func isNotStandardRegion(c *config.Config) bool {
-	return c.SnykCodeApi() != "https://deeproxy.snyk.io"
+	return c.Endpoint() != "https://api.snyk.io" && c.Endpoint() != ""
 }
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
@@ -790,6 +861,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 		InitializationOptions: types.Settings{
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       c.Token(),
+			Organization:                c.Organization(),
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
@@ -841,43 +913,16 @@ func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 }
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	cleanupChannels()
 	di.Init()
 
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 	cloneTargetDirString := string(cloneTargetDir)
-	if err != nil {
-		t.Fatal(err, "Couldn't setup test repo")
-	}
-
-	folder := types.WorkspaceFolder{
-		Name: "Test Repo",
-		Uri:  uri.PathToUri(cloneTargetDir),
-	}
-
-	clientParams := types.InitializeParams{
-		WorkspaceFolders: []types.WorkspaceFolder{folder},
-		InitializationOptions: types.Settings{
-			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       os.Getenv("SNYK_TOKEN"),
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-		},
-	}
-
-	_, _ = loc.Client.Call(ctx, "initialize", clientParams)
 
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, "app.js"))
-
-	w := c.Workspace()
-	f := workspace.NewFolder(c, cloneTargetDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService())
-	w.AddFolder(f)
-
-	c.SetLSPInitialized(true)
 
 	_ = textDocumentDidSave(t, &loc, testPath)
 
@@ -892,6 +937,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykOssEnabled(false)
 	c.SetSnykIacEnabled(false)
+	testutil.EnableSastAndAutoFix(c)
 	cleanupChannels()
 	di.Init()
 
@@ -914,12 +960,11 @@ func Test_SmokeUncFilePath(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
-	c.SetSnykOssEnabled(false)
-	c.SetSnykIacEnabled(false)
 	c.SetDeltaFindingsEnabled(true)
+	testutil.EnableSastAndAutoFix(c)
 	cleanupChannels()
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
@@ -933,9 +978,6 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 	newFileInCurrentDir(t, cloneTargetDirString, fileWithNewVulns, string(sourceContent))
 
-	c.SetSnykOssEnabled(false)
-	c.SetSnykIacEnabled(false)
-	c.SetManageBinariesAutomatically(false)
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 
 	ensureInitialized(t, c, loc, initParams, nil)
@@ -961,7 +1003,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetDeltaFindingsEnabled(true)
@@ -991,7 +1033,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetDeltaFindingsEnabled(true)
@@ -1019,7 +1061,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
-	c := testutil.SmokeTest(t, false)
+	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykIacEnabled(false)
 	cleanupChannels()
@@ -1081,7 +1123,7 @@ func requireFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.
 func Test_SmokeOrgSelection(t *testing.T) {
 	setupOrgSelectionTest := func(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
 		t.Helper()
-		c := testutil.SmokeTest(t, false)
+		c := testutil.SmokeTest(t, "")
 		loc, jsonRpcRecorder := setupServer(t, c)
 		c.EnableSnykCodeSecurity(false)
 		c.SetSnykOssEnabled(true)
@@ -1190,20 +1232,21 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			FolderPath: repo,
 		}
 
-		expectedOrg := uuid.NewString()
+		expectedOrg := "00000000-0000-0000-0000-000000000001"
 
 		// Pre-populate storage with a folder config to simulate migration
 		setupFunc := func(c *config.Config) {
 			c.SetOrganization(expectedOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 			require.NoError(t, err)
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 		}
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
 
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
 			repo: func(fc types.FolderConfig) {
-				require.True(t, fc.OrgSetByUser)
+				require.True(t, fc.OrgSetByUser, "OrgSetByUser should be true for non-default org")
 				require.Equal(t, expectedOrg, fc.PreferredOrg)
 				require.NotEmpty(t, fc.AutoDeterminedOrg)
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
@@ -1214,7 +1257,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - adding folder with existing stored config. Making sure PreferredOrg is preserved", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
-		ensureInitialized(t, c, loc, initParams, nil)
+		setupFunc := func(c *config.Config) {
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
 			require.Empty(t, fc.PreferredOrg)
@@ -1338,7 +1385,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 		t.Setenv("SNYK_TOKEN", "")
 
-		ensureInitialized(t, c, loc, initParams, nil)
+		setupFunc := func(c *config.Config) {
+			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
+		}
+
+		ensureInitialized(t, c, loc, initParams, setupFunc)
 
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
@@ -1504,9 +1555,9 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 	t.Helper()
 	t.Setenv("SNYK_LOG_LEVEL", "debug")
 	c.SetLogLevel(zerolog.LevelDebugValue)
-	c.ConfigureLogging(nil)
+	c.ConfigureLogging(nil) // we don't need to send logs to the client
 	gafConfig := c.Engine().GetConfiguration()
-	gafConfig.Set(configuration.DEBUG, false)
+	gafConfig.Set(configuration.DEBUG, c.Logger().GetLevel() == zerolog.DebugLevel)
 
 	documentURI := initParams.WorkspaceFolders[0].Uri
 	commitHash := getCurrentCommitHash(t, uri.PathFromUri(documentURI))
@@ -1529,7 +1580,7 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 	assert.NoError(t, err)
 
 	// Filter out old stored folder configs and only keep the ones from initParams
-	storedConfig, getSCErr := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+	storedConfig, getSCErr := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	if getSCErr == nil {
 		filteredConfigs := make(map[types.FilePath]*types.FolderConfig)
 		for _, fc := range initParams.InitializationOptions.FolderConfigs {
@@ -1606,7 +1657,7 @@ func sendModifiedFolderConfiguration(
 	modification func(folderConfigs map[types.FilePath]*types.FolderConfig),
 ) {
 	t.Helper()
-	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
+	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	require.NoError(t, err)
 	modification(storedConfig.FolderConfigs)
 	sendConfigurationDidChange(t, loc, types.Settings{
