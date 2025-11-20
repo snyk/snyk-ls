@@ -159,55 +159,58 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 }
 
 type Config struct {
-	scrubbingWriter                  zerolog.LevelWriter
-	cliSettings                      *CliSettings
-	configFile                       string
-	format                           string
-	isErrorReportingEnabled          bool
-	isSnykCodeEnabled                bool
-	isSnykOssEnabled                 bool
-	isSnykIacEnabled                 bool
-	isSnykAdvisorEnabled             bool
-	manageBinariesAutomatically      bool
-	logPath                          string
-	logFile                          *os.File
-	snykCodeAnalysisTimeout          time.Duration
-	snykApiUrl                       string
-	token                            string
-	deviceId                         string
-	clientCapabilities               types.ClientCapabilities
-	binarySearchPaths                []string
-	automaticAuthentication          bool
-	tokenChangeChannels              []chan string
-	prepareDefaultEnvChannel         chan bool
-	filterSeverity                   types.SeverityFilter
-	issueViewOptions                 types.IssueViewOptions
-	trustedFolders                   []types.FilePath
-	trustedFoldersFeatureEnabled     bool
-	activateSnykCodeSecurity         bool
-	osPlatform                       string
-	osArch                           string
-	runtimeName                      string
-	runtimeVersion                   string
-	automaticScanning                bool
-	authenticationMethod             types.AuthenticationMethod
-	engine                           workflow.Engine
-	enableSnykLearnCodeActions       bool
-	enableSnykOSSQuickFixCodeActions bool
-	enableDeltaFindings              bool
-	logger                           *zerolog.Logger
-	storage                          storage.StorageWithCallbacks
-	m                                sync.RWMutex
-	clientProtocolVersion            string
-	isOpenBrowserActionEnabled       bool
-	hoverVerbosity                   int
-	offline                          bool
-	ws                               types.Workspace
-	mcpServerEnabled                 bool
-	mcpBaseURL                       *url.URL
-	isLSPInitialized                 bool
-	cachedOriginalPath               string
-	userSettingsPath                 string
+	scrubbingWriter                     zerolog.LevelWriter
+	cliSettings                         *CliSettings
+	configFile                          string
+	format                              string
+	isErrorReportingEnabled             bool
+	isSnykCodeEnabled                   bool
+	isSnykOssEnabled                    bool
+	isSnykIacEnabled                    bool
+	isSnykAdvisorEnabled                bool
+	manageBinariesAutomatically         bool
+	logPath                             string
+	logFile                             *os.File
+	snykCodeAnalysisTimeout             time.Duration
+	snykApiUrl                          string
+	token                               string
+	deviceId                            string
+	clientCapabilities                  types.ClientCapabilities
+	binarySearchPaths                   []string
+	automaticAuthentication             bool
+	tokenChangeChannels                 []chan string
+	prepareDefaultEnvChannel            chan bool
+	filterSeverity                      types.SeverityFilter
+	issueViewOptions                    types.IssueViewOptions
+	trustedFolders                      []types.FilePath
+	trustedFoldersFeatureEnabled        bool
+	activateSnykCodeSecurity            bool
+	osPlatform                          string
+	osArch                              string
+	runtimeName                         string
+	runtimeVersion                      string
+	automaticScanning                   bool
+	authenticationMethod                types.AuthenticationMethod
+	engine                              workflow.Engine
+	enableSnykLearnCodeActions          bool
+	enableSnykOSSQuickFixCodeActions    bool
+	enableDeltaFindings                 bool
+	logger                              *zerolog.Logger
+	storage                             storage.StorageWithCallbacks
+	m                                   sync.RWMutex
+	clientProtocolVersion               string
+	isOpenBrowserActionEnabled          bool
+	hoverVerbosity                      int
+	offline                             bool
+	ws                                  types.Workspace
+	mcpServerEnabled                    bool
+	mcpBaseURL                          *url.URL
+	isLSPInitialized                    bool
+	snykAgentFixEnabled                 bool
+	cachedOriginalPath                  string
+	userSettingsPath                    string
+	autoConfigureMcpEnabled             bool
+	secureAtInceptionExecutionFrequency string
 }
 
 func CurrentConfig() *Config {
@@ -1469,4 +1472,28 @@ func (c *Config) SetLSPInitialized(initialized bool) {
 
 func (c *Config) EmptyToken() bool {
 	return !c.NonEmptyToken()
+}
+
+func (c *Config) IsAutoConfigureMcpEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.autoConfigureMcpEnabled
+}
+
+func (c *Config) SetAutoConfigureMcpEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.autoConfigureMcpEnabled = enabled
+}
+
+func (c *Config) GetSecureAtInceptionExecutionFrequency() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.secureAtInceptionExecutionFrequency
+}
+
+func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.secureAtInceptionExecutionFrequency = frequency
 }
