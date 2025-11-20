@@ -1,5 +1,5 @@
 /*
- * © 2022-2023 Snyk Limited
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -165,7 +165,7 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	rootDir := types.FilePath(t.TempDir())
 
 	// create trusted repo
-	repo1, err := storedconfig.SetupCustomTestRepo(t, rootDir, testsupport.NodejsGoof, "0336589", c.Logger())
+	repo1, err := storedconfig.SetupCustomTestRepo(t, rootDir, testsupport.NodejsGoof, "0336589", c.Logger(), false)
 	assert.NoError(t, err)
 
 	// create untrusted directory in same rootDir with the exact prefix

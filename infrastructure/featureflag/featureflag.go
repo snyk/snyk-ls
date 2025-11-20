@@ -18,8 +18,11 @@ package featureflag
 
 import (
 	"fmt"
+	"maps"
 	"sync"
+	"time"
 
+	"github.com/erni27/imcache"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
@@ -27,19 +30,24 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const (
-	SnykCodeConsistentIgnores string = "snykCodeConsistentIgnores"
-	SnykCodeInlineIgnore      string = "snykCodeInlineIgnore"
-	IgnoreApprovalEnabled     string = "internal_iaw_enabled"
+	SnykCodeConsistentIgnores     string = "snykCodeConsistentIgnores"
+	SnykCodeInlineIgnore          string = "snykCodeInlineIgnore"
+	IgnoreApprovalEnabled         string = "internal_iaw_enabled"
+	UseExperimentalRiskScoreInCLI string = "useExperimentalRiskScoreInCLI"
+	UseExperimentalRiskScore      string = "useExperimentalRiskScore"
 )
 
 var Flags = []string{
 	SnykCodeConsistentIgnores,
 	SnykCodeInlineIgnore,
 	IgnoreApprovalEnabled,
+	UseExperimentalRiskScoreInCLI,
+	UseExperimentalRiskScore,
 }
 
 // ExternalCallsProvider abstracts configuration and API calls for testability
@@ -96,31 +104,49 @@ func (p *externalCallsProvider) folderOrganization(path types.FilePath) string {
 type serviceImpl struct {
 	c                 *config.Config
 	provider          ExternalCallsProvider
-	orgToFlag         map[string]map[string]bool
-	orgToSastSettings map[string]*sast_contract.SastResponse
+	orgToFlag         *imcache.Cache[string, map[string]bool]
+	orgToSastSettings *imcache.Cache[string, *sast_contract.SastResponse]
 	mutex             *sync.Mutex
 }
 
-func New(c *config.Config) Service {
-	return &serviceImpl{
+type Option func(*serviceImpl)
+
+func WithProvider(provider ExternalCallsProvider) Option {
+	return func(s *serviceImpl) {
+		s.provider = provider
+	}
+}
+
+func New(c *config.Config, opts ...Option) *serviceImpl {
+	ffCache := imcache.New[string, map[string]bool]()
+	sastResponseCache := imcache.New[string, *sast_contract.SastResponse]()
+
+	// default values
+	service := &serviceImpl{
 		c:                 c,
 		provider:          &externalCallsProvider{c: c},
-		orgToFlag:         make(map[string]map[string]bool),
-		orgToSastSettings: make(map[string]*sast_contract.SastResponse),
+		orgToFlag:         ffCache,
+		orgToSastSettings: sastResponseCache,
 		mutex:             &sync.Mutex{},
 	}
+
+	for _, opt := range opts {
+		opt(service)
+	}
+
+	return service
 }
 
 func (s *serviceImpl) fetch(org string) map[string]bool {
 	s.mutex.Lock()
-	cached := s.orgToFlag[org]
-	if cached != nil {
+	orgFlags, found := s.orgToFlag.Get(org)
+	if found {
+		clone := maps.Clone(orgFlags)
 		s.mutex.Unlock()
-		return cached
+		return clone
 	}
-
-	s.orgToFlag[org] = make(map[string]bool)
 	s.mutex.Unlock()
+	orgFlags = make(map[string]bool)
 
 	var wg sync.WaitGroup
 	wg.Add(len(Flags))
@@ -146,8 +172,8 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 
 			s.mutex.Lock()
 			// Check if cache was flushed while we were fetching
-			if s.orgToFlag[org] != nil {
-				s.orgToFlag[org][flag] = enabled
+			if orgFlags != nil {
+				orgFlags[flag] = enabled
 			}
 			s.mutex.Unlock()
 		}()
@@ -156,7 +182,8 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 	wg.Wait()
 
 	s.mutex.Lock()
-	result := s.orgToFlag[org]
+	s.orgToFlag.Set(org, orgFlags, imcache.WithExpiration(time.Minute))
+	result := orgFlags
 	s.mutex.Unlock()
 
 	return result
@@ -164,8 +191,8 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 
 func (s *serviceImpl) fetchSastSettings(org string) (*sast_contract.SastResponse, error) {
 	s.mutex.Lock()
-	cached := s.orgToSastSettings[org]
-	if cached != nil {
+	cached, found := s.orgToSastSettings.Get(org)
+	if found {
 		s.mutex.Unlock()
 		return cached, nil
 	}
@@ -177,7 +204,7 @@ func (s *serviceImpl) fetchSastSettings(org string) (*sast_contract.SastResponse
 	}
 
 	s.mutex.Lock()
-	s.orgToSastSettings[org] = sastResponse
+	s.orgToSastSettings.Set(org, sastResponse, imcache.WithExpiration(time.Minute))
 	s.mutex.Unlock()
 
 	return sastResponse, nil
@@ -186,8 +213,8 @@ func (s *serviceImpl) fetchSastSettings(org string) (*sast_contract.SastResponse
 func (s *serviceImpl) FlushCache() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.orgToFlag = make(map[string]map[string]bool)
-	s.orgToSastSettings = make(map[string]*sast_contract.SastResponse)
+	s.orgToFlag.RemoveAll()
+	s.orgToSastSettings.RemoveAll()
 }
 
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
@@ -202,6 +229,7 @@ func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
+	logger := s.c.Logger().With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
 	org := s.provider.folderOrganization(folderConfig.FolderPath)
 
 	// Fetch feature flags and SAST settings in parallel
@@ -230,8 +258,13 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	folderConfig.FeatureFlags = flags
 
 	if sastErr != nil {
-		s.c.Logger().Err(sastErr).Str("method", "PopulateFolderConfig").Msgf("couldn't get SAST settings for org %s", org)
+		logger.Err(sastErr).Msgf("couldn't get SAST settings for org %s", org)
 	} else {
 		folderConfig.SastSettings = sastSettings
+	}
+
+	err := storedconfig.UpdateFolderConfig(s.c.Engine().GetConfiguration(), folderConfig, &logger)
+	if err != nil {
+		logger.Err(err).Msgf("couldn't update folder config for path %s", folderConfig.FolderPath)
 	}
 }

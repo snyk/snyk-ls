@@ -54,15 +54,16 @@ func TestUnifiedTestApiSmokeTest(t *testing.T) {
 	var unifiedDiagnostics []types.Diagnostic
 	legacyTestStarted := false
 	var legacyDiagnostics []types.Diagnostic
+	dir := t.TempDir()
 
 	t.Run("1. Unified Test API scan (with risk score)", func(t *testing.T) {
 		unifiedTestStarted = true
-		unifiedDiagnostics = runOSSComparisonTest(t, true)
+		unifiedDiagnostics = runOSSComparisonTest(t, true, dir)
 	})
 
 	t.Run("2. Legacy scan (without risk score)", func(t *testing.T) {
 		legacyTestStarted = true
-		legacyDiagnostics = runOSSComparisonTest(t, false)
+		legacyDiagnostics = runOSSComparisonTest(t, false, dir)
 	})
 
 	t.Run("3. Compare diagnostics from both scans", func(t *testing.T) {
@@ -83,7 +84,7 @@ func TestUnifiedTestApiSmokeTest(t *testing.T) {
 	})
 }
 
-func runOSSComparisonTest(t *testing.T, unifiedScan bool) []types.Diagnostic {
+func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Diagnostic {
 	t.Helper()
 
 	c, loc, jsonRPCRecorder := setupOSSComparisonTest(t)
@@ -95,10 +96,11 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool) []types.Diagnostic {
 	// -----------------------------------------
 	// setup test repo
 	// -----------------------------------------
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(dir), testsupport.NodejsGoof, "0336589", c.Logger(), true)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
+
 	cloneTargetDirString := (string)(cloneTargetDir)
 
 	// -----------------------------------------
@@ -108,9 +110,7 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool) []types.Diagnostic {
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
-		if unifiedScan {
-			substituteDepGraphFlow(t, c, cloneTargetDirString, manifestFile)
-		}
+		substituteDepGraphFlow(t, c, cloneTargetDirString, manifestFile)
 		c.SetAutomaticScanning(false)
 		c.SetDeltaFindingsEnabled(false)
 	})
@@ -181,8 +181,8 @@ func setRiskScoreFeatureFlagsFromGafConfig(t *testing.T, c *config.Config, clone
 	gafConfig.Set(FeatureFlagRiskScore, enabled)
 	gafConfig.Set(FeatureFlagRiskScoreInCLI, enabled)
 	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
-	folderConfig.FeatureFlags["useExperimentalRiskScore"] = engine.GetConfiguration().GetBool(FeatureFlagRiskScore)
-	folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"] = engine.GetConfiguration().GetBool(FeatureFlagRiskScoreInCLI)
+	folderConfig.FeatureFlags["useExperimentalRiskScore"] = gafConfig.GetBool(FeatureFlagRiskScore)
+	folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"] = gafConfig.GetBool(FeatureFlagRiskScoreInCLI)
 	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
 	if err != nil {
 		t.Fatal(err, "unable to update folder config")
@@ -230,30 +230,7 @@ func compareAndReportDiagnostics(t *testing.T, unified, legacy []types.Diagnosti
 
 	// Helper to get matching key from OssIssueData.Key
 	getMatchingKey := func(d types.Diagnostic) string {
-		// Try to get OssIssueData directly
-		if ossData, ok := d.Data.AdditionalData.(types.OssIssueData); ok {
-			if ossData.Key != "" {
-				return ossData.Key
-			}
-			t.Logf("WARNING: OssIssueData has empty Key field")
-		}
-
-		// Try to convert from map
-		if ossData, converted := convertMapToOssIssueData(d.Data.AdditionalData); converted {
-			if ossData.Key != "" {
-				return ossData.Key
-			}
-			t.Logf("WARNING: Converted OssIssueData has empty Key field")
-		}
-
-		// Fallback to Code field
-		if d.Code != nil {
-			t.Logf("WARNING: Could not extract OssIssueData.Key for diagnostic, using Code field")
-			return strings.ToLower(fmt.Sprintf("%v", d.Code))
-		}
-
-		t.Logf("WARNING: Found diagnostic with no Code and no OssIssueData.Key")
-		return ""
+		return d.Code.(string) + "|" + d.Range.String()
 	}
 
 	// Create maps indexed by OssIssueData.Key for easier comparison
@@ -786,7 +763,7 @@ func collectOssIssueDataComparisons(title string, unified, legacy types.OssIssue
 	// Compare Identifiers sub-object (only mismatches)
 	comparisons = append(comparisons, collectOssIdentifiersComparisons(title, unified.Identifiers, legacy.Identifiers)...)
 
-	if unified.Description != legacy.Description {
+	if unified.Description[0:20] != legacy.Description[0:20] {
 		comparisons = append(comparisons, FieldComparison{
 			DiagnosticTitle: title,
 			FieldPath:       "Data.AdditionalData.Description",

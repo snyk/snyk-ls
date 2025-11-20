@@ -1,5 +1,5 @@
 /*
- * © 2022-2025 Snyk Limited All rights reserved.
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -210,6 +210,7 @@ func getOssIssue(issue types.Issue) types.ScanIssue {
 				CWE: issue.GetCWEs(),
 				CVE: issue.GetCVEs(),
 			},
+			Title:             matchingIssue.Title,
 			Description:       matchingIssue.Description,
 			Language:          matchingIssue.Language,
 			PackageManager:    matchingIssue.PackageManager,
@@ -243,6 +244,7 @@ func getOssIssue(issue types.Issue) types.ScanIssue {
 		AdditionalData: types.OssIssueData{
 			Key:     additionalData.Key,
 			RuleId:  issue.GetID(),
+			Title:   additionalData.Title,
 			License: additionalData.License,
 			Identifiers: types.OssIdentifiers{
 				CWE: issue.GetCWEs(),

@@ -22,6 +22,8 @@ import (
 	"net/url"
 	"sync"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/delta"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -79,6 +81,7 @@ type Issue struct {
 	Fingerprint    string
 	GlobalIdentity string
 	FindingId      string
+	Issue          *testapi.Issue `json:"-"`
 	m              sync.RWMutex
 }
 

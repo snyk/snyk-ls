@@ -37,7 +37,13 @@ type DefaultFinder struct {
 
 // getDependencyNode will return the dependency node with range information
 // in case of maven, the node will also contain tree links information for the whole dep tree
-func getDependencyNode(logger *zerolog.Logger, path types.FilePath, packageManager string, from []string, fileContent []byte) *ast.Node {
+func getDependencyNode(
+	logger *zerolog.Logger,
+	path types.FilePath,
+	packageManager string,
+	dependencyPath []string,
+	fileContent []byte,
+) *ast.Node {
 	var finder RangeFinder
 
 	if len(fileContent) == 0 {
@@ -58,7 +64,7 @@ func getDependencyNode(logger *zerolog.Logger, path types.FilePath, packageManag
 		finder = &DefaultFinder{path: path, fileContent: fileContent, logger: logger}
 	}
 
-	introducingPackageName, introducingVersion := introducingPackageAndVersion(from, packageManager)
+	introducingPackageName, introducingVersion := introducingPackageAndVersion(dependencyPath, packageManager)
 
 	currentDep, parsedTree := finder.find(introducingPackageName, introducingVersion)
 
@@ -66,13 +72,13 @@ func getDependencyNode(logger *zerolog.Logger, path types.FilePath, packageManag
 	// we go recurse to the parent of it
 	if currentDep == nil && parsedTree != nil && parsedTree.ParentTree != nil {
 		tree := parsedTree.ParentTree
-		currentDep = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, from, []byte(tree.Root.Value))
+		currentDep = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, dependencyPath, []byte(tree.Root.Value))
 	}
 
 	// recurse until a dependency with version was found
 	if currentDep != nil && currentDep.Value == "" && currentDep.Tree != nil && currentDep.Tree.ParentTree != nil {
 		tree := currentDep.Tree.ParentTree
-		currentDep.LinkedParentDependencyNode = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, from, []byte(tree.Root.Value))
+		currentDep.LinkedParentDependencyNode = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, dependencyPath, []byte(tree.Root.Value))
 	}
 
 	return currentDep

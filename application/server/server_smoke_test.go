@@ -169,7 +169,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", c.Logger())
+		repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", c.Logger(), false)
 		require.NoError(t, err)
 		require.NotEmpty(t, repo)
 
@@ -386,7 +386,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) types.Folder {
 	t.Helper()
-	cloneTargetDirJuice, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger())
+	cloneTargetDirJuice, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger(), false)
 	require.NoError(t, err)
 
 	juiceLspWorkspaceFolder := types.WorkspaceFolder{Uri: uri.PathToUri(cloneTargetDirJuice), Name: "juicy-mac-juice-face"}
@@ -836,7 +836,7 @@ func isNotStandardRegion(c *config.Config) bool {
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
 	t.Helper()
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), repo, commit, c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), repo, commit, c.Logger(), false)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -941,7 +941,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger(), false)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -969,7 +969,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
 	fileWithNewVulns := "vulns.js"
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger(), false)
 	cloneTargetDirString := string(cloneTargetDir)
 	assert.NoError(t, err)
 
@@ -1012,7 +1012,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	scanAggregator := di.ScanStateAggregator()
 
 	fileWithNewVulns := "vulns.js"
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/nodejs-goof", "0336589", c.Logger(), false)
 	assert.NoError(t, err)
 
 	cloneTargetDirString := string(cloneTargetDir)
@@ -1041,7 +1041,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	di.Init()
 	scanAggregator := di.ScanStateAggregator()
 
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/java-goof", "f5719ae", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/java-goof", "f5719ae", c.Logger(), false)
 	assert.NoError(t, err)
 
 	cloneTargetDirString := string(cloneTargetDir)
@@ -1067,7 +1067,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CppGoof, "259ea516a4ec", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CppGoof, "259ea516a4ec", c.Logger(), false)
 	cloneTargetDirString := string(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -1130,7 +1130,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", c.Logger())
+		repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", c.Logger(), false)
 		require.NoError(t, err)
 		require.NotEmpty(t, repo)
 		require.NoError(t, err)
@@ -1553,8 +1553,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(*config.Config)) {
 	t.Helper()
-	t.Setenv("SNYK_LOG_LEVEL", "debug")
-	c.SetLogLevel(zerolog.LevelDebugValue)
+	t.Setenv("SNYK_LOG_LEVEL", "info")
+	c.SetLogLevel(zerolog.LevelInfoValue)
 	c.ConfigureLogging(nil) // we don't need to send logs to the client
 	gafConfig := c.Engine().GetConfiguration()
 	gafConfig.Set(configuration.DEBUG, c.Logger().GetLevel() == zerolog.DebugLevel)
