@@ -63,14 +63,9 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 }
 
 func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Logger, affectedFilePath types.FilePath, filePath types.FilePath, workDir types.FilePath) *snyk.Issue {
-	ecoData, found := trIssue.GetData(testapi.DataKeyTechnology)
-	if !found {
-		logger.Warn().Msg("failed to get ecosystem")
-		return nil
-	}
-	ecosystemStr, ok := ecoData.(string)
-	if !ok {
-		logger.Warn().Msg("failed to get ecosystem")
+	ecosystemStr, err := ecosystem(trIssue, logger)
+	if err != nil {
+		logger.Warn().Err(err).Send()
 		return nil
 	}
 
@@ -100,13 +95,13 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	myRange := getRangeFromNode(dependencyNode)
 
 	title := trIssue.GetTitle()
-	ossIssueData, err := buildOssIssueData(ctx, trIssue, problem, introducingFinding, affectedFilePath, myRange, ecosystemStr, dependencyPath)
+	introducingOssIssueData, err := buildOssIssueData(ctx, trIssue, problem, introducingFinding, affectedFilePath, myRange, ecosystemStr, dependencyPath)
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to build oss issue data")
 	}
 
 	// populate matching issues, we include the first primary finding
-	ossIssueData.MatchingIssues = []snyk.OssIssueData{}
+	introducingOssIssueData.MatchingIssues = []snyk.OssIssueData{}
 	for _, finding := range trIssue.GetFindings() {
 		for _, evidence := range finding.Attributes.Evidence {
 			dependencyPathEvidence, err := evidence.AsDependencyPathEvidence()
@@ -118,11 +113,11 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 			if err != nil {
 				logger.Warn().Err(err).Msg("failed to build oss issue data")
 			}
-			ossIssueData.MatchingIssues = append(ossIssueData.MatchingIssues, issueData)
+			introducingOssIssueData.MatchingIssues = append(introducingOssIssueData.MatchingIssues, issueData)
 		}
 	}
 
-	remediationAdvice := getRemediationAdvice(ossIssueData)
+	remediationAdvice := getRemediationAdvice(introducingOssIssueData)
 	// TODO: add ignore details once provenance and granularity are clarified
 	//ignoreDetails := trIssue.GetIgnoreDetails()
 	//isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
@@ -133,10 +128,10 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		title,
 		trIssue.GetDescription(),
 		severity.String(),
-		ossIssueData.PackageName,
-		ossIssueData.Identifiers.CVE,
-		ossIssueData.Identifiers.CWE,
-		ossIssueData.FixedIn,
+		introducingOssIssueData.PackageName,
+		introducingOssIssueData.Identifiers.CVE,
+		introducingOssIssueData.Identifiers.CWE,
+		introducingOssIssueData.FixedIn,
 	)
 
 	references := extractReferences(problem)
@@ -157,10 +152,10 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		References:          references,
 		IssueDescriptionURL: issueDescriptionURL,
 		Ecosystem:           ecosystemStr,
-		CWEs:                ossIssueData.Identifiers.CWE,
-		CVEs:                ossIssueData.Identifiers.CVE,
-		AdditionalData:      ossIssueData,
-		LessonUrl:           ossIssueData.Lesson,
+		CWEs:                introducingOssIssueData.Identifiers.CWE,
+		CVEs:                introducingOssIssueData.Identifiers.CVE,
+		AdditionalData:      introducingOssIssueData,
+		LessonUrl:           introducingOssIssueData.Lesson,
 		FindingId:           introducingFinding.Id.String(),
 	}
 
@@ -200,6 +195,20 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	return issue
 }
 
+func ecosystem(trIssue testapi.Issue, logger zerolog.Logger) (string, error) {
+	ecoData, found := trIssue.GetData(testapi.DataKeyTechnology)
+	if !found {
+		logger.Warn().Msg("failed to get ecosystem")
+		return "", fmt.Errorf("failed to get ecosystem")
+	}
+	ecosystemStr, ok := ecoData.(string)
+	if !ok {
+		logger.Warn().Msg("failed to parse ecosystem")
+		return "", fmt.Errorf("failed to parse ecosystem")
+	}
+	return ecosystemStr, nil
+}
+
 // getAffectedFilePath returns the affected file path for a test result
 // return values:
 // - workDir: the workspace directory
@@ -227,6 +236,7 @@ func getAffectedFilePath(ctx context.Context, testResult testapi.TestResult) (ty
 	return workDir, filePath, affectedFilePath, nil
 }
 
+// FIXME needs to look at all evidences
 func getIntroducingFinding(issue testapi.Issue, problem *testapi.SnykVulnProblem) (*testapi.FindingData, error) {
 	findings := issue.GetFindings()
 	if len(findings) == 0 {
@@ -320,6 +330,7 @@ func extractDependencyPath(finding *testapi.FindingData) []string {
 		return nil
 	}
 
+	//FIXME: don't stop at the first dependency path
 	for _, evidence := range finding.Attributes.Evidence {
 		disc, err := evidence.Discriminator()
 		if err == nil && disc == "dependency_path" {
