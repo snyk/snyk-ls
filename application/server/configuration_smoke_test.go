@@ -98,13 +98,8 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assertFieldPresent(t, html, "scanningMode", "ScanningMode field")
 			assertFieldPresent(t, html, "authenticationMethod", "AuthenticationMethod field")
 
-			// Integration settings
-			assertFieldPresent(t, html, "integrationName", "IntegrationName field")
-			assertFieldPresent(t, html, "integrationVersion", "IntegrationVersion field")
-
 			// Advanced settings
 			assertFieldPresent(t, html, "automaticAuthentication", "AutomaticAuthentication field")
-			assertFieldPresent(t, html, "deviceId", "DeviceId field")
 			assertFieldPresent(t, html, "snykCodeApi", "SnykCodeApi field")
 
 			// Feature toggles
@@ -117,15 +112,6 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assertFieldPresent(t, html, "filterSeverity", "FilterSeverity field")
 			assertFieldPresent(t, html, "hoverVerbosity", "HoverVerbosity field")
 			assertFieldPresent(t, html, "outputFormat", "OutputFormat field")
-
-			// System information (may be read-only)
-			assertFieldPresent(t, html, "osPlatform", "OsPlatform field")
-			assertFieldPresent(t, html, "osArch", "OsArch field")
-			assertFieldPresent(t, html, "runtimeVersion", "RuntimeVersion field")
-			assertFieldPresent(t, html, "runtimeName", "RuntimeName field")
-
-			// Protocol settings
-			assertFieldPresent(t, html, "requiredProtocolVersion", "RequiredProtocolVersion field")
 
 			// Legacy folder-level settings (TODO: move to folder config)
 			assertFieldPresent(t, html, "additionalParams", "AdditionalParams field")

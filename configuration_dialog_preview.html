@@ -193,19 +193,19 @@ button.secondary:hover {
 </head>
 <body>
     <div class="info-banner">
-        <h2>✅ Configuration Dialog Preview - All Settings Included!</h2>
-        <p>This preview demonstrates the complete configuration dialog with <strong>ALL 40+ settings fields</strong> now properly populated from the config:</p>
+        <h2>✅ Configuration Dialog Preview - User-Configurable Settings Only</h2>
+        <p>This preview demonstrates the configuration dialog with <strong>all user-configurable settings</strong> (auto-populated system fields are excluded):</p>
         <ul>
-            <li>✅ All core authentication settings (Token, Endpoint, Organization, etc.)</li>
+            <li>✅ Core authentication settings (Token, Endpoint, Organization, Authentication Method)</li>
             <li>✅ Product activation toggles (OSS, Code, IaC, Security, Quality)</li>
             <li>✅ CLI and path configuration</li>
             <li>✅ Security settings (Insecure mode, Trusted folders)</li>
             <li>✅ Filter severity and display options</li>
             <li>✅ Feature toggles (Learn, Quick Fix, Browser Actions, Delta Findings)</li>
-            <li>✅ Advanced settings (Integration info, Runtime details, Protocol version)</li>
+            <li>✅ Advanced settings (Snyk Code API, CLI parameters, Environment variables)</li>
             <li>✅ All 12 folder-specific configuration fields</li>
         </ul>
-        <p><strong>Note:</strong> This is a static preview. In production, values are populated from the Language Server config and saved via IDE integration.</p>
+        <p><strong>System fields excluded:</strong> Integration Name/Version, Device ID, OS Platform/Arch, Runtime Name/Version, and Protocol Version are auto-populated by the IDE and not shown in the dialog.</p>
     </div>
 
     <h1>Snyk Configuration</h1>
@@ -448,50 +448,6 @@ button.secondary:hover {
             </div>
 
             <div class="form-group">
-                <label for="integrationName">Integration Name</label>
-                <input type="text" id="integrationName" name="integrationName" value="vscode" readonly>
-                <span class="description">Auto-populated by IDE</span>
-            </div>
-
-            <div class="form-group">
-                <label for="integrationVersion">Integration Version</label>
-                <input type="text" id="integrationVersion" name="integrationVersion" value="2.5.0" readonly>
-                <span class="description">Auto-populated by IDE</span>
-            </div>
-
-            <div class="form-group">
-                <label for="deviceId">Device ID</label>
-                <input type="text" id="deviceId" name="deviceId" value="abc123-def456-ghi789" readonly>
-                <span class="description">Auto-generated</span>
-            </div>
-
-            <div class="form-group">
-                <label for="osPlatform">OS Platform</label>
-                <input type="text" id="osPlatform" name="osPlatform" value="darwin" readonly>
-            </div>
-
-            <div class="form-group">
-                <label for="osArch">OS Architecture</label>
-                <input type="text" id="osArch" name="osArch" value="arm64" readonly>
-            </div>
-
-            <div class="form-group">
-                <label for="runtimeName">Runtime Name</label>
-                <input type="text" id="runtimeName" name="runtimeName" value="node" readonly>
-            </div>
-
-            <div class="form-group">
-                <label for="runtimeVersion">Runtime Version</label>
-                <input type="text" id="runtimeVersion" name="runtimeVersion" value="18.17.0" readonly>
-            </div>
-
-            <div class="form-group">
-                <label for="requiredProtocolVersion">Required Protocol Version</label>
-                <input type="text" id="requiredProtocolVersion" name="requiredProtocolVersion" value="12" readonly>
-                <span class="description">LSP protocol version</span>
-            </div>
-
-            <div class="form-group">
                 <label for="additionalParams">Additional CLI Parameters (Legacy)</label>
                 <input type="text" id="additionalParams" name="additionalParams" value="--severity-threshold=high" placeholder="--debug --severity-threshold=high">
                 <span class="description">Use folder-specific additional parameters instead</span>
@@ -658,17 +614,22 @@ button.secondary:hover {
 
     <script>
         // Demo version with alerts instead of actual IDE bindings
-        console.log('Configuration Dialog Preview - Demo Mode (Updated with All Settings)');
-        console.log('✅ constructSettingsFromConfig() now populates ALL fields:');
-        console.log('  - Core Authentication (Token, Endpoint, Organization, Method, AutoAuth, DeviceId)');
+        console.log('Configuration Dialog Preview - User-Configurable Settings Only');
+        console.log('✅ Dialog displays user-configurable settings:');
+        console.log('  - Core Authentication (Token, Endpoint, Organization, Method, AutoAuth)');
         console.log('  - Product Activation (OSS, Code, IaC, CodeSecurity, CodeQuality)');
         console.log('  - CLI & Paths (CliPath, Path, ManageBinaries)');
         console.log('  - Security (Insecure, TrustedFolders, TrustedFoldersFeature)');
         console.log('  - Operational (ScanningMode, SendErrorReports)');
         console.log('  - Filters (FilterSeverity, IssueViewOptions, HoverVerbosity, OutputFormat)');
         console.log('  - Feature Toggles (Learn, OSSQuickFix, OpenBrowser, DeltaFindings)');
-        console.log('  - Advanced (SnykCodeApi, Integration info, OS/Runtime details, Protocol version, Additional params)');
-        console.log('  - Folder Configs (All 12 sub-fields including BaseBranch, LocalBranches, AdditionalParameters, etc.)');
+        console.log('  - Advanced (SnykCodeApi, Additional params/env)');
+        console.log('  - Folder Configs (All 12 sub-fields)');
+        console.log('');
+        console.log('❌ System fields hidden (auto-populated by IDE):');
+        console.log('  - IntegrationName, IntegrationVersion, DeviceId');
+        console.log('  - OsPlatform, OsArch, RuntimeName, RuntimeVersion');
+        console.log('  - RequiredProtocolVersion');
         console.log('');
         console.log('In production, IDE bindings:');
         console.log('- ${ideSaveConfig}(jsonData) - saves configuration');

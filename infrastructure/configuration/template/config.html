@@ -250,50 +250,6 @@
             </div>
 
             <div class="form-group">
-                <label for="integrationName">Integration Name</label>
-                <input type="text" id="integrationName" name="integrationName" value="{{.Settings.IntegrationName}}" readonly>
-                <span class="description">Auto-populated by IDE</span>
-            </div>
-
-            <div class="form-group">
-                <label for="integrationVersion">Integration Version</label>
-                <input type="text" id="integrationVersion" name="integrationVersion" value="{{.Settings.IntegrationVersion}}" readonly>
-                <span class="description">Auto-populated by IDE</span>
-            </div>
-
-            <div class="form-group">
-                <label for="deviceId">Device ID</label>
-                <input type="text" id="deviceId" name="deviceId" value="{{.Settings.DeviceId}}" readonly>
-                <span class="description">Auto-generated</span>
-            </div>
-
-            <div class="form-group">
-                <label for="osPlatform">OS Platform</label>
-                <input type="text" id="osPlatform" name="osPlatform" value="{{.Settings.OsPlatform}}" readonly>
-            </div>
-
-            <div class="form-group">
-                <label for="osArch">OS Architecture</label>
-                <input type="text" id="osArch" name="osArch" value="{{.Settings.OsArch}}" readonly>
-            </div>
-
-            <div class="form-group">
-                <label for="runtimeName">Runtime Name</label>
-                <input type="text" id="runtimeName" name="runtimeName" value="{{.Settings.RuntimeName}}" readonly>
-            </div>
-
-            <div class="form-group">
-                <label for="runtimeVersion">Runtime Version</label>
-                <input type="text" id="runtimeVersion" name="runtimeVersion" value="{{.Settings.RuntimeVersion}}" readonly>
-            </div>
-
-            <div class="form-group">
-                <label for="requiredProtocolVersion">Required Protocol Version</label>
-                <input type="text" id="requiredProtocolVersion" name="requiredProtocolVersion" value="{{.Settings.RequiredProtocolVersion}}" readonly>
-                <span class="description">LSP protocol version</span>
-            </div>
-
-            <div class="form-group">
                 <label for="additionalParams">Additional CLI Parameters (Legacy)</label>
                 <input type="text" id="additionalParams" name="additionalParams" value="{{.Settings.AdditionalParams}}" placeholder="--debug --severity-threshold=high">
                 <span class="description">Use folder-specific additional parameters instead</span>
