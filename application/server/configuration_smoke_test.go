@@ -21,9 +21,11 @@ import (
 	"strings"
 	"testing"
 
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/infrastructure/configuration"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -31,9 +33,10 @@ import (
 
 // Test_SmokeConfigurationDialog verifies that the configuration dialog:
 // 1. Can be triggered via workspace/executeCommand
-// 2. Includes ALL settings fields from types.Settings
-// 3. Includes ALL sub-fields from FolderConfig
-// 4. Includes authentication and logout triggers
+// 2. Sends window/showDocument callback with correct URI
+// 3. Generated HTML includes ALL settings fields from types.Settings
+// 4. Generated HTML includes ALL sub-fields from FolderConfig
+// 5. Includes authentication and logout triggers
 func Test_SmokeConfigurationDialog(t *testing.T) {
 	if os.Getenv("SMOKE_TESTS") != "1" {
 		t.Skip("Skipping smoke test")
@@ -42,23 +45,47 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
 	testutil.CreateDummyProgressListener(t)
 
-	t.Run("Configuration Command Execution", func(t *testing.T) {
-		// Verify the configuration renderer can be created
-		// Full command execution requires server setup and is tested in unit tests
-		renderer, err := configuration.NewConfigHtmlRenderer(c)
-		require.NoError(t, err)
-		require.NotNil(t, renderer)
+	t.Run("Configuration Command Execution via LSP", func(t *testing.T) {
+		// Setup server with LSP client
+		loc, jsonRPCRecorder := setupServer(t, c)
+		di.Init()
 
-		// Verify it can generate HTML
-		testSettings := types.Settings{
-			Token:    "test",
-			Endpoint: "https://api.snyk.io",
-		}
-		html := renderer.GetConfigHtml(testSettings)
-		require.NotEmpty(t, html)
+		// Execute the configuration command via LSP
+		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+			Command:   types.WorkspaceConfigurationCommand,
+			Arguments: []any{},
+		})
+
+		require.NoError(t, err, "Configuration command should execute successfully")
+
+		// Verify window/showDocument callback was sent
+		callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/showDocument")
+		require.Greater(t, len(callbacks), 0, "Should have sent window/showDocument callback")
+
+		// Verify the callback parameters
+		var showDocParams types.ShowDocumentParams
+		err = callbacks[0].UnmarshalParams(&showDocParams)
+		require.NoError(t, err)
+
+		// Verify the URI is the settings URI
+		assert.Equal(t, sglsp.DocumentURI("snyk://settings"), showDocParams.Uri, "Should show settings URI")
+		assert.False(t, showDocParams.External, "Should open internally")
+		assert.True(t, showDocParams.TakeFocus, "Should take focus")
 	})
 
 	t.Run("Configuration HTML Contains All Settings", func(t *testing.T) {
+		// Setup server with LSP client
+		loc, _ := setupServer(t, c)
+		di.Init()
+
+		// Execute command to trigger HTML generation
+		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+			Command:   types.WorkspaceConfigurationCommand,
+			Arguments: []any{},
+		})
+		require.NoError(t, err)
+
+		// Generate HTML directly to validate content (command execution is tested above)
 		renderer, err := configuration.NewConfigHtmlRenderer(c)
 		require.NoError(t, err)
 		require.NotNil(t, renderer)
