@@ -54,7 +54,11 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 		return nil, err
 	}
 
-	return nil, nil
+	// Return the HTML content so it can be verified by tests and potentially used by the client
+	return map[string]interface{}{
+		"uri":     string(uri),
+		"content": htmlContent,
+	}, nil
 }
 
 // constructSettingsFromConfig reconstructs a Settings object from the active configuration.
