@@ -194,18 +194,19 @@ button.secondary:hover {
 <body>
     <div class="info-banner">
         <h2>✅ Configuration Dialog Preview - User-Configurable Settings Only</h2>
-        <p>This preview demonstrates the configuration dialog with <strong>all user-configurable settings</strong> (auto-populated system fields are excluded):</p>
+        <p>This preview demonstrates the configuration dialog with <strong>all user-configurable settings</strong>:</p>
         <ul>
-            <li>✅ Core authentication settings (Token, Endpoint, Organization, Authentication Method)</li>
+            <li>✅ Core authentication settings (Token, Endpoint, Authentication Method)</li>
             <li>✅ Product activation toggles (OSS, Code, IaC, Security, Quality)</li>
             <li>✅ CLI and path configuration</li>
             <li>✅ Security settings (Insecure mode, Trusted folders)</li>
             <li>✅ Filter severity and display options</li>
             <li>✅ Feature toggles (Learn, Quick Fix, Browser Actions, Delta Findings)</li>
             <li>✅ Advanced settings (Snyk Code API, CLI parameters, Environment variables)</li>
-            <li>✅ All 12 folder-specific configuration fields</li>
+            <li>✅ Folder-specific settings with proper UI for scan config (no JSON editing!)</li>
         </ul>
-        <p><strong>System fields excluded:</strong> Integration Name/Version, Device ID, OS Platform/Arch, Runtime Name/Version, and Protocol Version are auto-populated by the IDE and not shown in the dialog.</p>
+        <p><strong>Excluded fields:</strong> Global Organization (use folder-level), Automatic Authentication (managed by IDE), SAST Settings (auto-populated), and all system fields (Integration info, Device ID, OS details, Protocol version).</p>
+        <p><strong>Scan Command Config:</strong> Pre/Post scan commands can be configured per product with proper UI controls instead of JSON editing.</p>
     </div>
 
     <h1>Snyk Configuration</h1>
@@ -217,7 +218,11 @@ button.secondary:hover {
 
             <div class="form-group">
                 <label for="token">Token</label>
-                <input type="password" id="token" name="token" value="snyk-test-token-12345" placeholder="Snyk API Token">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="password" id="token" name="token" value="snyk-test-token-12345" placeholder="Snyk API Token" style="flex: 1;">
+                    <button type="button" id="authenticate-btn" onclick="alert('✅ Authentication functionality: In the actual implementation, this saves the config and calls ${ideLogin}() to trigger the authentication flow.')" style="flex-shrink: 0;">Authenticate</button>
+                    <button type="button" id="logout-btn" class="secondary" onclick="alert('✅ Logout functionality: In the actual implementation, this calls ${ideLogout}() to clear the authentication token and log the user out.')" style="flex-shrink: 0;">Logout</button>
+                </div>
             </div>
 
             <div class="form-group">
@@ -227,23 +232,11 @@ button.secondary:hover {
             </div>
 
             <div class="form-group">
-                <label for="organization">Organization</label>
-                <input type="text" id="organization" name="organization" value="my-organization" placeholder="Organization Slug">
-            </div>
-
-            <div class="form-group">
                 <label for="authenticationMethod">Authentication Method</label>
                 <select id="authenticationMethod" name="authenticationMethod">
                     <option value="token" selected>Token</option>
                     <option value="oauth">OAuth</option>
                 </select>
-            </div>
-
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="automaticAuthentication" checked>
-                    Automatic Authentication
-                </label>
             </div>
         </div>
 
@@ -491,6 +484,12 @@ button.secondary:hover {
                 </div>
 
                 <div class="form-group">
+                    <label for="folder_0_riskScoreThreshold">Risk Score Threshold (0-1000)</label>
+                    <input type="number" id="folder_0_riskScoreThreshold" name="folder_0_riskScoreThreshold" min="0" max="1000" value="500" placeholder="0">
+                    <span class="description">Minimum risk score to display issues (0 = show all)</span>
+                </div>
+
+                <div class="form-group">
                     <label for="folder_0_preferredOrg">Preferred Organization</label>
                     <input type="text" id="folder_0_preferredOrg" name="folder_0_preferredOrg" value="my-org-uuid-12345" placeholder="org-id">
                 </div>
@@ -522,15 +521,56 @@ button.secondary:hover {
                 </div>
 
                 <div class="form-group">
-                    <label for="folder_0_sastSettings">SAST Settings (JSON)</label>
-                    <textarea id="folder_0_sastSettings" name="folder_0_sastSettings" rows="3" placeholder='{}' readonly>{"enabled": true, "localCodeEngine": {"enabled": false}}</textarea>
-                    <span class="description">Auto-populated SAST configuration</span>
-                </div>
-
-                <div class="form-group">
-                    <label for="folder_0_scanCommandConfig">Scan Command Config (JSON)</label>
-                    <textarea id="folder_0_scanCommandConfig" name="folder_0_scanCommandConfig" rows="3" placeholder='{}'>{"oss": {"enabled": true}, "code": {"enabled": true}}</textarea>
-                    <span class="description">Product-specific scan configurations</span>
+                    <label>Pre/Post Scan Commands</label>
+                    <span class="description">Configure commands to run before/after scans for each product</span>
+                    
+                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk Open Source</h4>
+                    <div style="margin-left: 10px;">
+                        <label for="folder_0_scanConfig_oss_preScanCommand">Pre-Scan Command</label>
+                        <input type="text" id="folder_0_scanConfig_oss_preScanCommand" name="folder_0_scanConfig_oss_preScanCommand" value="npm install" placeholder="npm install" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label" style="margin-bottom: 10px;">
+                            <input type="checkbox" name="folder_0_scanConfig_oss_preScanOnlyReferenceFolder" checked>
+                            Pre-Scan Only Reference Folder
+                        </label>
+                        <label for="folder_0_scanConfig_oss_postScanCommand">Post-Scan Command</label>
+                        <input type="text" id="folder_0_scanConfig_oss_postScanCommand" name="folder_0_scanConfig_oss_postScanCommand" value="cleanup.sh" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="folder_0_scanConfig_oss_postScanOnlyReferenceFolder">
+                            Post-Scan Only Reference Folder
+                        </label>
+                    </div>
+                    
+                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk Code</h4>
+                    <div style="margin-left: 10px;">
+                        <label for="folder_0_scanConfig_code_preScanCommand">Pre-Scan Command</label>
+                        <input type="text" id="folder_0_scanConfig_code_preScanCommand" name="folder_0_scanConfig_code_preScanCommand" value="" placeholder="prepare.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label" style="margin-bottom: 10px;">
+                            <input type="checkbox" name="folder_0_scanConfig_code_preScanOnlyReferenceFolder">
+                            Pre-Scan Only Reference Folder
+                        </label>
+                        <label for="folder_0_scanConfig_code_postScanCommand">Post-Scan Command</label>
+                        <input type="text" id="folder_0_scanConfig_code_postScanCommand" name="folder_0_scanConfig_code_postScanCommand" value="" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="folder_0_scanConfig_code_postScanOnlyReferenceFolder">
+                            Post-Scan Only Reference Folder
+                        </label>
+                    </div>
+                    
+                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk IaC</h4>
+                    <div style="margin-left: 10px;">
+                        <label for="folder_0_scanConfig_iac_preScanCommand">Pre-Scan Command</label>
+                        <input type="text" id="folder_0_scanConfig_iac_preScanCommand" name="folder_0_scanConfig_iac_preScanCommand" value="terraform init" placeholder="terraform init" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label" style="margin-bottom: 10px;">
+                            <input type="checkbox" name="folder_0_scanConfig_iac_preScanOnlyReferenceFolder">
+                            Pre-Scan Only Reference Folder
+                        </label>
+                        <label for="folder_0_scanConfig_iac_postScanCommand">Post-Scan Command</label>
+                        <input type="text" id="folder_0_scanConfig_iac_postScanCommand" name="folder_0_scanConfig_iac_postScanCommand" value="" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="folder_0_scanConfig_iac_postScanOnlyReferenceFolder">
+                            Post-Scan Only Reference Folder
+                        </label>
+                    </div>
                 </div>
             </div>
 
@@ -558,6 +598,12 @@ button.secondary:hover {
                 <div class="form-group">
                     <label for="folder_1_referenceFolderPath">Reference Folder Path</label>
                     <input type="text" id="folder_1_referenceFolderPath" name="folder_1_referenceFolderPath" value="" placeholder="/path/to/reference">
+                </div>
+
+                <div class="form-group">
+                    <label for="folder_1_riskScoreThreshold">Risk Score Threshold (0-1000)</label>
+                    <input type="number" id="folder_1_riskScoreThreshold" name="folder_1_riskScoreThreshold" min="0" max="1000" value="" placeholder="0">
+                    <span class="description">Minimum risk score to display issues (0 = show all)</span>
                 </div>
 
                 <div class="form-group">
@@ -592,15 +638,56 @@ button.secondary:hover {
                 </div>
 
                 <div class="form-group">
-                    <label for="folder_1_sastSettings">SAST Settings (JSON)</label>
-                    <textarea id="folder_1_sastSettings" name="folder_1_sastSettings" rows="3" placeholder='{}' readonly></textarea>
-                    <span class="description">Auto-populated SAST configuration</span>
-                </div>
-
-                <div class="form-group">
-                    <label for="folder_1_scanCommandConfig">Scan Command Config (JSON)</label>
-                    <textarea id="folder_1_scanCommandConfig" name="folder_1_scanCommandConfig" rows="3" placeholder='{}'></textarea>
-                    <span class="description">Product-specific scan configurations</span>
+                    <label>Pre/Post Scan Commands</label>
+                    <span class="description">Configure commands to run before/after scans for each product</span>
+                    
+                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk Open Source</h4>
+                    <div style="margin-left: 10px;">
+                        <label for="folder_1_scanConfig_oss_preScanCommand">Pre-Scan Command</label>
+                        <input type="text" id="folder_1_scanConfig_oss_preScanCommand" name="folder_1_scanConfig_oss_preScanCommand" value="" placeholder="npm install" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label" style="margin-bottom: 10px;">
+                            <input type="checkbox" name="folder_1_scanConfig_oss_preScanOnlyReferenceFolder">
+                            Pre-Scan Only Reference Folder
+                        </label>
+                        <label for="folder_1_scanConfig_oss_postScanCommand">Post-Scan Command</label>
+                        <input type="text" id="folder_1_scanConfig_oss_postScanCommand" name="folder_1_scanConfig_oss_postScanCommand" value="" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="folder_1_scanConfig_oss_postScanOnlyReferenceFolder">
+                            Post-Scan Only Reference Folder
+                        </label>
+                    </div>
+                    
+                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk Code</h4>
+                    <div style="margin-left: 10px;">
+                        <label for="folder_1_scanConfig_code_preScanCommand">Pre-Scan Command</label>
+                        <input type="text" id="folder_1_scanConfig_code_preScanCommand" name="folder_1_scanConfig_code_preScanCommand" value="" placeholder="prepare.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label" style="margin-bottom: 10px;">
+                            <input type="checkbox" name="folder_1_scanConfig_code_preScanOnlyReferenceFolder">
+                            Pre-Scan Only Reference Folder
+                        </label>
+                        <label for="folder_1_scanConfig_code_postScanCommand">Post-Scan Command</label>
+                        <input type="text" id="folder_1_scanConfig_code_postScanCommand" name="folder_1_scanConfig_code_postScanCommand" value="" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="folder_1_scanConfig_code_postScanOnlyReferenceFolder">
+                            Post-Scan Only Reference Folder
+                        </label>
+                    </div>
+                    
+                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk IaC</h4>
+                    <div style="margin-left: 10px;">
+                        <label for="folder_1_scanConfig_iac_preScanCommand">Pre-Scan Command</label>
+                        <input type="text" id="folder_1_scanConfig_iac_preScanCommand" name="folder_1_scanConfig_iac_preScanCommand" value="" placeholder="terraform init" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label" style="margin-bottom: 10px;">
+                            <input type="checkbox" name="folder_1_scanConfig_iac_preScanOnlyReferenceFolder">
+                            Pre-Scan Only Reference Folder
+                        </label>
+                        <label for="folder_1_scanConfig_iac_postScanCommand">Post-Scan Command</label>
+                        <input type="text" id="folder_1_scanConfig_iac_postScanCommand" name="folder_1_scanConfig_iac_postScanCommand" value="" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="folder_1_scanConfig_iac_postScanOnlyReferenceFolder">
+                            Post-Scan Only Reference Folder
+                        </label>
+                    </div>
                 </div>
             </div>
             
@@ -608,7 +695,6 @@ button.secondary:hover {
 
         <div class="actions">
             <button type="button" id="save-config-btn" onclick="alert('✅ Save functionality: In the actual implementation, this calls ${ideSaveConfig}(jsonData) to save configuration via the IDE extension.\n\nThe updated constructSettingsFromConfig() now populates ALL 40+ settings from the config!')">Save Configuration</button>
-            <button type="button" id="authenticate-btn" class="secondary" onclick="alert('✅ Authentication functionality: In the actual implementation, this saves the config and calls ${ideLogin}() to trigger the authentication flow.')">Authenticate</button>
         </div>
     </form>
 

@@ -19,7 +19,11 @@
 
             <div class="form-group">
                 <label for="token">Token</label>
-                <input type="password" id="token" name="token" value="{{.Settings.Token}}" placeholder="Snyk API Token">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="password" id="token" name="token" value="{{.Settings.Token}}" placeholder="Snyk API Token" style="flex: 1;">
+                    <button type="button" id="authenticate-btn" style="flex-shrink: 0;">Authenticate</button>
+                    <button type="button" id="logout-btn" class="secondary" style="flex-shrink: 0;">Logout</button>
+                </div>
             </div>
 
             <div class="form-group">
@@ -29,23 +33,11 @@
             </div>
 
             <div class="form-group">
-                <label for="organization">Organization</label>
-                <input type="text" id="organization" name="organization" value="{{.Settings.Organization}}" placeholder="Organization Slug">
-            </div>
-
-            <div class="form-group">
                 <label for="authenticationMethod">Authentication Method</label>
                 <select id="authenticationMethod" name="authenticationMethod">
                     <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>Token</option>
                     <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth</option>
                 </select>
-            </div>
-
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="automaticAuthentication" {{if eq .Settings.AutomaticAuthentication "true"}}checked{{end}}>
-                    Automatic Authentication
-                </label>
             </div>
         </div>
 
@@ -294,6 +286,12 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="folder_{{$index}}_riskScoreThreshold">Risk Score Threshold (0-1000)</label>
+                    <input type="number" id="folder_{{$index}}_riskScoreThreshold" name="folder_{{$index}}_riskScoreThreshold" min="0" max="1000" value="{{if $folder.RiskScoreThreshold}}{{$folder.RiskScoreThreshold}}{{end}}" placeholder="0">
+                    <span class="description">Minimum risk score to display issues (0 = show all)</span>
+                </div>
+
+                <div class="form-group">
                     <label for="folder_{{$index}}_preferredOrg">Preferred Organization</label>
                     <input type="text" id="folder_{{$index}}_preferredOrg" name="folder_{{$index}}_preferredOrg" value="{{$folder.PreferredOrg}}" placeholder="org-id">
                 </div>
@@ -325,15 +323,56 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="folder_{{$index}}_sastSettings">SAST Settings (JSON)</label>
-                    <textarea id="folder_{{$index}}_sastSettings" name="folder_{{$index}}_sastSettings" rows="3" placeholder='{}' readonly>{{if $folder.SastSettings}}{{$folder.SastSettings}}{{end}}</textarea>
-                    <span class="description">Auto-populated SAST configuration</span>
-                </div>
-
-                <div class="form-group">
-                    <label for="folder_{{$index}}_scanCommandConfig">Scan Command Config (JSON)</label>
-                    <textarea id="folder_{{$index}}_scanCommandConfig" name="folder_{{$index}}_scanCommandConfig" rows="3" placeholder='{}'>{{if $folder.ScanCommandConfig}}{{$folder.ScanCommandConfig}}{{end}}</textarea>
-                    <span class="description">Product-specific scan configurations</span>
+                    <label>Pre/Post Scan Commands</label>
+                    <span class="description">Configure commands to run before/after scans for each product</span>
+                    
+                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk Open Source</h4>
+                    <div style="margin-left: 10px;">
+                        <label for="folder_{{$index}}_scanConfig_oss_preScanCommand">Pre-Scan Command</label>
+                        <input type="text" id="folder_{{$index}}_scanConfig_oss_preScanCommand" name="folder_{{$index}}_scanConfig_oss_preScanCommand" placeholder="npm install" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label" style="margin-bottom: 10px;">
+                            <input type="checkbox" name="folder_{{$index}}_scanConfig_oss_preScanOnlyReferenceFolder">
+                            Pre-Scan Only Reference Folder
+                        </label>
+                        <label for="folder_{{$index}}_scanConfig_oss_postScanCommand">Post-Scan Command</label>
+                        <input type="text" id="folder_{{$index}}_scanConfig_oss_postScanCommand" name="folder_{{$index}}_scanConfig_oss_postScanCommand" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="folder_{{$index}}_scanConfig_oss_postScanOnlyReferenceFolder">
+                            Post-Scan Only Reference Folder
+                        </label>
+                    </div>
+                    
+                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk Code</h4>
+                    <div style="margin-left: 10px;">
+                        <label for="folder_{{$index}}_scanConfig_code_preScanCommand">Pre-Scan Command</label>
+                        <input type="text" id="folder_{{$index}}_scanConfig_code_preScanCommand" name="folder_{{$index}}_scanConfig_code_preScanCommand" placeholder="prepare.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label" style="margin-bottom: 10px;">
+                            <input type="checkbox" name="folder_{{$index}}_scanConfig_code_preScanOnlyReferenceFolder">
+                            Pre-Scan Only Reference Folder
+                        </label>
+                        <label for="folder_{{$index}}_scanConfig_code_postScanCommand">Post-Scan Command</label>
+                        <input type="text" id="folder_{{$index}}_scanConfig_code_postScanCommand" name="folder_{{$index}}_scanConfig_code_postScanCommand" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="folder_{{$index}}_scanConfig_code_postScanOnlyReferenceFolder">
+                            Post-Scan Only Reference Folder
+                        </label>
+                    </div>
+                    
+                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk IaC</h4>
+                    <div style="margin-left: 10px;">
+                        <label for="folder_{{$index}}_scanConfig_iac_preScanCommand">Pre-Scan Command</label>
+                        <input type="text" id="folder_{{$index}}_scanConfig_iac_preScanCommand" name="folder_{{$index}}_scanConfig_iac_preScanCommand" placeholder="terraform init" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label" style="margin-bottom: 10px;">
+                            <input type="checkbox" name="folder_{{$index}}_scanConfig_iac_preScanOnlyReferenceFolder">
+                            Pre-Scan Only Reference Folder
+                        </label>
+                        <label for="folder_{{$index}}_scanConfig_iac_postScanCommand">Post-Scan Command</label>
+                        <input type="text" id="folder_{{$index}}_scanConfig_iac_postScanCommand" name="folder_{{$index}}_scanConfig_iac_postScanCommand" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="folder_{{$index}}_scanConfig_iac_postScanOnlyReferenceFolder">
+                            Post-Scan Only Reference Folder
+                        </label>
+                    </div>
                 </div>
             </div>
             {{end}}
@@ -344,7 +383,6 @@
 
         <div class="actions">
             <button type="button" id="save-config-btn">Save Configuration</button>
-            <button type="button" id="authenticate-btn" class="secondary">Authenticate</button>
         </div>
     </form>
 

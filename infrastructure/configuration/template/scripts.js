@@ -84,18 +84,43 @@
                 continue;
             }
 
-            // Folder logic: folder_INDEX_FIELD
+            // Folder logic: folder_INDEX_FIELD or folder_INDEX_scanConfig_PRODUCT_FIELD
             if (name.indexOf('folder_') === 0) {
                 var parts = name.split('_');
                 if (parts.length >= 3) {
                     var index = parseInt(parts[1]);
-                    var field = parts.slice(2).join('_');
                     
                     if (!data.folderConfigs[index]) {
                         data.folderConfigs[index] = {};
                     }
 
-                    setFieldValue(data.folderConfigs[index], field, el);
+                    // Check if this is a scanConfig field: folder_INDEX_scanConfig_PRODUCT_FIELD
+                    if (parts.length >= 5 && parts[2] === 'scanConfig') {
+                        var product = parts[3]; // oss, code, or iac
+                        var field = parts[4]; // preScanCommand, preScanOnlyReferenceFolder, etc.
+                        
+                        if (!data.folderConfigs[index].scanCommandConfig) {
+                            data.folderConfigs[index].scanCommandConfig = {};
+                        }
+                        if (!data.folderConfigs[index].scanCommandConfig[product]) {
+                            data.folderConfigs[index].scanCommandConfig[product] = {};
+                        }
+                        
+                        // Map UI field names to JSON field names
+                        var jsonField = field;
+                        if (field === 'preScanCommand') {
+                            jsonField = 'command'; // PreScanCommand uses 'command' in JSON
+                        }
+                        
+                        if (el.type === 'checkbox') {
+                            data.folderConfigs[index].scanCommandConfig[product][jsonField] = el.checked;
+                        } else if (el.value && el.value.trim()) {
+                            data.folderConfigs[index].scanCommandConfig[product][jsonField] = el.value;
+                        }
+                    } else {
+                        var field = parts.slice(2).join('_');
+                        setFieldValue(data.folderConfigs[index], field, el);
+                    }
                 }
             } else {
                 // Global setting
@@ -222,6 +247,15 @@
         }
     }
 
+    function logout() {
+        // Trigger logout
+        try {
+            ${ideLogout}();
+        } catch (e) {
+            alert('Error initiating logout: ' + e.message);
+        }
+    }
+
     // Initialize
     addEvent(window, 'load', function() {
         var saveBtn = get('save-config-btn');
@@ -232,6 +266,11 @@
         var authBtn = get('authenticate-btn');
         if (authBtn) {
             addEvent(authBtn, 'click', authenticate);
+        }
+
+        var logoutBtn = get('logout-btn');
+        if (logoutBtn) {
+            addEvent(logoutBtn, 'click', logout);
         }
 
         var endpointInput = get('endpoint');

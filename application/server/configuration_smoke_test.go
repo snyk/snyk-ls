@@ -75,7 +75,6 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			// Core authentication settings
 			assertFieldPresent(t, html, "token", "Token field")
 			assertFieldPresent(t, html, "endpoint", "Endpoint field")
-			assertFieldPresent(t, html, "organization", "Organization field")
 
 			// Product activation settings
 			assertFieldPresent(t, html, "activateSnykOpenSource", "ActivateSnykOpenSource field")
@@ -99,7 +98,6 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assertFieldPresent(t, html, "authenticationMethod", "AuthenticationMethod field")
 
 			// Advanced settings
-			assertFieldPresent(t, html, "automaticAuthentication", "AutomaticAuthentication field")
 			assertFieldPresent(t, html, "snykCodeApi", "SnykCodeApi field")
 
 			// Feature toggles
@@ -137,14 +135,21 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assertFieldPresent(t, html, "orgMigratedFromGlobalConfig", "OrgMigratedFromGlobalConfig field")
 			assertFieldPresent(t, html, "orgSetByUser", "OrgSetByUser field")
 			assertFieldPresent(t, html, "featureFlags", "FeatureFlags field")
-			assertFieldPresent(t, html, "sastSettings", "SastSettings field")
-			assertFieldPresent(t, html, "scanCommandConfig", "ScanCommandConfig field")
+			assertFieldPresent(t, html, "riskScoreThreshold", "RiskScoreThreshold field")
+
+			// Scan command config fields (pre/post scan commands per product)
+			assertFieldPresent(t, html, "scanConfig_oss_preScanCommand", "ScanConfig OSS PreScanCommand field")
+			assertFieldPresent(t, html, "scanConfig_oss_postScanCommand", "ScanConfig OSS PostScanCommand field")
+			assertFieldPresent(t, html, "scanConfig_code_preScanCommand", "ScanConfig Code PreScanCommand field")
+			assertFieldPresent(t, html, "scanConfig_iac_preScanCommand", "ScanConfig IaC PreScanCommand field")
 		})
 
 		t.Run("Authentication and Logout Triggers", func(t *testing.T) {
-			// Verify authentication button is present
+			// Verify authentication and logout buttons are present
 			assert.Contains(t, html, "Authenticate", "Authentication button should be present")
 			assert.Contains(t, html, "authenticate-btn", "Authentication button ID should be present")
+			assert.Contains(t, html, "Logout", "Logout button should be present")
+			assert.Contains(t, html, "logout-btn", "Logout button ID should be present")
 
 			// Verify IDE function placeholders for injection
 			assert.Contains(t, html, "${ideLogin}", "ideLogin placeholder should be present")
@@ -188,7 +193,6 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			// Verify that the values from settings are populated in the HTML
 			assert.Contains(t, html, settings.Token, "Token value should be populated")
 			assert.Contains(t, html, settings.Endpoint, "Endpoint value should be populated")
-			assert.Contains(t, html, settings.Organization, "Organization value should be populated")
 
 			// Verify folder config values are populated
 			if len(settings.FolderConfigs) > 0 {
