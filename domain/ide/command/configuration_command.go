@@ -57,27 +57,9 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 	return nil, nil
 }
 
+// constructSettingsFromConfig reconstructs a Settings object from the active configuration.
+// Boolean and integer values are converted to strings as per types.Settings definition.
 func constructSettingsFromConfig(c *config.Config) types.Settings {
-	// Helper to reconstruct settings from the active config.
-	// We convert boolean/int values to strings as per types.Settings definition.
-
-	insecure := false
-	cliPath := ""
-	additionalOssParams := ""
-	if c.CliSettings() != nil {
-		insecure = c.CliSettings().Insecure
-		cliPath = c.CliSettings().Path()
-		if len(c.CliSettings().AdditionalOssParameters) > 0 {
-			for _, param := range c.CliSettings().AdditionalOssParameters {
-				additionalOssParams += param + " "
-			}
-		}
-	}
-
-	// Get environment PATH
-	envPath := c.Engine().GetConfiguration().GetString("PATH")
-
-	// Core settings
 	s := types.Settings{
 		// Core Authentication
 		Token:                   c.Token(),
@@ -87,95 +69,139 @@ func constructSettingsFromConfig(c *config.Config) types.Settings {
 		AutomaticAuthentication: fmt.Sprintf("%v", c.AutomaticAuthentication()),
 		DeviceId:                c.DeviceID(),
 
-		// Product Activation
-		ActivateSnykOpenSource:   fmt.Sprintf("%v", c.IsSnykOssEnabled()),
-		ActivateSnykCode:         fmt.Sprintf("%v", c.IsSnykCodeEnabled()),
-		ActivateSnykIac:          fmt.Sprintf("%v", c.IsSnykIacEnabled()),
-		ActivateSnykCodeSecurity: fmt.Sprintf("%v", c.IsSnykCodeSecurityEnabled()),
-		ActivateSnykCodeQuality:  fmt.Sprintf("%v", !c.IsSnykCodeSecurityEnabled()), // Quality is inverse of security-only mode
-
-		// CLI and Paths
-		CliPath:                     cliPath,
-		Path:                        envPath,
-		ManageBinariesAutomatically: fmt.Sprintf("%v", c.ManageBinariesAutomatically()),
-
-		// Security Settings
-		Insecure:                    fmt.Sprintf("%v", insecure),
-		EnableTrustedFoldersFeature: fmt.Sprintf("%v", c.IsTrustedFolderFeatureEnabled()),
-		TrustedFolders:              convertFilePathsToStrings(c.TrustedFolders()),
-
-		// Operational Settings
-		SendErrorReports: fmt.Sprintf("%v", c.IsErrorReportingEnabled()),
-		ScanningMode:     "auto",
-
-		// Feature Toggles
-		EnableSnykLearnCodeActions:       fmt.Sprintf("%v", c.IsSnykLearnCodeActionsEnabled()),
-		EnableSnykOSSQuickFixCodeActions: fmt.Sprintf("%v", c.IsSnykOSSQuickFixCodeActionsEnabled()),
-		EnableSnykOpenBrowserActions:     fmt.Sprintf("%v", c.IsSnykOpenBrowserActionEnabled()),
-		EnableDeltaFindings:              fmt.Sprintf("%v", c.IsDeltaFindingsEnabled()),
-
-		// Advanced Settings
-		SnykCodeApi:             getSnykCodeApiUrl(c),
-		IntegrationName:         c.IdeName(),
-		IntegrationVersion:      c.IdeVersion(),
-		OsPlatform:              c.OsPlatform(),
-		OsArch:                  c.OsArch(),
-		RuntimeName:             c.RuntimeName(),
-		RuntimeVersion:          c.RuntimeVersion(),
-		RequiredProtocolVersion: c.ClientProtocolVersion(),
-		AdditionalParams:        additionalOssParams,
-		AdditionalEnv:           "", // Not currently stored in config
-
 		// Initialize FolderConfigs as empty slice
 		FolderConfigs: []types.FolderConfig{},
 	}
 
-	if !c.IsAutoScanEnabled() {
-		s.ScanningMode = "manual"
+	populateProductSettings(&s, c)
+	populateCliSettings(&s, c)
+	populateSecuritySettings(&s, c)
+	populateOperationalSettings(&s, c)
+	populateFeatureToggles(&s, c)
+	populateAdvancedSettings(&s, c)
+	populatePointerFields(&s, c)
+	populateFolderConfigs(&s, c)
+
+	return s
+}
+
+// populateProductSettings sets product activation flags
+func populateProductSettings(s *types.Settings, c *config.Config) {
+	s.ActivateSnykOpenSource = fmt.Sprintf("%v", c.IsSnykOssEnabled())
+	s.ActivateSnykCode = fmt.Sprintf("%v", c.IsSnykCodeEnabled())
+	s.ActivateSnykIac = fmt.Sprintf("%v", c.IsSnykIacEnabled())
+	s.ActivateSnykCodeSecurity = fmt.Sprintf("%v", c.IsSnykCodeSecurityEnabled())
+	s.ActivateSnykCodeQuality = fmt.Sprintf("%v", !c.IsSnykCodeSecurityEnabled())
+}
+
+// populateCliSettings sets CLI-related configuration
+func populateCliSettings(s *types.Settings, c *config.Config) {
+	if c.CliSettings() != nil {
+		s.Insecure = fmt.Sprintf("%v", c.CliSettings().Insecure)
+		s.CliPath = c.CliSettings().Path()
+		s.AdditionalParams = buildAdditionalOssParamsString(c.CliSettings().AdditionalOssParameters)
+	} else {
+		s.Insecure = "false"
+		s.CliPath = ""
+		s.AdditionalParams = ""
 	}
 
-	// FilterSeverity
+	s.Path = c.Engine().GetConfiguration().GetString("PATH")
+	s.ManageBinariesAutomatically = fmt.Sprintf("%v", c.ManageBinariesAutomatically())
+}
+
+// populateSecuritySettings sets security-related configuration
+func populateSecuritySettings(s *types.Settings, c *config.Config) {
+	s.EnableTrustedFoldersFeature = fmt.Sprintf("%v", c.IsTrustedFolderFeatureEnabled())
+	s.TrustedFolders = convertFilePathsToStrings(c.TrustedFolders())
+}
+
+// populateOperationalSettings sets operational configuration
+func populateOperationalSettings(s *types.Settings, c *config.Config) {
+	s.SendErrorReports = fmt.Sprintf("%v", c.IsErrorReportingEnabled())
+	if c.IsAutoScanEnabled() {
+		s.ScanningMode = "auto"
+	} else {
+		s.ScanningMode = "manual"
+	}
+}
+
+// populateFeatureToggles sets feature flag configuration
+func populateFeatureToggles(s *types.Settings, c *config.Config) {
+	s.EnableSnykLearnCodeActions = fmt.Sprintf("%v", c.IsSnykLearnCodeActionsEnabled())
+	s.EnableSnykOSSQuickFixCodeActions = fmt.Sprintf("%v", c.IsSnykOSSQuickFixCodeActionsEnabled())
+	s.EnableSnykOpenBrowserActions = fmt.Sprintf("%v", c.IsSnykOpenBrowserActionEnabled())
+	s.EnableDeltaFindings = fmt.Sprintf("%v", c.IsDeltaFindingsEnabled())
+}
+
+// populateAdvancedSettings sets advanced configuration
+func populateAdvancedSettings(s *types.Settings, c *config.Config) {
+	s.SnykCodeApi = getSnykCodeApiUrl(c)
+	s.IntegrationName = c.IdeName()
+	s.IntegrationVersion = c.IdeVersion()
+	s.OsPlatform = c.OsPlatform()
+	s.OsArch = c.OsArch()
+	s.RuntimeName = c.RuntimeName()
+	s.RuntimeVersion = c.RuntimeVersion()
+	s.RequiredProtocolVersion = c.ClientProtocolVersion()
+	s.AdditionalEnv = "" // Not currently stored in config
+}
+
+// populatePointerFields sets pointer-based configuration fields
+func populatePointerFields(s *types.Settings, c *config.Config) {
 	filterSeverity := c.FilterSeverity()
 	s.FilterSeverity = &filterSeverity
 
-	// IssueViewOptions
 	issueViewOptions := c.IssueViewOptions()
 	s.IssueViewOptions = &issueViewOptions
 
-	// HoverVerbosity
 	hoverVerbosity := c.HoverVerbosity()
 	s.HoverVerbosity = &hoverVerbosity
 
-	// OutputFormat (not directly exposed, using empty string as default)
 	outputFormat := c.Format()
 	s.OutputFormat = &outputFormat
+}
 
-	// Populate FolderConfigs
-	if c.Workspace() != nil {
-		for _, f := range c.Workspace().Folders() {
-			fc := types.FolderConfig{
-				FolderPath: f.Path(),
-			}
-			// Try to get stored config to populate optional fields
-			storedFc := c.FolderConfig(fc.FolderPath)
-			if storedFc != nil {
-				fc.BaseBranch = storedFc.BaseBranch
-				fc.LocalBranches = storedFc.LocalBranches
-				fc.AdditionalParameters = storedFc.AdditionalParameters
-				fc.ReferenceFolderPath = storedFc.ReferenceFolderPath
-				fc.PreferredOrg = storedFc.PreferredOrg
-				fc.AutoDeterminedOrg = storedFc.AutoDeterminedOrg
-				fc.OrgMigratedFromGlobalConfig = storedFc.OrgMigratedFromGlobalConfig
-				fc.OrgSetByUser = storedFc.OrgSetByUser
-				fc.FeatureFlags = storedFc.FeatureFlags
-				fc.SastSettings = storedFc.SastSettings
-				fc.ScanCommandConfig = storedFc.ScanCommandConfig
-			}
-			s.FolderConfigs = append(s.FolderConfigs, fc)
-		}
+// populateFolderConfigs populates folder-specific configuration
+func populateFolderConfigs(s *types.Settings, c *config.Config) {
+	if c.Workspace() == nil {
+		return
 	}
 
-	return s
+	for _, f := range c.Workspace().Folders() {
+		fc := types.FolderConfig{
+			FolderPath: f.Path(),
+		}
+
+		// Merge with stored config if available
+		if storedFc := c.FolderConfig(fc.FolderPath); storedFc != nil {
+			fc.BaseBranch = storedFc.BaseBranch
+			fc.LocalBranches = storedFc.LocalBranches
+			fc.AdditionalParameters = storedFc.AdditionalParameters
+			fc.ReferenceFolderPath = storedFc.ReferenceFolderPath
+			fc.PreferredOrg = storedFc.PreferredOrg
+			fc.AutoDeterminedOrg = storedFc.AutoDeterminedOrg
+			fc.OrgMigratedFromGlobalConfig = storedFc.OrgMigratedFromGlobalConfig
+			fc.OrgSetByUser = storedFc.OrgSetByUser
+			fc.FeatureFlags = storedFc.FeatureFlags
+			fc.SastSettings = storedFc.SastSettings
+			fc.ScanCommandConfig = storedFc.ScanCommandConfig
+		}
+
+		s.FolderConfigs = append(s.FolderConfigs, fc)
+	}
+}
+
+// buildAdditionalOssParamsString converts additional OSS parameters to a space-separated string
+func buildAdditionalOssParamsString(params []string) string {
+	if len(params) == 0 {
+		return ""
+	}
+	result := ""
+	for _, param := range params {
+		result += param + " "
+	}
+	return result
 }
 
 // convertFilePathsToStrings converts []types.FilePath to []string

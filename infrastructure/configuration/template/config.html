@@ -19,10 +19,10 @@
 
             <div class="form-group">
                 <label for="token">Token</label>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="password" id="token" name="token" value="{{.Settings.Token}}" placeholder="Snyk API Token" style="flex: 1;">
-                    <button type="button" id="authenticate-btn" style="flex-shrink: 0;">Authenticate</button>
-                    <button type="button" id="logout-btn" class="secondary" style="flex-shrink: 0;">Logout</button>
+                <div class="button-group">
+                    <input type="password" id="token" name="token" value="{{.Settings.Token}}" placeholder="Snyk API Token">
+                    <button type="button" id="authenticate-btn">Authenticate</button>
+                    <button type="button" id="logout-btn" class="secondary">Logout</button>
                 </div>
             </div>
 
@@ -30,6 +30,11 @@
                 <label for="endpoint">Endpoint</label>
                 <input type="text" id="endpoint" name="endpoint" value="{{.Settings.Endpoint}}" placeholder="https://app.snyk.io/api">
                 <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: https://api.snyk.io or https://api.*.snykgov.io</span>
+            </div>
+
+            <div class="form-group">
+                <label for="organization">Organization</label>
+                <input type="text" id="organization" name="organization" value="{{.Settings.Organization}}" placeholder="Organization ID or slug">
             </div>
 
             <div class="form-group">
@@ -326,53 +331,29 @@
                     <label>Pre/Post Scan Commands</label>
                     <span class="description">Configure commands to run before/after scans for each product</span>
                     
-                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk Open Source</h4>
-                    <div style="margin-left: 10px;">
-                        <label for="folder_{{$index}}_scanConfig_oss_preScanCommand">Pre-Scan Command</label>
-                        <input type="text" id="folder_{{$index}}_scanConfig_oss_preScanCommand" name="folder_{{$index}}_scanConfig_oss_preScanCommand" placeholder="npm install" style="margin-top: 5px; margin-bottom: 5px;">
-                        <label class="checkbox-label" style="margin-bottom: 10px;">
-                            <input type="checkbox" name="folder_{{$index}}_scanConfig_oss_preScanOnlyReferenceFolder">
-                            Pre-Scan Only Reference Folder
-                        </label>
-                        <label for="folder_{{$index}}_scanConfig_oss_postScanCommand">Post-Scan Command</label>
-                        <input type="text" id="folder_{{$index}}_scanConfig_oss_postScanCommand" name="folder_{{$index}}_scanConfig_oss_postScanCommand" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="folder_{{$index}}_scanConfig_oss_postScanOnlyReferenceFolder">
-                            Post-Scan Only Reference Folder
-                        </label>
-                    </div>
+                    {{$products := list 
+                        (dict "name" "oss" "title" "Snyk Open Source" "prePlaceholder" "npm install" "postPlaceholder" "cleanup.sh")
+                        (dict "name" "code" "title" "Snyk Code" "prePlaceholder" "prepare.sh" "postPlaceholder" "cleanup.sh")
+                        (dict "name" "iac" "title" "Snyk IaC" "prePlaceholder" "terraform init" "postPlaceholder" "cleanup.sh")
+                    }}
                     
-                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk Code</h4>
-                    <div style="margin-left: 10px;">
-                        <label for="folder_{{$index}}_scanConfig_code_preScanCommand">Pre-Scan Command</label>
-                        <input type="text" id="folder_{{$index}}_scanConfig_code_preScanCommand" name="folder_{{$index}}_scanConfig_code_preScanCommand" placeholder="prepare.sh" style="margin-top: 5px; margin-bottom: 5px;">
-                        <label class="checkbox-label" style="margin-bottom: 10px;">
-                            <input type="checkbox" name="folder_{{$index}}_scanConfig_code_preScanOnlyReferenceFolder">
+                    {{range $products}}
+                    <h4 class="scan-config-title">{{.title}}</h4>
+                    <div class="scan-config-product">
+                        <label for="folder_{{$index}}_scanConfig_{{.name}}_preScanCommand">Pre-Scan Command</label>
+                        <input type="text" class="scan-config-input" id="folder_{{$index}}_scanConfig_{{.name}}_preScanCommand" name="folder_{{$index}}_scanConfig_{{.name}}_preScanCommand" placeholder="{{.prePlaceholder}}">
+                        <label class="checkbox-label scan-config-checkbox">
+                            <input type="checkbox" name="folder_{{$index}}_scanConfig_{{.name}}_preScanOnlyReferenceFolder">
                             Pre-Scan Only Reference Folder
                         </label>
-                        <label for="folder_{{$index}}_scanConfig_code_postScanCommand">Post-Scan Command</label>
-                        <input type="text" id="folder_{{$index}}_scanConfig_code_postScanCommand" name="folder_{{$index}}_scanConfig_code_postScanCommand" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
+                        <label for="folder_{{$index}}_scanConfig_{{.name}}_postScanCommand">Post-Scan Command</label>
+                        <input type="text" class="scan-config-input" id="folder_{{$index}}_scanConfig_{{.name}}_postScanCommand" name="folder_{{$index}}_scanConfig_{{.name}}_postScanCommand" placeholder="{{.postPlaceholder}}">
                         <label class="checkbox-label">
-                            <input type="checkbox" name="folder_{{$index}}_scanConfig_code_postScanOnlyReferenceFolder">
+                            <input type="checkbox" name="folder_{{$index}}_scanConfig_{{.name}}_postScanOnlyReferenceFolder">
                             Post-Scan Only Reference Folder
                         </label>
                     </div>
-                    
-                    <h4 style="margin-top: 15px; margin-bottom: 10px;">Snyk IaC</h4>
-                    <div style="margin-left: 10px;">
-                        <label for="folder_{{$index}}_scanConfig_iac_preScanCommand">Pre-Scan Command</label>
-                        <input type="text" id="folder_{{$index}}_scanConfig_iac_preScanCommand" name="folder_{{$index}}_scanConfig_iac_preScanCommand" placeholder="terraform init" style="margin-top: 5px; margin-bottom: 5px;">
-                        <label class="checkbox-label" style="margin-bottom: 10px;">
-                            <input type="checkbox" name="folder_{{$index}}_scanConfig_iac_preScanOnlyReferenceFolder">
-                            Pre-Scan Only Reference Folder
-                        </label>
-                        <label for="folder_{{$index}}_scanConfig_iac_postScanCommand">Post-Scan Command</label>
-                        <input type="text" id="folder_{{$index}}_scanConfig_iac_postScanCommand" name="folder_{{$index}}_scanConfig_iac_postScanCommand" placeholder="cleanup.sh" style="margin-top: 5px; margin-bottom: 5px;">
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="folder_{{$index}}_scanConfig_iac_postScanOnlyReferenceFolder">
-                            Post-Scan Only Reference Folder
-                        </label>
-                    </div>
+                    {{end}}
                 </div>
             </div>
             {{end}}

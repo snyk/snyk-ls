@@ -162,3 +162,38 @@ button.secondary {
 button.secondary:hover {
     background-color: var(--vscode-button-secondaryHoverBackground, #45494e);
 }
+
+/* Scan Configuration Styles */
+.scan-config-title {
+    margin-top: 15px;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
+.scan-config-product {
+    margin-left: 10px;
+}
+
+.scan-config-input {
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+.scan-config-checkbox {
+    margin-bottom: 10px;
+}
+
+/* Button Group for Authentication Section */
+.button-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.button-group input {
+    flex: 1;
+}
+
+.button-group button {
+    flex-shrink: 0;
+}
