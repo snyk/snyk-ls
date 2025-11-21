@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snyk Configuration</title>
+    <style nonce="{{.Nonce}}">
+        {{.Styles}}
+    </style>
+</head>
+<body>
+    <h1>Snyk Configuration</h1>
+    <form id="configForm">
+        
+        <!-- Core Authentication Settings -->
+        <div class="section">
+            <h2>Authentication</h2>
+
+            <div class="form-group">
+                <label for="token">Token</label>
+                <input type="password" id="token" name="token" value="{{.Settings.Token}}" placeholder="Snyk API Token">
+            </div>
+
+            <div class="form-group">
+                <label for="endpoint">Endpoint</label>
+                <input type="text" id="endpoint" name="endpoint" value="{{.Settings.Endpoint}}" placeholder="https://app.snyk.io/api">
+                <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: https://api.snyk.io or https://api.*.snykgov.io</span>
+            </div>
+
+            <div class="form-group">
+                <label for="organization">Organization</label>
+                <input type="text" id="organization" name="organization" value="{{.Settings.Organization}}" placeholder="Organization Slug">
+            </div>
+
+            <div class="form-group">
+                <label for="authenticationMethod">Authentication Method</label>
+                <select id="authenticationMethod" name="authenticationMethod">
+                    <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>Token</option>
+                    <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="automaticAuthentication" {{if eq .Settings.AutomaticAuthentication "true"}}checked{{end}}>
+                    Automatic Authentication
+                </label>
+            </div>
+        </div>
+
+        <!-- Product Activation -->
+        <div class="section">
+            <h2>Product Activation</h2>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="activateSnykOpenSource" {{if eq .Settings.ActivateSnykOpenSource "true"}}checked{{end}}>
+                    Activate Snyk Open Source
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="activateSnykCode" {{if eq .Settings.ActivateSnykCode "true"}}checked{{end}}>
+                    Activate Snyk Code
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="activateSnykIac" {{if eq .Settings.ActivateSnykIac "true"}}checked{{end}}>
+                    Activate Snyk IaC
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="activateSnykCodeSecurity" {{if eq .Settings.ActivateSnykCodeSecurity "true"}}checked{{end}}>
+                    Activate Snyk Code Security
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="activateSnykCodeQuality" {{if eq .Settings.ActivateSnykCodeQuality "true"}}checked{{end}}>
+                    Activate Snyk Code Quality
+                </label>
+            </div>
+        </div>
+
+        <!-- CLI and Paths -->
+        <div class="section">
+            <h2>CLI and Paths</h2>
+
+            <div class="form-group">
+                <label for="cliPath">CLI Path</label>
+                <input type="text" id="cliPath" name="cliPath" value="{{.Settings.CliPath}}" placeholder="Path to Snyk CLI">
+            </div>
+
+            <div class="form-group">
+                <label for="path">Path (Environment PATH)</label>
+                <input type="text" id="path" name="path" value="{{.Settings.Path}}" placeholder="Additional PATH directories">
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="manageBinariesAutomatically" {{if eq .Settings.ManageBinariesAutomatically "true"}}checked{{end}}>
+                    Manage Binaries Automatically
+                </label>
+            </div>
+        </div>
+
+        <!-- Security Settings -->
+        <div class="section">
+            <h2>Security Settings</h2>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="insecure" {{if eq .Settings.Insecure "true"}}checked{{end}}>
+                    Insecure (Skip SSL Verification)
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="enableTrustedFoldersFeature" {{if eq .Settings.EnableTrustedFoldersFeature "true"}}checked{{end}}>
+                    Enable Trusted Folders Feature
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="trustedFolders">Trusted Folders</label>
+                <input type="text" id="trustedFolders" name="trustedFolders" value="{{range .Settings.TrustedFolders}}{{.}},{{end}}" placeholder="Comma-separated paths">
+                <span class="description">Comma-separated list of trusted folder paths</span>
+            </div>
+        </div>
+
+        <!-- Operational Settings -->
+        <div class="section">
+            <h2>Operational Settings</h2>
+
+            <div class="form-group">
+                <label for="scanningMode">Scanning Mode</label>
+                <select id="scanningMode" name="scanningMode">
+                    <option value="auto" {{if eq .Settings.ScanningMode "auto"}}selected{{end}}>Auto</option>
+                    <option value="manual" {{if eq .Settings.ScanningMode "manual"}}selected{{end}}>Manual</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="sendErrorReports" {{if eq .Settings.SendErrorReports "true"}}checked{{end}}>
+                    Send Error Reports
+                </label>
+            </div>
+        </div>
+
+        <!-- Filter and Display Settings -->
+        <div class="section">
+            <h2>Filter and Display Settings</h2>
+
+            <div class="form-group">
+                <label>Filter Severity</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="filterSeverity_critical" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Critical}}checked{{end}}{{end}}>
+                        Critical
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="filterSeverity_high" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.High}}checked{{end}}{{end}}>
+                        High
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="filterSeverity_medium" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Medium}}checked{{end}}{{end}}>
+                        Medium
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="filterSeverity_low" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Low}}checked{{end}}{{end}}>
+                        Low
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="hoverVerbosity">Hover Verbosity (0-3)</label>
+                <input type="number" id="hoverVerbosity" name="hoverVerbosity" min="0" max="3" value="{{if .Settings.HoverVerbosity}}{{.Settings.HoverVerbosity}}{{else}}3{{end}}">
+            </div>
+
+            <div class="form-group">
+                <label for="outputFormat">Output Format</label>
+                <input type="text" id="outputFormat" name="outputFormat" value="{{if .Settings.OutputFormat}}{{.Settings.OutputFormat}}{{end}}" placeholder="json, text, etc.">
+            </div>
+
+            <div class="form-group">
+                <label>Issue View Options</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="issueViewOptions_openIssues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.OpenIssues}}checked{{end}}{{end}}>
+                        Show Open Issues
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="issueViewOptions_ignoredIssues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.IgnoredIssues}}checked{{end}}{{end}}>
+                        Show Ignored Issues
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feature Toggles -->
+        <div class="section">
+            <h2>Feature Toggles</h2>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="enableSnykLearnCodeActions" {{if eq .Settings.EnableSnykLearnCodeActions "true"}}checked{{end}}>
+                    Enable Snyk Learn Code Actions
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="enableSnykOSSQuickFixCodeActions" {{if eq .Settings.EnableSnykOSSQuickFixCodeActions "true"}}checked{{end}}>
+                    Enable Snyk OSS Quick Fix Code Actions
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="enableSnykOpenBrowserActions" {{if eq .Settings.EnableSnykOpenBrowserActions "true"}}checked{{end}}>
+                    Enable Snyk Open Browser Actions
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="enableDeltaFindings" {{if eq .Settings.EnableDeltaFindings "true"}}checked{{end}}>
+                    Enable Delta Findings
+                </label>
+            </div>
+        </div>
+
+        <!-- Advanced Settings -->
+        <div class="section">
+            <h2>Advanced Settings</h2>
+
+            <div class="form-group">
+                <label for="snykCodeApi">Snyk Code API URL</label>
+                <input type="text" id="snykCodeApi" name="snykCodeApi" value="{{.Settings.SnykCodeApi}}" placeholder="https://deeproxy.snyk.io">
+            </div>
+
+            <div class="form-group">
+                <label for="integrationName">Integration Name</label>
+                <input type="text" id="integrationName" name="integrationName" value="{{.Settings.IntegrationName}}" readonly>
+                <span class="description">Auto-populated by IDE</span>
+            </div>
+
+            <div class="form-group">
+                <label for="integrationVersion">Integration Version</label>
+                <input type="text" id="integrationVersion" name="integrationVersion" value="{{.Settings.IntegrationVersion}}" readonly>
+                <span class="description">Auto-populated by IDE</span>
+            </div>
+
+            <div class="form-group">
+                <label for="deviceId">Device ID</label>
+                <input type="text" id="deviceId" name="deviceId" value="{{.Settings.DeviceId}}" readonly>
+                <span class="description">Auto-generated</span>
+            </div>
+
+            <div class="form-group">
+                <label for="osPlatform">OS Platform</label>
+                <input type="text" id="osPlatform" name="osPlatform" value="{{.Settings.OsPlatform}}" readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="osArch">OS Architecture</label>
+                <input type="text" id="osArch" name="osArch" value="{{.Settings.OsArch}}" readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="runtimeName">Runtime Name</label>
+                <input type="text" id="runtimeName" name="runtimeName" value="{{.Settings.RuntimeName}}" readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="runtimeVersion">Runtime Version</label>
+                <input type="text" id="runtimeVersion" name="runtimeVersion" value="{{.Settings.RuntimeVersion}}" readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="requiredProtocolVersion">Required Protocol Version</label>
+                <input type="text" id="requiredProtocolVersion" name="requiredProtocolVersion" value="{{.Settings.RequiredProtocolVersion}}" readonly>
+                <span class="description">LSP protocol version</span>
+            </div>
+
+            <div class="form-group">
+                <label for="additionalParams">Additional CLI Parameters (Legacy)</label>
+                <input type="text" id="additionalParams" name="additionalParams" value="{{.Settings.AdditionalParams}}" placeholder="--debug --severity-threshold=high">
+                <span class="description">Use folder-specific additional parameters instead</span>
+            </div>
+
+            <div class="form-group">
+                <label for="additionalEnv">Additional Environment Variables (Legacy)</label>
+                <input type="text" id="additionalEnv" name="additionalEnv" value="{{.Settings.AdditionalEnv}}" placeholder="DEBUG=true">
+                <span class="description">KEY=value format</span>
+            </div>
+        </div>
+
+        <!-- Folder Specific Settings -->
+        <div class="section">
+            <h2>Folder Settings</h2>
+            {{if .Settings.FolderConfigs}}
+            {{range $index, $folder := .Settings.FolderConfigs}}
+            <div class="folder-config">
+                <h3>Folder: {{$folder.FolderPath}}</h3>
+                <input type="hidden" name="folder_{{$index}}_folderPath" value="{{$folder.FolderPath}}">
+
+                <div class="form-group">
+                    <label for="folder_{{$index}}_baseBranch">Base Branch</label>
+                    <input type="text" id="folder_{{$index}}_baseBranch" name="folder_{{$index}}_baseBranch" value="{{$folder.BaseBranch}}" placeholder="main">
+                </div>
+
+                <div class="form-group">
+                    <label for="folder_{{$index}}_localBranches">Local Branches</label>
+                    <input type="text" id="folder_{{$index}}_localBranches" name="folder_{{$index}}_localBranches" value="{{range $folder.LocalBranches}}{{.}},{{end}}" placeholder="feature-1,feature-2">
+                    <span class="description">Comma-separated branch names</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="folder_{{$index}}_additionalParameters">Additional CLI Parameters</label>
+                    <input type="text" id="folder_{{$index}}_additionalParameters" name="folder_{{$index}}_additionalParameters" value="{{range $p := $folder.AdditionalParameters}}{{$p}} {{end}}" placeholder="--severity-threshold=high">
+                    <span class="description">Space-separated arguments</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="folder_{{$index}}_referenceFolderPath">Reference Folder Path</label>
+                    <input type="text" id="folder_{{$index}}_referenceFolderPath" name="folder_{{$index}}_referenceFolderPath" value="{{$folder.ReferenceFolderPath}}" placeholder="/path/to/reference">
+                </div>
+
+                <div class="form-group">
+                    <label for="folder_{{$index}}_preferredOrg">Preferred Organization</label>
+                    <input type="text" id="folder_{{$index}}_preferredOrg" name="folder_{{$index}}_preferredOrg" value="{{$folder.PreferredOrg}}" placeholder="org-id">
+                </div>
+
+                <div class="form-group">
+                    <label for="folder_{{$index}}_autoDeterminedOrg">Auto-Determined Organization</label>
+                    <input type="text" id="folder_{{$index}}_autoDeterminedOrg" name="folder_{{$index}}_autoDeterminedOrg" value="{{$folder.AutoDeterminedOrg}}" readonly>
+                    <span class="description">Auto-populated</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="folder_{{$index}}_orgMigratedFromGlobalConfig" {{if $folder.OrgMigratedFromGlobalConfig}}checked{{end}}>
+                        Organization Migrated from Global Config
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="folder_{{$index}}_orgSetByUser" {{if $folder.OrgSetByUser}}checked{{end}}>
+                        Organization Set by User
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label for="folder_{{$index}}_featureFlags">Feature Flags (JSON)</label>
+                    <textarea id="folder_{{$index}}_featureFlags" name="folder_{{$index}}_featureFlags" rows="3" placeholder='{"flag": true}'>{{if $folder.FeatureFlags}}{{range $key, $value := $folder.FeatureFlags}}"{{$key}}": {{$value}},{{end}}{{end}}</textarea>
+                    <span class="description">JSON object of feature flags</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="folder_{{$index}}_sastSettings">SAST Settings (JSON)</label>
+                    <textarea id="folder_{{$index}}_sastSettings" name="folder_{{$index}}_sastSettings" rows="3" placeholder='{}' readonly>{{if $folder.SastSettings}}{{$folder.SastSettings}}{{end}}</textarea>
+                    <span class="description">Auto-populated SAST configuration</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="folder_{{$index}}_scanCommandConfig">Scan Command Config (JSON)</label>
+                    <textarea id="folder_{{$index}}_scanCommandConfig" name="folder_{{$index}}_scanCommandConfig" rows="3" placeholder='{}'>{{if $folder.ScanCommandConfig}}{{$folder.ScanCommandConfig}}{{end}}</textarea>
+                    <span class="description">Product-specific scan configurations</span>
+                </div>
+            </div>
+            {{end}}
+            {{else}}
+            <p>No folders configured. Open a workspace to configure folder-specific settings.</p>
+            {{end}}
+        </div>
+
+        <div class="actions">
+            <button type="button" id="save-config-btn">Save Configuration</button>
+            <button type="button" id="authenticate-btn" class="secondary">Authenticate</button>
+        </div>
+    </form>
+
+    <script nonce="{{.Nonce}}">
+        {{.Scripts}}
+    </script>
+</body>
+</html>
