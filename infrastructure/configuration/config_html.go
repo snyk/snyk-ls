@@ -1,0 +1,81 @@
+// Package configuration provides HTML rendering for the configuration dialog.
+// It uses Go templates to generate the configuration UI that is displayed to users
+// via the LSP protocol's window/showDocument mechanism.
+package configuration
+
+import (
+	"bytes"
+	_ "embed"
+	"html/template"
+
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
+)
+
+//go:embed template/config.html
+var configHtmlTemplate string
+
+//go:embed template/styles.css
+var configStylesTemplate string
+
+//go:embed template/scripts.js
+var configScriptsTemplate string
+
+type ConfigHtmlRenderer struct {
+	c        *config.Config
+	template *template.Template
+}
+
+func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
+	// Register custom template functions for better template reusability
+	funcMap := template.FuncMap{
+		"list": func(items ...interface{}) []interface{} {
+			return items
+		},
+		"dict": func(values ...interface{}) map[string]interface{} {
+			if len(values)%2 != 0 {
+				return nil
+			}
+			dict := make(map[string]interface{}, len(values)/2)
+			for i := 0; i < len(values); i += 2 {
+				key, ok := values[i].(string)
+				if !ok {
+					return nil
+				}
+				dict[key] = values[i+1]
+			}
+			return dict
+		},
+	}
+
+	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)
+	if err != nil {
+		c.Logger().Error().Msgf("Failed to parse config template: %s", err)
+		return nil, err
+	}
+
+	return &ConfigHtmlRenderer{
+		c:        c,
+		template: tmpl,
+	}, nil
+}
+
+// GetConfigHtml renders the configuration dialog HTML using the provided settings.
+// The returned HTML contains IDE placeholder variables (e.g., ${ideSaveConfig}, ${ideLogin})
+// that must be replaced by the IDE extension before displaying the content.
+func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
+	data := map[string]interface{}{
+		"Settings": settings,
+		"Styles":   template.CSS(configStylesTemplate),
+		"Scripts":  template.JS(configScriptsTemplate),
+		"Nonce":    "ideNonce", // Replaced by IDE extension
+	}
+
+	var buffer bytes.Buffer
+	if err := r.template.Execute(&buffer, data); err != nil {
+		r.c.Logger().Error().Msgf("Failed to execute config template: %v", err)
+		return ""
+	}
+
+	return buffer.String()
+}

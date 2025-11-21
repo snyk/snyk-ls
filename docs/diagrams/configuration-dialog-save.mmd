@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant User as User
+    participant Dialog as Configuration Dialog
+    participant Webview as Webview
+    participant IDE as IDE Client
+    participant LSP as Language Server
+    participant Config as Config System
+    
+    User->>Dialog: Modify settings
+    User->>Dialog: Click "Save Configuration"
+    
+    Dialog->>Dialog: collectData()<br/>Gather all form values
+    
+    Dialog->>Webview: Call window.ideSaveConfig(data)
+    
+    Webview->>IDE: Post message with config data
+    
+    IDE->>IDE: Validate configuration data
+    
+    IDE->>LSP: workspace/didChangeConfiguration<br/>{settings: data}
+    
+    LSP->>Config: Update configuration
+    Config->>Config: Validate settings
+    Config->>Config: Apply settings
+    Config->>Config: Persist to storage
+    Config-->>LSP: Configuration updated
+    
+    LSP-->>IDE: Acknowledgment
+    
+    IDE->>Webview: Show success message
+    Webview->>Dialog: Display "Configuration saved"
+    Dialog->>User: Visual feedback
+
