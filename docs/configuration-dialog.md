@@ -182,7 +182,59 @@ client.sendNotification('workspace/didChangeConfiguration', {
 });
 ```
 
-See [Saving Configuration Flow](#saving-configuration-flow) for the detailed sequence.
+**How the Language Server Processes Configuration:**
+
+1. **Receives Notification**: The language server receives the `workspace/didChangeConfiguration` notification
+2. **Validates Settings**: Validates all configuration values (e.g., endpoint URLs, numeric ranges)
+3. **Applies Configuration**: Updates the active configuration in memory
+4. **Persists Settings**: Saves configuration to persistent storage (typically in the user's config directory)
+5. **Applies Changes**: Immediately applies changes that affect behavior (e.g., enables/disables products, updates tokens)
+6. **Acknowledgment**: The notification is fire-and-forget (no response), but the IDE can verify success by:
+   - Monitoring for configuration-related errors via `window/showMessage`
+   - Re-executing `snyk.workspace.configuration` to see if changes were applied
+
+**Complete Implementation Example:**
+
+```typescript
+async function handleSaveConfig(configData: ConfigurationData) {
+  try {
+    // 1. Optional: Validate configuration data on IDE side
+    if (configData.endpoint && !isValidEndpoint(configData.endpoint)) {
+      showError('Invalid endpoint URL');
+      return;
+    }
+    
+    // 2. Send configuration to language server
+    await client.sendNotification('workspace/didChangeConfiguration', {
+      settings: configData
+    });
+    
+    // 3. Provide user feedback
+    showMessage('Configuration saved successfully');
+    
+    // 4. Optional: Refresh the dialog to show updated values
+    // await refreshConfigurationDialog();
+    
+  } catch (error) {
+    showError('Failed to save configuration: ' + error.message);
+  }
+}
+```
+
+**Important Notes:**
+- The `workspace/didChangeConfiguration` notification is **one-way** (no response expected)
+- All settings are optional - only include fields you want to change
+- The language server merges provided settings with existing configuration
+- Invalid settings are logged but don't fail the entire configuration update
+- Sensitive data (tokens) is encrypted when persisted to disk
+- Changes take effect immediately after the language server processes them
+
+**Error Handling:**
+- Monitor `window/showMessage` notifications for configuration-related errors from the language server
+- Validate critical fields (endpoint, paths) on the IDE side before sending
+- Provide immediate user feedback for both success and failure cases
+
+See [Saving Configuration Flow](#saving-configuration-flow) for the detailed sequence diagram.
 
 ### 5. Authentication Flow
 
