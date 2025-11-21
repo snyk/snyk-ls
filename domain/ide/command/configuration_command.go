@@ -41,20 +41,9 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 
 	uri := lsp.DocumentURI("snyk://settings")
 
-	params := types.ShowDocumentParams{
-		Uri:       uri,
-		External:  false,
-		TakeFocus: true,
-	}
+	cmd.logger.Debug().Str("method", method).Str("uri", string(uri)).Msg("returning configuration HTML")
 
-	cmd.logger.Debug().Str("method", method).Interface("params", params).Msg("sending showDocument request")
-	_, err = cmd.srv.Callback(ctx, "window/showDocument", params)
-	if err != nil {
-		cmd.logger.Err(err).Msg("failed to send window/showDocument callback")
-		return nil, err
-	}
-
-	// Return the HTML content so it can be verified by tests and potentially used by the client
+	// Return the HTML content for the client to display
 	return map[string]interface{}{
 		"uri":     string(uri),
 		"content": htmlContent,

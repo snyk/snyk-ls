@@ -32,15 +32,7 @@ The IDE triggers the configuration dialog by executing the LSP command `snyk.wor
 }
 ```
 
-**Callback Notification:**
-The server also sends a `window/showDocument` callback:
-```json
-{
-  "uri": "snyk://settings",
-  "external": false,
-  "takeFocus": true
-}
-```
+The command returns both the URI identifier and the complete HTML content. The IDE can directly use this response to display the configuration dialog without waiting for additional notifications.
 
 See [Opening Configuration Dialog Sequence](#opening-configuration-dialog) for the detailed flow.
 
@@ -48,24 +40,25 @@ See [Opening Configuration Dialog Sequence](#opening-configuration-dialog) for t
 
 The IDE should:
 
-1. Extract the `content` field from the command response
-2. Create a webview or browser component
-3. Load the HTML content
+1. Execute the command and receive the response
+2. Extract the `content` field from the command response
+3. Create a webview or browser component
 4. Inject IDE-specific JavaScript functions (see [Function Injection](#function-injection))
+5. Load the HTML content and display it
 
 **Example (conceptual):**
 ```typescript
-// Execute command
+// Execute command and receive response
 const response = await client.sendRequest('workspace/executeCommand', {
   command: 'snyk.workspace.configuration',
   arguments: []
 });
 
-// Extract HTML
+// Extract HTML from response
 const html = response.content;
 const uri = response.uri;
 
-// Create webview
+// Create webview and display
 const webview = createWebview();
 webview.html = injectFunctions(html);
 webview.show();
@@ -284,8 +277,6 @@ sequenceDiagram
     LSP->>HTML: Generate HTML with settings
     HTML-->>LSP: HTML content
     
-    LSP->>IDE: window/showDocument callback<br/>{uri: "snyk://settings", takeFocus: true}
-    
     LSP-->>IDE: Command response<br/>{uri: "snyk://settings", content: "<html>..."}
     
     IDE->>IDE: Extract HTML from response
@@ -450,10 +441,10 @@ sequenceDiagram
 
 ### Basic Integration
 - [ ] Execute `snyk.workspace.configuration` command
-- [ ] Extract HTML content from response
+- [ ] Extract HTML content from command response
 - [ ] Create webview/browser component for display
 - [ ] Inject `ideLogin`, `ideSaveConfig`, `ideLogout` functions
-- [ ] Handle `window/showDocument` callback
+- [ ] Display HTML content in webview
 
 ### Configuration Management
 - [ ] Parse configuration data from dialog

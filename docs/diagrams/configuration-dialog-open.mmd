@@ -15,8 +15,6 @@ sequenceDiagram
     LSP->>HTML: Generate HTML with settings
     HTML-->>LSP: HTML content
     
-    LSP->>IDE: window/showDocument callback<br/>{uri: "snyk://settings", takeFocus: true}
-    
     LSP-->>IDE: Command response<br/>{uri: "snyk://settings", content: "<html>..."}
     
     IDE->>IDE: Extract HTML from response

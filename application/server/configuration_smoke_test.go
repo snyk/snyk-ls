@@ -31,7 +31,7 @@ import (
 
 // Test_SmokeConfigurationDialog verifies that the configuration dialog:
 // 1. Can be triggered via workspace/executeCommand
-// 2. Sends window/showDocument callback with correct URI
+// 2. Returns response with URI and HTML content
 // 3. Generated HTML includes ALL settings fields from types.Settings
 // 4. Generated HTML includes ALL sub-fields from FolderConfig
 // 5. Includes authentication and logout triggers
@@ -40,7 +40,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 
 	// Setup server with LSP client
-	loc, jsonRPCRecorder := setupServer(t, c)
+	loc, _ := setupServer(t, c)
 	di.Init()
 
 	// Execute the configuration command via LSP
@@ -55,21 +55,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	err = response.UnmarshalResult(&result)
 	require.NoError(t, err, "Should unmarshal result")
 
-	// Verify window/showDocument callback was sent
-	callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/showDocument")
-	require.Greater(t, len(callbacks), 0, "Should have sent window/showDocument callback")
-
-	// Verify the callback parameters
-	var showDocParams types.ShowDocumentParams
-	err = callbacks[0].UnmarshalParams(&showDocParams)
-	require.NoError(t, err)
-
-	// Verify the URI is the settings URI
-	assert.Equal(t, sglsp.DocumentURI("snyk://settings"), showDocParams.Uri, "Should show settings URI")
-	assert.False(t, showDocParams.External, "Should open internally")
-	assert.True(t, showDocParams.TakeFocus, "Should take focus")
-
-	// Extract HTML content from command result
+	// Verify command response contains URI and HTML content
 	require.NotNil(t, result, "Command should return result")
 	require.Contains(t, result, "content", "Result should contain content")
 	require.Contains(t, result, "uri", "Result should contain uri")
