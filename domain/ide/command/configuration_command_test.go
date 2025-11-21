@@ -34,14 +34,8 @@ func TestConfigurationCommand_Execute(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// Verify the response contains uri and content
-	resultMap, ok := result.(map[string]interface{})
-	assert.True(t, ok, "Result should be a map")
-	assert.Contains(t, resultMap, "uri", "Result should contain uri")
-	assert.Contains(t, resultMap, "content", "Result should contain content")
-	assert.Equal(t, "snyk://settings", resultMap["uri"])
-	
-	content, ok := resultMap["content"].(string)
-	assert.True(t, ok, "Content should be a string")
-	assert.NotEmpty(t, content, "HTML content should not be empty")
+	// Verify the response is an HTML string
+	html, ok := result.(string)
+	assert.True(t, ok, "Result should be a string")
+	assert.NotEmpty(t, html, "HTML content should not be empty")
 }

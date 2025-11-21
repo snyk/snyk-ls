@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog"
-	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/configuration"
@@ -39,15 +38,10 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 		return nil, fmt.Errorf("failed to generate config html")
 	}
 
-	uri := lsp.DocumentURI("snyk://settings")
+	cmd.logger.Debug().Str("method", method).Msg("returning configuration HTML")
 
-	cmd.logger.Debug().Str("method", method).Str("uri", string(uri)).Msg("returning configuration HTML")
-
-	// Return the HTML content for the client to display
-	return map[string]interface{}{
-		"uri":     string(uri),
-		"content": htmlContent,
-	}, nil
+	// Return the HTML content directly for the client to display
+	return htmlContent, nil
 }
 
 // constructSettingsFromConfig reconstructs a Settings object from the active configuration.

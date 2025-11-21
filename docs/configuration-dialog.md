@@ -25,14 +25,11 @@ The IDE triggers the configuration dialog by executing the LSP command `snyk.wor
 - **Arguments**: `[]` (no arguments required)
 
 **Response:**
-```json
-{
-  "uri": "snyk://settings",
-  "content": "<html>... full HTML content ...</html>"
-}
+```
+"<html>... full HTML content ...</html>"
 ```
 
-The command returns both the URI identifier and the complete HTML content. The IDE can directly use this response to display the configuration dialog without waiting for additional notifications.
+The command returns the complete HTML content as a string. The IDE can directly display this in a webview without any additional processing.
 
 See [Opening Configuration Dialog Sequence](#opening-configuration-dialog) for the detailed flow.
 
@@ -48,15 +45,11 @@ The IDE should:
 
 **Example (conceptual):**
 ```typescript
-// Execute command and receive response
-const response = await client.sendRequest('workspace/executeCommand', {
+// Execute command and receive HTML
+const html = await client.sendRequest('workspace/executeCommand', {
   command: 'snyk.workspace.configuration',
   arguments: []
 });
-
-// Extract HTML from response
-const html = response.content;
-const uri = response.uri;
 
 // Create webview and display
 const webview = createWebview();

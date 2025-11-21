@@ -50,19 +50,10 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	})
 	require.NoError(t, err, "Configuration command should execute successfully")
 
-	// Unmarshal the result
-	var result map[string]interface{}
-	err = response.UnmarshalResult(&result)
+	// Unmarshal the result - should be an HTML string
+	var html string
+	err = response.UnmarshalResult(&html)
 	require.NoError(t, err, "Should unmarshal result")
-
-	// Verify command response contains URI and HTML content
-	require.NotNil(t, result, "Command should return result")
-	require.Contains(t, result, "content", "Result should contain content")
-	require.Contains(t, result, "uri", "Result should contain uri")
-	assert.Equal(t, "snyk://settings", result["uri"], "Result URI should match")
-
-	html, ok := result["content"].(string)
-	require.True(t, ok, "Content should be a string")
 	require.NotEmpty(t, html, "HTML content should not be empty")
 
 	// Now verify the HTML content that was returned by the command
