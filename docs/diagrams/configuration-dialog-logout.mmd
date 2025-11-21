@@ -1,0 +1,25 @@
+sequenceDiagram
+    participant User as User
+    participant Dialog as Configuration Dialog
+    participant IDE as IDE Client
+    participant LSP as Language Server
+    participant Auth as Auth Service
+    participant Storage as Credential Storage
+    
+    User->>Dialog: Click "Logout"
+    Dialog->>IDE: Call window.ideLogout()
+    
+    IDE->>LSP: workspace/executeCommand<br/>{command: "snyk.logout"}
+    
+    LSP->>Auth: Clear authentication state
+    Auth->>Storage: Remove credentials
+    Storage-->>Auth: Credentials cleared
+    Auth-->>LSP: Logout complete
+    
+    LSP-->>IDE: Command completed
+    
+    IDE->>IDE: Clear local token storage
+    
+    IDE->>Dialog: Refresh with logged-out state
+    Dialog->>User: Show "Not authenticated" status
+
