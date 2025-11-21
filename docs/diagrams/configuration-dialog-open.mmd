@@ -15,10 +15,9 @@ sequenceDiagram
     LSP->>HTML: Generate HTML with settings
     HTML-->>LSP: HTML content
     
-    LSP-->>IDE: Command response<br/>{uri: "snyk://settings", content: "<html>..."}
+    LSP-->>IDE: Command response<br/>"<html>..." (HTML string)
     
-    IDE->>IDE: Extract HTML from response
     IDE->>IDE: Create webview
-    IDE->>IDE: Inject IDE functions
+    IDE->>IDE: Inject IDE functions into HTML
     IDE->>IDE: Display HTML in webview
 
