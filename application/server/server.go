@@ -307,7 +307,7 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 				},
 			},
 		}
-		logger.Debug().Str("method", method).Any("result", result).Msg("SENDING")
+		defer logger.Debug().Str("method", method).Any("result", result).Msg("SENDING")
 		return result, nil
 	})
 }

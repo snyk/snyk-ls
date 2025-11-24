@@ -120,6 +120,7 @@ func handlePullModel(c *config.Config, srv *jrpc2.Server, ctx context.Context) (
 	}
 
 	emptySettings := types.Settings{}
+	c.Logger().Debug().Interface("settings", fetchedSettings[0]).Msg("Fetched settings from workspace/configuration")
 	if !reflect.DeepEqual(fetchedSettings[0], emptySettings) {
 		if !c.IsLSPInitialized() {
 			// First time - this is initialization
