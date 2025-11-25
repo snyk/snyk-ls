@@ -118,6 +118,9 @@ func handlePullModel(c *config.Config, srv *jrpc2.Server, ctx context.Context) (
 	if err != nil {
 		return false, err
 	}
+	if len(fetchedSettings) == 0 {
+		return false, nil
+	}
 
 	emptySettings := types.Settings{}
 	c.Logger().Debug().Interface("settings", fetchedSettings[0]).Msg("Fetched settings from workspace/configuration")
