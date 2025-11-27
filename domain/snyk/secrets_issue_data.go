@@ -21,7 +21,7 @@ type SecretsIssueData struct {
 	Regions        []Region           `json:"regions,omitempty"`
 	IsSecurityType bool               `json:"isSecurityType"`
 	PriorityScore  int                `json:"priorityScore"`
-	MatchingIssues []SecretsIssueData `json:"matchingIssues"`
+	MatchingIssues []SecretsIssueData `json:"matchingIssues"` // TODO check for secrets
 }
 
 func (s SecretsIssueData) GetKey() string {

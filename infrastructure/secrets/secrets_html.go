@@ -19,6 +19,9 @@ var detailsHtmlTemplate string
 //go:embed template/styles.css
 var panelStylesTemplate string
 
+//go:embed template/scripts.js
+var customScripts string
+
 type HtmlRenderer struct {
 	c              *config.Config
 	globalTemplate *template.Template

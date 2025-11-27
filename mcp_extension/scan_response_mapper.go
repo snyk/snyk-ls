@@ -156,6 +156,12 @@ func convertIssueToData(issue types.Issue) IssueData {
 			data.CWEs = ad.CWE
 			data.Dataflow = ad.DataFlow
 			data.FingerPrint = issue.GetFingerprint()
+
+		case snyk.SecretsIssueData:
+			data.RuleID = ad.RuleId
+			data.CWEs = ad.CWE
+			data.FingerPrint = issue.GetFingerprint()
+			// TODO check lesson secrets
 		}
 	}
 

@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/product"
@@ -1271,6 +1272,20 @@ type CodeIssueData struct {
 	PriorityScore   int               `json:"priorityScore"`
 	HasAIFix        bool              `json:"hasAIFix"`
 	DataFlow        []DataflowElement `json:"dataFlow,omitempty"`
+}
+
+type SecretsIssueData struct {
+	Key            string        `json:"key"`
+	Title          string        `json:"title"`
+	Message        string        `json:"message"`
+	Rule           string        `json:"rule"`
+	RuleId         string        `json:"ruleId"`
+	CWE            []string      `json:"cwe"`
+	Markers        []Marker      `json:"markers,omitempty"`
+	FilePath       string        `json:"filePath"`
+	Regions        []snyk.Region `json:"regions,omitempty"` // TODO check for secrets
+	IsSecurityType bool          `json:"isSecurityType"`
+	PriorityScore  int           `json:"priorityScore"`
 }
 
 type Point = [2]int
