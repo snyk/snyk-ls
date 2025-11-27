@@ -22,15 +22,14 @@ import (
 	"strconv"
 
 	"github.com/gomarkdown/markdown"
+	"github.com/snyk/code-client-go/sarif"
+	sglsp "github.com/sourcegraph/go-lsp"
 	stripmd "github.com/writeas/go-strip-markdown"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/product"
-
-	sglsp "github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -190,6 +189,8 @@ func ToDiagnostics(issues []types.Issue) []types.Diagnostic {
 			diagnostic.Data = getCodeIssue(issue)
 		} else if issue.GetProduct() == product.ProductOpenSource {
 			diagnostic.Data = getOssIssue(issue)
+		} else if issue.GetProduct() == product.ProductSecrets {
+			computeMultipleDiagnostics(issue, s, &diagnostics)
 		}
 		diagnostics = append(diagnostics, diagnostic)
 	}
@@ -424,4 +425,102 @@ func ToHovers(issues []types.Issue) (hovers []hover.Hover[hover.Context]) {
 		})
 	}
 	return hovers
+}
+
+func computeMultipleDiagnostics(issue types.Issue, s string, diagnostics *[]types.Diagnostic) {
+	additionalData, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
+	if !ok {
+		return
+	}
+	for _, region := range additionalData.Regions {
+		myRange := computeRange(region)
+		diagnostic := types.Diagnostic{
+			Range:           ToRange(myRange),
+			Severity:        ToSeverity(issue.GetSeverity()),
+			Code:            issue.GetID(),
+			Source:          string(issue.GetProduct()),
+			Message:         issue.GetMessage(),
+			CodeDescription: types.CodeDescription{Href: types.Uri(s)},
+		}
+		diagnostic.Data = getSecretsIssue(issue) // multiple diagnostics for a single issue.
+
+		*diagnostics = append(*diagnostics, diagnostic)
+	}
+}
+
+func getSecretsIssue(issue types.Issue) types.ScanIssue {
+	additionalData, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
+	if !ok {
+		return types.ScanIssue{}
+	}
+
+	markers := make([]types.Marker, 0, len(additionalData.Markers))
+	for _, marker := range additionalData.Markers {
+		positions := make([]types.MarkerPosition, 0)
+		for _, pos := range marker.Pos {
+			positions = append(positions, types.MarkerPosition{
+				CodeFlowPositionInFile: types.CodeFlowPositionInFile{
+					Rows: pos.Rows,
+					Cols: pos.Cols,
+				},
+				File: pos.File,
+			})
+		}
+
+		markers = append(markers, types.Marker{
+			Msg: marker.Msg,
+			Pos: positions,
+		})
+	}
+
+	scanIssue := types.ScanIssue{
+		Id:                  additionalData.Key,
+		Title:               additionalData.Title,
+		Severity:            issue.GetSeverity().String(),
+		FilePath:            issue.GetAffectedFilePath(),
+		ContentRoot:         issue.GetContentRoot(),
+		Range:               ToRange(issue.GetRange()),
+		IsIgnored:           issue.GetIsIgnored(),
+		IsNew:               issue.GetIsNew(),
+		FilterableIssueType: additionalData.GetFilterableIssueType(),
+		AdditionalData: types.SecretsIssueData{
+			Key:            additionalData.Key,
+			Title:          additionalData.Title,
+			Message:        additionalData.Message,
+			Rule:           additionalData.Rule,
+			RuleId:         additionalData.RuleId,
+			CWE:            additionalData.CWE,
+			Markers:        markers,
+			FilePath:       additionalData.FilePath,
+			Regions:        additionalData.Regions,
+			IsSecurityType: additionalData.IsSecurityType,
+			PriorityScore:  additionalData.PriorityScore,
+		},
+	}
+	// TODO check for secrets: ignore details.
+	if scanIssue.IsIgnored {
+		scanIssue.IgnoreDetails =
+			types.IgnoreDetails{
+				Category:   issue.GetIgnoreDetails().Category,
+				Reason:     issue.GetIgnoreDetails().Reason,
+				Expiration: issue.GetIgnoreDetails().Expiration,
+				IgnoredOn:  issue.GetIgnoreDetails().IgnoredOn,
+				IgnoredBy:  issue.GetIgnoreDetails().IgnoredBy,
+			}
+	}
+
+	return scanIssue
+}
+
+func computeRange(region sarif.Region) types.Range {
+	return types.Range{
+		Start: types.Position{
+			Line:      region.StartLine - 1,
+			Character: region.StartColumn - 1,
+		},
+		End: types.Position{
+			Line:      region.EndLine - 1,
+			Character: region.EndColumn,
+		},
+	}
 }

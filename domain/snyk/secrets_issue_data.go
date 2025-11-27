@@ -3,10 +3,9 @@ package snyk
 import (
 	"encoding/json"
 
+	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/snyk-ls/internal/product"
 )
-
-type Region struct{}
 
 type SecretsIssueData struct {
 	// Unique key identifying an issue in the whole result set
@@ -18,10 +17,10 @@ type SecretsIssueData struct {
 	CWE            []string           `json:"cwe"`
 	Markers        []Marker           `json:"markers,omitempty"`
 	FilePath       string             `json:"filePath"`
-	Regions        []Region           `json:"regions,omitempty"`
+	Regions        []sarif.Region     `json:"regions,omitempty"` // TODO check type for secrets.
 	IsSecurityType bool               `json:"isSecurityType"`
 	PriorityScore  int                `json:"priorityScore"`
-	MatchingIssues []SecretsIssueData `json:"matchingIssues"` // TODO check for secrets
+	MatchingIssues []SecretsIssueData `json:"matchingIssues"` // TODO check need for secrets.
 }
 
 func (s SecretsIssueData) GetKey() string {
