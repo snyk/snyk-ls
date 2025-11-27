@@ -680,7 +680,8 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 	}
 	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,
-		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
+		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}},
+	}
 	_, err := loc.Client.Call(ctx, "initialize", params)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
@@ -710,7 +711,8 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 
 	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,
-		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
+		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}},
+	}
 	_, err := loc.Client.Call(ctx, "initialize", params)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
@@ -735,7 +737,8 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	}
 	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,
-		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}}}
+		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}},
+	}
 	_, err := loc.Client.Call(ctx, "initialize", params)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
@@ -795,7 +798,7 @@ ignore:
         created: 2024-07-26T13:55:05.417Z
 patch: {}
 `
-	err = os.WriteFile(string(snykFilePath), []byte(yamlContent), 0600)
+	err = os.WriteFile(string(snykFilePath), []byte(yamlContent), 0o600)
 	assert.NoError(t, err)
 	return snykFilePath, types.FilePath(temp)
 }
@@ -850,7 +853,6 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 	c.Workspace().AddFolder(folder)
 
 	_, err = loc.Client.Call(ctx, textDocumentDidOpenOperation, didOpenParams)
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -888,10 +890,10 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 			URI:     fileUri,
 			Version: 1,
 			Text:    "",
-		}}
+		},
+	}
 
 	_, err = loc.Client.Call(ctx, textDocumentDidOpenOperation, didOpenParams)
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1049,7 +1051,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	var cloneTargetDir, err = storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger())
 	defer func(path string) { _ = os.RemoveAll(path) }(string(cloneTargetDir))
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -1088,7 +1090,6 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(types.FilePath(testPath))},
 		Position:     testPosition,
 	})
-
 	if err != nil {
 		t.Fatal(err, "Hover retrieval failed")
 	}
@@ -1234,5 +1235,104 @@ func Test_handleProtocolVersion(t *testing.T) {
 		)
 		// give goroutine of callback function a chance to fail the test
 		time.Sleep(time.Second)
+	})
+}
+
+func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
+
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	workspaceDir := types.FilePath(t.TempDir())
+	workspaceFolder := types.WorkspaceFolder{
+		Uri:  uri.PathToUri(workspaceDir),
+		Name: "workspace",
+	}
+
+	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{
+			Added: []types.WorkspaceFolder{workspaceFolder},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c.SetTrustedFolderFeatureEnabled(true)
+	c.SetTrustedFolders([]types.FilePath{workspaceDir})
+
+	outsideDir := types.FilePath(t.TempDir())
+	outsideFilePath := types.FilePath(filepath.Join(string(outsideDir), "outside.js"))
+	err = os.WriteFile(string(outsideFilePath), []byte("console.log('test');"), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("textDocument/didSave", func(t *testing.T) {
+		didSaveParams := sglsp.DidSaveTextDocumentParams{
+			TextDocument: sglsp.TextDocumentIdentifier{
+				URI: uri.PathToUri(outsideFilePath),
+			},
+		}
+
+		_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
+		assert.NoError(t, err)
+
+		folder := c.Workspace().GetFolderContaining(outsideFilePath)
+		assert.Nil(t, folder)
+	})
+
+	t.Run("textDocument/codeAction", func(t *testing.T) {
+		codeActionParams := types.CodeActionParams{
+			TextDocument: sglsp.TextDocumentIdentifier{
+				URI: uri.PathToUri(outsideFilePath),
+			},
+			Range: sglsp.Range{
+				Start: sglsp.Position{Line: 0, Character: 0},
+				End:   sglsp.Position{Line: 0, Character: 10},
+			},
+		}
+
+		rsp, err := loc.Client.Call(ctx, "textDocument/codeAction", codeActionParams)
+		assert.NoError(t, err)
+
+		var actions []types.LSPCodeAction
+		if rsp != nil {
+			err = rsp.UnmarshalResult(&actions)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		assert.Empty(t, actions)
+	})
+
+	t.Run("textDocument/didChange", func(t *testing.T) {
+		didChangeParams := sglsp.DidChangeTextDocumentParams{
+			TextDocument: sglsp.VersionedTextDocumentIdentifier{
+				TextDocumentIdentifier: sglsp.TextDocumentIdentifier{
+					URI: uri.PathToUri(outsideFilePath),
+				},
+				Version: 1,
+			},
+		}
+
+		_, err := loc.Client.Call(ctx, "textDocument/didChange", didChangeParams)
+		assert.NoError(t, err)
+	})
+
+	t.Run("textDocument/didOpen", func(t *testing.T) {
+		didOpenParams := sglsp.DidOpenTextDocumentParams{
+			TextDocument: sglsp.TextDocumentItem{
+				URI: uri.PathToUri(outsideFilePath),
+			},
+		}
+
+		_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+		assert.NoError(t, err)
 	})
 }
