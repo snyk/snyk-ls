@@ -415,6 +415,8 @@ func (i *Issue) GetFilterableIssueType() product.FilterableIssueType {
 		return product.FilterableIssueTypeOpenSource
 	case product.ProductInfrastructureAsCode:
 		return product.FilterableIssueTypeInfrastructureAsCode
+	case product.ProductSecrets:
+		return product.FilterableIssueTypeSecrets
 	case product.ProductCode:
 		switch i.IssueType {
 		case types.CodeSecurityVulnerability:
@@ -467,6 +469,12 @@ func (i *Issue) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		i.AdditionalData = iacData
+	case "SecretsIssueData":
+		var secretsData SecretsIssueData
+		if err := json.Unmarshal(temp.AdditionalData, &secretsData); err != nil {
+			return err
+		}
+		i.AdditionalData = secretsData
 	case "OssIssueData":
 		var ossData OssIssueData
 		if err := json.Unmarshal(temp.AdditionalData, &ossData); err != nil {
