@@ -167,6 +167,7 @@ type Config struct {
 	isSnykCodeEnabled                bool
 	isSnykOssEnabled                 bool
 	isSnykIacEnabled                 bool
+	isSnykSecretsEnabled             bool
 	isSnykAdvisorEnabled             bool
 	manageBinariesAutomatically      bool
 	logPath                          string
@@ -264,6 +265,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c.isErrorReportingEnabled = true
 	c.isSnykOssEnabled = true
 	c.isSnykIacEnabled = true
+	c.isSnykSecretsEnabled = true
 	c.manageBinariesAutomatically = true
 	c.logPath = ""
 	c.snykCodeAnalysisTimeout = c.snykCodeAnalysisTimeoutFromEnv()
@@ -437,6 +439,13 @@ func (c *Config) IsSnykIacEnabled() bool {
 	defer c.m.RUnlock()
 
 	return c.isSnykIacEnabled
+}
+
+func (c *Config) IsSnykSecretsEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.isSnykSecretsEnabled
 }
 
 func (c *Config) IsSnykAdvisorEnabled() bool {
