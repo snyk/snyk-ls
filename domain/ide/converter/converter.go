@@ -22,10 +22,10 @@ import (
 	"strconv"
 
 	"github.com/gomarkdown/markdown"
-	"github.com/snyk/code-client-go/sarif"
 	sglsp "github.com/sourcegraph/go-lsp"
 	stripmd "github.com/writeas/go-strip-markdown"
 
+	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
