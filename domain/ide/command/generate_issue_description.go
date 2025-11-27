@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
+	"github.com/snyk/snyk-ls/infrastructure/secrets"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -63,6 +64,8 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 		return cmd.getCodeHtml(c, logger, issue)
 	} else if issue.GetProduct() == product.ProductOpenSource {
 		return getOssHtml(c, logger, issue)
+	} else if issue.GetProduct() == product.ProductSecrets {
+		return cmd.getSecretsHtml(c, logger, issue)
 	}
 
 	return nil, nil
@@ -92,6 +95,16 @@ func getIacHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (str
 	htmlRender, err := iac.NewHtmlRenderer(c)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create IaC HTML render")
+		return "", err
+	}
+	html := htmlRender.GetDetailsHtml(issue)
+	return html, nil
+}
+
+func (cmd *generateIssueDescription) getSecretsHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (string, error) {
+	htmlRender, err := secrets.NewHtmlRenderer(c)
+	if err != nil {
+		logger.Err(err).Msg("Cannot create Secrets HTML render")
 		return "", err
 	}
 	html := htmlRender.GetDetailsHtml(issue)
