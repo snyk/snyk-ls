@@ -80,7 +80,7 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(config *config.Config, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)) *Scanner {
+func New(config *config.Config, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, notifier notification.Notifier) *Scanner {
 	sc := &Scanner{
 		SnykApiClient: apiClient,
 		errorReporter: reporter,
@@ -90,7 +90,6 @@ func New(config *config.Config, apiClient snyk_api.SnykApiClient, reporter codeC
 		learnService:  learnService,
 		notifier:      notifier,
 		bundleHashes:  map[types.FilePath]string{},
-		codeScanner:   codeScanner,
 		C:             config,
 	}
 	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
