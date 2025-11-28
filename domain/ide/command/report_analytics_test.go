@@ -31,13 +31,13 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -48,7 +48,11 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 
 		// Setup workspace with 2 folders
-		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 2)
+		folderPaths := []types.FilePath{
+			types.FilePath("/fake/test-folder-0"),
+			types.FilePath("/fake/test-folder-1"),
+		}
+		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 		testInput := "some data"
 		cmd := setupReportAnalyticsCommand(t, c, testInput)
@@ -104,7 +108,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 		// Setup workspace with no folders
-		testutils.SetupFakeWorkspace(t, c, 0)
+		_, _ = workspaceutil.SetupWorkspace(t, c)
 
 		testInput := "some data"
 		cmd := setupReportAnalyticsCommand(t, c, testInput)
@@ -148,7 +152,10 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with 2 folders
-	testutils.SetupFakeWorkspace(t, c, 2)
+	_, _ = workspaceutil.SetupWorkspace(t, c,
+		types.FilePath("/fake/test-folder-0"),
+		types.FilePath("/fake/test-folder-1"),
+	)
 
 	testInput := types.AnalyticsEventParam{
 		InteractionType: "plugin installed",

@@ -77,8 +77,8 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssue("id1", path1),
-			NewMockIssue("id2", path2),
+			testutil.NewMockIssue("id1", path1),
+			testutil.NewMockIssue("id2", path2),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -103,8 +103,8 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssue("id1", filePath),
-			NewMockIssue("id2", filePath),
+			testutil.NewMockIssue("id1", filePath),
+			testutil.NewMockIssue("id2", filePath),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -127,9 +127,9 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssue("id1", path1),
-			NewMockIssue("id2", path2),
-			NewMockIssue("id3", path3),
+			testutil.NewMockIssue("id1", path1),
+			testutil.NewMockIssue("id2", path2),
+			testutil.NewMockIssue("id3", path3),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -152,9 +152,9 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssue("id1", path1),
-			NewMockIssue("id2", path1),
-			NewMockIssue("id3", path1),
+			testutil.NewMockIssue("id1", path1),
+			testutil.NewMockIssue("id2", path1),
+			testutil.NewMockIssue("id3", path1),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -175,11 +175,11 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	path2 := types.FilePath(filepath.Join(string(f.path), "path2"))
-	issue1 := NewMockIssue("id1", path1)
-	issue2 := NewMockIssue("id2", path1)
-	issue3 := NewMockIssue("id3", path1)
-	issue4 := NewMockIssue("id1", path2)
-	issue5 := NewMockIssue("id3", path2)
+	issue1 := testutil.NewMockIssue("id1", path1)
+	issue2 := testutil.NewMockIssue("id2", path1)
+	issue3 := testutil.NewMockIssue("id3", path1)
+	issue4 := testutil.NewMockIssue("id1", path2)
+	issue5 := testutil.NewMockIssue("id3", path2)
 
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
@@ -216,11 +216,11 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssueWithSeverity("id1", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Critical),
-			NewMockIssueWithSeverity("id2", types.FilePath(filepath.Join(string(f.path), string(path1))), types.High),
-			NewMockIssueWithSeverity("id3", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Medium),
-			NewMockIssueWithSeverity("id4", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Low),
-			NewMockIssueWithSeverity("id5", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Critical),
+			testutil.NewMockIssueWithSeverity("id1", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Critical),
+			testutil.NewMockIssueWithSeverity("id2", types.FilePath(filepath.Join(string(f.path), string(path1))), types.High),
+			testutil.NewMockIssueWithSeverity("id3", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Medium),
+			testutil.NewMockIssueWithSeverity("id4", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Low),
+			testutil.NewMockIssueWithSeverity("id5", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Critical),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -270,11 +270,11 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssueWithIgnored("id1", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
-			NewMockIssueWithIgnored("id2", types.FilePath(filepath.Join(string(f.path), string(path1))), false),
-			NewMockIssueWithIgnored("id3", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
-			NewMockIssueWithIgnored("id4", types.FilePath(filepath.Join(string(f.path), string(path1))), false),
-			NewMockIssueWithIgnored("id5", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
+			testutil.NewMockIssueWithIgnored("id1", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
+			testutil.NewMockIssueWithIgnored("id2", types.FilePath(filepath.Join(string(f.path), string(path1))), false),
+			testutil.NewMockIssueWithIgnored("id3", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
+			testutil.NewMockIssueWithIgnored("id4", types.FilePath(filepath.Join(string(f.path), string(path1))), false),
+			testutil.NewMockIssueWithIgnored("id5", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     false,
@@ -320,8 +320,8 @@ func Test_Clear(t *testing.T) {
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssue("id1", path1),
-			NewMockIssue("id2", path2),
+			testutil.NewMockIssue("id1", path1),
+			testutil.NewMockIssue("id2", path2),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -526,10 +526,10 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	f := NewMockFolder(c, notifier)
 	setupWorkspaceWithFolder(c, f, notifier)
 	filePath := types.FilePath(filepath.Join(string(f.path), "path1"))
-	mockOpenSourceIssue := NewMockIssue("id1", filePath)
+	mockOpenSourceIssue := testutil.NewMockIssue("id1", filePath)
 	removedIssueType := product.FilterableIssueTypeOpenSource
 	mockOpenSourceIssue.Product = product.ProductOpenSource
-	mockIacIssue := NewMockIssue("id2", filePath)
+	mockIacIssue := testutil.NewMockIssue("id2", filePath)
 	mockIacIssue.Product = product.ProductInfrastructureAsCode
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
@@ -567,7 +567,7 @@ func Test_processResults_ShouldSendSuccess(t *testing.T) {
 	f, scanNotifier := NewMockFolderWithScanNotifier(c, notifier)
 	setupWorkspaceWithFolder(c, f, notifier)
 	var path = "path1"
-	mockCodeIssue := NewMockIssue("id1", types.FilePath(filepath.Join(string(f.path), path)))
+	mockCodeIssue := testutil.NewMockIssue("id1", types.FilePath(filepath.Join(string(f.path), path)))
 
 	data := types.ScanData{
 		Product:           product.ProductOpenSource,
@@ -590,7 +590,7 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 	f, scanNotifier := NewMockFolderWithScanNotifier(c, notifier)
 	setupWorkspaceWithFolder(c, f, notifier)
 	const filePath = "path1"
-	mockCodeIssue := NewMockIssue("id1", filePath)
+	mockCodeIssue := testutil.NewMockIssue("id1", filePath)
 
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
@@ -629,7 +629,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	require.NoError(t, err)
 
 	filePath := types.FilePath(filepath.Join(string(f.path), "path1"))
-	mockCodeIssue := NewMockIssue("id1", filePath)
+	mockCodeIssue := testutil.NewMockIssue("id1", filePath)
 
 	data := types.ScanData{
 		Product:           product.ProductOpenSource,
@@ -801,30 +801,6 @@ func NewMockFolder(c *config.Config, notifier notification.Notifier) *Folder {
 func NewMockFolderWithScanNotifier(c *config.Config, notifier notification.Notifier) (*Folder, *scanner.MockScanNotifier) {
 	scanNotifier := scanner.NewMockScanNotifier()
 	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanNotifier, notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService()), scanNotifier
-}
-
-func NewMockIssue(id string, path types.FilePath) *snyk.Issue {
-	return &snyk.Issue{
-		ID:               id,
-		AffectedFilePath: path,
-		Product:          product.ProductOpenSource,
-		Severity:         types.Medium,
-		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
-	}
-}
-
-func NewMockIssueWithSeverity(id string, path types.FilePath, severity types.Severity) *snyk.Issue {
-	issue := NewMockIssue(id, path)
-	issue.Severity = severity
-
-	return issue
-}
-
-func NewMockIssueWithIgnored(id string, path types.FilePath, ignored bool) *snyk.Issue {
-	issue := NewMockIssue(id, path)
-	issue.IsIgnored = ignored
-
-	return issue
 }
 
 func GetValueFromMap(m *xsync.MapOf[types.FilePath, []types.Issue], key types.FilePath) []types.Issue {

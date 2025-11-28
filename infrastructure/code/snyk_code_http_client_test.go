@@ -26,9 +26,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -46,7 +46,8 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		// Setup workspace with a folder, but try to access a different path
-		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[0],
@@ -71,7 +72,8 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		c.UpdateApiEndpoints("https://api.snykgov.io")
 
 		// Setup workspace but configure folder without org
-		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[0],
@@ -95,7 +97,11 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		c.UpdateApiEndpoints("https://api.snykgov.io")
 
 		// Setup workspace with 2 folders
-		_, folderPaths := testutils.SetupFakeWorkspace(t, c, 2)
+		folderPaths := []types.FilePath{
+			types.FilePath("/fake/test-folder-0"),
+			types.FilePath("/fake/test-folder-1"),
+		}
+		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 		folder1UUID, _ := uuid.NewRandom()
 		folder2UUID, _ := uuid.NewRandom()
@@ -243,7 +249,8 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 func setupFakeWorkspaceFolderWithSAST(t *testing.T, c *config.Config, localEngineURL string) (types.FilePath, error) {
 	t.Helper()
 
-	_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 	folderPath := folderPaths[0]
 
 	sastResponse := sast_contract.SastResponse{

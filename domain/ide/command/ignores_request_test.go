@@ -14,11 +14,11 @@ import (
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
-	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
@@ -120,7 +120,8 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 			c := testutil.UnitTest(t)
 
 			// Setup fake workspace
-			_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+			folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+			_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 			contentRoot := folderPaths[0]
 
 			// Configure folder with org
@@ -406,7 +407,8 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	const testFolderOrg = "test-folder-org"
 
 	// Setup fake workspace with the folder
-	_, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 	folderPath := folderPaths[0]
 
 	folderConfig := &types.FolderConfig{
@@ -445,7 +447,7 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithGlobalOrgFallback(t *testing.T) 
 	const testGlobalOrg = "test-global-org"
 
 	// Setup fake workspace with one folder, but we'll send analytics for a path outside of it
-	testutils.SetupFakeWorkspace(t, c, 1)
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/fake/test-folder-0"))
 
 	// Set a global org in the config
 	c.SetOrganization(testGlobalOrg)
@@ -468,4 +470,38 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithGlobalOrgFallback(t *testing.T) 
 	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
 	actualOrg := captured.Config.Get(configuration.ORGANIZATION)
 	assert.Equal(t, testGlobalOrg, actualOrg, "analytics should fall back to global org when folder org cannot be determined")
+}
+
+func Test_submitIgnoreRequest_initializeCreateConfiguration_FallsBackToGlobalOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	globalOrg := "00000000-0000-0000-0000-000000000004"
+	c.SetOrganization(globalOrg)
+
+	folderPath := types.FilePath("/fake/test-folder")
+
+	// Set up workspace with the folder
+	// This is required for FolderOrganizationForSubPath to work (used by initializeCreateConfiguration)
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath)
+
+	// Verify FolderOrganization() returns the global org (fallback behavior)
+	folderOrg := c.FolderOrganization(folderPath)
+	assert.Equal(t, globalOrg, folderOrg, "FolderOrganization should fall back to global org when no folder org is configured")
+
+	// Create command
+	cmd := &submitIgnoreRequest{
+		command: types.CommandData{
+			Arguments: []any{"create", "issue1", "wont_fix", "test reason", "2025-12-31"},
+		},
+		c: c,
+	}
+
+	// Test initializeCreateConfiguration - when FolderOrganization returns the global org,
+	// it sets the org in the config (which is the global org)
+	engine := c.Engine()
+	gafConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), "finding1", folderPath)
+	require.NoError(t, err)
+	configOrg := gafConfig.GetString(configuration.ORGANIZATION)
+	// When FolderOrganization returns the global org, initializeCreateConfiguration sets it in the config
+	assert.Equal(t, globalOrg, configOrg, "Config should use global org when folder org is not configured (fallback behavior)")
 }
