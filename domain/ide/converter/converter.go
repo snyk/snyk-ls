@@ -494,7 +494,7 @@ func getSecretsIssue(issue types.Issue) types.ScanIssue {
 			FilePath:       additionalData.FilePath,
 			Regions:        additionalData.Regions,
 			IsSecurityType: additionalData.IsSecurityType,
-			PriorityScore:  additionalData.PriorityScore,
+			PriorityScore:  *additionalData.PriorityScore,
 		},
 	}
 	// TODO check for secrets: ignore details.

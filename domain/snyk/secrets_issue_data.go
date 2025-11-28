@@ -19,7 +19,7 @@ type SecretsIssueData struct {
 	FilePath       string             `json:"filePath"`
 	Regions        []sarif.Region     `json:"regions,omitempty"` // TODO check type for secrets.
 	IsSecurityType bool               `json:"isSecurityType"`
-	PriorityScore  int                `json:"priorityScore"`
+	PriorityScore  *int               `json:"priorityScore"`
 	MatchingIssues []SecretsIssueData `json:"matchingIssues"` // TODO check need for secrets.
 }
 

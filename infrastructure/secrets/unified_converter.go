@@ -3,8 +3,10 @@ package secrets
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/snyk/code-client-go/sarif"
 	codeClient "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -42,9 +44,9 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 	issues := []types.Issue{}
 	for _, trIssue := range issuesFromTestResult {
 		title := trIssue.GetTitle()
-		secretsIssueData, err := buildSecretsIssueData(ctx, trIssue, affectedFilePath)
+		secretsIssueData, err := buildSecretsIssueData(ctx, trIssue)
 		if err != nil {
-			logger.Warn().Err(err).Msg("failed to build oss issue data")
+			logger.Warn().Err(err).Msg("failed to build secrets issue data")
 			continue
 		}
 		formattedMessage := buildFormattedMessage(title, trIssue.GetDescription(), trIssue.GetSeverity())
@@ -77,7 +79,7 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 			CWEs:             secretsIssueData.CWE,
 			IssueType:        types.SecretsIssues,
 			LessonUrl:        lessonURL.Url,
-			// TODO check handle in infrastructure/secrets/converter.go:computeMultipleDiagnostics
+			// TODO check handling in infrastructure/secrets/converter.go::computeMultipleDiagnostics
 			//Range: trIssue.GetSourceLocations(),
 		}
 
@@ -104,8 +106,39 @@ func buildFormattedMessage(title, description, severity string) string {
 func buildSecretsIssueData(
 	ctx context.Context,
 	trIssue testapi.Issue,
-	affectedFilePath types.FilePath,
-) (*snyk.SecretsIssueData, error) {
-	// TODO add mapping
-	return nil, nil
+) (snyk.SecretsIssueData, error) {
+	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "buildSecretsIssueData").Logger()
+	logger.Debug().Interface("test api issue", trIssue.GetID()).Msg("building secrets issue data")
+
+	slices.Sort(trIssue.GetCWEs())
+	filePath := ctx2.FilePathFromContext(ctx)
+	regs := computeRegionsFromSourceLocations(trIssue.GetSourceLocations())
+
+	data := snyk.SecretsIssueData{
+		Key:            trIssue.GetID(),
+		Title:          trIssue.GetTitle(),
+		Rule:           "name", // TODO check name exists in Problem json.RawMessage ??
+		RuleId:         trIssue.GetID(),
+		CWE:            trIssue.GetCWEs(),
+		FilePath:       string(filePath),
+		Regions:        regs,
+		Markers:        make([]snyk.Marker, 0), // TODO convert markers from ??
+		IsSecurityType: true,
+		PriorityScore:  nil, // We will add risk score for Secrets in the future.
+	}
+	return data, nil
+}
+
+// Compute sarif.Regions from testapi.SourceLocations.
+func computeRegionsFromSourceLocations(locs []testapi.SourceLocation) []sarif.Region {
+	regs := make([]sarif.Region, 0)
+	for _, loc := range locs {
+		regs = append(regs, sarif.Region{
+			StartLine:   loc.FromLine,
+			EndLine:     *loc.ToLine,
+			StartColumn: *loc.ToColumn,
+			EndColumn:   *loc.ToColumn,
+		})
+	}
+	return regs
 }
