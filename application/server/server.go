@@ -212,8 +212,6 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializeParams) (any, error) {
 		method := "initializeHandler"
 		logger := c.Logger().With().Str("method", method).Logger()
-		// we can only log, after we add the token to the list of forbidden outputs
-		defer logger.Info().Any("params", params).Msg("RECEIVING")
 
 		c.SetClientCapabilities(params.Capabilities)
 		setClientInformation(c, params)
@@ -308,6 +306,8 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 				},
 			},
 		}
+		// we can only log, after we add the token to the list of forbidden outputs
+		logger.Debug().Any("params", params).Msg("RECEIVING")
 		logger.Debug().Str("method", method).Any("result", result).Msg("SENDING")
 		return result, nil
 	})

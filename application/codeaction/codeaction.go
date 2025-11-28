@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited All rights reserved.
+ * © 2023-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,13 +77,17 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 		return nil
 	}
 	path := uri.PathFromUri(params.TextDocument.URI)
+	folder := c.c.Workspace().GetFolderContaining(path)
+	if folder == nil {
+		c.logger.Debug().Any("path", path).Msg("file not in workspace folder, skipping code actions")
+		return nil
+	}
+
 	r := converter.FromRange(params.Range)
 	issues := c.IssuesProvider.IssuesForRange(path, r)
-	logMsg := fmt.Sprint("Found ", len(issues), " issues for path ", path, " and range ", r)
-	c.logger.Debug().Msg(logMsg)
+	c.logger.Debug().Any("path", path).Any("range", r).Msgf("Found %d issues", len(issues))
 
-	folderPath := c.c.Workspace().GetFolderContaining(path)
-	codeConsistentIgnoresEnabled := c.featureFlagService.GetFromFolderConfig(folderPath.Path(), featureflag.SnykCodeConsistentIgnores)
+	codeConsistentIgnoresEnabled := c.featureFlagService.GetFromFolderConfig(folder.Path(), featureflag.SnykCodeConsistentIgnores)
 
 	var filteredIssues []types.Issue
 	if !codeConsistentIgnoresEnabled {
@@ -100,8 +104,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 			}
 			filteredIssues = append(filteredIssues, issue)
 		}
-		logMsg = fmt.Sprint("Filtered to ", len(filteredIssues), " issues for path ", path, " and range ", r)
-		c.logger.Debug().Msg(logMsg)
+		c.logger.Debug().Any("path", path).Any("range", r).Msgf("Filtered to %d issues", len(issues))
 	}
 
 	quickFixGroupables := c.getQuickFixGroupablesAndCache(filteredIssues)

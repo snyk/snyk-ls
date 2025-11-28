@@ -70,6 +70,7 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 // - window.__ideSaveConfig__(jsonString): Save configuration
 // - window.__ideLogin__(): Trigger authentication
 // - window.__ideLogout__(): Trigger logout
+// Folder configs are filtered to only show folders that are currently in the workspace.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	// Determine folder/solution label based on IDE
 	folderLabel := "Folder"
@@ -77,8 +78,11 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		folderLabel = "Solution"
 	}
 
+	// Filter folder configs to only include those in the current workspace
+	filteredSettings := filterFolderConfigs(settings, r.c)
+
 	data := map[string]interface{}{
-		"Settings":    settings,
+		"Settings":    filteredSettings,
 		"Styles":      template.CSS(configStylesTemplate),
 		"Scripts":     template.JS(configScriptsTemplate),
 		"Nonce":       "ideNonce", // Replaced by IDE extension
@@ -92,6 +96,33 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	}
 
 	return buffer.String()
+}
+
+// filterFolderConfigs filters the settings to only include folder configs
+// that correspond to folders currently in the workspace.
+func filterFolderConfigs(settings types.Settings, c *config.Config) types.Settings {
+	// If no workspace, return settings with empty folder configs
+	if c.Workspace() == nil {
+		settings.FolderConfigs = []types.FolderConfig{}
+		return settings
+	}
+
+	// Build a map of workspace folder paths for O(1) lookup
+	workspaceFolders := make(map[types.FilePath]bool)
+	for _, folder := range c.Workspace().Folders() {
+		workspaceFolders[folder.Path()] = true
+	}
+
+	// Filter folder configs to only include those in the workspace
+	filteredConfigs := make([]types.FolderConfig, 0, len(settings.FolderConfigs))
+	for _, fc := range settings.FolderConfigs {
+		if workspaceFolders[fc.FolderPath] {
+			filteredConfigs = append(filteredConfigs, fc)
+		}
+	}
+
+	settings.FolderConfigs = filteredConfigs
+	return settings
 }
 
 // isVisualStudio checks if the integration name indicates Visual Studio
