@@ -56,7 +56,7 @@ var (
 	snykApiClient               snyk_api.SnykApiClient
 	snykCodeScanner             *code.Scanner
 	infrastructureAsCodeScanner *iac.Scanner
-	secretsScanner              *secrets.Scanner
+	secretsScanner              types.ProductScanner
 	openSourceScanner           types.ProductScanner
 	scanInitializer             initialize.Initializer
 	authenticationService       authentication.AuthenticationService
@@ -140,7 +140,7 @@ func initInfrastructure(c *config.Config) {
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
-	secretsScanner = secrets.New(c, snykApiClient, codeErrorReporter, learnService, notifier)
+	secretsScanner = secrets.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
 	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner)
