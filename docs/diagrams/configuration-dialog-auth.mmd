@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant User as User
+    participant Dialog as Configuration Dialog
+    participant IDE as IDE Client
+    participant Auth as Auth Service
+    participant LSP as Language Server
+    participant Snyk as Snyk API
+    
+    User->>Dialog: Click "Authenticate"
+    Dialog->>IDE: Call window.ideLogin()
+    
+    IDE->>Auth: Initiate authentication
+    
+    alt OAuth Flow
+        Auth->>Snyk: Request OAuth authorization
+        Snyk-->>User: Open browser with auth page
+        User->>Snyk: Approve authorization
+        Snyk->>Auth: OAuth callback with code
+        Auth->>Snyk: Exchange code for token
+        Snyk-->>Auth: Access token
+    else Token Authentication
+        Auth->>User: Prompt for API token
+        User->>Auth: Provide token
+    end
+    
+    Auth-->>IDE: Authentication successful<br/>{token: "..."}
+    
+    IDE->>LSP: workspace/didChangeConfiguration<br/>{settings: {token: "..."}}
+    
+    LSP->>Snyk: Verify token
+    Snyk-->>LSP: Token valid
+    
+    LSP-->>IDE: Configuration updated
+    
+    IDE->>Dialog: Refresh with authenticated state
+    Dialog->>User: Show "Authenticated" status
+
