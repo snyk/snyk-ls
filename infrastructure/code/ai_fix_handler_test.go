@@ -130,3 +130,62 @@ func Test_getExplainEndpoint(t *testing.T) {
 		assert.Equal(t, expectedEndpoint, actualEndpoint.String())
 	})
 }
+
+func Test_getExplainEndpoint_UsesFolderOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+
+	// Set up two folders with different orgs
+	folderPath1 := types.FilePath("/fake/test-folder-1")
+	folderPath2 := types.FilePath("/fake/test-folder-2")
+	folderOrg1, _ := uuid.NewRandom()
+	folderOrg2, _ := uuid.NewRandom()
+
+	// Set up workspace with the folders
+	// This is required for FolderOrganizationForSubPath to work (used by getExplainEndpoint)
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
+
+	// Configure folder 1 with org1
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		FolderPath:                  folderPath1,
+		PreferredOrg:                folderOrg1.String(),
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
+
+	// Configure folder 2 with org2
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		FolderPath:                  folderPath2,
+		PreferredOrg:                folderOrg2.String(),
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
+
+	// Test folder 1
+	t.Run("folder 1", func(t *testing.T) {
+		endpoint, err := getExplainEndpoint(c, folderPath1)
+		require.NoError(t, err, "getExplainEndpoint should succeed for folder 1")
+		require.NotNil(t, endpoint, "Endpoint should not be nil")
+
+		// Verify the endpoint URL contains the correct org
+		// The endpoint format is: {apiUrl}/rest/orgs/{org}/explain-fix
+		assert.Contains(t, endpoint.Path, folderOrg1.String(), "Endpoint should contain folder 1's org")
+		assert.NotContains(t, endpoint.Path, folderOrg2.String(), "Endpoint should not contain folder 2's org")
+	})
+
+	// Test folder 2
+	t.Run("folder 2", func(t *testing.T) {
+		endpoint, err := getExplainEndpoint(c, folderPath2)
+		require.NoError(t, err, "getExplainEndpoint should succeed for folder 2")
+		require.NotNil(t, endpoint, "Endpoint should not be nil")
+
+		// Verify the endpoint URL contains the correct org
+		assert.Contains(t, endpoint.Path, folderOrg2.String(), "Endpoint should contain folder 2's org")
+		assert.NotContains(t, endpoint.Path, folderOrg1.String(), "Endpoint should not contain folder 1's org")
+	})
+
+	// Verify the orgs are different
+	assert.NotEqual(t, folderOrg1.String(), folderOrg2.String(), "Folder orgs should be different")
+}
