@@ -44,7 +44,7 @@
         var snykRegex = /^https:\/\/api\..*\.snyk\.io/;
         var snykgovRegex = /^https:\/\/api\..*\.snykgov\.io/;
         
-        return snykRegex.test(url) || snykgovRegex.test(url) || url === "https://app.snyk.io/api";
+        return snykRegex.test(url) || snykgovRegex.test(url) || url === "https://api.snyk.io";
     }
 
     // Collect form data
