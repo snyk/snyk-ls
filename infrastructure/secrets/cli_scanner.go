@@ -271,9 +271,7 @@ func (cliScanner *CLIScanner) updateSDKs(workDir types.FilePath) []string {
 func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 	ctx context.Context,
 	scanOutput any,
-	workDir types.FilePath,
 	path types.FilePath,
-	format string,
 ) (issues []types.Issue) {
 	issues, err := ProcessScanResults(
 		ctx,
@@ -509,7 +507,7 @@ func (cliScanner *CLIScanner) scanInternal(
 	}
 
 	// convert scan results into issues
-	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workDir, path, cliScanner.config.Format())
+	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, path)
 
 	// mark scan done
 	cliScanner.mutex.Lock()
