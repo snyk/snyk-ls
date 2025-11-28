@@ -61,7 +61,6 @@ func constructSettingsFromConfig(c *config.Config) types.Settings {
 	}
 
 	populateProductSettings(&s, c)
-	populateCliSettings(&s, c)
 	populateSecuritySettings(&s, c)
 	populateOperationalSettings(&s, c)
 	populateFeatureToggles(&s, c)
@@ -79,22 +78,6 @@ func populateProductSettings(s *types.Settings, c *config.Config) {
 	s.ActivateSnykIac = fmt.Sprintf("%v", c.IsSnykIacEnabled())
 	s.ActivateSnykCodeSecurity = fmt.Sprintf("%v", c.IsSnykCodeSecurityEnabled())
 	s.ActivateSnykCodeQuality = fmt.Sprintf("%v", !c.IsSnykCodeSecurityEnabled())
-}
-
-// populateCliSettings sets CLI-related configuration
-func populateCliSettings(s *types.Settings, c *config.Config) {
-	if c.CliSettings() != nil {
-		s.Insecure = fmt.Sprintf("%v", c.CliSettings().Insecure)
-		s.CliPath = c.CliSettings().Path()
-		s.AdditionalParams = buildAdditionalOssParamsString(c.CliSettings().AdditionalOssParameters)
-	} else {
-		s.Insecure = "false"
-		s.CliPath = ""
-		s.AdditionalParams = ""
-	}
-
-	s.Path = c.Engine().GetConfiguration().GetString("PATH")
-	s.ManageBinariesAutomatically = fmt.Sprintf("%v", c.ManageBinariesAutomatically())
 }
 
 // populateSecuritySettings sets security-related configuration
@@ -177,18 +160,6 @@ func populateFolderConfigs(s *types.Settings, c *config.Config) {
 
 		s.FolderConfigs = append(s.FolderConfigs, fc)
 	}
-}
-
-// buildAdditionalOssParamsString converts additional OSS parameters to a space-separated string
-func buildAdditionalOssParamsString(params []string) string {
-	if len(params) == 0 {
-		return ""
-	}
-	result := ""
-	for _, param := range params {
-		result += param + " "
-	}
-	return result
 }
 
 // convertFilePathsToStrings converts []types.FilePath to []string

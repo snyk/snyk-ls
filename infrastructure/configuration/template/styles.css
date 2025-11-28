@@ -1,3 +1,4 @@
+/* Bootstrap overrides for IDE theme compatibility */
 body {
     font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
     font-size: var(--vscode-font-size, 13px);
@@ -5,6 +6,23 @@ body {
     background-color: var(--vscode-editor-background, #1e1e1e);
     padding: 20px;
     margin: 0;
+}
+
+/* Override Bootstrap defaults to match IDE theme */
+.row {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.col-md-6 {
+    padding-left: 10px;
+    padding-right: 10px;
+    display: flex;
+}
+
+/* Make sections stretch to full height in side-by-side layout */
+.col-md-6 > .section {
+    flex: 1;
 }
 
 h1 {
@@ -196,4 +214,54 @@ button.secondary:hover {
 
 .button-group button {
     flex-shrink: 0;
+}
+
+/* Collapsible folder styles */
+.folder-toggle {
+    color: var(--vscode-editor-foreground, #ffffff);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-bottom: 1px solid var(--vscode-panel-border, #454545);
+    padding: 10px 0 !important;
+    margin-bottom: 0;
+    background-color: transparent;
+}
+
+.folder-toggle:hover {
+    color: var(--vscode-editor-foreground, #ffffff);
+    text-decoration: none;
+    background-color: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.05));
+}
+
+.folder-toggle:focus {
+    box-shadow: none;
+    outline: 1px solid var(--vscode-focusBorder, #007acc);
+}
+
+.collapse-icon {
+    transition: transform 0.2s ease;
+    font-size: 12px;
+}
+
+.folder-toggle[aria-expanded="true"] .collapse-icon {
+    transform: rotate(180deg);
+}
+
+.collapse {
+    transition: height 0.35s ease;
+}
+
+.folder-content {
+    padding-top: 15px;
+}
+
+/* Tooltip badge styling */
+.badge.bg-secondary[data-bs-toggle="tooltip"] {
+    margin-left: 8px;
+    vertical-align: middle;
+    cursor: help;
+    font-size: 11px;
+    padding: 2px 6px;
 }

@@ -58,79 +58,48 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 
 	// Now verify the HTML content that was returned by the command
 	t.Run("Verify HTML Content from Command Response", func(t *testing.T) {
-		// Verify all GLOBAL settings are present in HTML
+		// Verify VISIBLE settings in simplified UI are present in HTML
 		t.Run("Global Settings Fields", func(t *testing.T) {
 			t.Helper()
 			// Core authentication settings
 			assertFieldPresent(t, html, "token", "Token field")
 			assertFieldPresent(t, html, "endpoint", "Endpoint field")
+			assertFieldPresent(t, html, "authenticationMethod", "AuthenticationMethod field")
+			assertFieldPresent(t, html, "insecure", "Insecure field")
 
-			// Product activation settings
+			// Product activation settings (Scan Configuration section)
 			assertFieldPresent(t, html, "activateSnykOpenSource", "ActivateSnykOpenSource field")
 			assertFieldPresent(t, html, "activateSnykCode", "ActivateSnykCode field")
 			assertFieldPresent(t, html, "activateSnykIac", "ActivateSnykIac field")
 			assertFieldPresent(t, html, "activateSnykCodeSecurity", "ActivateSnykCodeSecurity field")
 			assertFieldPresent(t, html, "activateSnykCodeQuality", "ActivateSnykCodeQuality field")
-
-			// CLI and path settings
-			assertFieldPresent(t, html, "cliPath", "CliPath field")
-			assertFieldPresent(t, html, "path", "Path field")
-
-			// Security and trust settings
-			assertFieldPresent(t, html, "insecure", "Insecure field")
-			assertFieldPresent(t, html, "enableTrustedFoldersFeature", "EnableTrustedFoldersFeature field")
-
-			// Operational settings
-			assertFieldPresent(t, html, "sendErrorReports", "SendErrorReports field")
-			assertFieldPresent(t, html, "manageBinariesAutomatically", "ManageBinariesAutomatically field")
 			assertFieldPresent(t, html, "scanningMode", "ScanningMode field")
-			assertFieldPresent(t, html, "authenticationMethod", "AuthenticationMethod field")
-
-			// Advanced settings
-			assertFieldPresent(t, html, "snykCodeApi", "SnykCodeApi field")
-
-			// Feature toggles
-			assertFieldPresent(t, html, "enableSnykLearnCodeActions", "EnableSnykLearnCodeActions field")
-			assertFieldPresent(t, html, "enableSnykOSSQuickFixCodeActions", "EnableSnykOSSQuickFixCodeActions field")
-			assertFieldPresent(t, html, "enableSnykOpenBrowserActions", "EnableSnykOpenBrowserActions field")
-			assertFieldPresent(t, html, "enableDeltaFindings", "EnableDeltaFindings field")
+			assertFieldPresent(t, html, "organization", "Organization field")
 
 			// Filter and display settings
 			assertFieldPresent(t, html, "filterSeverity", "FilterSeverity field")
-			assertFieldPresent(t, html, "hoverVerbosity", "HoverVerbosity field")
-			assertFieldPresent(t, html, "outputFormat", "OutputFormat field")
-
-			// Legacy folder-level settings (TODO: move to folder config)
-			assertFieldPresent(t, html, "additionalParams", "AdditionalParams field")
-			assertFieldPresent(t, html, "additionalEnv", "AdditionalEnv field")
-			assertFieldPresent(t, html, "trustedFolders", "TrustedFolders field")
-
-			// Issue view options (complex object)
 			assertFieldPresent(t, html, "issueViewOptions", "IssueViewOptions field")
+			assertFieldPresent(t, html, "deltaFindings", "DeltaFindings field")
+
+			// Advanced settings (legacy additional params only)
+			assertFieldPresent(t, html, "additionalParams", "AdditionalParams field")
 		})
 
 		t.Run("Folder-Specific Settings Fields", func(t *testing.T) {
 			// Verify folder configs section exists
 			assert.Contains(t, html, "Folder Settings", "Folder Settings section should be present")
 
-			// Folder-specific fields are only present if there are configured folders
-			// In a smoke test environment without folders, these won't be rendered
-			// Just verify the section and template structure exist
+			// Folder-specific fields in simplified UI
+			// Only visible fields: additionalParameters, riskScoreThreshold, orgSetByUser, preferredOrg, scan config
 			if strings.Contains(html, "folderPath") {
-				// If folders are present, verify their fields
+				// If folders are present, verify their VISIBLE fields
 				assertFieldPresent(t, html, "folderPath", "FolderPath field")
-				assertFieldPresent(t, html, "baseBranch", "BaseBranch field")
-				assertFieldPresent(t, html, "localBranches", "LocalBranches field")
 				assertFieldPresent(t, html, "additionalParameters", "AdditionalParameters field")
-				assertFieldPresent(t, html, "referenceFolderPath", "ReferenceFolderPath field")
-				assertFieldPresent(t, html, "preferredOrg", "PreferredOrg field")
-				assertFieldPresent(t, html, "autoDeterminedOrg", "AutoDeterminedOrg field")
-				assertFieldPresent(t, html, "orgMigratedFromGlobalConfig", "OrgMigratedFromGlobalConfig field")
-				assertFieldPresent(t, html, "orgSetByUser", "OrgSetByUser field")
-				assertFieldPresent(t, html, "featureFlags", "FeatureFlags field")
 				assertFieldPresent(t, html, "riskScoreThreshold", "RiskScoreThreshold field")
+				assertFieldPresent(t, html, "orgSetByUser", "OrgSetByUser field")
+				assertFieldPresent(t, html, "preferredOrg", "PreferredOrg field")
 
-				// Scan command config fields (pre/post scan commands per product)
+				// Scan command config fields (pre/post scan commands per product - in hidden section)
 				assertFieldPresent(t, html, "scanConfig_oss_preScanCommand", "ScanConfig OSS PreScanCommand field")
 				assertFieldPresent(t, html, "scanConfig_oss_postScanCommand", "ScanConfig OSS PostScanCommand field")
 				assertFieldPresent(t, html, "scanConfig_code_preScanCommand", "ScanConfig Code PreScanCommand field")
@@ -190,6 +159,9 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 
 			// Verify endpoint field has a value attribute (will be from config)
 			assert.Regexp(t, `id="endpoint"[^>]*value="[^"]*"`, html, "Endpoint field should have a value")
+
+			// Verify token field has a value attribute
+			assert.Regexp(t, `id="token"[^>]*value="[^"]*"`, html, "Token field should have a value")
 
 			// Verify organization field has a value attribute
 			assert.Regexp(t, `id="organization"[^>]*value="[^"]*"`, html, "Organization field should have a value")

@@ -197,6 +197,49 @@
 
     var originalEndpoint = "";
 
+    // Toggle organization field based on auto-org checkbox
+    function toggleOrgField(folderIndex) {
+        var autoOrgCheckbox = get('folder_' + folderIndex + '_autoOrg');
+        var orgInput = get('folder_' + folderIndex + '_preferredOrg');
+        var orgSetByUserInput = get('folder_' + folderIndex + '_orgSetByUser');
+
+        if (!autoOrgCheckbox || !orgInput || !orgSetByUserInput) {
+            return;
+        }
+
+        var isAutoOrg = autoOrgCheckbox.checked;
+        var preferredOrg = orgInput.getAttribute('data-preferred-org') || '';
+        var autoOrg = orgInput.getAttribute('data-auto-org') || '';
+
+        if (isAutoOrg) {
+            // Auto select is ON: show AutoDeterminedOrg (readonly)
+            orgInput.value = autoOrg;
+            orgInput.setAttribute('readonly', 'readonly');
+            orgSetByUserInput.value = 'false';
+        } else {
+            // Auto select is OFF: show PreferredOrg (editable)
+            orgInput.value = preferredOrg;
+            orgInput.removeAttribute('readonly');
+            orgSetByUserInput.value = 'true';
+        }
+    }
+
+    // Expose toggleOrgField to window for inline onclick handlers
+    window.toggleOrgField = toggleOrgField;
+
+    // Initialize all folder org fields on page load
+    function initializeFolderOrgFields() {
+        var allInputs = document.getElementsByTagName('input');
+        for (var i = 0; i < allInputs.length; i++) {
+            var input = allInputs[i];
+            var inputId = input.id || '';
+            if (input.type === 'checkbox' && inputId.indexOf('_autoOrg') !== -1 && input.getAttribute('data-index') !== null) {
+                var folderIndex = input.getAttribute('data-index');
+                toggleOrgField(folderIndex);
+            }
+        }
+    }
+
     // Save handler
     function saveConfig() {
         var endpointInput = get('endpoint');
@@ -212,22 +255,22 @@
 
         var data = collectData();
         var jsonString = JSON.stringify(data);
-        
+
         // Call IDE injected function
         try {
-            ${ideSaveConfig}(jsonString);
-            
+            window.__ideSaveConfig__(jsonString);
+
             // If endpoint changed, trigger logout
             if (originalEndpoint && currentEndpoint !== originalEndpoint) {
                  // We might need to wait for save to complete, but here we just trigger it.
-                 // Ideally the IDE extension handles the logout if it detects the change, 
+                 // Ideally the IDE extension handles the logout if it detects the change,
                  // but the requirement says "logout command should be called".
                  // Since we are in the webview, we can't call the command directly unless we have a binding.
                  // We can use another injected function or rely on the save handler in the extension to check.
                  // Requirement: "when the endpoint (snyk api url) is changed, logout command should be called"
                  // I'll assume we can call a function.
-                 if (typeof ${ideLogout} !== 'undefined') {
-                     ${ideLogout}();
+                 if (typeof window.__ideLogout__ !== 'undefined') {
+                     window.__ideLogout__();
                  }
             }
         } catch (e) {
@@ -238,10 +281,10 @@
     function authenticate() {
         // First save
         saveConfig();
-        
+
         // Then trigger login
         try {
-            ${ideLogin}();
+            window.__ideLogin__();
         } catch (e) {
             alert('Error initiating authentication: ' + e.message);
         }
@@ -250,7 +293,7 @@
     function logout() {
         // Trigger logout
         try {
-            ${ideLogout}();
+            window.__ideLogout__();
         } catch (e) {
             alert('Error initiating logout: ' + e.message);
         }
@@ -276,6 +319,17 @@
         var endpointInput = get('endpoint');
         if (endpointInput) {
             originalEndpoint = endpointInput.value;
+        }
+
+        // Initialize folder organization field toggles
+        initializeFolderOrgFields();
+
+        // Initialize Bootstrap tooltips
+        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+            var tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            for (var i = 0; i < tooltipTriggerList.length; i++) {
+                new bootstrap.Tooltip(tooltipTriggerList[i]);
+            }
         }
     });
 

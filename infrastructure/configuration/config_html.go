@@ -7,6 +7,7 @@ import (
 	"bytes"
 	_ "embed"
 	"html/template"
+	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -46,6 +47,10 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 			}
 			return dict
 		},
+		// toLower converts a string to lowercase
+		"toLower": func(s string) string {
+			return strings.ToLower(s)
+		},
 	}
 
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)
@@ -61,14 +66,23 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 }
 
 // GetConfigHtml renders the configuration dialog HTML using the provided settings.
-// The returned HTML contains IDE placeholder variables (e.g., ${ideSaveConfig}, ${ideLogin})
-// that must be replaced by the IDE extension before displaying the content.
+// The IDE extension must inject JavaScript functions on the window object:
+// - window.__ideSaveConfig__(jsonString): Save configuration
+// - window.__ideLogin__(): Trigger authentication
+// - window.__ideLogout__(): Trigger logout
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
+	// Determine folder/solution label based on IDE
+	folderLabel := "Folder"
+	if isVisualStudio(settings.IntegrationName) {
+		folderLabel = "Solution"
+	}
+
 	data := map[string]interface{}{
-		"Settings": settings,
-		"Styles":   template.CSS(configStylesTemplate),
-		"Scripts":  template.JS(configScriptsTemplate),
-		"Nonce":    "ideNonce", // Replaced by IDE extension
+		"Settings":    settings,
+		"Styles":      template.CSS(configStylesTemplate),
+		"Scripts":     template.JS(configScriptsTemplate),
+		"Nonce":       "ideNonce", // Replaced by IDE extension
+		"FolderLabel": folderLabel,
 	}
 
 	var buffer bytes.Buffer
@@ -78,4 +92,9 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	}
 
 	return buffer.String()
+}
+
+// isVisualStudio checks if the integration name indicates Visual Studio
+func isVisualStudio(integrationName string) bool {
+	return integrationName == "VISUAL_STUDIO" || integrationName == "Visual Studio"
 }

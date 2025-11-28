@@ -33,15 +33,18 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 
 	html := renderer.GetConfigHtml(settings)
 
+	// Verify visible fields in simplified UI
 	assert.Contains(t, html, "test-token")
 	assert.Contains(t, html, "https://test.snyk.io")
-	assert.Contains(t, html, "test-org")
 	assert.Contains(t, html, "/path/to/folder")
-	assert.Contains(t, html, "main")
 	assert.Contains(t, html, "checked") // Insecure checkbox
-	assert.Contains(t, html, "${ideSaveConfig}")
-	assert.Contains(t, html, "${ideLogin}")
-	assert.Contains(t, html, "Activate Snyk Code Security")
+	assert.Contains(t, html, "window.__ideSaveConfig__")
+	assert.Contains(t, html, "window.__ideLogin__")
+	assert.Contains(t, html, "window.__ideLogout__")
+	assert.Contains(t, html, "Activate Snyk Code")
 	assert.Contains(t, html, "Authentication Method")
 	assert.Contains(t, html, "oauth")
+	assert.Contains(t, html, "Scan Configuration") // Section header
+	assert.Contains(t, html, "Filter and Display Settings") // Section header
+	assert.Contains(t, html, "Folder Settings") // Section header
 }
