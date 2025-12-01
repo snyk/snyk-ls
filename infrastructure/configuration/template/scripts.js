@@ -240,6 +240,9 @@
         }
     }
 
+    var saveTimeout = null;
+    var SAVE_DELAY = 500; // milliseconds delay for debouncing
+
     // Save handler
     function saveConfig() {
         var endpointInput = get('endpoint');
@@ -278,6 +281,43 @@
         }
     }
 
+    // Debounced save - delays save until user stops changing inputs
+    function debouncedSave() {
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+        }
+        saveTimeout = setTimeout(function() {
+            saveConfig();
+        }, SAVE_DELAY);
+    }
+
+    // Attach auto-save listeners to all form inputs
+    function attachAutoSaveListeners() {
+        var form = get('configForm');
+        if (!form) return;
+
+        var inputs = form.getElementsByTagName('input');
+        var selects = form.getElementsByTagName('select');
+        var textareas = form.getElementsByTagName('textarea');
+
+        // Add blur event listeners to all inputs
+        for (var i = 0; i < inputs.length; i++) {
+            addEvent(inputs[i], 'blur', debouncedSave);
+            // Also save on change for checkboxes and radios
+            if (inputs[i].type === 'checkbox' || inputs[i].type === 'radio') {
+                addEvent(inputs[i], 'change', debouncedSave);
+            }
+        }
+
+        for (var j = 0; j < selects.length; j++) {
+            addEvent(selects[j], 'change', debouncedSave);
+        }
+
+        for (var k = 0; k < textareas.length; k++) {
+            addEvent(textareas[k], 'blur', debouncedSave);
+        }
+    }
+
     function authenticate() {
         // First save
         saveConfig();
@@ -301,11 +341,6 @@
 
     // Initialize
     addEvent(window, 'load', function() {
-        var saveBtn = get('save-config-btn');
-        if (saveBtn) {
-            addEvent(saveBtn, 'click', saveConfig);
-        }
-
         var authBtn = get('authenticate-btn');
         if (authBtn) {
             addEvent(authBtn, 'click', authenticate);
@@ -323,6 +358,9 @@
 
         // Initialize folder organization field toggles
         initializeFolderOrgFields();
+
+        // Attach auto-save listeners to all form inputs
+        attachAutoSaveListeners();
 
         // Initialize Bootstrap tooltips
         if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
