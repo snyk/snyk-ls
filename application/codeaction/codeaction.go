@@ -79,7 +79,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	path := uri.PathFromUri(params.TextDocument.URI)
 	folder := c.c.Workspace().GetFolderContaining(path)
 	if folder == nil {
-		c.logger.Debug().Msg("file not in workspace folder, skipping code actions")
+		c.logger.Debug().Any("path", path).Msg("file not in workspace folder, skipping code actions")
 		return nil
 	}
 
@@ -104,8 +104,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 			}
 			filteredIssues = append(filteredIssues, issue)
 		}
-		logMsg := fmt.Sprint("Filtered to ", len(filteredIssues), " issues for path ", path, " and range ", r)
-		c.logger.Debug().Msg(logMsg)
+		c.logger.Debug().Any("path", path).Any("range", r).Msgf("Filtered to %d issues", len(issues))
 	}
 
 	quickFixGroupables := c.getQuickFixGroupablesAndCache(filteredIssues)
