@@ -79,7 +79,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			// Filter and display settings
 			assertFieldPresent(t, html, "filterSeverity", "FilterSeverity field")
 			assertFieldPresent(t, html, "issueViewOptions", "IssueViewOptions field")
-			assertFieldPresent(t, html, "deltaFindings", "DeltaFindings field")
+			assertFieldPresent(t, html, "enableDeltaFindings", "EnableDeltaFindings field")
 
 			// Advanced settings (legacy additional params only)
 			assertFieldPresent(t, html, "additionalParams", "AdditionalParams field")

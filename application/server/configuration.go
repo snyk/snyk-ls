@@ -37,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -221,19 +222,62 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 	var folderConfigs []types.FolderConfig
 	needsToSendUpdateToClient := false
 
-	for _, folderConfig := range settings.FolderConfigs {
-		path := folderConfig.FolderPath
+	// MERGE: Process all folders from both incoming settings AND storage
+	// This prevents data loss when IDE sends an incomplete list
 
+	// Create a map of incoming configs for quick lookup
+	incomingMap := make(map[types.FilePath]types.FolderConfig)
+	for _, fc := range settings.FolderConfigs {
+		incomingMap[fc.FolderPath] = fc
+	}
+
+	// Get all paths that need processing (union of incoming + stored)
+	allPaths := make(map[types.FilePath]bool)
+
+	// Add incoming paths
+	for path := range incomingMap {
+		allPaths[path] = true
+	}
+
+	// Add stored paths from all workspace folders
+	workspace := c.Workspace()
+	if workspace != nil {
+		for _, folder := range workspace.Folders() {
+			allPaths[folder.Path()] = true
+		}
+	}
+
+	// Process each folder
+	for path := range allPaths {
 		storedConfig := c.FolderConfig(path)
-		// Never trust the IDE for what the FFs and SAST settings are
-		folderConfig.FeatureFlags = storedConfig.FeatureFlags
-		folderConfig.SastSettings = storedConfig.SastSettings
+
+		// Start with stored config as base, then merge incoming changes
+		var folderConfig types.FolderConfig
+		if storedConfig != nil {
+			folderConfig = *storedConfig
+		} else {
+			// New folder - initialize with defaults
+			folderConfig = types.FolderConfig{
+				FolderPath: path,
+			}
+		}
+
+		// Merge incoming config if present
+		if incoming, hasIncoming := incomingMap[path]; hasIncoming {
+			mergeFolderConfig(&folderConfig, incoming)
+		}
+
+		// Never trust the IDE for what the FFs and SAST settings are - always use stored values
+		if storedConfig != nil {
+			folderConfig.FeatureFlags = storedConfig.FeatureFlags
+			folderConfig.SastSettings = storedConfig.SastSettings
+		}
 
 		// Folder config might be new or changed, so (re)resolve the org before saving it.
 		// We should also check that the folder's org is still valid if the globally set org has changed.
 		// Also, if the config hasn't been migrated yet, we need to perform the initial migration.
-		needsMigration := !storedConfig.OrgMigratedFromGlobalConfig
-		orgSettingsChanged := !folderConfigsOrgSettingsEqual(folderConfig, storedConfig)
+		needsMigration := storedConfig != nil && !storedConfig.OrgMigratedFromGlobalConfig
+		orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(folderConfig, storedConfig)
 
 		if needsMigration || orgSettingsChanged {
 			updateFolderConfigOrg(c, storedConfig, &folderConfig)
@@ -245,7 +289,8 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 
 		di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
 
-		if !cmp.Equal(folderConfig, *storedConfig) {
+		configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
+		if configChanged {
 			needsToSendUpdateToClient = true
 			err := c.UpdateFolderConfig(&folderConfig)
 			if err != nil {
@@ -253,7 +298,9 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			}
 		}
 
-		sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
+		if storedConfig != nil {
+			sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
+		}
 
 		folderConfigs = append(folderConfigs, folderConfig)
 	}
@@ -261,6 +308,57 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 	if needsToSendUpdateToClient && triggerSource != analytics.TriggerSourceInitialize { // Don't send folder configs on initialize, since initialized will always send them.
 		notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
 	}
+}
+
+// mergeFolderConfig merges incoming config fields into the base config
+// Only non-zero/non-empty values from incoming are applied
+func mergeFolderConfig(base *types.FolderConfig, incoming types.FolderConfig) {
+	// Always update FolderPath
+	if incoming.FolderPath != "" {
+		base.FolderPath = incoming.FolderPath
+	}
+
+	// Merge fields that were explicitly sent
+	if incoming.BaseBranch != "" {
+		base.BaseBranch = incoming.BaseBranch
+	}
+	if len(incoming.LocalBranches) > 0 {
+		base.LocalBranches = incoming.LocalBranches
+	}
+	if len(incoming.AdditionalParameters) > 0 {
+		base.AdditionalParameters = incoming.AdditionalParameters
+	}
+	if incoming.ReferenceFolderPath != "" {
+		base.ReferenceFolderPath = incoming.ReferenceFolderPath
+	}
+	if incoming.PreferredOrg != "" {
+		base.PreferredOrg = incoming.PreferredOrg
+	}
+	if incoming.AutoDeterminedOrg != "" {
+		base.AutoDeterminedOrg = incoming.AutoDeterminedOrg
+	}
+
+	// Boolean fields - need to check if they were explicitly set
+	// For now, always copy them (Go zero value is false, which is valid)
+	base.OrgSetByUser = incoming.OrgSetByUser
+	base.OrgMigratedFromGlobalConfig = incoming.OrgMigratedFromGlobalConfig
+
+	// Numeric fields
+	if incoming.RiskScoreThreshold != 0 {
+		base.RiskScoreThreshold = incoming.RiskScoreThreshold
+	}
+
+	// ScanCommandConfig - merge if present
+	if incoming.ScanCommandConfig != nil {
+		if base.ScanCommandConfig == nil {
+			base.ScanCommandConfig = make(map[product.Product]types.ScanCommandConfig)
+		}
+		for prod, config := range incoming.ScanCommandConfig {
+			base.ScanCommandConfig[prod] = config
+		}
+	}
+
+	// Note: FeatureFlags and SastSettings are NOT merged here - they are handled separately
 }
 
 func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource analytics.TriggerSource, oldStoredConfig, newStoredConfig types.FolderConfig) {

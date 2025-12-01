@@ -66,7 +66,6 @@
         // Process complex objects
         processFilterSeverity(data);
         processIssueViewOptions(data);
-        processTrustedFolders(data);
 
         return data;
     }
@@ -131,7 +130,7 @@
 
     function setFieldValue(obj, field, el) {
         if (el.type === 'checkbox') {
-            obj[field] = el.checked ? "true" : "false";
+            obj[field] = el.checked;
         } else if (el.type === 'number') {
             obj[field] = el.value ? parseInt(el.value) : null;
         } else if (el.tagName.toLowerCase() === 'textarea') {
@@ -175,23 +174,6 @@
                 openIssues: openIssues ? openIssues.checked : false,
                 ignoredIssues: ignoredIssues ? ignoredIssues.checked : false
             };
-        }
-    }
-
-    function processTrustedFolders(data) {
-        var trustedFoldersEl = get('trustedFolders');
-        if (trustedFoldersEl && trustedFoldersEl.value) {
-            var value = trustedFoldersEl.value;
-            // Split by comma and filter out empty strings
-            var folders = [];
-            var parts = value.split(',');
-            for (var i = 0; i < parts.length; i++) {
-                var folder = parts[i].replace(/^\s+|\s+$/g, ''); // trim
-                if (folder) {
-                    folders.push(folder);
-                }
-            }
-            data.trustedFolders = folders;
         }
     }
 
