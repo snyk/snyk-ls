@@ -40,7 +40,11 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	// Set additional settings via CliSettings
 	if c.CliSettings() != nil {
 		c.CliSettings().Insecure = true
+		c.CliSettings().SetPath("/test/path/to/snyk")
 	}
+
+	// Set user settings path
+	c.SetUserSettingsPath("/test/path/to/bin")
 
 	settings := constructSettingsFromConfig(c)
 

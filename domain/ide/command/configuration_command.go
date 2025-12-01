@@ -56,6 +56,11 @@ func constructSettingsFromConfig(c *config.Config) types.Settings {
 		AutomaticAuthentication: fmt.Sprintf("%v", c.AutomaticAuthentication()),
 		DeviceId:                c.DeviceID(),
 
+		// CLI and Path Settings
+		CliPath:                     c.CliSettings().Path(),
+		Path:                        c.GetUserSettingsPath(),
+		ManageBinariesAutomatically: fmt.Sprintf("%v", c.ManageBinariesAutomatically()),
+
 		// Initialize FolderConfigs as empty slice
 		FolderConfigs: []types.FolderConfig{},
 	}
@@ -82,6 +87,7 @@ func populateProductSettings(s *types.Settings, c *config.Config) {
 
 // populateSecuritySettings sets security-related configuration
 func populateSecuritySettings(s *types.Settings, c *config.Config) {
+	s.Insecure = fmt.Sprintf("%v", c.CliSettings().Insecure)
 	s.EnableTrustedFoldersFeature = fmt.Sprintf("%v", c.IsTrustedFolderFeatureEnabled())
 	s.TrustedFolders = convertFilePathsToStrings(c.TrustedFolders())
 }
@@ -156,6 +162,7 @@ func populateFolderConfigs(s *types.Settings, c *config.Config) {
 			fc.FeatureFlags = storedFc.FeatureFlags
 			fc.SastSettings = storedFc.SastSettings
 			fc.ScanCommandConfig = storedFc.ScanCommandConfig
+			fc.RiskScoreThreshold = storedFc.RiskScoreThreshold
 		}
 
 		s.FolderConfigs = append(s.FolderConfigs, fc)
