@@ -645,12 +645,28 @@ func (f *Folder) FilterIssues(
 		}
 		for _, issue := range issueSlice {
 			// Logging here will spam the logs
-			if isVisibleSeverity(f.c, issue) && (!codeConsistentIgnoresEnabled || isVisibleForIssueViewOptions(f.c, issue)) && supportedIssueTypes[issue.GetFilterableIssueType()] {
+			if f.isIssueVisible(issue, codeConsistentIgnoresEnabled, supportedIssueTypes) {
 				filteredIssues[path] = append(filteredIssues[path], issue)
 			}
 		}
 	}
 	return filteredIssues
+}
+
+func (f *Folder) isIssueVisible(issue types.Issue, codeConsistentIgnoresEnabled bool, supportedIssueTypes map[product.FilterableIssueType]bool) bool {
+	if !isVisibleSeverity(f.c, issue) {
+		return false
+	}
+	if !isVisibleRiskScore(f.c, f.path, issue) {
+		return false
+	}
+	if !supportedIssueTypes[issue.GetFilterableIssueType()] {
+		return false
+	}
+	if codeConsistentIgnoresEnabled && !isVisibleForIssueViewOptions(f.c, issue) {
+		return false
+	}
+	return true
 }
 
 func isVisibleSeverity(c *config.Config, issue types.Issue) bool {
@@ -683,6 +699,35 @@ func isVisibleForIssueViewOptions(c *config.Config, issue types.Issue) bool {
 	} else {
 		return issueViewOptions.OpenIssues
 	}
+}
+
+func isVisibleRiskScore(c *config.Config, folderPath types.FilePath, issue types.Issue) bool {
+	logger := c.Logger().With().Str("method", "isVisibleRiskScore").Logger()
+
+	folderConfig := c.FolderConfig(folderPath)
+	filterRiskScoreThreshold := folderConfig.RiskScoreThreshold
+
+	// If no threshold is set (0), show all issues
+	if filterRiskScoreThreshold == 0 {
+		return true
+	}
+
+	// Get risk score from issue's additional data
+	additionalData := issue.GetAdditionalData()
+	ossIssueData, ok := additionalData.(snyk.OssIssueData)
+	if !ok {
+		// If it's not an OSS issue, don't filter by risk score
+		return true
+	}
+
+	issueRiskScore := ossIssueData.RiskScore
+	logger.Debug().
+		Uint16("issueRiskScore", issueRiskScore).
+		Int("filterRiskScoreThreshold", filterRiskScoreThreshold).
+		Msg("Filtering issues by risk score")
+
+	// Issue is visible if its risk score is larger than the filter threshold
+	return issueRiskScore > uint16(filterRiskScoreThreshold)
 }
 
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {

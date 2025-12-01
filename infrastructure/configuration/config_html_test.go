@@ -60,9 +60,9 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, "Activate Snyk Code")
 	assert.Contains(t, html, "Authentication Method")
 	assert.Contains(t, html, "oauth")
-	assert.Contains(t, html, "Scan Configuration") // Section header
+	assert.Contains(t, html, "Scan Configuration")          // Section header
 	assert.Contains(t, html, "Filter and Display Settings") // Section header
-	assert.Contains(t, html, "Folder Settings") // Section header
+	assert.Contains(t, html, "Folder Settings")             // Section header
 }
 
 func TestConfigHtmlRenderer_FiltersFolderConfigsNotInWorkspace(t *testing.T) {

@@ -40,8 +40,15 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/constants"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -819,6 +826,56 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	// Should not panic and should handle nil gracefully
 	updateFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
 	// If we get here without panic, the nil check worked
+}
+
+func Test_updateFolderConfig_RiskScoreThreshold_UpdatesConfigAndTriggersHandleConfigChange(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	// Set up mock workspace to verify HandleConfigChange is called
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	c.SetWorkspace(mockWorkspace)
+
+	folderPath := types.FilePath(t.TempDir())
+	err := initTestRepo(t, string(folderPath))
+	require.NoError(t, err)
+
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+
+	// Create initial folder config with no risk score threshold (0 = show all)
+	initialConfig := &types.FolderConfig{
+		FolderPath:         folderPath,
+		RiskScoreThreshold: 0,
+	}
+	err = storedconfig.UpdateFolderConfig(engineConfig, initialConfig, logger)
+	require.NoError(t, err)
+
+	// Create minimal folder for testing
+	sc := scanner.NewTestScanner()
+	folder := workspace.NewFolder(c, folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{folder}).AnyTimes()
+
+	// Expect HandleConfigChange to be called when RiskScoreThreshold changes
+	mockWorkspace.EXPECT().HandleConfigChange().Times(1)
+
+	// Update folder config with risk score threshold of 400
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:         folderPath,
+				RiskScoreThreshold: 400,
+			},
+		},
+	}
+	updateFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
+
+	// Verify the config was updated
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
+	require.NoError(t, err)
+	assert.Equal(t, 400, updatedConfig.RiskScoreThreshold, "RiskScoreThreshold should be updated to 400")
 }
 
 func Test_InitializeSettings(t *testing.T) {

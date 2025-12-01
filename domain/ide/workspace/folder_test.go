@@ -519,6 +519,104 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 	assert.Contains(t, filteredDiagnostics[filePath], openIssue2)
 }
 
+func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
+	// Shared setup for all subtests
+	c := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+
+	// Create minimal folder for testing FilterIssues
+	sc := scanner.NewTestScanner()
+	folder := NewFolder(c, folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+
+	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
+
+	// Create issues with different risk scores
+	issue1 := &snyk.Issue{
+		ID:               "issue-1",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "issue-1-key",
+			RiskScore: 300,
+		},
+	}
+
+	issue2 := &snyk.Issue{
+		ID:               "issue-2",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "issue-2-key",
+			RiskScore: 500,
+		},
+	}
+
+	issue3 := &snyk.Issue{
+		ID:               "issue-3",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "issue-3-key",
+			RiskScore: 600,
+		},
+	}
+
+	supportedIssueTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeOpenSource: true,
+	}
+
+	issuesByFile := snyk.IssuesByFile{
+		filePath: {issue1, issue2, issue3},
+	}
+
+	t.Run("shows all issues when threshold is zero", func(t *testing.T) {
+		// Set folder config with no risk score threshold (0 = show all)
+		config := &types.FolderConfig{
+			FolderPath:         folderPath,
+			RiskScoreThreshold: 0,
+		}
+		err := storedconfig.UpdateFolderConfig(engineConfig, config, logger)
+		require.NoError(t, err)
+
+		// Verify all issues are visible when threshold is 0
+		filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
+		require.Contains(t, filteredIssues, filePath)
+		assert.Len(t, filteredIssues[filePath], 3, "All issues should be visible when threshold is 0")
+	})
+
+	t.Run("filters issues by threshold", func(t *testing.T) {
+		// Set folder config with risk score threshold of 400
+		config := &types.FolderConfig{
+			FolderPath:         folderPath,
+			RiskScoreThreshold: 400,
+		}
+		err := storedconfig.UpdateFolderConfig(engineConfig, config, logger)
+		require.NoError(t, err)
+
+		// Verify filtering works correctly with threshold of 400
+		filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
+		require.Contains(t, filteredIssues, filePath)
+
+		// Should only have issues 2 and 3 (risk scores 500 and 600)
+		// Issue 1 (risk score 300) should be filtered out
+		filteredIssueKeys := make(map[string]bool)
+		for _, issue := range filteredIssues[filePath] {
+			filteredIssueKeys[issue.GetID()] = true
+		}
+
+		assert.Len(t, filteredIssues[filePath], 2, "Only issues with risk score > 400 should be visible")
+		assert.False(t, filteredIssueKeys["issue-1"], "Issue 1 (risk score 300) should be filtered out")
+		assert.True(t, filteredIssueKeys["issue-2"], "Issue 2 (risk score 500) should be visible")
+		assert.True(t, filteredIssueKeys["issue-3"], "Issue 3 (risk score 600) should be visible")
+	})
+}
+
 func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)

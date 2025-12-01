@@ -292,9 +292,15 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
 		if configChanged {
 			needsToSendUpdateToClient = true
+			// Check if RiskScoreThreshold changed - if so, trigger diagnostics update
+			riskScoreThresholdChanged := folderConfig.RiskScoreThreshold != storedConfig.RiskScoreThreshold
 			err := c.UpdateFolderConfig(&folderConfig)
 			if err != nil {
 				notifier.SendShowMessage(sglsp.MTError, err.Error())
+			}
+			// If risk score threshold changed, trigger diagnostics update to re-filter issues
+			if riskScoreThresholdChanged {
+				sendDiagnosticsForNewSettings(c)
 			}
 		}
 
