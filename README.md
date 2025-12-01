@@ -430,6 +430,18 @@ Right now the language server supports the following actions:
   - args:
     - `issueId` string
 
+- `Connectivity Check` Performs comprehensive connectivity diagnostics including network checks, proxy detection, authentication, organization access, and directory permissions for Snyk-used directories.
+  - command: `snyk.performConnectivityCheck`
+  - args: empty
+  - returns: string (formatted connectivity check results with no ANSI colors)
+  - Checks performed:
+    - Network connectivity to all Snyk endpoints
+    - Proxy configuration detection (including Kerberos env vars)
+    - Authentication status
+    - Organization access
+    - Current user information
+    - Snyk-used directory permissions (CLI downloads, config storage, cache, temp) - checks existence, writability, and found binaries
+
 ## Installation
 
 ### Download
