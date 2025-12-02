@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 //go:embed template/details.html
@@ -46,45 +47,49 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 }
 
 func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
-	_, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
+	additionalData, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
 	if !ok {
 		renderer.c.Logger().Error().Msg("Failed to cast additional data to SecretsIssueData")
 		return ""
 	}
 
+	nonce, err := html.GenerateSecurityNonce()
+	if err != nil {
+		renderer.c.Logger().Warn().Msgf("Failed to generate secrets security nonce: %s", err)
+		return ""
+	}
+	folderPath := renderer.determineFolderPath(issue.GetAffectedFilePath())
+
 	data := map[string]interface{}{
-		//"IssueTitle":           additionalData.Title,
-		//"IssueMessage":         additionalData.Message,
-		//"IssueType":            getIssueType(),
-		//"SeverityIcon":         html.SeverityIcon(issue),
-		//"CWEs":                 issue.GetCWEs(),
-		//"IssueOverview":        html.MarkdownToHTML(additionalData.Text),
-		//"IsIgnored":            issue.GetIsIgnored(),
-		//"IsPending":            isPending,
-		//"IgnoreDetails":        ignoreDetailsRow,
-		//"IgnoreReason":         ignoreReason,
-		//"IAWEnabled":           renderer.iawEnabled,
-		//"InlineIgnoresEnabled": renderer.inlineIgnoresEnabled,
-		//"Regions":              additionalData.Regions,
-		//"PriorityScore":        additionalData.PriorityScore,
-		//"SnykWebUrl":           appLink,
-		//"LessonUrl":            issue.GetLessonUrl(),
-		//"LessonIcon":           html.LessonIcon(),
-		//"IgnoreLineAction":     getLineToIgnoreAction(issue),
-		//"ExternalIcon":         html.ExternalIcon(),
-		//"ScanAnimation":        html.ScanAnimation(),
-		//"GitHubIcon":           html.GitHubIcon(),
-		//"ArrowLeftDark":        html.ArrowLeftDark(),
-		//"ArrowLeftLight":       html.ArrowLeftLight(),
-		//"ArrowRightDark":       html.ArrowRightDark(),
-		//"ArrowRightLight":      html.ArrowRightLight(),
-		//"FileIcon":             html.FileIcon(),
-		//"FolderPath":           string(folderPath),
-		//"FilePath":             string(issue.GetAffectedFilePath()),
-		//"IssueId":              issue.GetAdditionalData().GetKey(),
-		//"Styles":               template.CSS(panelStylesTemplate),
-		//"Scripts":              template.JS(customScripts),
-		//"Nonce":                nonce,
+		"IssueTitle":       additionalData.Title,
+		"IssueMessage":     additionalData.Message,
+		"IssueType":        issue.GetIssueType(),
+		"SeverityIcon":     html.SeverityIcon(issue),
+		"CWEs":             issue.GetCWEs(),
+		"IssueOverview":    html.MarkdownToHTML(additionalData.Message),
+		"IsIgnored":        issue.GetIsIgnored(),
+		"IsPending":        !issue.GetIsIgnored(), // TODO check status val and return bool
+		"IgnoreDetails":    issue.GetIgnoreDetails(),
+		"IgnoreReason":     issue.GetIgnoreDetails().Reason,
+		"Regions":          additionalData.Regions,
+		"PriorityScore":    additionalData.PriorityScore,
+		"LessonUrl":        issue.GetLessonUrl(),
+		"LessonIcon":       html.LessonIcon(),
+		"IgnoreLineAction": getLineToIgnoreAction(issue),
+		"ExternalIcon":     html.ExternalIcon(),
+		"ScanAnimation":    html.ScanAnimation(),
+		"GitHubIcon":       html.GitHubIcon(),
+		"ArrowLeftDark":    html.ArrowLeftDark(),
+		"ArrowLeftLight":   html.ArrowLeftLight(),
+		"ArrowRightDark":   html.ArrowRightDark(),
+		"ArrowRightLight":  html.ArrowRightLight(),
+		"FileIcon":         html.FileIcon(),
+		"FolderPath":       folderPath,
+		"FilePath":         string(issue.GetAffectedFilePath()),
+		"IssueId":          issue.GetAdditionalData().GetKey(),
+		"Styles":           template.CSS(panelStylesTemplate),
+		"Scripts":          template.JS(customScripts),
+		"Nonce":            nonce,
 	}
 
 	var htmlBuffer bytes.Buffer
@@ -96,6 +101,24 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	return htmlBuffer.String()
 }
 
+func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types.FilePath {
+	ws := renderer.c.Workspace()
+	if ws == nil {
+		return ""
+	}
+	for _, folder := range ws.Folders() {
+		folderPath := folder.Path()
+		if uri.FolderContains(folderPath, filePath) {
+			return folderPath
+		}
+	}
+	return ""
+}
+
 func join(sep string, s []string) string {
 	return strings.Join(s, sep)
+}
+
+func getLineToIgnoreAction(issue types.Issue) int {
+	return issue.GetRange().Start.Line + 1
 }
