@@ -24,7 +24,8 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	gafSastContract "github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -562,7 +563,7 @@ type FolderConfig struct {
 	OrgMigratedFromGlobalConfig bool                                  `json:"orgMigratedFromGlobalConfig"`
 	OrgSetByUser                bool                                  `json:"orgSetByUser"`
 	FeatureFlags                map[string]bool                       `json:"featureFlags"`
-	SastSettings                *sast_contract.SastResponse           `json:"sastSettings"`
+	SastSettings                *gafSastContract.SastResponse         `json:"sastSettings"`
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {

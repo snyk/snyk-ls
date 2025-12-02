@@ -3,24 +3,25 @@ package snyk
 import (
 	"encoding/json"
 
-	"github.com/snyk/code-client-go/sarif"
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
+
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
 type SecretsIssueData struct {
 	// Unique key identifying an issue in the whole result set
-	Key            string             `json:"key"`
-	Title          string             `json:"title"`
-	Message        string             `json:"message"`
-	Rule           string             `json:"rule"`
-	RuleId         string             `json:"ruleId"`
-	CWE            []string           `json:"cwe"`
-	Markers        []Marker           `json:"markers,omitempty"`
-	FilePath       string             `json:"filePath"`
-	Regions        []sarif.Region     `json:"regions,omitempty"` // TODO check type for secrets.
-	IsSecurityType bool               `json:"isSecurityType"`
-	PriorityScore  *int               `json:"priorityScore"`
-	MatchingIssues []SecretsIssueData `json:"matchingIssues"` // TODO check need for secrets.
+	Key            string                   `json:"key"`
+	Title          string                   `json:"title"`
+	Message        string                   `json:"message"`
+	Rule           string                   `json:"rule"`
+	RuleId         string                   `json:"ruleId"`
+	CWE            []string                 `json:"cwe"`
+	Markers        []Marker                 `json:"markers,omitempty"`
+	FilePath       string                   `json:"filePath"`
+	Regions        []codeClientSarif.Region `json:"regions,omitempty"` // TODO check type for secrets.
+	IsSecurityType bool                     `json:"isSecurityType"`
+	PriorityScore  *int                     `json:"priorityScore"`
+	MatchingIssues []SecretsIssueData       `json:"matchingIssues"` // TODO check need for secrets.
 }
 
 func (s SecretsIssueData) GetKey() string {
