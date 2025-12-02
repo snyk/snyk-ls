@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/snyk/code-client-go/sarif"
-	codeClient "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -51,14 +50,17 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 		}
 		formattedMessage := buildFormattedMessage(title, trIssue.GetDescription(), trIssue.GetSeverity())
 
-		isIgnored := false
-		suppressionDetails := trIssue.GetSuppression()
-		isIgnored = suppressionDetails != nil && suppressionDetails.Status == testapi.SuppressionStatusIgnored
+		isIgnored := false // TODO check rejected status
+		trIgnoreDetails := trIssue.GetIgnoreDetails()
+		trIgnoreDetailsName := trIgnoreDetails.GetIgnoredBy()
+		trIgnoreDetailsStatus := trIgnoreDetails.GetStatus()
 		ignoreDetails := types.IgnoreDetails{
-			Reason:     *suppressionDetails.Justification,
-			Expiration: suppressionDetails.ExpiresAt.String(),
-			IgnoredOn:  *suppressionDetails.CreatedAt,
-			Status:     codeClient.SuppresionStatus(suppressionDetails.Status),
+			Category:   trIgnoreDetails.GetIgnoreReasonType(),
+			Reason:     *trIgnoreDetails.GetJustification(),
+			Expiration: trIgnoreDetails.GetExpiresAt().String(),
+			IgnoredOn:  *trIgnoreDetails.GetCreatedAt(),
+			IgnoredBy:  trIgnoreDetailsName.Name, // TODO check if email
+			Status:     sarif.SuppresionStatus(trIgnoreDetailsStatus),
 		}
 
 		// TODO handle lesson URL (ticket exists)
@@ -80,7 +82,7 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 			IssueType:        types.SecretsIssues,
 			LessonUrl:        lessonURL.Url,
 			// TODO check handling in infrastructure/secrets/converter.go::computeMultipleDiagnostics
-			//Range: trIssue.GetSourceLocations(),
+			// Range: trIssue.GetSourceLocations(),
 		}
 
 		// Calculate fingerprint
