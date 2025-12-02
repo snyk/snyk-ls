@@ -1,5 +1,5 @@
 /*
- * 2022-2023 Snyk Limited
+ * © 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rs/zerolog"
-
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 
@@ -37,37 +35,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string) *snyk.Issue {
-	// this needs to be first so that the lesson from Snyk Learn is added
-	codeActions := issue.AddCodeActions(learnService, ep, affectedFilePath, issueDepNode)
-
-	// If no code actions were added (e.g., no AST node), but we have a learn service,
-	// try to get the lesson directly for the MCP use case
-	if len(codeActions) == 0 && learnService != nil && issue.lesson == nil && !issue.isLicenseIssue() && !issue.IsIgnored {
-		lesson, err := learnService.GetLesson(issue.PackageManager, issue.Id, issue.Identifiers.CWE, issue.Identifiers.CVE, types.DependencyVulnerability)
-		if err == nil && lesson != nil && lesson.Url != "" {
-			issue.lesson = lesson
-		}
-	}
-
-	var codelensCommands []types.CommandData
+func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string) *snyk.Issue {
 	rangeFromNode := getRangeFromNode(issueDepNode)
-	for _, codeAction := range codeActions {
-		if strings.Contains(codeAction.GetTitle(), "Upgrade to") {
-			codelensCommands = append(codelensCommands, types.CommandData{
-				Title:     codeAction.GetTitle(),
-				CommandId: types.CodeFixCommand,
-				Arguments: []any{
-					codeAction.GetUuid(),
-					affectedFilePath,
-					rangeFromNode,
-				},
-				GroupingKey:   codeAction.GetGroupingKey(),
-				GroupingType:  codeAction.GetGroupingType(),
-				GroupingValue: codeAction.GetGroupingValue(),
-			})
-		}
-	}
+
 	// find all issues with the same id
 	matchingIssues := []snyk.OssIssueData{}
 	for _, otherIssue := range scanResult.Vulnerabilities {
@@ -100,29 +70,77 @@ func toIssue(workDir types.FilePath, affectedFilePath types.FilePath, issue ossI
 		message = message[:maxLength] + "... (Snyk)"
 	}
 
-	d := &snyk.Issue{
-		ID:                  issue.Id,
-		Message:             message,
-		FormattedMessage:    issue.GetExtendedMessage(issue),
+	if learnService != nil && issue.lesson == nil && !issue.isLicenseIssue() && !issue.IsIgnored {
+		lesson, err := learnService.GetLesson(issue.PackageManager, issue.Id, issue.Identifiers.CWE, issue.Identifiers.CVE, types.DependencyVulnerability)
+		if err == nil && lesson != nil && lesson.Url != "" {
+			additionalData.Lesson = lesson.Url
+		}
+	}
+
+	snykIssue := &snyk.Issue{
+		ID:      issue.Id,
+		Message: message,
+		FormattedMessage: GetExtendedMessage(
+			issue.Id,
+			issue.Title,
+			issue.Description,
+			issue.Severity,
+			issue.PackageName,
+			issue.Identifiers.CVE,
+			issue.Identifiers.CWE,
+			issue.FixedIn,
+		),
 		Range:               rangeFromNode,
 		Severity:            issue.ToIssueSeverity(),
 		ContentRoot:         workDir,
 		AffectedFilePath:    affectedFilePath,
 		Product:             product.ProductOpenSource,
-		IssueDescriptionURL: issue.CreateIssueURL(),
+		IssueDescriptionURL: CreateIssueURL(issue.Id),
 		IssueType:           types.DependencyVulnerability,
-		CodeActions:         codeActions,
-		CodelensCommands:    codelensCommands,
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,
+		LessonUrl:           additionalData.Lesson,
 		AdditionalData:      additionalData,
 	}
-	d.AdditionalData = additionalData
-	fingerprint := utils.CalculateFingerprintFromAdditionalData(d)
-	d.SetFingerPrint(fingerprint)
+	fingerprint := utils.CalculateFingerprintFromAdditionalData(snykIssue)
+	snykIssue.SetFingerPrint(fingerprint)
 
-	return d
+	addCodeActionsAndLenses(c, learnService, ep, affectedFilePath, issueDepNode, snykIssue)
+
+	return snykIssue
+}
+
+func addCodeActionsAndLenses(
+	c *config.Config,
+	learnService learn.Service,
+	ep error_reporting.ErrorReporter,
+	affectedFilePath types.FilePath,
+	issueDepNode *ast.Node,
+	issue *snyk.Issue,
+) {
+	// this needs to be first so that the lesson from Snyk Learn is added
+	codeActions := GetCodeActions(c, learnService, ep, affectedFilePath, issueDepNode, issue)
+
+	var codelensCommands []types.CommandData
+	for _, codeAction := range codeActions {
+		if strings.Contains(codeAction.GetTitle(), "Upgrade to") {
+			codelensCommands = append(codelensCommands, types.CommandData{
+				Title:     codeAction.GetTitle(),
+				CommandId: types.CodeFixCommand,
+				Arguments: []any{
+					codeAction.GetUuid(),
+					affectedFilePath,
+					getRangeFromNode(issueDepNode),
+				},
+				GroupingKey:   codeAction.GetGroupingKey(),
+				GroupingType:  codeAction.GetGroupingType(),
+				GroupingValue: codeAction.GetGroupingValue(),
+			})
+		}
+	}
+	issue.CodeActions = codeActions
+	issue.CodelensCommands = codelensCommands
 }
 
 func getRangeFromNode(issueDepNode *ast.Node) types.Range {
@@ -145,7 +163,8 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 // to keep it close to the code that needs it.
 var packageIssueCacheMutex sync.Mutex
 
-func convertScanResultToIssues(logger *zerolog.Logger, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string) []types.Issue {
+func convertScanResultToIssues(c *config.Config, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string) []types.Issue {
+	logger := c.Logger().With().Str("method", "convertScanResultToIssues").Logger()
 	var issues []types.Issue
 
 	duplicateCheckMap := map[string]bool{}
@@ -160,8 +179,8 @@ func convertScanResultToIssues(logger *zerolog.Logger, res *scanResult, workDir 
 		if duplicateCheckMap[duplicateKey] {
 			continue
 		}
-		node := getDependencyNode(logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent)
-		snykIssue := toIssue(workDir, targetFilePath, ossLegacyIssue, res, node, learnService, ep, format)
+		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent)
+		snykIssue := toIssue(c, workDir, targetFilePath, ossLegacyIssue, res, node, learnService, ep, format)
 		packageIssueCacheMutex.Lock()
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		packageIssueCacheMutex.Unlock()
