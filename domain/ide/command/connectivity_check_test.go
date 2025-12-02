@@ -110,5 +110,5 @@ func Test_connectivityCheckCommand_Execute_integration(t *testing.T) {
 	assert.Contains(t, responseStr, "Testing connectivity to Snyk endpoints")
 	assert.Contains(t, responseStr, "api.snyk.io                    OK (HTTP 204)")
 	assert.Contains(t, responseStr, "Authentication token is configured")
-	assert.Contains(t, responseStr, "Potential CLI Download Directories and Permissions")
+	assert.Contains(t, responseStr, "Potential Snyk Used Configuration and CLI Download Directories")
 }
