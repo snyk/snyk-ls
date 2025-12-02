@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"strings"
 
+	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/html"
@@ -68,7 +69,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"CWEs":             issue.GetCWEs(),
 		"IssueOverview":    html.MarkdownToHTML(additionalData.Message),
 		"IsIgnored":        issue.GetIsIgnored(),
-		"IsPending":        !issue.GetIsIgnored(), // TODO check status val and return bool
+		"IsPending":        isPending(issue),
 		"IgnoreDetails":    issue.GetIgnoreDetails(),
 		"IgnoreReason":     issue.GetIgnoreDetails().Reason,
 		"Regions":          additionalData.Regions,
@@ -121,4 +122,14 @@ func join(sep string, s []string) string {
 
 func getLineToIgnoreAction(issue types.Issue) int {
 	return issue.GetRange().Start.Line + 1
+}
+
+func isPending(issue types.Issue) bool {
+	if issue.GetIgnoreDetails() == nil {
+		return false
+	}
+	if issue.GetIgnoreDetails().Status != codeClientSarif.UnderReview {
+		return false
+	}
+	return true
 }
