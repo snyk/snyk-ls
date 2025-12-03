@@ -358,9 +358,9 @@ func mergeFolderConfig(base *types.FolderConfig, incoming types.FolderConfig) {
 	base.OrgMigratedFromGlobalConfig = incoming.OrgMigratedFromGlobalConfig
 
 	// Numeric fields
-	// RiskScoreThreshold: valid range is 0-1000, -1 means not set
-	// Apply if value is in valid range (0-1000)
-	if incoming.RiskScoreThreshold >= 0 && incoming.RiskScoreThreshold <= 1000 {
+	// RiskScoreThreshold: valid range is -1 to 1000, where -1 means not set, 0 means show all
+	// Apply if value is in valid range (-1 to 1000)
+	if incoming.RiskScoreThreshold >= -1 && incoming.RiskScoreThreshold <= 1000 {
 		base.RiskScoreThreshold = incoming.RiskScoreThreshold
 	}
 

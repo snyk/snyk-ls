@@ -878,6 +878,42 @@ func Test_updateFolderConfig_RiskScoreThreshold_UpdatesConfigAndTriggersHandleCo
 	assert.Equal(t, 400, updatedConfig.RiskScoreThreshold, "RiskScoreThreshold should be updated to 400")
 }
 
+func Test_updateFolderConfig_RiskScoreThreshold_AllowsMinusOneToClear(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	err := initTestRepo(t, string(folderPath))
+	require.NoError(t, err)
+
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+
+	// Create initial folder config with risk score threshold set to 500
+	initialConfig := &types.FolderConfig{
+		FolderPath:         folderPath,
+		RiskScoreThreshold: 500,
+	}
+	err = storedconfig.UpdateFolderConfig(engineConfig, initialConfig, logger)
+	require.NoError(t, err)
+
+	// Update folder config with risk score threshold of -1 (to clear/reset it)
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:         folderPath,
+				RiskScoreThreshold: -1, // -1 means not set
+			},
+		},
+	}
+	updateFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
+
+	// Verify the config was updated to -1
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
+	require.NoError(t, err)
+	assert.Equal(t, -1, updatedConfig.RiskScoreThreshold, "RiskScoreThreshold should be updated to -1 (not set)")
+}
+
 func Test_InitializeSettings(t *testing.T) {
 	di.TestInit(t)
 
@@ -1304,4 +1340,59 @@ func Test_mergeFolderConfig_SetsPreferredOrgWhenNonEmpty(t *testing.T) {
 	// Verify: PreferredOrg should be set
 	assert.Equal(t, "new-org-id", base.PreferredOrg, "PreferredOrg should be set when incoming has non-empty value")
 	assert.True(t, base.OrgSetByUser, "OrgSetByUser should be updated to true")
+}
+
+// Test: mergeFolderConfig should allow setting RiskScoreThreshold to -1 (not set)
+func Test_mergeFolderConfig_AllowsRiskScoreThresholdMinusOne(t *testing.T) {
+	// Setup: base config with a non-zero RiskScoreThreshold
+	base := &types.FolderConfig{
+		FolderPath:         types.FilePath("/test/path"),
+		RiskScoreThreshold: 500,
+	}
+
+	// Incoming config with -1 to clear/reset RiskScoreThreshold
+	incoming := types.FolderConfig{
+		FolderPath:         types.FilePath("/test/path"),
+		RiskScoreThreshold: -1, // -1 means not set
+	}
+
+	// Merge
+	mergeFolderConfig(base, incoming)
+
+	// Verify: RiskScoreThreshold should be set to -1
+	assert.Equal(t, -1, base.RiskScoreThreshold, "RiskScoreThreshold should be set to -1 (not set)")
+}
+
+// Test: mergeFolderConfig should allow setting RiskScoreThreshold to valid range values
+func Test_mergeFolderConfig_AllowsRiskScoreThresholdValidRange(t *testing.T) {
+	// Setup: base config with default RiskScoreThreshold
+	base := &types.FolderConfig{
+		FolderPath:         types.FilePath("/test/path"),
+		RiskScoreThreshold: -1,
+	}
+
+	// Test various valid values
+	testCases := []struct {
+		name     string
+		value    int
+		expected int
+	}{
+		{"zero", 0, 0},
+		{"minimum", 0, 0},
+		{"middle", 500, 500},
+		{"maximum", 1000, 1000},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			baseCopy := *base
+			incoming := types.FolderConfig{
+				FolderPath:         types.FilePath("/test/path"),
+				RiskScoreThreshold: tc.value,
+			}
+
+			mergeFolderConfig(&baseCopy, incoming)
+			assert.Equal(t, tc.expected, baseCopy.RiskScoreThreshold, "RiskScoreThreshold should be set to %d", tc.value)
+		})
+	}
 }
