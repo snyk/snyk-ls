@@ -293,7 +293,15 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		if configChanged {
 			needsToSendUpdateToClient = true
 			// Check if RiskScoreThreshold changed - if so, trigger diagnostics update
-			riskScoreThresholdChanged := folderConfig.RiskScoreThreshold != storedConfig.RiskScoreThreshold
+			// If storedConfig is nil (new folder config), consider threshold as changed
+			var riskScoreThresholdChanged bool
+			if storedConfig == nil {
+				// New folder config - threshold is considered changed if it's set to a non-default value
+				// Default is 0 (show all), so any value != 0 is a change
+				riskScoreThresholdChanged = folderConfig.RiskScoreThreshold != 0
+			} else {
+				riskScoreThresholdChanged = folderConfig.RiskScoreThreshold != storedConfig.RiskScoreThreshold
+			}
 			err := c.UpdateFolderConfig(&folderConfig)
 			if err != nil {
 				notifier.SendShowMessage(sglsp.MTError, err.Error())
@@ -350,7 +358,9 @@ func mergeFolderConfig(base *types.FolderConfig, incoming types.FolderConfig) {
 	base.OrgMigratedFromGlobalConfig = incoming.OrgMigratedFromGlobalConfig
 
 	// Numeric fields
-	if incoming.RiskScoreThreshold != 0 {
+	// RiskScoreThreshold: valid range is 0-1000, -1 means not set
+	// Apply if value is in valid range (0-1000)
+	if incoming.RiskScoreThreshold >= 0 && incoming.RiskScoreThreshold <= 1000 {
 		base.RiskScoreThreshold = incoming.RiskScoreThreshold
 	}
 

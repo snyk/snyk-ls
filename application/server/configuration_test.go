@@ -845,7 +845,7 @@ func Test_updateFolderConfig_RiskScoreThreshold_UpdatesConfigAndTriggersHandleCo
 	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
 
-	// Create initial folder config with no risk score threshold (0 = show all)
+	// Create initial folder config with risk score threshold set to 0 (0 = show all, valid range: 0-1000)
 	initialConfig := &types.FolderConfig{
 		FolderPath:         folderPath,
 		RiskScoreThreshold: 0,
@@ -861,7 +861,7 @@ func Test_updateFolderConfig_RiskScoreThreshold_UpdatesConfigAndTriggersHandleCo
 	// Expect HandleConfigChange to be called when RiskScoreThreshold changes
 	mockWorkspace.EXPECT().HandleConfigChange().Times(1)
 
-	// Update folder config with risk score threshold of 400
+	// Update folder config with risk score threshold of 400 (valid range: 0-1000)
 	settings := types.Settings{
 		FolderConfigs: []types.FolderConfig{
 			{

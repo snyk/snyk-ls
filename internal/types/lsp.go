@@ -563,7 +563,7 @@ type FolderConfig struct {
 	OrgSetByUser                bool                                  `json:"orgSetByUser"`
 	FeatureFlags                map[string]bool                       `json:"featureFlags"`
 	SastSettings                *sast_contract.SastResponse           `json:"sastSettings"`
-	RiskScoreThreshold          int                                   `json:"riskScoreThreshold,omitempty"`
+	RiskScoreThreshold          int                                   `json:"riskScoreThreshold,omitempty"` // Valid range: 0-1000, -1 means not set
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {

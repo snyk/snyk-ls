@@ -576,7 +576,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 	}
 
 	t.Run("shows all issues when threshold is zero", func(t *testing.T) {
-		// Set folder config with no risk score threshold (0 = show all)
+		// Set folder config with risk score threshold set to 0 (0 = show all, valid range: 0-1000)
 		config := &types.FolderConfig{
 			FolderPath:         folderPath,
 			RiskScoreThreshold: 0,
@@ -591,7 +591,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 	})
 
 	t.Run("filters issues by threshold", func(t *testing.T) {
-		// Set folder config with risk score threshold of 400
+		// Set folder config with risk score threshold of 400 (valid range: 0-1000)
 		config := &types.FolderConfig{
 			FolderPath:         folderPath,
 			RiskScoreThreshold: 400,

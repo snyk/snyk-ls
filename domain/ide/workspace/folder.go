@@ -707,8 +707,9 @@ func isVisibleRiskScore(c *config.Config, folderPath types.FilePath, issue types
 	folderConfig := c.FolderConfig(folderPath)
 	filterRiskScoreThreshold := folderConfig.RiskScoreThreshold
 
-	// If no threshold is set (0), show all issues
-	if filterRiskScoreThreshold == 0 {
+	// If no threshold is set (-1) or threshold is 0, show all issues
+	// Valid range is 0-1000, where 0 means show all
+	if filterRiskScoreThreshold < 0 || filterRiskScoreThreshold == 0 {
 		return true
 	}
 
@@ -721,6 +722,13 @@ func isVisibleRiskScore(c *config.Config, folderPath types.FilePath, issue types
 	}
 
 	issueRiskScore := ossIssueData.RiskScore
+
+	// If issue has no risk score (0 means not set for legacy scans), show all issues
+	// This handles legacy scans that don't provide risk scores
+	if issueRiskScore == 0 {
+		return true
+	}
+
 	logger.Debug().
 		Uint16("issueRiskScore", issueRiskScore).
 		Int("filterRiskScoreThreshold", filterRiskScoreThreshold).
