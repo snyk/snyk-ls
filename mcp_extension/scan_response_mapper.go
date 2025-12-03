@@ -161,7 +161,6 @@ func convertIssueToData(issue types.Issue) IssueData {
 			data.RuleID = ad.RuleId
 			data.CWEs = ad.CWE
 			data.FingerPrint = issue.GetFingerprint()
-			// TODO check lesson secrets
 		}
 	}
 

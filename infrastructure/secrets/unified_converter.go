@@ -49,21 +49,8 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 			continue
 		}
 		formattedMessage := buildFormattedMessage(title, trIssue.GetDescription(), trIssue.GetSeverity())
-
-		isIgnored := false // TODO check rejected status
-		trIgnoreDetails := trIssue.GetIgnoreDetails()
-		trIgnoreDetailsName := trIgnoreDetails.GetIgnoredBy()
-		trIgnoreDetailsStatus := trIgnoreDetails.GetStatus()
-		ignoreDetails := types.IgnoreDetails{
-			Category:   trIgnoreDetails.GetIgnoreReasonType(),
-			Reason:     *trIgnoreDetails.GetJustification(),
-			Expiration: trIgnoreDetails.GetExpiresAt().String(),
-			IgnoredOn:  *trIgnoreDetails.GetCreatedAt(),
-			IgnoredBy:  trIgnoreDetailsName.Name, // TODO check if email
-			Status:     sarif.SuppresionStatus(trIgnoreDetailsStatus),
-		}
-
-		// TODO handle lesson URL (ticket exists)
+		ignoreDetails := getIgnoreDetailsFromTestResultIssue(trIssue)
+		// TODO handle lesson URL (ticket exists).
 		lessonURL := learn.Lesson{Url: "secrets-test"}
 
 		issue := &snyk.Issue{
@@ -73,16 +60,15 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 			AffectedFilePath: affectedFilePath,
 			ContentRoot:      workDir,
 			IsNew:            false,
-			IsIgnored:        isIgnored,
+			IsIgnored:        ignoreDetails.Status == "accepted",
 			Severity:         types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())],
-			IgnoreDetails:    &ignoreDetails,
+			IgnoreDetails:    ignoreDetails,
 			Product:          product.ProductSecrets,
 			AdditionalData:   secretsIssueData,
 			CWEs:             secretsIssueData.CWE,
 			IssueType:        types.SecretsIssues,
 			LessonUrl:        lessonURL.Url,
-			// TODO check handling in infrastructure/secrets/converter.go::computeMultipleDiagnostics
-			// Range: trIssue.GetSourceLocations(),
+			Range:            computeRangeFromSourceLocations(trIssue.GetSourceLocations()),
 		}
 
 		// Calculate fingerprint
@@ -138,9 +124,38 @@ func computeRegionsFromSourceLocations(locs []testapi.SourceLocation) []sarif.Re
 		regs = append(regs, sarif.Region{
 			StartLine:   loc.FromLine,
 			EndLine:     *loc.ToLine,
-			StartColumn: *loc.ToColumn,
+			StartColumn: *loc.FromColumn,
 			EndColumn:   *loc.ToColumn,
 		})
 	}
 	return regs
+}
+
+// Compute types.Range from testapi.SourceLocations. Use first location as start and last location as end.
+func computeRangeFromSourceLocations(locs []testapi.SourceLocation) types.Range {
+	return types.Range{
+		Start: types.Position{
+			Line:      locs[0].FromLine,
+			Character: *locs[0].FromColumn,
+		},
+		End: types.Position{
+			Line:      *locs[len(locs)-1].ToLine,
+			Character: *locs[len(locs)-1].ToColumn,
+		},
+	}
+}
+
+// Get ignore details from test result issue.
+func getIgnoreDetailsFromTestResultIssue(trIssue testapi.Issue) *types.IgnoreDetails {
+	trIgnoreDetails := trIssue.GetIgnoreDetails()
+	trIgnoreDetailsName := trIgnoreDetails.GetIgnoredBy()
+	trIgnoreDetailsStatus := trIgnoreDetails.GetStatus()
+	return &types.IgnoreDetails{
+		Category:   trIgnoreDetails.GetIgnoreReasonType(),
+		Reason:     *trIgnoreDetails.GetJustification(),
+		Expiration: trIgnoreDetails.GetExpiresAt().String(),
+		IgnoredOn:  *trIgnoreDetails.GetCreatedAt(),
+		IgnoredBy:  trIgnoreDetailsName.Name, // TODO check if use email instead ??
+		Status:     sarif.SuppresionStatus(trIgnoreDetailsStatus),
+	}
 }
