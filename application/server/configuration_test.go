@@ -1256,3 +1256,52 @@ func Test_updateFolderConfig_PostEAMode_Unauthenticated_UnmigratedUserSetsPrefer
 	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true (LS fixes IDE's false)")
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
 }
+
+// Test: mergeFolderConfig should allow clearing PreferredOrg when IDE sends empty string
+// This is needed for auto-org functionality where IntelliJ sends empty PreferredOrg to clear it
+func Test_mergeFolderConfig_ClearsPreferredOrgWhenEmpty(t *testing.T) {
+	// Setup: base config with a non-empty PreferredOrg
+	base := &types.FolderConfig{
+		FolderPath:   types.FilePath("/test/path"),
+		PreferredOrg: "old-org-id",
+		OrgSetByUser: true,
+	}
+
+	// Incoming config with empty PreferredOrg (simulating IntelliJ clearing it for auto-org)
+	incoming := types.FolderConfig{
+		FolderPath:   types.FilePath("/test/path"),
+		PreferredOrg: "", // Empty string to clear it
+		OrgSetByUser: false,
+	}
+
+	// Merge
+	mergeFolderConfig(base, incoming)
+
+	// Verify: PreferredOrg should be cleared
+	assert.Empty(t, base.PreferredOrg, "PreferredOrg should be cleared when IDE sends empty string")
+	assert.False(t, base.OrgSetByUser, "OrgSetByUser should be updated to false")
+}
+
+// Test: mergeFolderConfig should set PreferredOrg when incoming has non-empty value
+func Test_mergeFolderConfig_SetsPreferredOrgWhenNonEmpty(t *testing.T) {
+	// Setup: base config with empty PreferredOrg
+	base := &types.FolderConfig{
+		FolderPath:   types.FilePath("/test/path"),
+		PreferredOrg: "",
+		OrgSetByUser: false,
+	}
+
+	// Incoming config with non-empty PreferredOrg
+	incoming := types.FolderConfig{
+		FolderPath:   types.FilePath("/test/path"),
+		PreferredOrg: "new-org-id",
+		OrgSetByUser: true,
+	}
+
+	// Merge
+	mergeFolderConfig(base, incoming)
+
+	// Verify: PreferredOrg should be set
+	assert.Equal(t, "new-org-id", base.PreferredOrg, "PreferredOrg should be set when incoming has non-empty value")
+	assert.True(t, base.OrgSetByUser, "OrgSetByUser should be updated to true")
+}

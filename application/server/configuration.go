@@ -345,9 +345,9 @@ func mergeFolderConfig(base *types.FolderConfig, incoming types.FolderConfig) {
 	if incoming.ReferenceFolderPath != "" {
 		base.ReferenceFolderPath = incoming.ReferenceFolderPath
 	}
-	if incoming.PreferredOrg != "" {
-		base.PreferredOrg = incoming.PreferredOrg
-	}
+	// PreferredOrg: Always apply incoming value, even if empty, to allow IDEs to clear it
+	// This is needed for auto-org functionality where IDEs send empty PreferredOrg to clear it
+	base.PreferredOrg = incoming.PreferredOrg
 	if incoming.AutoDeterminedOrg != "" {
 		base.AutoDeterminedOrg = incoming.AutoDeterminedOrg
 	}
