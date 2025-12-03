@@ -25,10 +25,10 @@ import (
 )
 
 type DataFlowElement struct {
-	Position  int
-	FilePath  types.FilePath
-	FlowRange types.Range
-	Content   string
+	Position  int            `json:"position"`
+	FilePath  types.FilePath `json:"filePath"`
+	FlowRange types.Range    `json:"flowRange"`
+	Content   string         `json:"content"`
 }
 
 func (d *DataFlowElement) String() string {

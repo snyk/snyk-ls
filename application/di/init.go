@@ -44,6 +44,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
+	"github.com/snyk/snyk-ls/infrastructure/secrets"
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
@@ -55,6 +56,7 @@ var (
 	snykApiClient               snyk_api.SnykApiClient
 	snykCodeScanner             *code.Scanner
 	infrastructureAsCodeScanner *iac.Scanner
+	secretsScanner              types.ProductScanner
 	openSourceScanner           types.ProductScanner
 	scanInitializer             initialize.Initializer
 	authenticationService       authentication.AuthenticationService
@@ -91,7 +93,21 @@ func Init() {
 
 func initDomain(c *config.Config) {
 	hoverService = hover.NewDefaultService(c)
-	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = scanner2.NewDelegatingScanner(
+		c,
+		scanInitializer,
+		instrumentor,
+		scanNotifier,
+		snykApiClient,
+		authenticationService,
+		notifier,
+		scanPersister,
+		scanStateAggregator,
+		snykCodeScanner,
+		infrastructureAsCodeScanner,
+		openSourceScanner,
+		secretsScanner,
+	)
 }
 
 func initInfrastructure(c *config.Config) {
@@ -124,6 +140,7 @@ func initInfrastructure(c *config.Config) {
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
+	secretsScanner = secrets.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
 	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner)

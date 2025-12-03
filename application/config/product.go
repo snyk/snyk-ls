@@ -26,6 +26,8 @@ func (c *Config) IsProductEnabled(p product.Product) bool {
 		return c.IsSnykOssEnabled()
 	case product.ProductInfrastructureAsCode:
 		return c.IsSnykIacEnabled()
+	case product.ProductSecrets:
+		return c.IsSnykSecretsEnabled()
 	default:
 		return false
 	}

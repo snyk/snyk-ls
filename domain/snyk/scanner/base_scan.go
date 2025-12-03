@@ -86,7 +86,10 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	var results []types.Issue
 	if s.Product() == product.ProductCode {
 		results, err = s.Scan(ctx, "", baseFolderPath, folderConfig)
+	} else if s.Product() == product.ProductSecrets {
+		results, err = s.Scan(ctx, "", baseFolderPath, folderConfig)
 	} else {
+		// TODO check for secrets: remove else
 		sc.populateOrgForScannedFolderConfig(baseFolderPath, folderConfig)
 		results, err = s.Scan(ctx, baseFolderPath, "", folderConfig)
 	}
