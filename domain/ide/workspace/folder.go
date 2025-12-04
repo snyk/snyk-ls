@@ -636,16 +636,16 @@ func (f *Folder) FilterIssues(
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
 
-	codeConsistentIgnoresEnabled := f.featureFlagService.GetFromFolderConfig(f.path, featureflag.SnykCodeConsistentIgnores)
+	folderConfig := f.c.FolderConfig(f.path)
 
 	for path, issueSlice := range issues {
 		if !f.Contains(path) {
-			logger.Error().Msg("issue found in cache that does not pertain to folder")
+			logger.Error().Msg("issues found in cache that do not pertain to folder")
 			continue
 		}
 		for _, issue := range issueSlice {
 			// Logging here will spam the logs
-			if isVisibleSeverity(f.c, issue) && (!codeConsistentIgnoresEnabled || isVisibleForIssueViewOptions(f.c, issue)) && supportedIssueTypes[issue.GetFilterableIssueType()] {
+			if f.isIssueVisible(issue, supportedIssueTypes, folderConfig) {
 				filteredIssues[path] = append(filteredIssues[path], issue)
 			}
 		}
@@ -653,31 +653,72 @@ func (f *Folder) FilterIssues(
 	return filteredIssues
 }
 
-func isVisibleSeverity(c *config.Config, issue types.Issue) bool {
-	logger := c.Logger().With().Str("method", "isVisibleSeverity").Logger()
+func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, folderConfig *types.FolderConfig) bool {
+	if !supportedIssueTypes[issue.GetFilterableIssueType()] {
+		return false
+	}
+	if !f.isVisibleSeverity(issue) {
+		return false
+	}
+	riskScoreInCLIEnabled := folderConfig.FeatureFlags[featureflag.UseExperimentalRiskScoreInCLI]
+	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue, folderConfig.RiskScoreThreshold) {
+		return false
+	}
+	codeConsistentIgnoresEnabled := folderConfig.FeatureFlags[featureflag.SnykCodeConsistentIgnores]
+	if codeConsistentIgnoresEnabled && !f.isVisibleForIssueViewOptions(issue) {
+		return false
+	}
+	return true
+}
 
-	filterSeverity := c.FilterSeverity()
-	logger.Debug().Interface("filterSeverity", filterSeverity).Msg("Filtering issues by severity")
-
+func (f *Folder) isVisibleSeverity(issue types.Issue) bool {
 	switch issue.GetSeverity() {
 	case types.Critical:
-		return c.FilterSeverity().Critical
+		return f.c.FilterSeverity().Critical
 	case types.High:
-		return c.FilterSeverity().High
+		return f.c.FilterSeverity().High
 	case types.Medium:
-		return c.FilterSeverity().Medium
+		return f.c.FilterSeverity().Medium
 	case types.Low:
-		return c.FilterSeverity().Low
+		return f.c.FilterSeverity().Low
 	}
 	return false
 }
 
-func isVisibleForIssueViewOptions(c *config.Config, issue types.Issue) bool {
-	logger := c.Logger().With().Str("method", "isVisibleForIssueViewOptions").Logger()
+func (f *Folder) isVisibleRiskScore(issue types.Issue, riskScoreThreshold int) bool {
+	if riskScoreThreshold == 0 {
+		// Showing all issues because threshold is 0
+		return true
+	} else if riskScoreThreshold < 0 {
+		// Invalid negative risk score threshold. Showing all issues.
+		return true
+	} else if riskScoreThreshold > 1000 {
+		// Invalid high risk score threshold. Showing no issues.
+		return false
+	}
 
-	issueViewOptions := c.IssueViewOptions()
-	logger.Debug().Interface("issueViewOptions", issueViewOptions).Msg("Filtering issues by issue view options")
+	// Get risk score from issue's additional data
+	additionalData := issue.GetAdditionalData()
+	ossIssueData, ok := additionalData.(snyk.OssIssueData)
+	if !ok {
+		// If it's not an OSS issue, don't filter by risk score
+		return true
+	}
 
+	issueRiskScore := ossIssueData.RiskScore
+
+	// If issue has no risk score (0 means not set for legacy scans), show all issues
+	// This handles legacy scans that don't provide risk scores if somehow we got here with the risk score feature flag enabled
+	if issueRiskScore == 0 {
+		return true
+	}
+
+	// Issue is visible if its risk score meets or exceeds the filter threshold
+	return issueRiskScore >= uint16(riskScoreThreshold)
+}
+
+func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue) bool {
+	issueViewOptions := f.c.IssueViewOptions()
 	if issue.GetIsIgnored() {
 		return issueViewOptions.IgnoredIssues
 	} else {

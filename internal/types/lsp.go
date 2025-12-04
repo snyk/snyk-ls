@@ -563,6 +563,8 @@ type FolderConfig struct {
 	OrgSetByUser                bool                                  `json:"orgSetByUser"`
 	FeatureFlags                map[string]bool                       `json:"featureFlags"`
 	SastSettings                *sast_contract.SastResponse           `json:"sastSettings"`
+	// RiskScoreThreshold filters OSS issues by their risk score. Only issues with score >= threshold are shown. Valid range is 0-1000.
+	RiskScoreThreshold int `json:"riskScoreThreshold"`
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {
@@ -579,6 +581,7 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 		OrgMigratedFromGlobalConfig: fc.OrgMigratedFromGlobalConfig,
 		OrgSetByUser:                fc.OrgSetByUser,
 		SastSettings:                fc.SastSettings,
+		RiskScoreThreshold:          fc.RiskScoreThreshold,
 	}
 
 	if fc.LocalBranches != nil {
