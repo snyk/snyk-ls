@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -38,19 +39,7 @@ import (
 // ConvertJSONToIssues converts OSS JSON output to Issue objects with optional learn service
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
 func ConvertJSONToIssues(logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
-	// Call the standalone version of unmarshallAndRetrieveAnalysis
-	issues, err := ProcessScanResults(
-		context.Background(),
-		jsonData,
-		types.FilePath(workDir),
-		"",
-		logger,
-		error_reporting.NewTestErrorReporter(),
-		learnService,
-		make(map[string][]types.Issue), // empty package issue cache
-		false,
-		config.FormatMd,
-	)
+	issues, err := ProcessScanResults(context.Background(), jsonData, error_reporting.NewTestErrorReporter(), learnService, make(map[string][]types.Issue), false, config.FormatMd)
 
 	return issues, err
 }
@@ -59,21 +48,22 @@ func ConvertJSONToIssues(logger *zerolog.Logger, jsonData []byte, learnService l
 // our internal issue format. It also populates the given package cache with the
 // found problems per package.
 //   - scanOutput: the output of the scan (can be either a []byte or []workflow.Data)
-func ProcessScanResults(
-	ctx context.Context,
-	scanOutput any,
-	workDir types.FilePath,
-	path types.FilePath,
-	logger *zerolog.Logger,
-	errorReporter error_reporting.ErrorReporter,
-	learnService learn.Service,
-	packageIssueCache map[string][]types.Issue,
-	readFiles bool,
-	format string,
-) ([]types.Issue, error) {
+func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error_reporting.ErrorReporter, learnService learn.Service, packageIssueCache map[string][]types.Issue, readFiles bool, format string) ([]types.Issue, error) {
 	if ctx.Err() != nil {
 		return nil, nil
 	}
+	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "ProcessScanResults").Logger()
+	deps, found := ctx2.DependenciesFromContext(ctx)
+	c := config.CurrentConfig()
+	if found {
+		ctxConfig, ok := deps[ctx2.DepConfig].(*config.Config)
+		if !ok {
+			return nil, errors.New("failed to get config from context")
+		}
+		c = ctxConfig
+	}
+	workDir := ctx2.WorkDirFromContext(ctx)
+	filePath := ctx2.FilePathFromContext(ctx)
 
 	// new ostest workflow result processing
 	if output, ok := scanOutput.([]workflow.Data); ok {
@@ -89,27 +79,31 @@ func ProcessScanResults(
 
 	scanResults, err := UnmarshallOssJson(scanOutputBytes)
 	if err != nil {
-		errorReporter.CaptureErrorAndReportAsIssue(path, err)
+		errorReporter.CaptureErrorAndReportAsIssue(filePath, err)
 		return nil, nil
 	}
 
 	for _, scanResult := range scanResults {
-		targetFilePath := getAbsTargetFilePath(logger, scanResult.Path, scanResult.DisplayTargetFile, workDir, path)
+		targetFilePath := getAbsTargetFilePath(&logger, scanResult.Path, scanResult.DisplayTargetFile, workDir, filePath)
 
-		var fileContent []byte
+		fileContent := getFileContent(targetFilePath, readFiles, logger)
 
-		if targetFilePath != "" && readFiles && uri.IsRegularFile(targetFilePath) {
-			fileContent, err = os.ReadFile(string(targetFilePath))
-			if err != nil {
-				logger.Error().Err(err).Str("filePath", string(targetFilePath)).Msg("Failed to read file")
-			}
-		}
-
-		issues := convertScanResultToIssues(logger, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format)
+		issues := convertScanResultToIssues(c, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format)
 		allIssues = append(allIssues, issues...)
 	}
 
 	return allIssues, nil
+}
+
+func getFileContent(targetFilePath types.FilePath, readFiles bool, logger zerolog.Logger) []byte {
+	if targetFilePath != "" && readFiles && uri.IsRegularFile(targetFilePath) {
+		fc, err := os.ReadFile(string(targetFilePath))
+		if err != nil {
+			logger.Error().Err(err).Str("filePath", string(targetFilePath)).Msg("Failed to read file")
+		}
+		return fc
+	}
+	return []byte{}
 }
 
 // UnmarshallOssJson is a standalone version of CLIScanner.unmarshallOssJson

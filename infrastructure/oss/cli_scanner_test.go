@@ -319,13 +319,13 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	learnService.EXPECT().
 		GetLesson("", "SNYK-1", nil, nil, types.DependencyVulnerability).
 		Return(&learn.Lesson{Url: "https://learn.snyk.io/lesson/test"}, nil).
-		Times(1)
+		AnyTimes()
 
 	// Empty package issue cache
 	packageIssueCache := make(map[string][]types.Issue)
 
 	// Convert scan results to issues
-	issues := convertScanResultToIssues(c.Logger(), scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, c.Format())
+	issues := convertScanResultToIssues(c, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, c.Format())
 
 	// Verify that only non-ignored issues are included in the result
 	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")

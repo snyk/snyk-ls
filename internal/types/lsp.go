@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1220,6 +1220,7 @@ func GetCvssCalculatorUrl(cvssSources []CvssSource) string {
 type OssIssueData struct {
 	Key               string         `json:"key,omitempty"`
 	RuleId            string         `json:"ruleId"`
+	Title             string         `json:"title,omitempty"`
 	License           string         `json:"license,omitempty"`
 	Identifiers       OssIdentifiers `json:"identifiers,omitempty"`
 	Description       string         `json:"description"`
@@ -1242,7 +1243,6 @@ type OssIssueData struct {
 	MatchingIssues    []OssIssueData `json:"matchingIssues"`
 	Lesson            string         `json:"lessonUrl,omitempty"`
 }
-
 type OssIdentifiers struct {
 	CWE []string `json:"CWE,omitempty"`
 	CVE []string `json:"CVE,omitempty"`
