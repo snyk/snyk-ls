@@ -147,9 +147,11 @@ func TestUploadAndAnalyze(t *testing.T) {
 			filePath, path := TempWorkdirWithIssues(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(string(path))
 			files := []string{string(filePath)}
-			folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org"}
+			folderConfig := &types.FolderConfig{FolderPath: path, PreferredOrg: "test-org", FeatureFlags: map[string]bool{
+				featureflag.SnykCodeConsistentIgnores: false,
+			}}
 
-			issues, err := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+			issues, err := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, testTracker)
 			require.NoError(t, err)
 
 			assert.NotNil(t, issues)
@@ -188,8 +190,10 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 		NewFakeCodeScannerClient,
 	)
 
-	folderConfig := &types.FolderConfig{FolderPath: workDir, PreferredOrg: "test-org"}
-	issues, err := scanner.UploadAndAnalyze(t.Context(), workDir, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
+	folderConfig := &types.FolderConfig{FolderPath: workDir, PreferredOrg: "test-org", FeatureFlags: map[string]bool{
+		featureflag.SnykCodeConsistentIgnores: true,
+	}}
+	issues, err := scanner.UploadAndAnalyze(t.Context(), workDir, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, testTracker)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(issues), 2, "scan should return at least 2 issues")
 	assert.False(t, issues[0].GetIsIgnored())
@@ -472,10 +476,13 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				SastEnabled:    true,
 				AutofixEnabled: false,
 			},
+			FeatureFlags: map[string]bool{
+				featureflag.SnykCodeConsistentIgnores: false,
+			},
 		}
 
 		// execute
-		issues, err := scanner.UploadAndAnalyze(t.Context(), "", folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+		issues, err := scanner.UploadAndAnalyze(t.Context(), "", folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, testTracker)
 		require.NoError(t, err)
 		require.NotEmpty(t, issues, "scan should return at least one issue")
 
@@ -525,10 +532,13 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 				SastEnabled:    true,
 				AutofixEnabled: true,
 			},
+			FeatureFlags: map[string]bool{
+				featureflag.SnykCodeConsistentIgnores: false,
+			},
 		}
 
 		// execute
-		issues, err := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
+		issues, err := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, testTracker)
 		require.NoError(t, err)
 		require.GreaterOrEqual(t, len(issues), 2, "scan should return at least 2 issues")
 
@@ -558,6 +568,9 @@ func TestDeltaScanUsesFolderOrg(t *testing.T) {
 	folderConfig := &types.FolderConfig{
 		FolderPath:   workspaceFolderPath,
 		PreferredOrg: "workspace-org-123",
+		FeatureFlags: map[string]bool{
+			featureflag.SnykCodeConsistentIgnores: false,
+		},
 	}
 
 	// Create a separate temp directory with a dummy file for a delta scan to run on
@@ -594,7 +607,6 @@ func TestDeltaScanUsesFolderOrg(t *testing.T) {
 		folderConfig,                // But folder config has workspace folder
 		sliceToChannel(files),
 		map[types.FilePath]bool{},
-		false,
 		testTracker,
 	)
 	require.NoError(t, err)

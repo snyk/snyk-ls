@@ -250,8 +250,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, f
 		return results, err
 	}
 
-	codeConsistentIgnoresEnabled := sc.featureFlagService.GetFromFolderConfig(folderPath, featureflag.SnykCodeConsistentIgnores)
-	results, err = sc.UploadAndAnalyze(ctx, folderPath, folderConfig, files, filesToBeScanned, codeConsistentIgnoresEnabled, t)
+	results, err = sc.UploadAndAnalyze(ctx, folderPath, folderConfig, files, filesToBeScanned, t)
 
 	return results, err
 }
@@ -354,7 +353,7 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.
 	return false
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig, files <-chan string, changedFiles map[types.FilePath]bool, codeConsistentIgnores bool, t *progress.Tracker) (issues []types.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig, files <-chan string, changedFiles map[types.FilePath]bool, t *progress.Tracker) (issues []types.Issue, err error) {
 	if ctx.Err() != nil {
 		progress.Cancel(t.GetToken())
 		sc.C.Logger().Info().Msg("Canceling Code scanner received cancellation signal")
@@ -389,7 +388,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 
 	var sarifResponse *sarif.SarifResponse
 	var bundleHash string
-	if codeConsistentIgnores {
+	if folderConfig.FeatureFlags[featureflag.SnykCodeConsistentIgnores] {
 		sarifResponse, bundleHash, err = newCodeScanner.UploadAndAnalyze(ctx, requestId, target, files, stringChangedFiles)
 	} else {
 		shardKey := getShardKey(path, sc.C.Token())
