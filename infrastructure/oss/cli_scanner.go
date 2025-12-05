@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -265,10 +266,8 @@ func (cliScanner *CLIScanner) scanInternal(
 	}
 
 	// determine which scanner to use
-	// FIXME after release
-	//useLegacyScan := !folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"]
-	useLegacyScan := true
-	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨🚨🚨🚨 oss scan usage 🚨🚨🚨🚨")
+	useLegacyScan := !folderConfig.FeatureFlags[featureflag.UseExperimentalRiskScoreInCLI]
+	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨 oss scan usage 🚨")
 
 	// do actual scan
 	var output any
@@ -423,18 +422,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 	path types.FilePath,
 	format string,
 ) (issues []types.Issue) {
-	issues, err := ProcessScanResults(
-		ctx,
-		scanOutput,
-		workDir,
-		path,
-		cliScanner.config.Logger(),
-		cliScanner.errorReporter,
-		cliScanner.learnService,
-		cliScanner.packageIssueCache,
-		true, // readFiles = true for CLIScanner
-		format,
-	)
+	issues, err := ProcessScanResults(ctx, scanOutput, cliScanner.errorReporter, cliScanner.learnService, cliScanner.packageIssueCache, true, format)
 
 	if err != nil {
 		cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
