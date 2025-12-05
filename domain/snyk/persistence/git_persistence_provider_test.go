@@ -33,7 +33,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
@@ -63,7 +62,7 @@ func TestInit_NotEmpty(t *testing.T) {
 		},
 	}
 	expectedCacheDir := filepath.Join(filepath.Join(string(folderPath), CacheFolder))
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -97,7 +96,7 @@ func TestInit_NotEmpty_ExpiredCache(t *testing.T) {
 		},
 	}
 	expectedCacheDir := filepath.Join(filepath.Join(string(folderPath), CacheFolder))
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -133,7 +132,7 @@ func TestAdd_NewCommit(t *testing.T) {
 			GlobalIdentity: uuid.New().String(),
 		},
 	}
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -238,7 +237,7 @@ func TestAdd_ExistingCommit_ShouldOverrideExistingSnapshots(t *testing.T) {
 	assert.Equal(t, newIssueList[0].GetGlobalIdentity(), list[0].GetGlobalIdentity())
 	assert.NotEqual(t, issueList[0].GetGlobalIdentity(), list[0].GetGlobalIdentity())
 	cacheDir := filepath.Join(string(folderPath), CacheFolder)
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 	assert.NoError(t, err)
 	newIssuesExist := cut.Exists(folderPath, newCommitHash, p)
 	assert.True(t, newIssuesExist)
@@ -263,7 +262,7 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 		},
 	}
 
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	p := product.ProductCode
@@ -327,7 +326,7 @@ func TestClear_ExistingCache(t *testing.T) {
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 	assert.NoError(t, err)
 	pc := product.ProductCode
 	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
@@ -354,7 +353,7 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	}
 
 	cacheDir := filepath.Join(xdg.CacheHome, CacheFolder)
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -437,7 +436,7 @@ func TestClearFolder_ClearsInMemoryCacheForFolder(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify cache exists before clearing
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 	assert.NotEmpty(t, persistenceProvider.cache[hash])
 
 	// Clear the folder cache
@@ -484,11 +483,11 @@ func TestClearFolder_DoesNotAffectOtherFolders(t *testing.T) {
 	persistenceProvider.ClearFolder(folderPath1)
 
 	// Verify folder1's cache is cleared
-	hash1 := hashedFolderPath(util.Sha256First16Hash(string(folderPath1)))
+	hash1 := getHashForFolderPath(folderPath1)
 	assert.Empty(t, persistenceProvider.cache[hash1])
 
 	// Verify folder2's cache is still intact
-	hash2 := hashedFolderPath(util.Sha256First16Hash(string(folderPath2)))
+	hash2 := getHashForFolderPath(folderPath2)
 	assert.NotEmpty(t, persistenceProvider.cache[hash2])
 
 	// folder2 should still return issues
@@ -503,7 +502,7 @@ func TestCreateOrAppendToCache_NewCache(t *testing.T) {
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -521,7 +520,7 @@ func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -540,7 +539,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
@@ -561,7 +560,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductDifferentHash(t *tes
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	initGitRepo(t, folderPath, false)
 
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 
 	pcCommitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	poCommitHash := "wwwwf18c4432b2a41e0f8e6c9831fe33be92b3db"
@@ -581,10 +580,10 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDiffere
 	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	initGitRepo(t, folderPath, false)
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 
 	otherFolderPath := "/home/myusr/newrepo"
-	otherHashPath := hashedFolderPath(util.Sha256First16Hash(otherFolderPath))
+	otherHashPath := getHashForFolderPath(types.FilePath(otherFolderPath))
 	pcCommitHash := "eab0f18c4432b2a41e0f8e6c9831fe84be92b3db"
 	poCommitHash := "wwwwf18c4432b2a41e0f8e6c9831fe33be92b3db"
 	pc := product.ProductCode
@@ -618,7 +617,7 @@ func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
 	c := testutil.UnitTest(t)
 	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
-	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	hash := getHashForFolderPath(folderPath)
 	repo := initGitRepo(t, folderPath, false)
 	existingCodeIssues := []types.Issue{
 		&snyk.Issue{
@@ -683,4 +682,46 @@ func issuesFileExists(cacheDir string, hash hashedFolderPath, newCommitHash stri
 	newIssuesFile := getLocalFilePath(cacheDir, hash, newCommitHash, p)
 	_, err := os.Stat(newIssuesFile)
 	return err == nil
+}
+
+// TestGetPersistedIssueList_AfterRestart simulates the scenario where data is persisted,
+// the IDE restarts (new provider instance), and the data should be loaded correctly.
+func TestGetPersistedIssueList_AfterRestart(t *testing.T) {
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
+	folderPath := types.FilePath(conf.GetString(constants.DataHome))
+	repo := initGitRepo(t, folderPath, false)
+
+	expectedIssue := &snyk.Issue{
+		GlobalIdentity:   uuid.New().String(),
+		Fingerprint:      "test-fingerprint-123",
+		ContentRoot:      folderPath,
+		AffectedFilePath: types.FilePath(filepath.Join(string(folderPath), "test.js")),
+	}
+	existingIssues := []types.Issue{expectedIssue}
+
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+	pc := product.ProductCode
+
+	// First session: persist data
+	provider1 := NewGitPersistenceProvider(c.Logger(), conf)
+	err = provider1.Init([]types.FilePath{folderPath})
+	assert.NoError(t, err)
+	err = provider1.Add(folderPath, commitHash, existingIssues, pc)
+	assert.NoError(t, err)
+
+	// Simulate restart: create a NEW provider instance
+	provider2 := NewGitPersistenceProvider(c.Logger(), conf)
+	// Call Init to load persisted data from disk
+	err = provider2.Init([]types.FilePath{folderPath})
+	assert.NoError(t, err)
+
+	// Verify the data is loaded correctly
+	loadedIssues, err := provider2.GetPersistedIssueList(folderPath, pc)
+	assert.NoError(t, err)
+	assert.Len(t, loadedIssues, 1)
+	assert.Equal(t, expectedIssue.GetGlobalIdentity(), loadedIssues[0].GetGlobalIdentity())
+	assert.Equal(t, expectedIssue.GetFingerprint(), loadedIssues[0].GetFingerprint())
+	assert.Equal(t, expectedIssue.GetContentRoot(), loadedIssues[0].GetContentRoot())
 }

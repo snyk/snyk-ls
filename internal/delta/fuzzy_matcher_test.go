@@ -195,3 +195,161 @@ func initDeltaFinder() *Finder {
 		WithDiffer(&FindingsDiffer{}))
 	return df
 }
+
+// Test_No_New_Issue_SameRuleId_DifferentContentRoots simulates the scenario where
+// multiple issues have the same ruleId but different fingerprints and line numbers.
+// This is the case when scanning code with multiple hardcoded passwords.
+func Test_No_New_Issue_SameRuleId_DifferentContentRoots(t *testing.T) {
+	// Base issues from temp directory (simulating persisted base branch scan)
+	// All issues have the same ruleId but different fingerprints and line numbers
+	baseIssueList := []mockIdentifiable{
+		{
+			ruleId:      "java/HardcodedPassword",
+			startLine:   15,
+			endLine:     15,
+			startColumn: 26,
+			endColumn:   35,
+			path:        "/tmp/snyk_main_abc123/src/main/java/org/example/Main.java",
+			contentRoot: "/tmp/snyk_main_abc123",
+			fingerprint: "19689298.83dbfe52.6bce7ef3.bd0e4e78.0026eb05.0135de40.bcfae557.54d46e25.19689298.83dbfe52.6bce7ef3.e22980a8.0026eb05.0135de40.bcfae557.54d46e25",
+		},
+		{
+			ruleId:      "java/HardcodedPassword",
+			startLine:   16,
+			endLine:     16,
+			startColumn: 19,
+			endColumn:   31,
+			path:        "/tmp/snyk_main_abc123/src/main/java/org/example/Main.java",
+			contentRoot: "/tmp/snyk_main_abc123",
+			fingerprint: "a23f0fd0.3a2692cc.71a71d19.e22980a8.f1d9f854.7fda7c5e.5cd65e98.54d46e25.797a5cca.3a2692cc.71a71d19.e22980a8.f1d9f854.7fda7c5e.377b98a3.54d46e25",
+		},
+		{
+			ruleId:      "java/HardcodedPassword",
+			startLine:   18,
+			endLine:     18,
+			startColumn: 19,
+			endColumn:   34,
+			path:        "/tmp/snyk_main_abc123/src/main/java/org/example/Main.java",
+			contentRoot: "/tmp/snyk_main_abc123",
+			fingerprint: "4cb2a3a4.598507f0.71a71d19.e22980a8.f1d9f854.7fda7c5e.c1f84394.54d46e25.797a5cca.598507f0.71a71d19.e22980a8.f1d9f854.7fda7c5e.377b98a3.54d46e25",
+		},
+	}
+
+	// Current issues from working directory (same files, different content root)
+	currentIssueList := []mockIdentifiable{
+		{
+			ruleId:      "java/HardcodedPassword",
+			startLine:   15,
+			endLine:     15,
+			startColumn: 26,
+			endColumn:   35,
+			path:        "/Users/dev/myproject/src/main/java/org/example/Main.java",
+			contentRoot: "/Users/dev/myproject",
+			fingerprint: "19689298.83dbfe52.6bce7ef3.bd0e4e78.0026eb05.0135de40.bcfae557.54d46e25.19689298.83dbfe52.6bce7ef3.e22980a8.0026eb05.0135de40.bcfae557.54d46e25",
+		},
+		{
+			ruleId:      "java/HardcodedPassword",
+			startLine:   16,
+			endLine:     16,
+			startColumn: 19,
+			endColumn:   31,
+			path:        "/Users/dev/myproject/src/main/java/org/example/Main.java",
+			contentRoot: "/Users/dev/myproject",
+			fingerprint: "a23f0fd0.3a2692cc.71a71d19.e22980a8.f1d9f854.7fda7c5e.5cd65e98.54d46e25.797a5cca.3a2692cc.71a71d19.e22980a8.f1d9f854.7fda7c5e.377b98a3.54d46e25",
+		},
+		{
+			ruleId:      "java/HardcodedPassword",
+			startLine:   18,
+			endLine:     18,
+			startColumn: 19,
+			endColumn:   34,
+			path:        "/Users/dev/myproject/src/main/java/org/example/Main.java",
+			contentRoot: "/Users/dev/myproject",
+			fingerprint: "4cb2a3a4.598507f0.71a71d19.e22980a8.f1d9f854.7fda7c5e.c1f84394.54d46e25.797a5cca.598507f0.71a71d19.e22980a8.f1d9f854.7fda7c5e.377b98a3.54d46e25",
+		},
+	}
+
+	df := initDeltaFinder()
+
+	baseFindingIdentifiable := convertToFindingsIdentifiable(baseIssueList)
+	currentFindingIdentifiable := convertToFindingsIdentifiable(currentIssueList)
+
+	// Clear global identities from current issues (as done in folder.GetDelta)
+	for i := range currentFindingIdentifiable {
+		currentFindingIdentifiable[i].SetGlobalIdentity("")
+	}
+
+	deltaList, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
+
+	assert.NoError(t, err)
+	assert.Empty(t, deltaList, "When base and current branches are identical (same files, same fingerprints), there should be no delta")
+}
+
+// Test_No_New_Issue_DifferentContentRoots simulates the scenario where base branch
+// issues are persisted with a temp directory content root, and current issues have
+// the working directory as content root. This tests a user setting the base branch
+// to the current branch on first startup.
+func Test_No_New_Issue_DifferentContentRoots(t *testing.T) {
+	// Base issues from temp directory (simulating persisted base branch scan)
+	baseIssueList := []mockIdentifiable{
+		{
+			ruleId:      "javascript/UseCsurfForExpress",
+			startLine:   30,
+			endLine:     30,
+			startColumn: 10,
+			endColumn:   17,
+			path:        "/tmp/snyk_main_abc123/app.js",
+			contentRoot: "/tmp/snyk_main_abc123",
+			fingerprint: "ae77ea27.4773f344.607187b5.d7919eeb.a1fb1152.5fce695c.fee35010.89d75565.630e4ed1.4773f344.aa4dda5f.d7919eeb.f30fb760.49b28873.85bdc101.83642794",
+		},
+		{
+			ruleId:      "javascript/NoHardcodedPasswords",
+			startLine:   40,
+			endLine:     40,
+			startColumn: 10,
+			endColumn:   17,
+			path:        "/tmp/snyk_main_abc123/db.js",
+			contentRoot: "/tmp/snyk_main_abc123",
+			fingerprint: "12567ef6.6d936dbf.bd65d204.fd94bb7c.79a7d027.fcf3002d.81d021f5.91c60b7d.12567ef6.6d936dbf.bd65d204.fd94bb7c.79a7d027.fcf3002d.81d021f5.91c60b7d",
+		},
+	}
+
+	// Current issues from working directory (same files, different content root)
+	currentIssueList := []mockIdentifiable{
+		{
+			ruleId:      "javascript/UseCsurfForExpress",
+			startLine:   30,
+			endLine:     30,
+			startColumn: 10,
+			endColumn:   17,
+			path:        "/Users/dev/myproject/app.js",
+			contentRoot: "/Users/dev/myproject",
+			fingerprint: "ae77ea27.4773f344.607187b5.d7919eeb.a1fb1152.5fce695c.fee35010.89d75565.630e4ed1.4773f344.aa4dda5f.d7919eeb.f30fb760.49b28873.85bdc101.83642794",
+		},
+		{
+			ruleId:      "javascript/NoHardcodedPasswords",
+			startLine:   40,
+			endLine:     40,
+			startColumn: 10,
+			endColumn:   17,
+			path:        "/Users/dev/myproject/db.js",
+			contentRoot: "/Users/dev/myproject",
+			fingerprint: "12567ef6.6d936dbf.bd65d204.fd94bb7c.79a7d027.fcf3002d.81d021f5.91c60b7d.12567ef6.6d936dbf.bd65d204.fd94bb7c.79a7d027.fcf3002d.81d021f5.91c60b7d",
+		},
+	}
+
+	df := initDeltaFinder()
+
+	baseFindingIdentifiable := convertToFindingsIdentifiable(baseIssueList)
+	currentFindingIdentifiable := convertToFindingsIdentifiable(currentIssueList)
+
+	// Clear global identities from current issues (as done in folder.GetDelta)
+	for i := range currentFindingIdentifiable {
+		currentFindingIdentifiable[i].SetGlobalIdentity("")
+	}
+
+	deltaList, err := df.Diff(baseFindingIdentifiable, currentFindingIdentifiable)
+
+	assert.NoError(t, err)
+	assert.Empty(t, deltaList, "When base and current branches are identical (same files, same fingerprints), there should be no delta")
+}
