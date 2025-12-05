@@ -45,14 +45,19 @@ func (FindingsEnricher) EnrichWithId(issueList []Identifiable) []Identifiable {
 }
 
 func (FindingsEnricher) EnrichWithIsNew(allCurrentIssues, newIssues []Identifiable) []Identifiable {
+	// Build a set of GlobalIdentities that are new for O(1) lookup
+	newIssueIDs := make(map[string]bool, len(newIssues))
+	for _, issue := range newIssues {
+		issue.SetIsNew(true)
+		newIssueIDs[issue.GetGlobalIdentity()] = true
+	}
+
+	// Set isNew for all current issues based on whether they're in the delta list
 	for i := range allCurrentIssues {
-		for j := range newIssues {
-			// everything in delta list is new
-			newIssues[j].SetIsNew(true)
-			if allCurrentIssues[i].GetGlobalIdentity() == newIssues[j].GetGlobalIdentity() {
-				// issues that have the same id as a new issue are also new
-				allCurrentIssues[i].SetIsNew(true)
-			}
+		if newIssueIDs[allCurrentIssues[i].GetGlobalIdentity()] {
+			allCurrentIssues[i].SetIsNew(true)
+		} else {
+			allCurrentIssues[i].SetIsNew(false)
 		}
 	}
 

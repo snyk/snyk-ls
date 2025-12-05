@@ -253,6 +253,22 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 			}
 		}
 
+		baseBranchChanged := storedConfig.BaseBranch != folderConfig.BaseBranch
+		referenceFolderChanged := storedConfig.ReferenceFolderPath != folderConfig.ReferenceFolderPath
+		if baseBranchChanged || referenceFolderChanged {
+			logger.Info().
+				Str("folderPath", string(path)).
+				Str("oldBaseBranch", storedConfig.BaseBranch).
+				Str("newBaseBranch", folderConfig.BaseBranch).
+				Str("oldReferenceFolderPath", string(storedConfig.ReferenceFolderPath)).
+				Str("newReferenceFolderPath", string(folderConfig.ReferenceFolderPath)).
+				Msg("base branch or reference folder changed, clearing persisted scan cache for folder")
+			ws := c.Workspace()
+			if ws != nil {
+				ws.GetScanSnapshotClearerExister().ClearFolder(path)
+			}
+		}
+
 		sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
 
 		folderConfigs = append(folderConfigs, folderConfig)

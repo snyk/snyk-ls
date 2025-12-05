@@ -37,6 +37,9 @@ func (n NopScanPersister) Exists(_ types.FilePath, _ string, _ product.Product) 
 func (n NopScanPersister) Clear(_ []types.FilePath, _ bool) {
 }
 
+func (n NopScanPersister) ClearFolder(_ types.FilePath) {
+}
+
 func (n NopScanPersister) Init(folderPath []types.FilePath) error {
 	return nil
 }

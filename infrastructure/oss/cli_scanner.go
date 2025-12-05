@@ -147,7 +147,19 @@ func (cliScanner *CLIScanner) Product() product.Product {
 
 // TODO remove params from scan interface, once every scanner has these things in context and can extract it from there
 func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, workDir types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
-	logger := cliScanner.getLogger(ctx)
+	// Log scan type and paths
+	scanType := "WorkingDirectory"
+	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
+		scanType = deltaScanType.String()
+	}
+	logger := cliScanner.getLogger(ctx).With().
+		Str("path", string(path)).
+		Str("workDir", string(workDir)).
+		Str("scanType", scanType).
+		Logger()
+
+	logger.Debug().Msg("OSS scanner: starting scan")
+
 	ctx = cliScanner.enrichContext(ctx)
 
 	// Add path to context so it can be used by scheduled scans
@@ -168,7 +180,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, wor
 	}
 	cliPathScan := cliScanner.isSupported(path)
 	if !cliPathScan {
-		logger.Debug().Msgf("OSS Scan not supported for %s", path)
+		logger.Debug().Msg("OSS scanner: skipping unsupported file/directory")
 		return issues, nil
 	}
 	return cliScanner.scanInternal(ctx, cliScanner.prepareScanCommand)
