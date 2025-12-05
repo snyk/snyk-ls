@@ -245,11 +245,6 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, f
 	logger.Debug().
 		Int("fileCount", len(filesToBeScanned)).
 		Msg("Code scanner: files to be scanned")
-	for filePath := range filesToBeScanned {
-		logger.Debug().
-			Str("file", string(filePath)).
-			Msg("Code scanner: scanning file")
-	}
 
 	t := progress.NewTracker(true)
 	// monitor external tracker & context cancellations
