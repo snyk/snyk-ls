@@ -17,6 +17,7 @@
 package workspace
 
 import (
+	"bytes"
 	"errors"
 	"path/filepath"
 	"sync"
@@ -629,6 +630,130 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 		assert.Contains(t, filteredIssues[filePath], issue2, "Issue 2 (risk score 500) should be visible")
 		assert.Contains(t, filteredIssues[filePath], issue3, "Issue 3 (risk score 600) should be visible")
 	})
+}
+
+func Test_FilterIssues_LogsCorrectFilterReasons(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+
+	// Set up folder config with feature flags enabled
+	folderConfig := &types.FolderConfig{
+		FolderPath:         folderPath,
+		RiskScoreThreshold: 400,
+		FeatureFlags: map[string]bool{
+			featureflag.UseExperimentalRiskScoreInCLI: true,
+			featureflag.SnykCodeConsistentIgnores:     true,
+		},
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
+	require.NoError(t, err)
+
+	// Disable low severity in global config
+	severityFilter := types.NewSeverityFilter(true, true, true, false)
+	c.SetSeverityFilter(&severityFilter)
+	// Only show open issues (not ignored)
+	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, false)))
+
+	sc := scanner.NewTestScanner()
+	folder := NewFolder(c, folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+
+	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
+
+	// Issue that passes all filters (visible)
+	visibleIssue := &snyk.Issue{
+		ID:               "visible",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		IsIgnored:        false,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "visible-key",
+			RiskScore: 500,
+		},
+	}
+
+	// Issue filtered by unsupported type (IaC not in supportedIssueTypes)
+	unsupportedTypeIssue := &snyk.Issue{
+		ID:               "unsupported-type",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductInfrastructureAsCode,
+	}
+
+	// Issue filtered by severity (Low severity disabled)
+	lowSeverityIssue := &snyk.Issue{
+		ID:               "low-severity",
+		AffectedFilePath: filePath,
+		Severity:         types.Low,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "low-severity-key",
+			RiskScore: 500,
+		},
+	}
+
+	// Issue filtered by risk score (below threshold of 400)
+	lowRiskScoreIssue := &snyk.Issue{
+		ID:               "low-risk-score",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "low-risk-key",
+			RiskScore: 300,
+		},
+	}
+
+	// Issue filtered by issue view options (ignored issue when only showing open)
+	ignoredIssue := &snyk.Issue{
+		ID:               "ignored",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		IsIgnored:        true,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "ignored-key",
+			RiskScore: 500,
+		},
+	}
+
+	supportedIssueTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeOpenSource: true,
+		// IaC intentionally not included to test unsupported type filtering
+	}
+
+	issuesByFile := snyk.IssuesByFile{
+		filePath: {visibleIssue, unsupportedTypeIssue, lowSeverityIssue, lowRiskScoreIssue, ignoredIssue},
+	}
+
+	// Set up a buffer to capture log output right before filtering
+	var logBuffer bytes.Buffer
+	c.AddLoggerOutputForTesting(&logBuffer)
+
+	// Test FilterIssues returns only the visible issue
+	// All other issues should be filtered for their respective reasons
+	filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
+	require.Contains(t, filteredIssues, filePath)
+
+	// Only the visible issue should pass all filters
+	assert.Len(t, filteredIssues[filePath], 1, "Only one issue should be visible (4 filtered: unsupported type, severity, risk score, issue view options)")
+	assert.Contains(t, filteredIssues[filePath], visibleIssue, "Issue passing all filters should be visible")
+	assert.NotContains(t, filteredIssues[filePath], unsupportedTypeIssue, "IaC issue should be filtered (unsupported type)")
+	assert.NotContains(t, filteredIssues[filePath], lowSeverityIssue, "Low severity issue should be filtered (severity filter)")
+	assert.NotContains(t, filteredIssues[filePath], lowRiskScoreIssue, "Low risk score issue should be filtered (risk score threshold)")
+	assert.NotContains(t, filteredIssues[filePath], ignoredIssue, "Ignored issue should be filtered (issue view options)")
+
+	// Verify log output contains correct filter reason counts
+	logOutput := logBuffer.String()
+	assert.Contains(t, logOutput, "4 issue(s) filtered", "Log should contain filter message")
+	assert.Contains(t, logOutput, "filterReasons", "Log should contain filterReasons field")
+	assert.Contains(t, logOutput, `"unsupported issue type":1`, "Log should show 1 issue filtered for unsupported type")
+	assert.Contains(t, logOutput, `"severity filter":1`, "Log should show 1 issue filtered for severity")
+	assert.Contains(t, logOutput, `"risk score threshold":1`, "Log should show 1 issue filtered for risk score")
+	assert.Contains(t, logOutput, `"issue view options":1`, "Log should show 1 issue filtered for issue view options")
 }
 
 func Test_ClearDiagnosticsByIssueType(t *testing.T) {

@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/samber/lo"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -624,12 +625,24 @@ func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.Filterab
 	return deltaList
 }
 
+// FilterReason describes why an issue was filtered out
+type FilterReason string
+
+const (
+	FilterReasonNotFiltered      FilterReason = ""
+	FilterReasonUnsupportedType  FilterReason = "unsupported issue type"
+	FilterReasonSeverity         FilterReason = "severity filter"
+	FilterReasonRiskScore        FilterReason = "risk score threshold"
+	FilterReasonIssueViewOptions FilterReason = "issue view options"
+)
+
 func (f *Folder) FilterIssues(
 	issues snyk.IssuesByFile,
 	supportedIssueTypes map[product.FilterableIssueType]bool,
 ) snyk.IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 	filteredIssues := snyk.IssuesByFile{}
+	filterReasonCounts := make(map[FilterReason]int)
 
 	if f.c.IsDeltaFindingsEnabled() {
 		deltaForAllProducts := f.GetDeltaForAllProducts(supportedIssueTypes)
@@ -645,30 +658,40 @@ func (f *Folder) FilterIssues(
 		}
 		for _, issue := range issueSlice {
 			// Logging here will spam the logs
-			if f.isIssueVisible(issue, supportedIssueTypes, folderConfig) {
+			filterReason := f.isIssueVisible(issue, supportedIssueTypes, folderConfig)
+			if filterReason == FilterReasonNotFiltered {
 				filteredIssues[path] = append(filteredIssues[path], issue)
+			} else {
+				filterReasonCounts[filterReason]++
 			}
 		}
 	}
+
+	if len(filterReasonCounts) > 0 {
+		logger.Debug().Interface("filterReasons", filterReasonCounts).Msgf("%d issue(s) filtered", lo.Sum(lo.Values(filterReasonCounts)))
+	} else {
+		logger.Debug().Msg("No issues were filtered out")
+	}
+
 	return filteredIssues
 }
 
-func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, folderConfig *types.FolderConfig) bool {
+func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, folderConfig *types.FolderConfig) FilterReason {
 	if !supportedIssueTypes[issue.GetFilterableIssueType()] {
-		return false
+		return FilterReasonUnsupportedType
 	}
 	if !f.isVisibleSeverity(issue) {
-		return false
+		return FilterReasonSeverity
 	}
 	riskScoreInCLIEnabled := folderConfig.FeatureFlags[featureflag.UseExperimentalRiskScoreInCLI]
 	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue, folderConfig.RiskScoreThreshold) {
-		return false
+		return FilterReasonRiskScore
 	}
 	codeConsistentIgnoresEnabled := folderConfig.FeatureFlags[featureflag.SnykCodeConsistentIgnores]
 	if codeConsistentIgnoresEnabled && !f.isVisibleForIssueViewOptions(issue) {
-		return false
+		return FilterReasonIssueViewOptions
 	}
-	return true
+	return FilterReasonNotFiltered
 }
 
 func (f *Folder) isVisibleSeverity(issue types.Issue) bool {
