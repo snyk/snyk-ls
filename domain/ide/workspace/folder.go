@@ -529,7 +529,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	defer f.mutex.Unlock()
 
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
-	logger.Debug().Msgf("called for product=%s, folderPath=%s", p, f.path)
+	logger.Debug().Msgf("getting delta for product %s, folderPath %s", p, f.path)
 
 	issueByFile := f.IssuesByProduct()[p]
 
@@ -570,8 +570,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	deltaSnykIssues := []types.Issue{}
-	for i := range enrichedIssues {
-		identifiable := enrichedIssues[i]
+	for _, identifiable := range enrichedIssues {
 		if identifiable == nil || !identifiable.GetIsNew() {
 			continue
 		}
