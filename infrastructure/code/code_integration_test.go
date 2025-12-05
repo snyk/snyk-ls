@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	codeClient "github.com/snyk/code-client-go"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -37,8 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// Test_Scan_SetsContentRootCorrectly is an INTEGRATION TEST that verifies
-// ContentRoot is set correctly on issues returned from scanning files in different folders.
+// Test_Scan_SetsContentRootCorrectly verifies that the ContentRoot is set correctly on issues returned from scanning files in different folders.
 func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 	c := testutil.IntegTest(t)
 	c.SetSnykCodeEnabled(true)
@@ -96,34 +96,56 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 
 	// Test folder 1
 	t.Run("folder 1", func(t *testing.T) {
+		// Capture the org used when creating the scanner
+		var capturedOrg string
+		factoryWithOrgCapture := func(sc *Scanner, fc *types.FolderConfig) (codeClient.CodeScanner, error) {
+			fakeClient, err := NewFakeCodeScannerClient(sc, fc)
+			if err == nil {
+				capturedOrg = fakeClient.(*FakeCodeScannerClient).Organization
+			}
+			return fakeClient, err
+		}
+		scanner.codeScanner = factoryWithOrgCapture
+
 		// Scan a file in folder 1
 		// The FakeCodeScannerClient will return SARIF that gets converted to issues
 		issues, err := scanner.Scan(context.Background(), types.FilePath("test1.js"), folderPath1, folderConfig1)
 		require.NoError(t, err, "Scan should succeed for folder 1")
 		require.NotEmpty(t, issues, "Should return issues from scan")
 
+		// Verify the scanner was created with the correct org
+		assert.Equal(t, folderOrg1, capturedOrg, "Scanner should be created with folder 1's org")
+
 		// Verify all issues have ContentRoot set to folderPath1
 		for _, issue := range issues {
 			assert.Equal(t, folderPath1, issue.GetContentRoot(), "Issue ContentRoot should be set to folder 1")
-			// Verify FolderOrganization returns the correct org for this issue's ContentRoot
-			issueOrg := c.FolderOrganization(issue.GetContentRoot())
-			assert.Equal(t, folderOrg1, issueOrg, "FolderOrganization should return folder 1's org for issue's ContentRoot")
 		}
 	})
 
 	// Test folder 2
 	t.Run("folder 2", func(t *testing.T) {
+		// Capture the org used when creating the scanner
+		var capturedOrg string
+		factoryWithOrgCapture := func(sc *Scanner, fc *types.FolderConfig) (codeClient.CodeScanner, error) {
+			fakeClient, err := NewFakeCodeScannerClient(sc, fc)
+			if err == nil {
+				capturedOrg = fakeClient.(*FakeCodeScannerClient).Organization
+			}
+			return fakeClient, err
+		}
+		scanner.codeScanner = factoryWithOrgCapture
+
 		// Scan a file in folder 2
 		issues, err := scanner.Scan(context.Background(), types.FilePath("test2.js"), folderPath2, folderConfig2)
 		require.NoError(t, err, "Scan should succeed for folder 2")
 		require.NotEmpty(t, issues, "Should return issues from scan")
 
+		// Verify the scanner was created with the correct org
+		assert.Equal(t, folderOrg2, capturedOrg, "Scanner should be created with folder 2's org")
+
 		// Verify all issues have ContentRoot set to folderPath2
 		for _, issue := range issues {
 			assert.Equal(t, folderPath2, issue.GetContentRoot(), "Issue ContentRoot should be set to folder 2")
-			// Verify FolderOrganization returns the correct org for this issue's ContentRoot
-			issueOrg := c.FolderOrganization(issue.GetContentRoot())
-			assert.Equal(t, folderOrg2, issueOrg, "FolderOrganization should return folder 2's org for issue's ContentRoot")
 		}
 	})
 

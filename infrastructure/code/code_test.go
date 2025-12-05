@@ -932,11 +932,7 @@ func testCodeConfigUsesFolderOrg(
 
 	// Verify the org is correctly set in the config
 	configOrg := codeConfig.Organization()
-
-	// The org should be resolved to UUID (code-client-go expects UUID, not slug)
-	expectedOrgUUID, err := c.ResolveOrgToUUID(expectedOrg)
-	require.NoError(t, err, "Should be able to resolve folder's org to UUID")
-	assert.Equal(t, expectedOrgUUID, configOrg, "CodeConfig should use folder's org (as UUID)")
+	assert.Equal(t, expectedOrg, configOrg, "CodeConfig should use folder's org")
 }
 
 func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
@@ -1024,11 +1020,7 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 
 	// Verify the org is correctly set in the config
 	configOrg := codeConfig.Organization()
-
-	// The org should be resolved to UUID (code-client-go expects UUID, not slug)
-	globalOrgUUID, err := c.ResolveOrgToUUID(globalOrg)
-	require.NoError(t, err, "Should be able to resolve global org to UUID")
-	assert.Equal(t, globalOrgUUID, configOrg, "CodeConfig should fall back to global org (as UUID) when no folder org is set")
+	assert.Equal(t, globalOrg, configOrg, "CodeConfig should fall back to global org when no folder org is set")
 }
 
 func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
