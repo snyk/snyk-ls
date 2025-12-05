@@ -563,8 +563,6 @@ type FolderConfig struct {
 	OrgSetByUser                bool                                  `json:"orgSetByUser"`
 	FeatureFlags                map[string]bool                       `json:"featureFlags"`
 	SastSettings                *sast_contract.SastResponse           `json:"sastSettings"`
-	// RiskScoreThreshold filters OSS issues by their risk score. Only issues with score >= threshold are shown. Valid range is 0-1000.
-	RiskScoreThreshold int `json:"riskScoreThreshold"`
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {
@@ -581,7 +579,6 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 		OrgMigratedFromGlobalConfig: fc.OrgMigratedFromGlobalConfig,
 		OrgSetByUser:                fc.OrgSetByUser,
 		SastSettings:                fc.SastSettings,
-		RiskScoreThreshold:          fc.RiskScoreThreshold,
 	}
 
 	if fc.LocalBranches != nil {
@@ -633,6 +630,7 @@ type Settings struct {
 	AutomaticAuthentication          string               `json:"automaticAuthentication,omitempty"`
 	DeviceId                         string               `json:"deviceId,omitempty"`
 	FilterSeverity                   *SeverityFilter      `json:"filterSeverity,omitempty"`
+	RiskScoreThreshold               *int                 `json:"riskScoreThreshold,omitempty"` // Valid range is 0-1000.
 	IssueViewOptions                 *IssueViewOptions    `json:"issueViewOptions,omitempty"`
 	SendErrorReports                 string               `json:"sendErrorReports,omitempty"`
 	ManageBinariesAutomatically      string               `json:"manageBinariesAutomatically,omitempty"`
@@ -649,7 +647,7 @@ type Settings struct {
 	EnableSnykLearnCodeActions       string               `json:"enableSnykLearnCodeActions,omitempty"`
 	EnableSnykOSSQuickFixCodeActions string               `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
 	EnableSnykOpenBrowserActions     string               `json:"enableSnykOpenBrowserActions,omitempty"`
-	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"` // should this be global?
+	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"`
 	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
 	HoverVerbosity                   *int                 `json:"hoverVerbosity,omitempty"`
 	OutputFormat                     *string              `json:"outputFormat,omitempty"`

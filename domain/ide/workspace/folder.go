@@ -684,7 +684,7 @@ func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[produ
 		return FilterReasonSeverity
 	}
 	riskScoreInCLIEnabled := folderConfig.FeatureFlags[featureflag.UseExperimentalRiskScoreInCLI]
-	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue, folderConfig.RiskScoreThreshold) {
+	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue) {
 		return FilterReasonRiskScore
 	}
 	codeConsistentIgnoresEnabled := folderConfig.FeatureFlags[featureflag.SnykCodeConsistentIgnores]
@@ -708,7 +708,8 @@ func (f *Folder) isVisibleSeverity(issue types.Issue) bool {
 	return false
 }
 
-func (f *Folder) isVisibleRiskScore(issue types.Issue, riskScoreThreshold int) bool {
+func (f *Folder) isVisibleRiskScore(issue types.Issue) bool {
+	riskScoreThreshold := f.c.RiskScoreThreshold()
 	if riskScoreThreshold == 0 {
 		// Showing all issues because threshold is 0
 		return true

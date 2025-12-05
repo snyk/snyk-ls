@@ -590,10 +590,9 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 	}
 
 	t.Run("shows all issues when threshold is zero", func(t *testing.T) {
-		// Set folder config with risk score threshold set to 0 (0 = show all, valid range: 0-1000)
+		// Set folder config with feature flag enabled
 		folderConfig := &types.FolderConfig{
-			FolderPath:         folderPath,
-			RiskScoreThreshold: 0,
+			FolderPath: folderPath,
 			FeatureFlags: map[string]bool{
 				featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
 				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
@@ -601,6 +600,9 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 		}
 		err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
 		require.NoError(t, err)
+
+		// Set global risk score threshold to 0 (show all)
+		c.SetRiskScoreThreshold(util.Ptr(0))
 
 		// Verify all issues are visible when threshold is 0
 		filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
@@ -609,10 +611,9 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 	})
 
 	t.Run("filters issues by threshold", func(t *testing.T) {
-		// Set folder config with risk score threshold of 400 (valid range: 0-1000)
+		// Set folder config with feature flag enabled
 		folderConfig := &types.FolderConfig{
-			FolderPath:         folderPath,
-			RiskScoreThreshold: 400,
+			FolderPath: folderPath,
 			FeatureFlags: map[string]bool{
 				featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
 				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
@@ -620,6 +621,9 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 		}
 		err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
 		require.NoError(t, err)
+
+		// Set global risk score threshold of 400
+		c.SetRiskScoreThreshold(util.Ptr(400))
 
 		// Verify filtering works correctly with threshold of 400
 		filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
@@ -641,16 +645,18 @@ func Test_FilterIssues_LogsCorrectFilterReasons(t *testing.T) {
 
 	// Set up folder config with feature flags enabled
 	folderConfig := &types.FolderConfig{
-		FolderPath:         folderPath,
-		RiskScoreThreshold: 400,
+		FolderPath: folderPath,
 		FeatureFlags: map[string]bool{
-			featureflag.UseExperimentalRiskScoreInCLI: true,
-			featureflag.SnykCodeConsistentIgnores:     true,
+			featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
+			// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
+			featureflag.SnykCodeConsistentIgnores: true,
 		},
 	}
 	err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
 	require.NoError(t, err)
 
+	// Set global risk score threshold
+	c.SetRiskScoreThreshold(util.Ptr(400))
 	// Disable low severity in global config
 	severityFilter := types.NewSeverityFilter(true, true, true, false)
 	c.SetSeverityFilter(&severityFilter)
