@@ -255,7 +255,7 @@ func (g *GitPersistenceProvider) Exists(folderPath types.FilePath, commitHash st
 	defer g.mutex.Unlock()
 
 	logger := g.logger.With().Str("method", "Exists").Logger()
-	logger.Debug().Msgf("called: folderPath=%s, requestedCommitHash=%s, product=%s", folderPath, commitHash, p)
+	logger.Debug().Msgf("checking for existing snapshot: folderPath=%s, requestedCommitHash=%s, product=%s", folderPath, commitHash, p)
 
 	cacheDir := snykCacheDir(g.conf)
 	existingCommitHash, err := g.getCommitHashForProduct(folderPath, p)
