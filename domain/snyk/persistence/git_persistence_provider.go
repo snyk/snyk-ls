@@ -179,7 +179,7 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 	defer g.mutex.Unlock()
 
 	logger := g.logger.With().Str("method", "GetPersistedIssueList").Logger()
-	logger.Debug().Msgf("called: folderPath=%s, product=%s", folderPath, p)
+	logger.Debug().Msgf("getting persisted issue list for folderPath=%s, product=%s", folderPath, p)
 
 	cacheDir := snykCacheDir(g.conf)
 	commitHash, err := g.getCommitHashForProduct(folderPath, p)
