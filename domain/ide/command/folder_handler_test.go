@@ -30,11 +30,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command/testutils"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -86,7 +86,8 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	setupMockOrgResolver(t, expectedOrg)
 
 	// Setup workspace with a folder
-	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
@@ -117,7 +118,7 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	_, _ = testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with no folders
-	notifier, _ := testutils.SetupFakeWorkspace(t, c, 0)
+	_, notifier := workspaceutil.SetupWorkspace(t, c)
 
 	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
@@ -225,7 +226,8 @@ func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 	setupMockOrgResolverWithError(t, assert.AnError)
 
 	// Setup workspace with a folder
-	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 1)
+	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
@@ -276,7 +278,11 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	SetService(mockService)
 
 	// Setup workspace with multiple folders
-	notifier, folderPaths := testutils.SetupFakeWorkspace(t, c, 2)
+	folderPaths := []types.FilePath{
+		types.FilePath("/fake/test-folder-0"),
+		types.FilePath("/fake/test-folder-1"),
+	}
+	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 	logger := c.Logger()
 
