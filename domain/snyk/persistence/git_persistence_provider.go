@@ -161,6 +161,15 @@ func (g *GitPersistenceProvider) Clear(folders []types.FilePath, deleteOnlyExpir
 	}
 }
 
+func (g *GitPersistenceProvider) ClearFolder(folderPath types.FilePath) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+
+	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	g.logger.Debug().Str("folderPath", string(folderPath)).Str("hash", string(hash)).Msg("clearing in-memory cache for folder")
+	delete(g.cache, hash)
+}
+
 func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath, p product.Product) ([]types.Issue, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()

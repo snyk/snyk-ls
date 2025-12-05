@@ -415,6 +415,88 @@ func TestClear_ExpiredCache(t *testing.T) {
 	assert.NotEmpty(t, existingActualIssueList)
 }
 
+func TestClearFolder_ClearsInMemoryCacheForFolder(t *testing.T) {
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
+	folderPath := types.FilePath(conf.GetString(constants.DataHome))
+	repo := initGitRepo(t, folderPath, false)
+
+	existingCodeIssues := []types.Issue{
+		&snyk.Issue{
+			GlobalIdentity: uuid.New().String(),
+		},
+	}
+
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+	productName := product.ProductCode
+	persistenceProvider := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
+	err = persistenceProvider.Init([]types.FilePath{folderPath})
+	assert.NoError(t, err)
+	err = persistenceProvider.Add(folderPath, commitHash, existingCodeIssues, productName)
+	assert.NoError(t, err)
+
+	// Verify cache exists before clearing
+	hash := hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
+	assert.NotEmpty(t, persistenceProvider.cache[hash])
+
+	// Clear the folder cache
+	persistenceProvider.ClearFolder(folderPath)
+
+	// Verify in-memory cache is cleared for the folder
+	assert.Empty(t, persistenceProvider.cache[hash])
+
+	// GetPersistedIssueList should now return an error since the cache entry is gone
+	_, err = persistenceProvider.GetPersistedIssueList(folderPath, productName)
+	assert.Error(t, err)
+	assert.Equal(t, ErrPathHashDoesntExist, err)
+}
+
+func TestClearFolder_DoesNotAffectOtherFolders(t *testing.T) {
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
+	folderPath1 := types.FilePath(conf.GetString(constants.DataHome))
+	folderPath2 := types.FilePath(t.TempDir())
+	repo1 := initGitRepo(t, folderPath1, false)
+	repo2 := initGitRepo(t, folderPath2, false)
+
+	existingCodeIssues := []types.Issue{
+		&snyk.Issue{
+			GlobalIdentity: uuid.New().String(),
+		},
+	}
+
+	commitHash1, err := vcs.HeadRefHashForRepo(repo1)
+	assert.NoError(t, err)
+	commitHash2, err := vcs.HeadRefHashForRepo(repo2)
+	assert.NoError(t, err)
+
+	productName := product.ProductCode
+	persistenceProvider := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
+	err = persistenceProvider.Init([]types.FilePath{folderPath1, folderPath2})
+	assert.NoError(t, err)
+	err = persistenceProvider.Add(folderPath1, commitHash1, existingCodeIssues, productName)
+	assert.NoError(t, err)
+	err = persistenceProvider.Add(folderPath2, commitHash2, existingCodeIssues, productName)
+	assert.NoError(t, err)
+
+	// Clear only folder1's cache
+	persistenceProvider.ClearFolder(folderPath1)
+
+	// Verify folder1's cache is cleared
+	hash1 := hashedFolderPath(util.Sha256First16Hash(string(folderPath1)))
+	assert.Empty(t, persistenceProvider.cache[hash1])
+
+	// Verify folder2's cache is still intact
+	hash2 := hashedFolderPath(util.Sha256First16Hash(string(folderPath2)))
+	assert.NotEmpty(t, persistenceProvider.cache[hash2])
+
+	// folder2 should still return issues
+	issues, err := persistenceProvider.GetPersistedIssueList(folderPath2, productName)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, issues)
+}
+
 func TestCreateOrAppendToCache_NewCache(t *testing.T) {
 	c := testutil.UnitTest(t)
 	conf := c.Engine().GetConfiguration()
