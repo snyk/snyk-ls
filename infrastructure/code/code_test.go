@@ -243,11 +243,13 @@ func Test_Scan(t *testing.T) {
 
 		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
 		mockConfig.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
+		mockConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
 		mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 
 		// Mock Clone() to return a cloned configuration
 		clonedConfig := mocks.NewMockConfiguration(ctrl)
 		clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+		clonedConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
 		clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).AnyTimes()
 		mockConfig.EXPECT().Clone().Return(clonedConfig).AnyTimes()
 
@@ -284,11 +286,13 @@ func Test_Scan(t *testing.T) {
 			c.SetEngine(mockEngine)
 			mockEngine.EXPECT().GetConfiguration().Return(mockConfiguration).AnyTimes()
 			mockConfiguration.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
+			mockConfiguration.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
 			mockConfiguration.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 
 			// Mock Clone() to return a cloned configuration
 			clonedConfig := mocks.NewMockConfiguration(ctrl)
 			clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+			clonedConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
 			clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
 			mockConfiguration.EXPECT().Clone().Return(clonedConfig).AnyTimes()
 
@@ -728,6 +732,7 @@ func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, mockConfig *mocks.
 	mockConfig.EXPECT().GetString(gomock.Any()).DoAndReturn(func(key string) string {
 		return storage[key]
 	}).AnyTimes()
+	mockConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
 	mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value interface{}) {
 		// For these tests, we only need to persist strings.
 		if strVal, ok := value.(string); ok {
