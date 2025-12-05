@@ -181,6 +181,7 @@ type Config struct {
 	tokenChangeChannels              []chan string
 	prepareDefaultEnvChannel         chan bool
 	filterSeverity                   types.SeverityFilter
+	riskScoreThreshold               int
 	issueViewOptions                 types.IssueViewOptions
 	trustedFolders                   []types.FilePath
 	trustedFoldersFeatureEnabled     bool
@@ -195,6 +196,7 @@ type Config struct {
 	enableSnykLearnCodeActions       bool
 	enableSnykOSSQuickFixCodeActions bool
 	enableDeltaFindings              bool
+	writer                           *zerolog.ConsoleWriter
 	logger                           *zerolog.Logger
 	storage                          storage.StorageWithCallbacks
 	m                                sync.RWMutex
@@ -252,7 +254,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 		opt(c)
 	}
 
-	c.logger = getNewScrubbingLogger(c)
+	c.writer, c.logger = getNewScrubbingLogger(c)
 	c.cliSettings = NewCliSettings(c)
 	c.prepareDefaultEnvChannel = make(chan bool, 1)
 	if c.binarySearchPaths == nil {
@@ -346,13 +348,13 @@ func initWorkflows(c *Config) error {
 	return nil
 }
 
-func getNewScrubbingLogger(c *Config) *zerolog.Logger {
+func getNewScrubbingLogger(c *Config) (*zerolog.ConsoleWriter, *zerolog.Logger) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(logging.New(nil), make(frameworkLogging.ScrubbingDict))
 	writer := c.getConsoleWriter(c.scrubbingWriter)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
-	return &logger
+	return &writer, &logger
 }
 
 func (c *Config) determineDeviceId() string {
@@ -494,6 +496,12 @@ func (c *Config) FilterSeverity() types.SeverityFilter {
 	return c.filterSeverity
 }
 
+func (c *Config) RiskScoreThreshold() int {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.riskScoreThreshold
+}
+
 func (c *Config) IssueViewOptions() types.IssueViewOptions {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -607,9 +615,21 @@ func (c *Config) SetSeverityFilter(severityFilter *types.SeverityFilter) bool {
 		return false
 	}
 	filterModified := c.filterSeverity != *severityFilter
-	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
+	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
 	c.filterSeverity = *severityFilter
 	return filterModified
+}
+
+func (c *Config) SetRiskScoreThreshold(riskScoreThreshold *int) bool {
+	c.m.Lock()
+	defer c.m.Unlock()
+	if riskScoreThreshold == nil {
+		return false
+	}
+	modified := c.riskScoreThreshold != *riskScoreThreshold
+	c.logger.Debug().Str("method", "SetRiskScoreThreshold").Int("riskScoreThreshold", *riskScoreThreshold).Msg("Setting risk score threshold")
+	c.riskScoreThreshold = *riskScoreThreshold
+	return modified
 }
 
 func (c *Config) SetIssueViewOptions(issueViewOptions *types.IssueViewOptions) bool {
@@ -619,7 +639,7 @@ func (c *Config) SetIssueViewOptions(issueViewOptions *types.IssueViewOptions) b
 		return false
 	}
 	issueViewOptionsModified := c.issueViewOptions != *issueViewOptions
-	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options:")
+	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options")
 	c.issueViewOptions = *issueViewOptions
 	return issueViewOptionsModified
 }
@@ -750,6 +770,7 @@ func (c *Config) ConfigureLogging(server types.Server) {
 	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), make(frameworkLogging.ScrubbingDict))
 	writer := c.getConsoleWriter(c.scrubbingWriter)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger().Level(logLevel)
+	c.writer = &writer
 	c.logger = &logger
 	c.engine.SetLogger(&logger)
 }
@@ -1111,6 +1132,15 @@ func (c *Config) Logger() *zerolog.Logger {
 	c.m.RLock()
 	defer c.m.RUnlock()
 	return c.logger
+}
+
+// AddLoggerOutputForTesting allows tests to capture log output by adding an additional writer.
+// Note: This updates c.logger but not c.writer, as the new logger still outputs through c.writer's formatting.
+func (c *Config) AddLoggerOutputForTesting(writer io.Writer) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	newLogger := c.logger.Output(io.MultiWriter(c.writer, writer))
+	c.logger = &newLogger
 }
 
 func (c *Config) AuthenticationMethodMatchesCredentials() bool {
