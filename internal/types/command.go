@@ -47,6 +47,7 @@ const (
 	ClearCacheCommand               = "snyk.clearCache"
 	GenerateIssueDescriptionCommand = "snyk.generateIssueDescription"
 	SubmitIgnoreRequest             = "snyk.submitIgnoreRequest"
+	WorkspaceConfigurationCommand   = "snyk.workspace.configuration"
 	// Snyk Code specific commands
 	CodeFixCommand          = "snyk.code.fix"
 	CodeFixDiffsCommand     = "snyk.code.fixDiffs"

@@ -1,0 +1,356 @@
+(function() {
+    // IE7 Compatible Script
+
+    // Helper to get element by ID
+    function get(id) {
+        return document.getElementById(id);
+    }
+
+    // Helper to get elements by name
+    function getByName(name) {
+        return document.getElementsByName(name);
+    }
+
+    // Helper to add event listener (IE7 compatible)
+    function addEvent(element, event, handler) {
+        if (element.addEventListener) {
+            element.addEventListener(event, handler, false);
+        } else if (element.attachEvent) {
+            element.attachEvent('on' + event, handler);
+        } else {
+            element['on' + event] = handler;
+        }
+    }
+
+    // Helper to remove class (IE7 compatible)
+    function removeClass(element, className) {
+        if (!element) return;
+        var reg = new RegExp('(\\s|^)' + className + '(\\s|$)');
+        element.className = element.className.replace(reg, ' ');
+    }
+
+    // Helper to add class (IE7 compatible)
+    function addClass(element, className) {
+        if (!element) return;
+        if (element.className.indexOf(className) === -1) {
+            element.className += ' ' + className;
+        }
+    }
+
+    // Validate Endpoint
+    function validateEndpoint(url) {
+        if (!url) return true; // Empty URL allows default
+        // Regex for api.*.snyk.io or api.*.snykgov.io
+        var snykRegex = /^https:\/\/api\..*\.snyk\.io/;
+        var snykgovRegex = /^https:\/\/api\..*\.snykgov\.io/;
+        
+        return snykRegex.test(url) || snykgovRegex.test(url) || url === "https://api.snyk.io";
+    }
+
+    // Collect form data
+    function collectData() {
+        var data = {
+            folderConfigs: []
+        };
+
+        var form = get('configForm');
+        var inputs = form.getElementsByTagName('input');
+        var selects = form.getElementsByTagName('select');
+        var textareas = form.getElementsByTagName('textarea');
+        
+        // Process all elements
+        processElements(inputs, data);
+        processElements(selects, data);
+        processElements(textareas, data);
+
+        // Process complex objects
+        processFilterSeverity(data);
+        processIssueViewOptions(data);
+
+        return data;
+    }
+
+    function processElements(elements, data) {
+        for (var i = 0; i < elements.length; i++) {
+            var el = elements[i];
+            var name = el.name;
+
+            if (!name) continue;
+
+            // Skip complex object fields (handled separately)
+            if (name.indexOf('filterSeverity_') === 0 || 
+                name.indexOf('issueViewOptions_') === 0) {
+                continue;
+            }
+
+            // Folder logic: folder_INDEX_FIELD or folder_INDEX_scanConfig_PRODUCT_FIELD
+            if (name.indexOf('folder_') === 0) {
+                var parts = name.split('_');
+                if (parts.length >= 3) {
+                    var index = parseInt(parts[1]);
+                    
+                    if (!data.folderConfigs[index]) {
+                        data.folderConfigs[index] = {};
+                    }
+
+                    // Check if this is a scanConfig field: folder_INDEX_scanConfig_PRODUCT_FIELD
+                    if (parts.length >= 5 && parts[2] === 'scanConfig') {
+                        var product = parts[3]; // oss, code, or iac
+                        var field = parts[4]; // preScanCommand, preScanOnlyReferenceFolder, etc.
+                        
+                        if (!data.folderConfigs[index].scanCommandConfig) {
+                            data.folderConfigs[index].scanCommandConfig = {};
+                        }
+                        if (!data.folderConfigs[index].scanCommandConfig[product]) {
+                            data.folderConfigs[index].scanCommandConfig[product] = {};
+                        }
+                        
+                        // Map UI field names to JSON field names
+                        var jsonField = field;
+                        if (field === 'preScanCommand') {
+                            jsonField = 'command'; // PreScanCommand uses 'command' in JSON
+                        }
+                        
+                        if (el.type === 'checkbox') {
+                            data.folderConfigs[index].scanCommandConfig[product][jsonField] = el.checked;
+                        } else if (el.value && el.value.trim()) {
+                            data.folderConfigs[index].scanCommandConfig[product][jsonField] = el.value;
+                        }
+                    } else {
+                        var field = parts.slice(2).join('_');
+                        setFieldValue(data.folderConfigs[index], field, el);
+                    }
+                }
+            } else {
+                // Global setting
+                setFieldValue(data, name, el);
+            }
+        }
+    }
+
+    function setFieldValue(obj, field, el) {
+        if (el.type === 'checkbox') {
+            obj[field] = el.checked;
+        } else if (el.type === 'number') {
+            obj[field] = el.value ? parseInt(el.value) : null;
+        } else if (el.tagName.toLowerCase() === 'textarea') {
+            // Try to parse as JSON, fallback to string
+            try {
+                if (el.value && el.value.trim()) {
+                    obj[field] = JSON.parse(el.value);
+                } else {
+                    obj[field] = null;
+                }
+            } catch (e) {
+                obj[field] = el.value;
+            }
+        } else {
+            obj[field] = el.value;
+        }
+    }
+
+    function processFilterSeverity(data) {
+        var critical = getByName('filterSeverity_critical')[0];
+        var high = getByName('filterSeverity_high')[0];
+        var medium = getByName('filterSeverity_medium')[0];
+        var low = getByName('filterSeverity_low')[0];
+
+        if (critical || high || medium || low) {
+            data.filterSeverity = {
+                critical: critical ? critical.checked : false,
+                high: high ? high.checked : false,
+                medium: medium ? medium.checked : false,
+                low: low ? low.checked : false
+            };
+        }
+    }
+
+    function processIssueViewOptions(data) {
+        var openIssues = getByName('issueViewOptions_openIssues')[0];
+        var ignoredIssues = getByName('issueViewOptions_ignoredIssues')[0];
+
+        if (openIssues || ignoredIssues) {
+            data.issueViewOptions = {
+                openIssues: openIssues ? openIssues.checked : false,
+                ignoredIssues: ignoredIssues ? ignoredIssues.checked : false
+            };
+        }
+    }
+
+    var originalEndpoint = "";
+
+    // Toggle organization field based on auto-org checkbox
+    function toggleOrgField(folderIndex) {
+        var autoOrgCheckbox = get('folder_' + folderIndex + '_autoOrg');
+        var orgInput = get('folder_' + folderIndex + '_preferredOrg');
+        var orgSetByUserInput = get('folder_' + folderIndex + '_orgSetByUser');
+
+        if (!autoOrgCheckbox || !orgInput || !orgSetByUserInput) {
+            return;
+        }
+
+        var isAutoOrg = autoOrgCheckbox.checked;
+        var preferredOrg = orgInput.getAttribute('data-preferred-org') || '';
+        var autoOrg = orgInput.getAttribute('data-auto-org') || '';
+
+        if (isAutoOrg) {
+            // Auto select is ON: show AutoDeterminedOrg (readonly)
+            orgInput.value = autoOrg;
+            orgInput.setAttribute('readonly', 'readonly');
+            orgSetByUserInput.value = 'false';
+        } else {
+            // Auto select is OFF: show PreferredOrg (editable)
+            orgInput.value = preferredOrg;
+            orgInput.removeAttribute('readonly');
+            orgSetByUserInput.value = 'true';
+        }
+    }
+
+    // Expose toggleOrgField to window for inline onclick handlers
+    window.toggleOrgField = toggleOrgField;
+
+    // Initialize all folder org fields on page load
+    function initializeFolderOrgFields() {
+        var allInputs = document.getElementsByTagName('input');
+        for (var i = 0; i < allInputs.length; i++) {
+            var input = allInputs[i];
+            var inputId = input.id || '';
+            if (input.type === 'checkbox' && inputId.indexOf('_autoOrg') !== -1 && input.getAttribute('data-index') !== null) {
+                var folderIndex = input.getAttribute('data-index');
+                toggleOrgField(folderIndex);
+            }
+        }
+    }
+
+    var saveTimeout = null;
+    var SAVE_DELAY = 500; // milliseconds delay for debouncing
+
+    // Save handler
+    function saveConfig() {
+        var endpointInput = get('endpoint');
+        var endpointError = get('endpoint-error');
+        var currentEndpoint = endpointInput.value;
+
+        if (currentEndpoint && !validateEndpoint(currentEndpoint)) {
+            removeClass(endpointError, 'hidden');
+            return;
+        } else {
+            addClass(endpointError, 'hidden');
+        }
+
+        var data = collectData();
+        var jsonString = JSON.stringify(data);
+
+        // Call IDE injected function
+        try {
+            window.__ideSaveConfig__(jsonString);
+
+            // If endpoint changed, trigger logout
+            if (originalEndpoint && currentEndpoint !== originalEndpoint) {
+                 // We might need to wait for save to complete, but here we just trigger it.
+                 // Ideally the IDE extension handles the logout if it detects the change,
+                 // but the requirement says "logout command should be called".
+                 // Since we are in the webview, we can't call the command directly unless we have a binding.
+                 // We can use another injected function or rely on the save handler in the extension to check.
+                 // Requirement: "when the endpoint (snyk api url) is changed, logout command should be called"
+                 // I'll assume we can call a function.
+                 if (typeof window.__ideLogout__ !== 'undefined') {
+                     window.__ideLogout__();
+                 }
+            }
+        } catch (e) {
+            alert('Error saving configuration: ' + e.message);
+        }
+    }
+
+    // Debounced save - delays save until user stops changing inputs
+    function debouncedSave() {
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+        }
+        saveTimeout = setTimeout(function() {
+            saveConfig();
+        }, SAVE_DELAY);
+    }
+
+    // Attach auto-save listeners to all form inputs
+    function attachAutoSaveListeners() {
+        var form = get('configForm');
+        if (!form) return;
+
+        var inputs = form.getElementsByTagName('input');
+        var selects = form.getElementsByTagName('select');
+        var textareas = form.getElementsByTagName('textarea');
+
+        // Add blur event listeners to all inputs
+        for (var i = 0; i < inputs.length; i++) {
+            addEvent(inputs[i], 'blur', debouncedSave);
+            // Also save on change for checkboxes and radios
+            if (inputs[i].type === 'checkbox' || inputs[i].type === 'radio') {
+                addEvent(inputs[i], 'change', debouncedSave);
+            }
+        }
+
+        for (var j = 0; j < selects.length; j++) {
+            addEvent(selects[j], 'change', debouncedSave);
+        }
+
+        for (var k = 0; k < textareas.length; k++) {
+            addEvent(textareas[k], 'blur', debouncedSave);
+        }
+    }
+
+    function authenticate() {
+        // First save
+        saveConfig();
+
+        // Then trigger login
+        try {
+            window.__ideLogin__();
+        } catch (e) {
+            alert('Error initiating authentication: ' + e.message);
+        }
+    }
+
+    function logout() {
+        // Trigger logout
+        try {
+            window.__ideLogout__();
+        } catch (e) {
+            alert('Error initiating logout: ' + e.message);
+        }
+    }
+
+    // Initialize
+    addEvent(window, 'load', function() {
+        var authBtn = get('authenticate-btn');
+        if (authBtn) {
+            addEvent(authBtn, 'click', authenticate);
+        }
+
+        var logoutBtn = get('logout-btn');
+        if (logoutBtn) {
+            addEvent(logoutBtn, 'click', logout);
+        }
+
+        var endpointInput = get('endpoint');
+        if (endpointInput) {
+            originalEndpoint = endpointInput.value;
+        }
+
+        // Initialize folder organization field toggles
+        initializeFolderOrgFields();
+
+        // Attach auto-save listeners to all form inputs
+        attachAutoSaveListeners();
+
+        // Initialize Bootstrap tooltips
+        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+            var tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            for (var i = 0; i < tooltipTriggerList.length; i++) {
+                new bootstrap.Tooltip(tooltipTriggerList[i]);
+            }
+        }
+    });
+
+})();
