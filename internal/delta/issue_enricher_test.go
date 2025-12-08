@@ -80,6 +80,17 @@ func TestFindingsEnricher_EnrichWithIsNew(t *testing.T) {
 			newIssues:           []Identifiable{},
 			expectedIsNewStates: []bool{},
 		},
+		{
+			name: "Fixed issue in newIssues but not in allCurrentIssues is ignored",
+			allCurrentIssues: []Identifiable{
+				&mockIdentifiable{globalIdentity: "id1", isNew: false},
+				&mockIdentifiable{globalIdentity: "id2", isNew: false},
+			},
+			newIssues: []Identifiable{
+				&mockIdentifiable{globalIdentity: "id3"}, // fixed issue - in delta but not in current
+			},
+			expectedIsNewStates: []bool{false, false},
+		},
 	}
 
 	for _, tt := range tests {
