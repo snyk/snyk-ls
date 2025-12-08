@@ -710,13 +710,14 @@ func (f *Folder) isVisibleSeverity(issue types.Issue) bool {
 
 func (f *Folder) isVisibleRiskScore(issue types.Issue) bool {
 	riskScoreThreshold := f.c.RiskScoreThreshold()
-	if riskScoreThreshold == 0 {
+	switch {
+	case riskScoreThreshold == 0:
 		// Showing all issues because threshold is 0
 		return true
-	} else if riskScoreThreshold < 0 {
+	case riskScoreThreshold < 0:
 		// Invalid negative risk score threshold. Showing all issues.
 		return true
-	} else if riskScoreThreshold > 1000 {
+	case riskScoreThreshold > 1000:
 		// Invalid high risk score threshold. Showing no issues.
 		return false
 	}
