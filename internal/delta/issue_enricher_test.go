@@ -23,6 +23,91 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestFindingsEnricher_EnrichWithIsNew(t *testing.T) {
+	tests := []struct {
+		name                string
+		allCurrentIssues    []Identifiable
+		newIssues           []Identifiable
+		expectedIsNewStates []bool
+	}{
+		{
+			name: "Empty delta list sets all issues to not new regardless of pre-existing state",
+			allCurrentIssues: []Identifiable{
+				&mockIdentifiable{globalIdentity: "id1", isNew: true},
+				&mockIdentifiable{globalIdentity: "id2", isNew: false},
+				&mockIdentifiable{globalIdentity: "id3", isNew: true},
+			},
+			newIssues:           []Identifiable{},
+			expectedIsNewStates: []bool{false, false, false},
+		},
+		{
+			name: "Issues in delta list are marked new, others are not, regardless of pre-existing state",
+			allCurrentIssues: []Identifiable{
+				&mockIdentifiable{globalIdentity: "id1", isNew: false}, // was false, not in delta -> stays false
+				&mockIdentifiable{globalIdentity: "id2", isNew: false}, // was false, in delta -> becomes true
+				&mockIdentifiable{globalIdentity: "id3", isNew: true},  // was true, not in delta -> becomes false
+			},
+			newIssues: []Identifiable{
+				&mockIdentifiable{globalIdentity: "id2"},
+			},
+			expectedIsNewStates: []bool{false, true, false},
+		},
+		{
+			name: "All issues in delta list are marked new",
+			allCurrentIssues: []Identifiable{
+				&mockIdentifiable{globalIdentity: "id1", isNew: false},
+				&mockIdentifiable{globalIdentity: "id2", isNew: false},
+			},
+			newIssues: []Identifiable{
+				&mockIdentifiable{globalIdentity: "id1"},
+				&mockIdentifiable{globalIdentity: "id2"},
+			},
+			expectedIsNewStates: []bool{true, true},
+		},
+		{
+			name: "Pre-existing isNew=true is overwritten to false when not in delta",
+			allCurrentIssues: []Identifiable{
+				&mockIdentifiable{globalIdentity: "id1", isNew: true},
+				&mockIdentifiable{globalIdentity: "id2", isNew: true},
+				&mockIdentifiable{globalIdentity: "id3", isNew: true},
+			},
+			newIssues:           []Identifiable{},
+			expectedIsNewStates: []bool{false, false, false},
+		},
+		{
+			name:                "Empty current issues list",
+			allCurrentIssues:    []Identifiable{},
+			newIssues:           []Identifiable{},
+			expectedIsNewStates: []bool{},
+		},
+		{
+			name: "Fixed issue in newIssues but not in allCurrentIssues is ignored",
+			allCurrentIssues: []Identifiable{
+				&mockIdentifiable{globalIdentity: "id1", isNew: false},
+				&mockIdentifiable{globalIdentity: "id2", isNew: false},
+			},
+			newIssues: []Identifiable{
+				&mockIdentifiable{globalIdentity: "id3"}, // fixed issue - in delta but not in current
+			},
+			expectedIsNewStates: []bool{false, false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			enricher := FindingsEnricher{}
+			result := enricher.EnrichWithIsNew(tt.allCurrentIssues, tt.newIssues)
+
+			assert.Equal(t, len(tt.expectedIsNewStates), len(result), "Result length should match expected")
+
+			for i, item := range result {
+				assert.Equal(t, tt.expectedIsNewStates[i], item.GetIsNew(),
+					"Issue %d (%s) should have isNew=%v", i, item.GetGlobalIdentity(), tt.expectedIsNewStates[i])
+			}
+		})
+	}
+}
+
 func TestFindingsEnricher_EnrichWithId(t *testing.T) {
 	tests := []struct {
 		name     string

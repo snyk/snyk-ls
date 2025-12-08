@@ -529,17 +529,25 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	defer f.mutex.Unlock()
 
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
+	logger.Debug().Msgf("getting delta for product %s, folderPath %s", p, f.path)
+
 	issueByFile := f.IssuesByProduct()[p]
 
 	if len(issueByFile) == 0 {
 		// If no issues found in current branch scan. We can't have deltas.
+		logger.Debug().Msg("no current issues, returning empty")
 		return issueByFile, nil
 	}
 
+	logger.Debug().Msgf("current issues count=%d", len(getFlatIssueList(issueByFile)))
+
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
 	if err != nil {
+		logger.Debug().Msgf("GetPersistedIssueList returned error: %v", err)
 		return nil, err
 	}
+
+	logger.Debug().Msgf("base issues count=%d", len(baseIssueList))
 
 	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
 	for i := range baseIssueList {
@@ -547,6 +555,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	currentFlatIssueList := getFlatIssueList(issueByFile)
+
 	currentFindingIdentifiable := make([]delta.Identifiable, len(currentFlatIssueList))
 	for i := range currentFlatIssueList {
 		currentFindingIdentifiable[i] = currentFlatIssueList[i]
@@ -561,8 +570,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	deltaSnykIssues := []types.Issue{}
-	for i := range enrichedIssues {
-		identifiable := enrichedIssues[i]
+	for _, identifiable := range enrichedIssues {
 		if identifiable == nil || !identifiable.GetIsNew() {
 			continue
 		}
@@ -573,6 +581,8 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 		}
 	}
 	issueByFile = getIssuePerFileFromFlatList(deltaSnykIssues)
+
+	logger.Debug().Msgf("returning %d delta issues", len(deltaSnykIssues))
 
 	return issueByFile, nil
 }

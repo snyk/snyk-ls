@@ -35,6 +35,7 @@ type Clearer interface {
 type ScanSnapshotClearerExister interface {
 	Init(folderPath []FilePath) error
 	Clear(folderPath []FilePath, deleteOnlyExpired bool)
+	ClearFolder(folderPath FilePath)
 	Exists(folderPath FilePath, commitHash string, p product.Product) bool
 }
 
