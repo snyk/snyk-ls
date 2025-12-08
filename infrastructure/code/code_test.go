@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -46,6 +47,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
@@ -241,11 +243,13 @@ func Test_Scan(t *testing.T) {
 
 		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
 		mockConfig.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
+		mockConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
 		mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 
 		// Mock Clone() to return a cloned configuration
 		clonedConfig := mocks.NewMockConfiguration(ctrl)
 		clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+		clonedConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
 		clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).AnyTimes()
 		mockConfig.EXPECT().Clone().Return(clonedConfig).AnyTimes()
 
@@ -282,11 +286,13 @@ func Test_Scan(t *testing.T) {
 			c.SetEngine(mockEngine)
 			mockEngine.EXPECT().GetConfiguration().Return(mockConfiguration).AnyTimes()
 			mockConfiguration.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
+			mockConfiguration.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
 			mockConfiguration.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 
 			// Mock Clone() to return a cloned configuration
 			clonedConfig := mocks.NewMockConfiguration(ctrl)
 			clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+			clonedConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
 			clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
 			mockConfiguration.EXPECT().Clone().Return(clonedConfig).AnyTimes()
 
@@ -726,6 +732,7 @@ func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, mockConfig *mocks.
 	mockConfig.EXPECT().GetString(gomock.Any()).DoAndReturn(func(key string) string {
 		return storage[key]
 	}).AnyTimes()
+	mockConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
 	mockConfig.EXPECT().Set(gomock.Any(), gomock.Any()).DoAndReturn(func(key string, value interface{}) {
 		// For these tests, we only need to persist strings.
 		if strVal, ok := value.(string); ok {
@@ -900,4 +907,180 @@ func Test_resolveOrgToUUID(t *testing.T) {
 		assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
 		assert.Empty(t, result)
 	})
+}
+
+// testCodeConfigUsesFolderOrg is a shared helper function that tests CodeConfig creation
+// uses the correct folder-specific org for a single folder scenario.
+// This focuses on the core CodeConfig creation flow: FolderOrganization -> createCodeConfig -> CreateCodeScanner
+func testCodeConfigUsesFolderOrg(
+	t *testing.T,
+	c *config.Config,
+	scanner *Scanner,
+	folderPath types.FilePath,
+	expectedOrg string,
+) {
+	t.Helper()
+
+	// Verify FolderOrganization() returns the expected org
+	folderOrg := c.FolderOrganization(folderPath)
+	assert.Equal(t, expectedOrg, folderOrg, "FolderOrganization should return folder's org")
+
+	// Get FolderConfig for the folder
+	folderConfig := c.FolderConfig(folderPath)
+	require.NotNil(t, folderConfig, "FolderConfig should not be nil")
+
+	// Verify the CodeConfig has the correct org
+	// This is what CreateCodeScanner uses internally, so we verify it first
+	codeConfig, err := scanner.createCodeConfig(folderConfig)
+	require.NoError(t, err, "createCodeConfig should succeed with folder's org")
+	require.NotNil(t, codeConfig, "CodeConfig should not be nil")
+
+	// Verify the org is correctly set in the config
+	configOrg := codeConfig.Organization()
+	assert.Equal(t, expectedOrg, configOrg, "CodeConfig should use folder's org")
+}
+
+func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+
+	// Set up two folders with different orgs
+	folderPath1 := types.FilePath("/fake/test-folder-1")
+	folderPath2 := types.FilePath("/fake/test-folder-2")
+	folderOrg1 := "5b1ddf00-0000-0000-0000-000000000002"
+	folderOrg2 := "5b1ddf00-0000-0000-0000-000000000003"
+
+	// Set up workspace with the folders
+	// This is required for FolderOrganizationForSubPath to work (used by GetCodeApiUrlForFolder)
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
+
+	// Configure folder 1 with org1
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		FolderPath:                  folderPath1,
+		PreferredOrg:                folderOrg1,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
+
+	// Configure folder 2 with org2
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		FolderPath:                  folderPath2,
+		PreferredOrg:                folderOrg2,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
+
+	// Create a scanner to test CreateCodeScanner (the actual function used in scanning)
+	// This is called via sc.codeScanner() in UploadAndAnalyze during actual scans
+	scanner := &Scanner{
+		C: c,
+	}
+
+	// Test folder 1
+	t.Run("folder 1", func(t *testing.T) {
+		testCodeConfigUsesFolderOrg(t, c, scanner, folderPath1, folderOrg1)
+	})
+
+	// Test folder 2
+	t.Run("folder 2", func(t *testing.T) {
+		testCodeConfigUsesFolderOrg(t, c, scanner, folderPath2, folderOrg2)
+	})
+
+	// Verify the orgs are different
+	assert.NotEqual(t, folderOrg1, folderOrg2, "Folder orgs should be different")
+}
+
+func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+
+	globalOrg := "00000000-0000-0000-0000-000000000004"
+	c.SetOrganization(globalOrg)
+
+	folderPath := types.FilePath("/fake/test-folder")
+
+	// Set up workspace with the folder
+	// This is required for FolderOrganizationForSubPath to work (used by GetCodeApiUrlForFolder)
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath)
+
+	// Verify FolderOrganization() returns the global org (fallback behavior)
+	folderOrg := c.FolderOrganization(folderPath)
+	assert.Equal(t, globalOrg, folderOrg, "FolderOrganization should fall back to global org when no folder org is configured")
+
+	// Get FolderConfig for the folder
+	folderConfig := c.FolderConfig(folderPath)
+	require.NotNil(t, folderConfig, "FolderConfig should not be nil")
+
+	// Create a scanner to test createCodeConfig
+	scanner := &Scanner{
+		C: c,
+	}
+
+	// Verify the CodeConfig has the correct org
+	codeConfig, err := scanner.createCodeConfig(folderConfig)
+	require.NoError(t, err, "createCodeConfig should succeed with global org fallback")
+	require.NotNil(t, codeConfig, "CodeConfig should not be nil")
+
+	// Verify the org is correctly set in the config
+	configOrg := codeConfig.Organization()
+	assert.Equal(t, globalOrg, configOrg, "CodeConfig should fall back to global org when no folder org is set")
+}
+
+func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+
+	// Set up two folders with different orgs
+	folderPath1 := types.FilePath("/fake/test-folder-1")
+	folderPath2 := types.FilePath("/fake/test-folder-2")
+	folderOrg1 := "5b1ddf00-0000-0000-0000-000000000002"
+	folderOrg2 := "5b1ddf00-0000-0000-0000-000000000003"
+
+	// Set up workspace with the folders
+	// This is required for FolderOrganization to work (used by NewAutofixCodeRequestContext)
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
+
+	// Configure folder 1 with org1
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		FolderPath:                  folderPath1,
+		PreferredOrg:                folderOrg1,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
+
+	// Configure folder 2 with org2
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		FolderPath:                  folderPath2,
+		PreferredOrg:                folderOrg2,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
+
+	// Test folder 1
+	t.Run("folder 1", func(t *testing.T) {
+		requestContext := NewAutofixCodeRequestContext(folderPath1)
+		require.NotNil(t, requestContext, "RequestContext should not be nil")
+
+		// Verify the request context uses the correct org
+		// newCodeRequestContext calls FolderOrganization() which should return folderOrg1
+		assert.Equal(t, folderOrg1, requestContext.Org.PublicId, "RequestContext should use folder 1's org")
+		assert.NotEqual(t, folderOrg2, requestContext.Org.PublicId, "RequestContext should not use folder 2's org")
+	})
+
+	// Test folder 2
+	t.Run("folder 2", func(t *testing.T) {
+		requestContext := NewAutofixCodeRequestContext(folderPath2)
+		require.NotNil(t, requestContext, "RequestContext should not be nil")
+
+		// Verify the request context uses the correct org
+		assert.Equal(t, folderOrg2, requestContext.Org.PublicId, "RequestContext should use folder 2's org")
+		assert.NotEqual(t, folderOrg1, requestContext.Org.PublicId, "RequestContext should not use folder 1's org")
+	})
+
+	// Verify the orgs are different
+	assert.NotEqual(t, folderOrg1, folderOrg2, "Folder orgs should be different")
 }
