@@ -21,9 +21,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/code-client-go/sarif"
+	gafSastContract "github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -562,7 +563,7 @@ type FolderConfig struct {
 	OrgMigratedFromGlobalConfig bool                                  `json:"orgMigratedFromGlobalConfig"`
 	OrgSetByUser                bool                                  `json:"orgSetByUser"`
 	FeatureFlags                map[string]bool                       `json:"featureFlags"`
-	SastSettings                *sast_contract.SastResponse           `json:"sastSettings"`
+	SastSettings                *gafSastContract.SastResponse         `json:"sastSettings"`
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {
@@ -1178,12 +1179,12 @@ type ScanIssue struct { // TODO - convert this to a generic type
 }
 
 type IgnoreDetails struct {
-	Category   string                           `json:"category"`
-	Reason     string                           `json:"reason"`
-	Expiration string                           `json:"expiration"`
-	IgnoredOn  time.Time                        `json:"ignoredOn"`
-	IgnoredBy  string                           `json:"ignoredBy"`
-	Status     codeClientSarif.SuppresionStatus `json:"status"`
+	Category   string                 `json:"category"`
+	Reason     string                 `json:"reason"`
+	Expiration string                 `json:"expiration"`
+	IgnoredOn  time.Time              `json:"ignoredOn"`
+	IgnoredBy  string                 `json:"ignoredBy"`
+	Status     sarif.SuppresionStatus `json:"status"`
 }
 
 // CvssSource represents CVSS scoring information from various sources
@@ -1271,6 +1272,20 @@ type CodeIssueData struct {
 	PriorityScore   int               `json:"priorityScore"`
 	HasAIFix        bool              `json:"hasAIFix"`
 	DataFlow        []DataflowElement `json:"dataFlow,omitempty"`
+}
+
+type SecretsIssueData struct {
+	Key            string         `json:"key"`
+	Title          string         `json:"title"`
+	Message        string         `json:"message"`
+	Rule           string         `json:"rule"`
+	RuleId         string         `json:"ruleId"`
+	CWE            []string       `json:"cwe"`
+	Markers        []Marker       `json:"markers,omitempty"`
+	FilePath       string         `json:"filePath"`
+	Regions        []sarif.Region `json:"regions,omitempty"` // TODO check type for secrets.
+	IsSecurityType bool           `json:"isSecurityType"`
+	PriorityScore  int            `json:"priorityScore"`
 }
 
 type Point = [2]int
