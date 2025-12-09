@@ -47,14 +47,41 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 // constructSettingsFromConfig reconstructs a Settings object from the active configuration.
 // Boolean and integer values are converted to strings as per types.Settings definition.
 func constructSettingsFromConfig(c *config.Config) types.Settings {
+	// Extract CLI settings
+	insecure := false
+	cliPath := ""
+	additionalOssParams := ""
+	if c.CliSettings() != nil {
+		insecure = c.CliSettings().Insecure
+		cliPath = c.CliSettings().Path()
+		if len(c.CliSettings().AdditionalOssParameters) > 0 {
+			for _, param := range c.CliSettings().AdditionalOssParameters {
+				additionalOssParams += param + " "
+			}
+		}
+	}
+
+	// Get environment PATH
+	envPath := c.Engine().GetConfiguration().GetString("PATH")
+
 	s := types.Settings{
 		// Core Authentication
 		Token:                   c.Token(),
 		Endpoint:                c.Endpoint(),
+		BaseUrl:                 c.BaseUrl(),
 		Organization:            c.Organization(),
 		AuthenticationMethod:    c.AuthenticationMethod(),
 		AutomaticAuthentication: fmt.Sprintf("%v", c.AutomaticAuthentication()),
 		DeviceId:                c.DeviceID(),
+
+		// CLI and Paths
+		CliPath:                     cliPath,
+		Path:                        envPath,
+		ManageBinariesAutomatically: fmt.Sprintf("%v", c.ManageBinariesAutomatically()),
+		AdditionalParams:            additionalOssParams,
+
+		// Security Settings
+		Insecure: fmt.Sprintf("%v", insecure),
 
 		// Initialize FolderConfigs as empty slice
 		FolderConfigs: []types.FolderConfig{},

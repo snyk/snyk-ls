@@ -54,15 +54,17 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, "https://test.snyk.io")
 	assert.Contains(t, html, "/path/to/folder")
 	assert.Contains(t, html, "checked") // Insecure checkbox
-	assert.Contains(t, html, "window.__ideSaveConfig__")
+	assert.Contains(t, html, "window.__saveIdeConfig__")
+	assert.Contains(t, html, "window.getAndSaveIdeConfig")
 	assert.Contains(t, html, "window.__ideLogin__")
 	assert.Contains(t, html, "window.__ideLogout__")
 	assert.Contains(t, html, "Activate Snyk Code")
 	assert.Contains(t, html, "Authentication Method")
 	assert.Contains(t, html, "oauth")
-	assert.Contains(t, html, "Scan Configuration") // Section header
-	assert.Contains(t, html, "Filter and Display Settings") // Section header
-	assert.Contains(t, html, "Folder Settings") // Section header
+	assert.Contains(t, html, "Scan Configuration")    // Section header
+	assert.Contains(t, html, "Filtering and Display") // Section header
+	assert.Contains(t, html, "Folder Settings")       // Section header
+	assert.Contains(t, html, "CLI Configuration")     // Section header
 }
 
 func TestConfigHtmlRenderer_FiltersFolderConfigsNotInWorkspace(t *testing.T) {

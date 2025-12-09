@@ -67,9 +67,11 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 
 // GetConfigHtml renders the configuration dialog HTML using the provided settings.
 // The IDE extension must inject JavaScript functions on the window object:
-// - window.__ideSaveConfig__(jsonString): Save configuration
+// - window.__saveIdeConfig__(jsonString): Save configuration
 // - window.__ideLogin__(): Trigger authentication
 // - window.__ideLogout__(): Trigger logout
+// The IDE can optionally set window.__IS_IDE_AUTOSAVE_ENABLED__ = true to enable auto-save on form changes.
+// The IDE can also call window.getAndSaveIdeConfig() to retrieve and save current form values.
 // Folder configs are filtered to only show folders that are currently in the workspace.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	// Determine folder/solution label based on IDE
@@ -81,12 +83,16 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	// Filter folder configs to only include those in the current workspace
 	filteredSettings := filterFolderConfigs(settings, r.c)
 
+	// Get CLI release channel from runtime version
+	cliReleaseChannel := getCliReleaseChannel(r.c)
+
 	data := map[string]interface{}{
-		"Settings":    filteredSettings,
-		"Styles":      template.CSS(configStylesTemplate),
-		"Scripts":     template.JS(configScriptsTemplate),
-		"Nonce":       "ideNonce", // Replaced by IDE extension
-		"FolderLabel": folderLabel,
+		"Settings":          filteredSettings,
+		"Styles":            template.CSS(configStylesTemplate),
+		"Scripts":           template.JS(configScriptsTemplate),
+		"Nonce":             "ideNonce", // Replaced by IDE extension
+		"FolderLabel":       folderLabel,
+		"CliReleaseChannel": cliReleaseChannel,
 	}
 
 	var buffer bytes.Buffer
@@ -128,4 +134,20 @@ func filterFolderConfigs(settings types.Settings, c *config.Config) types.Settin
 // isVisualStudio checks if the integration name indicates Visual Studio
 func isVisualStudio(integrationName string) bool {
 	return integrationName == "VISUAL_STUDIO" || integrationName == "Visual Studio"
+}
+
+// getCliReleaseChannel derives the CLI release channel from the runtime version
+func getCliReleaseChannel(c *config.Config) string {
+	info := c.Engine().GetRuntimeInfo()
+	if info == nil {
+		return "stable"
+	}
+	version := info.GetVersion()
+	if strings.Contains(version, "-preview.") {
+		return "preview"
+	}
+	if strings.Contains(version, "-rc.") {
+		return "rc"
+	}
+	return "stable"
 }

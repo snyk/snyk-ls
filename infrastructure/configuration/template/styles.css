@@ -8,8 +8,52 @@ body {
     margin: 0;
 }
 
+/* Dark scrollbars */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--vscode-scrollbarSlider-background, #424242) var(--vscode-editor-background, #1e1e1e);
+}
+
+/* Webkit scrollbars (Chrome, Safari, Edge) */
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+    background: var(--vscode-editor-background, #1e1e1e);
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--vscode-scrollbarSlider-background, #424242);
+    border-radius: 5px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--vscode-scrollbarSlider-hoverBackground, #4f4f4f);
+}
+
+*::-webkit-scrollbar-thumb:active {
+    background: var(--vscode-scrollbarSlider-activeBackground, #555555);
+}
+
+/* Container max-width for large screens */
+form {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
 /* Override Bootstrap defaults to match IDE theme */
 .row {
+    margin-left: 0;
+    margin-right: 0;
+    margin-bottom: 20px;
+    flex-grow: 1;
+    display: flex;
+}
+
+/* Ensure full-width sections match row width */
+form > .section {
     margin-left: 0;
     margin-right: 0;
 }
@@ -18,6 +62,7 @@ body {
     padding-left: 10px;
     padding-right: 10px;
     display: flex;
+    flex-direction: column;
 }
 
 /* Make sections stretch to full height in side-by-side layout */
@@ -29,6 +74,9 @@ h1 {
     font-size: 24px;
     margin-bottom: 20px;
     color: var(--vscode-editor-foreground, #ffffff);
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 h2 {
@@ -38,13 +86,19 @@ h2 {
     color: var(--vscode-editor-foreground, #ffffff);
     border-bottom: 1px solid var(--vscode-panel-border, #454545);
     padding-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.section > h2 {
+    margin-top: 0;
 }
 
 h3 {
-    font-size: 14px;
-    margin-top: 15px;
-    margin-bottom: 10px;
-    color: var(--vscode-editor-foreground, #cccccc);
+    font-size: inherit;
+    margin-top: 0;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: var(--vscode-input-foreground, #cccccc);
 }
 
 .section {
@@ -52,6 +106,8 @@ h3 {
     padding: 15px;
     background-color: var(--vscode-editor-inactiveSelectionBackground, #2a2d2e);
     border-radius: 4px;
+    display: flex;
+    flex-direction: column;
 }
 
 .folder-config {
@@ -64,6 +120,9 @@ h3 {
 
 .form-group {
     margin-bottom: 15px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .checkbox-group {
@@ -107,6 +166,10 @@ textarea {
     font-size: inherit;
 }
 
+input[type="file"] {
+    display: none !important;
+}
+
 input[readonly] {
     background-color: var(--vscode-input-background, #2d2d2d);
     color: var(--vscode-disabledForeground, #808080);
@@ -126,14 +189,6 @@ textarea:focus {
     outline-offset: -1px;
 }
 
-.description {
-    display: block;
-    font-size: 11px;
-    color: var(--vscode-descriptionForeground, #969696);
-    margin-top: 4px;
-    font-style: italic;
-}
-
 .error-message {
     color: var(--vscode-errorForeground, #f48771);
     font-size: 12px;
@@ -143,14 +198,6 @@ textarea:focus {
 
 .hidden {
     display: none !important;
-}
-
-.actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid var(--vscode-panel-border, #454545);
 }
 
 button {
@@ -181,24 +228,20 @@ button.secondary:hover {
     background-color: var(--vscode-button-secondaryHoverBackground, #45494e);
 }
 
-/* Scan Configuration Styles */
-.scan-config-title {
-    margin-top: 15px;
-    margin-bottom: 10px;
-    font-size: 14px;
+/* Collapsible header for Pre/Post Scan Commands */
+.collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px 0;
+    font-weight: 600;
+    color: var(--vscode-foreground, #cccccc);
+    user-select: none;
 }
 
-.scan-config-product {
-    margin-left: 10px;
-}
-
-.scan-config-input {
-    margin-top: 5px;
-    margin-bottom: 5px;
-}
-
-.scan-config-checkbox {
-    margin-bottom: 10px;
+.collapsible-header:hover {
+    color: var(--vscode-editor-foreground, #ffffff);
 }
 
 /* Button Group for Authentication Section */
