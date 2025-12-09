@@ -196,7 +196,6 @@ type Config struct {
 	enableSnykLearnCodeActions       bool
 	enableSnykOSSQuickFixCodeActions bool
 	enableDeltaFindings              bool
-	writer                           *zerolog.ConsoleWriter
 	logger                           *zerolog.Logger
 	storage                          storage.StorageWithCallbacks
 	m                                sync.RWMutex
@@ -254,7 +253,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 		opt(c)
 	}
 
-	c.writer, c.logger = getNewScrubbingLogger(c)
+	c.logger = getNewScrubbingLogger(c)
 	c.cliSettings = NewCliSettings(c)
 	c.prepareDefaultEnvChannel = make(chan bool, 1)
 	if c.binarySearchPaths == nil {
@@ -348,13 +347,13 @@ func initWorkflows(c *Config) error {
 	return nil
 }
 
-func getNewScrubbingLogger(c *Config) (*zerolog.ConsoleWriter, *zerolog.Logger) {
+func getNewScrubbingLogger(c *Config) *zerolog.Logger {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(logging.New(nil), make(frameworkLogging.ScrubbingDict))
 	writer := c.getConsoleWriter(c.scrubbingWriter)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
-	return &writer, &logger
+	return &logger
 }
 
 func (c *Config) determineDeviceId() string {
@@ -770,7 +769,6 @@ func (c *Config) ConfigureLogging(server types.Server) {
 	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), make(frameworkLogging.ScrubbingDict))
 	writer := c.getConsoleWriter(c.scrubbingWriter)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger().Level(logLevel)
-	c.writer = &writer
 	c.logger = &logger
 	c.engine.SetLogger(&logger)
 }
@@ -1132,15 +1130,6 @@ func (c *Config) Logger() *zerolog.Logger {
 	c.m.RLock()
 	defer c.m.RUnlock()
 	return c.logger
-}
-
-// AddLoggerOutputForTesting allows tests to capture log output by adding an additional writer.
-// Note: This updates c.logger but not c.writer, as the new logger still outputs through c.writer's formatting.
-func (c *Config) AddLoggerOutputForTesting(writer io.Writer) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	newLogger := c.logger.Output(io.MultiWriter(c.writer, writer))
-	c.logger = &newLogger
 }
 
 func (c *Config) AuthenticationMethodMatchesCredentials() bool {

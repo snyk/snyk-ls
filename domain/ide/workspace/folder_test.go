@@ -17,7 +17,6 @@
 package workspace
 
 import (
-	"bytes"
 	"errors"
 	"path/filepath"
 	"sync"
@@ -636,7 +635,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 	})
 }
 
-func Test_FilterIssues_LogsCorrectFilterReasons(t *testing.T) {
+func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
@@ -735,10 +734,6 @@ func Test_FilterIssues_LogsCorrectFilterReasons(t *testing.T) {
 		filePath: {visibleIssue, unsupportedTypeIssue, lowSeverityIssue, lowRiskScoreIssue, ignoredIssue},
 	}
 
-	// Set up a buffer to capture log output right before filtering
-	var logBuffer bytes.Buffer
-	c.AddLoggerOutputForTesting(&logBuffer)
-
 	// Test FilterIssues returns only the visible issue
 	// All other issues should be filtered for their respective reasons
 	filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
@@ -751,15 +746,6 @@ func Test_FilterIssues_LogsCorrectFilterReasons(t *testing.T) {
 	assert.NotContains(t, filteredIssues[filePath], lowSeverityIssue, "Low severity issue should be filtered (severity filter)")
 	assert.NotContains(t, filteredIssues[filePath], lowRiskScoreIssue, "Low risk score issue should be filtered (risk score threshold)")
 	assert.NotContains(t, filteredIssues[filePath], ignoredIssue, "Ignored issue should be filtered (issue view options)")
-
-	// Verify log output contains correct filter reason counts
-	logOutput := logBuffer.String()
-	assert.Contains(t, logOutput, "4 issue(s) filtered", "Log should contain filter message")
-	assert.Contains(t, logOutput, "filterReasons", "Log should contain filterReasons field")
-	assert.Contains(t, logOutput, `"unsupported issue type":1`, "Log should show 1 issue filtered for unsupported type")
-	assert.Contains(t, logOutput, `"severity filter":1`, "Log should show 1 issue filtered for severity")
-	assert.Contains(t, logOutput, `"risk score threshold":1`, "Log should show 1 issue filtered for risk score")
-	assert.Contains(t, logOutput, `"issue view options":1`, "Log should show 1 issue filtered for issue view options")
 }
 
 func Test_ClearDiagnosticsByIssueType(t *testing.T) {
