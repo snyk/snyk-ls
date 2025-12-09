@@ -73,8 +73,9 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConf
 		NormalizeBranchName(filepath.Base(string(folderPath))),
 		NormalizeBranchName(baseBranchName),
 	)
+	logger.Info().Str("tmpFolderName", tmpFolderName).Msg("Creating tmp directory for base branch")
 	baseBranchFolderPath, err := os.MkdirTemp("", tmpFolderName)
-	logger.Info().Msg("Creating tmp directory for base branch")
+	logger.Info().Str("baseBranchFolderPath", baseBranchFolderPath).Msg("Created tmp directory for base branch")
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to create tmp directory for base branch")

@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -637,6 +637,7 @@ type Settings struct {
 	AutomaticAuthentication             string               `json:"automaticAuthentication,omitempty"`
 	DeviceId                            string               `json:"deviceId,omitempty"`
 	FilterSeverity                      *SeverityFilter      `json:"filterSeverity,omitempty"`
+	RiskScoreThreshold                  *int                 `json:"riskScoreThreshold,omitempty"` // Valid range is 0-1000.
 	IssueViewOptions                    *IssueViewOptions    `json:"issueViewOptions,omitempty"`
 	SendErrorReports                    string               `json:"sendErrorReports,omitempty"`
 	ManageBinariesAutomatically         string               `json:"manageBinariesAutomatically,omitempty"`
@@ -653,7 +654,7 @@ type Settings struct {
 	EnableSnykLearnCodeActions          string               `json:"enableSnykLearnCodeActions,omitempty"`
 	EnableSnykOSSQuickFixCodeActions    string               `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
 	EnableSnykOpenBrowserActions        string               `json:"enableSnykOpenBrowserActions,omitempty"`
-	EnableDeltaFindings                 string               `json:"enableDeltaFindings,omitempty"` // should this be global?
+	EnableDeltaFindings                 string               `json:"enableDeltaFindings,omitempty"`
 	RequiredProtocolVersion             string               `json:"requiredProtocolVersion,omitempty"`
 	HoverVerbosity                      *int                 `json:"hoverVerbosity,omitempty"`
 	OutputFormat                        *string              `json:"outputFormat,omitempty"`
@@ -1229,6 +1230,7 @@ func GetCvssCalculatorUrl(cvssSources []CvssSource) string {
 type OssIssueData struct {
 	Key               string         `json:"key,omitempty"`
 	RuleId            string         `json:"ruleId"`
+	Title             string         `json:"title,omitempty"`
 	License           string         `json:"license,omitempty"`
 	Identifiers       OssIdentifiers `json:"identifiers,omitempty"`
 	Description       string         `json:"description"`
@@ -1251,7 +1253,6 @@ type OssIssueData struct {
 	MatchingIssues    []OssIssueData `json:"matchingIssues"`
 	Lesson            string         `json:"lessonUrl,omitempty"`
 }
-
 type OssIdentifiers struct {
 	CWE []string `json:"CWE,omitempty"`
 	CVE []string `json:"CVE,omitempty"`

@@ -1,5 +1,5 @@
 /*
- * © 2022-2023 Snyk Limited
+ * © 2022-2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -101,6 +101,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"MoreDetailedPaths":  len(detailedPaths) - 3,
 		"Policy":             buildPolicyMap(additionalData),
 		"Styles":             template.CSS(panelStylesTemplate),
+		"RiskScore":          additionalData.RiskScore,
 	}
 
 	var htmlBuffer bytes.Buffer
@@ -208,7 +209,7 @@ func getRemediationAdvice(issue snyk.OssIssueData) string {
 	isOutdated := hasUpgradePath && issue.UpgradePath[1] == issue.From[1]
 	remediationAdvice := "No remediation advice available"
 	upgradeMessage := ""
-	if issue.IsUpgradable || issue.IsPatchable {
+	if issue.IsUpgradable {
 		if hasUpgradePath {
 			upgradePath, ok := issue.UpgradePath[1].(string)
 			if ok {

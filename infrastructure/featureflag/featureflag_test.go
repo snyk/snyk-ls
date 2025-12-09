@@ -21,6 +21,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/erni27/imcache"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,6 +40,7 @@ type mockExternalCallsProvider struct {
 	sastSettingsByOrg   map[string]*sast_contract.SastResponse
 	sastErr             error
 	folderOrg           string
+	folderOrgByPath     map[string]string // Maps folder path to org for testing different folders
 
 	// Call counters to verify no unnecessary external calls
 	ignoreApprovalCalls int
@@ -99,6 +101,12 @@ func (m *mockExternalCallsProvider) getSastSettings(org string) (*sast_contract.
 }
 
 func (m *mockExternalCallsProvider) folderOrganization(path types.FilePath) string {
+	// If folderOrgByPath is set, use it to return org based on path
+	if m.folderOrgByPath != nil {
+		if org, ok := m.folderOrgByPath[string(path)]; ok {
+			return org
+		}
+	}
 	return m.folderOrg
 }
 
@@ -119,13 +127,7 @@ func setupMockProvider(t *testing.T) (*config.Config, *mockExternalCallsProvider
 func TestFetch(t *testing.T) {
 	t.Run("caches flags with mock provider", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 		org := "test-org-123"
 
 		// First fetch populates cache
@@ -152,7 +154,8 @@ func TestFetch(t *testing.T) {
 		mockProvider.mu.Unlock()
 
 		// Cache should contain the org
-		assert.Contains(t, service.orgToFlag, org)
+		_, b := service.orgToFlag.Get(org)
+		assert.True(t, b)
 	})
 
 	t.Run("different orgs have separate caches", func(t *testing.T) {
@@ -171,13 +174,7 @@ func TestFetch(t *testing.T) {
 			SnykCodeInlineIgnore:      true,
 		}
 
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		flags1 := service.fetch(org1)
 		assert.NotNil(t, flags1)
@@ -186,13 +183,16 @@ func TestFetch(t *testing.T) {
 		assert.NotNil(t, flags2)
 
 		// Cache should have both orgs
-		assert.Contains(t, service.orgToFlag, org1)
-		assert.Contains(t, service.orgToFlag, org2)
-		assert.Len(t, service.orgToFlag, 2)
+		flag := service.orgToFlag
+		assert.Len(t, flag.GetAll(), 2)
 
 		// Explicitly verify caches are distinct entries with different values
-		assert.Equal(t, flags1, service.orgToFlag[org1], "org1 cache should match flags1")
-		assert.Equal(t, flags2, service.orgToFlag[org2], "org2 cache should match flags2")
+		org1Cache, b := flag.Get(org1)
+		assert.True(t, b)
+		org2Cache, b := flag.Get(org2)
+		assert.True(t, b)
+		assert.Equal(t, flags1, org1Cache, "org1 cache should match flags1")
+		assert.Equal(t, flags2, org2Cache, "org2 cache should match flags2")
 
 		// Verify that different orgs have different flag values
 		assert.NotEqual(t, flags1[SnykCodeConsistentIgnores], flags2[SnykCodeConsistentIgnores], "org1 and org2 should have different SnykCodeConsistentIgnores values")
@@ -205,13 +205,7 @@ func TestFetch(t *testing.T) {
 
 	t.Run("concurrent access is thread-safe", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 		org := "concurrent-org"
 
 		// Launch multiple goroutines that fetch simultaneously
@@ -234,19 +228,14 @@ func TestFetch(t *testing.T) {
 		}
 
 		// Should only have one cache entry for the org
-		assert.Contains(t, service.orgToFlag, org)
-		assert.Len(t, service.orgToFlag, 1)
+		_, b := service.orgToFlag.Get(org)
+		assert.True(t, b)
+		assert.Len(t, service.orgToFlag.GetAll(), 1)
 	})
 
 	t.Run("fetches IgnoreApprovalEnabled flag via provider", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		flags := service.fetch("test-org")
 
@@ -257,14 +246,7 @@ func TestFetch(t *testing.T) {
 
 	t.Run("handles empty org string", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
-
+		service := New(c, WithProvider(mockProvider))
 		// Should not panic with empty org
 		flags := service.fetch("")
 		assert.NotNil(t, flags)
@@ -274,32 +256,19 @@ func TestFetch(t *testing.T) {
 func TestFlushCache(t *testing.T) {
 	t.Run("clears all org feature flags", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
-
+		service := New(c, WithProvider(mockProvider))
 		org := "test-org"
 		_ = service.fetch(org)
 		assert.NotEmpty(t, service.orgToFlag)
 
 		service.FlushCache()
 
-		assert.Empty(t, service.orgToFlag)
+		assert.Len(t, service.orgToFlag.GetAll(), 0)
 	})
 
 	t.Run("clears SAST settings", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		org := "test-org-sast"
 		_, _ = service.fetchSastSettings(org)
@@ -307,18 +276,12 @@ func TestFlushCache(t *testing.T) {
 
 		service.FlushCache()
 
-		assert.Empty(t, service.orgToSastSettings)
+		assert.Len(t, service.orgToSastSettings.GetAll(), 0)
 	})
 
 	t.Run("concurrent flush during fetch is thread-safe", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		var wg sync.WaitGroup
 		// Start multiple fetches
@@ -345,14 +308,7 @@ func TestFlushCache(t *testing.T) {
 func TestGetFromFolderConfig(t *testing.T) {
 	t.Run("returns correct flag value", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
-
+		service := New(c, WithProvider(mockProvider))
 		folderPath := types.FilePath("/test/folder")
 
 		// Setup folder config with specific feature flags
@@ -375,13 +331,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("returns false for non-existent flag", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -399,13 +349,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("handles multiple folders independently", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		folder1 := types.FilePath("/folder1")
 		folder2 := types.FilePath("/folder2")
@@ -436,13 +380,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("handles nil FeatureFlags map gracefully", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test")
 		folderConfig := &types.FolderConfig{
@@ -458,13 +396,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("handles empty folder path", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		// Should not panic with empty path
 		value := service.GetFromFolderConfig("", "anyFlag")
@@ -475,13 +407,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 func TestPopulateFolderConfig(t *testing.T) {
 	t.Run("sets feature flags", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -497,13 +423,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 
 	t.Run("handles multiple folders", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		folder1 := &types.FolderConfig{FolderPath: "/folder1"}
 		folder2 := &types.FolderConfig{FolderPath: "/folder2"}
@@ -518,13 +438,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 
 	t.Run("populates SAST settings", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -541,13 +455,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 		c, mockProviderWithError := setupMockProvider(t)
 		// Override with error
 		mockProviderWithError.sastErr = fmt.Errorf("mock error")
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProviderWithError,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProviderWithError))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -562,13 +470,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 
 	t.Run("concurrent population is thread-safe", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		var wg sync.WaitGroup
 		numFolders := 10
@@ -596,13 +498,8 @@ func TestPopulateFolderConfig(t *testing.T) {
 func TestFetchSastSettings(t *testing.T) {
 	t.Run("caches SAST settings", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
+
 		org := "test-org-sast"
 
 		// First fetch populates cache
@@ -616,7 +513,8 @@ func TestFetchSastSettings(t *testing.T) {
 		assert.Equal(t, settings1, settings2)
 
 		// Cache should contain the org
-		assert.Contains(t, service.orgToSastSettings, org)
+		_, b := service.orgToSastSettings.Get(org)
+		assert.True(t, b)
 	})
 
 	t.Run("different orgs have separate caches", func(t *testing.T) {
@@ -639,13 +537,7 @@ func TestFetchSastSettings(t *testing.T) {
 			},
 		}
 
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 
 		settings1, err1 := service.fetchSastSettings(org1)
 		require.NoError(t, err1)
@@ -656,13 +548,14 @@ func TestFetchSastSettings(t *testing.T) {
 		assert.NotNil(t, settings2)
 
 		// Cache should have both orgs
-		assert.Contains(t, service.orgToSastSettings, org1)
-		assert.Contains(t, service.orgToSastSettings, org2)
-		assert.Len(t, service.orgToSastSettings, 2)
+		actualOrg1, b := service.orgToSastSettings.Get(org1)
+		assert.True(t, b)
+		actualOrg2, b := service.orgToSastSettings.Get(org2)
+		assert.True(t, b)
 
 		// Explicitly verify caches are distinct entries with different values
-		assert.Equal(t, settings1, service.orgToSastSettings[org1], "org1 SAST cache should match settings1")
-		assert.Equal(t, settings2, service.orgToSastSettings[org2], "org2 SAST cache should match settings2")
+		assert.Equal(t, settings1, actualOrg1, "org1 SAST cache should match settings1")
+		assert.Equal(t, settings2, actualOrg2, "org2 SAST cache should match settings2")
 
 		// Verify that different orgs have different SAST settings
 		assert.NotEqual(t, settings1.SastEnabled, settings2.SastEnabled, "org1 and org2 should have different SastEnabled values")
@@ -675,13 +568,7 @@ func TestFetchSastSettings(t *testing.T) {
 
 	t.Run("concurrent SAST settings fetch is thread-safe", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := &serviceImpl{
-			c:                 c,
-			provider:          mockProvider,
-			orgToFlag:         make(map[string]map[string]bool),
-			orgToSastSettings: make(map[string]*sast_contract.SastResponse),
-			mutex:             &sync.Mutex{},
-		}
+		service := New(c, WithProvider(mockProvider))
 		org := "concurrent-sast-org"
 
 		var wg sync.WaitGroup
@@ -698,7 +585,86 @@ func TestFetchSastSettings(t *testing.T) {
 		wg.Wait()
 
 		// Should only have one cache entry
-		assert.Contains(t, service.orgToSastSettings, org)
-		assert.Len(t, service.orgToSastSettings, 1)
+		_, b := service.orgToSastSettings.Get(org)
+		assert.True(t, b)
+		assert.Len(t, service.orgToSastSettings.GetAll(), 1)
 	})
+}
+
+func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
+	c := testutil.IntegTest(t)
+
+	// Set up two folders with different orgs
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+
+	// Create a mock provider that returns different orgs based on folder path
+	mockProvider := &mockExternalCallsProvider{
+		ignoreApprovalByOrg: make(map[string]bool),
+		featureFlagsByOrg:   make(map[string]map[string]bool),
+		sastSettingsByOrg:   make(map[string]*sast_contract.SastResponse),
+		folderOrgByPath: map[string]string{
+			string(folderPath1): folderOrg1,
+			string(folderPath2): folderOrg2,
+		},
+	}
+
+	// Configure different feature flags for each org
+	mockProvider.featureFlagsByOrg[folderOrg1] = map[string]bool{
+		SnykCodeConsistentIgnores: true,
+		SnykCodeInlineIgnore:      false,
+	}
+	mockProvider.featureFlagsByOrg[folderOrg2] = map[string]bool{
+		SnykCodeConsistentIgnores: false,
+		SnykCodeInlineIgnore:      true,
+	}
+
+	service := &serviceImpl{
+		c:                 c,
+		provider:          mockProvider,
+		orgToFlag:         imcache.New[string, map[string]bool](),
+		orgToSastSettings: imcache.New[string, *sast_contract.SastResponse](),
+		mutex:             &sync.Mutex{},
+	}
+
+	// Populate folder config for folder 1
+	folderConfig1 := &types.FolderConfig{
+		FolderPath: folderPath1,
+	}
+	service.PopulateFolderConfig(folderConfig1)
+
+	// Verify folder1 got flags from folderOrg1
+	assert.NotNil(t, folderConfig1.FeatureFlags)
+	assert.True(t, folderConfig1.FeatureFlags[SnykCodeConsistentIgnores], "Folder1 should have SnykCodeConsistentIgnores=true from folderOrg1")
+	assert.False(t, folderConfig1.FeatureFlags[SnykCodeInlineIgnore], "Folder1 should have SnykCodeInlineIgnore=false from folderOrg1")
+
+	// Verify fetch was called with folderOrg1 and cached the correct values
+	org1Flags, found := service.orgToFlag.Get(folderOrg1)
+	assert.True(t, found, "Service should have cached flags for folderOrg1")
+	assert.Contains(t, org1Flags, SnykCodeConsistentIgnores, "Service should have cached SnykCodeConsistentIgnores for folderOrg1")
+	assert.True(t, org1Flags[SnykCodeConsistentIgnores], "Service should have cached SnykCodeConsistentIgnores=true for folderOrg1")
+	assert.Contains(t, org1Flags, SnykCodeInlineIgnore, "Service should have cached SnykCodeInlineIgnore for folderOrg1")
+	assert.False(t, org1Flags[SnykCodeInlineIgnore], "Service should have cached SnykCodeInlineIgnore=false for folderOrg1")
+
+	// Populate folder config for folder 2
+	folderConfig2 := &types.FolderConfig{
+		FolderPath: folderPath2,
+	}
+	service.PopulateFolderConfig(folderConfig2)
+
+	// Verify folder2 got flags from folderOrg2
+	assert.NotNil(t, folderConfig2.FeatureFlags)
+	assert.False(t, folderConfig2.FeatureFlags[SnykCodeConsistentIgnores], "Folder2 should have SnykCodeConsistentIgnores=false from folderOrg2")
+	assert.True(t, folderConfig2.FeatureFlags[SnykCodeInlineIgnore], "Folder2 should have SnykCodeInlineIgnore=true from folderOrg2")
+
+	// Verify fetch was called with folderOrg2 and cached the correct values
+	org2Flags, found := service.orgToFlag.Get(folderOrg2)
+	assert.True(t, found, "Service should have cached flags for folderOrg2")
+	assert.Contains(t, org2Flags, SnykCodeConsistentIgnores, "Service should have cached SnykCodeConsistentIgnores for folderOrg2")
+	assert.False(t, org2Flags[SnykCodeConsistentIgnores], "Service should have cached SnykCodeConsistentIgnores=false for folderOrg2")
+	assert.Contains(t, org2Flags, SnykCodeInlineIgnore, "Service should have cached SnykCodeInlineIgnore for folderOrg2")
+	assert.True(t, org2Flags[SnykCodeInlineIgnore], "Service should have cached SnykCodeInlineIgnore=true for folderOrg2")
+
+	// Verify both orgs are cached separately
+	assert.Len(t, service.orgToFlag.GetAll(), 2, "Service should have cached flags for both orgs")
+	assert.NotEqual(t, folderConfig1.FeatureFlags[SnykCodeConsistentIgnores], folderConfig2.FeatureFlags[SnykCodeConsistentIgnores], "Folders should have different flag values based on their orgs")
 }

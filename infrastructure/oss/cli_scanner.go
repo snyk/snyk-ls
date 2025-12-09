@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -146,7 +147,19 @@ func (cliScanner *CLIScanner) Product() product.Product {
 
 // TODO remove params from scan interface, once every scanner has these things in context and can extract it from there
 func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, workDir types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
-	logger := cliScanner.getLogger(ctx)
+	// Log scan type and paths
+	scanType := "WorkingDirectory"
+	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
+		scanType = deltaScanType.String()
+	}
+	logger := cliScanner.getLogger(ctx).With().
+		Str("path", string(path)).
+		Str("workDir", string(workDir)).
+		Str("scanType", scanType).
+		Logger()
+
+	logger.Debug().Msg("OSS scanner: starting scan")
+
 	ctx = cliScanner.enrichContext(ctx)
 
 	// Add path to context so it can be used by scheduled scans
@@ -167,7 +180,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, wor
 	}
 	cliPathScan := cliScanner.isSupported(path)
 	if !cliPathScan {
-		logger.Debug().Msgf("OSS Scan not supported for %s", path)
+		logger.Debug().Msg("OSS scanner: skipping unsupported file/directory")
 		return issues, nil
 	}
 	return cliScanner.scanInternal(ctx, cliScanner.prepareScanCommand)
@@ -265,10 +278,8 @@ func (cliScanner *CLIScanner) scanInternal(
 	}
 
 	// determine which scanner to use
-	// FIXME after release
-	//useLegacyScan := !folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"]
-	useLegacyScan := true
-	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨🚨🚨🚨 oss scan usage 🚨🚨🚨🚨")
+	useLegacyScan := !folderConfig.FeatureFlags[featureflag.UseExperimentalRiskScoreInCLI]
+	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨 oss scan usage 🚨")
 
 	// do actual scan
 	var output any
@@ -423,18 +434,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 	path types.FilePath,
 	format string,
 ) (issues []types.Issue) {
-	issues, err := ProcessScanResults(
-		ctx,
-		scanOutput,
-		workDir,
-		path,
-		cliScanner.config.Logger(),
-		cliScanner.errorReporter,
-		cliScanner.learnService,
-		cliScanner.packageIssueCache,
-		true, // readFiles = true for CLIScanner
-		format,
-	)
+	issues, err := ProcessScanResults(ctx, scanOutput, cliScanner.errorReporter, cliScanner.learnService, cliScanner.packageIssueCache, true, format)
 
 	if err != nil {
 		cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
