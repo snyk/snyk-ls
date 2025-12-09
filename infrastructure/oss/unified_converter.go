@@ -383,7 +383,7 @@ func extractUpgradePackage(dependencyPath []string, finding *testapi.FindingData
 		return nil
 	}
 
-	if len(dependencyPath) == 0 {
+	if len(dependencyPath) < 2 {
 		return nil
 	}
 	depPathPackageName := strings.Split(dependencyPath[1], "@")[0]
