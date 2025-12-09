@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-        content="style-src 'self' 'nonce-{{.Nonce}}' 'nonce-ideNonce' https://cdn.jsdelivr.net;
+        content="style-src 'self' 'nonce-{{.Nonce}}' https://cdn.jsdelivr.net;
                  script-src 'nonce-{{.Nonce}}' https://cdn.jsdelivr.net;
                  font-src 'self';" />
     <title>Snyk Settings</title>
@@ -60,7 +60,7 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label>Filter Severity <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Select which severity levels to display in the results">?</span></label>
+                                <label>Filter by Severity <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Select which severity levels to display in the results">?</span></label>
                                 <div class="checkbox-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="filterSeverity_critical" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Critical}}checked{{end}}{{end}}>
@@ -97,19 +97,27 @@
                                 </div>
                             </div>
 
-                            <div class="form-group">
-                                <label for="riskScoreThreshold">Risk Score Threshold (0-1000) <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Minimum risk score to display issues (0 = show all)">?</span></label>
-                                <input type="number" id="riskScoreThreshold" name="riskScoreThreshold" min="0" max="1000" value="{{if .Settings.RiskScoreThreshold}}{{.Settings.RiskScoreThreshold}}{{end}}" placeholder="0">
-                            </div>
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="enableDeltaFindings">Delta Findings <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Specifies whether to see all issues or only net new issues. Net new issues option requires a Git repository, where it compares findings with those in the base branch">?</span></label>
-                        <select id="enableDeltaFindings" name="enableDeltaFindings">
-                            <option value="false" {{if ne .Settings.EnableDeltaFindings "true"}}selected{{end}}>All Issues</option>
-                            <option value="true" {{if eq .Settings.EnableDeltaFindings "true"}}selected{{end}}>Net New Issues</option>
-                        </select>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="riskScoreThreshold">Filter by Risk Score <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Minimum risk score to display issues. Valid range: 0 to 1000 (0 = show all issues)">?</span></label>
+                                <input type="number" id="riskScoreThreshold" name="riskScoreThreshold" min="0" max="1000" value="{{if .Settings.RiskScoreThreshold}}{{.Settings.RiskScoreThreshold}}{{end}}" placeholder="0">
+                                <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="enableDeltaFindings">Delta Findings <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Specifies whether to see all issues or only net new issues. Net new issues option requires a Git repository, where it compares findings with those in the base branch">?</span></label>
+                                <select id="enableDeltaFindings" name="enableDeltaFindings">
+                                    <option value="false" {{if ne .Settings.EnableDeltaFindings "true"}}selected{{end}}>All Issues</option>
+                                    <option value="true" {{if eq .Settings.EnableDeltaFindings "true"}}selected{{end}}>Net New Issues</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -159,10 +167,10 @@
 
                     <div class="form-group">
                         <label for="cliPath">CLI Path <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Path to Snyk CLI executable">?</span></label>
-                        <input type="file" id="cliPathPicker" style="display: none;">
+                        <input type="file" id="cliPathPicker">
                         <div class="button-group">
                             <input type="text" id="cliPath" name="cliPath" value="{{.Settings.CliPath}}" placeholder="Path to Snyk CLI">
-                            <button type="button" id="browse-cli-btn">Browse...</button>
+                            <button type="button" id="browse-cli-btn">Browse</button>
                         </div>
                     </div>
 
@@ -208,7 +216,7 @@
 
                 <div class="form-group">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="folder_{{$index}}_autoOrg" data-index="{{$index}}" onclick="window.toggleOrgField('{{$index}}')" {{if not $folder.OrgSetByUser}}checked{{end}}>
+                        <input type="checkbox" id="folder_{{$index}}_autoOrg" data-index="{{$index}}" {{if not $folder.OrgSetByUser}}checked{{end}}>
                         Auto Select Organization
                         <span class="badge bg-secondary" data-bs-toggle="tooltip" title="When enabled, Snyk will automatically select the most appropriate organization for your project using context found in your repository. If disabled, you can manually specify the organization">?</span>
                     </label>
@@ -328,6 +336,12 @@
     </form>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" nonce="{{.Nonce}}"></script>
+    <script nonce="{{.Nonce}}">
+        {{.Utils}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.DirtyTracker}}
+    </script>
     <script nonce="{{.Nonce}}">
         {{.Scripts}}
     </script>

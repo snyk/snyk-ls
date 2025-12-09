@@ -213,10 +213,12 @@
 			orgInput.removeAttribute("readonly");
 			orgSetByUserInput.value = "true";
 		}
-	}
 
-	// Expose toggleOrgField to window for inline onclick handlers
-	window.toggleOrgField = toggleOrgField;
+		// Trigger dirty check since we changed the value programmatically
+		if (debouncedDirtyCheck) {
+			debouncedDirtyCheck();
+		}
+	}
 
 	// Handle file picker for CLI Path
 	function handleCliPathBrowse() {
@@ -238,6 +240,10 @@
 				if (window.__IS_IDE_AUTOSAVE_ENABLED__) {
 					debouncedSave();
 				}
+				// Trigger dirty check
+				if (debouncedDirtyCheck) {
+					debouncedDirtyCheck();
+				}
 			}
 		});
 	}
@@ -254,7 +260,16 @@
 				input.getAttribute("data-index") !== null
 			) {
 				var folderIndex = input.getAttribute("data-index");
+
+				// Initialize the field state
 				toggleOrgField(folderIndex);
+
+				// Attach click event listener (CSP-compliant)
+				(function(index) {
+					addEvent(input, "change", function() {
+						toggleOrgField(index);
+					});
+				})(folderIndex);
 			}
 		}
 	}
@@ -273,11 +288,24 @@
 		var endpointError = get("endpoint-error");
 		var currentEndpoint = endpointInput.value;
 
+		// Validate endpoint
 		if (currentEndpoint && !validateEndpoint(currentEndpoint)) {
 			removeClass(endpointError, "hidden");
 			return;
 		} else {
 			addClass(endpointError, "hidden");
+		}
+
+		// Validate risk score
+		var riskScoreInput = get("riskScoreThreshold");
+		var riskScoreError = get("riskScore-error");
+		if (riskScoreInput && riskScoreError) {
+			if (!validateRiskScore(riskScoreInput.value)) {
+				removeClass(riskScoreError, "hidden");
+				return;
+			} else {
+				addClass(riskScoreError, "hidden");
+			}
 		}
 
 		var data = collectData();
@@ -286,6 +314,11 @@
 		try {
 			window.__saveIdeConfig__(jsonString);
 
+			// Reset dirty state after successful save
+			if (window.dirtyTracker) {
+				window.dirtyTracker.reset(data);
+			}
+
 			// If endpoint changed, trigger logout
 			if (originalEndpoint && currentEndpoint !== originalEndpoint) {
 				if (typeof window.__ideLogout__ !== "undefined") {
@@ -293,6 +326,7 @@
 				}
 			}
 		} catch (e) {
+			// Keep dirty state on save failure
 			alert("Error saving configuration: " + e.message);
 		}
 	}
@@ -365,6 +399,106 @@
 		}
 	}
 
+	// Validate risk score
+	function validateRiskScore(value) {
+		if (value === "" || value === null || value === undefined) {
+			return true; // Empty is valid (will use default)
+		}
+
+		var num = parseInt(value);
+		return !isNaN(num) && num >= 0 && num <= 1000;
+	}
+
+	// Validate risk score on input
+	function validateRiskScoreOnInput() {
+		var riskScoreInput = get("riskScoreThreshold");
+		var riskScoreError = get("riskScore-error");
+
+		if (!riskScoreInput || !riskScoreError) return;
+
+		var currentValue = riskScoreInput.value;
+
+		if (!validateRiskScore(currentValue)) {
+			removeClass(riskScoreError, "hidden");
+		} else {
+			addClass(riskScoreError, "hidden");
+		}
+	}
+
+	// Initialize dirty tracking
+	function initializeDirtyTracking() {
+		// Only initialize if DirtyTracker is available
+		if (typeof window.DirtyTracker === "undefined") {
+			return;
+		}
+
+		// Create global dirty tracker instance
+		window.dirtyTracker = new window.DirtyTracker();
+		window.dirtyTracker.initialize(collectData);
+
+		// Expose IDE interface functions
+		window.__isFormDirty__ = function () {
+			return window.dirtyTracker ? window.dirtyTracker.getDirtyState() : false;
+		};
+
+		window.__resetDirtyState__ = function () {
+			if (window.dirtyTracker) {
+				window.dirtyTracker.reset();
+			}
+		};
+	}
+
+	// Debounced dirty check function
+	var debouncedDirtyCheck = null;
+
+	// Attach dirty tracking listeners to all form inputs
+	function attachDirtyTrackingListeners() {
+		if (!window.dirtyTracker) {
+			return; // Dirty tracking not initialized
+		}
+
+		// Create debounced dirty check function
+		if (window.FormUtils && window.FormUtils.debounce) {
+			debouncedDirtyCheck = window.FormUtils.debounce(function () {
+				window.dirtyTracker.checkDirty();
+			}, 100);
+		} else {
+			// Fallback if FormUtils not available
+			debouncedDirtyCheck = function () {
+				if (saveTimeout) {
+					clearTimeout(saveTimeout);
+				}
+				saveTimeout = setTimeout(function () {
+					window.dirtyTracker.checkDirty();
+				}, 100);
+			};
+		}
+
+		var form = get("configForm");
+		if (!form) return;
+
+		var inputs = form.getElementsByTagName("input");
+		var selects = form.getElementsByTagName("select");
+		var textareas = form.getElementsByTagName("textarea");
+
+		// Add listeners to all inputs
+		for (var i = 0; i < inputs.length; i++) {
+			addEvent(inputs[i], "change", debouncedDirtyCheck);
+			addEvent(inputs[i], "input", debouncedDirtyCheck);
+		}
+
+		// Add listeners to all selects
+		for (var j = 0; j < selects.length; j++) {
+			addEvent(selects[j], "change", debouncedDirtyCheck);
+		}
+
+		// Add listeners to all textareas
+		for (var k = 0; k < textareas.length; k++) {
+			addEvent(textareas[k], "input", debouncedDirtyCheck);
+			addEvent(textareas[k], "change", debouncedDirtyCheck);
+		}
+	}
+
 	// Initialize
 	addEvent(window, "load", function () {
 		var authBtn = get("authenticate-btn");
@@ -384,6 +518,12 @@
 			addEvent(endpointInput, "input", validateEndpointOnInput);
 		}
 
+		var riskScoreInput = get("riskScoreThreshold");
+		if (riskScoreInput) {
+			// Add input event listener for real-time validation
+			addEvent(riskScoreInput, "input", validateRiskScoreOnInput);
+		}
+
 		// Initialize folder organization field toggles
 		initializeFolderOrgFields();
 
@@ -393,8 +533,14 @@
 			addEvent(browseBtn, "click", handleCliPathBrowse);
 		}
 
+		// Initialize dirty tracking
+		initializeDirtyTracking();
+
 		// Attach auto-save listeners to all form inputs
 		attachAutoSaveListeners();
+
+		// Attach dirty tracking listeners to all form inputs
+		attachDirtyTrackingListeners();
 
 		// Initialize Bootstrap tooltips
 		if (typeof bootstrap !== "undefined" && bootstrap.Tooltip) {

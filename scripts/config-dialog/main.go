@@ -128,6 +128,37 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Add test script for dirty tracking demonstration
+	testScript := `
+	<script nonce="ideNonce">
+		// Test handler for dirty state changes
+		window.__onFormDirtyChange__ = function(isDirty) {
+			var message = isDirty
+				? "⚠️ FORM IS DIRTY - You have unsaved changes!"
+				: "✅ FORM IS CLEAN - All changes saved";
+			alert(message);
+		};
+
+		// Mock save function for testing
+		window.__saveIdeConfig__ = function(jsonString) {
+			alert("💾 Configuration saved!");
+		};
+
+		// Mock login/logout for testing
+		window.__ideLogin__ = function() {
+			alert("🔐 Login triggered");
+		};
+
+		window.__ideLogout__ = function() {
+			alert("🚪 Logout triggered");
+		};
+	</script>
+</body>
+</html>`
+
+	// Replace closing tags with test script
+	html = html[:len(html)-len("</body>\n</html>")-1] + testScript
+
 	// Output HTML
 	fmt.Println(html)
 }

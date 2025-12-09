@@ -19,6 +19,12 @@ var configHtmlTemplate string
 //go:embed template/styles.css
 var configStylesTemplate string
 
+//go:embed template/utils.js
+var configUtilsTemplate string
+
+//go:embed template/dirty-tracker.js
+var configDirtyTrackerTemplate string
+
 //go:embed template/scripts.js
 var configScriptsTemplate string
 
@@ -70,8 +76,10 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 // - window.__saveIdeConfig__(jsonString): Save configuration
 // - window.__ideLogin__(): Trigger authentication
 // - window.__ideLogout__(): Trigger logout
+// - window.__onFormDirtyChange__(isDirty): [Optional] Called when form dirty state changes
 // The IDE can optionally set window.__IS_IDE_AUTOSAVE_ENABLED__ = true to enable auto-save on form changes.
 // The IDE can also call window.getAndSaveIdeConfig() to retrieve and save current form values.
+// The IDE can query dirty state via window.__isFormDirty__() or reset it via window.__resetDirtyState__().
 // Folder configs are filtered to only show folders that are currently in the workspace.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	// Determine folder/solution label based on IDE
@@ -89,6 +97,8 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	data := map[string]interface{}{
 		"Settings":          filteredSettings,
 		"Styles":            template.CSS(configStylesTemplate),
+		"Utils":             template.JS(configUtilsTemplate),
+		"DirtyTracker":      template.JS(configDirtyTrackerTemplate),
 		"Scripts":           template.JS(configScriptsTemplate),
 		"Nonce":             "ideNonce", // Replaced by IDE extension
 		"FolderLabel":       folderLabel,
