@@ -316,6 +316,7 @@ github.com/snyk/go-application-framework v0.0.0-20251209131634-fa77f8c14fa3 h1:R
 github.com/snyk/go-application-framework v0.0.0-20251209131634-fa77f8c14fa3/go.mod h1:T+dt4+4XFAJ4PmoGgt/hrx7LiY+vaz+m9V4UYe24Rpc=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 h1:s9PHNkL6ueYRiAKNfd8OVxlUOqU3qY0VDbgCD1f6WQY=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530/go.mod h1:88KbbvGYlmLgee4OcQ19yr0bNpXpOr2kciOthaSzCAg=
+github.com/snyk/studio-mcp v1.2.1/go.mod h1:mc5SWeSCdrOW86DynzQV0iyBcDWNvmaNb7tfDCa7wUQ=
 github.com/sourcegraph/conc v0.3.0 h1:OQTbbt6P72L20UqAkXXuLOj79LfEanQ+YQFNpLA9ySo=
 github.com/sourcegraph/conc v0.3.0/go.mod h1:Sdozi7LEKbFPqYX2/J+iBAM6HpqSLTASQIKqDmF7Mt0=
 github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd h1:Dq5WSzWsP1TbVi10zPWBI5LKEBDg4Y1OhWEph1wr5WQ=
