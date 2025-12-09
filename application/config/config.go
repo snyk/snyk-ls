@@ -181,6 +181,7 @@ type Config struct {
 	tokenChangeChannels              []chan string
 	prepareDefaultEnvChannel         chan bool
 	filterSeverity                   types.SeverityFilter
+	riskScoreThreshold               int
 	issueViewOptions                 types.IssueViewOptions
 	trustedFolders                   []types.FilePath
 	trustedFoldersFeatureEnabled     bool
@@ -494,6 +495,12 @@ func (c *Config) FilterSeverity() types.SeverityFilter {
 	return c.filterSeverity
 }
 
+func (c *Config) RiskScoreThreshold() int {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.riskScoreThreshold
+}
+
 func (c *Config) IssueViewOptions() types.IssueViewOptions {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -607,9 +614,21 @@ func (c *Config) SetSeverityFilter(severityFilter *types.SeverityFilter) bool {
 		return false
 	}
 	filterModified := c.filterSeverity != *severityFilter
-	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
+	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
 	c.filterSeverity = *severityFilter
 	return filterModified
+}
+
+func (c *Config) SetRiskScoreThreshold(riskScoreThreshold *int) bool {
+	c.m.Lock()
+	defer c.m.Unlock()
+	if riskScoreThreshold == nil {
+		return false
+	}
+	modified := c.riskScoreThreshold != *riskScoreThreshold
+	c.logger.Debug().Str("method", "SetRiskScoreThreshold").Int("riskScoreThreshold", *riskScoreThreshold).Msg("Setting risk score threshold")
+	c.riskScoreThreshold = *riskScoreThreshold
+	return modified
 }
 
 func (c *Config) SetIssueViewOptions(issueViewOptions *types.IssueViewOptions) bool {
@@ -619,7 +638,7 @@ func (c *Config) SetIssueViewOptions(issueViewOptions *types.IssueViewOptions) b
 		return false
 	}
 	issueViewOptionsModified := c.issueViewOptions != *issueViewOptions
-	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options:")
+	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options")
 	c.issueViewOptions = *issueViewOptions
 	return issueViewOptionsModified
 }

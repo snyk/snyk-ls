@@ -499,6 +499,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "medium": true,
     "low": true,
   },
+  "riskScoreThreshold": 400, // Optional filter to be applied for the determined issues (if omitted: no filtering) (valid range: 0-1000)
   "issueViewOptions": { // Optional filter to be applied for the determined issues (if omitted: no filtering)
     "openIssues": true,
     "ignoredIssues": false,
