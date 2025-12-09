@@ -230,18 +230,29 @@ button.secondary:hover {
 
 /* Collapsible header for Pre/Post Scan Commands */
 .collapsible-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
     cursor: pointer;
-    padding: 8px 0;
+    padding: 8px 0 !important;
     font-weight: 600;
     color: var(--vscode-foreground, #cccccc);
     user-select: none;
+    border: none;
+    background-color: transparent;
+    font-size: inherit;
+    font-family: inherit;
 }
 
 .collapsible-header:hover {
     color: var(--vscode-editor-foreground, #ffffff);
+    background-color: transparent;
+}
+
+.collapsible-header:focus {
+    outline: 1px solid var(--vscode-focusBorder, #007acc);
+    background-color: transparent;
+}
+
+.collapsible-header[aria-expanded="true"] .collapse-icon {
+    transform: rotate(180deg);
 }
 
 /* Button Group for Authentication Section */
@@ -273,7 +284,7 @@ button.secondary:hover {
 }
 
 .folder-toggle:hover {
-    color: var(--vscode-editor-foreground, #ffffff);
+    color: var(--vscode-editor-foreground, #ffffff) !important;
     text-decoration: none;
     background-color: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.05));
 }
@@ -290,6 +301,21 @@ button.secondary:hover {
 
 .folder-toggle[aria-expanded="true"] .collapse-icon {
     transform: rotate(180deg);
+}
+
+/* Product toggles nested inside Pre/Post Scan Commands */
+.collapse .folder-toggle {
+    color: var(--vscode-foreground, #cccccc);
+    border-bottom: none;
+    font-size: 13px;
+}
+
+.collapse .folder-toggle:hover {
+    color: var(--vscode-editor-foreground, #ffffff) !important;
+}
+
+.collapse .folder-toggle[aria-expanded="true"] .collapse-icon {
+    transform: rotate(90deg);
 }
 
 .collapse {
