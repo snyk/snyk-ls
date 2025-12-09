@@ -19,7 +19,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gosimple/hashdir v1.0.2
 	github.com/hexops/gotextdiff v1.0.3
-	github.com/mark3labs/mcp-go v0.31.0
+	github.com/mark3labs/mcp-go v0.43.0
 	github.com/otiai10/copy v1.14.1
 	github.com/pact-foundation/pact-go v1.10.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
@@ -32,17 +32,18 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/cli-extension-os-flows v0.0.0-20251111161917-55366f295dd6
 	github.com/snyk/code-client-go v1.24.4
-	github.com/snyk/go-application-framework v0.0.0-20251112134702-bc81011fdac9
+	github.com/snyk/go-application-framework v0.0.0-20251209131634-fa77f8c14fa3
+	github.com/snyk/studio-mcp v1.2.1
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
-	github.com/spf13/pflag v1.0.6
-	github.com/stretchr/testify v1.10.0
+	github.com/spf13/pflag v1.0.10
+	github.com/stretchr/testify v1.11.1
 	github.com/subosito/gotenv v1.6.0
 	github.com/writeas/go-strip-markdown v2.0.1+incompatible
 	go.lsp.dev/uri v0.3.0
-	golang.org/x/exp v0.0.0-20250215185904-eff6e970281f
-	golang.org/x/mod v0.27.0
-	golang.org/x/net v0.43.0
-	golang.org/x/oauth2 v0.27.0
+	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546
+	golang.org/x/mod v0.29.0
+	golang.org/x/net v0.46.0
+	golang.org/x/oauth2 v0.33.0
 	golang.org/x/sync v0.17.0
 )
 
@@ -53,12 +54,15 @@ require (
 	github.com/alexbrainman/sspi v0.0.0-20210105120005-909beea2cc74 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
+	github.com/bahlo/generic-list-go v0.2.0 // indirect
+	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
 	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.8.0 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
+	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/cloudflare/circl v1.6.0 // indirect
 	github.com/creachadair/mds v0.23.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
@@ -79,6 +83,7 @@ require (
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/go-version v1.7.0 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
+	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
@@ -89,6 +94,8 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
+	github.com/mailru/easyjson v0.9.0 // indirect
+	github.com/manifoldco/promptui v0.9.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
@@ -112,6 +119,7 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tklauser/go-sysconf v0.3.14 // indirect
 	github.com/tklauser/numcpus v0.8.0 // indirect
+	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
@@ -121,10 +129,10 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
-	golang.org/x/crypto v0.42.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
-	golang.org/x/tools v0.36.0 // indirect
+	golang.org/x/crypto v0.43.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
+	golang.org/x/tools v0.38.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250409194420-de1ac958c67a // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -135,3 +143,5 @@ tool github.com/golang/mock/mockgen
 //replace github.com/snyk/go-application-framework => ../go-application-framework
 
 //replace github.com/snyk/code-client-go => ../code-client-go
+
+//replace github.com/snyk/studio-mcp => ../studio-mcp

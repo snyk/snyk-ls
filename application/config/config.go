@@ -280,6 +280,8 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 		// Engine is provided externally, e.g. we were invoked from CLI.
 		c.engine = engine
 	}
+
+	c.engine.SetUserInterface(util.NewLsUserInterface(c.logger))
 	gafConfig := c.engine.GetConfiguration()
 	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
 	gafConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
