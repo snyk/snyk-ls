@@ -37,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -220,19 +221,35 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 
 func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
 	notifier := di.Notifier()
+	incomingMap := buildIncomingConfigMap(settings.FolderConfigs)
+	allPaths := gatherAllFolderPaths(incomingMap, c.Workspace())
+
 	var folderConfigs []types.FolderConfig
 	needsToSendUpdateToClient := false
 
-	// MERGE: Process all folders from both incoming settings AND storage
-	// This prevents data loss when IDE sends an incomplete list
+	for path := range allPaths {
+		folderConfig, configChanged := processSingleFolderConfig(c, path, incomingMap, notifier)
 
-	// Create a map of incoming configs for quick lookup
-	incomingMap := make(map[types.FilePath]types.FolderConfig)
-	for _, fc := range settings.FolderConfigs {
-		incomingMap[fc.FolderPath] = fc
+		if configChanged {
+			needsToSendUpdateToClient = true
+		}
+
+		handleFolderCacheClearing(c, path, folderConfig, logger, triggerSource)
+		folderConfigs = append(folderConfigs, folderConfig)
 	}
 
-	// Get all paths that need processing (union of incoming + stored)
+	sendFolderConfigUpdateIfNeeded(notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
+}
+
+func buildIncomingConfigMap(folderConfigs []types.FolderConfig) map[types.FilePath]types.FolderConfig {
+	incomingMap := make(map[types.FilePath]types.FolderConfig)
+	for _, fc := range folderConfigs {
+		incomingMap[fc.FolderPath] = fc
+	}
+	return incomingMap
+}
+
+func gatherAllFolderPaths(incomingMap map[types.FilePath]types.FolderConfig, workspace types.Workspace) map[types.FilePath]bool {
 	allPaths := make(map[types.FilePath]bool)
 
 	// Add incoming paths
@@ -241,88 +258,98 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 	}
 
 	// Add stored paths from all workspace folders
-	workspace := c.Workspace()
 	if workspace != nil {
 		for _, folder := range workspace.Folders() {
 			allPaths[folder.Path()] = true
 		}
 	}
 
-	// Process each folder
-	for path := range allPaths {
-		storedConfig := c.FolderConfig(path)
+	return allPaths
+}
 
-		// Start with stored config as base, then merge incoming changes
-		var folderConfig types.FolderConfig
-		if storedConfig != nil {
-			folderConfig = *storedConfig
-		} else {
-			// New folder - initialize with defaults
-			folderConfig = types.FolderConfig{
-				FolderPath: path,
-			}
-		}
+func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.FolderConfig, notifier notification.Notifier) (types.FolderConfig, bool) {
+	storedConfig := c.FolderConfig(path)
+	folderConfig := initializeFolderConfig(path, storedConfig)
 
-		// Merge incoming config if present
-		if incoming, hasIncoming := incomingMap[path]; hasIncoming {
-			mergeFolderConfig(&folderConfig, incoming)
-		}
-
-		// Never trust the IDE for what the FFs and SAST settings are - always use stored values
-		if storedConfig != nil {
-			folderConfig.FeatureFlags = storedConfig.FeatureFlags
-			folderConfig.SastSettings = storedConfig.SastSettings
-		}
-
-		// Folder config might be new or changed, so (re)resolve the org before saving it.
-		// We should also check that the folder's org is still valid if the globally set org has changed.
-		// Also, if the config hasn't been migrated yet, we need to perform the initial migration.
-		needsMigration := storedConfig != nil && !storedConfig.OrgMigratedFromGlobalConfig
-		orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(folderConfig, storedConfig)
-
-		if needsMigration || orgSettingsChanged {
-			updateFolderConfigOrg(c, storedConfig, &folderConfig)
-			err := c.UpdateFolderConfig(&folderConfig) // a lot of methods depend on correct persisted organization values
-			if err != nil {
-				notifier.SendShowMessage(sglsp.MTError, err.Error())
-			}
-		}
-
-		di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
-
-		configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
-		if configChanged {
-			needsToSendUpdateToClient = true
-			err := c.UpdateFolderConfig(&folderConfig)
-			if err != nil {
-				notifier.SendShowMessage(sglsp.MTError, err.Error())
-			}
-		}
-
-		if storedConfig != nil {
-			baseBranchChanged := storedConfig.BaseBranch != folderConfig.BaseBranch
-			referenceFolderChanged := storedConfig.ReferenceFolderPath != folderConfig.ReferenceFolderPath
-			if baseBranchChanged || referenceFolderChanged {
-				logger.Info().
-					Str("folderPath", string(path)).
-					Str("oldBaseBranch", storedConfig.BaseBranch).
-					Str("newBaseBranch", folderConfig.BaseBranch).
-					Str("oldReferenceFolderPath", string(storedConfig.ReferenceFolderPath)).
-					Str("newReferenceFolderPath", string(folderConfig.ReferenceFolderPath)).
-					Msg("base branch or reference folder changed, clearing persisted scan cache for folder")
-				ws := c.Workspace()
-				if ws != nil {
-					ws.GetScanSnapshotClearerExister().ClearFolder(path)
-				}
-			}
-
-			sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
-		}
-
-		folderConfigs = append(folderConfigs, folderConfig)
+	// Merge incoming config if present
+	if incoming, hasIncoming := incomingMap[path]; hasIncoming {
+		mergeFolderConfig(&folderConfig, incoming)
 	}
 
-	if needsToSendUpdateToClient && triggerSource != analytics.TriggerSourceInitialize { // Don't send folder configs on initialize, since initialized will always send them.
+	// Never trust the IDE for what the FFs and SAST settings are - always use stored values
+	if storedConfig != nil {
+		folderConfig.FeatureFlags = storedConfig.FeatureFlags
+		folderConfig.SastSettings = storedConfig.SastSettings
+	}
+
+	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
+	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
+
+	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
+	if configChanged {
+		err := c.UpdateFolderConfig(&folderConfig)
+		if err != nil {
+			notifier.SendShowMessage(sglsp.MTError, err.Error())
+		}
+	}
+
+	return folderConfig, configChanged
+}
+
+func initializeFolderConfig(path types.FilePath, storedConfig *types.FolderConfig) types.FolderConfig {
+	if storedConfig != nil {
+		return *storedConfig
+	}
+	return types.FolderConfig{FolderPath: path}
+}
+
+func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {
+	needsMigration := storedConfig != nil && !storedConfig.OrgMigratedFromGlobalConfig
+	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(*folderConfig, storedConfig)
+
+	if needsMigration || orgSettingsChanged {
+		updateFolderConfigOrg(c, storedConfig, folderConfig)
+		err := c.UpdateFolderConfig(folderConfig) // a lot of methods depend on correct persisted organization values
+		if err != nil {
+			notifier.SendShowMessage(sglsp.MTError, err.Error())
+		}
+	}
+}
+
+func handleFolderCacheClearing(c *config.Config, path types.FilePath, folderConfig types.FolderConfig, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
+	storedConfig := c.FolderConfig(path)
+	if storedConfig == nil {
+		return
+	}
+
+	baseBranchChanged := storedConfig.BaseBranch != folderConfig.BaseBranch
+	referenceFolderChanged := storedConfig.ReferenceFolderPath != folderConfig.ReferenceFolderPath
+
+	if baseBranchChanged || referenceFolderChanged {
+		logger.Info().
+			Str("folderPath", string(path)).
+			Str("oldBaseBranch", storedConfig.BaseBranch).
+			Str("newBaseBranch", folderConfig.BaseBranch).
+			Str("oldReferenceFolderPath", string(storedConfig.ReferenceFolderPath)).
+			Str("newReferenceFolderPath", string(folderConfig.ReferenceFolderPath)).
+			Msg("base branch or reference folder changed, clearing persisted scan cache for folder")
+
+		clearFolderCache(c, path)
+	}
+
+	sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
+}
+
+func clearFolderCache(c *config.Config, path types.FilePath) {
+	ws := c.Workspace()
+	if ws != nil {
+		ws.GetScanSnapshotClearerExister().ClearFolder(path)
+	}
+}
+
+func sendFolderConfigUpdateIfNeeded(notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
+	// Don't send folder configs on initialize, since initialized will always send them.
+	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
 		notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
 	}
 }

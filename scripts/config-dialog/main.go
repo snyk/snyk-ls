@@ -177,5 +177,5 @@ func main() {
 	html = html[:len(html)-len("</body>\n</html>")-1] + testScript
 
 	// Output HTML
-	fmt.Println(html)
+	fmt.Fprintln(os.Stdout, html)
 }
