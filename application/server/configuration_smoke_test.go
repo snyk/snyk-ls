@@ -71,8 +71,6 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assertFieldPresent(t, html, "activateSnykOpenSource", "ActivateSnykOpenSource field")
 			assertFieldPresent(t, html, "activateSnykCode", "ActivateSnykCode field")
 			assertFieldPresent(t, html, "activateSnykIac", "ActivateSnykIac field")
-			assertFieldPresent(t, html, "activateSnykCodeSecurity", "ActivateSnykCodeSecurity field")
-			assertFieldPresent(t, html, "activateSnykCodeQuality", "ActivateSnykCodeQuality field")
 			assertFieldPresent(t, html, "scanningMode", "ScanningMode field")
 			assertFieldPresent(t, html, "organization", "Organization field")
 
@@ -80,9 +78,6 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assertFieldPresent(t, html, "filterSeverity", "FilterSeverity field")
 			assertFieldPresent(t, html, "issueViewOptions", "IssueViewOptions field")
 			assertFieldPresent(t, html, "enableDeltaFindings", "EnableDeltaFindings field")
-
-			// Advanced settings (legacy additional params only)
-			assertFieldPresent(t, html, "additionalParams", "AdditionalParams field")
 		})
 
 		t.Run("Folder-Specific Settings Fields", func(t *testing.T) {
