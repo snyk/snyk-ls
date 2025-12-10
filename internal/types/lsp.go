@@ -563,7 +563,6 @@ type FolderConfig struct {
 	OrgSetByUser                bool                                  `json:"orgSetByUser"`
 	FeatureFlags                map[string]bool                       `json:"featureFlags"`
 	SastSettings                *sast_contract.SastResponse           `json:"sastSettings"`
-	RiskScoreThreshold          int                                   `json:"riskScoreThreshold,omitempty"`
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {
@@ -580,7 +579,6 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 		OrgMigratedFromGlobalConfig: fc.OrgMigratedFromGlobalConfig,
 		OrgSetByUser:                fc.OrgSetByUser,
 		SastSettings:                fc.SastSettings,
-		RiskScoreThreshold:          fc.RiskScoreThreshold,
 	}
 
 	if fc.LocalBranches != nil {

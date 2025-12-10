@@ -26,8 +26,32 @@ var configUtilsTemplate string
 //go:embed template/dirty-tracker.js
 var configDirtyTrackerTemplate string
 
-//go:embed template/scripts.js
-var configScriptsTemplate string
+//go:embed template/js/helpers.js
+var configHelpersTemplate string
+
+//go:embed template/js/validation.js
+var configValidationTemplate string
+
+//go:embed template/js/form-data.js
+var configFormDataTemplate string
+
+//go:embed template/js/auto-save.js
+var configAutoSaveTemplate string
+
+//go:embed template/js/authentication.js
+var configAuthenticationTemplate string
+
+//go:embed template/js/folder-management.js
+var configFolderManagementTemplate string
+
+//go:embed template/js/trusted-folders.js
+var configTrustedFoldersTemplate string
+
+//go:embed template/js/dirty-tracking.js
+var configDirtyTrackingModuleTemplate string
+
+//go:embed template/js/init.js
+var configInitTemplate string
 
 type ConfigHtmlRenderer struct {
 	c        *config.Config
@@ -117,14 +141,22 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	cliReleaseChannel := getCliReleaseChannel(r.c)
 
 	data := map[string]interface{}{
-		"Settings":          filteredSettings,
-		"Styles":            template.CSS(configStylesTemplate),
-		"Utils":             template.JS(configUtilsTemplate),
-		"DirtyTracker":      template.JS(configDirtyTrackerTemplate),
-		"Scripts":           template.JS(configScriptsTemplate),
-		"Nonce":             "ideNonce", // Replaced by IDE extension
-		"FolderLabel":       folderLabel,
-		"CliReleaseChannel": cliReleaseChannel,
+		"Settings":            filteredSettings,
+		"Styles":              template.CSS(configStylesTemplate),
+		"Utils":               template.JS(configUtilsTemplate),
+		"DirtyTracker":        template.JS(configDirtyTrackerTemplate),
+		"Helpers":             template.JS(configHelpersTemplate),
+		"Validation":          template.JS(configValidationTemplate),
+		"FormData":            template.JS(configFormDataTemplate),
+		"AutoSave":            template.JS(configAutoSaveTemplate),
+		"Authentication":      template.JS(configAuthenticationTemplate),
+		"FolderManagement":    template.JS(configFolderManagementTemplate),
+		"TrustedFolders":      template.JS(configTrustedFoldersTemplate),
+		"DirtyTrackingModule": template.JS(configDirtyTrackingModuleTemplate),
+		"Init":                template.JS(configInitTemplate),
+		"Nonce":               "ideNonce", // Replaced by IDE extension
+		"FolderLabel":         folderLabel,
+		"CliReleaseChannel":   cliReleaseChannel,
 	}
 
 	var buffer bytes.Buffer

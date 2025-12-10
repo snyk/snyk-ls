@@ -95,7 +95,6 @@ func main() {
 				AdditionalParameters: []string{"--all-projects", "--detection-depth=3"},
 				PreferredOrg:         "my-org-uuid-12345",
 				AutoDeterminedOrg:    "auto-org-uuid-67890",
-				RiskScoreThreshold:   500,
 				OrgSetByUser:         true,
 				// Add ScanCommandConfig to reproduce template error
 				ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
@@ -115,11 +114,10 @@ func main() {
 				},
 			},
 			{
-				FolderPath:         "/Users/username/workspace/your-project",
-				PreferredOrg:       "manual-org-uuid-11111",
-				AutoDeterminedOrg:  "auto-determined-uuid-99999",
-				RiskScoreThreshold: 800,
-				OrgSetByUser:       false,
+				FolderPath:        "/Users/username/workspace/your-project",
+				PreferredOrg:      "manual-org-uuid-11111",
+				AutoDeterminedOrg: "auto-determined-uuid-99999",
+				OrgSetByUser:      false,
 			},
 		},
 	}

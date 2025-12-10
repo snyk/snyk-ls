@@ -50,6 +50,12 @@
                             <option value="manual" {{if eq .Settings.ScanningMode "manual"}}selected{{end}}>Manual</option>
                         </select>
                     </div>
+
+                    <div class="form-group">
+                        <label for="additionalEnv">Additional Environment <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Additional environment variables for Snyk CLI (format: KEY1=value1;KEY2=value2)">?</span></label>
+                        <input type="text" id="additionalEnv" name="additionalEnv" value="{{.Settings.AdditionalEnv}}" placeholder="KEY1=value1;KEY2=value2">
+                        <span id="additionalEnv-error" class="error-message hidden">Invalid format. Expected: KEY1=value1;KEY2=value2</span>
+                    </div>
                 </div>
             </div>
 
@@ -130,10 +136,11 @@
                     <h2>Authentication</h2>
 
                     <div class="form-group">
-                        <label for="authenticationMethod">Authentication Method <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Specifies whether to authenticate with OAuth2, PAT, or with an API token (Legacy). Note: OAuth2 authentication is recommended as it provides enhanced security">?</span></label>
+                        <label for="authenticationMethod">Authentication Method <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy). Note: OAuth2 authentication is recommended as it provides enhanced security">?</span></label>
                         <select id="authenticationMethod" name="authenticationMethod">
                             <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>Token</option>
                             <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth</option>
+                            <option value="pat" {{if eq .Settings.AuthenticationMethod "pat"}}selected{{end}}>PAT</option>
                         </select>
                     </div>
 
@@ -194,6 +201,36 @@
                     <div class="form-group">
                         <label for="baseUrl">Base URL <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Base URL for downloading Snyk CLI binaries">?</span></label>
                         <input type="text" id="baseUrl" name="baseUrl" value="{{.Settings.BaseUrl}}" placeholder="https://downloads.snyk.io">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Permissions -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="section">
+                    <h2>Permissions</h2>
+
+                    <input type="hidden" name="enableTrustedFoldersFeature" value="{{.Settings.EnableTrustedFoldersFeature}}">
+                    <div class="form-group">
+                        <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-bs-toggle="collapse" data-bs-target="#trustedFoldersSection" aria-expanded="false" aria-controls="trustedFoldersSection">
+                            <span>Trusted Folders <span class="badge bg-secondary" data-bs-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">?</span></span>
+                            <span class="collapse-icon">▼</span>
+                        </button>
+                        <div class="collapse" id="trustedFoldersSection">
+                            <div id="trustedFoldersList" class="trusted-folders-list mt-2">
+                                {{range $index, $folder := .Settings.TrustedFolders}}
+                                <div class="trusted-folder-item" data-index="{{$index}}" style="margin-bottom: 10px;">
+                                    <div class="button-group">
+                                        <input type="text" name="trustedFolder_{{$index}}" value="{{$folder}}" placeholder="/path/to/trusted/folder">
+                                        <button type="button" class="remove-trusted-folder" data-index="{{$index}}" title="Remove">✕</button>
+                                    </div>
+                                </div>
+                                {{end}}
+                            </div>
+                            <button type="button" id="addTrustedFolderBtn" class="btn btn-primary mt-2">Add Folder</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -343,7 +380,31 @@
         {{.DirtyTracker}}
     </script>
     <script nonce="{{.Nonce}}">
-        {{.Scripts}}
+        {{.Helpers}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.Validation}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.FormData}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.AutoSave}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.Authentication}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.FolderManagement}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.TrustedFolders}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.DirtyTrackingModule}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.Init}}
     </script>
 </body>
 </html>

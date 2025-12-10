@@ -103,8 +103,6 @@ func populateProductSettings(s *types.Settings, c *config.Config) {
 	s.ActivateSnykOpenSource = fmt.Sprintf("%v", c.IsSnykOssEnabled())
 	s.ActivateSnykCode = fmt.Sprintf("%v", c.IsSnykCodeEnabled())
 	s.ActivateSnykIac = fmt.Sprintf("%v", c.IsSnykIacEnabled())
-	s.ActivateSnykCodeSecurity = fmt.Sprintf("%v", c.IsSnykCodeSecurityEnabled())
-	s.ActivateSnykCodeQuality = fmt.Sprintf("%v", !c.IsSnykCodeSecurityEnabled())
 }
 
 // populateSecuritySettings sets security-related configuration
@@ -154,9 +152,6 @@ func populatePointerFields(s *types.Settings, c *config.Config) {
 
 	hoverVerbosity := c.HoverVerbosity()
 	s.HoverVerbosity = &hoverVerbosity
-
-	outputFormat := c.Format()
-	s.OutputFormat = &outputFormat
 }
 
 // populateFolderConfigs populates folder-specific configuration

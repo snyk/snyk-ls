@@ -499,6 +499,82 @@
 		}
 	}
 
+	// Trusted Folder Management
+	var trustedFolderIndex = 0;
+
+	function handleAddTrustedFolder() {
+		var trustedFoldersList = get("trustedFoldersList");
+		if (!trustedFoldersList) return;
+
+		// Create new folder item
+		var folderItem = document.createElement("div");
+		folderItem.className = "trusted-folder-item";
+		folderItem.setAttribute("data-index", trustedFolderIndex);
+		folderItem.style.marginBottom = "10px";
+
+		// Create button group container
+		var buttonGroup = document.createElement("div");
+		buttonGroup.className = "button-group";
+
+		// Create text input
+		var input = document.createElement("input");
+		input.type = "text";
+		input.name = "trustedFolder_" + trustedFolderIndex;
+		input.placeholder = "/path/to/trusted/folder";
+
+		// Create remove button with X icon
+		var removeBtn = document.createElement("button");
+		removeBtn.type = "button";
+		removeBtn.className = "remove-trusted-folder";
+		removeBtn.setAttribute("data-index", trustedFolderIndex);
+		removeBtn.setAttribute("title", "Remove");
+		removeBtn.textContent = "✕";
+		addEvent(removeBtn, "click", handleRemoveTrustedFolder);
+
+		// Assemble elements
+		buttonGroup.appendChild(input);
+		buttonGroup.appendChild(removeBtn);
+		folderItem.appendChild(buttonGroup);
+		trustedFoldersList.appendChild(folderItem);
+
+		trustedFolderIndex++;
+
+		// Trigger dirty check
+		if (window.dirtyTracker) {
+			window.dirtyTracker.markDirty();
+		}
+	}
+
+	function handleRemoveTrustedFolder() {
+		var btn = this;
+		var buttonGroup = btn.parentNode;
+		var folderItem = buttonGroup ? buttonGroup.parentNode : null;
+		if (folderItem && folderItem.parentNode) {
+			folderItem.parentNode.removeChild(folderItem);
+		}
+
+		// Trigger dirty check
+		if (window.dirtyTracker) {
+			window.dirtyTracker.markDirty();
+		}
+	}
+
+	function initializeTrustedFolderHandlers() {
+		// Initialize remove buttons
+		var removeButtons = document.querySelectorAll(".remove-trusted-folder");
+		for (var i = 0; i < removeButtons.length; i++) {
+			addEvent(removeButtons[i], "click", handleRemoveTrustedFolder);
+			var buttonGroup = removeButtons[i].parentNode;
+			var folderItem = buttonGroup ? buttonGroup.parentNode : null;
+			if (folderItem) {
+				var index = parseInt(folderItem.getAttribute("data-index") || "0");
+				if (index >= trustedFolderIndex) {
+					trustedFolderIndex = index + 1;
+				}
+			}
+		}
+	}
+
 	// Initialize
 	addEvent(window, "load", function () {
 		var authBtn = get("authenticate-btn");
@@ -532,6 +608,15 @@
 		if (browseBtn) {
 			addEvent(browseBtn, "click", handleCliPathBrowse);
 		}
+
+		// Add event listener for Add Trusted Folder button
+		var addTrustedFolderBtn = get("addTrustedFolderBtn");
+		if (addTrustedFolderBtn) {
+			addEvent(addTrustedFolderBtn, "click", handleAddTrustedFolder);
+		}
+
+		// Add event listeners for Remove Trusted Folder buttons
+		initializeTrustedFolderHandlers();
 
 		// Initialize dirty tracking
 		initializeDirtyTracking();
