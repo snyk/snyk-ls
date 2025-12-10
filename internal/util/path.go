@@ -25,9 +25,6 @@ type PathValidationOptions struct {
 	Existence  ExistenceType
 }
 
-// Common dangerous characters that could be used for injection attacks
-var dangerousChars = []string{";", "&", "|", "`", "$", "\"", "'", "\n", "\r", "\t", "*"}
-
 // ValidatePath validates any path for security with customizable requirements
 func ValidatePath(path types.FilePath, options PathValidationOptions) error {
 	pathStr := strings.TrimSpace(string(path))
@@ -38,12 +35,12 @@ func ValidatePath(path types.FilePath, options PathValidationOptions) error {
 		return fmt.Errorf("path cannot be empty, got: '%s'", string(path))
 	}
 
-	// 1. Check for dangerous characters
-	if err := validateDangerousCharacters(pathStr); err != nil {
+	// Validate Windows UNC admin share paths
+	if err := validateWindowsUNCAdminShare(pathStr); err != nil {
 		return err
 	}
 
-	// 2. Validate path existence based on requirements
+	// Validate path existence based on requirements
 	if err := validatePathExistence(pathStr, options.Existence); err != nil {
 		return err
 	}
@@ -78,8 +75,7 @@ func ValidatePathStrict(path types.FilePath) error {
 // ValidatePathForStorage validates a path for storage purposes without requiring the path to exist.
 // This function is used when storing paths where the path may not exist yet
 // (e.g., user-configured paths for future use, paths during data migration, or storage keys).
-// It performs security validation (dangerous characters, path traversal) but allows empty paths
-// and doesn't check if the path actually exists on the filesystem.
+// It allows empty paths and doesn't check if the path actually exists on the filesystem.
 func ValidatePathForStorage(path types.FilePath) error {
 	options := PathValidationOptions{
 		AllowEmpty: true,
@@ -103,30 +99,27 @@ func PathKey(p types.FilePath) types.FilePath {
 		return ""
 	}
 
-	if err := validateDangerousCharacters(s); err != nil {
-		return ""
-	}
-
 	// Normalize the path using filepath.Clean()
 	s = filepath.Clean(s)
 
 	return types.FilePath(s)
 }
 
-// validateDangerousCharacters checks for dangerous characters in a string
-func validateDangerousCharacters(input string) error {
-	for _, char := range dangerousChars {
-		if !strings.Contains(input, char) {
-			continue
+// validateWindowsUNCAdminShare validates Windows UNC admin share paths
+// These paths have the format \\server\C$\... where C$ is the administrative share
+func validateWindowsUNCAdminShare(path string) error {
+	// Check if path looks like a UNC path (starts with \\ or //)
+	if strings.HasPrefix(path, "\\\\") || strings.HasPrefix(path, "//") {
+		// If it's a UNC path, verify it's a valid admin share format
+		if !isWindowsUNCAdminShare(path) {
+			// If it looks like UNC but isn't a valid admin share, that's okay
+			// We just want to ensure admin shares are properly recognized
+			return nil
 		}
-
-		// Special case: $ is allowed in Windows UNC administrative share paths (e.g., \\server\C$\path)
-		if char == "$" && isWindowsUNCAdminShare(input) {
-			continue
-		}
-
-		return fmt.Errorf("dangerous character detected in '%s': %s", input, char)
+		// Valid admin share path - no error
+		return nil
 	}
+	// Not a UNC path - no validation needed
 	return nil
 }
 

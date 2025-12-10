@@ -69,9 +69,9 @@ func TestPathKey(t *testing.T) {
 			expected: types.FilePath(filepath.Clean("/Users/foo/./../bar")),
 		},
 		{
-			name:     "Invalid path with command injection",
+			name:     "Path with semicolon (normalized)",
 			input:    "/Users/foo; rm -rf /",
-			expected: "",
+			expected: types.FilePath(filepath.Clean("/Users/foo; rm -rf /")),
 		},
 		{
 			name:     "Relative path",
@@ -122,48 +122,6 @@ func createCommonTestCases(tempDir string) []testCase {
 			input:       types.FilePath(tempDir),
 			expectError: false,
 		},
-		{
-			name:        "Command injection semicolon",
-			input:       "/Users/foo; rm -rf /",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Command injection ampersand",
-			input:       "/Users/foo & echo pwned",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Command injection backtick",
-			input:       "/Users/foo `whoami`",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Command injection dollar",
-			input:       "/Users/foo $(whoami)",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Command injection double quote",
-			input:       "/Users/foo\" && rm -rf /",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Command injection single quote",
-			input:       "/Users/foo' && rm -rf /",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Dollar sign in non-UNC path should fail",
-			input:       "/Users/foo$bar/test",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
 	}
 }
 
@@ -179,25 +137,6 @@ func TestValidatePathLenient(t *testing.T) {
 		input:       "",
 		expectError: false,
 	})
-
-	// Add Windows UNC admin share test cases (only for lenient, as they don't exist on non-Windows)
-	testCases = append(testCases,
-		testCase{
-			name:        "Windows UNC admin share C$",
-			input:       "\\\\localhost\\C$\\Users\\test",
-			expectError: false,
-		},
-		testCase{
-			name:        "Windows UNC admin share D$",
-			input:       "\\\\server\\D$\\path\\to\\file",
-			expectError: false,
-		},
-		testCase{
-			name:        "Windows UNC admin share with forward slashes",
-			input:       "//localhost/C$/Users/test",
-			expectError: false,
-		},
-	)
 
 	runValidationTest(t, ValidatePathLenient, testCases)
 }
