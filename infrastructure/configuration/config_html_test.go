@@ -33,13 +33,13 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.NotNil(t, renderer)
 
 	settings := types.Settings{
-		Token:                    "test-token",
-		Endpoint:                 "https://test.snyk.io",
-		Organization:             "test-org",
-		Insecure:                 "true",
-		ActivateSnykOpenSource:   "true",
-		ActivateSnykCodeSecurity: "false",
-		AuthenticationMethod:     "oauth",
+		Token:                  "test-token",
+		Endpoint:               "https://test.snyk.io",
+		Organization:           "test-org",
+		Insecure:               "true",
+		ActivateSnykOpenSource: "true",
+		ActivateSnykCode:       "true",
+		AuthenticationMethod:   "oauth",
 		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath: "/path/to/folder",
@@ -64,7 +64,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, "window.getAndSaveIdeConfig")
 	assert.Contains(t, html, "window.__ideLogin__")
 	assert.Contains(t, html, "window.__ideLogout__")
-	assert.Contains(t, html, "Activate Snyk Code")
+	assert.Contains(t, html, "Snyk Code")
 	assert.Contains(t, html, "Authentication Method")
 	assert.Contains(t, html, "oauth")
 	assert.Contains(t, html, "Scan Configuration")    // Section header

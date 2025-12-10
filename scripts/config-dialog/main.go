@@ -77,18 +77,23 @@ func main() {
 
 	// Create sample settings with folder configs
 	settings := types.Settings{
-		Token:                  c.Token(),
-		Endpoint:               c.Endpoint(),
-		Organization:           c.Organization(),
-		AuthenticationMethod:   "token",
-		Insecure:               "false",
-		ActivateSnykOpenSource: "true",
-		ActivateSnykCode:       "true",
-		ActivateSnykIac:        "true",
-		ScanningMode:           "auto",
-		AdditionalParams:       "--severity-threshold=high",
-		IntegrationName:        c.IntegrationName(),
-		IntegrationVersion:     c.IdeVersion(),
+		Token:                       c.Token(),
+		Endpoint:                    c.Endpoint(),
+		Organization:                c.Organization(),
+		AuthenticationMethod:        "token",
+		Insecure:                    "false",
+		ActivateSnykOpenSource:      "true",
+		ActivateSnykCode:            "true",
+		ActivateSnykIac:             "true",
+		ScanningMode:                "auto",
+		AdditionalParams:            "--severity-threshold=high",
+		IntegrationName:             c.IntegrationName(),
+		IntegrationVersion:          c.IdeVersion(),
+		EnableTrustedFoldersFeature: "true",
+		TrustedFolders: []string{
+			"/Users/username/workspace/my-project",
+			"/Users/username/trusted/folder",
+		},
 		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath:           "/Users/username/workspace/my-project",

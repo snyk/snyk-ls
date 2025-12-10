@@ -23,10 +23,13 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykOssEnabled(true)
 	c.SetSnykIacEnabled(true)
-	c.EnableSnykCodeSecurity(true)
 	c.SetErrorReportingEnabled(true)
 	c.SetManageBinariesAutomatically(true)
 	c.SetTrustedFolderFeatureEnabled(true)
+	c.SetTrustedFolders([]types.FilePath{
+		"/Users/test/trusted-folder-1",
+		"/Users/test/trusted-folder-2",
+	})
 	c.SetAuthenticationMethod(types.TokenAuthentication)
 	c.SetSnykLearnCodeActionsEnabled(true)
 	c.SetSnykOSSQuickFixCodeActionsEnabled(true)
@@ -60,8 +63,6 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 		assert.Equal(t, "true", settings.ActivateSnykOpenSource, "ActivateSnykOpenSource should be populated")
 		assert.Equal(t, "true", settings.ActivateSnykCode, "ActivateSnykCode should be populated")
 		assert.Equal(t, "true", settings.ActivateSnykIac, "ActivateSnykIac should be populated")
-		assert.Equal(t, "true", settings.ActivateSnykCodeSecurity, "ActivateSnykCodeSecurity should be populated")
-		assert.NotEmpty(t, settings.ActivateSnykCodeQuality, "ActivateSnykCodeQuality should be populated")
 	})
 
 	t.Run("CLI and Path Settings", func(t *testing.T) {
@@ -74,6 +75,7 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 		assert.Equal(t, "true", settings.Insecure, "Insecure should be populated")
 		assert.Equal(t, "true", settings.EnableTrustedFoldersFeature, "EnableTrustedFoldersFeature should be populated")
 		assert.NotNil(t, settings.TrustedFolders, "TrustedFolders should be populated")
+		assert.NotEmpty(t, settings.TrustedFolders, "TrustedFolders should contain at least one entry")
 	})
 
 	t.Run("Operational Settings", func(t *testing.T) {
@@ -85,7 +87,6 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 		assert.NotNil(t, settings.FilterSeverity, "FilterSeverity should be populated")
 		assert.NotNil(t, settings.IssueViewOptions, "IssueViewOptions should be populated")
 		assert.NotNil(t, settings.HoverVerbosity, "HoverVerbosity should be populated")
-		assert.NotNil(t, settings.OutputFormat, "OutputFormat should be populated")
 	})
 
 	t.Run("Feature Toggles", func(t *testing.T) {
@@ -126,4 +127,69 @@ func TestConstructSettingsFromConfig_FolderConfigs(t *testing.T) {
 	settings := constructSettingsFromConfig(c)
 	require.NotNil(t, settings.FolderConfigs, "FolderConfigs should be initialized")
 	assert.Empty(t, settings.FolderConfigs, "FolderConfigs should be empty when no workspace is set")
+}
+
+// TestConstructSettingsFromConfig_TrustedFolders verifies trusted folders are properly populated
+func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
+	t.Run("Empty trusted folders", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetTrustedFolderFeatureEnabled(false)
+		c.SetTrustedFolders([]types.FilePath{})
+
+		settings := constructSettingsFromConfig(c)
+
+		assert.Equal(t, "false", settings.EnableTrustedFoldersFeature, "EnableTrustedFoldersFeature should be false")
+		assert.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
+		assert.Empty(t, settings.TrustedFolders, "TrustedFolders should be empty when not configured")
+	})
+
+	t.Run("Single trusted folder", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetTrustedFolderFeatureEnabled(true)
+		c.SetTrustedFolders([]types.FilePath{
+			"/Users/test/trusted-project",
+		})
+
+		settings := constructSettingsFromConfig(c)
+
+		assert.Equal(t, "true", settings.EnableTrustedFoldersFeature, "EnableTrustedFoldersFeature should be true")
+		require.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
+		require.Len(t, settings.TrustedFolders, 1, "TrustedFolders should contain one folder")
+		assert.Equal(t, "/Users/test/trusted-project", settings.TrustedFolders[0], "Trusted folder path should match")
+	})
+
+	t.Run("Multiple trusted folders", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetTrustedFolderFeatureEnabled(true)
+		c.SetTrustedFolders([]types.FilePath{
+			"/Users/test/project-1",
+			"/Users/test/project-2",
+			"/home/user/workspace",
+		})
+
+		settings := constructSettingsFromConfig(c)
+
+		assert.Equal(t, "true", settings.EnableTrustedFoldersFeature, "EnableTrustedFoldersFeature should be true")
+		require.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
+		require.Len(t, settings.TrustedFolders, 3, "TrustedFolders should contain three folders")
+		assert.Equal(t, "/Users/test/project-1", settings.TrustedFolders[0], "First trusted folder should match")
+		assert.Equal(t, "/Users/test/project-2", settings.TrustedFolders[1], "Second trusted folder should match")
+		assert.Equal(t, "/home/user/workspace", settings.TrustedFolders[2], "Third trusted folder should match")
+	})
+
+	t.Run("FilePath to string conversion", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetTrustedFolderFeatureEnabled(true)
+
+		// Test that FilePath type is correctly converted to string
+		testPath := types.FilePath("/path/with/special/chars/@#$")
+		c.SetTrustedFolders([]types.FilePath{testPath})
+
+		settings := constructSettingsFromConfig(c)
+
+		require.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
+		require.Len(t, settings.TrustedFolders, 1, "TrustedFolders should contain one folder")
+		assert.Equal(t, string(testPath), settings.TrustedFolders[0], "FilePath should be correctly converted to string")
+		assert.IsType(t, "", settings.TrustedFolders[0], "TrustedFolders should contain string values")
+	})
 }
