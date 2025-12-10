@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -96,6 +97,22 @@ func main() {
 				AutoDeterminedOrg:    "auto-org-uuid-67890",
 				RiskScoreThreshold:   500,
 				OrgSetByUser:         true,
+				// Add ScanCommandConfig to reproduce template error
+				ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
+					product.ProductOpenSource: {
+						PreScanCommand:              "npm install",
+						PostScanCommand:             "npm test",
+						PreScanOnlyReferenceFolder:  true,
+						PostScanOnlyReferenceFolder: false,
+					},
+					product.ProductCode: {
+						PreScanCommand:              "echo 'code scan'",
+						PostScanOnlyReferenceFolder: false,
+					},
+					product.ProductInfrastructureAsCode: {
+						PreScanCommand: "terraform init",
+					},
+				},
 			},
 			{
 				FolderPath:         "/Users/username/workspace/your-project",

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
@@ -43,6 +44,11 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 			{
 				FolderPath: "/path/to/folder",
 				BaseBranch: "main",
+				ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
+					product.ProductOpenSource: {
+						PreScanCommand: "npm install",
+					},
+				},
 			},
 		},
 	}
@@ -96,8 +102,9 @@ func TestConfigHtmlRenderer_FiltersFolderConfigsNotInWorkspace(t *testing.T) {
 		ActivateSnykOpenSource: "true",
 		FolderConfigs: []types.FolderConfig{
 			{
-				FolderPath: workspaceFolderPath,
-				BaseBranch: "main",
+				FolderPath:        workspaceFolderPath,
+				BaseBranch:        "main",
+				ScanCommandConfig: map[product.Product]types.ScanCommandConfig{}, // Empty map to test edge case
 			},
 			{
 				FolderPath: "/external/folder2",

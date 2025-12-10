@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -56,6 +57,27 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 		// toLower converts a string to lowercase
 		"toLower": func(s string) string {
 			return strings.ToLower(s)
+		},
+		// getScanConfig retrieves scan configuration for a specific product from a map
+		"getScanConfig": func(scanConfigMap map[product.Product]types.ScanCommandConfig, productName string) *types.ScanCommandConfig {
+			if scanConfigMap == nil {
+				return nil
+			}
+			var prod product.Product
+			switch productName {
+			case "oss", "Snyk Open Source":
+				prod = product.ProductOpenSource
+			case "code", "Snyk Code":
+				prod = product.ProductCode
+			case "iac", "Snyk IaC":
+				prod = product.ProductInfrastructureAsCode
+			default:
+				return nil
+			}
+			if config, ok := scanConfigMap[prod]; ok {
+				return &config
+			}
+			return nil
 		},
 	}
 

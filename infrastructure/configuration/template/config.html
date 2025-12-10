@@ -248,21 +248,21 @@
                             <div class="collapse folder-content" id="folder-{{$index}}-oss">
                                 <div class="form-group">
                                     <label for="folder_{{$index}}_scanConfig_oss_preScanCommand">Pre-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_oss_preScanCommand" name="folder_{{$index}}_scanConfig_oss_preScanCommand" value="{{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.oss}}{{$folder.ScanCommandConfig.oss.command}}{{end}}{{end}}" placeholder="npm install">
+                                    <input type="text" id="folder_{{$index}}_scanConfig_oss_preScanCommand" name="folder_{{$index}}_scanConfig_oss_preScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "oss"}}{{.PreScanCommand}}{{end}}" placeholder="npm install">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_oss_preScanOnlyReferenceFolder" {{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.oss}}{{if $folder.ScanCommandConfig.oss.preScanOnlyReferenceFolder}}checked{{end}}{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_oss_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "oss"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Pre-Scan Only Reference Folder
                                     </label>
                                 </div>
                                 <div class="form-group">
                                     <label for="folder_{{$index}}_scanConfig_oss_postScanCommand">Post-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_oss_postScanCommand" name="folder_{{$index}}_scanConfig_oss_postScanCommand" value="{{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.oss}}{{$folder.ScanCommandConfig.oss.postScanCommand}}{{end}}{{end}}" placeholder="cleanup.sh">
+                                    <input type="text" id="folder_{{$index}}_scanConfig_oss_postScanCommand" name="folder_{{$index}}_scanConfig_oss_postScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "oss"}}{{.PostScanCommand}}{{end}}" placeholder="cleanup.sh">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_oss_postScanOnlyReferenceFolder" {{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.oss}}{{if $folder.ScanCommandConfig.oss.postScanOnlyReferenceFolder}}checked{{end}}{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_oss_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "oss"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Post-Scan Only Reference Folder
                                     </label>
                                 </div>
@@ -275,21 +275,21 @@
                             <div class="collapse folder-content" id="folder-{{$index}}-code">
                                 <div class="form-group">
                                     <label for="folder_{{$index}}_scanConfig_code_preScanCommand">Pre-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_code_preScanCommand" name="folder_{{$index}}_scanConfig_code_preScanCommand" value="{{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.code}}{{$folder.ScanCommandConfig.code.command}}{{end}}{{end}}" placeholder="prepare.sh">
+                                    <input type="text" id="folder_{{$index}}_scanConfig_code_preScanCommand" name="folder_{{$index}}_scanConfig_code_preScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "code"}}{{.PreScanCommand}}{{end}}" placeholder="prepare.sh">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_code_preScanOnlyReferenceFolder" {{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.code}}{{if $folder.ScanCommandConfig.code.preScanOnlyReferenceFolder}}checked{{end}}{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_code_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "code"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Pre-Scan Only Reference Folder
                                     </label>
                                 </div>
                                 <div class="form-group">
                                     <label for="folder_{{$index}}_scanConfig_code_postScanCommand">Post-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_code_postScanCommand" name="folder_{{$index}}_scanConfig_code_postScanCommand" value="{{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.code}}{{$folder.ScanCommandConfig.code.postScanCommand}}{{end}}{{end}}" placeholder="cleanup.sh">
+                                    <input type="text" id="folder_{{$index}}_scanConfig_code_postScanCommand" name="folder_{{$index}}_scanConfig_code_postScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "code"}}{{.PostScanCommand}}{{end}}" placeholder="cleanup.sh">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_code_postScanOnlyReferenceFolder" {{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.code}}{{if $folder.ScanCommandConfig.code.postScanOnlyReferenceFolder}}checked{{end}}{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_code_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "code"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Post-Scan Only Reference Folder
                                     </label>
                                 </div>
@@ -302,21 +302,21 @@
                             <div class="collapse folder-content" id="folder-{{$index}}-iac">
                                 <div class="form-group">
                                     <label for="folder_{{$index}}_scanConfig_iac_preScanCommand">Pre-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_iac_preScanCommand" name="folder_{{$index}}_scanConfig_iac_preScanCommand" value="{{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.iac}}{{$folder.ScanCommandConfig.iac.command}}{{end}}{{end}}" placeholder="terraform init">
+                                    <input type="text" id="folder_{{$index}}_scanConfig_iac_preScanCommand" name="folder_{{$index}}_scanConfig_iac_preScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "iac"}}{{.PreScanCommand}}{{end}}" placeholder="terraform init">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_iac_preScanOnlyReferenceFolder" {{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.iac}}{{if $folder.ScanCommandConfig.iac.preScanOnlyReferenceFolder}}checked{{end}}{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_iac_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "iac"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Pre-Scan Only Reference Folder
                                     </label>
                                 </div>
                                 <div class="form-group">
                                     <label for="folder_{{$index}}_scanConfig_iac_postScanCommand">Post-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_iac_postScanCommand" name="folder_{{$index}}_scanConfig_iac_postScanCommand" value="{{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.iac}}{{$folder.ScanCommandConfig.iac.postScanCommand}}{{end}}{{end}}" placeholder="cleanup.sh">
+                                    <input type="text" id="folder_{{$index}}_scanConfig_iac_postScanCommand" name="folder_{{$index}}_scanConfig_iac_postScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "iac"}}{{.PostScanCommand}}{{end}}" placeholder="cleanup.sh">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_iac_postScanOnlyReferenceFolder" {{if $folder.ScanCommandConfig}}{{if $folder.ScanCommandConfig.iac}}{{if $folder.ScanCommandConfig.iac.postScanOnlyReferenceFolder}}checked{{end}}{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_iac_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "iac"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Post-Scan Only Reference Folder
                                     </label>
                                 </div>
