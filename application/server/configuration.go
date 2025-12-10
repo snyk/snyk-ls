@@ -174,6 +174,7 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	}
 
 	updateSeverityFilter(c, settings.FilterSeverity, triggerSource)
+	updateRiskScoreThreshold(c, settings, triggerSource)
 	updateIssueViewOptions(c, settings.IssueViewOptions, triggerSource)
 	updateProductEnablement(c, settings, triggerSource)
 	updateCliConfig(c, settings)
@@ -299,6 +300,22 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		}
 
 		if storedConfig != nil {
+			baseBranchChanged := storedConfig.BaseBranch != folderConfig.BaseBranch
+			referenceFolderChanged := storedConfig.ReferenceFolderPath != folderConfig.ReferenceFolderPath
+			if baseBranchChanged || referenceFolderChanged {
+				logger.Info().
+					Str("folderPath", string(path)).
+					Str("oldBaseBranch", storedConfig.BaseBranch).
+					Str("newBaseBranch", folderConfig.BaseBranch).
+					Str("oldReferenceFolderPath", string(storedConfig.ReferenceFolderPath)).
+					Str("newReferenceFolderPath", string(folderConfig.ReferenceFolderPath)).
+					Msg("base branch or reference folder changed, clearing persisted scan cache for folder")
+				ws := c.Workspace()
+				if ws != nil {
+					ws.GetScanSnapshotClearerExister().ClearFolder(path)
+				}
+			}
+
 			sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
 		}
 
@@ -745,7 +762,7 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 }
 
 func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, triggerSource analytics.TriggerSource) {
-	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options:")
+	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options")
 	oldValue := c.IssueViewOptions()
 	modified := c.SetIssueViewOptions(s)
 
@@ -765,8 +782,26 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, trigger
 	}
 }
 
+func updateRiskScoreThreshold(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
+	c.Logger().Debug().Str("method", "updateRiskScoreThreshold").Interface("riskScoreThreshold", settings.RiskScoreThreshold).Msg("Updating risk score threshold")
+	oldValue := c.RiskScoreThreshold()
+	modified := c.SetRiskScoreThreshold(settings.RiskScoreThreshold)
+
+	if !modified {
+		return
+	}
+
+	// Send UI update
+	sendDiagnosticsForNewSettings(c)
+
+	// Send analytics
+	if c.IsLSPInitialized() && settings.RiskScoreThreshold != nil {
+		analytics.SendConfigChangedAnalytics(c, "riskScoreThreshold", oldValue, *settings.RiskScoreThreshold, triggerSource)
+	}
+}
+
 func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSource analytics.TriggerSource) {
-	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter:")
+	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter")
 	oldValue := c.FilterSeverity()
 	modified := c.SetSeverityFilter(s)
 
