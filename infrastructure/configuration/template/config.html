@@ -27,17 +27,17 @@
                         <div class="checkbox-group">
                             <label class="checkbox-label">
                                 <input type="checkbox" name="activateSnykOpenSource" {{if eq .Settings.ActivateSnykOpenSource "true"}}checked{{end}}>
-                                Activate Snyk Open Source
+                                Snyk Open Source
                                 <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Find and fix open source dependency issues">?</span>
                             </label>
                             <label class="checkbox-label">
                                 <input type="checkbox" name="activateSnykCode" {{if eq .Settings.ActivateSnykCode "true"}}checked{{end}}>
-                                Activate Snyk Code
+                                Snyk Code
                                 <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Find and fix security issues in your application code in real time. Note: Snyk Code must be enabled for your organization in Snyk settings">?</span>
                             </label>
                             <label class="checkbox-label">
                                 <input type="checkbox" name="activateSnykIac" {{if eq .Settings.ActivateSnykIac "true"}}checked{{end}}>
-                                Activate Snyk IaC
+                                Snyk IaC
                                 <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Find and fix your IaC misconfigurations">?</span>
                             </label>
                         </div>
@@ -138,9 +138,9 @@
                     <div class="form-group">
                         <label for="authenticationMethod">Authentication Method <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy). Note: OAuth2 authentication is recommended as it provides enhanced security">?</span></label>
                         <select id="authenticationMethod" name="authenticationMethod">
-                            <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>Token</option>
-                            <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth</option>
-                            <option value="pat" {{if eq .Settings.AuthenticationMethod "pat"}}selected{{end}}>PAT</option>
+                            <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth2 (Recommended)</option>
+                            <option value="pat" {{if eq .Settings.AuthenticationMethod "pat"}}selected{{end}}>Personal Access Token</option>
+                            <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>API Token (Legacy)</option>
                         </select>
                     </div>
 
