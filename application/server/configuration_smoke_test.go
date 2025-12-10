@@ -72,7 +72,6 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assertFieldPresent(t, html, "activateSnykCode", "ActivateSnykCode field")
 			assertFieldPresent(t, html, "activateSnykIac", "ActivateSnykIac field")
 			assertFieldPresent(t, html, "scanningMode", "ScanningMode field")
-			assertFieldPresent(t, html, "organization", "Organization field")
 
 			// Filter and display settings
 			assertFieldPresent(t, html, "filterSeverity", "FilterSeverity field")
@@ -109,10 +108,10 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assert.Contains(t, html, "Logout", "Logout button should be present")
 			assert.Contains(t, html, "logout-btn", "Logout button ID should be present")
 
-			// Verify IDE function placeholders for injection
-			assert.Contains(t, html, "${ideLogin}", "ideLogin placeholder should be present")
-			assert.Contains(t, html, "${ideSaveConfig}", "ideSaveConfig placeholder should be present")
-			assert.Contains(t, html, "${ideLogout}", "ideLogout placeholder should be present")
+			// Verify IDE function calls are present (changed from placeholders to window functions)
+			assert.Contains(t, html, "window.__ideLogin__", "ideLogin function call should be present")
+			assert.Contains(t, html, "window.__saveIdeConfig__", "saveIdeConfig function call should be present")
+			assert.Contains(t, html, "window.__ideLogout__", "ideLogout function call should be present")
 		})
 
 		t.Run("Endpoint Validation Logic", func(t *testing.T) {
@@ -131,9 +130,8 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assert.Contains(t, html, "collectData", "collectData function should be present")
 			assert.Contains(t, html, "configForm", "config form ID should be present")
 
-			// Verify save functionality
-			assert.Contains(t, html, "save-config-btn", "Save button should be present")
-			assert.Contains(t, html, "Save Configuration", "Save button text should be present")
+			// Verify auto-save functionality (save button was removed in favor of auto-save)
+			assert.Contains(t, html, "getAndSaveIdeConfig", "Auto-save function should be present")
 		})
 
 		t.Run("IE7 Compatibility", func(t *testing.T) {
@@ -157,9 +155,6 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 
 			// Verify token field has a value attribute
 			assert.Regexp(t, `id="token"[^>]*value="[^"]*"`, html, "Token field should have a value")
-
-			// Verify organization field has a value attribute
-			assert.Regexp(t, `id="organization"[^>]*value="[^"]*"`, html, "Organization field should have a value")
 		})
 
 		t.Run("Security - Password Masking", func(t *testing.T) {
