@@ -53,9 +53,6 @@ func CallMcpConfigWorkflow(c *config.Config, notifier notification.Notifier, con
 		mcpConfig.Set(mcp.ConfigureMcpParam, configureMcp)
 		mcpConfig.Set(mcp.ConfigureRulesParam, configureRules)
 
-		// TODO: Implement VSCode notification
-		//mcpConfig.Set(shared.McpConfigureCallback)
-
 		_, err := c.Engine().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, mcpConfig)
 		if err != nil {
 			logger.Err(err).Msg("failed to configure MCP")
