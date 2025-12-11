@@ -29,8 +29,7 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/google/go-cmp/cmp"
 	"github.com/rs/zerolog"
-	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
-	mcp "github.com/snyk/studio-mcp/shared"
+	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -741,7 +740,7 @@ func sendDiagnosticsForNewSettings(c *config.Config) {
 
 func updateMcpConfiguration(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
 	logger := c.Logger().With().Str("method", "updateMcpConfiguration").Logger()
-
+	n := di.Notifier()
 	// Update autoConfigureSnykMcpServer
 	if settings.AutoConfigureSnykMcpServer != "" {
 		parseBool, err := strconv.ParseBool(settings.AutoConfigureSnykMcpServer)
@@ -755,7 +754,7 @@ func updateMcpConfiguration(c *config.Config, settings types.Settings, triggerSo
 				if c.IsLSPInitialized() {
 					go analytics.SendConfigChangedAnalytics(c, configAutoConfigureSnykMcpServer, oldValue, parseBool, triggerSource)
 				}
-				callMcpConfigWorkflow(c, true, false)
+				mcpWorkflow.CallMcpConfigWorkflow(c, n, true, false)
 			}
 		}
 	}
@@ -769,48 +768,7 @@ func updateMcpConfiguration(c *config.Config, settings types.Settings, triggerSo
 			if c.IsLSPInitialized() {
 				go analytics.SendConfigChangedAnalytics(c, configSecureAtInceptionExecutionFrequency, oldValue, settings.SecureAtInceptionExecutionFrequency, triggerSource)
 			}
-			callMcpConfigWorkflow(c, false, true)
-		}
-	}
-}
-
-func callMcpConfigWorkflow(c *config.Config, configureMcp bool, configureRules bool) {
-	logger := c.Logger().With().Str("method", "callMcpConfigWorkflow").Logger()
-
-	engine := c.Engine()
-	var trustedFoldersStr string
-	for _, f := range c.TrustedFolders() {
-		trustedFoldersStr += string(f) + ";"
-	}
-
-	trustedWorkspaceFolders, _ := c.Workspace().GetFolderTrust()
-	for _, f := range trustedWorkspaceFolders {
-		mcpConfig := engine.GetConfiguration().Clone()
-		mcpConfig.Set(mcp.ToolNameParam, c.IdeName())
-		mcpConfig.Set(mcp.IdeConfigPathParam, c.IdeName())
-		mcpConfig.Set(mcp.TrustedFoldersParam, trustedFoldersStr)
-		if c.GetSecureAtInceptionExecutionFrequency() == "Smart Scan" {
-			mcpConfig.Set(mcp.RuleTypeParam, mcp.RuleTypeSmart)
-		} else if c.GetSecureAtInceptionExecutionFrequency() == "On Code Generation" {
-			mcpConfig.Set(mcp.RuleTypeParam, mcp.RuleTypeAlwaysApply)
-		}
-
-		if (c.GetSecureAtInceptionExecutionFrequency() == "Manual" && configureRules) || (!c.IsAutoConfigureMcpEnabled() && configureMcp) {
-			mcpConfig.Set(mcp.RemoveParam, true)
-		}
-
-		mcpConfig.Set(mcp.RulesScopeParam, mcp.RulesWorkspaceScope)
-		mcpConfig.Set(mcp.WorkspacePath, string(f.Path()))
-
-		mcpConfig.Set(mcp.ConfigureMcpParam, configureMcp)
-		mcpConfig.Set(mcp.ConfigureRulesParam, configureRules)
-
-		// TODO: Implement VSCode notification
-		//mcpConfig.Set(shared.McpConfigureCallback)
-
-		_, err := c.Engine().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, mcpConfig)
-		if err != nil {
-			logger.Err(err).Msg("failed to configure MCP")
+			mcpWorkflow.CallMcpConfigWorkflow(c, n, false, true)
 		}
 	}
 }

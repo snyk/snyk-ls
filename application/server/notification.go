@@ -148,8 +148,8 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		case types.McpServerURLParams:
 			logger.Debug().Msgf("sending mcp url %s", params.URL)
 			notifier(c, srv, "$/snyk.mcpServerURL", params)
-		case types.SnykConfigureMcpParams:
-			notifier(c, srv, "$/snyk.configureSnykMCP", params)
+		case types.SnykRegisterMcpParams:
+			notifier(c, srv, "$/snyk.registerMcp", params)
 			logger.Debug().Interface("mcpConfig", params).Msg("sending MCP config to client")
 		default:
 			logger.Warn().

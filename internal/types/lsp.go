@@ -38,11 +38,10 @@ type McpServerURLParams struct {
 	URL string `json:"url"`
 }
 
-type SnykConfigureMcpParams struct {
+type SnykRegisterMcpParams struct {
 	Command string            `json:"command"`
 	Args    []string          `json:"args"`
 	Env     map[string]string `json:"env"`
-	IdeName string            `json:"ideName"` // "cursor", "windsurf", "vscode"
 }
 
 type TextDocumentSaveReason int

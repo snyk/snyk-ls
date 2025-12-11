@@ -259,7 +259,20 @@ Right now the language server supports the following actions:
     "scanSummary": "<html><body<p> Summary </p></body></html>"
   }
   ```
-
+- Register MCP Notification
+  - method: `$/snyk.registerMcp`
+  - params: `types.SnykRegisterMcpParams`
+  - example:
+  ```json5
+    {
+      "command": "/path/to/cli",
+      "args": [ "mcp", "-t", "stdio" ],
+      "env": {
+        "ENV1": "value1",
+        "ENV2": "value2"
+      }
+    }
+  ```
 ### Commands
 
 - `NavigateToRangeCommand` navigates the client to the given range

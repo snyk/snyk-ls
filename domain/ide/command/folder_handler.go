@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -46,6 +47,7 @@ func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, noti
 	initScanPersister(c, persister)
 	sendFolderConfigs(c, notifier, featureFlagService)
 	HandleUntrustedFolders(ctx, c, srv)
+	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, true, true)
 }
 
 func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service) {

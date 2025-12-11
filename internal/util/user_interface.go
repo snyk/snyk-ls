@@ -29,7 +29,6 @@ func (l LsUserInterface) Output(output string) error {
 func (l LsUserInterface) OutputError(err error, _ ...ui.Opts) error {
 	l.logger.Error().Err(err).Msg("received errors")
 	return nil
-
 }
 
 func (l LsUserInterface) NewProgressBar() ui.ProgressBar {
