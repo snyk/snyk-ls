@@ -301,6 +301,7 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 						types.GenerateIssueDescriptionCommand,
 						types.ReportAnalyticsCommand,
 						types.ExecuteMCPToolCall,
+						types.WorkspaceConfigurationCommand,
 					},
 				},
 			},
