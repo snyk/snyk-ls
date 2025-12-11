@@ -442,6 +442,23 @@ Right now the language server supports the following actions:
   - command: `snyk.generateIssueDescription`
   - args:
     - `issueId` string
+- `Configuration Dialog` Opens the configuration dialog with all Snyk settings.
+  - command: `snyk.workspace.configuration`
+  - args: empty
+  - returns: HTML string containing the configuration dialog
+  - example:
+  ```html
+  <html>
+    <head>
+      <title>Snyk Configuration</title>
+      ...
+    </head>
+    <body>
+      <!-- Configuration form with all settings -->
+    </body>
+  </html>
+  ```
+  - See [Configuration Dialog Integration Guide](docs/configuration-dialog.md) for full integration details.
 
 ## Installation
 

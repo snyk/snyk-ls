@@ -20,8 +20,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -31,6 +33,30 @@ func TestToHovers(t *testing.T) {
 	testIssue := &snyk.Issue{FormattedMessage: "<br><br/><br />"}
 	hovers := ToHovers([]types.Issue{testIssue})
 	assert.Equal(t, "\n\n\n\n\n\n", hovers[0].Message)
+}
+
+func TestToDiagnostics_OssIssue_RiskScore(t *testing.T) {
+	testutil.UnitTest(t)
+
+	expectedRiskScore := uint16(500)
+	testIssue := &snyk.Issue{
+		ID:       "test-vuln-id",
+		Severity: types.High,
+		Product:  product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "test-key",
+			RiskScore: expectedRiskScore,
+		},
+	}
+
+	diagnostics := ToDiagnostics([]types.Issue{testIssue})
+
+	require.Len(t, diagnostics, 1)
+	scanIssue := diagnostics[0].Data
+
+	ossData, ok := scanIssue.AdditionalData.(types.OssIssueData)
+	require.True(t, ok, "additional data should be OssIssueData")
+	assert.Equal(t, expectedRiskScore, ossData.RiskScore, "RiskScore should be propagated to LSP layer")
 }
 
 func TestGetCvssCalculatorUrl(t *testing.T) {
