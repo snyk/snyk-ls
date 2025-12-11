@@ -269,6 +269,7 @@ func getOssIssue(issue types.Issue) types.ScanIssue {
 			DisplayTargetFile: additionalData.DisplayTargetFile,
 			MatchingIssues:    matchingIssues,
 			Lesson:            additionalData.Lesson,
+			RiskScore:         additionalData.RiskScore,
 		},
 	}
 
