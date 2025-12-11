@@ -289,6 +289,18 @@ button.secondary:hover {
     background-color: var(--button-secondary-hover-background);
 }
 
+button:disabled,
+button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--button-secondary-background) !important;
+}
+
+button.secondary:disabled,
+button.secondary[disabled] {
+    background-color: var(--button-secondary-background) !important;
+}
+
 /* - - - Collapsible Elements - - - */
 .collapsible-header {
     cursor: pointer;
@@ -384,6 +396,11 @@ button.secondary:hover {
 
 .folder-content {
     padding-top: var(--section-padding);
+}
+
+/* - - - Trusted Folders - - - */
+.trusted-folder-item {
+    margin-bottom: 10px;
 }
 
 /* - - - Tooltips - - - */

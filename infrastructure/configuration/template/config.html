@@ -221,7 +221,7 @@
                         <div class="collapse" id="trustedFoldersSection">
                             <div id="trustedFoldersList" class="trusted-folders-list mt-2">
                                 {{range $index, $folder := .Settings.TrustedFolders}}
-                                <div class="trusted-folder-item" data-index="{{$index}}" style="margin-bottom: 10px;">
+                                <div class="trusted-folder-item" data-index="{{$index}}">
                                     <div class="button-group">
                                         <input type="text" name="trustedFolder_{{$index}}" value="{{$folder}}" placeholder="/path/to/trusted/folder">
                                         <button type="button" class="remove-trusted-folder" data-index="{{$index}}" title="Remove">✕</button>

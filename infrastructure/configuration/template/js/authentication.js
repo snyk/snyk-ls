@@ -12,6 +12,19 @@
 	};
 
 	authentication.logout = function () {
+		// Clear the token field
+		var tokenInput = window.ConfigApp.helpers.get("token");
+		if (tokenInput) {
+			tokenInput.value = "";
+		}
+
+		// Disable the logout button
+		var logoutBtn = window.ConfigApp.helpers.get("logout-btn");
+		if (logoutBtn) {
+			logoutBtn.disabled = true;
+		}
+
+		// Call IDE logout function
 		window.__ideLogout__();
 	};
 
