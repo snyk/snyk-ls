@@ -46,8 +46,8 @@
 		trustedFolderIndex++;
 
 		// Trigger dirty check
-		if (window.dirtyTracker) {
-			window.dirtyTracker.markDirty();
+		if (window.ConfigApp.dirtyTracking && window.ConfigApp.dirtyTracking.debouncedDirtyCheck) {
+			window.ConfigApp.dirtyTracking.debouncedDirtyCheck();
 		}
 	};
 
@@ -60,8 +60,8 @@
 		}
 
 		// Trigger dirty check
-		if (window.dirtyTracker) {
-			window.dirtyTracker.markDirty();
+		if (window.ConfigApp.dirtyTracking && window.ConfigApp.dirtyTracking.debouncedDirtyCheck) {
+			window.ConfigApp.dirtyTracking.debouncedDirtyCheck();
 		}
 	};
 

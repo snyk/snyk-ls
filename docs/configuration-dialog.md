@@ -13,6 +13,24 @@ The configuration dialog follows a client-server pattern:
 - **Language Server**: Generates HTML content with current settings, handles configuration updates
 - **IDE Client**: Displays the HTML, injects JavaScript functions for user interactions, applies configuration changes
 
+### JavaScript Architecture
+
+The dialog uses a modular JavaScript architecture with all modules organized under `infrastructure/configuration/template/js/`:
+
+- **utils.js**: Core utilities (deep cloning, debouncing, normalization, IE7 polyfills)
+- **dirty-tracker.js**: DirtyTracker class for tracking form state changes
+- **helpers.js**: DOM manipulation helpers (get, addEvent, addClass, removeClass)
+- **validation.js**: Form validation logic (endpoint, risk score, additional env)
+- **form-data.js**: Form data collection and serialization
+- **auto-save.js**: Auto-save functionality with debouncing
+- **authentication.js**: Login and logout operations
+- **folder-management.js**: Folder-specific configuration management
+- **trusted-folders.js**: Trusted folder list management
+- **dirty-tracking.js**: Dirty tracking module that integrates DirtyTracker with the form
+- **init.js**: Main initialization that wires up all event handlers
+
+All modules are namespaced under `window.ConfigApp` to minimize global namespace pollution. The `DirtyTracker` class and `FormUtils` are exposed globally as they are referenced by multiple modules and the IDE integration layer.
+
 ## Integration Flow
 
 ### 1. Opening the Configuration Dialog
@@ -59,37 +77,51 @@ webview.show();
 
 ### 3. Function Injection
 
-The HTML contains placeholders for IDE-specific functions that must be injected:
+The IDE must expose the following functions on the window object for the dialog to function:
 
-| Placeholder | Purpose | Expected Behavior |
-|------------|---------|-------------------|
-| `${ideLogin}` | Handle authentication | Trigger OAuth or token-based login flow |
-| `${ideSaveConfig}` | Save configuration | Receive config data, send to language server |
-| `${ideLogout}` | Handle logout | Clear authentication, notify language server |
+| Function | Purpose | Required | Parameters |
+|----------|---------|----------|------------|
+| `window.__ideLogin__()` | Handle authentication | Yes | None |
+| `window.__saveIdeConfig__(jsonString)` | Save configuration | Yes | JSON string of config data |
+| `window.__ideLogout__()` | Handle logout | Yes | None |
+| `window.__IS_IDE_AUTOSAVE_ENABLED__` | Enable auto-save mode | No | Boolean (default: false) |
+| `window.__onFormDirtyChange__(isDirty)` | Dirty state notifications | No | Boolean indicating dirty state |
+
+**Additional IDE-Callable Functions:**
+
+The dialog also exposes these functions that the IDE can call:
+
+| Function | Purpose | Returns |
+|----------|---------|---------|
+| `window.getAndSaveIdeConfig()` | Collect and save current form data | void |
+| `window.__isFormDirty__()` | Check if form has unsaved changes | Boolean |
+| `window.__resetDirtyState__()` | Reset dirty tracker after save | void |
 
 **Injection Example:**
 ```typescript
-function injectFunctions(html: string): string {
-  return html
-    .replace('${ideLogin}', 'window.ideLogin')
-    .replace('${ideSaveConfig}', 'window.ideSaveConfig')
-    .replace('${ideLogout}', 'window.ideLogout');
-}
+// Expose functions to webview before loading HTML
+webview.window.__ideLogin__ = async () => {
+  const token = await handleLogin();
+  // Optionally refresh dialog or update token field
+};
 
-// Expose functions to webview
-webview.onDidReceiveMessage(message => {
-  switch (message.command) {
-    case 'login':
-      handleLogin();
-      break;
-    case 'saveConfig':
-      handleSaveConfig(message.data);
-      break;
-    case 'logout':
-      handleLogout();
-      break;
-  }
-});
+webview.window.__saveIdeConfig__ = async (jsonString: string) => {
+  const data = JSON.parse(jsonString);
+  await handleSaveConfig(data);
+};
+
+webview.window.__ideLogout__ = async () => {
+  await handleLogout();
+};
+
+// Optional: Enable auto-save
+webview.window.__IS_IDE_AUTOSAVE_ENABLED__ = true;
+
+// Optional: Listen for dirty state changes
+webview.window.__onFormDirtyChange__ = (isDirty: boolean) => {
+  // Update IDE UI to show unsaved changes indicator
+  updateTabTitle(isDirty ? "* Settings" : "Settings");
+};
 ```
 
 See [Function Injection Flow](#function-injection-flow) for the detailed sequence.
@@ -298,6 +330,62 @@ async function handleLogout() {
 
 See [Logout Flow](#logout-flow) for the detailed sequence.
 
+### 7. Dirty Tracking
+
+The dialog includes a dirty tracking system that monitors form changes and notifies the IDE when there are unsaved changes.
+
+**How it Works:**
+
+1. **Initial State Capture**: When the dialog loads, the `DirtyTracker` captures a deep clone of the initial form state
+2. **Change Detection**: Form inputs are monitored with event listeners - text inputs and textareas use `input` and `change` events, while select dropdowns and checkboxes use `change` events
+3. **Deep Comparison**: Before comparison, values are normalized (empty strings → null, "true"/"false" → booleans, numeric strings → numbers). The tracker then performs deep equality checks between normalized current and original state
+4. **State Transition Events**: When dirty state transitions (clean→dirty or dirty→clean), `window.__onFormDirtyChange__(isDirty)` is called
+5. **Reset After Save**: After successful save, the tracker resets with the new saved state as the baseline
+
+**IDE Integration:**
+
+```typescript
+// Listen for dirty state changes
+webview.window.__onFormDirtyChange__ = (isDirty: boolean) => {
+  if (isDirty) {
+    // Show unsaved changes indicator
+    setDocumentIcon("*");
+    enableSaveButton();
+  } else {
+    // Clear indicator
+    setDocumentIcon("");
+    disableSaveButton();
+  }
+};
+
+// Check dirty state before closing dialog
+function beforeClose() {
+  if (webview.window.__isFormDirty__()) {
+    const shouldClose = confirm("You have unsaved changes. Close anyway?");
+    if (!shouldClose) return false;
+  }
+  return true;
+}
+
+// Reset dirty state after successful save
+async function handleSave(jsonString: string) {
+  try {
+    await saveConfiguration(jsonString);
+    webview.window.__resetDirtyState__(); // Only reset on success
+  } catch (error) {
+    // Keep dirty state on save failure
+    showError('Failed to save: ' + error.message);
+  }
+}
+```
+
+**Features:**
+
+- Deep equality comparison handles nested objects and arrays
+- Value normalization (empty strings = null, "true"/"false" to booleans)
+- Debounced change detection for performance
+- Automatic reset after successful save
+
 ## Sequence Diagrams
 
 ### Opening Configuration Dialog
@@ -338,33 +426,30 @@ sequenceDiagram
     participant IDE as IDE Client
     participant Webview as Webview Component
     participant HTML as HTML Content
-    
+
     IDE->>IDE: Receive HTML content
-    
-    Note over IDE: Replace placeholders with<br/>actual function names
-    IDE->>IDE: html.replace('${ideLogin}', 'window.ideLogin')
-    IDE->>IDE: html.replace('${ideSaveConfig}', 'window.ideSaveConfig')
-    IDE->>IDE: html.replace('${ideLogout}', 'window.ideLogout')
-    
-    IDE->>Webview: Load modified HTML
-    
-    IDE->>Webview: Expose functions:<br/>- window.ideLogin()<br/>- window.ideSaveConfig(data)<br/>- window.ideLogout()
-    
+
+    IDE->>Webview: Create webview instance
+
+    IDE->>Webview: Expose functions on window object:<br/>- window.__ideLogin__()<br/>- window.__saveIdeConfig__(jsonString)<br/>- window.__ideLogout__()
+
+    IDE->>Webview: Load HTML content
+
     Webview-->>IDE: Webview ready
-    
+
     Note over HTML,Webview: User interacts with dialog
-    
+
     HTML->>Webview: User clicks "Authenticate"
-    Webview->>IDE: Call window.ideLogin()
+    Webview->>IDE: Call window.__ideLogin__()
     IDE->>IDE: Handle authentication
-    
+
     HTML->>Webview: User clicks "Save"
     Webview->>Webview: collectData()
-    Webview->>IDE: Call window.ideSaveConfig(data)
+    Webview->>IDE: Call window.__saveIdeConfig__(jsonString)
     IDE->>IDE: Handle save
-    
+
     HTML->>Webview: User clicks "Logout"
-    Webview->>IDE: Call window.ideLogout()
+    Webview->>IDE: Call window.__ideLogout__()
     IDE->>IDE: Handle logout
 ```
 
@@ -386,7 +471,7 @@ sequenceDiagram
     
     Dialog->>Dialog: collectData()<br/>Gather all form values
     
-    Dialog->>Webview: Call window.ideSaveConfig(data)
+    Dialog->>Webview: Call window.__saveIdeConfig__(jsonString)
     
     Webview->>IDE: Post message with config data
     
@@ -487,28 +572,45 @@ sequenceDiagram
 - [ ] Execute `snyk.workspace.configuration` command
 - [ ] Extract HTML content from command response
 - [ ] Create webview/browser component for display
-- [ ] Inject `ideLogin`, `ideSaveConfig`, `ideLogout` functions
+- [ ] Expose required window functions (`__ideLogin__`, `__saveIdeConfig__`, `__ideLogout__`)
 - [ ] Display HTML content in webview
 
 ### Configuration Management
-- [ ] Parse configuration data from dialog
+- [ ] Implement `window.__saveIdeConfig__(jsonString)` to receive config data
+- [ ] Parse JSON configuration data
 - [ ] Send `workspace/didChangeConfiguration` notification
 - [ ] Validate configuration data before sending
 - [ ] Handle configuration errors gracefully
 - [ ] Provide user feedback on save success/failure
+- [ ] Call `window.__resetDirtyState__()` after successful save
 
 ### Authentication
-- [ ] Implement `ideLogin()` function
+- [ ] Implement `window.__ideLogin__()` function
 - [ ] Support OAuth flow (recommended)
-- [ ] Support token-based authentication (fallback)
+- [ ] Support PAT (Personal Access Token) authentication
+- [ ] Support API token authentication (legacy)
 - [ ] Update language server on successful authentication
 - [ ] Handle authentication errors
+- [ ] Optionally refresh dialog after authentication
 
 ### Logout
-- [ ] Implement `ideLogout()` function
+- [ ] Implement `window.__ideLogout__()` function
 - [ ] Execute `snyk.logout` command
 - [ ] Clear stored credentials
 - [ ] Update UI to reflect logged-out state
+- [ ] Optionally refresh dialog after logout
+
+### Dirty Tracking (Optional but Recommended)
+- [ ] Implement `window.__onFormDirtyChange__(isDirty)` callback
+- [ ] Show unsaved changes indicator in IDE UI (e.g., "*" in tab title)
+- [ ] Warn user before closing dialog with unsaved changes using `window.__isFormDirty__()`
+- [ ] Disable save button when form is clean
+- [ ] Enable save button when form is dirty
+
+### Auto-Save (Optional)
+- [ ] Set `window.__IS_IDE_AUTOSAVE_ENABLED__ = true` before loading HTML
+- [ ] Handle automatic saves triggered by form changes
+- [ ] Provide feedback for auto-save operations
 
 ### User Experience
 - [ ] Display loading indicators during operations
@@ -516,6 +618,7 @@ sequenceDiagram
 - [ ] Provide validation feedback for form fields
 - [ ] Support dialog refresh after configuration changes
 - [ ] Handle dialog close/cancel actions
+- [ ] Implement beforeunload confirmation for unsaved changes
 
 ## Best Practices
 

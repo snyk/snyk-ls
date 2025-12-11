@@ -20,10 +20,10 @@ var configHtmlTemplate string
 //go:embed template/styles.css
 var configStylesTemplate string
 
-//go:embed template/utils.js
+//go:embed template/js/utils.js
 var configUtilsTemplate string
 
-//go:embed template/dirty-tracker.js
+//go:embed template/js/dirty-tracker.js
 var configDirtyTrackerTemplate string
 
 //go:embed template/js/helpers.js
