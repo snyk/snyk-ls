@@ -30,7 +30,11 @@ import (
 
 func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath, cmd []string, workDir types.FilePath) ([]workflow.Data, error) {
 	c := cliScanner.config
-	logger := c.Logger().With().Str("method", "cliScanner.ostestScan").Logger()
+	logger := c.Logger().With().
+		Str("method", "cliScanner.ostestScan").
+		Str("path", string(path)).
+		Str("workDir", string(workDir)).
+		Logger()
 	engine := c.Engine()
 	gafConfig := engine.GetConfiguration().Clone()
 
@@ -38,10 +42,13 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath,
 	envvars.UpdatePath(c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
 	envvars.LoadConfiguredEnvironment(gafConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workDir))
 
+	// Resolve organization for the scan
+	folderOrg := c.FolderOrganization(workDir)
+
 	gafConfig.Set(configuration.WORKING_DIRECTORY, string(workDir))
 	gafConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 	gafConfig.Set(configuration.INPUT_DIRECTORY, []string{string(workDir)})
-	gafConfig.Set(configuration.ORGANIZATION, c.FolderOrganization(workDir))
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 	gafConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
 	gafConfig.Set("no-output", true)
 
@@ -49,6 +56,7 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath,
 	// see: https://github.com/snyk/cli-extension-os-flows/blob/main/internal/commands/ostest/workflow.go#L45
 	testWorkFlowId := workflow.NewWorkflowIdentifier("test")
 
+	logger.Debug().Str("folderOrg", folderOrg).Msg("Invoking OSS scan workflow")
 	// This cannot be canceled :(
 	output, err := engine.InvokeWithConfig(testWorkFlowId, gafConfig)
 	if err != nil {
