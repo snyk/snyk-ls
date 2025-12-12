@@ -30,9 +30,9 @@ import (
 )
 
 type lensesWithIssueCount struct {
-	lensCommands []types.CommandData
-	issueCount   int
-	totalIssues  int
+	lensCommands    []types.CommandData
+	totalIssues     int
+	unfixableIssues int
 }
 
 func GetFor(filePath types.FilePath) (lenses []sglsp.CodeLens) {
@@ -50,7 +50,7 @@ func GetFor(filePath types.FilePath) (lenses []sglsp.CodeLens) {
 
 	issues := ip.IssuesForFile(filePath)
 
-	// group by range first
+	// group by range first - iterate over ALL issues to ensure CodeLens appear even when all are filtered
 	lensesByRange := make(map[types.Range]*lensesWithIssueCount)
 	for _, issue := range issues {
 		if c.IsDeltaFindingsEnabled() && !issue.GetIsNew() {
@@ -59,14 +59,19 @@ func GetFor(filePath types.FilePath) (lenses []sglsp.CodeLens) {
 		for _, lens := range issue.GetCodelensCommands() {
 			lensesWithIssueCountsForRange := lensesByRange[issue.GetRange()]
 			if lensesWithIssueCountsForRange == nil {
+				// For quickfix counts: use ALL issues in range
+				allIssuesInRange := filterIssuesForRange(issues, issue.GetRange())
+
+				// Count issues without any quickfix (actually unfixable)
+				unfixableCount := countUnfixableIssues(allIssuesInRange)
+
 				lensesWithIssueCountsForRange = &lensesWithIssueCount{
-					lensCommands: []types.CommandData{},
-					issueCount:   0,
-					totalIssues:  len(ip.IssuesForRange(filePath, issue.GetRange())),
+					lensCommands:    []types.CommandData{},
+					totalIssues:     len(allIssuesInRange),
+					unfixableIssues: unfixableCount,
 				}
 			}
 			lensesWithIssueCountsForRange.lensCommands = append(lensesWithIssueCountsForRange.lensCommands, lens)
-			lensesWithIssueCountsForRange.issueCount++
 			lensesByRange[issue.GetRange()] = lensesWithIssueCountsForRange
 		}
 	}
@@ -80,6 +85,35 @@ func GetFor(filePath types.FilePath) (lenses []sglsp.CodeLens) {
 	}
 
 	return lenses
+}
+
+// filterIssuesForRange filters issues to only those in the given range
+func filterIssuesForRange(issues []types.Issue, r types.Range) []types.Issue {
+	var issuesInRange []types.Issue
+	for _, issue := range issues {
+		if issue.GetRange().Overlaps(r) {
+			issuesInRange = append(issuesInRange, issue)
+		}
+	}
+	return issuesInRange
+}
+
+// countUnfixableIssues counts issues that don't have any quickfix available
+func countUnfixableIssues(issues []types.Issue) int {
+	count := 0
+	for _, issue := range issues {
+		hasQuickfix := false
+		for _, action := range issue.GetCodeActions() {
+			if action.GetGroupingType() == types.Quickfix {
+				hasQuickfix = true
+				break
+			}
+		}
+		if !hasQuickfix {
+			count++
+		}
+	}
+	return count
 }
 
 func getLensCommands(lensesWithIssueCount *lensesWithIssueCount, logger zerolog.Logger) []types.CommandData {
@@ -100,14 +134,14 @@ func getLensCommands(lensesWithIssueCount *lensesWithIssueCount, logger zerolog.
 			// code only has one quickfix available, and iac none at all
 			qf, ok := types.MaxSemver(logger)(lensCommands).(types.CommandData)
 			plural := ""
-			fixable := lensesWithIssueCount.issueCount
-			unfixable := lensesWithIssueCount.totalIssues - fixable
+			// Calculate fixable as total minus unfixable (matches code action logic)
+			fixable := lensesWithIssueCount.totalIssues - lensesWithIssueCount.unfixableIssues
 			if fixable > 1 {
 				plural = "s"
 			}
 			unfixableSuffix := ""
-			if unfixable > 1 {
-				unfixableSuffix = fmt.Sprintf(" (%d unfixable)", unfixable)
+			if lensesWithIssueCount.unfixableIssues > 0 {
+				unfixableSuffix = fmt.Sprintf(" (%d unfixable)", lensesWithIssueCount.unfixableIssues)
 			}
 			qf.Title = fmt.Sprintf("%s and fix %d issue%s%s", qf.Title, fixable, plural, unfixableSuffix)
 			if ok {

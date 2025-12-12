@@ -28,6 +28,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
+	"github.com/snyk/snyk-ls/domain/ide/filter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -87,31 +88,17 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	issues := c.IssuesProvider.IssuesForRange(path, r)
 	c.logger.Debug().Any("path", path).Any("range", r).Msgf("Found %d issues", len(issues))
 
-	codeConsistentIgnoresEnabled := c.featureFlagService.GetFromFolderConfig(folder.Path(), featureflag.SnykCodeConsistentIgnores)
+	// Apply all filters: severity, risk score, and issue view options
+	filteredIssues := filter.FilterIssues(issues, c.c, folder.Path())
+	c.logger.Debug().Any("path", path).Any("range", r).Msgf("Filtered to %d issues", len(filteredIssues))
 
-	var filteredIssues []types.Issue
-	if !codeConsistentIgnoresEnabled {
-		filteredIssues = issues
-	} else {
-		isViewingOpenIssues := c.c.IssueViewOptions().OpenIssues
-		isViewingIgnoredIssues := c.c.IssueViewOptions().IgnoredIssues
-		for _, issue := range issues {
-			if !isViewingOpenIssues && !issue.GetIsIgnored() {
-				continue
-			}
-			if !isViewingIgnoredIssues && issue.GetIsIgnored() {
-				continue
-			}
-			filteredIssues = append(filteredIssues, issue)
-		}
-		c.logger.Debug().Any("path", path).Any("range", r).Msgf("Filtered to %d issues", len(issues))
-	}
-
-	quickFixGroupables := c.getQuickFixGroupablesAndCache(filteredIssues)
+	// Get quickfix groupables from both filtered and all issues
+	filteredQuickFixGroupables := c.getQuickFixGroupablesAndCache(filteredIssues)
+	allQuickFixGroupables := c.getQuickFixGroupablesFromAllIssues(issues)
 
 	var updatedIssues []types.Issue
-	if len(quickFixGroupables) != 0 {
-		updatedIssues = c.UpdateIssuesWithQuickFix(quickFixGroupables, filteredIssues)
+	if len(filteredQuickFixGroupables) != 0 || len(allQuickFixGroupables) != 0 {
+		updatedIssues = c.UpdateIssuesWithQuickFixes(filteredQuickFixGroupables, allQuickFixGroupables, filteredIssues, issues)
 	} else {
 		updatedIssues = filteredIssues
 	}
@@ -121,27 +108,66 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	return actions
 }
 
-func (c *CodeActionsService) UpdateIssuesWithQuickFix(quickFixGroupables []types.Groupable, issues []types.Issue) []types.Issue {
-	// we only allow one quickfix, so it needs to be grouped
-	quickFix := c.getQuickFixAction(quickFixGroupables)
-	if quickFix == nil {
-		// If no quickfix action found, return issues unchanged
-		return issues
+// UpdateIssuesWithQuickFixes creates quickfix actions: one or two depending on filtering
+func (c *CodeActionsService) UpdateIssuesWithQuickFixes(filteredGroupables, allGroupables []types.Groupable, filteredIssues, allIssues []types.Issue) []types.Issue {
+	var quickFixActions []types.CodeAction
+
+	// Count fixable issues for both filtered and all
+	fixableDisplayed := c.countIssuesWithQuickfixes(filteredIssues)
+	fixableAll := c.countIssuesWithQuickfixes(allIssues)
+
+	// If the issue counts and fixable counts are the same, only show one action (without "displayed")
+	// We check both because unfixable counts might differ even if fixable counts are the same
+	if fixableDisplayed == fixableAll && len(filteredIssues) == len(allIssues) {
+		if len(allGroupables) > 0 {
+			allAction := c.getQuickFixAction(allGroupables)
+			if allAction != nil {
+				allActionCopy := c.cloneQuickFixAction(allAction)
+				originalTitle := allActionCopy.GetOriginalTitle()
+				unfixable := len(allIssues) - fixableAll
+				allTitle := c.formatAllIssuesTitle(originalTitle, fixableAll, unfixable)
+				allActionCopy.SetTitle(allTitle)
+				quickFixActions = append(quickFixActions, allActionCopy)
+			}
+		}
+	} else {
+		// Show both actions: "displayed" and "all"
+		// Create "displayed issues" action
+		if len(filteredGroupables) > 0 {
+			displayedAction := c.getQuickFixAction(filteredGroupables)
+			if displayedAction != nil {
+				displayedActionCopy := c.cloneQuickFixAction(displayedAction)
+				originalTitle := displayedActionCopy.GetOriginalTitle()
+				unfixable := len(filteredIssues) - fixableDisplayed
+				displayedTitle := c.formatDisplayedIssuesTitle(originalTitle, fixableDisplayed, unfixable)
+				displayedActionCopy.SetTitle(displayedTitle)
+				quickFixActions = append(quickFixActions, displayedActionCopy)
+			}
+		}
+
+		// Create "all issues" action
+		if len(allGroupables) > 0 {
+			allAction := c.getQuickFixAction(allGroupables)
+			if allAction != nil {
+				allActionCopy := c.cloneQuickFixAction(allAction)
+				originalTitle := allActionCopy.GetOriginalTitle()
+				unfixable := len(allIssues) - fixableAll
+				allTitle := c.formatAllIssuesTitle(originalTitle, fixableAll, unfixable)
+				allActionCopy.SetTitle(allTitle)
+				quickFixActions = append(quickFixActions, allActionCopy)
+			}
+		}
 	}
 
-	// Get the original title from the action to avoid concatenation issues
-	originalTitle := quickFix.GetOriginalTitle()
+	// If no quickfix actions were created, return issues unchanged
+	if len(quickFixActions) == 0 {
+		return filteredIssues
+	}
 
-	fixable := len(quickFixGroupables)
-	unfixable := len(issues) - fixable
-
-	// Format the complete title using the original title, not concatenating to existing
-	completeTitle := c.formatQuickFixTitle(originalTitle, fixable, unfixable)
-	quickFix.SetTitle(completeTitle)
-
-	updatedIssues := make([]types.Issue, 0, len(issues))
-	for _, issue := range issues {
-		groupedActions := append([]types.CodeAction{}, quickFix)
+	// Add quickfix actions to all filtered issues
+	updatedIssues := make([]types.Issue, 0, len(filteredIssues))
+	for _, issue := range filteredIssues {
+		groupedActions := append([]types.CodeAction{}, quickFixActions...)
 
 		for _, action := range issue.GetCodeActions() {
 			if action.GetGroupingType() == types.Quickfix {
@@ -183,6 +209,37 @@ func (c *CodeActionsService) getQuickFixGroupablesAndCache(issues []types.Issue)
 		}
 	}
 	return quickFixGroupables
+}
+
+// getQuickFixGroupablesFromAllIssues gets quickfix groupables without caching (for unfiltered count)
+func (c *CodeActionsService) getQuickFixGroupablesFromAllIssues(issues []types.Issue) []types.Groupable {
+	quickFixGroupables := []types.Groupable{}
+	for _, issue := range issues {
+		for _, action := range issue.GetCodeActions() {
+			if action.GetGroupingType() == types.Quickfix {
+				quickFixGroupables = append(quickFixGroupables, action)
+			}
+		}
+	}
+	return quickFixGroupables
+}
+
+// countIssuesWithQuickfixes counts how many issues have at least one quickfix action
+func (c *CodeActionsService) countIssuesWithQuickfixes(issues []types.Issue) int {
+	count := 0
+	for _, issue := range issues {
+		hasQuickfix := false
+		for _, action := range issue.GetCodeActions() {
+			if action.GetGroupingType() == types.Quickfix {
+				hasQuickfix = true
+				break
+			}
+		}
+		if hasQuickfix {
+			count++
+		}
+	}
+	return count
 }
 
 func (c *CodeActionsService) cacheCodeAction(action types.CodeAction, issue types.Issue) {
@@ -241,7 +298,21 @@ func IsMissingKeyError(err error) bool {
 	return ok
 }
 
-func (c *CodeActionsService) formatQuickFixTitle(originalTitle string, fixable, unfixable int) string {
+func (c *CodeActionsService) formatDisplayedIssuesTitle(originalTitle string, fixable, unfixable int) string {
+	plural := ""
+	if fixable > 1 {
+		plural = "s"
+	}
+
+	unfixableSuffix := ""
+	if unfixable > 0 {
+		unfixableSuffix = fmt.Sprintf(" (%d unfixable)", unfixable)
+	}
+
+	return fmt.Sprintf("%s and fix %d displayed issue%s%s", originalTitle, fixable, plural, unfixableSuffix)
+}
+
+func (c *CodeActionsService) formatAllIssuesTitle(originalTitle string, fixable, unfixable int) string {
 	plural := ""
 	if fixable > 1 {
 		plural = "s"
@@ -253,4 +324,34 @@ func (c *CodeActionsService) formatQuickFixTitle(originalTitle string, fixable, 
 	}
 
 	return fmt.Sprintf("%s and fix %d issue%s%s", originalTitle, fixable, plural, unfixableSuffix)
+}
+
+// cloneQuickFixAction creates a deep copy of a code action with a new UUID
+func (c *CodeActionsService) cloneQuickFixAction(action types.CodeAction) types.CodeAction {
+	// Cast to *snyk.CodeAction to access fields for cloning
+	snykAction, ok := action.(*snyk.CodeAction)
+	if !ok {
+		// If it's not a snyk.CodeAction, return as is
+		return action
+	}
+
+	// Create a new UUID for the cloned action
+	newUUID := uuid.New()
+
+	// Create a new action with copied fields
+	cloned := &snyk.CodeAction{
+		Title:           snykAction.Title,
+		OriginalTitle:   snykAction.OriginalTitle,
+		IsPreferred:     snykAction.IsPreferred,
+		Edit:            snykAction.Edit,
+		DeferredEdit:    snykAction.DeferredEdit,
+		Command:         snykAction.Command,
+		DeferredCommand: snykAction.DeferredCommand,
+		Uuid:            &newUUID, // New UUID for the clone
+		GroupingKey:     snykAction.GroupingKey,
+		GroupingValue:   snykAction.GroupingValue,
+		GroupingType:    snykAction.GroupingType,
+	}
+
+	return cloned
 }

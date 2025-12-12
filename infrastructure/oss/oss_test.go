@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -354,6 +355,9 @@ func EnrichContextForTest(t *testing.T, ctx context.Context, c *config.Config, f
 	t.Helper()
 	// add logger to context
 	newCtx := ctx2.NewContextWithLogger(ctx, c.Logger())
+
+	// Ensure workspace is set up for tests that rely on it
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath(folderPath))
 
 	// add scanner dependencies to context
 	folderConfig := c.FolderConfig(types.FilePath(folderPath))

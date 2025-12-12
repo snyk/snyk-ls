@@ -17,6 +17,7 @@
 package codeaction_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -228,48 +229,77 @@ func Test_UpdateIssuesWithQuickFix_TitleConcatenationIssue_WhenCalledMultipleTim
 	quickFix := &snyk.CodeAction{
 		Title:         "Upgrade to logback-core:1.3.15",
 		OriginalTitle: "Upgrade to logback-core:1.3.15",
+		GroupingType:  types.Quickfix,
 	}
 
 	quickFixGroupables := []types.Groupable{quickFix}
 
-	issues := []types.Issue{
-		&snyk.Issue{},
-		&snyk.Issue{},
-		&snyk.Issue{},
-		&snyk.Issue{},
-		&snyk.Issue{},
+	// Helper to create fresh issues for each call
+	createIssues := func() []types.Issue {
+		return []types.Issue{
+			&snyk.Issue{CodeActions: []types.CodeAction{quickFix}},
+			&snyk.Issue{CodeActions: []types.CodeAction{}},
+			&snyk.Issue{CodeActions: []types.CodeAction{}},
+			&snyk.Issue{CodeActions: []types.CodeAction{}},
+			&snyk.Issue{CodeActions: []types.CodeAction{}},
+		}
 	}
 
-	service.UpdateIssuesWithQuickFix(quickFixGroupables, issues)
+	// Test with same filtered and all issues (no filtering scenario)
+	// Since no filtering, should only show ONE action without "displayed"
+	issues1 := createIssues()
+	updatedIssues1 := service.UpdateIssuesWithQuickFixes(quickFixGroupables, quickFixGroupables, issues1, issues1)
 
-	expectedAfterFirstCall := "Upgrade to logback-core:1.3.15 and fix 1 issue (4 unfixable)"
-	assert.Equal(t, expectedAfterFirstCall, quickFix.GetTitle())
+	// Check the title in the returned issues (not the original quickFix)
+	// Should say "fix 1 issue" not "fix 1 displayed issue" since no filtering
+	expectedTitle := "Upgrade to logback-core:1.3.15 and fix 1 issue (4 unfixable)"
+	assert.Greater(t, len(updatedIssues1), 0, "Should have updated issues")
+	if len(updatedIssues1) > 0 {
+		actions := updatedIssues1[0].GetCodeActions()
+		assert.Len(t, actions, 1, "Should have exactly 1 action when no filtering")
+		if len(actions) > 0 {
+			assert.Equal(t, expectedTitle, actions[0].GetTitle(),
+				"First call should have correct title without 'displayed'")
+			assert.NotContains(t, actions[0].GetTitle(), "displayed",
+				"Should not contain 'displayed' when no filtering active")
+		}
+	}
 
-	// Second call - this should demonstrate the concatenation issue
-	// The title will now include the previous "and fix X issue" text
-	service.UpdateIssuesWithQuickFix(quickFixGroupables, issues)
+	// Second call with fresh issues - the title should be correctly formatted again (not concatenated)
+	issues2 := createIssues()
+	updatedIssues2 := service.UpdateIssuesWithQuickFixes(quickFixGroupables, quickFixGroupables, issues2, issues2)
 
-	// The title should NOT be concatenated - this test will fail if the bug exists
-	// The title should remain the same as after the first call
-	expectedAfterSecondCall := "Upgrade to logback-core:1.3.15 and fix 1 issue (4 unfixable)"
-	assert.Equal(t, expectedAfterSecondCall, quickFix.GetTitle(),
-		"Title should not be concatenated on second call. Expected: %s, Got: %s",
-		expectedAfterSecondCall, quickFix.GetTitle())
+	assert.Greater(t, len(updatedIssues2), 0, "Should have updated issues")
+	if len(updatedIssues2) > 0 {
+		actions := updatedIssues2[0].GetCodeActions()
+		assert.Len(t, actions, 1, "Should have exactly 1 action when no filtering")
+		if len(actions) > 0 {
+			assert.Equal(t, expectedTitle, actions[0].GetTitle(),
+				"Second call should have same correct title, not concatenated. Expected: %s, Got: %s",
+				expectedTitle, actions[0].GetTitle())
+		}
+	}
 
-	// Third call - title should still not be concatenated
-	service.UpdateIssuesWithQuickFix(quickFixGroupables, issues)
+	// Third call with fresh issues - title should still be correct (not concatenated three times)
+	issues3 := createIssues()
+	updatedIssues3 := service.UpdateIssuesWithQuickFixes(quickFixGroupables, quickFixGroupables, issues3, issues3)
 
-	// The title should NOT be concatenated three times - this test will fail if the bug exists
-	expectedAfterThirdCall := "Upgrade to logback-core:1.3.15 and fix 1 issue (4 unfixable)"
-	assert.Equal(t, expectedAfterThirdCall, quickFix.GetTitle(),
-		"Title should not be concatenated on third call. Expected: %s, Got: %s",
-		expectedAfterThirdCall, quickFix.GetTitle())
+	assert.Greater(t, len(updatedIssues3), 0, "Should have updated issues")
+	if len(updatedIssues3) > 0 {
+		actions := updatedIssues3[0].GetCodeActions()
+		assert.Len(t, actions, 1, "Should have exactly 1 action when no filtering")
+		if len(actions) > 0 {
+			assert.Equal(t, expectedTitle, actions[0].GetTitle(),
+				"Third call should have same correct title, not concatenated. Expected: %s, Got: %s",
+				expectedTitle, actions[0].GetTitle())
 
-	// Additional assertion: verify that titles are not growing
-	originalTitleLength := len("Upgrade to logback-core:1.3.15")
-	assert.False(t, len(quickFix.GetTitle()) > originalTitleLength+50,
-		"Title should not grow significantly. Original length: %d, Current length: %d",
-		originalTitleLength, len(quickFix.GetTitle()))
+			// Additional assertion: verify that titles are not growing
+			originalTitleLength := len("Upgrade to logback-core:1.3.15")
+			assert.False(t, len(actions[0].GetTitle()) > originalTitleLength+60,
+				"Title should not grow significantly. Original length: %d, Current length: %d",
+				originalTitleLength, len(actions[0].GetTitle()))
+		}
+	}
 }
 
 func setupService(t *testing.T, c *config.Config) *codeaction.CodeActionsService {
@@ -282,6 +312,301 @@ func setupService(t *testing.T, c *config.Config) *codeaction.CodeActionsService
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return([]types.Issue{}).AnyTimes()
 	service := codeaction.NewService(c, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService())
 	return service
+}
+
+func Test_GetCodeActions_FiltersBySeverity_ExcludesLowSeverity(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Create issues with different severities
+	highSeverityIssue := createOssIssueWithSeverityAndQuickFix(t, types.High, "high-vuln", "1.0.0")
+	lowSeverityIssue := createOssIssueWithSeverityAndQuickFix(t, types.Low, "low-vuln", "1.0.0")
+
+	// Set severity filter to exclude Low severity
+	severityFilter := types.NewSeverityFilter(true, true, true, false) // Critical, High, Medium, no Low
+	c.SetSeverityFilter(&severityFilter)
+
+	service, codeActionsParam := setupWithMultipleIssues(t, c, []types.Issue{highSeverityIssue, lowSeverityIssue})
+
+	// Act
+	actions := service.GetCodeActions(codeActionsParam)
+
+	// Assert - should have TWO quickfix actions (displayed and all)
+	quickFixActions := findAllQuickFixActions(actions)
+	assert.Len(t, quickFixActions, 2, "Should have both displayed and all issue actions")
+
+	// Find the displayed issues action
+	var displayedAction *types.LSPCodeAction
+	for i := range quickFixActions {
+		if strings.Contains(quickFixActions[i].Title, "displayed") {
+			displayedAction = &quickFixActions[i]
+			break
+		}
+	}
+
+	// The displayed action should count only the High severity issue (1)
+	assert.NotNil(t, displayedAction, "Should have a displayed issues action")
+	if displayedAction != nil {
+		assert.Contains(t, displayedAction.Title, "fix 1 displayed issue", "Should only count the High severity issue, not the filtered-out Low issue")
+	}
+}
+
+func Test_GetCodeActions_FiltersByRiskScore_ExcludesLowRiskScore(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Enable risk score feature flag in folder config
+	folderPath := types.FilePath("/path/to")
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath)
+
+	// Get the folder config and set the feature flag
+	folderConfig := c.FolderConfig(folderPath)
+	if folderConfig.FeatureFlags == nil {
+		folderConfig.FeatureFlags = make(map[string]bool)
+	}
+	folderConfig.FeatureFlags[featureflag.UseExperimentalRiskScoreInCLI] = true
+	err := c.UpdateFolderConfig(folderConfig)
+	assert.NoError(t, err, "Failed to update folder config")
+
+	ffs := featureflag.NewFakeService()
+	ffs.Flags[featureflag.UseExperimentalRiskScoreInCLI] = true
+
+	// Set risk score threshold to 500
+	riskThreshold := 500
+	c.SetRiskScoreThreshold(&riskThreshold)
+
+	// Create issues with different risk scores
+	highRiskIssue := createOssIssueWithRiskScoreAndQuickFix(t, 600, "high-risk-vuln", "1.0.0")
+	lowRiskIssue := createOssIssueWithRiskScoreAndQuickFix(t, 300, "low-risk-vuln", "1.0.0")
+
+	service, codeActionsParam := setupWithMultipleIssuesAndFeatureFlags(t, c, []types.Issue{highRiskIssue, lowRiskIssue}, ffs)
+
+	// Act
+	actions := service.GetCodeActions(codeActionsParam)
+
+	// Assert - should have TWO quickfix actions (displayed and all)
+	quickFixActions := findAllQuickFixActions(actions)
+	assert.Len(t, quickFixActions, 2, "Should have both displayed and all issue actions")
+
+	// Find the displayed issues action
+	var displayedAction *types.LSPCodeAction
+	for i := range quickFixActions {
+		if strings.Contains(quickFixActions[i].Title, "displayed") {
+			displayedAction = &quickFixActions[i]
+			break
+		}
+	}
+
+	// The displayed action should count only the high risk score issue (1)
+	assert.NotNil(t, displayedAction, "Should have a displayed issues action")
+	if displayedAction != nil {
+		assert.Contains(t, displayedAction.Title, "fix 1 displayed issue", "Should only count the high risk score issue, not the filtered-out low risk issue")
+	}
+}
+
+func Test_GetCodeActions_QuickFixTitle_ReflectsFilteredIssueCount(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Set severity filter to exclude Low severity
+	severityFilter := types.NewSeverityFilter(true, true, true, false) // No Low
+	c.SetSeverityFilter(&severityFilter)
+
+	// Create 3 high severity issues and 2 low severity issues, all fixable by same upgrade
+	issues := []types.Issue{
+		createOssIssueWithSeverityAndQuickFix(t, types.High, "vuln-1", "2.0.0"),
+		createOssIssueWithSeverityAndQuickFix(t, types.High, "vuln-2", "2.0.0"),
+		createOssIssueWithSeverityAndQuickFix(t, types.High, "vuln-3", "2.0.0"),
+		createOssIssueWithSeverityAndQuickFix(t, types.Low, "vuln-4", "2.0.0"),
+		createOssIssueWithSeverityAndQuickFix(t, types.Low, "vuln-5", "2.0.0"),
+	}
+
+	service, codeActionsParam := setupWithMultipleIssues(t, c, issues)
+
+	// Act
+	actions := service.GetCodeActions(codeActionsParam)
+
+	// Assert - should have both displayed and all issue actions
+	quickFixActions := findAllQuickFixActions(actions)
+	assert.Len(t, quickFixActions, 2, "Should have both displayed and all issue actions")
+
+	// Find both actions
+	var displayedAction, allAction *types.LSPCodeAction
+	for i := range quickFixActions {
+		if strings.Contains(quickFixActions[i].Title, "displayed") {
+			displayedAction = &quickFixActions[i]
+		} else {
+			// The action without "displayed" is the all-issues action
+			allAction = &quickFixActions[i]
+		}
+	}
+
+	// Assert displayed action counts only filtered issues (3)
+	assert.NotNil(t, displayedAction, "Should have a displayed issues action")
+	if displayedAction != nil {
+		assert.Contains(t, displayedAction.Title, "fix 3 displayed issues",
+			"Displayed action should only count filtered (High severity) issues. Got: %s", displayedAction.Title)
+	}
+
+	// Assert all action counts all issues (5)
+	assert.NotNil(t, allAction, "Should have an all issues action")
+	if allAction != nil {
+		assert.Contains(t, allAction.Title, "fix 5 issues",
+			"All action should count all issues. Got: %s", allAction.Title)
+	}
+}
+
+func Test_GetCodeActions_QuickFixUnfixableCount_ReflectsFilteredIssues(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Set severity filter to exclude Low severity
+	severityFilter := types.NewSeverityFilter(true, true, true, false) // No Low
+	c.SetSeverityFilter(&severityFilter)
+
+	// Create 2 fixable high severity issues and 3 unfixable (1 high, 2 low)
+	issues := []types.Issue{
+		createOssIssueWithSeverityAndQuickFix(t, types.High, "vuln-1", "2.0.0"),
+		createOssIssueWithSeverityAndQuickFix(t, types.High, "vuln-2", "2.0.0"),
+		createOssIssueWithSeverity(t, types.High, "unfixable-high"), // unfixable high
+		createOssIssueWithSeverity(t, types.Low, "unfixable-low-1"), // unfixable low
+		createOssIssueWithSeverity(t, types.Low, "unfixable-low-2"), // unfixable low
+	}
+
+	service, codeActionsParam := setupWithMultipleIssues(t, c, issues)
+
+	// Act
+	actions := service.GetCodeActions(codeActionsParam)
+
+	// Assert - should have both displayed and all issue actions
+	quickFixActions := findAllQuickFixActions(actions)
+	assert.Len(t, quickFixActions, 2, "Should have both displayed and all issue actions")
+
+	// Find both actions
+	var displayedAction, allAction *types.LSPCodeAction
+	for i := range quickFixActions {
+		if strings.Contains(quickFixActions[i].Title, "displayed") {
+			displayedAction = &quickFixActions[i]
+		} else {
+			// The action without "displayed" is the all-issues action
+			allAction = &quickFixActions[i]
+		}
+	}
+
+	// Displayed action should show "fix 2 displayed issues (1 unfixable)" counting only High severity
+	assert.NotNil(t, displayedAction, "Should have a displayed issues action")
+	if displayedAction != nil {
+		assert.Contains(t, displayedAction.Title, "(1 unfixable)",
+			"Should only count unfixable High severity issues, not Low. Got: %s", displayedAction.Title)
+		assert.Contains(t, displayedAction.Title, "fix 2 displayed issues",
+			"Should show 2 fixable displayed issues. Got: %s", displayedAction.Title)
+	}
+
+	// All action should show "fix 2 issues (3 unfixable)" counting all issues
+	assert.NotNil(t, allAction, "Should have an all issues action")
+	if allAction != nil {
+		assert.Contains(t, allAction.Title, "(3 unfixable)",
+			"Should count all unfixable issues. Got: %s", allAction.Title)
+		assert.Contains(t, allAction.Title, "fix 2 issues",
+			"Should show 2 fixable issues total. Got: %s", allAction.Title)
+	}
+}
+
+// Helper functions for tests
+
+func createOssIssueWithSeverityAndQuickFix(t *testing.T, severity types.Severity, vulnId string, fixVersion string) types.Issue {
+	t.Helper()
+	quickFixAction := createQuickFixAction(t, fixVersion)
+
+	return &snyk.Issue{
+		ID:               vulnId,
+		Severity:         severity,
+		AffectedFilePath: uri.PathFromUri(documentUriExample),
+		Range:            converter.FromRange(exampleRange),
+		CodeActions:      []types.CodeAction{quickFixAction},
+		AdditionalData: snyk.OssIssueData{
+			Key:         vulnId,
+			PackageName: "test-package",
+			UpgradePath: []any{"test-package@" + fixVersion},
+			RiskScore:   500, // Default risk score
+		},
+	}
+}
+
+func createOssIssueWithRiskScoreAndQuickFix(t *testing.T, riskScore uint16, vulnId string, fixVersion string) types.Issue {
+	t.Helper()
+	issue := createOssIssueWithSeverityAndQuickFix(t, types.High, vulnId, fixVersion)
+	ossData := issue.GetAdditionalData().(snyk.OssIssueData)
+	ossData.RiskScore = riskScore
+	issue.(*snyk.Issue).AdditionalData = ossData
+	return issue
+}
+
+func createOssIssueWithSeverity(t *testing.T, severity types.Severity, vulnId string) types.Issue {
+	t.Helper()
+	return &snyk.Issue{
+		ID:               vulnId,
+		Severity:         severity,
+		AffectedFilePath: uri.PathFromUri(documentUriExample),
+		Range:            converter.FromRange(exampleRange),
+		CodeActions:      []types.CodeAction{}, // No quickfix - unfixable
+		AdditionalData: snyk.OssIssueData{
+			Key:         vulnId,
+			PackageName: "test-package",
+			RiskScore:   500,
+		},
+	}
+}
+
+func createQuickFixAction(t *testing.T, fixVersion string) types.CodeAction {
+	t.Helper()
+	id := uuid.New()
+	return &snyk.CodeAction{
+		Title:         "⚡️ Upgrade to " + fixVersion,
+		OriginalTitle: "⚡️ Upgrade to " + fixVersion,
+		Uuid:          &id,
+		GroupingType:  types.Quickfix,
+		GroupingKey:   types.Key("test-package"),
+		GroupingValue: fixVersion,
+	}
+}
+
+func findAllQuickFixActions(actions []types.LSPCodeAction) []types.LSPCodeAction {
+	var quickFixActions []types.LSPCodeAction
+	for i := range actions {
+		if actions[i].Title == "" {
+			continue
+		}
+		// Check if it's a quickfix (contains "Upgrade" or the lightning emoji symbol)
+		if strings.Contains(actions[i].Title, "Upgrade") || strings.Contains(actions[i].Title, "⚡") {
+			quickFixActions = append(quickFixActions, actions[i])
+		}
+	}
+	return quickFixActions
+}
+
+func setupWithMultipleIssues(t *testing.T, c *config.Config, issues []types.Issue) (*codeaction.CodeActionsService, types.CodeActionParams) {
+	t.Helper()
+	folderPath := types.FilePath("/path/to")
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath)
+	return setupWithMultipleIssuesAndFeatureFlags(t, c, issues, featureflag.NewFakeService())
+}
+
+func setupWithMultipleIssuesAndFeatureFlags(t *testing.T, c *config.Config, issues []types.Issue, ffs featureflag.Service) (*codeaction.CodeActionsService, types.CodeActionParams) {
+	t.Helper()
+	r := exampleRange
+	uriPath := documentUriExample
+	path := uri.PathFromUri(uriPath)
+
+	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
+	providerMock.EXPECT().IssuesForRange(path, converter.FromRange(r)).Return(issues).AnyTimes()
+	fileWatcher := watcher.NewFileWatcher()
+	service := codeaction.NewService(c, providerMock, fileWatcher, notification.NewMockNotifier(), ffs)
+
+	codeActionsParam := types.CodeActionParams{
+		TextDocument: sglsp.TextDocumentIdentifier{
+			URI: uriPath,
+		},
+		Range:   r,
+		Context: types.CodeActionContext{},
+	}
+	return service, codeActionsParam
 }
 
 func setupWithSingleIssue(t *testing.T, c *config.Config, issue types.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
