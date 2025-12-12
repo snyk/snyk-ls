@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant IDE as IDE Client
+    participant Webview as Webview Component
+    participant HTML as HTML Content
+    
+    IDE->>IDE: Receive HTML content
+    
+    Note over IDE: Replace placeholders with<br/>actual function names
+    IDE->>IDE: html.replace('${ideLogin}', 'window.ideLogin')
+    IDE->>IDE: html.replace('${ideSaveConfig}', 'window.ideSaveConfig')
+    IDE->>IDE: html.replace('${ideLogout}', 'window.ideLogout')
+    
+    IDE->>Webview: Load modified HTML
+    
+    IDE->>Webview: Expose functions:<br/>- window.ideLogin()<br/>- window.ideSaveConfig(data)<br/>- window.ideLogout()
+    
+    Webview-->>IDE: Webview ready
+    
+    Note over HTML,Webview: User interacts with dialog
+    
+    HTML->>Webview: User clicks "Authenticate"
+    Webview->>IDE: Call window.ideLogin()
+    IDE->>IDE: Handle authentication
+    
+    HTML->>Webview: User clicks "Save"
+    Webview->>Webview: collectData()
+    Webview->>IDE: Call window.ideSaveConfig(data)
+    IDE->>IDE: Handle save
+    
+    HTML->>Webview: User clicks "Logout"
+    Webview->>IDE: Call window.ideLogout()
+    IDE->>IDE: Handle logout
+
