@@ -621,6 +621,7 @@ type Settings struct {
 	ActivateSnykIac                  string               `json:"activateSnykIac,omitempty"`
 	Insecure                         string               `json:"insecure,omitempty"`
 	Endpoint                         string               `json:"endpoint,omitempty"`
+	BaseUrl                          string               `json:"baseUrl,omitempty"`
 	Organization                     string               `json:"organization,omitempty"`
 	Path                             string               `json:"path,omitempty"`
 	CliPath                          string               `json:"cliPath,omitempty"`
@@ -630,6 +631,7 @@ type Settings struct {
 	AutomaticAuthentication          string               `json:"automaticAuthentication,omitempty"`
 	DeviceId                         string               `json:"deviceId,omitempty"`
 	FilterSeverity                   *SeverityFilter      `json:"filterSeverity,omitempty"`
+	RiskScoreThreshold               *int                 `json:"riskScoreThreshold,omitempty"` // Valid range is 0-1000.
 	IssueViewOptions                 *IssueViewOptions    `json:"issueViewOptions,omitempty"`
 	SendErrorReports                 string               `json:"sendErrorReports,omitempty"`
 	ManageBinariesAutomatically      string               `json:"manageBinariesAutomatically,omitempty"`
@@ -1242,6 +1244,7 @@ type OssIssueData struct {
 	DisplayTargetFile FilePath       `json:"displayTargetFile"`
 	MatchingIssues    []OssIssueData `json:"matchingIssues"`
 	Lesson            string         `json:"lessonUrl,omitempty"`
+	RiskScore         uint16         `json:"riskScore,omitempty"`
 }
 type OssIdentifiers struct {
 	CWE []string `json:"CWE,omitempty"`

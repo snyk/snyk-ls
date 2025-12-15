@@ -429,6 +429,23 @@ Right now the language server supports the following actions:
   - command: `snyk.generateIssueDescription`
   - args:
     - `issueId` string
+- `Configuration Dialog` Opens the configuration dialog with all Snyk settings.
+  - command: `snyk.workspace.configuration`
+  - args: empty
+  - returns: HTML string containing the configuration dialog
+  - example:
+  ```html
+  <html>
+    <head>
+      <title>Snyk Configuration</title>
+      ...
+    </head>
+    <body>
+      <!-- Configuration form with all settings -->
+    </body>
+  </html>
+  ```
+  - See [Configuration Dialog Integration Guide](docs/configuration-dialog.md) for full integration details.
 
 ## Installation
 
@@ -499,6 +516,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "medium": true,
     "low": true,
   },
+  "riskScoreThreshold": 400, // Optional filter to be applied for the determined issues (if omitted: no filtering) (valid range: 0-1000)
   "issueViewOptions": { // Optional filter to be applied for the determined issues (if omitted: no filtering)
     "openIssues": true,
     "ignoredIssues": false,

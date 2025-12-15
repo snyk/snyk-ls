@@ -53,8 +53,12 @@ infrastructure/oss/testdata/go.sum
 # Test generated comparison files
 application/server/diagnostic_comparison.csv
 application/server/diagnostic_comparison.md
+config_output.html
 
 .qodo
 
 # Compatibility matrix cache
 .cache/compatibility-matrix/
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.cursor/rules/snyk_rules.mdc

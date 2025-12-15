@@ -292,3 +292,77 @@ func SkipLocally(t *testing.T) {
 		t.Skip("not running in CI, skipping test")
 	}
 }
+
+// SetupFoldersWithOrgs is a helper function for integration tests that sets up two folders
+// with different organizations. It returns the folder paths, org UUIDs, and the config.
+// The global org is set to a different value than the folder orgs to test isolation.
+func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPath2 types.FilePath, globalOrg, folderOrg1, folderOrg2 string) {
+	t.Helper()
+
+	// Use valid UUIDs (hex characters only) to avoid API resolution issues in tests
+	// These are valid UUIDs that won't trigger slug resolution
+	globalOrg = "5b1ddf00-0000-0000-0000-000000000001"
+	folderOrg1 = "5b1ddf00-0000-0000-0000-000000000002"
+	folderOrg2 = "5b1ddf00-0000-0000-0000-000000000003"
+
+	// Set a global org that is different from folder orgs
+	c.SetOrganization(globalOrg)
+
+	// Set up two folders with different orgs
+	folderPath1 = types.FilePath(t.TempDir())
+	folderPath2 = types.FilePath(t.TempDir())
+
+	// Configure folder 1 with its own org
+	folderConfig1 := &types.FolderConfig{
+		FolderPath:                  folderPath1,
+		PreferredOrg:                folderOrg1,
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig1, c.Logger())
+	require.NoError(t, err)
+
+	// Configure folder 2 with a different org
+	folderConfig2 := &types.FolderConfig{
+		FolderPath:                  folderPath2,
+		PreferredOrg:                folderOrg2,
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig2, c.Logger())
+	require.NoError(t, err)
+
+	return folderPath1, folderPath2, globalOrg, folderOrg1, folderOrg2
+}
+
+// SetupFolderWithOrg is a helper function for integration tests that sets up a single folder
+// with a specific organization. It returns the folder path, org UUID, and the config.
+func SetupFolderWithOrg(t *testing.T, c *config.Config, orgUUID string) types.FilePath {
+	t.Helper()
+
+	folderPath := types.FilePath(t.TempDir())
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  folderPath,
+		PreferredOrg:                orgUUID,
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	require.NoError(t, err)
+
+	return folderPath
+}
+
+// SetupGlobalOrgOnly is a helper function for integration tests that sets up only a global org
+// (no folder-specific org). It returns a test folder path and the global org UUID.
+func SetupGlobalOrgOnly(t *testing.T, c *config.Config) (folderPath types.FilePath, globalOrg string) {
+	t.Helper()
+
+	globalOrg = "00000000-0000-0000-0000-000000000004"
+	c.SetOrganization(globalOrg)
+
+	folderPath = types.FilePath(t.TempDir())
+
+	return folderPath, globalOrg
+}

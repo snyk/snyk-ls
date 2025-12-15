@@ -34,6 +34,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -141,9 +142,12 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 
 	waitForScan(t, cloneTargetDirString, c)
 
+	// Check scan completed successfully (fails fast if scan returned error)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductOpenSource)
+
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, manifestFile))
 
-	// Wait for scan to complete AND for diagnostics to be published
+	// Wait for diagnostics to be published
 	require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Second)
 
 	diagnosticsNotifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")

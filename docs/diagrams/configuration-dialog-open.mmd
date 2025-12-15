@@ -1,0 +1,23 @@
+sequenceDiagram
+    participant IDE as IDE Client
+    participant LSP as Language Server
+    participant Config as Config System
+    participant HTML as HTML Renderer
+    
+    IDE->>LSP: workspace/executeCommand<br/>{command: "snyk.workspace.configuration"}
+    
+    LSP->>Config: Get current configuration
+    Config-->>LSP: Configuration data
+    
+    LSP->>Config: Construct Settings from Config
+    Config-->>LSP: Settings object
+    
+    LSP->>HTML: Generate HTML with settings
+    HTML-->>LSP: HTML content
+    
+    LSP-->>IDE: Command response<br/>"<html>..." (HTML string)
+    
+    IDE->>IDE: Create webview
+    IDE->>IDE: Inject IDE functions into HTML
+    IDE->>IDE: Display HTML in webview
+
