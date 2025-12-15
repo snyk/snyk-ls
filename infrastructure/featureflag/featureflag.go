@@ -40,6 +40,7 @@ const (
 	IgnoreApprovalEnabled         string = "internal_iaw_enabled"
 	UseExperimentalRiskScoreInCLI string = "useExperimentalRiskScoreInCLI"
 	UseExperimentalRiskScore      string = "useExperimentalRiskScore"
+	UseOsTest                     string = "useTestShimForOSCliTest"
 )
 
 var Flags = []string{
@@ -48,6 +49,11 @@ var Flags = []string{
 	IgnoreApprovalEnabled,
 	UseExperimentalRiskScoreInCLI,
 	UseExperimentalRiskScore,
+	UseOsTest,
+}
+
+func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {
+	return folderConfig.FeatureFlags[UseExperimentalRiskScoreInCLI] || folderConfig.FeatureFlags[UseOsTest]
 }
 
 // ExternalCallsProvider abstracts configuration and API calls for testability
