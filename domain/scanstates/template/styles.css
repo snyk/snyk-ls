@@ -58,3 +58,21 @@ strong.snx-highlight { text-decoration: none; cursor: unset; }
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
+
+.snx-filter-message {
+  font-size: 1.2rem;
+  opacity: 0.9;
+}
+
+.snx-filter-info { 
+  display: inline-block; 
+  cursor: help; 
+  font-size: 1.2rem; 
+  margin-left: 0.2rem; 
+  vertical-align: middle;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+.snx-filter-info:hover { 
+  opacity: 1;
+}

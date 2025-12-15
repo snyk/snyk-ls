@@ -19,6 +19,7 @@ package scanstates
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"html/template"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -57,13 +58,14 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	logger := renderer.c.Logger().With().Str("method", "GetSummaryHtml").Logger()
 	var allIssues []types.Issue
 	var deltaIssues []types.Issue
+	var unfilteredIssuesCount int
 	var currentIssuesFound int
 	var currentFixableIssueCount int
 	isDeltaEnabled := renderer.c.IsDeltaFindingsEnabled()
 	logger.Debug().Msgf("has wd scans in progress %t, has ref scans in progress %t", state.AnyScanInProgressWorkingDirectory, state.AnyScanInProgressReference)
 	logger.Debug().Msgf("scans in progress count %d, ref scans in progress count %d", state.ScansInProgressCount, state.ScansInProgressCount)
 	if state.AnyScanSucceededReference || state.AnyScanSucceededWorkingDirectory {
-		allIssues, deltaIssues = renderer.getIssuesFromFolders()
+		allIssues, deltaIssues, unfilteredIssuesCount = renderer.getIssuesFromFolders()
 
 		if isDeltaEnabled {
 			currentIssuesFound = len(deltaIssues)
@@ -73,6 +75,9 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 			currentFixableIssueCount = fixableIssueCount(allIssues)
 		}
 	}
+
+	filterInfo := renderer.getFilterInfo()
+	hiddenIssuesCount := unfilteredIssuesCount - currentIssuesFound
 
 	data := map[string]interface{}{
 		"Styles":                            template.CSS(summaryStylesTemplate),
@@ -94,6 +99,9 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 		"RunningScansCount":                 state.ScansSuccessCount + state.ScansErrorCount,
 		"IsDeltaEnabled":                    isDeltaEnabled,
 		"IsSnykAgentFixEnabled":             renderer.isAutofixEnabledInAnyFolder(),
+		"HasActiveFilters":                  filterInfo.HasActiveFilters,
+		"FilterTooltip":                     filterInfo.Tooltip,
+		"HiddenIssuesCount":                 hiddenIssuesCount,
 	}
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
@@ -104,31 +112,36 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	return buffer.String()
 }
 
-func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, deltaIssues []types.Issue) {
+func (renderer *HtmlRenderer) getIssuesFromFolders() (filteredIssues []types.Issue, filteredDeltaIssues []types.Issue, unfilteredCount int) {
 	logger := renderer.c.Logger().With().Str("method", "getIssuesFromFolders").Logger()
 	issueTypes := renderer.c.DisplayableIssueTypes()
 
 	for _, f := range renderer.c.Workspace().Folders() {
 		if ip, ok := f.(snyk.FilteringIssueProvider); ok {
-			// Note that IssueProvider.Issues() does not return enriched issues (i.e, we don't know if they're new). so we
-			// also need to get the deltas as a separate operation later.
-			// TODO Find the root cause of the issues not being enriched. This is likely an unwanted pointer dereference.
-			for _, issues := range ip.Issues() {
-				allIssues = append(allIssues, issues...)
+			// Get unfiltered issues for counting
+			unfilteredIssuesByFile := ip.Issues()
+			for _, issues := range unfilteredIssuesByFile {
+				unfilteredCount += len(issues)
+			}
+
+			// Get filtered issues
+			filteredIssuesByFile := ip.FilterIssues(unfilteredIssuesByFile, issueTypes)
+			for _, issues := range filteredIssuesByFile {
+				filteredIssues = append(filteredIssues, issues...)
 			}
 		} else {
-			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.FilteringIssueProvider", f.Name())
-			return allIssues, deltaIssues
+			logger.Error().Msgf("Failed to cast folder %s to interface snyk.FilteringIssueProvider", f.Name())
+			return filteredIssues, filteredDeltaIssues, unfilteredCount
 		}
 
 		if dp, ok := f.(delta.Provider); ok {
-			deltaIssues = append(deltaIssues, dp.GetDeltaForAllProducts(issueTypes)...)
+			filteredDeltaIssues = append(filteredDeltaIssues, dp.GetDeltaForAllProducts(issueTypes)...)
 		} else {
-			logger.Error().Msgf("Failed to get cast folder %s to interface delta.Provider", f.Name())
+			logger.Error().Msgf("Failed to cast folder %s to interface delta.Provider", f.Name())
 		}
 	}
 
-	return allIssues, deltaIssues
+	return filteredIssues, filteredDeltaIssues, unfilteredCount
 }
 
 func fixableIssueCount(issues []types.Issue) (fixableIssueCount int) {
@@ -153,4 +166,84 @@ func (renderer *HtmlRenderer) isAutofixEnabledInAnyFolder() bool {
 		}
 	}
 	return false
+}
+
+type FilterInfo struct {
+	HasActiveFilters bool
+	Tooltip          string
+}
+
+// getFilterInfo generates filter information for the summary HTML
+func (renderer *HtmlRenderer) getFilterInfo() FilterInfo {
+	var filters []string
+	hasActiveFilters := false
+
+	// Check severity filter
+	severityFilter := renderer.c.FilterSeverity()
+	defaultSeverity := types.DefaultSeverityFilter()
+	if severityFilter != defaultSeverity {
+		hasActiveFilters = true
+		var enabledSeverities []string
+		if severityFilter.Critical {
+			enabledSeverities = append(enabledSeverities, "Critical")
+		}
+		if severityFilter.High {
+			enabledSeverities = append(enabledSeverities, "High")
+		}
+		if severityFilter.Medium {
+			enabledSeverities = append(enabledSeverities, "Medium")
+		}
+		if severityFilter.Low {
+			enabledSeverities = append(enabledSeverities, "Low")
+		}
+		if len(enabledSeverities) > 0 {
+			filters = append(filters, "Severity: "+joinStrings(enabledSeverities, ", "))
+		} else {
+			filters = append(filters, "Severity: None")
+		}
+	}
+
+	// Check risk score threshold
+	riskScoreThreshold := renderer.c.RiskScoreThreshold()
+	if riskScoreThreshold > 0 {
+		hasActiveFilters = true
+		filters = append(filters, fmt.Sprintf("Risk Score: ≥%d", riskScoreThreshold))
+	}
+
+	// Check issue view options
+	issueViewOptions := renderer.c.IssueViewOptions()
+	defaultIssueViewOptions := types.DefaultIssueViewOptions()
+	if issueViewOptions != defaultIssueViewOptions {
+		hasActiveFilters = true
+		var viewTypes []string
+		if issueViewOptions.OpenIssues {
+			viewTypes = append(viewTypes, "Open")
+		}
+		if issueViewOptions.IgnoredIssues {
+			viewTypes = append(viewTypes, "Ignored")
+		}
+		if len(viewTypes) > 0 {
+			filters = append(filters, "Issues: "+joinStrings(viewTypes, ", "))
+		} else {
+			filters = append(filters, "Issues: None")
+		}
+	}
+
+	// Use newlines to separate filters for better tooltip readability
+	tooltip := "Active filters:\n" + joinStrings(filters, "\n")
+	return FilterInfo{
+		HasActiveFilters: hasActiveFilters,
+		Tooltip:          tooltip,
+	}
+}
+
+func joinStrings(strs []string, sep string) string {
+	result := ""
+	for i, s := range strs {
+		if i > 0 {
+			result += sep
+		}
+		result += s
+	}
+	return result
 }
