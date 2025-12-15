@@ -314,6 +314,7 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 
 	// Verify the org flag was added to the command args
 	assert.Contains(t, capturedArgs, "--org="+folderOrgUUID, "Command args should contain folder org flag")
+	assert.NotContains(t, capturedArgs, "--org="+globalOrgUUID, "Command args should not contain global org flag")
 }
 
 func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T) {

@@ -47,8 +47,8 @@ func NewExtensionExecutor(c *config.Config) Executor {
 }
 
 func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error) {
-	method := "ExtensionExecutor.Execute"
-	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd[1:]).Str("workingDir", string(workingDir)).Msg("calling legacycli extension")
+	logger := c.c.Logger().With().Str("method", "ExtensionExecutor.Execute").Logger()
+	logger.Debug().Interface("cmd", cmd[1:]).Str("workingDir", string(workingDir)).Msg("calling legacycli extension")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(c.cliTimeout))
@@ -63,12 +63,12 @@ func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir
 	}
 
 	output, err := c.doExecute(ctx, cmd, workingDir)
-	c.c.Logger().Trace().Str("method", method).Str("response", string(output))
+	logger.Trace().Str("response", string(output))
 	return output, err
 }
 
 func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingDir types.FilePath) ([]byte, error) {
-	method := "ExtensionExecutor.doExecute"
+	logger := c.c.Logger().With().Str("method", "ExtensionExecutor.doExecute").Logger()
 	err := c.c.WaitForDefaultEnv(ctx)
 	if err != nil {
 		return []byte{}, err
@@ -88,7 +88,7 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 		if folderOrg != "" {
 			resolvedFolderOrg, resolveErr := c.c.ResolveOrgToUUID(folderOrg)
 			if resolveErr != nil {
-				c.c.Logger().Warn().Err(err).Str("method", method).Str("folderOrg", folderOrg).Msg("failed to resolve folder organization to UUID, falling back to global organization")
+				logger.Warn().Err(resolveErr).Str("folderOrg", folderOrg).Msg("failed to resolve folder organization to UUID, falling back to global organization")
 				legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
 			} else {
 				legacyCLIConfig.Set(configuration.ORGANIZATION, resolvedFolderOrg)
