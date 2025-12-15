@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
 	"github.com/snyk/snyk-ls/application/config"

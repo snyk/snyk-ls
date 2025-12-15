@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
