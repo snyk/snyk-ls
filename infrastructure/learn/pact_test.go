@@ -19,6 +19,7 @@ package learn
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/pact-foundation/pact-go/dsl"
 	"github.com/stretchr/testify/assert"
@@ -47,6 +48,8 @@ func setupPact(t *testing.T) {
 		Consumer: consumer,
 		Provider: pactProvider,
 		PactDir:  pactDir,
+		Host:     "localhost",
+		ClientTimeout: 30 * time.Second,
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/pact-foundation/pact-go/dsl"
 	"github.com/stretchr/testify/assert"
@@ -144,6 +145,8 @@ func setupPact(c *config.Config) {
 		Consumer: consumer,
 		Provider: pactProvider,
 		PactDir:  pactDir,
+		Host:     "localhost",
+		ClientTimeout: 30 * time.Second,
 	}
 
 	// Proactively start service to get access to the port

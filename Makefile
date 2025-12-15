@@ -27,11 +27,11 @@ COMMIT := $(shell git show -s --format=%h)
 LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true' -X 'github.com/snyk/snyk-ls/application/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
 
 TOOLS_BIN := $(shell pwd)/.bin
-
+ 
 OVERRIDE_GOCI_LINT_V := v2.6.1
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
-
+ 
 TIMEOUT := "-timeout=45m"
 
 
@@ -54,6 +54,54 @@ $(TOOLS_BIN)/golangci-lint:
 
 $(TOOLS_BIN)/pact/bin/pact:
 	cd $(TOOLS_BIN); curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/v$(PACT_V)/install.sh | PACT_CLI_VERSION=v$(PACT_V) bash
+	@if [ -x "$(TOOLS_BIN)/pact/bin/pact-mock-service" ] && "$(TOOLS_BIN)/pact/bin/pact-mock-service" --version 2>&1 | grep -q "Usage:"; then \
+		mv "$(TOOLS_BIN)/pact/bin/pact-mock-service" "$(TOOLS_BIN)/pact/bin/pact-mock-service.real"; \
+		printf '%s\n' \
+			'#!/usr/bin/env bash' \
+			'set -euo pipefail' \
+			'' \
+			'SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"' \
+			'' \
+			'if [[ "$${1:-}" == "--version" ]]; then' \
+			'  exec "$$SCRIPT_DIR/pact-mock-service.real" version' \
+			'fi' \
+			'' \
+			'exec "$$SCRIPT_DIR/pact-mock-service.real" "$$@"' \
+			> "$(TOOLS_BIN)/pact/bin/pact-mock-service"; \
+		chmod +x "$(TOOLS_BIN)/pact/bin/pact-mock-service"; \
+	fi
+	@if [ -x "$(TOOLS_BIN)/pact/bin/pact-broker" ] && ! "$(TOOLS_BIN)/pact/bin/pact-broker" --version 2>/dev/null | grep -qE '^[0-9]+\.[0-9]+'; then \
+		mv "$(TOOLS_BIN)/pact/bin/pact-broker" "$(TOOLS_BIN)/pact/bin/pact-broker.real"; \
+		printf '%s\n' \
+			'#!/usr/bin/env bash' \
+			'set -euo pipefail' \
+			'' \
+			'SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"' \
+			'' \
+			'if [[ "$${1:-}" == "--version" ]]; then' \
+			'  exec "$$SCRIPT_DIR/pact-broker.real" version' \
+			'fi' \
+			'' \
+			'exec "$$SCRIPT_DIR/pact-broker.real" "$$@"' \
+			> "$(TOOLS_BIN)/pact/bin/pact-broker"; \
+		chmod +x "$(TOOLS_BIN)/pact/bin/pact-broker"; \
+	fi
+	@if [ -x "$(TOOLS_BIN)/pact/bin/pact-provider-verifier" ] && ! "$(TOOLS_BIN)/pact/bin/pact-provider-verifier" --version 2>/dev/null | grep -qE '^[0-9]+\.[0-9]+'; then \
+		mv "$(TOOLS_BIN)/pact/bin/pact-provider-verifier" "$(TOOLS_BIN)/pact/bin/pact-provider-verifier.real"; \
+		printf '%s\n' \
+			'#!/usr/bin/env bash' \
+			'set -euo pipefail' \
+			'' \
+			'SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"' \
+			'' \
+			'if [[ "$${1:-}" == "--version" ]]; then' \
+			'  exec "$$SCRIPT_DIR/pact-provider-verifier.real" version' \
+			'fi' \
+			'' \
+			'exec "$$SCRIPT_DIR/pact-provider-verifier.real" "$$@"' \
+			> "$(TOOLS_BIN)/pact/bin/pact-provider-verifier"; \
+		chmod +x "$(TOOLS_BIN)/pact/bin/pact-provider-verifier"; \
+	fi
 
 ## clean: Delete the build directory
 .PHONY: clean
@@ -80,7 +128,12 @@ lint-fix: $(TOOLS_BIN)/golangci-lint
 test:
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
-	go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
+	PATH=$(TOOLS_BIN)/pact/bin:$$PATH go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
+
+.PHONY: test-no-cover
+test-no-cover:
+	@echo "==> Running tests (no coverage)..."
+	PATH=$(TOOLS_BIN)/pact/bin:$$PATH go test $(TIMEOUT) -failfast ./...
 
 .PHONY: race-test
 race-test:

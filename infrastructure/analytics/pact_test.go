@@ -32,6 +32,8 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 		LogDir:   "logs",
 		PactDir:  "./pacts",
 		LogLevel: "DEBUG",
+		Host:     "localhost",
+		ClientTimeout: 30 * time.Second,
 	}
 
 	defer pact.Teardown()
