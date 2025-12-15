@@ -193,8 +193,8 @@
                         <label for="cliReleaseChannel">CLI Release Channel <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Release channel for Snyk CLI downloads (stable, preview, or rc)">?</span></label>
                         <select id="cliReleaseChannel" name="cliReleaseChannel">
                             <option value="stable" {{if eq .CliReleaseChannel "stable"}}selected{{end}}>Stable</option>
-                            <option value="preview" {{if eq .CliReleaseChannel "preview"}}selected{{end}}>Preview</option>
                             <option value="rc" {{if eq .CliReleaseChannel "rc"}}selected{{end}}>Release Candidate</option>
+                            <option value="preview" {{if eq .CliReleaseChannel "preview"}}selected{{end}}>Preview</option>
                         </select>
                     </div>
 
