@@ -60,6 +60,36 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, "https://test.snyk.io")
 	assert.Contains(t, html, "/path/to/folder")
 	assert.Contains(t, html, "checked") // Insecure checkbox
+	assert.Contains(t, html, `data-config-scope-slot="true"`)
+
+	expectedSettingKeys := []string{
+		"activateSnykOpenSource",
+		"activateSnykCode",
+		"activateSnykIac",
+		"scanningMode",
+		"additionalEnv",
+		"filterSeverity_critical",
+		"filterSeverity_high",
+		"filterSeverity_medium",
+		"filterSeverity_low",
+		"issueViewOptions_openIssues",
+		"issueViewOptions_ignoredIssues",
+		"riskScoreThreshold",
+		"enableDeltaFindings",
+		"authenticationMethod",
+		"endpoint",
+		"insecure",
+		"token",
+		"cliPath",
+		"manageBinariesAutomatically",
+		"cliReleaseChannel",
+		"baseUrl",
+		"trustedFolders",
+	}
+
+	for _, key := range expectedSettingKeys {
+		assert.Contains(t, html, `data-setting-key="`+key+`"`)
+	}
 	assert.Contains(t, html, "window.__saveIdeConfig__")
 	assert.Contains(t, html, "window.getAndSaveIdeConfig")
 	assert.Contains(t, html, "window.__ideLogin__")
