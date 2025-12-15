@@ -242,6 +242,16 @@ label {
     margin-bottom: 0;
 }
 
+.config-scope-slot:empty {
+    display: none;
+}
+
+.config-scope-slot:not(:empty) {
+    margin-left: var(--checkbox-gap);
+    font-size: var(--tiny-font-size);
+    color: var(--disabled-foreground);
+}
+
 .checkbox-label input[type="checkbox"] {
     margin-right: var(--checkbox-gap);
 }
