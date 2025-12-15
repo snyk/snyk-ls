@@ -67,6 +67,7 @@ body {
     background-color: var(--background-color);
     padding: var(--container-padding);
     margin: 0;
+    accent-color: var(--focus-border);
 }
 
 /* - - - Scrollbars - - - */
