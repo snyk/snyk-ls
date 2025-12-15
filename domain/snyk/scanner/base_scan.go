@@ -124,8 +124,9 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 // the org settings from the working directory folder config.
 // In delta scans, base branches might not have a folderConfig in storage, so the base scan would run using the default
 // org. This ensures we use the same org as for the working directory scans so that we can compare the results.
-func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(c *config.Config, path types.FilePath, folderConfig *types.FolderConfig) {
-	logger := c.Logger().With().Str("method", "populateOrgForScannedFolderConfig").Logger()
+func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(path types.FilePath, folderConfig *types.FolderConfig) {
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "populateOrgForScannedFolderConfig").Str("path", string(path)).Logger()
 	scannedFolderConfig, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
 		CreateIfNotExist: false,
 		ReadOnly:         true,
@@ -133,12 +134,12 @@ func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(c *conf
 	})
 
 	if err != nil {
-		logger.Warn().Err(err).Str("path", string(path)).Msg("failed to get folder config for scanned directory")
+		logger.Warn().Err(err).Msg("failed to get folder config for scanned directory")
 	}
 
 	if scannedFolderConfig == nil {
 		// Create a new folder config and copy the organization settings from the working directory folder config
-		logger.Debug().Str("path", string(path)).Msg("creating new folder config for scanned directory")
+		logger.Debug().Msg("creating new folder config for scanned directory")
 		scannedFolderConfig = c.FolderConfig(path)
 		scannedFolderConfig.OrgMigratedFromGlobalConfig = folderConfig.OrgMigratedFromGlobalConfig
 		scannedFolderConfig.OrgSetByUser = folderConfig.OrgSetByUser
@@ -147,7 +148,7 @@ func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(c *conf
 		// Persist the folder config so it's available for future scans
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), scannedFolderConfig, &logger)
 		if err != nil {
-			logger.Err(err).Str("path", string(path)).Msg("failed to persist folder config for scanned directory")
+			logger.Err(err).Msg("failed to persist folder config for scanned directory")
 		}
 	}
 }
