@@ -29,7 +29,6 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/google/go-cmp/cmp"
 	"github.com/rs/zerolog"
-	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
@@ -37,6 +36,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -118,8 +118,12 @@ func handlePullModel(c *config.Config, srv *jrpc2.Server, ctx context.Context) (
 	if err != nil {
 		return false, err
 	}
+	if len(fetchedSettings) == 0 {
+		return false, nil
+	}
 
 	emptySettings := types.Settings{}
+	c.Logger().Debug().Interface("settings", fetchedSettings[0]).Msg("Fetched settings from workspace/configuration")
 	if !reflect.DeepEqual(fetchedSettings[0], emptySettings) {
 		if !c.IsLSPInitialized() {
 			// First time - this is initialization
@@ -169,6 +173,7 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	}
 
 	updateSeverityFilter(c, settings.FilterSeverity, triggerSource)
+	updateRiskScoreThreshold(c, settings, triggerSource)
 	updateIssueViewOptions(c, settings.IssueViewOptions, triggerSource)
 	updateProductEnablement(c, settings, triggerSource)
 	updateCliConfig(c, settings)
@@ -214,47 +219,130 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 
 func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
 	notifier := di.Notifier()
+	incomingMap := buildIncomingConfigMap(settings.FolderConfigs)
+	allPaths := gatherAllFolderPaths(incomingMap, c.Workspace())
+
 	var folderConfigs []types.FolderConfig
 	needsToSendUpdateToClient := false
 
-	for _, folderConfig := range settings.FolderConfigs {
-		path := folderConfig.FolderPath
+	for path := range allPaths {
+		folderConfig, configChanged := processSingleFolderConfig(c, path, incomingMap, notifier)
 
-		storedConfig := c.FolderConfig(path)
-		// Never trust the IDE for what the FFs and SAST settings are
-		folderConfig.FeatureFlags = storedConfig.FeatureFlags
-		folderConfig.SastSettings = storedConfig.SastSettings
-
-		// Folder config might be new or changed, so (re)resolve the org before saving it.
-		// We should also check that the folder's org is still valid if the globally set org has changed.
-		// Also, if the config hasn't been migrated yet, we need to perform the initial migration.
-		needsMigration := !storedConfig.OrgMigratedFromGlobalConfig
-		orgSettingsChanged := !folderConfigsOrgSettingsEqual(folderConfig, storedConfig)
-
-		if needsMigration || orgSettingsChanged {
-			updateFolderConfigOrg(c, storedConfig, &folderConfig)
-			err := c.UpdateFolderConfig(&folderConfig) // a lot of methods depend on correct persisted organization values
-			if err != nil {
-				notifier.SendShowMessage(sglsp.MTError, err.Error())
-			}
-		}
-
-		di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
-
-		if !cmp.Equal(folderConfig, *storedConfig) {
+		if configChanged {
 			needsToSendUpdateToClient = true
-			err := c.UpdateFolderConfig(&folderConfig)
-			if err != nil {
-				notifier.SendShowMessage(sglsp.MTError, err.Error())
-			}
 		}
 
-		sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
-
+		handleFolderCacheClearing(c, path, folderConfig, logger, triggerSource)
 		folderConfigs = append(folderConfigs, folderConfig)
 	}
 
-	if needsToSendUpdateToClient && triggerSource != analytics.TriggerSourceInitialize { // Don't send folder configs on initialize, since initialized will always send them.
+	sendFolderConfigUpdateIfNeeded(notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
+}
+
+func buildIncomingConfigMap(folderConfigs []types.FolderConfig) map[types.FilePath]types.FolderConfig {
+	incomingMap := make(map[types.FilePath]types.FolderConfig)
+	for _, fc := range folderConfigs {
+		incomingMap[fc.FolderPath] = fc
+	}
+	return incomingMap
+}
+
+func gatherAllFolderPaths(incomingMap map[types.FilePath]types.FolderConfig, workspace types.Workspace) map[types.FilePath]bool {
+	allPaths := make(map[types.FilePath]bool)
+
+	// Add incoming paths
+	for path := range incomingMap {
+		allPaths[path] = true
+	}
+
+	// Add stored paths from all workspace folders
+	if workspace != nil {
+		for _, folder := range workspace.Folders() {
+			allPaths[folder.Path()] = true
+		}
+	}
+
+	return allPaths
+}
+
+func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.FolderConfig, notifier notification.Notifier) (types.FolderConfig, bool) {
+	storedConfig := c.FolderConfig(path)
+
+	var folderConfig types.FolderConfig
+	// Use incoming config if present, otherwise use stored config or create new
+	if incoming, hasIncoming := incomingMap[path]; hasIncoming {
+		folderConfig = incoming
+	} else if storedConfig != nil {
+		folderConfig = *storedConfig
+	} else {
+		folderConfig = types.FolderConfig{FolderPath: path}
+	}
+
+	// Never trust the IDE for what the FFs and SAST settings are - always use stored values
+	if storedConfig != nil {
+		folderConfig.FeatureFlags = storedConfig.FeatureFlags
+		folderConfig.SastSettings = storedConfig.SastSettings
+	}
+
+	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
+	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
+
+	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
+	if configChanged {
+		err := c.UpdateFolderConfig(&folderConfig)
+		if err != nil {
+			c.Logger().Err(err).Str("path", string(path)).Msg("failed to update folder config")
+			notifier.SendErrorDiagnostic(path, err)
+		}
+	}
+
+	return folderConfig, configChanged
+}
+
+func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {
+	needsMigration := storedConfig != nil && !storedConfig.OrgMigratedFromGlobalConfig
+	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(*folderConfig, storedConfig)
+
+	if needsMigration || orgSettingsChanged {
+		updateFolderConfigOrg(c, storedConfig, folderConfig)
+		err := c.UpdateFolderConfig(folderConfig) // a lot of methods depend on correct persisted organization values
+		if err != nil {
+			c.Logger().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("failed to update folder config during org migration")
+			notifier.SendErrorDiagnostic(folderConfig.FolderPath, err)
+		}
+	}
+}
+
+func handleFolderCacheClearing(c *config.Config, path types.FilePath, folderConfig types.FolderConfig, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
+	storedConfig := c.FolderConfig(path)
+	if storedConfig == nil {
+		return
+	}
+
+	baseBranchChanged := storedConfig.BaseBranch != folderConfig.BaseBranch
+	referenceFolderChanged := storedConfig.ReferenceFolderPath != folderConfig.ReferenceFolderPath
+
+	if baseBranchChanged || referenceFolderChanged {
+		logger.Info().
+			Str("folderPath", string(path)).
+			Str("oldBaseBranch", storedConfig.BaseBranch).
+			Str("newBaseBranch", folderConfig.BaseBranch).
+			Str("oldReferenceFolderPath", string(storedConfig.ReferenceFolderPath)).
+			Str("newReferenceFolderPath", string(folderConfig.ReferenceFolderPath)).
+			Msg("base branch or reference folder changed, clearing persisted scan cache for folder")
+
+		ws := c.Workspace()
+		if ws != nil {
+			ws.GetScanSnapshotClearerExister().ClearFolder(path)
+		}
+	}
+
+	sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
+}
+
+func sendFolderConfigUpdateIfNeeded(notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
+	// Don't send folder configs on initialize, since initialized will always send them.
+	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
 		notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
 	}
 }
@@ -643,7 +731,7 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 }
 
 func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, triggerSource analytics.TriggerSource) {
-	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options:")
+	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options")
 	oldValue := c.IssueViewOptions()
 	modified := c.SetIssueViewOptions(s)
 
@@ -663,8 +751,26 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, trigger
 	}
 }
 
+func updateRiskScoreThreshold(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
+	c.Logger().Debug().Str("method", "updateRiskScoreThreshold").Interface("riskScoreThreshold", settings.RiskScoreThreshold).Msg("Updating risk score threshold")
+	oldValue := c.RiskScoreThreshold()
+	modified := c.SetRiskScoreThreshold(settings.RiskScoreThreshold)
+
+	if !modified {
+		return
+	}
+
+	// Send UI update
+	sendDiagnosticsForNewSettings(c)
+
+	// Send analytics
+	if c.IsLSPInitialized() && settings.RiskScoreThreshold != nil {
+		analytics.SendConfigChangedAnalytics(c, "riskScoreThreshold", oldValue, *settings.RiskScoreThreshold, triggerSource)
+	}
+}
+
 func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSource analytics.TriggerSource) {
-	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter:")
+	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter")
 	oldValue := c.FilterSeverity()
 	modified := c.SetSeverityFilter(s)
 

@@ -1,5 +1,5 @@
 <!--
-  ~ © 2024 Snyk Limited
+  ~ © 2024-2025 Snyk Limited
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -69,6 +69,11 @@
         <span class="delimiter"> </span>
         <a class="styled-link"  rel="noopener noreferrer"
           href="https://snyk.io/vuln/{{.IssueId}}">{{.IssueId}}</a>
+
+        {{if ne .RiskScore 0 }}
+        <span class="delimiter"> </span>
+        <div>Risk score: {{.RiskScore}}</div>
+        {{end}}
       </div>
       {{ if .LessonUrl }}
       <div class="sn-learn" id="learn">

@@ -33,7 +33,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -216,29 +215,6 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 	assert.NotNil(t, result)
 }
 
-// Helper function to execute ExtensionExecutor and capture organization and working directory
-func executeAndCaptureConfig(t *testing.T, c *config.Config, cmd []string, workingDir types.FilePath) (capturedOrg interface{}, capturedWorkingDir string) {
-	t.Helper()
-
-	workflowId := workflow.NewWorkflowIdentifier("legacycli")
-	engine := c.Engine()
-	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
-		gafConf := invocation.GetConfiguration()
-		// Get the raw value without triggering resolution
-		capturedOrg = gafConf.Get(configuration.ORGANIZATION)
-		capturedWorkingDir = gafConf.GetString(configuration.WORKING_DIRECTORY)
-		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
-		return []workflow.Data{data}, nil
-	})
-	require.NoError(t, err)
-
-	executor := NewExtensionExecutor(c)
-	_, err = executor.Execute(t.Context(), cmd, workingDir)
-	require.NoError(t, err)
-
-	return capturedOrg, capturedWorkingDir
-}
-
 func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
 	c := testutil.UnitTest(t)
 
@@ -260,7 +236,8 @@ func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test
-	capturedOrg, _ := executeAndCaptureConfig(t, c, []string{"snyk", "test"}, folderPath)
+	executor := NewExtensionExecutor(c)
+	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify we are using the folder-specific organization
 	assert.Equal(t, folderOrgUUID, capturedOrg, "Should use folder-specific organization")
@@ -276,7 +253,8 @@ func Test_ExtensionExecutor_UsesGlobalOrgWhenNoFolderOrg(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
 
 	// Test
-	capturedOrg, _ := executeAndCaptureConfig(t, c, []string{"snyk", "test"}, folderPath)
+	executor := NewExtensionExecutor(c)
+	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify global org was used as fallback (since no folder-specific org exists)
 	assert.Equal(t, globalOrgUUID, capturedOrg, "Should fall back to global organization")
@@ -290,7 +268,8 @@ func Test_ExtensionExecutor_HandlesEmptyWorkingDir(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
 
 	// Test
-	capturedOrg, capturedWorkingDir := executeAndCaptureConfig(t, c, []string{"snyk", "version"}, "")
+	executor := NewExtensionExecutor(c)
+	capturedOrg, capturedWorkingDir := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "version"}, "")
 
 	// Verify working dir was empty and global org was used
 	assert.Empty(t, capturedWorkingDir, "Working directory should be empty")
@@ -359,7 +338,9 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
 	require.NoError(t, err)
 
-	capturedOrg, _ := executeAndCaptureConfig(t, c, []string{"snyk", "test"}, folderPath)
+	// Test - the resolution will fail because we don't have a real API connection
+	executor := NewExtensionExecutor(c)
+	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify we fell back to global org when resolution failed
 	assert.Equal(t, globalOrgUUID, capturedOrg, "Should fall back to global org when resolution fails")
