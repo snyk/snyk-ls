@@ -53,6 +53,18 @@ var configDirtyTrackingModuleTemplate string
 //go:embed template/js/init.js
 var configInitTemplate string
 
+//go:embed template/js/ie11CustomProperties.js
+var configIE11PolyfillTemplate string
+
+//go:embed template/vendor/bootstrap.min.css
+var bootstrapCssTemplate string
+
+//go:embed template/vendor/jquery.slim.min.js
+var jqueryJsTemplate string
+
+//go:embed template/vendor/bootstrap.bundle.min.js
+var bootstrapJsTemplate string
+
 type ConfigHtmlRenderer struct {
 	c        *config.Config
 	template *template.Template
@@ -142,7 +154,11 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 
 	data := map[string]interface{}{
 		"Settings":            filteredSettings,
+		"BootstrapCSS":        template.CSS(bootstrapCssTemplate),
 		"Styles":              template.CSS(configStylesTemplate),
+		"JQuery":              template.JS(jqueryJsTemplate),
+		"BootstrapJS":         template.JS(bootstrapJsTemplate),
+		"IE11Polyfill":        template.JS(configIE11PolyfillTemplate),
 		"Utils":               template.JS(configUtilsTemplate),
 		"DirtyTracker":        template.JS(configDirtyTrackerTemplate),
 		"Helpers":             template.JS(configHelpersTemplate),

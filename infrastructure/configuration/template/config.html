@@ -5,11 +5,16 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-        content="style-src 'self' 'nonce-{{.Nonce}}' https://cdn.jsdelivr.net;
-                 script-src 'nonce-{{.Nonce}}' https://cdn.jsdelivr.net;
+        content="style-src 'self' 'nonce-{{.Nonce}}';
+                 script-src 'nonce-{{.Nonce}}';
                  font-src 'self';" />
     <title>Snyk Settings</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" nonce="{{.Nonce}}">
+    <script nonce="{{.Nonce}}">
+        {{.IE11Polyfill}}
+    </script>
+    <style nonce="{{.Nonce}}">
+        {{.BootstrapCSS}}
+    </style>
     <style nonce="{{.Nonce}}">
         {{.Styles}}
     </style>
@@ -27,24 +32,21 @@
                         <div class="checkbox-group">
                             <label class="checkbox-label">
                                 <input type="checkbox" name="activateSnykOpenSource" {{if eq .Settings.ActivateSnykOpenSource "true"}}checked{{end}}>
-                                Snyk Open Source
-                                <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Find and fix open source dependency issues">?</span>
+                                <span data-toggle="tooltip" title="Find and fix open source dependency issues">Snyk Open Source</span>
                             </label>
                             <label class="checkbox-label">
                                 <input type="checkbox" name="activateSnykCode" {{if eq .Settings.ActivateSnykCode "true"}}checked{{end}}>
-                                Snyk Code
-                                <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Find and fix security issues in your application code in real time. Note: Snyk Code must be enabled for your organization in Snyk settings">?</span>
+                                <span data-toggle="tooltip" title="Find and fix security issues in your application code in real time. Note: Snyk Code must be enabled for your organization in Snyk settings">Snyk Code</span>
                             </label>
                             <label class="checkbox-label">
                                 <input type="checkbox" name="activateSnykIac" {{if eq .Settings.ActivateSnykIac "true"}}checked{{end}}>
-                                Snyk IaC
-                                <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Find and fix your IaC misconfigurations">?</span>
+                                <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk IaC</span>
                             </label>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label for="scanningMode">Scanning Mode <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">?</span></label>
+                        <label for="scanningMode"><span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning Mode</span></label>
                         <select id="scanningMode" name="scanningMode">
                             <option value="auto" {{if eq .Settings.ScanningMode "auto"}}selected{{end}}>Auto</option>
                             <option value="manual" {{if eq .Settings.ScanningMode "manual"}}selected{{end}}>Manual</option>
@@ -52,7 +54,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="additionalEnv">Additional Environment <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Additional environment variables for Snyk CLI (format: KEY1=value1;KEY2=value2)">?</span></label>
+                        <label for="additionalEnv"><span data-toggle="tooltip" title="Additional environment variables for Snyk CLI (format: KEY1=value1;KEY2=value2)">Additional Environment</span></label>
                         <input type="text" id="additionalEnv" name="additionalEnv" value="{{.Settings.AdditionalEnv}}" placeholder="KEY1=value1;KEY2=value2">
                         <span id="additionalEnv-error" class="error-message hidden">Invalid format. Expected: KEY1=value1;KEY2=value2</span>
                     </div>
@@ -66,7 +68,7 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label>Filter by Severity <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Select which severity levels to display in the results">?</span></label>
+                                <label><span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by Severity</span></label>
                                 <div class="checkbox-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="filterSeverity_critical" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Critical}}checked{{end}}{{end}}>
@@ -90,7 +92,7 @@
 
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label>Issue View Options <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Code Consistent Ignores helps your teams focus on important tasks by filtering out distractions. It ensures that once an ignore is created, it is consistently respected regardless of how and where the test is run">?</span></label>
+                                <label><span data-toggle="tooltip" title="Code Consistent Ignores helps your teams focus on important tasks by filtering out distractions. It ensures that once an ignore is created, it is consistently respected regardless of how and where the test is run">Issue View Options</span></label>
                                 <div class="checkbox-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="issueViewOptions_openIssues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.OpenIssues}}checked{{end}}{{end}}>
@@ -109,7 +111,7 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="riskScoreThreshold">Filter by Risk Score <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Minimum risk score to display issues. Valid range: 0 to 1000 (0 = show all issues)">?</span></label>
+                                <label for="riskScoreThreshold"><span data-toggle="tooltip" title="Minimum risk score to display issues. Valid range: 0 to 1000 (0 = show all issues)">Filter by Risk Score</span></label>
                                 <input type="number" id="riskScoreThreshold" name="riskScoreThreshold" min="0" max="1000" value="{{if .Settings.RiskScoreThreshold}}{{.Settings.RiskScoreThreshold}}{{end}}" placeholder="0">
                                 <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
                             </div>
@@ -117,7 +119,7 @@
 
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="enableDeltaFindings">Delta Findings <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Specifies whether to see all issues or only net new issues. Net new issues option requires a Git repository, where it compares findings with those in the base branch">?</span></label>
+                                <label for="enableDeltaFindings"><span data-toggle="tooltip" title="Specifies whether to see all issues or only net new issues. Net new issues option requires a Git repository, where it compares findings with those in the base branch">Delta Findings</span></label>
                                 <select id="enableDeltaFindings" name="enableDeltaFindings">
                                     <option value="false" {{if ne .Settings.EnableDeltaFindings "true"}}selected{{end}}>All Issues</option>
                                     <option value="true" {{if eq .Settings.EnableDeltaFindings "true"}}selected{{end}}>Net New Issues</option>
@@ -136,7 +138,7 @@
                     <h2>Authentication</h2>
 
                     <div class="form-group">
-                        <label for="authenticationMethod">Authentication Method <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy). Note: OAuth2 authentication is recommended as it provides enhanced security">?</span></label>
+                        <label for="authenticationMethod"><span data-toggle="tooltip" title="Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy). Note: OAuth2 authentication is recommended as it provides enhanced security">Authentication Method</span></label>
                         <select id="authenticationMethod" name="authenticationMethod">
                             <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth2 (Recommended)</option>
                             <option value="pat" {{if eq .Settings.AuthenticationMethod "pat"}}selected{{end}}>Personal Access Token</option>
@@ -145,7 +147,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="endpoint">Endpoint <span class="badge bg-secondary" data-bs-toggle="tooltip" title="If you're using SSO with Snyk and OAuth2, this is automatically populated. For public regional instances, see Snyk documentation. For private instances, contact your team or account manager">?</span></label>
+                        <label for="endpoint"><span data-toggle="tooltip" title="If you're using SSO with Snyk and OAuth2, this is automatically populated. For public regional instances, see Snyk documentation. For private instances, contact your team or account manager">Endpoint</span></label>
                         <input type="text" id="endpoint" name="endpoint" value="{{.Settings.Endpoint}}" placeholder="https://app.snyk.io/api">
                         <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: https://api.snyk.io or https://api.*.snykgov.io</span>
                     </div>
@@ -173,7 +175,7 @@
                     <h2>CLI Configuration</h2>
 
                     <div class="form-group">
-                        <label for="cliPath">CLI Path <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Path to Snyk CLI executable">?</span></label>
+                        <label for="cliPath"><span data-toggle="tooltip" title="Path to Snyk CLI executable">CLI Path</span></label>
                         <input type="file" id="cliPathPicker">
                         <div class="button-group">
                             <input type="text" id="cliPath" name="cliPath" value="{{.Settings.CliPath}}" placeholder="Path to Snyk CLI">
@@ -184,13 +186,12 @@
                     <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" name="manageBinariesAutomatically" {{if eq .Settings.ManageBinariesAutomatically "true"}}checked{{end}}>
-                            Manage Binaries Automatically
-                            <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Automatically download and manage Snyk CLI binaries">?</span>
+                            <span data-toggle="tooltip" title="Automatically download and manage Snyk CLI binaries">Manage Binaries Automatically</span>
                         </label>
                     </div>
 
                     <div class="form-group">
-                        <label for="cliReleaseChannel">CLI Release Channel <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Release channel for Snyk CLI downloads (stable, preview, or rc)">?</span></label>
+                        <label for="cliReleaseChannel"><span data-toggle="tooltip" title="Release channel for Snyk CLI downloads (stable, preview, or rc)">CLI Release Channel</span></label>
                         <select id="cliReleaseChannel" name="cliReleaseChannel">
                             <option value="stable" {{if eq .CliReleaseChannel "stable"}}selected{{end}}>Stable</option>
                             <option value="rc" {{if eq .CliReleaseChannel "rc"}}selected{{end}}>Release Candidate</option>
@@ -199,7 +200,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="baseUrl">Base URL <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Base URL for downloading Snyk CLI binaries">?</span></label>
+                        <label for="baseUrl"><span data-toggle="tooltip" title="Base URL for downloading Snyk CLI binaries">Base URL</span></label>
                         <input type="text" id="baseUrl" name="baseUrl" value="{{.Settings.BaseUrl}}" placeholder="https://downloads.snyk.io">
                     </div>
                 </div>
@@ -214,8 +215,8 @@
 
                     <input type="hidden" name="enableTrustedFoldersFeature" value="{{.Settings.EnableTrustedFoldersFeature}}">
                     <div class="form-group">
-                        <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-bs-toggle="collapse" data-bs-target="#trustedFoldersSection" aria-expanded="false" aria-controls="trustedFoldersSection">
-                            <span>Trusted Folders <span class="badge bg-secondary" data-bs-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">?</span></span>
+                        <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#trustedFoldersSection" aria-expanded="false" aria-controls="trustedFoldersSection">
+                            <span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">Trusted Folders</span>
                             <span class="collapse-icon">▼</span>
                         </button>
                         <div class="collapse" id="trustedFoldersSection">
@@ -244,7 +245,7 @@
                     {{if .Settings.FolderConfigs}}
                     {{range $index, $folder := .Settings.FolderConfigs}}
             <div class="folder-config">
-                <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-bs-toggle="collapse" data-bs-target="#folder-{{$index}}" aria-expanded="false" aria-controls="folder-{{$index}}">
+                <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}" aria-expanded="false" aria-controls="folder-{{$index}}">
                     <span>{{$folder.FolderPath}}</span>
                     <span class="collapse-icon">▼</span>
                 </button>
@@ -254,31 +255,30 @@
                 <div class="form-group">
                     <label class="checkbox-label">
                         <input type="checkbox" id="folder_{{$index}}_autoOrg" data-index="{{$index}}" {{if not $folder.OrgSetByUser}}checked{{end}}>
-                        Auto Select Organization
-                        <span class="badge bg-secondary" data-bs-toggle="tooltip" title="When enabled, Snyk will automatically select the most appropriate organization for your project using context found in your repository. If disabled, you can manually specify the organization">?</span>
+                        <span data-toggle="tooltip" title="When enabled, Snyk will automatically select the most appropriate organization for your project using context found in your repository. If disabled, you can manually specify the organization">Auto Select Organization</span>
                     </label>
                     <input type="hidden" name="folder_{{$index}}_orgSetByUser" id="folder_{{$index}}_orgSetByUser" value="{{if $folder.OrgSetByUser}}true{{else}}false{{end}}">
                 </div>
 
                 <div class="form-group">
-                    <label for="folder_{{$index}}_preferredOrg">Organization <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Specify the organization (ID or name) for this folder. If auto-select is enabled, this will show the automatically determined organization (read-only)">?</span></label>
+                    <label for="folder_{{$index}}_preferredOrg"><span data-toggle="tooltip" title="Specify the organization (ID or name) for this folder. If auto-select is enabled, this will show the automatically determined organization (read-only)">Organization</span></label>
                     <input type="text" id="folder_{{$index}}_preferredOrg" name="folder_{{$index}}_preferredOrg" value="{{if $folder.OrgSetByUser}}{{$folder.PreferredOrg}}{{else}}{{$folder.AutoDeterminedOrg}}{{end}}" data-preferred-org="{{$folder.PreferredOrg}}" data-auto-org="{{$folder.AutoDeterminedOrg}}" placeholder="Organization UUID or Slug" {{if not $folder.OrgSetByUser}}readonly{{end}}>
                     <input type="hidden" name="folder_{{$index}}_autoDeterminedOrg" value="{{$folder.AutoDeterminedOrg}}">
                 </div>
 
                 <div class="form-group">
-                    <label for="folder_{{$index}}_additionalParameters">Additional CLI Parameters <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Parameters to pass to Snyk CLI for this folder's scans. Space-separated arguments (e.g., --severity-threshold=high --debug)">?</span></label>
+                    <label for="folder_{{$index}}_additionalParameters"><span data-toggle="tooltip" title="Parameters to pass to Snyk CLI for this folder's scans. Space-separated arguments (e.g., --severity-threshold=high --debug)">Additional CLI Parameters</span></label>
                     <input type="text" id="folder_{{$index}}_additionalParameters" name="folder_{{$index}}_additionalParameters" value="{{range $p := $folder.AdditionalParameters}}{{$p}} {{end}}" placeholder="--severity-threshold=high">
                 </div>
 
                 <div class="form-group">
-                    <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-bs-toggle="collapse" data-bs-target="#folder-{{$index}}-prescan" aria-expanded="false" aria-controls="folder-{{$index}}-prescan">
-                        <span>Pre/Post Scan Commands <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Configure commands to run before/after scans for each product. Commands run in the folder context.">?</span></span>
+                    <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-prescan" aria-expanded="false" aria-controls="folder-{{$index}}-prescan">
+                        <span data-toggle="tooltip" title="Configure commands to run before/after scans for each product. Commands run in the folder context.">Pre/Post Scan Commands</span>
                         <span class="collapse-icon">▼</span>
                     </button>
                     <div class="collapse" id="folder-{{$index}}-prescan">
                         <div class="mt-2">
-                            <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-bs-toggle="collapse" data-bs-target="#folder-{{$index}}-oss" aria-expanded="false" aria-controls="folder-{{$index}}-oss">
+                            <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-oss" aria-expanded="false" aria-controls="folder-{{$index}}-oss">
                                 <span>Snyk Open Source</span>
                                 <span class="collapse-icon">▶</span>
                             </button>
@@ -305,7 +305,7 @@
                                 </div>
                             </div>
 
-                            <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-bs-toggle="collapse" data-bs-target="#folder-{{$index}}-code" aria-expanded="false" aria-controls="folder-{{$index}}-code">
+                            <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-code" aria-expanded="false" aria-controls="folder-{{$index}}-code">
                                 <span>Snyk Code</span>
                                 <span class="collapse-icon">▶</span>
                             </button>
@@ -332,7 +332,7 @@
                                 </div>
                             </div>
 
-                            <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-bs-toggle="collapse" data-bs-target="#folder-{{$index}}-iac" aria-expanded="false" aria-controls="folder-{{$index}}-iac">
+                            <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-iac" aria-expanded="false" aria-controls="folder-{{$index}}-iac">
                                 <span>Snyk IaC</span>
                                 <span class="collapse-icon">▶</span>
                             </button>
@@ -372,7 +372,12 @@
         </div>
     </form>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" nonce="{{.Nonce}}"></script>
+    <script nonce="{{.Nonce}}">
+        {{.JQuery}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.BootstrapJS}}
+    </script>
     <script nonce="{{.Nonce}}">
         {{.Utils}}
     </script>
