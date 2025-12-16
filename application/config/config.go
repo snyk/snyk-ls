@@ -40,8 +40,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2"
 
-	"github.com/snyk/snyk-ls/internal/util/user_interface"
-
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -284,7 +282,6 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 		c.engine = engine
 	}
 
-	c.engine.SetUserInterface(user_interface.NewLsUserInterface(user_interface.WithLogger(c.logger)))
 	gafConfig := c.engine.GetConfiguration()
 	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
 	gafConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
