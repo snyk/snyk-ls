@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/snyk/cli-extension-os-flows/pkg/flags"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
@@ -32,8 +33,9 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath,
 	c := cliScanner.config
 	logger := c.Logger().With().
 		Str("method", "cliScanner.ostestScan").
-		Str("path", string(path)).
+		Any("cmd", cmd).
 		Str("workDir", string(workDir)).
+		Str("path", string(path)).
 		Logger()
 	engine := c.Engine()
 	gafConfig := engine.GetConfiguration().Clone()
@@ -46,7 +48,24 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath,
 	folderOrg := c.FolderOrganization(workDir)
 
 	gafConfig.Set(configuration.WORKING_DIRECTORY, string(workDir))
-	gafConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
+	args := cmd[1:]
+
+	// convert args to flagset
+	gafConfig.Set(configuration.RAW_CMD_ARGS, args)
+	flagSet := flags.OSTestFlagSet()
+	flagSet.ParseErrorsWhitelist.UnknownFlags = true
+	err2 := flagSet.Parse(args)
+	if err2 != nil {
+		logger.Err(err2).Msg("Error parsing cmd args")
+		return nil, err2
+	}
+
+	err2 = gafConfig.AddFlagSet(flagSet)
+	if err2 != nil {
+		logger.Err(err2).Msg("Error adding flag set")
+		return nil, err2
+	}
+
 	gafConfig.Set(configuration.INPUT_DIRECTORY, []string{string(workDir)})
 	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 	gafConfig.Set(configuration.WORKFLOW_USE_STDIO, false)

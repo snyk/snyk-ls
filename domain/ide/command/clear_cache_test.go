@@ -45,6 +45,7 @@ func Test_ClearCache_DeleteAll_NoError(t *testing.T) {
 	folder := workspace.NewFolder(c, "dummy", "dummy", sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator, featureflag.NewFakeService())
 	w.AddFolder(folder)
 	c.SetWorkspace(w)
+	c.SetAutomaticScanning(false)
 
 	clearCacheCommand := setupClearCacheCommand(t, "", "", c)
 
