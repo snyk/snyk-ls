@@ -621,6 +621,7 @@ type Settings struct {
 	ActivateSnykIac                  string               `json:"activateSnykIac,omitempty"`
 	Insecure                         string               `json:"insecure,omitempty"`
 	Endpoint                         string               `json:"endpoint,omitempty"`
+	BaseUrl                          string               `json:"baseUrl,omitempty"`
 	Organization                     string               `json:"organization,omitempty"`
 	Path                             string               `json:"path,omitempty"`
 	CliPath                          string               `json:"cliPath,omitempty"`
@@ -647,7 +648,7 @@ type Settings struct {
 	EnableSnykLearnCodeActions       string               `json:"enableSnykLearnCodeActions,omitempty"`
 	EnableSnykOSSQuickFixCodeActions string               `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
 	EnableSnykOpenBrowserActions     string               `json:"enableSnykOpenBrowserActions,omitempty"`
-	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"`
+	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"` // should this be global?
 	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
 	HoverVerbosity                   *int                 `json:"hoverVerbosity,omitempty"`
 	OutputFormat                     *string              `json:"outputFormat,omitempty"`
@@ -1243,6 +1244,7 @@ type OssIssueData struct {
 	DisplayTargetFile FilePath       `json:"displayTargetFile"`
 	MatchingIssues    []OssIssueData `json:"matchingIssues"`
 	Lesson            string         `json:"lessonUrl,omitempty"`
+	RiskScore         uint16         `json:"riskScore,omitempty"`
 }
 type OssIdentifiers struct {
 	CWE []string `json:"CWE,omitempty"`

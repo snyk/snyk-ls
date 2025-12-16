@@ -173,6 +173,7 @@ type Config struct {
 	logFile                          *os.File
 	snykCodeAnalysisTimeout          time.Duration
 	snykApiUrl                       string
+	baseUrl                          string
 	token                            string
 	deviceId                         string
 	clientCapabilities               types.ClientCapabilities
@@ -479,6 +480,18 @@ func (c *Config) SnykUI() string {
 	}
 
 	return snykUiUrl
+}
+
+func (c *Config) BaseUrl() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.baseUrl
+}
+
+func (c *Config) SetBaseUrl(baseUrl string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.baseUrl = baseUrl
 }
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string {
@@ -1328,9 +1341,11 @@ func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfi
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
 // the folder, it returns the global organization (which if unset, GAF will return the default org).
 func (c *Config) FolderOrganization(path types.FilePath) string {
+	logger := c.Logger().With().Str("method", "FolderOrganization").Str("path", string(path)).Logger()
 	if path == "" {
-		c.Logger().Warn().Str("method", "FolderOrganization").Str("path", "").Msg("called with empty path, falling back to global organization")
-		return c.Organization()
+		globalOrg := c.Organization()
+		logger.Warn().Str("globalOrg", globalOrg).Msg("called with empty path, falling back to global organization")
+		return globalOrg
 	}
 
 	fc, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
@@ -1339,12 +1354,14 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 		EnrichFromGit:    false,
 	})
 	if err != nil {
-		c.Logger().Warn().Err(err).Str("method", "FolderOrganization").Str("path", string(path)).Msg("error getting folder config, falling back to global organization")
-		return c.Organization()
+		globalOrg := c.Organization()
+		logger.Warn().Err(err).Str("globalOrg", globalOrg).Msg("error getting folder config, falling back to global organization")
+		return globalOrg
 	}
 	if fc == nil {
-		c.Logger().Debug().Str("method", "FolderOrganization").Str("path", string(path)).Msg("no folder config in storage, falling back to global organization")
-		return c.Organization()
+		globalOrg := c.Organization()
+		logger.Debug().Str("globalOrg", globalOrg).Msg("no folder config in storage, falling back to global organization")
+		return globalOrg
 	}
 
 	if fc.OrgSetByUser {
@@ -1356,7 +1373,9 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 	} else {
 		// If AutoDeterminedOrg is empty, fall back to global organization
 		if fc.AutoDeterminedOrg == "" {
-			return c.Organization()
+			globalOrg := c.Organization()
+			logger.Debug().Str("globalOrg", globalOrg).Msg("AutoDeterminedOrg is empty, falling back to global organization")
+			return globalOrg
 		}
 		return fc.AutoDeterminedOrg
 	}
