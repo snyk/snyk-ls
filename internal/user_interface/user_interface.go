@@ -20,8 +20,6 @@ package user_interface
 import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/ui"
-
-	"github.com/snyk/snyk-ls/internal/progress"
 )
 
 var _ ui.UserInterface = (*LsUserInterface)(nil)
@@ -29,7 +27,14 @@ var _ ui.UserInterface = (*LsUserInterface)(nil)
 type LsUserInterfaceOption func(*LsUserInterface)
 
 type LsUserInterface struct {
-	logger *zerolog.Logger
+	logger      *zerolog.Logger
+	progressBar ui.ProgressBar
+}
+
+func WithProgressBar(progressBar ui.ProgressBar) LsUserInterfaceOption {
+	return func(l *LsUserInterface) {
+		l.progressBar = progressBar
+	}
 }
 
 func WithLogger(logger *zerolog.Logger) LsUserInterfaceOption {
@@ -73,7 +78,7 @@ func (l LsUserInterface) OutputError(err error, _ ...ui.Opts) error {
 }
 
 func (l LsUserInterface) NewProgressBar() ui.ProgressBar {
-	return progress.NewTracker(true)
+	return l.progressBar
 }
 
 func (l LsUserInterface) Input(_ string) (string, error) {

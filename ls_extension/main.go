@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/snyk-ls/internal/progress"
 
 	"github.com/snyk/snyk-ls/internal/user_interface"
 
@@ -99,7 +100,9 @@ func lsWorkflow(
 	c.SetFormat(extensionConfig.GetString("formatFlag"))
 	config.SetCurrentConfig(c)
 
-	engine.SetUserInterface(user_interface.NewLsUserInterface(user_interface.WithLogger(c.Logger())))
+	engine.SetUserInterface(user_interface.NewLsUserInterface(
+		user_interface.WithLogger(c.Logger()),
+		user_interface.WithProgressBar(progress.NewTracker(true))))
 
 	if extensionConfig.GetBool("v") {
 		fmt.Println(config.Version) //nolint:forbidigo // we want to output the version to stdout here
