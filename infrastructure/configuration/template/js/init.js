@@ -42,12 +42,6 @@
 		// Initialize folder organization field toggles
 		window.ConfigApp.folderManagement.initializeFolderOrgFields();
 
-		// Add event listener for Browse button
-		var browseBtn = helpers.get("browse-cli-btn");
-		if (browseBtn) {
-			helpers.addEvent(browseBtn, "click", window.ConfigApp.folderManagement.handleCliPathBrowse);
-		}
-
 		// Add event listener for Add Trusted Folder button
 		var addTrustedFolderBtn = helpers.get("addTrustedFolderBtn");
 		if (addTrustedFolderBtn) {
