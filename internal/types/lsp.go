@@ -34,10 +34,6 @@ const (
 	FocusOut   TextDocumentSaveReason = 2
 )
 
-type McpServerURLParams struct {
-	URL string `json:"url"`
-}
-
 type SnykRegisterMcpParams struct {
 	Command string            `json:"command"`
 	Args    []string          `json:"args"`

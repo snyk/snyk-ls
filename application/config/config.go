@@ -205,8 +205,6 @@ type Config struct {
 	hoverVerbosity                      int
 	offline                             bool
 	ws                                  types.Workspace
-	mcpServerEnabled                    bool
-	mcpBaseURL                          *url.URL
 	isLSPInitialized                    bool
 	cachedOriginalPath                  string
 	userSettingsPath                    string
@@ -1476,26 +1474,6 @@ func (c *Config) SetWorkspace(workspace types.Workspace) {
 	defer c.m.Unlock()
 
 	c.ws = workspace
-}
-
-func (c *Config) McpServerEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.mcpServerEnabled
-}
-
-func (c *Config) SetMCPServerURL(baseURL *url.URL) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.mcpBaseURL = baseURL
-}
-
-func (c *Config) GetMCPServerURL() *url.URL {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.mcpBaseURL
 }
 
 func (c *Config) IsLSPInitialized() bool {
