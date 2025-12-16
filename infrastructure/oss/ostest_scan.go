@@ -53,7 +53,7 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath,
 	// convert args to flagset
 	gafConfig.Set(configuration.RAW_CMD_ARGS, args)
 	flagSet := flags.OSTestFlagSet()
-	flagSet.ParseErrorsWhitelist.UnknownFlags = true
+	flagSet.ParseErrorsAllowlist.UnknownFlags = true
 	err2 := flagSet.Parse(args)
 	if err2 != nil {
 		logger.Err(err2).Msg("Error parsing cmd args")
