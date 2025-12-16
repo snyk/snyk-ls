@@ -43,17 +43,17 @@ func (l LsUserInterface) SelectOptions(_ string, _ []string) (int, string, error
 }
 
 func NewLsUserInterface(opts ...LsUserInterfaceOption) *LsUserInterface {
-	ui := &LsUserInterface{}
+	lsUi := &LsUserInterface{}
 	if opts == nil {
-		return ui
+		return lsUi
 	}
 	for _, opt := range opts {
 		if opt == nil {
 			continue
 		}
-		opt(ui)
+		opt(lsUi)
 	}
-	return ui
+	return lsUi
 }
 
 func (l LsUserInterface) Output(output string) error {
