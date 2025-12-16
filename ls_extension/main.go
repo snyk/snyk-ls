@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/internal/progress"
 
 	"github.com/snyk/snyk-ls/internal/user_interface"
