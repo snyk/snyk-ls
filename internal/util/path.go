@@ -35,11 +35,6 @@ func ValidatePath(path types.FilePath, options PathValidationOptions) error {
 		return fmt.Errorf("path cannot be empty, got: '%s'", string(path))
 	}
 
-	// Validate Windows UNC admin share paths
-	if err := validateWindowsUNCAdminShare(pathStr); err != nil {
-		return err
-	}
-
 	// Validate path existence based on requirements
 	if err := validatePathExistence(pathStr, options.Existence); err != nil {
 		return err
@@ -103,52 +98,6 @@ func PathKey(p types.FilePath) types.FilePath {
 	s = filepath.Clean(s)
 
 	return types.FilePath(s)
-}
-
-// validateWindowsUNCAdminShare validates Windows UNC admin share paths
-// These paths have the format \\server\C$\... where C$ is the administrative share
-func validateWindowsUNCAdminShare(path string) error {
-	// Check if path looks like a UNC path (starts with \\ or //)
-	if strings.HasPrefix(path, "\\\\") || strings.HasPrefix(path, "//") {
-		// If it's a UNC path, verify it's a valid admin share format
-		if !isWindowsUNCAdminShare(path) {
-			// If it looks like UNC but isn't a valid admin share, that's okay
-			// We just want to ensure admin shares are properly recognized
-			return nil
-		}
-		// Valid admin share path - no error
-		return nil
-	}
-	// Not a UNC path - no validation needed
-	return nil
-}
-
-// isWindowsUNCAdminShare checks if the path is a Windows UNC administrative share path
-// These paths have the format \\server\C$\... where C$ is the administrative share
-func isWindowsUNCAdminShare(path string) bool {
-	// Check if it starts with \\ (UNC path)
-	if !strings.HasPrefix(path, "\\\\") && !strings.HasPrefix(path, "//") {
-		return false
-	}
-
-	// Check if it contains a drive letter followed by $ (e.g., C$, D$, etc.)
-	// Pattern: \\server\X$ where X is a drive letter
-	parts := strings.Split(strings.ReplaceAll(path, "/", "\\"), "\\")
-	if len(parts) < 4 {
-		return false
-	}
-
-	// parts[0] and parts[1] are empty (from leading \\)
-	// parts[2] is the server name
-	// parts[3] should be the share name (e.g., C$)
-	shareName := parts[3]
-	if len(shareName) == 2 && shareName[1] == '$' {
-		// Check if first character is a drive letter (A-Z, case insensitive)
-		driveLetter := shareName[0]
-		return (driveLetter >= 'A' && driveLetter <= 'Z') || (driveLetter >= 'a' && driveLetter <= 'z')
-	}
-
-	return false
 }
 
 // validatePathExistence checks path existence based on the specified type

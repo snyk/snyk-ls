@@ -138,6 +138,26 @@ func TestValidatePathLenient(t *testing.T) {
 		expectError: false,
 	})
 
+	// Add Windows UNC admin share test cases - verify we support $ character in UNC admin share paths
+	// These test that the $ character is allowed in Windows UNC administrative share paths (e.g., \\server\C$\path)
+	testCases = append(testCases,
+		testCase{
+			name:        "Windows UNC admin share C$ - supports $ character",
+			input:       "\\\\localhost\\C$\\Users\\test",
+			expectError: false,
+		},
+		testCase{
+			name:        "Windows UNC admin share D$ - supports $ character",
+			input:       "\\\\server\\D$\\path\\to\\file",
+			expectError: false,
+		},
+		testCase{
+			name:        "Windows UNC admin share with forward slashes - supports $ character",
+			input:       "//localhost/C$/Users/test",
+			expectError: false,
+		},
+	)
+
 	runValidationTest(t, ValidatePathLenient, testCases)
 }
 
