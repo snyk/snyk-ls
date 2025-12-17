@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/subosito/gotenv"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -61,11 +62,11 @@ func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, 
 }
 
 type Executor interface {
-	Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error)
+	Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error)
 	ExpandParametersFromConfig(base []string) []string
 }
 
-func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error) {
+func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error) {
 	method := "SnykCli.Execute"
 	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", string(workingDir)).Msg("calling Snyk CLI")
 
@@ -107,6 +108,7 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 
 	cloneConfig := c.c.Engine().GetConfiguration().Clone()
 	cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
+	// FIXME: this is not thread-safe
 	envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
 	envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
 	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
@@ -170,7 +172,7 @@ func (c *SnykCli) ExpandParametersFromConfig(base []string) []string {
 
 func (c *SnykCli) CliVersion() string {
 	cmd := []string{"version"}
-	output, err := c.Execute(context.Background(), cmd, "")
+	output, err := c.Execute(context.Background(), cmd, "", nil)
 	if err != nil {
 		c.c.Logger().Error().Err(err).Msg("failed to run version command")
 		return ""

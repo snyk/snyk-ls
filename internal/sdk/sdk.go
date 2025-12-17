@@ -22,22 +22,30 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/subosito/gotenv"
 
-	"github.com/snyk/go-application-framework/pkg/envvars"
+	env "github.com/snyk/snyk-ls/internal"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.LsSdk) []string {
+const pathEnvVarName = "PATH"
+
+// UpdateEnvironmentAndReturnAdditionalParams returns additional parameters and updated env for the given SDK
+func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.LsSdk, workDir types.FilePath) ([]string, gotenv.Env) {
 	logger := c.Logger().With().Str("method", "UpdateEnvironmentAndReturnAdditionalParams").Logger()
 	var additionalParameters []string
+
+	// env update
+	env := env.GetEnvFromSystemAndConfiguration(c.Engine().GetConfiguration(), c.GetUserSettingsPath(), &logger)
+
+	// update process environment with sdk info
 	for i := 0; i < len(sdks); i++ {
 		sdk := sdks[i]
 		path := sdk.Path
 		pathExt := filepath.Join(path, "bin")
-		env := gotenv.Env{}
 		switch {
 		case strings.Contains(strings.ToLower(sdk.Type), "java"):
 			env["JAVA_HOME"] = path
@@ -48,12 +56,41 @@ func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.L
 			env["GOROOT"] = path
 		}
 
-		envvars.UpdatePath(pathExt, true)
+		env[pathEnvVarName] = getPath(pathExt, true)
 		logger.Debug().Msg("prepended " + pathExt)
-		for k, v := range env {
-			_ = os.Setenv(k, v)
-			logger.Debug().Any("env", env).Msg("added")
-		}
 	}
-	return additionalParameters
+	return additionalParameters, env
+}
+
+// UpdatePath prepends or appends the extension to the current path.
+// For append, if the entry is already there, it will not be re-added / moved.
+// For prepend, if the entry is already there, it will be correctly re-prioritized to the front.
+//
+//	pathExtension string the path component to be added.
+//	prepend bool whether to pre- or append
+func getPath(pathExtension string, prepend bool) string {
+	currentPath := os.Getenv(pathEnvVarName)
+
+	if pathExtension == "" {
+		return currentPath
+	}
+
+	if currentPath == "" {
+		return pathExtension
+	}
+
+	currentPathEntries := strings.Split(currentPath, string(os.PathListSeparator))
+	addPathEntries := strings.Split(pathExtension, string(os.PathListSeparator))
+
+	var combinedSliceWithDuplicates []string
+	if prepend {
+		combinedSliceWithDuplicates = append(addPathEntries, currentPathEntries...)
+	} else {
+		combinedSliceWithDuplicates = append(currentPathEntries, addPathEntries...)
+	}
+
+	newPathSlice := utils.Dedupe(combinedSliceWithDuplicates)
+
+	newPath := strings.Join(newPathSlice, string(os.PathListSeparator))
+	return newPath
 }
