@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/subosito/gotenv"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -46,7 +47,7 @@ func NewExtensionExecutor(c *config.Config) Executor {
 	}
 }
 
-func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error) {
+func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error) {
 	logger := c.c.Logger().With().Str("method", "ExtensionExecutor.Execute").Logger()
 	logger.Debug().Interface("cmd", cmd[1:]).Str("workingDir", string(workingDir)).Msg("calling legacycli extension")
 
@@ -62,12 +63,12 @@ func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir
 		return nil, ctx.Err()
 	}
 
-	output, err := c.doExecute(ctx, cmd, workingDir)
+	output, err := c.doExecute(ctx, cmd, workingDir, env)
 	logger.Trace().Str("response", string(output))
 	return output, err
 }
 
-func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingDir types.FilePath) ([]byte, error) {
+func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) ([]byte, error) {
 	logger := c.c.Logger().With().Str("method", "ExtensionExecutor.doExecute").Logger()
 	err := c.c.WaitForDefaultEnv(ctx)
 	if err != nil {
@@ -81,6 +82,13 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	legacyCLIConfig := engine.GetConfiguration().Clone()
 	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, string(workingDir))
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
+
+	invocationEnv := make([]string, 0, len(env))
+	for k, v := range env {
+		invocationEnv = append(invocationEnv, k+"="+v)
+	}
+	legacyCLIConfig.Set(configuration.SUBPROCESS_ENVIRONMENT, invocationEnv)
+
 	// Use folder-level organization if we are executing from within a project folder.
 	// If no folder-specific org is configured, fall back to global organization.
 	if workingDir != "" {
@@ -124,7 +132,7 @@ func (c ExtensionExecutor) ExpandParametersFromConfig(base []string) []string {
 
 func (c ExtensionExecutor) CliVersion() string {
 	cmd := []string{"version"}
-	output, err := c.Execute(context.Background(), cmd, "")
+	output, err := c.Execute(context.Background(), cmd, "", nil)
 	if err != nil {
 		c.c.Logger().Error().Err(err).Msg("failed to run version command")
 		return ""

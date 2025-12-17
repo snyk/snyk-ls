@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/subosito/gotenv"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -61,11 +62,11 @@ func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, 
 }
 
 type Executor interface {
-	Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error)
+	Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error)
 	ExpandParametersFromConfig(base []string) []string
 }
 
-func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error) {
+func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error) {
 	method := "SnykCli.Execute"
 	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", string(workingDir)).Msg("calling Snyk CLI")
 
@@ -73,12 +74,12 @@ func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir types.Fi
 	ctx, cancel := context.WithTimeout(ctx, c.cliTimeout)
 	defer cancel()
 
-	output, err := c.doExecute(ctx, cmd, workingDir)
+	output, err := c.doExecute(ctx, cmd, workingDir, env)
 	c.c.Logger().Trace().Str("method", method).Str("response", string(output))
 	return output, err
 }
 
-func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.FilePath) ([]byte, error) {
+func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) ([]byte, error) {
 	// handle concurrency limit and cancellations
 	err := c.semaphore.Acquire(ctx, 1)
 	if err != nil {
@@ -86,7 +87,7 @@ func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.
 	}
 	defer c.semaphore.Release(1)
 
-	command, err := c.getCommand(cmd, workingDir, ctx)
+	command, err := c.getCommand(cmd, workingDir, ctx, env)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +96,7 @@ func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.
 	return output, err
 }
 
-func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx context.Context) (*exec.Cmd, error) {
+func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx context.Context, env gotenv.Env) (*exec.Cmd, error) {
 	err := c.c.WaitForDefaultEnv(ctx)
 	if err != nil {
 		return nil, err
@@ -105,11 +106,22 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 		cmd = append(cmd, "-d")
 	}
 
-	cloneConfig := c.c.Engine().GetConfiguration().Clone()
-	cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
-	envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
-	envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
-	cliEnv := AppendCliEnvironmentVariables(os.Environ(), c.c.NonEmptyToken())
+	var baseEnv []string
+	if env != nil {
+		baseEnv = make([]string, 0, len(env))
+		for k, v := range env {
+			baseEnv = append(baseEnv, k+"="+v)
+		}
+	} else {
+		cloneConfig := c.c.Engine().GetConfiguration().Clone()
+		cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
+		// this is not thread-safe
+		envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
+		envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
+		baseEnv = os.Environ()
+	}
+
+	cliEnv := AppendCliEnvironmentVariables(baseEnv, c.c.NonEmptyToken())
 
 	effectiveArgs := cmd
 	if org := c.c.FolderOrganization(workingDir); org != "" {
@@ -170,7 +182,7 @@ func (c *SnykCli) ExpandParametersFromConfig(base []string) []string {
 
 func (c *SnykCli) CliVersion() string {
 	cmd := []string{"version"}
-	output, err := c.Execute(context.Background(), cmd, "")
+	output, err := c.Execute(context.Background(), cmd, "", nil)
 	if err != nil {
 		c.c.Logger().Error().Err(err).Msg("failed to run version command")
 		return ""

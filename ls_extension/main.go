@@ -100,7 +100,7 @@ func lsWorkflow(
 		fmt.Println(config.Version) //nolint:forbidigo // we want to output the version to stdout here
 		return output, err
 	} else if extensionConfig.GetBool("licenses") {
-		about, err := cli.NewExtensionExecutor(c).Execute(context.Background(), []string{"snyk", "--about"}, "")
+		about, err := cli.NewExtensionExecutor(c).Execute(context.Background(), []string{"snyk", "--about"}, "", nil)
 		fmt.Println(string(about)) //nolint:forbidigo // we want to output licenses to stdout here
 
 		return output, err

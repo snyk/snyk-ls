@@ -184,7 +184,7 @@ func (i *Initializer) isOutdatedCli() bool {
 
 // logCliVersion runs the cli with `--version` and returns the version
 func (i *Initializer) logCliVersion(cliPath string) {
-	output, err := i.cli.Execute(context.Background(), []string{cliPath, "--version"}, "")
+	output, err := i.cli.Execute(context.Background(), []string{cliPath, "--version"}, "", nil)
 	version := "unknown version"
 	if err == nil && len(output) > 0 {
 		version = string(output)
