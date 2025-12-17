@@ -19,7 +19,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gosimple/hashdir v1.0.2
 	github.com/hexops/gotextdiff v1.0.3
-	github.com/mark3labs/mcp-go v0.31.0
 	github.com/otiai10/copy v1.14.1
 	github.com/pact-foundation/pact-go v1.10.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
@@ -33,16 +32,17 @@ require (
 	github.com/snyk/cli-extension-os-flows v0.0.0-20251216105957-6fea9cc0c94b
 	github.com/snyk/code-client-go v1.24.4
 	github.com/snyk/go-application-framework v0.0.0-20251215143646-9f078499ac30
+	github.com/snyk/studio-mcp v1.2.3
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
-	github.com/spf13/pflag v1.0.6
-	github.com/stretchr/testify v1.10.0
+	github.com/spf13/pflag v1.0.10
+	github.com/stretchr/testify v1.11.1
 	github.com/subosito/gotenv v1.6.0
 	github.com/writeas/go-strip-markdown v2.0.1+incompatible
 	go.lsp.dev/uri v0.3.0
-	golang.org/x/exp v0.0.0-20250215185904-eff6e970281f
+	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546
 	golang.org/x/mod v0.29.0
 	golang.org/x/net v0.47.0
-	golang.org/x/oauth2 v0.27.0
+	golang.org/x/oauth2 v0.33.0
 	golang.org/x/sync v0.18.0
 )
 
@@ -91,6 +91,7 @@ require (
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/manifoldco/promptui v0.9.0 // indirect
+	github.com/mark3labs/mcp-go v0.31.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
