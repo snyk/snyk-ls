@@ -44,6 +44,18 @@
 				continue;
 			}
 
+			// Trusted folder logic: trustedFolder_INDEX
+			if (name.indexOf("trustedFolder_") === 0) {
+				if (!data.trustedFolders) {
+					data.trustedFolders = [];
+				}
+				// Only add non-empty values
+				if (el.value && el.value.trim()) {
+					data.trustedFolders.push(el.value);
+				}
+				continue;
+			}
+
 			// Folder logic: folder_INDEX_FIELD or folder_INDEX_scanConfig_PRODUCT_FIELD
 			if (name.indexOf("folder_") === 0) {
 				var parts = name.split("_");
