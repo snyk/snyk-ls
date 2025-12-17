@@ -68,14 +68,17 @@ func CallMcpConfigWorkflow(c *config.Config, notifier notification.Notifier, con
 				mcpConfig.Set(mcpTypes.RuleTypeParam, mcpTypes.RuleTypeAlwaysApply)
 			}
 
-			if (c.GetSecureAtInceptionExecutionFrequency() == SecureAtInceptionManual && configureRules) || (!c.IsAutoConfigureMcpEnabled() && configureMcp) {
+			if c.GetSecureAtInceptionExecutionFrequency() == SecureAtInceptionManual && configureRules {
 				mcpConfig.Set(mcpTypes.RemoveParam, true)
+				// never remove MCP server configuration
+				mcpConfig.Set(mcpTypes.ConfigureMcpParam, false)
+			} else {
+				mcpConfig.Set(mcpTypes.ConfigureMcpParam, configureMcp)
 			}
 
 			mcpConfig.Set(mcpTypes.RulesScopeParam, mcpTypes.RulesWorkspaceScope)
 			mcpConfig.Set(mcpTypes.WorkspacePathParam, string(f.Path()))
 
-			mcpConfig.Set(mcpTypes.ConfigureMcpParam, configureMcp)
 			mcpConfig.Set(mcpTypes.ConfigureRulesParam, configureRules)
 
 			_, err := c.Engine().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, mcpConfig)
