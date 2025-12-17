@@ -370,7 +370,7 @@ func (cliScanner *CLIScanner) updateSDKs(workDir types.FilePath) ([]string, gote
 	// wait for sdk info
 	sdks := <-sdkChan
 	logger.Debug().Msg("received SDKs")
-	return sdk.UpdateEnvironmentAndReturnAdditionalParams(cliScanner.config, sdks, "")
+	return sdk.UpdateEnvironmentAndReturnAdditionalParams(cliScanner.config, sdks)
 }
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {

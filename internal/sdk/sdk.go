@@ -34,7 +34,7 @@ import (
 const pathEnvVarName = "PATH"
 
 // UpdateEnvironmentAndReturnAdditionalParams returns additional parameters and updated env for the given SDK
-func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.LsSdk, workDir types.FilePath) ([]string, gotenv.Env) {
+func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.LsSdk) ([]string, gotenv.Env) {
 	logger := c.Logger().With().Str("method", "UpdateEnvironmentAndReturnAdditionalParams").Logger()
 	var additionalParameters []string
 
