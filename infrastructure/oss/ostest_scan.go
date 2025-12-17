@@ -20,16 +20,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/snyk/cli-extension-os-flows/pkg/flags"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/envvars"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/subosito/gotenv"
+
+	"github.com/snyk/cli-extension-os-flows/pkg/flags"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath, cmd []string, workDir types.FilePath) ([]workflow.Data, error) {
+func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath, cmd []string, workDir types.FilePath, env gotenv.Env) ([]workflow.Data, error) {
 	c := cliScanner.config
 	logger := c.Logger().With().
 		Str("method", "cliScanner.ostestScan").
@@ -39,18 +40,19 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath,
 		Logger()
 	engine := c.Engine()
 	gafConfig := engine.GetConfiguration().Clone()
-
-	// load env from shell
-	envvars.UpdatePath(c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
-	envvars.LoadConfiguredEnvironment(gafConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workDir))
+	gafConfig.Set(configuration.WORKING_DIRECTORY, string(workDir))
+	gafConfig.Set(configuration.INPUT_DIRECTORY, []string{string(workDir)})
 
 	// Resolve organization for the scan
 	folderOrg := c.FolderOrganization(workDir)
-
-	gafConfig.Set(configuration.WORKING_DIRECTORY, string(workDir))
-	args := cmd[1:]
+	logger.Debug().
+		Str("globalOrg", c.Organization()).
+		Str("folderOrg", folderOrg).
+		Msg("resolved folder organization, overriding global org parameter")
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
 	// convert args to flagset
+	args := cmd[1:]
 	gafConfig.Set(configuration.RAW_CMD_ARGS, args)
 	flagSet := flags.OSTestFlagSet()
 	flagSet.ParseErrorsAllowlist.UnknownFlags = true
@@ -66,10 +68,15 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath,
 		return nil, err2
 	}
 
-	gafConfig.Set(configuration.INPUT_DIRECTORY, []string{string(workDir)})
-	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 	gafConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
 	gafConfig.Set("no-output", true)
+
+	// set env to workflow config
+	invocationEnv := make([]string, 0, len(env))
+	for k, v := range env {
+		invocationEnv = append(invocationEnv, k+"="+v)
+	}
+	gafConfig.Set(configuration.SUBPROCESS_ENVIRONMENT, invocationEnv)
 
 	// this is hard coded here, as the extension does not export its ID
 	// see: https://github.com/snyk/cli-extension-os-flows/blob/main/internal/commands/ostest/workflow.go#L45

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/subosito/gotenv"
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -195,10 +196,7 @@ func (cliScanner *CLIScanner) getLogger(ctx context.Context) zerolog.Logger {
 	return logger
 }
 
-func (cliScanner *CLIScanner) scanInternal(
-	ctx context.Context,
-	commandFunc func(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) []string,
-) ([]types.Issue, error) {
+func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) ([]string, gotenv.Env)) ([]types.Issue, error) {
 	method := "cliScanner.Scan"
 	logger := cliScanner.getLogger(ctx).With().Str("method", method).Logger()
 
@@ -269,7 +267,7 @@ func (cliScanner *CLIScanner) scanInternal(
 	cliScanner.runningScans[workDir] = newScan
 	cliScanner.mutex.Unlock()
 
-	cmd := commandFunc([]string{string(workDir)}, map[string]bool{"": true}, workDir, folderConfig)
+	cmd, env := commandFunc([]string{string(workDir)}, map[string]bool{"": true}, workDir, folderConfig)
 
 	// check if scan was canceled
 	if ctx.Err() != nil {
@@ -286,14 +284,14 @@ func (cliScanner *CLIScanner) scanInternal(
 	if useLegacyScan {
 		logger.Info().Msg("⚠️ using legacy OSS scanner")
 
-		output, err = cliScanner.legacyScan(ctx, path, cmd, workDir)
+		output, err = cliScanner.legacyScan(ctx, path, cmd, workDir, env)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
 			return []types.Issue{}, err
 		}
 	} else {
 		logger.Info().Msg("🐉🪰using new ostest scanner")
-		output, err = cliScanner.ostestScan(ctx, path, cmd, workDir)
+		output, err = cliScanner.ostestScan(ctx, path, cmd, workDir, env)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
 			return []types.Issue{}, err
@@ -316,9 +314,9 @@ func (cliScanner *CLIScanner) scanInternal(
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) legacyScan(ctx context.Context, path types.FilePath, cmd []string, workDir types.FilePath) ([]byte, error) {
+func (cliScanner *CLIScanner) legacyScan(ctx context.Context, path types.FilePath, cmd []string, workDir types.FilePath, env gotenv.Env) ([]byte, error) {
 	logger := cliScanner.config.Logger().With().Str("method", "cliScanner.legacyScan").Logger()
-	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir)
+	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir, env)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
 		if noCancellation {
@@ -334,14 +332,14 @@ func (cliScanner *CLIScanner) legacyScan(ctx context.Context, path types.FilePat
 	return res, nil
 }
 
-func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs []string, folderConfig *types.FolderConfig) []string {
+func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs []string, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {
 	if folderConfig == nil {
 		folderConfig = cliScanner.config.FolderConfig(workDir)
 	}
 	folderConfigArgs := folderConfig.AdditionalParameters
 
 	// this asks the client for the current SDK and blocks on it
-	additionalParameters := cliScanner.updateSDKs(folderConfig.FolderPath)
+	additionalParameters, env := cliScanner.updateSDKs(folderConfig.FolderPath)
 
 	if len(folderConfigArgs) > 0 {
 		additionalParameters = append(additionalParameters, folderConfigArgs...)
@@ -358,10 +356,12 @@ func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs
 			}
 		}
 	}
-	return commandLineArgs
+	return commandLineArgs, env
 }
 
-func (cliScanner *CLIScanner) updateSDKs(workDir types.FilePath) []string {
+// updateSDKs asks the client for the current SDK and blocks on it
+// returns additional parameters for the given SDK
+func (cliScanner *CLIScanner) updateSDKs(workDir types.FilePath) ([]string, gotenv.Env) {
 	logger := cliScanner.config.Logger().With().Str("method", "updateSDKs").Logger()
 	sdkChan := make(chan []types.LsSdk)
 	getSdk := types.GetSdk{FolderPath: string(workDir), Result: sdkChan}
@@ -373,7 +373,7 @@ func (cliScanner *CLIScanner) updateSDKs(workDir types.FilePath) []string {
 	return sdk.UpdateEnvironmentAndReturnAdditionalParams(cliScanner.config, sdks)
 }
 
-func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) []string {
+func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
@@ -383,7 +383,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		"--json",
 	})
 
-	args = cliScanner.updateArgs(path, args, folderConfig)
+	args, env := cliScanner.updateArgs(path, args, folderConfig)
 	args = append(args, cliScanner.config.CliSettings().AdditionalOssParameters...)
 
 	processedArgs := []string{}
@@ -420,7 +420,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 
 	cmd = append(cmd, processedArgs...)
 
-	return cmd
+	return cmd, env
 }
 
 func (cliScanner *CLIScanner) isSupported(path types.FilePath) bool {
