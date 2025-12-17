@@ -17,8 +17,10 @@
 package command
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
@@ -29,7 +31,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
+
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -125,6 +131,35 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
 	assert.Empty(t, messages)
+}
+
+func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
+	c := testutil.UnitTest(t)
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+
+	originalService := Service()
+	t.Cleanup(func() {
+		SetService(originalService)
+	})
+	SetService(types.NewCommandServiceMock(nil))
+
+	called := make(chan struct{}, 1)
+	mockEngine.EXPECT().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, gomock.Any()).
+		DoAndReturn(func(_ workflow.Identifier, _ configuration.Configuration) ([]workflow.Data, error) {
+			called <- struct{}{}
+			return nil, nil
+		}).Times(1)
+
+	_, notifier := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
+
+	HandleFolders(c, context.Background(), nil, notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+
+	select {
+	case <-called:
+		// ok
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for MCP config workflow invocation")
+	}
 }
 
 // setupOrgResolverTest is a helper function to reduce duplication in org resolver tests

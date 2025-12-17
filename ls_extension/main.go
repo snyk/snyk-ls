@@ -25,6 +25,10 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
+	"github.com/snyk/snyk-ls/internal/progress"
+
+	"github.com/snyk/snyk-ls/internal/user_interface"
+
 	"github.com/snyk/snyk-ls/application/entrypoint"
 	"github.com/snyk/snyk-ls/application/server"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -84,17 +88,22 @@ func lsWorkflow(
 	logger.Info().Msgf("LS Version: %s", config.Version)
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	defaultConfig := invocation.GetEngine().GetConfiguration()
+	engine := invocation.GetEngine()
+	defaultConfig := engine.GetConfiguration()
 	defaultConfig.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
 	defaultConfig.Set(configuration.CONFIG_CACHE_TTL, configCacheTTL)
 	defaultConfig.Set(configuration.CONFIG_CACHE_DISABLED, false)
 
-	c := config.NewFromExtension(invocation.GetEngine())
+	c := config.NewFromExtension(engine)
 	c.SetConfigFile(extensionConfig.GetString("configfile"))
 	c.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
 	c.SetLogPath(extensionConfig.GetString("logPathFlag"))
 	c.SetFormat(extensionConfig.GetString("formatFlag"))
 	config.SetCurrentConfig(c)
+
+	engine.SetUserInterface(user_interface.NewLsUserInterface(
+		user_interface.WithLogger(c.Logger()),
+		user_interface.WithProgressBar(progress.NewTracker(true))))
 
 	if extensionConfig.GetBool("v") {
 		fmt.Println(config.Version) //nolint:forbidigo // we want to output the version to stdout here

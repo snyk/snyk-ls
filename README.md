@@ -181,16 +181,6 @@ Right now the language server supports the following actions:
   - note: alias for textDocument/publishDiagnostics
 
 
-- MCP Server URL Notification to publish the listening address. The server listens for `POST` requests on `/messages` and for SSE subscriptions on `/sse`. An example can be found in the mcp package in the smoke test.
-  - method: `$/snyk.mcpServerURL`
-  - params: `types.McpServerURLParams`
-  - example:
-  ```json5
-  {
-    "url": "https://127.0.0.1:7595"
-  }
-  ``` 
-
 - Authentication Notification
   - method: `$/snyk.hasAuthenticated`
   - params: `types.AuthenticationParams`
@@ -259,7 +249,20 @@ Right now the language server supports the following actions:
     "scanSummary": "<html><body<p> Summary </p></body></html>"
   }
   ```
-
+- Register MCP Notification
+  - method: `$/snyk.registerMcp`
+  - params: `types.SnykRegisterMcpParams`
+  - example:
+  ```json5
+    {
+      "command": "/path/to/cli",
+      "args": [ "mcp", "-t", "stdio" ],
+      "env": {
+        "ENV1": "value1",
+        "ENV2": "value2"
+      }
+    }
+  ```
 ### Commands
 
 - `NavigateToRangeCommand` navigates the client to the given range
