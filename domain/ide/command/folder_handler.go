@@ -48,7 +48,7 @@ func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, noti
 	initScanPersister(c, persister)
 	sendFolderConfigs(c, notifier, featureFlagService)
 	HandleUntrustedFolders(ctx, c, srv)
-	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, true, true)
+	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
 }
 
 func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service) {
