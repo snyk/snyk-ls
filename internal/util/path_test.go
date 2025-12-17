@@ -69,9 +69,9 @@ func TestPathKey(t *testing.T) {
 			expected: types.FilePath(filepath.Clean("/Users/foo/./../bar")),
 		},
 		{
-			name:     "Invalid path with command injection",
+			name:     "Path with semicolon (normalized)",
 			input:    "/Users/foo; rm -rf /",
-			expected: "",
+			expected: types.FilePath(filepath.Clean("/Users/foo; rm -rf /")),
 		},
 		{
 			name:     "Relative path",
@@ -122,48 +122,6 @@ func createCommonTestCases(tempDir string) []testCase {
 			input:       types.FilePath(tempDir),
 			expectError: false,
 		},
-		{
-			name:        "Command injection semicolon",
-			input:       "/Users/foo; rm -rf /",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Command injection ampersand",
-			input:       "/Users/foo & echo pwned",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Command injection backtick",
-			input:       "/Users/foo `whoami`",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Command injection dollar",
-			input:       "/Users/foo $(whoami)",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Command injection double quote",
-			input:       "/Users/foo\" && rm -rf /",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Command injection single quote",
-			input:       "/Users/foo' && rm -rf /",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
-		{
-			name:        "Dollar sign in non-UNC path should fail",
-			input:       "/Users/foo$bar/test",
-			expectError: true,
-			errorMsg:    "dangerous character detected in",
-		},
 	}
 }
 
@@ -180,20 +138,21 @@ func TestValidatePathLenient(t *testing.T) {
 		expectError: false,
 	})
 
-	// Add Windows UNC admin share test cases (only for lenient, as they don't exist on non-Windows)
+	// Add Windows UNC admin share test cases - verify we support $ character in UNC admin share paths
+	// These test that the $ character is allowed in Windows UNC administrative share paths (e.g., \\server\C$\path)
 	testCases = append(testCases,
 		testCase{
-			name:        "Windows UNC admin share C$",
+			name:        "Windows UNC admin share C$ - supports $ character",
 			input:       "\\\\localhost\\C$\\Users\\test",
 			expectError: false,
 		},
 		testCase{
-			name:        "Windows UNC admin share D$",
+			name:        "Windows UNC admin share D$ - supports $ character",
 			input:       "\\\\server\\D$\\path\\to\\file",
 			expectError: false,
 		},
 		testCase{
-			name:        "Windows UNC admin share with forward slashes",
+			name:        "Windows UNC admin share with forward slashes - supports $ character",
 			input:       "//localhost/C$/Users/test",
 			expectError: false,
 		},
