@@ -49,6 +49,7 @@ const (
 	configAdditionalParameters             = "additionalParameters"
 	configAuthenticationMethod             = "authenticationMethod"
 	configBaseBranch                       = "baseBranch"
+	configBaseUrl                          = "baseUrl"
 	configEnableDeltaFindings              = "enableDeltaFindings"
 	configEnableSnykLearnCodeActions       = "enableSnykLearnCodeActions"
 	configEnableSnykOSSQuickFixCodeActions = "enableSnykOSSQuickFixCodeActions"
@@ -62,6 +63,7 @@ const (
 	configOrganization                     = "organization"
 	configPreferredOrg                     = "preferredOrg"
 	configReferenceFolderPath              = "referenceFolderPath"
+	configScanCommandConfig                = "scanCommandConfig"
 	configSendErrorReports                 = "sendErrorReports"
 	configSnykCodeApi                      = "snykCodeApi"
 )
@@ -178,6 +180,7 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateProductEnablement(c, settings, triggerSource)
 	updateCliConfig(c, settings)
 	updateApiEndpoints(c, settings, triggerSource) // Must be called before token is set, as it may trigger a logout which clears the token.
+	updateBaseUrl(c, settings, triggerSource)
 	updateToken(settings.Token)                    // Must be called before the Authentication method is set, as the latter checks the token.
 	updateAuthenticationMethod(c, settings, triggerSource)
 	updateEnvironment(c, settings)
@@ -374,7 +377,11 @@ func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSou
 	}
 
 	// ScanCommandConfig change
-	// Dont send analytics for newStoredConfig.ScanCommandConfig until we need it.
+	if !reflect.DeepEqual(oldStoredConfig.ScanCommandConfig, newStoredConfig.ScanCommandConfig) {
+		oldConfigJSON, _ := json.Marshal(oldStoredConfig.ScanCommandConfig)
+		newConfigJSON, _ := json.Marshal(newStoredConfig.ScanCommandConfig)
+		go analytics.SendConfigChangedAnalyticsEvent(c, configScanCommandConfig, string(oldConfigJSON), string(newConfigJSON), path, triggerSource)
+	}
 
 	// PreferredOrg change
 	if oldStoredConfig.PreferredOrg != newStoredConfig.PreferredOrg && newStoredConfig.PreferredOrg != "" {
@@ -578,6 +585,20 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource
 		if oldEndpoint != snykApiUrl && c.IsLSPInitialized() {
 			analytics.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
 		}
+	}
+}
+
+func updateBaseUrl(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
+	newBaseUrl := strings.TrimSpace(settings.BaseUrl)
+	if newBaseUrl == "" {
+		return
+	}
+
+	oldBaseUrl := c.BaseUrl()
+	c.SetBaseUrl(newBaseUrl)
+
+	if oldBaseUrl != newBaseUrl && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configBaseUrl, oldBaseUrl, newBaseUrl, triggerSource)
 	}
 }
 
