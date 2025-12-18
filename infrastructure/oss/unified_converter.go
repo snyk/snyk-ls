@@ -49,20 +49,20 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 		return nil, fmt.Errorf("couldn't create issues from test result: %w", err)
 	}
 
-	workDir, filePath, affectedFilePath, err := getAffectedFilePath(ctx, testResult)
+	workDir, affectedFilePath, err := getAffectedFilePath(ctx, testResult)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get affected file path: %w", err)
 	}
 
 	issues := []types.Issue{}
 	for _, trIssue := range issuesFromTestResult {
-		issue := processIssue(ctx, trIssue, logger, affectedFilePath, filePath, workDir)
+		issue := processIssue(ctx, trIssue, logger, affectedFilePath, workDir)
 		issues = append(issues, issue)
 	}
 	return issues, nil
 }
 
-func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Logger, affectedFilePath types.FilePath, filePath types.FilePath, workDir types.FilePath) *snyk.Issue {
+func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Logger, affectedFilePath types.FilePath, workDir types.FilePath) *snyk.Issue {
 	ecosystemStr, err := ecosystem(trIssue, logger)
 	if err != nil {
 		logger.Warn().Err(err).Send()
@@ -91,7 +91,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 
 	dependencyPath := extractDependencyPath(introducingFinding)
 	fileContent := getFileContent(affectedFilePath, true, logger)
-	dependencyNode := getDependencyNode(&logger, filePath, ecosystemStr, dependencyPath, fileContent)
+	dependencyNode := getDependencyNode(&logger, affectedFilePath, ecosystemStr, dependencyPath, fileContent)
 	myRange := getRangeFromNode(dependencyNode)
 
 	title := trIssue.GetTitle()
@@ -212,10 +212,9 @@ func ecosystem(trIssue testapi.Issue, logger zerolog.Logger) (string, error) {
 // getAffectedFilePath returns the affected file path for a test result
 // return values:
 // - workDir: the workspace directory
-// - filePath: the file path of the test result
-// - affectedFilePath: the affected file path
+// - affectedFilePath: the affected file path (the absolute path to the manifest file)
 // - error: the error if any
-func getAffectedFilePath(ctx context.Context, testResult testapi.TestResult) (types.FilePath, types.FilePath, types.FilePath, error) {
+func getAffectedFilePath(ctx context.Context, testResult testapi.TestResult) (types.FilePath, types.FilePath, error) {
 	logger := ctx2.LoggerFromContext(ctx).With().
 		Str("method", "getAffectedFilePath").
 		Str("testID", testResult.GetTestID().String()).Logger()
@@ -224,7 +223,7 @@ func getAffectedFilePath(ctx context.Context, testResult testapi.TestResult) (ty
 	if err != nil {
 		msg := "failed to fetch test subject"
 		logger.Error().Err(err).Msg(msg)
-		return "", "", "", fmt.Errorf(msg+": %w", err)
+		return "", "", fmt.Errorf(msg+": %w", err)
 	}
 
 	workDir := ctx2.WorkDirFromContext(ctx)
@@ -233,7 +232,7 @@ func getAffectedFilePath(ctx context.Context, testResult testapi.TestResult) (ty
 	logger.Debug().Str("displayTargetFile", displayTargetFile).Msg("displayTargetFile")
 
 	affectedFilePath := getAbsTargetFilePath(&logger, string(workDir), displayTargetFile, workDir, filePath)
-	return workDir, filePath, affectedFilePath, nil
+	return workDir, affectedFilePath, nil
 }
 
 // FIXME needs to look at all evidences
