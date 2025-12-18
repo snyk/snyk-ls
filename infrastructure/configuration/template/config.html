@@ -119,7 +119,7 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="riskScoreThreshold">Filter by Risk Score <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="riskScoreThreshold"></span> <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Minimum risk score to display issues. Valid range: 0 to 1000 (0 = show all issues)">?</span></label>
-                                <input type="number" id="riskScoreThreshold" name="riskScoreThreshold" min="0" max="1000" value="{{if .Settings.RiskScoreThreshold}}{{.Settings.RiskScoreThreshold}}{{end}}" placeholder="0">
+                                <input type="number" id="riskScoreThreshold" name="riskScoreThreshold" min="0" max="1000" value="{{if ne .Settings.RiskScoreThreshold nil}}{{.Settings.RiskScoreThreshold}}{{end}}" placeholder="0">
                                 <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
                             </div>
                         </div>
