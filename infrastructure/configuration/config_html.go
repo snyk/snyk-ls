@@ -53,6 +53,18 @@ var configDirtyTrackingModuleTemplate string
 //go:embed template/js/init.js
 var configInitTemplate string
 
+//go:embed template/js/ie11CustomProperties.js
+var configIE11PolyfillTemplate string
+
+//go:embed template/vendor/bootstrap.min.css
+var bootstrapCssTemplate string
+
+//go:embed template/vendor/jquery.slim.min.js
+var jqueryJsTemplate string
+
+//go:embed template/vendor/bootstrap.bundle.min.js
+var bootstrapJsTemplate string
+
 type ConfigHtmlRenderer struct {
 	c        *config.Config
 	template *template.Template
@@ -61,47 +73,14 @@ type ConfigHtmlRenderer struct {
 func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
-		"list": func(items ...interface{}) []interface{} {
-			return items
-		},
-		"dict": func(values ...interface{}) map[string]interface{} {
-			if len(values)%2 != 0 {
-				return nil
-			}
-			dict := make(map[string]interface{}, len(values)/2)
-			for i := 0; i < len(values); i += 2 {
-				key, ok := values[i].(string)
-				if !ok {
-					return nil
-				}
-				dict[key] = values[i+1]
-			}
-			return dict
-		},
-		// toLower converts a string to lowercase
-		"toLower": func(s string) string {
-			return strings.ToLower(s)
-		},
-		// getScanConfig retrieves scan configuration for a specific product from a map
+		"toLower": strings.ToLower,
+		// getScanConfig retrieves scan command config for a product from the map
 		"getScanConfig": func(scanConfigMap map[product.Product]types.ScanCommandConfig, productName string) *types.ScanCommandConfig {
-			if scanConfigMap == nil {
+			config, exists := scanConfigMap[product.Product(productName)]
+			if !exists {
 				return nil
 			}
-			var prod product.Product
-			switch productName {
-			case "oss", "Snyk Open Source":
-				prod = product.ProductOpenSource
-			case "code", "Snyk Code":
-				prod = product.ProductCode
-			case "iac", "Snyk IaC":
-				prod = product.ProductInfrastructureAsCode
-			default:
-				return nil
-			}
-			if config, ok := scanConfigMap[prod]; ok {
-				return &config
-			}
-			return nil
+			return &config
 		},
 	}
 
@@ -142,7 +121,11 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 
 	data := map[string]interface{}{
 		"Settings":            filteredSettings,
+		"BootstrapCSS":        template.CSS(bootstrapCssTemplate),
 		"Styles":              template.CSS(configStylesTemplate),
+		"JQuery":              template.JS(jqueryJsTemplate),
+		"BootstrapJS":         template.JS(bootstrapJsTemplate),
+		"IE11Polyfill":        template.JS(configIE11PolyfillTemplate),
 		"Utils":               template.JS(configUtilsTemplate),
 		"DirtyTracker":        template.JS(configDirtyTrackerTemplate),
 		"Helpers":             template.JS(configHelpersTemplate),

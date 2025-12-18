@@ -64,33 +64,5 @@
 		}
 	};
 
-	// Handle file picker for CLI Path
-	folderManagement.handleCliPathBrowse = function() {
-		var filePicker = helpers.get("cliPathPicker");
-		var cliPathInput = helpers.get("cliPath");
-
-		if (!filePicker || !cliPathInput) {
-			return;
-		}
-
-		// Trigger file picker
-		filePicker.click();
-
-		// When file is selected, update the CLI Path input
-		helpers.addEvent(filePicker, "change", function () {
-			if (filePicker.files && filePicker.files.length > 0) {
-				cliPathInput.value = filePicker.files[0].path || filePicker.value;
-				// Trigger auto-save if enabled
-				if (window.__IS_IDE_AUTOSAVE_ENABLED__ && window.ConfigApp.autoSave) {
-					window.ConfigApp.autoSave.debouncedSave();
-				}
-				// Trigger dirty check
-				if (window.ConfigApp.dirtyTracking && window.ConfigApp.dirtyTracking.debouncedDirtyCheck) {
-					window.ConfigApp.dirtyTracking.debouncedDirtyCheck();
-				}
-			}
-		});
-	};
-
 	window.ConfigApp.folderManagement = folderManagement;
 })();

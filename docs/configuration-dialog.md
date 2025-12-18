@@ -185,20 +185,20 @@ interface ConfigurationData {
   folder_0_riskScoreThreshold?: number;
   
   // Scan command configuration per product per folder
-  folder_0_scanConfig_oss_preScanCommand?: string;
-  folder_0_scanConfig_oss_preScanOnlyReferenceFolder?: boolean;
-  folder_0_scanConfig_oss_postScanCommand?: string;
-  folder_0_scanConfig_oss_postScanOnlyReferenceFolder?: boolean;
-  
-  folder_0_scanConfig_code_preScanCommand?: string;
-  folder_0_scanConfig_code_preScanOnlyReferenceFolder?: boolean;
-  folder_0_scanConfig_code_postScanCommand?: string;
-  folder_0_scanConfig_code_postScanOnlyReferenceFolder?: boolean;
-  
-  folder_0_scanConfig_iac_preScanCommand?: string;
-  folder_0_scanConfig_iac_preScanOnlyReferenceFolder?: boolean;
-  folder_0_scanConfig_iac_postScanCommand?: string;
-  folder_0_scanConfig_iac_postScanOnlyReferenceFolder?: boolean;
+  folder_0_scanConfig_Snyk_Open_Source_preScanCommand?: string;
+  folder_0_scanConfig_Snyk_Open_Source_preScanOnlyReferenceFolder?: boolean;
+  folder_0_scanConfig_Snyk_Open_Source_postScanCommand?: string;
+  folder_0_scanConfig_Snyk_Open_Source_postScanOnlyReferenceFolder?: boolean;
+
+  folder_0_scanConfig_Snyk_Code_preScanCommand?: string;
+  folder_0_scanConfig_Snyk_Code_preScanOnlyReferenceFolder?: boolean;
+  folder_0_scanConfig_Snyk_Code_postScanCommand?: string;
+  folder_0_scanConfig_Snyk_Code_postScanOnlyReferenceFolder?: boolean;
+
+  folder_0_scanConfig_Snyk_IaC_preScanCommand?: string;
+  folder_0_scanConfig_Snyk_IaC_preScanOnlyReferenceFolder?: boolean;
+  folder_0_scanConfig_Snyk_IaC_postScanCommand?: string;
+  folder_0_scanConfig_Snyk_IaC_postScanOnlyReferenceFolder?: boolean;
   
   // ... additional folders follow the same pattern with folder_1_, folder_2_, etc.
 }
