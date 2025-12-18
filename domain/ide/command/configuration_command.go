@@ -139,7 +139,6 @@ func populateAdvancedSettings(s *types.Settings, c *config.Config) {
 	s.RuntimeName = c.RuntimeName()
 	s.RuntimeVersion = c.RuntimeVersion()
 	s.RequiredProtocolVersion = c.ClientProtocolVersion()
-	s.AdditionalEnv = "" // Not currently stored in config
 }
 
 // populatePointerFields sets pointer-based configuration fields
@@ -173,6 +172,7 @@ func populateFolderConfigs(s *types.Settings, c *config.Config) {
 			fc.BaseBranch = storedFc.BaseBranch
 			fc.LocalBranches = storedFc.LocalBranches
 			fc.AdditionalParameters = storedFc.AdditionalParameters
+			fc.AdditionalEnv = storedFc.AdditionalEnv
 			fc.ReferenceFolderPath = storedFc.ReferenceFolderPath
 			fc.PreferredOrg = storedFc.PreferredOrg
 			fc.AutoDeterminedOrg = storedFc.AutoDeterminedOrg

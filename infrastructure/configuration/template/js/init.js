@@ -42,12 +42,6 @@
 		// Initialize folder organization field toggles
 		window.ConfigApp.folderManagement.initializeFolderOrgFields();
 
-		// Add event listener for Browse button
-		var browseBtn = helpers.get("browse-cli-btn");
-		if (browseBtn) {
-			helpers.addEvent(browseBtn, "click", window.ConfigApp.folderManagement.handleCliPathBrowse);
-		}
-
 		// Add event listener for Add Trusted Folder button
 		var addTrustedFolderBtn = helpers.get("addTrustedFolderBtn");
 		if (addTrustedFolderBtn) {
@@ -66,14 +60,14 @@
 		// Attach dirty tracking listeners to all form inputs
 		window.ConfigApp.dirtyTracking.attachDirtyTrackingListeners();
 
-		// Initialize Bootstrap tooltips
-		if (typeof bootstrap !== "undefined" && bootstrap.Tooltip) {
-			var tooltipTriggerList = document.querySelectorAll(
-				'[data-bs-toggle="tooltip"]',
-			);
-			for (var i = 0; i < tooltipTriggerList.length; i++) {
-				new bootstrap.Tooltip(tooltipTriggerList[i]);
-			}
+		// Initialize Bootstrap 4 tooltips
+		if (typeof $ !== "undefined" && $.fn && $.fn.tooltip) {
+			// All elements with data-toggle="tooltip" (spans inside labels, checkboxes, and buttons)
+			$('[data-toggle="tooltip"]').tooltip({
+				placement: 'top',
+				boundary: 'window',
+				trigger: 'hover'
+			});
 		}
 	});
 })();
