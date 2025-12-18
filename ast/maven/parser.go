@@ -166,12 +166,10 @@ func (p *Parser) addNewNodeTo(parent *ast.Node, offsetBefore int64, offsetAfter 
 	valueEndOffset := endTagOffset
 	if startTagOffset != -1 && endTagOffset != -1 && endTagOffset >= valueStartOffset {
 		value := content[valueStartOffset:valueEndOffset]
-		trimmedLeft := strings.TrimLeft(value, " \t\n")
-		leftTrim := len(value) - len(trimmedLeft)
-		trimmedBoth := strings.TrimRight(trimmedLeft, " \t\n")
-		rightTrim := len(trimmedLeft) - len(trimmedBoth)
-		valueStartOffset += leftTrim
-		valueEndOffset -= rightTrim
+		trimmedValue := strings.Trim(value, " \t\n")
+		leadingWhitespace := len(value) - len(strings.TrimLeft(value, " \t\n"))
+		valueStartOffset += leadingWhitespace
+		valueEndOffset = valueStartOffset + len(trimmedValue)
 	}
 
 	contentToValueStart := content[0:valueStartOffset]
