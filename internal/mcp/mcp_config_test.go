@@ -64,7 +64,6 @@ func TestCallMcpConfigWorkflow_setsRemoveWhenAutoConfigureDisabled(t *testing.T)
 	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 	c.SetIdeName("test-ide")
-	c.SetTrustedFolders(nil)
 	c.SetAutoConfigureMcpEnabled(false)
 	c.SetSecureAtInceptionExecutionFrequency(SecureAtInceptionManual)
 
@@ -79,13 +78,90 @@ func TestCallMcpConfigWorkflow_setsRemoveWhenAutoConfigureDisabled(t *testing.T)
 			return nil, nil
 		}).Times(1)
 
-	CallMcpConfigWorkflow(c, notifier, true, false)
+	CallMcpConfigWorkflow(c, notifier, true, true)
 
 	select {
 	case cfg := <-called:
 		require.NotNil(t, cfg)
 		assert.True(t, cfg.GetBool(mcpTypes.RemoveParam))
+		assert.False(t, cfg.GetBool(mcpTypes.ConfigureMcpParam))
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for InvokeWithConfig")
+	}
+}
+
+func TestCallMcpConfigWorkflow_removeParamCombinations(t *testing.T) {
+	tests := []struct {
+		name           string
+		execFrequency  string
+		configureMcp   bool
+		configureRules bool
+		expectRemove   bool
+		expectCfgMcp   bool
+	}{
+		{
+			name:           "manual+configureRules=true sets remove and forces configureMcp=false",
+			execFrequency:  SecureAtInceptionManual,
+			configureMcp:   true,
+			configureRules: true,
+			expectRemove:   true,
+			expectCfgMcp:   false,
+		},
+		{
+			name:           "manual+configureRules=false does not set remove",
+			execFrequency:  SecureAtInceptionManual,
+			configureMcp:   true,
+			configureRules: false,
+			expectRemove:   false,
+			expectCfgMcp:   true,
+		},
+		{
+			name:           "non-manual+configureRules=true does not set remove",
+			execFrequency:  SecureAtInceptionSmartScan,
+			configureMcp:   false,
+			configureRules: true,
+			expectRemove:   false,
+			expectCfgMcp:   false,
+		},
+		{
+			name:           "non-manual+configureRules=false does not set remove",
+			execFrequency:  SecureAtInceptionOnCodeGeneration,
+			configureMcp:   false,
+			configureRules: false,
+			expectRemove:   false,
+			expectCfgMcp:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			mockEngine, _ := testutil.SetUpEngineMock(t, c)
+
+			c.SetIdeName("test-ide")
+			c.SetTrustedFolders(nil)
+			c.SetSecureAtInceptionExecutionFrequency(tt.execFrequency)
+			_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/one")
+
+			notifier := notification.NewMockNotifier()
+			called := make(chan configuration.Configuration, 1)
+
+			mockEngine.EXPECT().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, gomock.Any()).
+				DoAndReturn(func(_ workflow.Identifier, cfg configuration.Configuration) ([]workflow.Data, error) {
+					called <- cfg
+					return nil, nil
+				}).Times(1)
+
+			CallMcpConfigWorkflow(c, notifier, tt.configureMcp, tt.configureRules)
+
+			select {
+			case cfg := <-called:
+				require.NotNil(t, cfg)
+				assert.Equal(t, tt.expectRemove, cfg.GetBool(mcpTypes.RemoveParam))
+				assert.Equal(t, tt.expectCfgMcp, cfg.GetBool(mcpTypes.ConfigureMcpParam))
+			case <-time.After(2 * time.Second):
+				t.Fatal("timed out waiting for InvokeWithConfig")
+			}
+		})
 	}
 }
