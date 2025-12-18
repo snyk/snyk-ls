@@ -169,6 +169,7 @@ func populateFolderConfigs(s *types.Settings, c *config.Config) {
 			fc.BaseBranch = storedFc.BaseBranch
 			fc.LocalBranches = storedFc.LocalBranches
 			fc.AdditionalParameters = storedFc.AdditionalParameters
+			fc.AdditionalEnv = storedFc.AdditionalEnv
 			fc.ReferenceFolderPath = storedFc.ReferenceFolderPath
 			fc.PreferredOrg = storedFc.PreferredOrg
 			fc.AutoDeterminedOrg = storedFc.AutoDeterminedOrg

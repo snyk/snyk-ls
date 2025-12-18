@@ -290,22 +290,22 @@
                             </button>
                             <div class="collapse folder-content" id="folder-{{$index}}-oss">
                                 <div class="form-group">
-                                    <label for="folder_{{$index}}_scanConfig_oss_preScanCommand">Pre-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_oss_preScanCommand" name="folder_{{$index}}_scanConfig_oss_preScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "oss"}}{{.PreScanCommand}}{{end}}" placeholder="npm install">
+                                    <label for="folder_{{$index}}_scanConfig_Snyk_Open_Source_preScanCommand">Pre-Scan Command</label>
+                                    <input type="text" id="folder_{{$index}}_scanConfig_Snyk_Open_Source_preScanCommand" name="folder_{{$index}}_scanConfig_Snyk_Open_Source_preScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "oss"}}{{.PreScanCommand}}{{end}}" placeholder="npm install">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_oss_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "oss"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_Open_Source_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "oss"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Pre-Scan Only Reference Folder
                                     </label>
                                 </div>
                                 <div class="form-group">
-                                    <label for="folder_{{$index}}_scanConfig_oss_postScanCommand">Post-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_oss_postScanCommand" name="folder_{{$index}}_scanConfig_oss_postScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "oss"}}{{.PostScanCommand}}{{end}}" placeholder="cleanup.sh">
+                                    <label for="folder_{{$index}}_scanConfig_Snyk_Open_Source_postScanCommand">Post-Scan Command</label>
+                                    <input type="text" id="folder_{{$index}}_scanConfig_Snyk_Open_Source_postScanCommand" name="folder_{{$index}}_scanConfig_Snyk_Open_Source_postScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "oss"}}{{.PostScanCommand}}{{end}}" placeholder="cleanup.sh">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_oss_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "oss"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_Open_Source_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "oss"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Post-Scan Only Reference Folder
                                     </label>
                                 </div>
@@ -317,22 +317,22 @@
                             </button>
                             <div class="collapse folder-content" id="folder-{{$index}}-code">
                                 <div class="form-group">
-                                    <label for="folder_{{$index}}_scanConfig_code_preScanCommand">Pre-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_code_preScanCommand" name="folder_{{$index}}_scanConfig_code_preScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "code"}}{{.PreScanCommand}}{{end}}" placeholder="prepare.sh">
+                                    <label for="folder_{{$index}}_scanConfig_Snyk_Code_preScanCommand">Pre-Scan Command</label>
+                                    <input type="text" id="folder_{{$index}}_scanConfig_Snyk_Code_preScanCommand" name="folder_{{$index}}_scanConfig_Snyk_Code_preScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "code"}}{{.PreScanCommand}}{{end}}" placeholder="prepare.sh">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_code_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "code"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_Code_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "code"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Pre-Scan Only Reference Folder
                                     </label>
                                 </div>
                                 <div class="form-group">
-                                    <label for="folder_{{$index}}_scanConfig_code_postScanCommand">Post-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_code_postScanCommand" name="folder_{{$index}}_scanConfig_code_postScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "code"}}{{.PostScanCommand}}{{end}}" placeholder="cleanup.sh">
+                                    <label for="folder_{{$index}}_scanConfig_Snyk_Code_postScanCommand">Post-Scan Command</label>
+                                    <input type="text" id="folder_{{$index}}_scanConfig_Snyk_Code_postScanCommand" name="folder_{{$index}}_scanConfig_Snyk_Code_postScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "code"}}{{.PostScanCommand}}{{end}}" placeholder="cleanup.sh">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_code_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "code"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_Code_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "code"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Post-Scan Only Reference Folder
                                     </label>
                                 </div>
@@ -344,22 +344,22 @@
                             </button>
                             <div class="collapse folder-content" id="folder-{{$index}}-iac">
                                 <div class="form-group">
-                                    <label for="folder_{{$index}}_scanConfig_iac_preScanCommand">Pre-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_iac_preScanCommand" name="folder_{{$index}}_scanConfig_iac_preScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "iac"}}{{.PreScanCommand}}{{end}}" placeholder="terraform init">
+                                    <label for="folder_{{$index}}_scanConfig_Snyk_IaC_preScanCommand">Pre-Scan Command</label>
+                                    <input type="text" id="folder_{{$index}}_scanConfig_Snyk_IaC_preScanCommand" name="folder_{{$index}}_scanConfig_Snyk_IaC_preScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "iac"}}{{.PreScanCommand}}{{end}}" placeholder="terraform init">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_iac_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "iac"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_IaC_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "iac"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Pre-Scan Only Reference Folder
                                     </label>
                                 </div>
                                 <div class="form-group">
-                                    <label for="folder_{{$index}}_scanConfig_iac_postScanCommand">Post-Scan Command</label>
-                                    <input type="text" id="folder_{{$index}}_scanConfig_iac_postScanCommand" name="folder_{{$index}}_scanConfig_iac_postScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "iac"}}{{.PostScanCommand}}{{end}}" placeholder="cleanup.sh">
+                                    <label for="folder_{{$index}}_scanConfig_Snyk_IaC_postScanCommand">Post-Scan Command</label>
+                                    <input type="text" id="folder_{{$index}}_scanConfig_Snyk_IaC_postScanCommand" name="folder_{{$index}}_scanConfig_Snyk_IaC_postScanCommand" value="{{with getScanConfig $folder.ScanCommandConfig "iac"}}{{.PostScanCommand}}{{end}}" placeholder="cleanup.sh">
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_iac_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "iac"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_IaC_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "iac"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
                                         Post-Scan Only Reference Folder
                                     </label>
                                 </div>

@@ -543,7 +543,7 @@ type WorkspaceFoldersChangeEvent struct {
 // parameter PreScanOnlyReferenceFolder / PostScanOnlyReferenceFolder is set.
 // Else it will run for all scans.
 type ScanCommandConfig struct {
-	PreScanCommand              string `json:"command,omitempty"`
+	PreScanCommand              string `json:"preScanCommand,omitempty"`
 	PreScanOnlyReferenceFolder  bool   `json:"preScanOnlyReferenceFolder,omitempty"`
 	PostScanCommand             string `json:"postScanCommand,omitempty"`
 	PostScanOnlyReferenceFolder bool   `json:"postScanOnlyReferenceFolder,omitempty"`
