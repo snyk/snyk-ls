@@ -55,8 +55,7 @@ const (
 	CodeSubmitFixFeedback   = "snyk.code.submitFixFeedback"
 
 	// bridging commands
-	ExecuteCLICommand  = "snyk.executeCLI"
-	ExecuteMCPToolCall = "snyk.executeMCPToolCall"
+	ExecuteCLICommand = "snyk.executeCLI"
 )
 
 type OpenBrowserFunc func(url string)

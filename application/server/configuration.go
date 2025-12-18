@@ -29,8 +29,9 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/google/go-cmp/cmp"
 	"github.com/rs/zerolog"
-
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -43,29 +44,31 @@ import (
 
 // Constants for configName strings used in analytics
 const (
-	configActivateSnykCode                 = "activateSnykCode"
-	configActivateSnykIac                  = "activateSnykIac"
-	configActivateSnykOpenSource           = "activateSnykOpenSource"
-	configAdditionalParameters             = "additionalParameters"
-	configAuthenticationMethod             = "authenticationMethod"
-	configBaseBranch                       = "baseBranch"
-	configBaseUrl                          = "baseUrl"
-	configEnableDeltaFindings              = "enableDeltaFindings"
-	configEnableSnykLearnCodeActions       = "enableSnykLearnCodeActions"
-	configEnableSnykOSSQuickFixCodeActions = "enableSnykOSSQuickFixCodeActions"
-	configEnableTrustedFoldersFeature      = "enableTrustedFoldersFeature"
-	configEndpoint                         = "endpoint"
-	configFolderPath                       = "folderPath"
-	configLocalBranches                    = "localBranches"
-	configManageBinariesAutomatically      = "manageBinariesAutomatically"
-	configOrgMigratedFromGlobalConfig      = "orgMigratedFromGlobalConfig"
-	configOrgSetByUser                     = "orgSetByUser"
-	configOrganization                     = "organization"
-	configPreferredOrg                     = "preferredOrg"
-	configReferenceFolderPath              = "referenceFolderPath"
-	configScanCommandConfig                = "scanCommandConfig"
-	configSendErrorReports                 = "sendErrorReports"
-	configSnykCodeApi                      = "snykCodeApi"
+	configActivateSnykCode                    = "activateSnykCode"
+	configActivateSnykIac                     = "activateSnykIac"
+	configActivateSnykOpenSource              = "activateSnykOpenSource"
+	configAdditionalParameters                = "additionalParameters"
+	configAuthenticationMethod                = "authenticationMethod"
+	configBaseBranch                          = "baseBranch"
+	configBaseUrl                             = "baseUrl"
+	configEnableDeltaFindings                 = "enableDeltaFindings"
+	configEnableSnykLearnCodeActions          = "enableSnykLearnCodeActions"
+	configEnableSnykOSSQuickFixCodeActions    = "enableSnykOSSQuickFixCodeActions"
+	configEnableTrustedFoldersFeature         = "enableTrustedFoldersFeature"
+	configEndpoint                            = "endpoint"
+	configFolderPath                          = "folderPath"
+	configLocalBranches                       = "localBranches"
+	configManageBinariesAutomatically         = "manageBinariesAutomatically"
+	configOrgMigratedFromGlobalConfig         = "orgMigratedFromGlobalConfig"
+	configOrgSetByUser                        = "orgSetByUser"
+	configOrganization                        = "organization"
+	configPreferredOrg                        = "preferredOrg"
+	configReferenceFolderPath                 = "referenceFolderPath"
+	configScanCommandConfig                   = "scanCommandConfig"
+	configSendErrorReports                    = "sendErrorReports"
+	configSnykCodeApi                         = "snykCodeApi"
+	configAutoConfigureSnykMcpServer          = "autoConfigureSnykMcpServer"
+	configSecureAtInceptionExecutionFrequency = "secureAtInceptionExecutionFrequency"
 )
 
 func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
@@ -199,6 +202,7 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateFolderConfig(c, settings, c.Logger(), triggerSource)
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
+	updateMcpConfiguration(c, settings, triggerSource)
 }
 
 func updateFormat(c *config.Config, settings types.Settings) {
@@ -820,4 +824,39 @@ func sendDiagnosticsForNewSettings(c *config.Config) {
 		return
 	}
 	go ws.HandleConfigChange()
+}
+
+func updateMcpConfiguration(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
+	logger := c.Logger().With().Str("method", "updateMcpConfiguration").Logger()
+	n := di.Notifier()
+	// Update autoConfigureSnykMcpServer
+	if settings.AutoConfigureSnykMcpServer != "" {
+		parseBool, err := strconv.ParseBool(settings.AutoConfigureSnykMcpServer)
+		if err != nil {
+			logger.Debug().Msgf("couldn't parse autoConfigureSnykMcpServer %s", settings.AutoConfigureSnykMcpServer)
+		} else {
+			oldValue := c.IsAutoConfigureMcpEnabled()
+			c.SetAutoConfigureMcpEnabled(parseBool)
+
+			if oldValue != parseBool {
+				if c.IsLSPInitialized() {
+					go analytics.SendConfigChangedAnalytics(c, configAutoConfigureSnykMcpServer, oldValue, parseBool, triggerSource)
+				}
+				mcpWorkflow.CallMcpConfigWorkflow(c, n, true, false)
+			}
+		}
+	}
+
+	// Update secureAtInceptionExecutionFrequency
+	if settings.SecureAtInceptionExecutionFrequency != "" {
+		oldValue := c.GetSecureAtInceptionExecutionFrequency()
+		c.SetSecureAtInceptionExecutionFrequency(settings.SecureAtInceptionExecutionFrequency)
+
+		if oldValue != settings.SecureAtInceptionExecutionFrequency {
+			if c.IsLSPInitialized() {
+				go analytics.SendConfigChangedAnalytics(c, configSecureAtInceptionExecutionFrequency, oldValue, settings.SecureAtInceptionExecutionFrequency, triggerSource)
+			}
+			mcpWorkflow.CallMcpConfigWorkflow(c, n, false, true)
+		}
+	}
 }

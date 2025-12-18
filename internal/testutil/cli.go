@@ -18,10 +18,13 @@ package testutil
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
+	"github.com/subosito/gotenv"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -33,7 +36,7 @@ import (
 // CLIExecutor is a minimal interface for executing CLI commands in tests.
 // This allows the test helper to work with any executor implementation.
 type CLIExecutor interface {
-	Execute(ctx context.Context, cmd []string, workingDir types.FilePath) (resp []byte, err error)
+	Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error)
 }
 
 // ExecuteAndCaptureConfig executes a CLI command using the provided executor and captures
@@ -54,7 +57,15 @@ func ExecuteAndCaptureConfig(t *testing.T, c *config.Config, executor CLIExecuto
 	})
 	require.NoError(t, err)
 
-	_, err = executor.Execute(t.Context(), cmd, workingDir)
+	env := gotenv.Env{}
+	for _, kv := range os.Environ() {
+		k, v, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue
+		}
+		env[k] = v
+	}
+	_, err = executor.Execute(t.Context(), cmd, workingDir, env)
 	require.NoError(t, err)
 
 	return capturedOrg, capturedWorkingDir

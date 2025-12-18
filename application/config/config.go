@@ -159,57 +159,57 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 }
 
 type Config struct {
-	scrubbingWriter                  zerolog.LevelWriter
-	cliSettings                      *CliSettings
-	configFile                       string
-	format                           string
-	isErrorReportingEnabled          bool
-	isSnykCodeEnabled                bool
-	isSnykOssEnabled                 bool
-	isSnykIacEnabled                 bool
-	isSnykAdvisorEnabled             bool
-	manageBinariesAutomatically      bool
-	logPath                          string
-	logFile                          *os.File
-	snykCodeAnalysisTimeout          time.Duration
-	snykApiUrl                       string
-	baseUrl                          string
-	token                            string
-	deviceId                         string
-	clientCapabilities               types.ClientCapabilities
-	binarySearchPaths                []string
-	automaticAuthentication          bool
-	tokenChangeChannels              []chan string
-	prepareDefaultEnvChannel         chan bool
-	filterSeverity                   types.SeverityFilter
-	riskScoreThreshold               int
-	issueViewOptions                 types.IssueViewOptions
-	trustedFolders                   []types.FilePath
-	trustedFoldersFeatureEnabled     bool
-	activateSnykCodeSecurity         bool
-	osPlatform                       string
-	osArch                           string
-	runtimeName                      string
-	runtimeVersion                   string
-	automaticScanning                bool
-	authenticationMethod             types.AuthenticationMethod
-	engine                           workflow.Engine
-	enableSnykLearnCodeActions       bool
-	enableSnykOSSQuickFixCodeActions bool
-	enableDeltaFindings              bool
-	logger                           *zerolog.Logger
-	storage                          storage.StorageWithCallbacks
-	m                                sync.RWMutex
-	clientProtocolVersion            string
-	isOpenBrowserActionEnabled       bool
-	hoverVerbosity                   int
-	offline                          bool
-	ws                               types.Workspace
-	mcpServerEnabled                 bool
-	mcpBaseURL                       *url.URL
-	isLSPInitialized                 bool
-	cachedOriginalPath               string
-	userSettingsPath                 string
+	scrubbingWriter                     zerolog.LevelWriter
+	cliSettings                         *CliSettings
+	configFile                          string
+	format                              string
+	isErrorReportingEnabled             bool
+	isSnykCodeEnabled                   bool
+	isSnykOssEnabled                    bool
+	isSnykIacEnabled                    bool
+	isSnykAdvisorEnabled                bool
+	manageBinariesAutomatically         bool
+	logPath                             string
+	logFile                             *os.File
+	snykCodeAnalysisTimeout             time.Duration
+	snykApiUrl                          string
+	baseUrl                             string
+	token                               string
+	deviceId                            string
+	clientCapabilities                  types.ClientCapabilities
+	binarySearchPaths                   []string
+	automaticAuthentication             bool
+	tokenChangeChannels                 []chan string
+	prepareDefaultEnvChannel            chan bool
+	filterSeverity                      types.SeverityFilter
+	riskScoreThreshold                  int
+	issueViewOptions                    types.IssueViewOptions
+	trustedFolders                      []types.FilePath
+	trustedFoldersFeatureEnabled        bool
+	activateSnykCodeSecurity            bool
+	osPlatform                          string
+	osArch                              string
+	runtimeName                         string
+	runtimeVersion                      string
+	automaticScanning                   bool
+	authenticationMethod                types.AuthenticationMethod
+	engine                              workflow.Engine
+	enableSnykLearnCodeActions          bool
+	enableSnykOSSQuickFixCodeActions    bool
+	enableDeltaFindings                 bool
+	logger                              *zerolog.Logger
+	storage                             storage.StorageWithCallbacks
+	m                                   sync.RWMutex
+	clientProtocolVersion               string
+	isOpenBrowserActionEnabled          bool
+	hoverVerbosity                      int
+	offline                             bool
+	ws                                  types.Workspace
+	isLSPInitialized                    bool
+	cachedOriginalPath                  string
+	userSettingsPath                    string
+	autoConfigureMcpEnabled             bool
+	secureAtInceptionExecutionFrequency string
 }
 
 func CurrentConfig() *Config {
@@ -279,6 +279,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 		// Engine is provided externally, e.g. we were invoked from CLI.
 		c.engine = engine
 	}
+
 	gafConfig := c.engine.GetConfiguration()
 	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
 	gafConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
@@ -493,6 +494,7 @@ func (c *Config) SetBaseUrl(baseUrl string) {
 	defer c.m.Unlock()
 	c.baseUrl = baseUrl
 }
+
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string {
 	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_NAME)
@@ -1474,26 +1476,6 @@ func (c *Config) SetWorkspace(workspace types.Workspace) {
 	c.ws = workspace
 }
 
-func (c *Config) McpServerEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.mcpServerEnabled
-}
-
-func (c *Config) SetMCPServerURL(baseURL *url.URL) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.mcpBaseURL = baseURL
-}
-
-func (c *Config) GetMCPServerURL() *url.URL {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.mcpBaseURL
-}
-
 func (c *Config) IsLSPInitialized() bool {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -1508,4 +1490,28 @@ func (c *Config) SetLSPInitialized(initialized bool) {
 
 func (c *Config) EmptyToken() bool {
 	return !c.NonEmptyToken()
+}
+
+func (c *Config) IsAutoConfigureMcpEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.autoConfigureMcpEnabled
+}
+
+func (c *Config) SetAutoConfigureMcpEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.autoConfigureMcpEnabled = enabled
+}
+
+func (c *Config) GetSecureAtInceptionExecutionFrequency() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.secureAtInceptionExecutionFrequency
+}
+
+func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.secureAtInceptionExecutionFrequency = frequency
 }

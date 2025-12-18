@@ -217,7 +217,7 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 	defer iac.mutex.Unlock()
 
 	cmd := iac.cliCmd(documentURI)
-	res, err := iac.cli.Execute(ctx, cmd, workspacePath)
+	res, err := iac.cli.Execute(ctx, cmd, workspacePath, nil)
 
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
