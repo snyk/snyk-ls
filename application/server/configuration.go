@@ -181,7 +181,7 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateCliConfig(c, settings)
 	updateApiEndpoints(c, settings, triggerSource) // Must be called before token is set, as it may trigger a logout which clears the token.
 	updateBaseUrl(c, settings, triggerSource)
-	updateToken(settings.Token)                    // Must be called before the Authentication method is set, as the latter checks the token.
+	updateToken(settings.Token) // Must be called before the Authentication method is set, as the latter checks the token.
 	updateAuthenticationMethod(c, settings, triggerSource)
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings)

@@ -55,12 +55,6 @@
                             <option value="manual" {{if eq .Settings.ScanningMode "manual"}}selected{{end}}>Manual</option>
                         </select>
                     </div>
-
-                    <div class="form-group">
-                        <label for="additionalEnv"><span data-toggle="tooltip" title="Additional environment variables for Snyk CLI (format: KEY1=value1;KEY2=value2)">Additional Environment</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="additionalEnv"></span></label>
-                        <input type="text" id="additionalEnv" name="additionalEnv" value="{{.Settings.AdditionalEnv}}" placeholder="KEY1=value1;KEY2=value2">
-                        <span id="additionalEnv-error" class="error-message hidden">Invalid format. Expected: KEY1=value1;KEY2=value2</span>
-                    </div>
                 </div>
             </div>
 
@@ -276,6 +270,11 @@
                 <div class="form-group">
                     <label for="folder_{{$index}}_additionalParameters"><span data-toggle="tooltip" title="Parameters to pass to Snyk CLI for this folder's scans. Space-separated arguments (e.g., --severity-threshold=high --debug)">Additional CLI Parameters</span></label>
                     <input type="text" id="folder_{{$index}}_additionalParameters" name="folder_{{$index}}_additionalParameters" value="{{range $p := $folder.AdditionalParameters}}{{$p}} {{end}}" placeholder="--severity-threshold=high">
+                </div>
+
+                <div class="form-group">
+                    <label for="folder_{{$index}}_additionalEnv"><span data-toggle="tooltip" title="Environment variables for this folder. Format: VAR1=value1;VAR2=value2">Additional Environment Variables</span></label>
+                    <input type="text" id="folder_{{$index}}_additionalEnv" name="folder_{{$index}}_additionalEnv" value="{{$folder.AdditionalEnv}}" placeholder="VAR1=value1;VAR2=value2">
                 </div>
 
                 <div class="form-group">

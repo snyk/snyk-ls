@@ -139,7 +139,6 @@ func populateAdvancedSettings(s *types.Settings, c *config.Config) {
 	s.RuntimeName = c.RuntimeName()
 	s.RuntimeVersion = c.RuntimeVersion()
 	s.RequiredProtocolVersion = c.ClientProtocolVersion()
-	s.AdditionalEnv = "" // Not currently stored in config
 }
 
 // populatePointerFields sets pointer-based configuration fields
