@@ -196,7 +196,7 @@
 
 		for (var i = 0; i < folderAdditionalEnvInputs.length; i++) {
 			(function(input) {
-				var folderIndex = input.id.match(/folder_(\d+)_additionalEnv/)[1];
+                var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
 				helpers.addEvent(input, "input", function() {
 					validation.validateFolderAdditionalEnvOnInput(folderIndex);
 				});
