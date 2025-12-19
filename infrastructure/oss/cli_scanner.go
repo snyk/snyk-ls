@@ -62,8 +62,14 @@ var (
 		"poetry.lock":       "pyproject.toml",
 	}
 
+	// see https://github.com/snyk/cli/blob/765e53a67ea1cbad79c2ee8c436e5e5816003744/src/cli/main.ts#L388-L397
 	allProjectsParamBlacklist = map[string]bool{
-		"--file": true,
+		"--file":             true,
+		"--package-manager":  true,
+		"--project-name":     true,
+		"--yarn-workspaces":  true,
+		"--docker":           true,
+		"--all-sub-projects": true,
 	}
 
 	// Make sure CLIScanner implements the desired interfaces
