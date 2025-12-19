@@ -269,6 +269,26 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		// Restore the original config to avoid affecting other tests
 		cliScanner.config = originalConfig
 	})
+
+	// Test case 3: Command with a parameter that disables --all-projects (but is not itself filtered)
+	t.Run("does not append --all-projects when --all-sub-projects is present", func(t *testing.T) {
+		configWithConflicts := testutil.UnitTest(t)
+		clisettings := configWithConflicts.CliSettings()
+		clisettings.AdditionalOssParameters = []string{"--all-sub-projects"}
+
+		originalConfig := cliScanner.config
+		cliScanner.config = configWithConflicts
+		defer func() { cliScanner.config = originalConfig }()
+
+		initialArgs := []string{}
+		parameterBlacklist := map[string]bool{}
+		path := types.FilePath("/path/to/project")
+
+		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+
+		assert.NotContains(t, result, "--all-projects", "--all-projects should not be present when --all-sub-projects is present")
+		assert.Contains(t, result, "--all-sub-projects", "--all-sub-projects should be present")
+	})
 }
 
 func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
