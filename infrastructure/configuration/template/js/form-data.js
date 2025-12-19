@@ -1,13 +1,13 @@
 // ABOUTME: Form data collection and serialization functions
 // ABOUTME: Handles gathering all form inputs and converting them to JSON format
 
-(function() {
+(function () {
 	window.ConfigApp = window.ConfigApp || {};
 	var formData = {};
 	var helpers = window.ConfigApp.helpers;
 
 	// Collect form data
-	formData.collectData = function() {
+	formData.collectData = function () {
 		var data = {
 			folderConfigs: [],
 		};
@@ -74,7 +74,7 @@
 						// product = "snyk open source"
 						// field = "preScanCommand"
 						var productParts = parts.slice(3, -1); // ["Snyk", "Open", "Source"]
-						var product = productParts.join(" ").toLowerCase(); // "snyk open source"
+						var product = productParts.join(" ");
 						var field = parts[parts.length - 1]; // "preScanCommand"
 
 						if (!data.folderConfigs[index].scanCommandConfig) {

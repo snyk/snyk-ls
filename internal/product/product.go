@@ -24,9 +24,9 @@ type ProductAttributes map[string]any
 type FilterableIssueType string
 
 const (
-	ProductOpenSource           Product = "snyk open source"
-	ProductCode                 Product = "snyk code"
-	ProductInfrastructureAsCode Product = "snyk iac"
+	ProductOpenSource           Product = "Snyk Open Source"
+	ProductCode                 Product = "Snyk Code"
+	ProductInfrastructureAsCode Product = "Snyk IaC"
 	ProductUnknown              Product = ""
 )
 
