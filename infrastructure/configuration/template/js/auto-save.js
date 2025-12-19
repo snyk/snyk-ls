@@ -52,42 +52,18 @@
 	// Get current form data, validate, and call __saveIdeConfig__
 	autoSave.getAndSaveIdeConfig = function() {
 		var endpointInput = helpers.get("endpoint");
-		var endpointError = helpers.get("endpoint-error");
-		var currentEndpoint = endpointInput.value;
+		var currentEndpoint = endpointInput ? endpointInput.value : "";
 
-		// Validate endpoint
-		if (currentEndpoint && !window.ConfigApp.validation.validateEndpoint(currentEndpoint)) {
-			helpers.removeClass(endpointError, "hidden");
-			notifySaveAttemptFinished(SAVE_STATUS.ENDPOINT_INVALID);
+		// Validate all fields
+		var validationResult = window.ConfigApp.validation.validateAllBeforeSave();
+		if (!validationResult.valid) {
+			var statusMap = {
+				"endpoint": SAVE_STATUS.ENDPOINT_INVALID,
+				"risk_score": SAVE_STATUS.RISK_SCORE_INVALID,
+				"additional_env": SAVE_STATUS.ADDITIONAL_ENV_INVALID
+			};
+			notifySaveAttemptFinished(statusMap[validationResult.failedField] || SAVE_STATUS.ERROR);
 			return;
-		} else {
-			helpers.addClass(endpointError, "hidden");
-		}
-
-		// Validate risk score
-		var riskScoreInput = helpers.get("riskScoreThreshold");
-		var riskScoreError = helpers.get("riskScore-error");
-		if (riskScoreInput && riskScoreError) {
-			if (!window.ConfigApp.validation.validateRiskScore(riskScoreInput.value)) {
-				helpers.removeClass(riskScoreError, "hidden");
-				notifySaveAttemptFinished(SAVE_STATUS.RISK_SCORE_INVALID);
-				return;
-			} else {
-				helpers.addClass(riskScoreError, "hidden");
-			}
-		}
-
-		// Validate additional env
-		var additionalEnvInput = helpers.get("additionalEnv");
-		var additionalEnvError = helpers.get("additionalEnv-error");
-		if (additionalEnvInput && additionalEnvError) {
-			if (!window.ConfigApp.validation.validateAdditionalEnv(additionalEnvInput.value)) {
-				helpers.removeClass(additionalEnvError, "hidden");
-				notifySaveAttemptFinished(SAVE_STATUS.ADDITIONAL_ENV_INVALID);
-				return;
-			} else {
-				helpers.addClass(additionalEnvError, "hidden");
-			}
 		}
 
 		var data = window.ConfigApp.formData.collectData();

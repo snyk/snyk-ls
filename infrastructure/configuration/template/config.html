@@ -231,7 +231,9 @@
                                 </div>
                                 {{end}}
                             </div>
-                            <button type="button" id="addTrustedFolderBtn" class="btn btn-primary mt-2">Add Folder</button>
+                            <div class="button-container-right">
+                                <button type="button" id="addTrustedFolderBtn">Add Folder</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -246,7 +248,7 @@
                     {{if .Settings.FolderConfigs}}
                     {{range $index, $folder := .Settings.FolderConfigs}}
             <div class="folder-config">
-                <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}" aria-expanded="false" aria-controls="folder-{{$index}}">
+                <button class="btn folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}" aria-expanded="false" aria-controls="folder-{{$index}}">
                     <span>{{$folder.FolderPath}}</span>
                     <span class="collapse-icon">▼</span>
                 </button>
@@ -275,6 +277,7 @@
                 <div class="form-group">
                     <label for="folder_{{$index}}_additionalEnv"><span data-toggle="tooltip" title="Environment variables for this folder. Format: VAR1=value1;VAR2=value2">Additional Environment Variables</span></label>
                     <input type="text" id="folder_{{$index}}_additionalEnv" name="folder_{{$index}}_additionalEnv" value="{{$folder.AdditionalEnv}}" placeholder="VAR1=value1;VAR2=value2">
+                    <div id="folder_{{$index}}_additionalEnv-error" class="error-message hidden">Invalid format. Use: VAR1=value1;VAR2=value2</div>
                 </div>
 
                 <div class="form-group">
@@ -282,9 +285,9 @@
                         <span data-toggle="tooltip" title="Configure commands to run before/after scans for each product. Commands run in the folder context.">Pre/Post Scan Commands</span>
                         <span class="collapse-icon">▼</span>
                     </button>
-                    <div class="collapse" id="folder-{{$index}}-prescan">
+                    <div class="collapse ml-1" id="folder-{{$index}}-prescan">
                         <div class="mt-2">
-                            <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-oss" aria-expanded="false" aria-controls="folder-{{$index}}-oss">
+                            <button class="btn folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-oss" aria-expanded="false" aria-controls="folder-{{$index}}-oss">
                                 <span>Snyk Open Source</span>
                                 <span class="collapse-icon">▶</span>
                             </button>
@@ -296,7 +299,7 @@
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_Open_Source_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "Snyk Open Source"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
-                                        Pre-Scan Only Reference Folder
+                                        Run only in reference folder
                                     </label>
                                 </div>
                                 <div class="form-group">
@@ -306,12 +309,12 @@
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_Open_Source_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "Snyk Open Source"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
-                                        Post-Scan Only Reference Folder
+                                        Run only in reference folder
                                     </label>
                                 </div>
                             </div>
 
-                            <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-code" aria-expanded="false" aria-controls="folder-{{$index}}-code">
+                            <button class="btn folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-code" aria-expanded="false" aria-controls="folder-{{$index}}-code">
                                 <span>Snyk Code</span>
                                 <span class="collapse-icon">▶</span>
                             </button>
@@ -323,7 +326,7 @@
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_Code_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "Snyk Code"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
-                                        Pre-Scan Only Reference Folder
+                                        Run only in reference folder
                                     </label>
                                 </div>
                                 <div class="form-group">
@@ -333,12 +336,12 @@
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_Code_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "Snyk Code"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
-                                        Post-Scan Only Reference Folder
+                                        Run only in reference folder
                                     </label>
                                 </div>
                             </div>
 
-                            <button class="btn btn-link folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-iac" aria-expanded="false" aria-controls="folder-{{$index}}-iac">
+                            <button class="btn folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-iac" aria-expanded="false" aria-controls="folder-{{$index}}-iac">
                                 <span>Snyk IaC</span>
                                 <span class="collapse-icon">▶</span>
                             </button>
@@ -350,7 +353,7 @@
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_IaC_preScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "Snyk IaC"}}{{if .PreScanOnlyReferenceFolder}}checked{{end}}{{end}}>
-                                        Pre-Scan Only Reference Folder
+                                        Run only in reference folder
                                     </label>
                                 </div>
                                 <div class="form-group">
@@ -360,7 +363,7 @@
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="folder_{{$index}}_scanConfig_Snyk_IaC_postScanOnlyReferenceFolder" {{with getScanConfig $folder.ScanCommandConfig "Snyk IaC"}}{{if .PostScanOnlyReferenceFolder}}checked{{end}}{{end}}>
-                                        Post-Scan Only Reference Folder
+                                        Run only in reference folder
                                     </label>
                                 </div>
                             </div>
