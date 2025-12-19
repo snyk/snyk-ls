@@ -133,7 +133,7 @@
 
 		for (var i = 0; i < inputs.length; i++) {
 			var input = inputs[i];
-			var folderIndex = input.id.match(/folder_(\d+)_additionalEnv/)[1];
+            var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
 			var errorId = "folder_" + folderIndex + "_additionalEnv-error";
 			var errorElement = helpers.get(errorId);
 
