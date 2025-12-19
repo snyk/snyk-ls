@@ -75,7 +75,7 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 		AdditionalData:   snyk.CodeIssueData{Key: "123"},
 		Range:            fakeRange,
 	}
-	expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=snyk+code&issueId=123&action=showInDetailPanel"
+	expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
 
 	t.Run("returns CommandData with correct URI and range", func(t *testing.T) {
 		commandDataFunc := issueEnhancer.autofixShowDetailsFunc(t.Context(), issue)

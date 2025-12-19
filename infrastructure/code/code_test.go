@@ -60,7 +60,7 @@ func setupTestData() (issue *snyk.Issue, expectedURI string, expectedTitle strin
 		Range:            fakeRange,
 	}
 
-	expectedURI = "snyk:///Users/user/workspace/blah/app.js?product=snyk+code&issueId=123&action=showInDetailPanel"
+	expectedURI = "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
 	expectedTitle = "⚡ Fix this issue: Test Issue (Snyk)"
 
 	return
