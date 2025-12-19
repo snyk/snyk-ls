@@ -103,11 +103,14 @@
 		return true;
 	};
 
-	// Validate additional env on input
-	validation.validateAdditionalEnvOnInput = function() {
+	// Validate per-folder additional env on input
+	validation.validateFolderAdditionalEnvOnInput = function(folderIndex) {
 		var helpers = window.ConfigApp.helpers;
-		var additionalEnvInput = helpers.get("additionalEnv");
-		var additionalEnvError = helpers.get("additionalEnv-error");
+		var fieldId = "folder_" + folderIndex + "_additionalEnv";
+		var errorId = "folder_" + folderIndex + "_additionalEnv-error";
+
+		var additionalEnvInput = helpers.get(fieldId);
+		var additionalEnvError = helpers.get(errorId);
 
 		if (!additionalEnvInput || !additionalEnvError) return;
 
@@ -118,6 +121,107 @@
 		} else {
 			helpers.addClass(additionalEnvError, "hidden");
 		}
+	};
+
+	// Validate all folder additional env fields
+	validation.validateAllFolderAdditionalEnv = function() {
+		var helpers = window.ConfigApp.helpers;
+		var allValid = true;
+
+		// Find all folder additional env inputs
+		var inputs = document.querySelectorAll('[id^="folder_"][id$="_additionalEnv"]');
+
+		for (var i = 0; i < inputs.length; i++) {
+			var input = inputs[i];
+            var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
+			var errorId = "folder_" + folderIndex + "_additionalEnv-error";
+			var errorElement = helpers.get(errorId);
+
+			if (!errorElement) continue;
+
+			if (!validation.validateAdditionalEnv(input.value)) {
+				helpers.removeClass(errorElement, "hidden");
+				allValid = false;
+			} else {
+				helpers.addClass(errorElement, "hidden");
+			}
+		}
+
+		return allValid;
+	};
+
+	// Validate all fields before save
+	// Returns: { valid: boolean, failedField: string|null }
+	// failedField can be: "endpoint", "risk_score", "additional_env", or null if all valid
+	validation.validateAllBeforeSave = function() {
+		var helpers = window.ConfigApp.helpers;
+
+		// Validate endpoint
+		var endpointInput = helpers.get("endpoint");
+		var endpointError = helpers.get("endpoint-error");
+		if (endpointInput && endpointError) {
+			var currentEndpoint = endpointInput.value;
+			if (currentEndpoint && !validation.validateEndpoint(currentEndpoint)) {
+				helpers.removeClass(endpointError, "hidden");
+				return { valid: false, failedField: "endpoint" };
+			} else {
+				helpers.addClass(endpointError, "hidden");
+			}
+		}
+
+		// Validate risk score
+		var riskScoreInput = helpers.get("riskScoreThreshold");
+		var riskScoreError = helpers.get("riskScore-error");
+		if (riskScoreInput && riskScoreError) {
+			if (!validation.validateRiskScore(riskScoreInput.value)) {
+				helpers.removeClass(riskScoreError, "hidden");
+				return { valid: false, failedField: "risk_score" };
+			} else {
+				helpers.addClass(riskScoreError, "hidden");
+			}
+		}
+
+		// Validate all folder additional env fields
+		if (!validation.validateAllFolderAdditionalEnv()) {
+			return { valid: false, failedField: "additional_env" };
+		}
+
+		return { valid: true, failedField: null };
+	};
+
+	// Initialize validation event listeners for all per-folder additional env fields
+	validation.initializeFolderAdditionalEnvValidation = function() {
+		var helpers = window.ConfigApp.helpers;
+		var folderAdditionalEnvInputs = document.querySelectorAll('[id^="folder_"][id$="_additionalEnv"]');
+
+		for (var i = 0; i < folderAdditionalEnvInputs.length; i++) {
+			(function(input) {
+                var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
+				helpers.addEvent(input, "input", function() {
+					validation.validateFolderAdditionalEnvOnInput(folderIndex);
+				});
+			})(folderAdditionalEnvInputs[i]);
+		}
+	};
+
+	// Initialize all validation event listeners
+	validation.initializeAllValidation = function() {
+		var helpers = window.ConfigApp.helpers;
+
+		// Endpoint validation
+		var endpointInput = helpers.get("endpoint");
+		if (endpointInput) {
+			helpers.addEvent(endpointInput, "input", validation.validateEndpointOnInput);
+		}
+
+		// Risk score validation
+		var riskScoreInput = helpers.get("riskScoreThreshold");
+		if (riskScoreInput) {
+			helpers.addEvent(riskScoreInput, "input", validation.validateRiskScoreOnInput);
+		}
+
+		// Per-folder additional env validation
+		validation.initializeFolderAdditionalEnvValidation();
 	};
 
 	window.ConfigApp.validation = validation;

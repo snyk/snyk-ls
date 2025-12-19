@@ -17,27 +17,14 @@
 			helpers.addEvent(logoutBtn, "click", window.ConfigApp.authentication.logout);
 		}
 
-		// Endpoint validation
+		// Store original endpoint for auto-save change detection
 		var endpointInput = helpers.get("endpoint");
 		if (endpointInput) {
 			window.ConfigApp.autoSave.setOriginalEndpoint(endpointInput.value);
-			// Add input event listener for real-time validation
-			helpers.addEvent(endpointInput, "input", window.ConfigApp.validation.validateEndpointOnInput);
 		}
 
-		// Risk score validation
-		var riskScoreInput = helpers.get("riskScoreThreshold");
-		if (riskScoreInput) {
-			// Add input event listener for real-time validation
-			helpers.addEvent(riskScoreInput, "input", window.ConfigApp.validation.validateRiskScoreOnInput);
-		}
-
-		// Additional env validation
-		var additionalEnvInput = helpers.get("additionalEnv");
-		if (additionalEnvInput) {
-			// Add input event listener for real-time validation
-			helpers.addEvent(additionalEnvInput, "input", window.ConfigApp.validation.validateAdditionalEnvOnInput);
-		}
+		// Initialize all validation event listeners
+		window.ConfigApp.validation.initializeAllValidation();
 
 		// Initialize folder organization field toggles
 		window.ConfigApp.folderManagement.initializeFolderOrgFields();

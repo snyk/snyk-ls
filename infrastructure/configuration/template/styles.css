@@ -447,11 +447,18 @@ button.secondary[disabled] {
 
 .folder-content {
     padding-top: var(--section-padding);
+    margin-left: 10px;
 }
 
 /* - - - Trusted Folders - - - */
 .trusted-folder-item {
     margin-bottom: 10px;
+}
+
+.button-container-right {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 15px;
 }
 
 /* - - - Tooltips - - - */
