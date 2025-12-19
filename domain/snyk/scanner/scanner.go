@@ -337,13 +337,11 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 
 	defer func() {
 		if gitCheckoutHandler.CleanupFunc() != nil {
-			// Force defer cleanup func to wait until all reference scans are done
 			logger.Debug().Msg("Calling cleanup func for base folder")
-			go gitCheckoutHandler.CleanupFunc()()
+			gitCheckoutHandler.CleanupFunc()()
 			logger.Debug().Msgf("All product scanners finished for %s", path)
 			sc.notifier.Send(types.InlineValueRefresh{})
 			sc.notifier.Send(types.CodeLensRefresh{})
-			// TODO: handle learn actions centrally instead of in each scanner
 		}
 	}()
 }
