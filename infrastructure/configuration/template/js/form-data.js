@@ -71,7 +71,7 @@
 						// Product name is everything between "scanConfig" and the last part (field name)
 						// e.g., folder_0_scanConfig_Snyk_Open_Source_preScanCommand
 						// parts = ["folder", "0", "scanConfig", "Snyk", "Open", "Source", "preScanCommand"]
-						// product = "snyk open source"
+						// product = "Snyk Open Source"
 						// field = "preScanCommand"
 						var productParts = parts.slice(3, -1); // ["Snyk", "Open", "Source"]
 						var product = productParts.join(" ");
