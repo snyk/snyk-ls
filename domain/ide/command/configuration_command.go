@@ -151,6 +151,9 @@ func populatePointerFields(s *types.Settings, c *config.Config) {
 
 	hoverVerbosity := c.HoverVerbosity()
 	s.HoverVerbosity = &hoverVerbosity
+
+	riskScoreThreshold := c.RiskScoreThreshold()
+	s.RiskScoreThreshold = &riskScoreThreshold
 }
 
 // populateFolderConfigs populates folder-specific configuration
