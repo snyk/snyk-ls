@@ -67,6 +67,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 		"activateSnykCode",
 		"activateSnykIac",
 		"scanningMode",
+		"additionalEnv",
 		"filterSeverity_critical",
 		"filterSeverity_high",
 		"filterSeverity_medium",

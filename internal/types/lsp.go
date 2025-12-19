@@ -543,7 +543,7 @@ type WorkspaceFoldersChangeEvent struct {
 // parameter PreScanOnlyReferenceFolder / PostScanOnlyReferenceFolder is set.
 // Else it will run for all scans.
 type ScanCommandConfig struct {
-	PreScanCommand              string `json:"preScanCommand,omitempty"`
+	PreScanCommand              string `json:"command,omitempty"`
 	PreScanOnlyReferenceFolder  bool   `json:"preScanOnlyReferenceFolder,omitempty"`
 	PostScanCommand             string `json:"postScanCommand,omitempty"`
 	PostScanOnlyReferenceFolder bool   `json:"postScanOnlyReferenceFolder,omitempty"`
@@ -557,7 +557,6 @@ type FolderConfig struct {
 	BaseBranch                  string                                `json:"baseBranch"`
 	LocalBranches               []string                              `json:"localBranches,omitempty"`
 	AdditionalParameters        []string                              `json:"additionalParameters,omitempty"`
-	AdditionalEnv               string                                `json:"additionalEnv,omitempty"`
 	ReferenceFolderPath         FilePath                              `json:"referenceFolderPath,omitempty"`
 	ScanCommandConfig           map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
 	PreferredOrg                string                                `json:"preferredOrg"`
@@ -576,7 +575,6 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 	clone := &FolderConfig{
 		FolderPath:                  fc.FolderPath,
 		BaseBranch:                  fc.BaseBranch,
-		AdditionalEnv:               fc.AdditionalEnv,
 		ReferenceFolderPath:         fc.ReferenceFolderPath,
 		PreferredOrg:                fc.PreferredOrg,
 		AutoDeterminedOrg:           fc.AutoDeterminedOrg,
@@ -662,7 +660,7 @@ type Settings struct {
 
 	// Folder specific settings start
 	AdditionalParams string         `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
-	AdditionalEnv    string         `json:"additionalEnv,omitempty"`    // Global fallback for backward compatibility; folder-specific values in FolderConfig.AdditionalEnv
+	AdditionalEnv    string         `json:"additionalEnv,omitempty"`    // TODO make folder specific, move to folder config
 	TrustedFolders   []string       `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
 	FolderConfigs    []FolderConfig `json:"folderConfigs,omitempty"`
 	// Folder specific settings end
