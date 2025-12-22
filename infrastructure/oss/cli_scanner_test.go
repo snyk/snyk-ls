@@ -216,7 +216,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		path := types.FilePath("/path/to/project")
 
 		// Call the method under test
-		result := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
 
 		// Verify that --all-projects was initially removed (it may be added back later in the method)
 		// Count occurrences of --all-projects in the command
@@ -253,7 +253,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		path := types.FilePath("/path/to/project")
 
 		// Call the method under test
-		result := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
 
 		// Verify that --all-projects was removed and not added back due to conflict
 		containsAllProjects := false
@@ -268,6 +268,74 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 
 		// Restore the original config to avoid affecting other tests
 		cliScanner.config = originalConfig
+	})
+
+	// Test case 3: Any parameter on allProjectsParamBlacklist should prevent auto-appending --all-projects.
+	t.Run("does not append --all-projects when a blacklisted parameter is present", func(t *testing.T) {
+		testCases := []struct {
+			name            string
+			parameter       string
+			expectedInCmd   string
+			expectedMessage string
+		}{
+			{
+				name:            "--file",
+				parameter:       "--file=package.json",
+				expectedInCmd:   "--file=package.json",
+				expectedMessage: "--all-projects should not be present when --file is present",
+			},
+			{
+				name:            "--package-manager",
+				parameter:       "--package-manager=npm",
+				expectedInCmd:   "--package-manager=npm",
+				expectedMessage: "--all-projects should not be present when --package-manager is present",
+			},
+			{
+				name:            "--project-name",
+				parameter:       "--project-name=my-project",
+				expectedInCmd:   "--project-name=my-project",
+				expectedMessage: "--all-projects should not be present when --project-name is present",
+			},
+			{
+				name:            "--yarn-workspaces",
+				parameter:       "--yarn-workspaces",
+				expectedInCmd:   "--yarn-workspaces",
+				expectedMessage: "--all-projects should not be present when --yarn-workspaces is present",
+			},
+			{
+				name:            "--docker",
+				parameter:       "--docker",
+				expectedInCmd:   "--docker",
+				expectedMessage: "--all-projects should not be present when --docker is present",
+			},
+			{
+				name:            "--all-sub-projects",
+				parameter:       "--all-sub-projects",
+				expectedInCmd:   "--all-sub-projects",
+				expectedMessage: "--all-projects should not be present when --all-sub-projects is present",
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				configWithConflicts := testutil.UnitTest(t)
+				clisettings := configWithConflicts.CliSettings()
+				clisettings.AdditionalOssParameters = []string{tc.parameter}
+
+				originalConfig := cliScanner.config
+				cliScanner.config = configWithConflicts
+				defer func() { cliScanner.config = originalConfig }()
+
+				initialArgs := []string{}
+				parameterBlacklist := map[string]bool{}
+				path := types.FilePath("/path/to/project")
+
+				result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+
+				assert.NotContains(t, result, "--all-projects", tc.expectedMessage)
+				assert.Contains(t, result, tc.expectedInCmd, "Blacklisted parameter should be present")
+			})
+		}
 	})
 }
 

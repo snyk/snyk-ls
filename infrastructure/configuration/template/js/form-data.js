@@ -1,13 +1,13 @@
 // ABOUTME: Form data collection and serialization functions
 // ABOUTME: Handles gathering all form inputs and converting them to JSON format
 
-(function() {
+(function () {
 	window.ConfigApp = window.ConfigApp || {};
 	var formData = {};
 	var helpers = window.ConfigApp.helpers;
 
 	// Collect form data
-	formData.collectData = function() {
+	formData.collectData = function () {
 		var data = {
 			folderConfigs: [],
 		};
@@ -44,6 +44,18 @@
 				continue;
 			}
 
+			// Trusted folder logic: trustedFolder_INDEX
+			if (name.indexOf("trustedFolder_") === 0) {
+				if (!data.trustedFolders) {
+					data.trustedFolders = [];
+				}
+				// Only add non-empty values
+				if (el.value && el.value.trim()) {
+					data.trustedFolders.push(el.value);
+				}
+				continue;
+			}
+
 			// Folder logic: folder_INDEX_FIELD or folder_INDEX_scanConfig_PRODUCT_FIELD
 			if (name.indexOf("folder_") === 0) {
 				var parts = name.split("_");
@@ -54,10 +66,16 @@
 						data.folderConfigs[index] = {};
 					}
 
-					// Check if this is a scanConfig field: folder_INDEX_scanConfig_PRODUCT_FIELD
+					// Check if this is a scanConfig field: folder_INDEX_scanConfig_PRODUCT_PARTS_FIELD
 					if (parts.length >= 5 && parts[2] === "scanConfig") {
-						var product = parts[3]; // oss, code, or iac
-						var field = parts[4]; // preScanCommand, postScanCommand, preScanOnlyReferenceFolder, postScanOnlyReferenceFolder
+						// Product name is everything between "scanConfig" and the last part (field name)
+						// e.g., folder_0_scanConfig_Snyk_Open_Source_preScanCommand
+						// parts = ["folder", "0", "scanConfig", "Snyk", "Open", "Source", "preScanCommand"]
+						// product = "Snyk Open Source"
+						// field = "preScanCommand"
+						var productParts = parts.slice(3, -1); // ["Snyk", "Open", "Source"]
+						var product = productParts.join(" ");
+						var field = parts[parts.length - 1]; // "preScanCommand"
 
 						if (!data.folderConfigs[index].scanCommandConfig) {
 							data.folderConfigs[index].scanCommandConfig = {};
@@ -66,18 +84,12 @@
 							data.folderConfigs[index].scanCommandConfig[product] = {};
 						}
 
-						// Map UI field names to JSON field names
-						var jsonField = field;
-						if (field === "preScanCommand") {
-							jsonField = "command"; // PreScanCommand uses 'command' in JSON
-						}
-
 						if (el.type === "checkbox") {
-							data.folderConfigs[index].scanCommandConfig[product][jsonField] =
+							data.folderConfigs[index].scanCommandConfig[product][field] =
 								el.checked;
 						} else {
 							// Always set the value, even if empty, to allow clearing
-							data.folderConfigs[index].scanCommandConfig[product][jsonField] =
+							data.folderConfigs[index].scanCommandConfig[product][field] =
 								el.value;
 						}
 					} else {

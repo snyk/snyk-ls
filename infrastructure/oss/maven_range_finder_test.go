@@ -19,6 +19,7 @@ package oss
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,11 +43,13 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 		logger:      c.Logger(),
 	}
 
-	expected := ast.Node{
-		Line:      54,
-		StartChar: 15,
-		EndChar:   21,
-	}
+	lines := strings.Split(strings.ReplaceAll(string(testContent), "\r", ""), "\n")
+	version := "2.14.1"
+	expectedLineNumber := 54
+	versionStartIndex := strings.Index(lines[expectedLineNumber], version)
+	versionEndIndex := versionStartIndex + len(version)
+
+	expected := ast.Node{Line: expectedLineNumber, StartChar: versionStartIndex, EndChar: versionEndIndex}
 
 	p, v := introducingPackageAndVersion([]string{"goof@1.0.1", "org.apache.logging.log4j:log4j-core@2.14.1"}, "maven")
 
@@ -67,11 +70,12 @@ func TestMavenRangeFinder_FindInPomHierarchy(t *testing.T) {
 		logger:      c.Logger(),
 	}
 
-	expected := ast.Node{
-		Line:      34,
-		StartChar: 18,
-		EndChar:   36,
-	}
+	lines := strings.Split(strings.ReplaceAll(string(testContent), "\r", ""), "\n")
+	expectedLineNumber := 34
+	expectedStartChar := strings.Index(lines[expectedLineNumber], "commons-fileupload")
+	expectedEndChar := expectedStartChar + len("commons-fileupload")
+
+	expected := ast.Node{Line: expectedLineNumber, StartChar: expectedStartChar, EndChar: expectedEndChar}
 
 	p, v := introducingPackageAndVersion([]string{"goof@1.0.1", "commons-fileupload:commons-fileupload@1.2.1"}, "maven")
 

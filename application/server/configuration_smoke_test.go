@@ -20,13 +20,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-git/go-git/v5"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // Test_SmokeConfigurationDialog verifies that the configuration dialog:
@@ -42,6 +46,56 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	// Setup server with LSP client
 	loc, _ := setupServer(t, c)
 	di.Init()
+
+	// Create workspace folder and initialize git repository
+	workspaceFolder := types.FilePath(t.TempDir())
+	_, err := git.PlainInit(string(workspaceFolder), false)
+	require.NoError(t, err, "Failed to initialize git repository")
+
+	folder := types.WorkspaceFolder{
+		Name: "Test Workspace",
+		Uri:  uri.PathToUri(workspaceFolder),
+	}
+
+	// Create folder config with scan command configuration
+	folderConfig := types.FolderConfig{
+		FolderPath:        workspaceFolder,
+		ScanCommandConfig: make(map[product.Product]types.ScanCommandConfig),
+	}
+	folderConfig.ScanCommandConfig[product.ProductOpenSource] = types.ScanCommandConfig{
+		PreScanCommand:              "npm install",
+		PreScanOnlyReferenceFolder:  true,
+		PostScanCommand:             "npm run cleanup",
+		PostScanOnlyReferenceFolder: false,
+	}
+	folderConfig.ScanCommandConfig[product.ProductCode] = types.ScanCommandConfig{
+		PreScanCommand:              "prepare.sh",
+		PreScanOnlyReferenceFolder:  true,
+		PostScanCommand:             "cleanup.sh",
+		PostScanOnlyReferenceFolder: true,
+	}
+	folderConfig.ScanCommandConfig[product.ProductInfrastructureAsCode] = types.ScanCommandConfig{
+		PreScanCommand:              "terraform init",
+		PreScanOnlyReferenceFolder:  true,
+		PostScanCommand:             "terraform cleanup",
+		PostScanOnlyReferenceFolder: false,
+	}
+
+	// Prepare initialization parameters
+	initParams := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{folder},
+		InitializationOptions: types.Settings{
+			Token:                       c.Token(),
+			EnableTrustedFoldersFeature: "false",
+			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
+			AuthenticationMethod:        types.TokenAuthentication,
+			FolderConfigs:               []types.FolderConfig{folderConfig},
+		},
+	}
+
+	// Initialize the server with workspace and folder configs
+	ensureInitialized(t, c, loc, initParams, nil)
 
 	// Execute the configuration command via LSP
 	response, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
@@ -94,10 +148,10 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 				assertFieldPresent(t, html, "preferredOrg", "PreferredOrg field")
 
 				// Scan command config fields (pre/post scan commands per product - in hidden section)
-				assertFieldPresent(t, html, "scanConfig_oss_preScanCommand", "ScanConfig OSS PreScanCommand field")
-				assertFieldPresent(t, html, "scanConfig_oss_postScanCommand", "ScanConfig OSS PostScanCommand field")
-				assertFieldPresent(t, html, "scanConfig_code_preScanCommand", "ScanConfig Code PreScanCommand field")
-				assertFieldPresent(t, html, "scanConfig_iac_preScanCommand", "ScanConfig IaC PreScanCommand field")
+				assertFieldPresent(t, html, "scanConfig_Snyk_Open_Source_preScanCommand", "ScanConfig OSS PreScanCommand field")
+				assertFieldPresent(t, html, "scanConfig_Snyk_Open_Source_postScanCommand", "ScanConfig OSS PostScanCommand field")
+				assertFieldPresent(t, html, "scanConfig_Snyk_Code_preScanCommand", "ScanConfig Code PreScanCommand field")
+				assertFieldPresent(t, html, "scanConfig_Snyk_IaC_preScanCommand", "ScanConfig IaC PreScanCommand field")
 			}
 		})
 

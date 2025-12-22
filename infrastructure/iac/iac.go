@@ -99,7 +99,7 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{}
 }
 
-func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
 	c := config.CurrentConfig()
 
 	// Log scan type and paths
@@ -217,7 +217,7 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 	defer iac.mutex.Unlock()
 
 	cmd := iac.cliCmd(documentURI)
-	res, err := iac.cli.Execute(ctx, cmd, workspacePath)
+	res, err := iac.cli.Execute(ctx, cmd, workspacePath, nil)
 
 	if ctx.Err() != nil {
 		return nil, ctx.Err()

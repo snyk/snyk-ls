@@ -34,8 +34,10 @@ const (
 	FocusOut   TextDocumentSaveReason = 2
 )
 
-type McpServerURLParams struct {
-	URL string `json:"url"`
+type SnykRegisterMcpParams struct {
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env"`
 }
 
 type TextDocumentSaveReason int
@@ -541,7 +543,7 @@ type WorkspaceFoldersChangeEvent struct {
 // parameter PreScanOnlyReferenceFolder / PostScanOnlyReferenceFolder is set.
 // Else it will run for all scans.
 type ScanCommandConfig struct {
-	PreScanCommand              string `json:"command,omitempty"`
+	PreScanCommand              string `json:"preScanCommand,omitempty"`
 	PreScanOnlyReferenceFolder  bool   `json:"preScanOnlyReferenceFolder,omitempty"`
 	PostScanCommand             string `json:"postScanCommand,omitempty"`
 	PostScanOnlyReferenceFolder bool   `json:"postScanOnlyReferenceFolder,omitempty"`
@@ -555,6 +557,7 @@ type FolderConfig struct {
 	BaseBranch                  string                                `json:"baseBranch"`
 	LocalBranches               []string                              `json:"localBranches,omitempty"`
 	AdditionalParameters        []string                              `json:"additionalParameters,omitempty"`
+	AdditionalEnv               string                                `json:"additionalEnv,omitempty"`
 	ReferenceFolderPath         FilePath                              `json:"referenceFolderPath,omitempty"`
 	ScanCommandConfig           map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
 	PreferredOrg                string                                `json:"preferredOrg"`
@@ -573,6 +576,7 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 	clone := &FolderConfig{
 		FolderPath:                  fc.FolderPath,
 		BaseBranch:                  fc.BaseBranch,
+		AdditionalEnv:               fc.AdditionalEnv,
 		ReferenceFolderPath:         fc.ReferenceFolderPath,
 		PreferredOrg:                fc.PreferredOrg,
 		AutoDeterminedOrg:           fc.AutoDeterminedOrg,
@@ -616,47 +620,49 @@ type FolderConfigsParam struct {
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
 	// Global settings start
-	ActivateSnykOpenSource           string               `json:"activateSnykOpenSource,omitempty"`
-	ActivateSnykCode                 string               `json:"activateSnykCode,omitempty"`
-	ActivateSnykIac                  string               `json:"activateSnykIac,omitempty"`
-	Insecure                         string               `json:"insecure,omitempty"`
-	Endpoint                         string               `json:"endpoint,omitempty"`
-	BaseUrl                          string               `json:"baseUrl,omitempty"`
-	Organization                     string               `json:"organization,omitempty"`
-	Path                             string               `json:"path,omitempty"`
-	CliPath                          string               `json:"cliPath,omitempty"`
-	Token                            string               `json:"token,omitempty"`
-	IntegrationName                  string               `json:"integrationName,omitempty"`
-	IntegrationVersion               string               `json:"integrationVersion,omitempty"`
-	AutomaticAuthentication          string               `json:"automaticAuthentication,omitempty"`
-	DeviceId                         string               `json:"deviceId,omitempty"`
-	FilterSeverity                   *SeverityFilter      `json:"filterSeverity,omitempty"`
-	RiskScoreThreshold               *int                 `json:"riskScoreThreshold,omitempty"` // Valid range is 0-1000.
-	IssueViewOptions                 *IssueViewOptions    `json:"issueViewOptions,omitempty"`
-	SendErrorReports                 string               `json:"sendErrorReports,omitempty"`
-	ManageBinariesAutomatically      string               `json:"manageBinariesAutomatically,omitempty"`
-	EnableTrustedFoldersFeature      string               `json:"enableTrustedFoldersFeature,omitempty"`
-	ActivateSnykCodeSecurity         string               `json:"activateSnykCodeSecurity,omitempty"`
-	ActivateSnykCodeQuality          string               `json:"activateSnykCodeQuality,omitempty"`
-	OsPlatform                       string               `json:"osPlatform,omitempty"`
-	OsArch                           string               `json:"osArch,omitempty"`
-	RuntimeVersion                   string               `json:"runtimeVersion,omitempty"`
-	RuntimeName                      string               `json:"runtimeName,omitempty"`
-	ScanningMode                     string               `json:"scanningMode,omitempty"`
-	AuthenticationMethod             AuthenticationMethod `json:"authenticationMethod,omitempty"`
-	SnykCodeApi                      string               `json:"snykCodeApi,omitempty"`
-	EnableSnykLearnCodeActions       string               `json:"enableSnykLearnCodeActions,omitempty"`
-	EnableSnykOSSQuickFixCodeActions string               `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
-	EnableSnykOpenBrowserActions     string               `json:"enableSnykOpenBrowserActions,omitempty"`
-	EnableDeltaFindings              string               `json:"enableDeltaFindings,omitempty"` // should this be global?
-	RequiredProtocolVersion          string               `json:"requiredProtocolVersion,omitempty"`
-	HoverVerbosity                   *int                 `json:"hoverVerbosity,omitempty"`
-	OutputFormat                     *string              `json:"outputFormat,omitempty"`
+	ActivateSnykOpenSource              string               `json:"activateSnykOpenSource,omitempty"`
+	ActivateSnykCode                    string               `json:"activateSnykCode,omitempty"`
+	ActivateSnykIac                     string               `json:"activateSnykIac,omitempty"`
+	Insecure                            string               `json:"insecure,omitempty"`
+	Endpoint                            string               `json:"endpoint,omitempty"`
+	BaseUrl                             string               `json:"baseUrl,omitempty"`
+	Organization                        string               `json:"organization,omitempty"`
+	Path                                string               `json:"path,omitempty"`
+	CliPath                             string               `json:"cliPath,omitempty"`
+	Token                               string               `json:"token,omitempty"`
+	IntegrationName                     string               `json:"integrationName,omitempty"`
+	IntegrationVersion                  string               `json:"integrationVersion,omitempty"`
+	AutomaticAuthentication             string               `json:"automaticAuthentication,omitempty"`
+	DeviceId                            string               `json:"deviceId,omitempty"`
+	FilterSeverity                      *SeverityFilter      `json:"filterSeverity,omitempty"`
+	RiskScoreThreshold                  *int                 `json:"riskScoreThreshold,omitempty"` // Valid range is 0-1000.
+	IssueViewOptions                    *IssueViewOptions    `json:"issueViewOptions,omitempty"`
+	SendErrorReports                    string               `json:"sendErrorReports,omitempty"`
+	ManageBinariesAutomatically         string               `json:"manageBinariesAutomatically,omitempty"`
+	EnableTrustedFoldersFeature         string               `json:"enableTrustedFoldersFeature,omitempty"`
+	ActivateSnykCodeSecurity            string               `json:"activateSnykCodeSecurity,omitempty"`
+	ActivateSnykCodeQuality             string               `json:"activateSnykCodeQuality,omitempty"`
+	OsPlatform                          string               `json:"osPlatform,omitempty"`
+	OsArch                              string               `json:"osArch,omitempty"`
+	RuntimeVersion                      string               `json:"runtimeVersion,omitempty"`
+	RuntimeName                         string               `json:"runtimeName,omitempty"`
+	ScanningMode                        string               `json:"scanningMode,omitempty"`
+	AuthenticationMethod                AuthenticationMethod `json:"authenticationMethod,omitempty"`
+	SnykCodeApi                         string               `json:"snykCodeApi,omitempty"`
+	EnableSnykLearnCodeActions          string               `json:"enableSnykLearnCodeActions,omitempty"`
+	EnableSnykOSSQuickFixCodeActions    string               `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
+	EnableSnykOpenBrowserActions        string               `json:"enableSnykOpenBrowserActions,omitempty"`
+	EnableDeltaFindings                 string               `json:"enableDeltaFindings,omitempty"` // should this be global?
+	RequiredProtocolVersion             string               `json:"requiredProtocolVersion,omitempty"`
+	HoverVerbosity                      *int                 `json:"hoverVerbosity,omitempty"`
+	OutputFormat                        *string              `json:"outputFormat,omitempty"`
+	AutoConfigureSnykMcpServer          string               `json:"autoConfigureSnykMcpServer,omitempty"`
+	SecureAtInceptionExecutionFrequency string               `json:"secureAtInceptionExecutionFrequency,omitempty"`
 	// Global settings end
 
 	// Folder specific settings start
 	AdditionalParams string         `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
-	AdditionalEnv    string         `json:"additionalEnv,omitempty"`    // TODO make folder specific, move to folder config
+	AdditionalEnv    string         `json:"additionalEnv,omitempty"`    // Global fallback for backward compatibility; folder-specific values in FolderConfig.AdditionalEnv
 	TrustedFolders   []string       `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
 	FolderConfigs    []FolderConfig `json:"folderConfigs,omitempty"`
 	// Folder specific settings end
