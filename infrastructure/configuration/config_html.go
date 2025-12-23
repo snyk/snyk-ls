@@ -47,8 +47,8 @@ var configFolderManagementTemplate string
 //go:embed template/js/trusted-folders.js
 var configTrustedFoldersTemplate string
 
-//go:embed template/js/dirty-tracking.js
-var configDirtyTrackingModuleTemplate string
+//go:embed template/js/form-state-tracking.js
+var configFormStateTrackingTemplate string
 
 //go:embed template/js/init.js
 var configInitTemplate string
@@ -120,26 +120,26 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	cliReleaseChannel := getCliReleaseChannel(r.c)
 
 	data := map[string]interface{}{
-		"Settings":            filteredSettings,
-		"BootstrapCSS":        template.CSS(bootstrapCssTemplate),
-		"Styles":              template.CSS(configStylesTemplate),
-		"JQuery":              template.JS(jqueryJsTemplate),
-		"BootstrapJS":         template.JS(bootstrapJsTemplate),
-		"IE11Polyfill":        template.JS(configIE11PolyfillTemplate),
-		"Utils":               template.JS(configUtilsTemplate),
-		"DirtyTracker":        template.JS(configDirtyTrackerTemplate),
-		"Helpers":             template.JS(configHelpersTemplate),
-		"Validation":          template.JS(configValidationTemplate),
-		"FormData":            template.JS(configFormDataTemplate),
-		"AutoSave":            template.JS(configAutoSaveTemplate),
-		"Authentication":      template.JS(configAuthenticationTemplate),
-		"FolderManagement":    template.JS(configFolderManagementTemplate),
-		"TrustedFolders":      template.JS(configTrustedFoldersTemplate),
-		"DirtyTrackingModule": template.JS(configDirtyTrackingModuleTemplate),
-		"Init":                template.JS(configInitTemplate),
-		"Nonce":               "ideNonce", // Replaced by IDE extension
-		"FolderLabel":         folderLabel,
-		"CliReleaseChannel":   cliReleaseChannel,
+		"Settings":          filteredSettings,
+		"BootstrapCSS":      template.CSS(bootstrapCssTemplate),
+		"Styles":            template.CSS(configStylesTemplate),
+		"JQuery":            template.JS(jqueryJsTemplate),
+		"BootstrapJS":       template.JS(bootstrapJsTemplate),
+		"IE11Polyfill":      template.JS(configIE11PolyfillTemplate),
+		"Utils":             template.JS(configUtilsTemplate),
+		"DirtyTracker":      template.JS(configDirtyTrackerTemplate),
+		"Helpers":           template.JS(configHelpersTemplate),
+		"Validation":        template.JS(configValidationTemplate),
+		"FormData":          template.JS(configFormDataTemplate),
+		"AutoSave":          template.JS(configAutoSaveTemplate),
+		"Authentication":    template.JS(configAuthenticationTemplate),
+		"FolderManagement":  template.JS(configFolderManagementTemplate),
+		"TrustedFolders":    template.JS(configTrustedFoldersTemplate),
+		"FormStateTracking": template.JS(configFormStateTrackingTemplate),
+		"Init":              template.JS(configInitTemplate),
+		"Nonce":             "ideNonce", // Replaced by IDE extension
+		"FolderLabel":       folderLabel,
+		"CliReleaseChannel": cliReleaseChannel,
 	}
 
 	var buffer bytes.Buffer

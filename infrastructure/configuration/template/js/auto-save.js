@@ -100,41 +100,14 @@
 
 	// Debounced save - delays save until user stops changing inputs
 	autoSave.debouncedSave = function() {
+		if (!window.__IS_IDE_AUTOSAVE_ENABLED__) return;
+
 		if (saveTimeout) {
 			clearTimeout(saveTimeout);
 		}
 		saveTimeout = setTimeout(function () {
 			autoSave.getAndSaveIdeConfig();
 		}, SAVE_DELAY);
-	};
-
-	// Attach auto-save listeners to all form inputs
-	autoSave.attachAutoSaveListeners = function() {
-		if (!window.__IS_IDE_AUTOSAVE_ENABLED__) return; // Don't attach listeners if auto-save not enabled
-
-		var form = helpers.get("configForm");
-		if (!form) return;
-
-		var inputs = form.getElementsByTagName("input");
-		var selects = form.getElementsByTagName("select");
-		var textareas = form.getElementsByTagName("textarea");
-
-		// Add blur event listeners to all inputs
-		for (var i = 0; i < inputs.length; i++) {
-			helpers.addEvent(inputs[i], "blur", autoSave.debouncedSave);
-			// Also save on change for checkboxes and radios
-			if (inputs[i].type === "checkbox" || inputs[i].type === "radio") {
-				helpers.addEvent(inputs[i], "change", autoSave.debouncedSave);
-			}
-		}
-
-		for (var j = 0; j < selects.length; j++) {
-			helpers.addEvent(selects[j], "change", autoSave.debouncedSave);
-		}
-
-		for (var k = 0; k < textareas.length; k++) {
-			helpers.addEvent(textareas[k], "blur", autoSave.debouncedSave);
-		}
 	};
 
 	autoSave.setOriginalEndpoint = function(endpoint) {

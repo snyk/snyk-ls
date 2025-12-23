@@ -28,6 +28,11 @@
 		input.name = "trustedFolder_" + trustedFolderIndex;
 		input.placeholder = "/path/to/trusted/folder";
 
+		// Attach blur listener for form state tracking
+		if (window.ConfigApp.formStateTracking && window.ConfigApp.formStateTracking.triggerChangeHandlers) {
+			helpers.addEvent(input, "blur", window.ConfigApp.formStateTracking.triggerChangeHandlers);
+		}
+
 		// Create remove button with X icon
 		var removeBtn = document.createElement("button");
 		removeBtn.type = "button";
@@ -44,11 +49,6 @@
 		trustedFoldersList.appendChild(folderItem);
 
 		trustedFolderIndex++;
-
-		// Trigger dirty check
-		if (window.ConfigApp.dirtyTracking && window.ConfigApp.dirtyTracking.debouncedDirtyCheck) {
-			window.ConfigApp.dirtyTracking.debouncedDirtyCheck();
-		}
 	};
 
 	trustedFolders.handleRemoveTrustedFolder = function() {
@@ -59,9 +59,9 @@
 			folderItem.parentNode.removeChild(folderItem);
 		}
 
-		// Trigger dirty check
-		if (window.ConfigApp.dirtyTracking && window.ConfigApp.dirtyTracking.debouncedDirtyCheck) {
-			window.ConfigApp.dirtyTracking.debouncedDirtyCheck();
+		// Trigger dirty check and auto-save
+		if (window.ConfigApp.formStateTracking && window.ConfigApp.formStateTracking.triggerChangeHandlers) {
+			window.ConfigApp.formStateTracking.triggerChangeHandlers();
 		}
 	};
 
