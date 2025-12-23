@@ -866,6 +866,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
 			AuthenticationMethod:        types.TokenAuthentication,
+			AutomaticAuthentication:     "false",
 			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
 			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
 			ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
