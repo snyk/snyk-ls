@@ -39,13 +39,10 @@
 		window.ConfigApp.trustedFolders.initializeTrustedFolderHandlers();
 
 		// Initialize dirty tracking
-		window.ConfigApp.dirtyTracking.initializeDirtyTracking();
+		window.ConfigApp.formStateTracking.initializeDirtyTracking();
 
-		// Attach auto-save listeners to all form inputs
-		window.ConfigApp.autoSave.attachAutoSaveListeners();
-
-		// Attach dirty tracking listeners to all form inputs
-		window.ConfigApp.dirtyTracking.attachDirtyTrackingListeners();
+		// Attach form state listeners (handles both dirty tracking and auto-save)
+		window.ConfigApp.formStateTracking.attachFormStateListeners();
 
 		// Initialize Bootstrap 4 tooltips
 		if (typeof $ !== "undefined" && $.fn && $.fn.tooltip) {

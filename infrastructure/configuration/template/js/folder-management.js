@@ -7,7 +7,8 @@
 	var helpers = window.ConfigApp.helpers;
 
 	// Toggle organization field based on auto-org checkbox
-	folderManagement.toggleOrgField = function(folderIndex) {
+	// skipTrigger: if true, don't trigger dirty check/auto-save (used during initialization)
+	folderManagement.toggleOrgField = function(folderIndex, skipTrigger) {
 		var autoOrgCheckbox = helpers.get("folder_" + folderIndex + "_autoOrg");
 		var orgInput = helpers.get("folder_" + folderIndex + "_preferredOrg");
 		var orgSetByUserInput = helpers.get("folder_" + folderIndex + "_orgSetByUser");
@@ -32,9 +33,10 @@
 			orgSetByUserInput.value = "true";
 		}
 
-		// Trigger dirty check since we changed the value programmatically
-		if (window.ConfigApp.dirtyTracking && window.ConfigApp.dirtyTracking.debouncedDirtyCheck) {
-			window.ConfigApp.dirtyTracking.debouncedDirtyCheck();
+		// Trigger dirty check and auto-save since we changed the value programmatically
+		// Skip during initialization to avoid premature auto-save
+		if (!skipTrigger && window.ConfigApp.formStateTracking && window.ConfigApp.formStateTracking.triggerChangeHandlers) {
+			window.ConfigApp.formStateTracking.triggerChangeHandlers();
 		}
 	};
 
@@ -51,8 +53,8 @@
 			) {
 				var folderIndex = input.getAttribute("data-index");
 
-				// Initialize the field state
-				folderManagement.toggleOrgField(folderIndex);
+				// Initialize the field state (skip triggering handlers during init)
+				folderManagement.toggleOrgField(folderIndex, true);
 
 				// Attach click event listener (CSP-compliant)
 				(function(index) {

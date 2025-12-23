@@ -26,7 +26,7 @@ The dialog uses a modular JavaScript architecture with all modules organized und
 - **authentication.js**: Login and logout operations
 - **folder-management.js**: Folder-specific configuration management
 - **trusted-folders.js**: Trusted folder list management
-- **dirty-tracking.js**: Dirty tracking module that integrates DirtyTracker with the form
+- **form-state-tracking.js**: Consolidated form state tracking that integrates DirtyTracker with the form and triggers both dirty tracking and auto-save on blur/change events
 - **init.js**: Main initialization that wires up all event handlers
 
 All modules are namespaced under `window.ConfigApp` to minimize global namespace pollution. The `DirtyTracker` class and `FormUtils` are exposed globally as they are referenced by multiple modules and the IDE integration layer.
