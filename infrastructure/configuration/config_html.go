@@ -105,6 +105,7 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 // The IDE can optionally set window.__IS_IDE_AUTOSAVE_ENABLED__ = true to enable auto-save on form changes.
 // The IDE can also call window.getAndSaveIdeConfig() to retrieve and save current form values.
 // The IDE can query dirty state via window.__isFormDirty__() or reset it via window.__resetDirtyState__().
+// The IDE can call window.setAuthToken(token) to inject an authentication token into the token input field.
 // Folder configs are filtered to only show folders that are currently in the workspace.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	// Determine folder/solution label based on IDE

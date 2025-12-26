@@ -28,5 +28,17 @@
 		window.__ideLogout__();
 	};
 
+	// Expose setAuthToken on window for IDE integration
+	window.setAuthToken = function (token) {
+		var tokenInput = window.ConfigApp.helpers.get("token");
+		if (tokenInput) {
+			tokenInput.value = token;
+			// Trigger dirty state tracking
+			if (window.ConfigApp.dirtyTracker && window.ConfigApp.dirtyTracker.markDirty) {
+				window.ConfigApp.dirtyTracker.markDirty();
+			}
+		}
+	};
+
 	window.ConfigApp.authentication = authentication;
 })();
