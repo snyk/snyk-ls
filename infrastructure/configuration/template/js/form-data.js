@@ -121,7 +121,14 @@
 				obj[field] = el.value;
 			}
 		} else {
-			obj[field] = el.value;
+			// Convert string boolean values to actual booleans
+			if (el.value === "true") {
+				obj[field] = true;
+			} else if (el.value === "false") {
+				obj[field] = false;
+			} else {
+				obj[field] = el.value;
+			}
 		}
 	}
 
