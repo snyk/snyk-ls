@@ -13,9 +13,7 @@
 	// Status codes for save attempt notifications
 	var SAVE_STATUS = {
 		SUCCESS: "success",
-		ENDPOINT_INVALID: "endpoint_invalid",
-		RISK_SCORE_INVALID: "risk_score_invalid",
-		ADDITIONAL_ENV_INVALID: "additional_env_invalid",
+		VALIDATION_ERROR: "validation_error",
 		BRIDGE_MISSING: "bridge_missing",
 		ERROR: "error"
 	};
@@ -54,15 +52,10 @@
 		var endpointInput = helpers.get("endpoint");
 		var currentEndpoint = endpointInput ? endpointInput.value : "";
 
-		// Validate all fields
-		var validationResult = window.ConfigApp.validation.validateAllBeforeSave();
-		if (!validationResult.valid) {
-			var statusMap = {
-				"endpoint": SAVE_STATUS.ENDPOINT_INVALID,
-				"risk_score": SAVE_STATUS.RISK_SCORE_INVALID,
-				"additional_env": SAVE_STATUS.ADDITIONAL_ENV_INVALID
-			};
-			notifySaveAttemptFinished(statusMap[validationResult.failedField] || SAVE_STATUS.ERROR);
+		// Check validation state
+		var validationInfo = window.ConfigApp.validation.getFormValidationInfo();
+		if (!validationInfo.isValid) {
+			notifySaveAttemptFinished(SAVE_STATUS.VALIDATION_ERROR);
 			return;
 		}
 

@@ -5,6 +5,9 @@
 	window.ConfigApp = window.ConfigApp || {};
 	var validation = {};
 
+	// Global validation state - tracks validation status by fieldId
+	var validationState = {};
+
 	// Validate Endpoint
 	validation.validateEndpoint = function(url) {
 		if (!url) return true; // Empty URL allows default
@@ -29,38 +32,95 @@
 		return !isNaN(num) && num >= 0 && num <= 1000;
 	};
 
+	// Validate UUID format (for Legacy API Token)
+	validation.isUUID = function(str) {
+		var uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+		return uuidRegex.test(str);
+	};
+
+	// Validate Personal Access Token format
+	validation.isPAT = function(token) {
+		var patRegex = /^snyk_(?:uat|sat)\.[a-z0-9]{8}\.[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+$/;
+		return patRegex.test(token);
+	};
+
+	// Validate OAuth2 token format
+	validation.isOAuth2Token = function(token) {
+		try {
+			var oauthToken = JSON.parse(token);
+			return (
+				oauthToken.access_token &&
+				oauthToken.access_token.length > 0 &&
+				oauthToken.expiry &&
+				Date.parse(oauthToken.expiry) > Date.now() &&
+				oauthToken.refresh_token &&
+				oauthToken.refresh_token.length > 0
+			);
+		} catch (e) {
+			return false;
+		}
+	};
+
+	// Validate token based on selected authentication method
+	// Returns: { valid: boolean, errorMessage: string|null }
+	validation.validateToken = function(token, authMethod) {
+		if (!token || token.trim() === "") {
+			return { valid: true, errorMessage: null }; // Empty token is valid
+		}
+
+		// If no auth method specified, try to get it from the form
+		if (!authMethod) {
+			var helpers = window.ConfigApp.helpers;
+			var authMethodSelect = helpers.get("authenticationMethod");
+			authMethod = authMethodSelect ? authMethodSelect.value : "token";
+		}
+
+		var isValid = false;
+		var errorMessage = null;
+
+		switch (authMethod) {
+			case "oauth":
+				isValid = validation.isOAuth2Token(token);
+				if (!isValid) {
+					errorMessage = "Invalid OAuth2 token format. Expected JSON with access_token, expiry (future date), and refresh_token.";
+				}
+				break;
+			case "pat":
+				isValid = validation.isPAT(token);
+				if (!isValid) {
+					errorMessage = "Invalid Personal Access Token format. Expected format: snyk_uat.xxxxxxxx.xxxx.xxxx or snyk_sat.xxxxxxxx.xxxx.xxxx";
+				}
+				break;
+			case "token":
+				isValid = validation.isUUID(token);
+				if (!isValid) {
+					errorMessage = "Invalid API Token format. Expected UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+				}
+				break;
+			default:
+				// If auth method is unknown, accept any of the three formats
+				isValid = validation.isUUID(token) || validation.isPAT(token) || validation.isOAuth2Token(token);
+				if (!isValid) {
+					errorMessage = "Invalid token format. Please check your authentication method and token.";
+				}
+		}
+
+		return { valid: isValid, errorMessage: errorMessage };
+	};
+
+	// Validate token on input
+	validation.validateTokenOnInput = function() {
+		validation.validateAndShowError("token", "token-error", validation.validateToken);
+	};
+
 	// Validate endpoint on input
 	validation.validateEndpointOnInput = function() {
-		var helpers = window.ConfigApp.helpers;
-		var endpointInput = helpers.get("endpoint");
-		var endpointError = helpers.get("endpoint-error");
-
-		if (!endpointInput || !endpointError) return;
-
-		var currentEndpoint = endpointInput.value;
-
-		if (currentEndpoint && !validation.validateEndpoint(currentEndpoint)) {
-			helpers.removeClass(endpointError, "hidden");
-		} else {
-			helpers.addClass(endpointError, "hidden");
-		}
+		validation.validateAndShowError("endpoint", "endpoint-error", validation.validateEndpoint);
 	};
 
 	// Validate risk score on input
 	validation.validateRiskScoreOnInput = function() {
-		var helpers = window.ConfigApp.helpers;
-		var riskScoreInput = helpers.get("riskScoreThreshold");
-		var riskScoreError = helpers.get("riskScore-error");
-
-		if (!riskScoreInput || !riskScoreError) return;
-
-		var currentValue = riskScoreInput.value;
-
-		if (!validation.validateRiskScore(currentValue)) {
-			helpers.removeClass(riskScoreError, "hidden");
-		} else {
-			helpers.addClass(riskScoreError, "hidden");
-		}
+		validation.validateAndShowError("riskScoreThreshold", "riskScore-error", validation.validateRiskScore);
 	};
 
 	// Validate additional environment variables format
@@ -103,29 +163,59 @@
 		return true;
 	};
 
+	// Helper function to validate a field and show/hide error message
+	// validatorFn should return either:
+	//   - boolean (true = valid, false = invalid)
+	//   - {valid: boolean, errorMessage: string}
+	// Returns true if valid, false if invalid
+	// Updates the global validation state using fieldId as the key
+	validation.validateAndShowError = function(fieldId, errorId, validatorFn) {
+		var helpers = window.ConfigApp.helpers;
+		var input = helpers.get(fieldId);
+		var error = helpers.get(errorId);
+
+		if (!input || !error) return true;
+
+		var value = input.value;
+		var result = validatorFn(value);
+		var isValid = false;
+
+		// Handle object result {valid, errorMessage}
+		if (result && typeof result === 'object' && 'valid' in result) {
+			isValid = result.valid;
+			if (!isValid) {
+				if (result.errorMessage) {
+					error.textContent = result.errorMessage;
+				}
+				helpers.removeClass(error, "hidden");
+			} else {
+				helpers.addClass(error, "hidden");
+			}
+		} else {
+			// Handle boolean result
+			isValid = !!result;
+			if (!isValid) {
+				helpers.removeClass(error, "hidden");
+			} else {
+				helpers.addClass(error, "hidden");
+			}
+		}
+
+		// Update validation state using fieldId as key
+		validationState[fieldId] = isValid;
+
+		return isValid;
+	};
+
 	// Validate per-folder additional env on input
 	validation.validateFolderAdditionalEnvOnInput = function(folderIndex) {
-		var helpers = window.ConfigApp.helpers;
 		var fieldId = "folder_" + folderIndex + "_additionalEnv";
 		var errorId = "folder_" + folderIndex + "_additionalEnv-error";
-
-		var additionalEnvInput = helpers.get(fieldId);
-		var additionalEnvError = helpers.get(errorId);
-
-		if (!additionalEnvInput || !additionalEnvError) return;
-
-		var currentValue = additionalEnvInput.value;
-
-		if (!validation.validateAdditionalEnv(currentValue)) {
-			helpers.removeClass(additionalEnvError, "hidden");
-		} else {
-			helpers.addClass(additionalEnvError, "hidden");
-		}
+		validation.validateAndShowError(fieldId, errorId, validation.validateAdditionalEnv);
 	};
 
 	// Validate all folder additional env fields
 	validation.validateAllFolderAdditionalEnv = function() {
-		var helpers = window.ConfigApp.helpers;
 		var allValid = true;
 
 		// Find all folder additional env inputs
@@ -133,60 +223,35 @@
 
 		for (var i = 0; i < inputs.length; i++) {
 			var input = inputs[i];
-            var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
+			var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
+			var fieldId = "folder_" + folderIndex + "_additionalEnv";
 			var errorId = "folder_" + folderIndex + "_additionalEnv-error";
-			var errorElement = helpers.get(errorId);
 
-			if (!errorElement) continue;
-
-			if (!validation.validateAdditionalEnv(input.value)) {
-				helpers.removeClass(errorElement, "hidden");
+			if (!validation.validateAndShowError(fieldId, errorId, validation.validateAdditionalEnv)) {
 				allValid = false;
-			} else {
-				helpers.addClass(errorElement, "hidden");
 			}
 		}
 
 		return allValid;
 	};
 
-	// Validate all fields before save
-	// Returns: { valid: boolean, failedField: string|null }
-	// failedField can be: "endpoint", "risk_score", "additional_env", or null if all valid
-	validation.validateAllBeforeSave = function() {
-		var helpers = window.ConfigApp.helpers;
+	// Get current form validation info by querying the validation state
+	// Returns: { isValid: boolean, validationState: object }
+	validation.getFormValidationInfo = function() {
+		var allValid = true;
 
-		// Validate endpoint
-		var endpointInput = helpers.get("endpoint");
-		var endpointError = helpers.get("endpoint-error");
-		if (endpointInput && endpointError) {
-			var currentEndpoint = endpointInput.value;
-			if (currentEndpoint && !validation.validateEndpoint(currentEndpoint)) {
-				helpers.removeClass(endpointError, "hidden");
-				return { valid: false, failedField: "endpoint" };
-			} else {
-				helpers.addClass(endpointError, "hidden");
+		// Check all fields in validation state
+		for (var fieldId in validationState) {
+			if (validationState.hasOwnProperty(fieldId) && validationState[fieldId] === false) {
+				allValid = false;
+				break;
 			}
 		}
 
-		// Validate risk score
-		var riskScoreInput = helpers.get("riskScoreThreshold");
-		var riskScoreError = helpers.get("riskScore-error");
-		if (riskScoreInput && riskScoreError) {
-			if (!validation.validateRiskScore(riskScoreInput.value)) {
-				helpers.removeClass(riskScoreError, "hidden");
-				return { valid: false, failedField: "risk_score" };
-			} else {
-				helpers.addClass(riskScoreError, "hidden");
-			}
-		}
-
-		// Validate all folder additional env fields
-		if (!validation.validateAllFolderAdditionalEnv()) {
-			return { valid: false, failedField: "additional_env" };
-		}
-
-		return { valid: true, failedField: null };
+		return {
+			isValid: allValid,
+			validationState: validationState
+		};
 	};
 
 	// Initialize validation event listeners for all per-folder additional env fields
@@ -207,6 +272,18 @@
 	// Initialize all validation event listeners
 	validation.initializeAllValidation = function() {
 		var helpers = window.ConfigApp.helpers;
+
+		// Token validation
+		var tokenInput = helpers.get("token");
+		if (tokenInput) {
+			helpers.addEvent(tokenInput, "input", validation.validateTokenOnInput);
+		}
+
+		// Re-validate token when authentication method changes
+		var authMethodSelect = helpers.get("authenticationMethod");
+		if (authMethodSelect) {
+			helpers.addEvent(authMethodSelect, "change", validation.validateTokenOnInput);
+		}
 
 		// Endpoint validation
 		var endpointInput = helpers.get("endpoint");

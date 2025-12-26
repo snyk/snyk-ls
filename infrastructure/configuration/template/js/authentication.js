@@ -37,6 +37,10 @@
 			if (window.ConfigApp.dirtyTracker && window.ConfigApp.dirtyTracker.markDirty) {
 				window.ConfigApp.dirtyTracker.markDirty();
 			}
+			// Trigger token validation
+			if (window.ConfigApp.validation && window.ConfigApp.validation.validateTokenOnInput) {
+				window.ConfigApp.validation.validateTokenOnInput();
+			}
 		}
 	};
 
