@@ -18,12 +18,6 @@
 			tokenInput.value = "";
 		}
 
-		// Disable the logout button
-		var logoutBtn = window.ConfigApp.helpers.get("logout-btn");
-		if (logoutBtn) {
-			logoutBtn.disabled = true;
-		}
-
 		// Call IDE logout function
 		window.__ideLogout__();
 	};
@@ -34,9 +28,9 @@
 		if (tokenInput) {
 			tokenInput.value = token;
 			// Trigger dirty state tracking
-			if (window.ConfigApp.dirtyTracker && window.ConfigApp.dirtyTracker.markDirty) {
-				window.ConfigApp.dirtyTracker.markDirty();
-			}
+      if (window.ConfigApp.formStateTracking && window.ConfigApp.formStateTracking.triggerChangeHandlers) {
+        window.ConfigApp.formStateTracking.triggerChangeHandlers();
+      }
 			// Trigger token validation
 			if (window.ConfigApp.validation && window.ConfigApp.validation.validateTokenOnInput) {
 				window.ConfigApp.validation.validateTokenOnInput();
