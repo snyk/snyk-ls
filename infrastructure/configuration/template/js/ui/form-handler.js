@@ -3,16 +3,19 @@
 
 (function () {
 	window.ConfigApp = window.ConfigApp || {};
-	var formData = {};
-	var helpers = window.ConfigApp.helpers;
+	var formHandler = {};
+	var dom = window.ConfigApp.dom || window.ConfigApp.helpers;
 
 	// Collect form data
-	formData.collectData = function () {
+	formHandler.collectData = function () {
+		var domHelper = dom || window.ConfigApp.helpers;
 		var data = {
 			folderConfigs: [],
 		};
 
-		var form = helpers.get("configForm");
+		var form = domHelper.get("configForm");
+		if (!form) return data;
+
 		var inputs = form.getElementsByTagName("input");
 		var selects = form.getElementsByTagName("select");
 		var textareas = form.getElementsByTagName("textarea");
@@ -133,10 +136,11 @@
 	}
 
 	function processFilterSeverity(data) {
-		var critical = helpers.getByName("filterSeverity_critical")[0];
-		var high = helpers.getByName("filterSeverity_high")[0];
-		var medium = helpers.getByName("filterSeverity_medium")[0];
-		var low = helpers.getByName("filterSeverity_low")[0];
+		var domHelper = dom || window.ConfigApp.helpers;
+		var critical = domHelper.getByName("filterSeverity_critical")[0];
+		var high = domHelper.getByName("filterSeverity_high")[0];
+		var medium = domHelper.getByName("filterSeverity_medium")[0];
+		var low = domHelper.getByName("filterSeverity_low")[0];
 
 		if (critical || high || medium || low) {
 			data.filterSeverity = {
@@ -149,8 +153,9 @@
 	}
 
 	function processIssueViewOptions(data) {
-		var openIssues = helpers.getByName("issueViewOptions_openIssues")[0];
-		var ignoredIssues = helpers.getByName("issueViewOptions_ignoredIssues")[0];
+		var domHelper = dom || window.ConfigApp.helpers;
+		var openIssues = domHelper.getByName("issueViewOptions_openIssues")[0];
+		var ignoredIssues = domHelper.getByName("issueViewOptions_ignoredIssues")[0];
 
 		if (openIssues || ignoredIssues) {
 			data.issueViewOptions = {
@@ -160,5 +165,7 @@
 		}
 	}
 
-	window.ConfigApp.formData = formData;
+	// Maintain backward compatibility with old namespace
+	window.ConfigApp.formData = formHandler;
+	window.ConfigApp.formHandler = formHandler;
 })();

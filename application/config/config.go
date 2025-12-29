@@ -173,7 +173,7 @@ type Config struct {
 	logFile                             *os.File
 	snykCodeAnalysisTimeout             time.Duration
 	snykApiUrl                          string
-	baseUrl                             string
+	cliBaseDownloadURL                  string
 	token                               string
 	deviceId                            string
 	clientCapabilities                  types.ClientCapabilities
@@ -483,16 +483,16 @@ func (c *Config) SnykUI() string {
 	return snykUiUrl
 }
 
-func (c *Config) BaseUrl() string {
+func (c *Config) CliBaseDownloadURL() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
-	return c.baseUrl
+	return c.cliBaseDownloadURL
 }
 
-func (c *Config) SetBaseUrl(baseUrl string) {
+func (c *Config) SetCliBaseDownloadURL(cliBaseDownloadURL string) {
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.baseUrl = baseUrl
+	c.cliBaseDownloadURL = cliBaseDownloadURL
 }
 
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }

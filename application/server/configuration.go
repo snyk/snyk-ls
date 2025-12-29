@@ -50,7 +50,7 @@ const (
 	configAdditionalParameters                = "additionalParameters"
 	configAuthenticationMethod                = "authenticationMethod"
 	configBaseBranch                          = "baseBranch"
-	configBaseUrl                             = "baseUrl"
+	configCliBaseDownloadURL                  = "cliBaseDownloadURL"
 	configEnableDeltaFindings                 = "enableDeltaFindings"
 	configEnableSnykLearnCodeActions          = "enableSnykLearnCodeActions"
 	configEnableSnykOSSQuickFixCodeActions    = "enableSnykOSSQuickFixCodeActions"
@@ -183,7 +183,7 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateProductEnablement(c, settings, triggerSource)
 	updateCliConfig(c, settings)
 	updateApiEndpoints(c, settings, triggerSource) // Must be called before token is set, as it may trigger a logout which clears the token.
-	updateBaseUrl(c, settings, triggerSource)
+	updateCliBaseDownloadURL(c, settings, triggerSource)
 	updateToken(settings.Token) // Must be called before the Authentication method is set, as the latter checks the token.
 	updateAuthenticationMethod(c, settings, triggerSource)
 	updateEnvironment(c, settings)
@@ -592,17 +592,17 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource
 	}
 }
 
-func updateBaseUrl(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	newBaseUrl := strings.TrimSpace(settings.BaseUrl)
-	if newBaseUrl == "" {
+func updateCliBaseDownloadURL(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
+	newCliBaseDownloadURL := strings.TrimSpace(settings.CliBaseDownloadURL)
+	if newCliBaseDownloadURL == "" {
 		return
 	}
 
-	oldBaseUrl := c.BaseUrl()
-	c.SetBaseUrl(newBaseUrl)
+	oldCliBaseDownloadURL := c.CliBaseDownloadURL()
+	c.SetCliBaseDownloadURL(newCliBaseDownloadURL)
 
-	if oldBaseUrl != newBaseUrl && c.IsLSPInitialized() {
-		analytics.SendConfigChangedAnalytics(c, configBaseUrl, oldBaseUrl, newBaseUrl, triggerSource)
+	if oldCliBaseDownloadURL != newCliBaseDownloadURL && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configCliBaseDownloadURL, oldCliBaseDownloadURL, newCliBaseDownloadURL, triggerSource)
 	}
 }
 

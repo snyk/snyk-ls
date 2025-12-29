@@ -3,8 +3,10 @@
 (function (window) {
 	"use strict";
 
+	window.ConfigApp = window.ConfigApp || {};
+
 	// Utility namespace
-	var FormUtils = {};
+	var utils = {};
 
 	/**
 	 * Deep clone an object or array (IE7 compatible)
@@ -12,7 +14,7 @@
 	 * @param {*} obj - The object to clone
 	 * @returns {*} A deep copy of the object
 	 */
-	FormUtils.deepClone = function (obj) {
+	utils.deepClone = function (obj) {
 		// Handle primitives and null/undefined
 		if (obj === null || typeof obj !== "object") {
 			return obj;
@@ -27,7 +29,7 @@
 		if (obj instanceof Array || Object.prototype.toString.call(obj) === "[object Array]") {
 			var arrCopy = [];
 			for (var i = 0; i < obj.length; i++) {
-				arrCopy[i] = FormUtils.deepClone(obj[i]);
+				arrCopy[i] = utils.deepClone(obj[i]);
 			}
 			return arrCopy;
 		}
@@ -37,7 +39,7 @@
 			var objCopy = {};
 			for (var key in obj) {
 				if (obj.hasOwnProperty(key)) {
-					objCopy[key] = FormUtils.deepClone(obj[key]);
+					objCopy[key] = utils.deepClone(obj[key]);
 				}
 			}
 			return objCopy;
@@ -53,7 +55,7 @@
 	 * @param {*} val - The value to normalize
 	 * @returns {*} The normalized value
 	 */
-	FormUtils.normalizeValue = function (val) {
+	utils.normalizeValue = function (val) {
 		// Convert empty strings to null for consistent comparison
 		if (val === "") {
 			return null;
@@ -90,7 +92,7 @@
 	 * @param {number} wait - The delay in milliseconds
 	 * @returns {Function} The debounced function
 	 */
-	FormUtils.debounce = function (func, wait) {
+	utils.debounce = function (func, wait) {
 		var timeout = null;
 
 		return function () {
@@ -114,7 +116,7 @@
 	 * @param {Object} obj - The object to get keys from
 	 * @returns {Array} Array of object keys
 	 */
-	FormUtils.getKeys = function (obj) {
+	utils.getKeys = function (obj) {
 		if (Object.keys) {
 			return Object.keys(obj);
 		}
@@ -134,7 +136,7 @@
 	 * @param {*} val - The value to check
 	 * @returns {boolean} True if value is an array
 	 */
-	FormUtils.isArray = function (val) {
+	utils.isArray = function (val) {
 		if (Array.isArray) {
 			return Array.isArray(val);
 		}
@@ -148,7 +150,7 @@
 	 * @param {string} str - The string to trim
 	 * @returns {string} The trimmed string
 	 */
-	FormUtils.trim = function (str) {
+	utils.trim = function (str) {
 		if (!str) {
 			return str;
 		}
@@ -166,7 +168,7 @@
 	 * @param {string} jsonString - The JSON string to parse
 	 * @returns {*} The parsed object or null on error
 	 */
-	FormUtils.parseJSON = function (jsonString) {
+	utils.parseJSON = function (jsonString) {
 		if (!jsonString) {
 			return null;
 		}
@@ -188,20 +190,20 @@
 	 * @param {*} obj - The object to stringify
 	 * @returns {string} The JSON string
 	 */
-	FormUtils.stringifyJSON = function (obj) {
+	utils.stringifyJSON = function (obj) {
 		if (window.JSON && window.JSON.stringify) {
 			return JSON.stringify(obj);
 		}
 
 		// Fallback for IE7 - basic implementation
-		return FormUtils._stringifyValue(obj);
+		return utils._stringifyValue(obj);
 	};
 
 	/**
 	 * Internal helper for JSON stringification
 	 * @private
 	 */
-	FormUtils._stringifyValue = function (val) {
+	utils._stringifyValue = function (val) {
 		if (val === null || val === undefined) {
 			return "null";
 		}
@@ -216,11 +218,11 @@
 			return '"' + val.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
 		}
 
-		if (FormUtils.isArray(val)) {
+		if (utils.isArray(val)) {
 			var arrStr = "[";
 			for (var i = 0; i < val.length; i++) {
 				if (i > 0) arrStr += ",";
-				arrStr += FormUtils._stringifyValue(val[i]);
+				arrStr += utils._stringifyValue(val[i]);
 			}
 			return arrStr + "]";
 		}
@@ -231,7 +233,7 @@
 			for (var key in val) {
 				if (val.hasOwnProperty(key)) {
 					if (!first) objStr += ",";
-					objStr += '"' + key + '":' + FormUtils._stringifyValue(val[key]);
+					objStr += '"' + key + '":' + utils._stringifyValue(val[key]);
 					first = false;
 				}
 			}
@@ -241,6 +243,7 @@
 		return "null";
 	};
 
-	// Expose to window
-	window.FormUtils = FormUtils;
+	// Expose to window and ConfigApp namespace
+	window.FormUtils = utils;
+	window.ConfigApp.utils = utils;
 })(window);

@@ -173,16 +173,9 @@
 	 * @param {boolean} isDirty - Current dirty state
 	 */
 	DirtyTracker.prototype._notifyStateChange = function (isDirty) {
-		// Call IDE-injected handler if available
-		if (typeof window.__onFormDirtyChange__ === "function") {
-			try {
-				window.__onFormDirtyChange__(isDirty);
-			} catch (e) {
-				// Silently ignore errors in IDE handler
-				if (window.console && window.console.error) {
-					console.error("Error in __onFormDirtyChange__ handler:", e);
-				}
-			}
+		// Use IDE bridge if available
+		if (window.ConfigApp && window.ConfigApp.ideBridge) {
+			window.ConfigApp.ideBridge.notifyDirtyState(isDirty);
 		}
 	};
 
