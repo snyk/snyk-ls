@@ -1,33 +1,28 @@
-// ABOUTME: Consolidated form state tracking for dirty state and auto-save
-// ABOUTME: Monitors form changes via blur/change events and triggers both dirty tracking and auto-save
+// ABOUTME: Consolidated form state coordination for dirty state and auto-save
+// ABOUTME: Manages state transitions and coordinates between dirty tracking and auto-save
 
 (function() {
 	window.ConfigApp = window.ConfigApp || {};
-	var formStateTracking = {};
-	var helpers = window.ConfigApp.helpers;
+	var formState = {};
 
 	var debouncedDirtyCheck = null;
 
 	// Initialize dirty tracking
-	formStateTracking.initializeDirtyTracking = function() {
+	formState.initializeDirtyTracking = function() {
 		if (typeof window.DirtyTracker === "undefined") {
 			return;
 		}
 
 		// Create global dirty tracker instance
 		window.dirtyTracker = new window.DirtyTracker();
-		window.dirtyTracker.initialize(window.ConfigApp.formData.collectData);
 
-		// Expose IDE interface functions
-		window.__isFormDirty__ = function () {
-			return window.dirtyTracker ? window.dirtyTracker.getDirtyState() : false;
-		};
+		// Use formHandler.collectData if available, otherwise use legacy formData.collectData
+		var collectDataFn = (window.ConfigApp.formHandler && window.ConfigApp.formHandler.collectData) ||
+			(window.ConfigApp.formData && window.ConfigApp.formData.collectData);
 
-		window.__resetDirtyState__ = function () {
-			if (window.dirtyTracker) {
-				window.dirtyTracker.reset();
-			}
-		};
+		if (collectDataFn) {
+			window.dirtyTracker.initialize(collectDataFn);
+		}
 
 		// Create debounced dirty check function
 		debouncedDirtyCheck = window.FormUtils.debounce(function () {
@@ -36,7 +31,7 @@
 	};
 
 	// Consolidated function that triggers both dirty check and auto-save
-	formStateTracking.triggerChangeHandlers = function() {
+	formState.triggerChangeHandlers = function() {
 		// Trigger dirty check
 		if (debouncedDirtyCheck) {
 			debouncedDirtyCheck();
@@ -48,12 +43,15 @@
 	};
 
 	// Attach listeners to all form inputs (consolidated for both dirty tracking and auto-save)
-	formStateTracking.attachFormStateListeners = function() {
+	formState.attachFormStateListeners = function() {
 		if (!window.dirtyTracker) {
 			return;
 		}
 
-		var form = helpers.get("configForm");
+		var dom = window.ConfigApp.dom || window.ConfigApp.helpers;
+		if (!dom) return;
+
+		var form = dom.get("configForm");
 		if (!form) return;
 
 		var inputs = form.getElementsByTagName("input");
@@ -62,23 +60,24 @@
 
 		// Add blur listeners to all text inputs
 		for (var i = 0; i < inputs.length; i++) {
-			helpers.addEvent(inputs[i], "blur", formStateTracking.triggerChangeHandlers);
+			dom.addEvent(inputs[i], "blur", formState.triggerChangeHandlers);
 			// Also track change for checkboxes and radios
 			if (inputs[i].type === "checkbox" || inputs[i].type === "radio") {
-				helpers.addEvent(inputs[i], "change", formStateTracking.triggerChangeHandlers);
+				dom.addEvent(inputs[i], "change", formState.triggerChangeHandlers);
 			}
 		}
 
 		// Add change listeners to all selects
 		for (var j = 0; j < selects.length; j++) {
-			helpers.addEvent(selects[j], "change", formStateTracking.triggerChangeHandlers);
+			dom.addEvent(selects[j], "change", formState.triggerChangeHandlers);
 		}
 
 		// Add blur listeners to all textareas
 		for (var k = 0; k < textareas.length; k++) {
-			helpers.addEvent(textareas[k], "blur", formStateTracking.triggerChangeHandlers);
+			dom.addEvent(textareas[k], "blur", formState.triggerChangeHandlers);
 		}
 	};
 
-	window.ConfigApp.formStateTracking = formStateTracking;
+	window.ConfigApp.formStateTracking = formState;
+	window.ConfigApp.formState = formState;
 })();

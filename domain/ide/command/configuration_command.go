@@ -68,7 +68,7 @@ func constructSettingsFromConfig(c *config.Config) types.Settings {
 		// Core Authentication
 		Token:                   c.Token(),
 		Endpoint:                c.Endpoint(),
-		BaseUrl:                 c.BaseUrl(),
+		CliBaseDownloadURL:      c.CliBaseDownloadURL(),
 		Organization:            c.Organization(),
 		AuthenticationMethod:    c.AuthenticationMethod(),
 		AutomaticAuthentication: fmt.Sprintf("%v", c.AutomaticAuthentication()),
