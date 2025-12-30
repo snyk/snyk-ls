@@ -594,9 +594,6 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource
 
 func updateCliBaseDownloadURL(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
 	newCliBaseDownloadURL := strings.TrimSpace(settings.CliBaseDownloadURL)
-	if newCliBaseDownloadURL == "" {
-		return
-	}
 
 	oldCliBaseDownloadURL := c.CliBaseDownloadURL()
 	c.SetCliBaseDownloadURL(newCliBaseDownloadURL)

@@ -26,9 +26,10 @@
 		var autoOrg = orgInput.getAttribute("data-auto-org") || "";
 
 		if (isAutoOrg) {
-			// Auto select is ON: show AutoDeterminedOrg (readonly)
+			// Auto select is ON: show AutoDeterminedOrg (readonly) and clear preferred org
 			orgInput.value = autoOrg;
 			orgInput.setAttribute("readonly", "readonly");
+			orgInput.setAttribute("data-preferred-org", "");
 			orgSetByUserInput.value = "false";
 		} else {
 			// Auto select is OFF: show PreferredOrg (editable)
