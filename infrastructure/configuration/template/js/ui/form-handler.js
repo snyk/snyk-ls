@@ -97,6 +97,16 @@
 						}
 					} else {
 						var field = parts.slice(2).join("_");
+
+						// Skip preferredOrg if orgSetByUser is false (auto-org is enabled)
+						if (field === "preferredOrg") {
+							var domHelper = dom || window.ConfigApp.helpers;
+							var orgSetByUserInput = domHelper.get("folder_" + index + "_orgSetByUser");
+							if (orgSetByUserInput && orgSetByUserInput.value === "false") {
+								continue;
+							}
+						}
+
 						setFieldValue(data.folderConfigs[index], field, el);
 					}
 				}

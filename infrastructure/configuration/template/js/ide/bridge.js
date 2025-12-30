@@ -85,9 +85,9 @@
 	 * @param {boolean} isDirty - Whether the form is dirty
 	 */
 	ideBridge.notifyDirtyState = function(isDirty) {
-		if (typeof window.__onDirtyStateChanged__ === "function") {
+		if (typeof window.__onFormDirtyChange__ === "function") {
 			try {
-				window.__onDirtyStateChanged__(isDirty);
+				window.__onFormDirtyChange__(isDirty);
 			} catch (e) {
 				if (window.console && console.error) {
 					console.error("Error notifying IDE of dirty state:", e);
