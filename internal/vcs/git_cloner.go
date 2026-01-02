@@ -58,6 +58,13 @@ func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath t
 	if err != nil {
 		logger.Error().Err(err).Msgf("Could not patch origin remote url in cloned repo %s", destinationPath)
 	}
+
+	logger.Debug().
+		Str("srcRepoPath", string(srcRepoPath)).
+		Str("destinationPath", string(destinationPath)).
+		Str("targetBranchName", targetBranchName).
+		Msg("successfully cloned base branch")
+
 	return clonedRepo, nil
 }
 
@@ -130,6 +137,11 @@ func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath types.FilePath, des
 		logger.Debug().Err(checkOutErr).Msgf("Could not checkout target branch %s. Exiting", targetBranchReferenceName.Short())
 		return nil
 	}
+
+	logger.Debug().
+		Str("branch", targetBranchReferenceName.Short()).
+		Msg("successfully cloned base branch via FS copy")
+
 	return targetRepo
 }
 

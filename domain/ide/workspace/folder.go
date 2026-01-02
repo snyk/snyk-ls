@@ -540,8 +540,6 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 		return issueByFile, nil
 	}
 
-	logger.Debug().Msgf("current issues count=%d", len(getFlatIssueList(issueByFile)))
-
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
 	if err != nil {
 		logger.Debug().Msgf("GetPersistedIssueList returned error: %v", err)
@@ -556,6 +554,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	currentFlatIssueList := getFlatIssueList(issueByFile)
+	logger.Debug().Msgf("current issues count=%d", len(currentFlatIssueList))
 
 	currentFindingIdentifiable := make([]delta.Identifiable, len(currentFlatIssueList))
 	for i := range currentFlatIssueList {
