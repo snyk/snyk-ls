@@ -418,6 +418,8 @@ func (i *Issue) GetFilterableIssueType() product.FilterableIssueType {
 		return product.FilterableIssueTypeOpenSource
 	case product.ProductInfrastructureAsCode:
 		return product.FilterableIssueTypeInfrastructureAsCode
+	case product.ProductContainer:
+		return product.FilterableIssueTypeContainer
 	case product.ProductCode:
 		switch i.IssueType {
 		case types.CodeSecurityVulnerability:
