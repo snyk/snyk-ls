@@ -73,6 +73,9 @@ func createProgressListener(progressChannel chan types.ProgressParams, server ty
 }
 
 func notifyProgress(server types.Server, p types.ProgressParams) {
+	if p.Value == nil {
+		return
+	}
 	_ = server.Notify(context.Background(), "$/progress", p)
 }
 

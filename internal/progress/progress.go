@@ -257,8 +257,9 @@ func newProgressParams(title, message string, cancellable, unquantifiableLength 
 }
 
 func (t *Tracker) send(progress types.ProgressParams, logger zerolog.Logger) {
-	if progress.Token == "" {
-		logger.Warn().Msg("progress has no token")
+	if progress.Token == "" || progress.Value == nil {
+		logger.Warn().Any("progress", progress).Msg("invalid progress param, token or value not filled")
+		return
 	}
 	t.channel <- progress
 }
