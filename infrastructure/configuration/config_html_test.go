@@ -82,7 +82,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 		"cliPath",
 		"manageBinariesAutomatically",
 		"cliReleaseChannel",
-		"baseUrl",
+		"cliBaseDownloadURL",
 		"trustedFolders",
 	}
 
