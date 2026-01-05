@@ -70,9 +70,9 @@
 
 		// If no auth method specified, try to get it from the form
 		if (!authMethod) {
-			var helpers = window.ConfigApp.helpers;
-			var authMethodSelect = helpers.get("authenticationMethod");
-			authMethod = authMethodSelect ? authMethodSelect.value : "token";
+			var dom = window.ConfigApp.dom;
+			var authMethodSelect = dom.get("authenticationMethod");
+			authMethod = authMethodSelect ? authMethodSelect.value : "oauth";
 		}
 
 		var isValid = false;
@@ -129,38 +129,13 @@
 			return true; // Empty is valid
 		}
 
-		// Split by semicolon to get individual env vars
-		var envVars = value.split(";");
+		// Pattern: KEY=VALUE where KEY is valid env var name [A-Za-z_][A-Za-z0-9_]*
+		// VALUE cannot contain ; or = characters (exactly one = per segment)
+		var envVarPattern = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[^;=]*\s*$/;
 
-		for (var i = 0; i < envVars.length; i++) {
-			var envVar = envVars[i].trim();
-
-			// Skip empty segments
-			if (envVar === "") {
-				continue;
-			}
-
-			// Check if it contains exactly one '=' separator
-			var parts = envVar.split("=");
-			if (parts.length !== 2) {
-				return false;
-			}
-
-			var key = parts[0].trim();
-			var val = parts[1].trim();
-
-			// Key must not be empty and should be a valid env var name (alphanumeric + underscore)
-			if (key === "" || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
-				return false;
-			}
-
-			// Value can be empty but key cannot
-			if (val === undefined) {
-				return false;
-			}
-		}
-
-		return true;
+		return value.split(";")
+			.filter(function(segment) { return segment.trim() !== ""; })
+			.every(function(segment) { return envVarPattern.test(segment); });
 	};
 
 	// Helper function to validate a field and show/hide error message
@@ -170,9 +145,9 @@
 	// Returns true if valid, false if invalid
 	// Updates the global validation state using fieldId as the key
 	validation.validateAndShowError = function(fieldId, errorId, validatorFn) {
-		var helpers = window.ConfigApp.helpers;
-		var input = helpers.get(fieldId);
-		var error = helpers.get(errorId);
+		var dom = window.ConfigApp.dom;
+		var input = dom.get(fieldId);
+		var error = dom.get(errorId);
 
 		if (!input || !error) return true;
 
@@ -187,17 +162,17 @@
 				if (result.errorMessage) {
 					error.textContent = result.errorMessage;
 				}
-				helpers.removeClass(error, "hidden");
+				dom.removeClass(error, "hidden");
 			} else {
-				helpers.addClass(error, "hidden");
+				dom.addClass(error, "hidden");
 			}
 		} else {
 			// Handle boolean result
 			isValid = !!result;
 			if (!isValid) {
-				helpers.removeClass(error, "hidden");
+				dom.removeClass(error, "hidden");
 			} else {
-				helpers.addClass(error, "hidden");
+				dom.addClass(error, "hidden");
 			}
 		}
 
@@ -256,13 +231,13 @@
 
 	// Initialize validation event listeners for all per-folder additional env fields
 	validation.initializeFolderAdditionalEnvValidation = function() {
-		var helpers = window.ConfigApp.helpers;
+		var dom = window.ConfigApp.dom;
 		var folderAdditionalEnvInputs = document.querySelectorAll('[id^="folder_"][id$="_additionalEnv"]');
 
 		for (var i = 0; i < folderAdditionalEnvInputs.length; i++) {
 			(function(input) {
                 var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
-				helpers.addEvent(input, "input", function() {
+				dom.addEvent(input, "input", function() {
 					validation.validateFolderAdditionalEnvOnInput(folderIndex);
 				});
 			})(folderAdditionalEnvInputs[i]);
@@ -271,30 +246,30 @@
 
 	// Initialize all validation event listeners
 	validation.initializeAllValidation = function() {
-		var helpers = window.ConfigApp.helpers;
+		var dom = window.ConfigApp.dom;
 
 		// Token validation
-		var tokenInput = helpers.get("token");
+		var tokenInput = dom.get("token");
 		if (tokenInput) {
-			helpers.addEvent(tokenInput, "input", validation.validateTokenOnInput);
+			dom.addEvent(tokenInput, "input", validation.validateTokenOnInput);
 		}
 
 		// Re-validate token when authentication method changes
-		var authMethodSelect = helpers.get("authenticationMethod");
+		var authMethodSelect = dom.get("authenticationMethod");
 		if (authMethodSelect) {
-			helpers.addEvent(authMethodSelect, "change", validation.validateTokenOnInput);
+			dom.addEvent(authMethodSelect, "change", validation.validateTokenOnInput);
 		}
 
 		// Endpoint validation
-		var endpointInput = helpers.get("endpoint");
+		var endpointInput = dom.get("endpoint");
 		if (endpointInput) {
-			helpers.addEvent(endpointInput, "input", validation.validateEndpointOnInput);
+			dom.addEvent(endpointInput, "input", validation.validateEndpointOnInput);
 		}
 
 		// Risk score validation
-		var riskScoreInput = helpers.get("riskScoreThreshold");
+		var riskScoreInput = dom.get("riskScoreThreshold");
 		if (riskScoreInput) {
-			helpers.addEvent(riskScoreInput, "input", validation.validateRiskScoreOnInput);
+			dom.addEvent(riskScoreInput, "input", validation.validateRiskScoreOnInput);
 		}
 
 		// Per-folder additional env validation

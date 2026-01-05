@@ -2,7 +2,7 @@
 // ABOUTME: Runs on window load to set up the complete configuration dialog functionality
 
 (function () {
-	var dom = window.ConfigApp.dom || window.ConfigApp.helpers;
+	var dom = window.ConfigApp.dom;
 
 	// Initialize on window load
 	dom.addEvent(window, "load", function () {

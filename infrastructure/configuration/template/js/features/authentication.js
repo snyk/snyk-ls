@@ -4,7 +4,7 @@
 (function () {
 	window.ConfigApp = window.ConfigApp || {};
 	var authentication = {};
-	var dom = window.ConfigApp.dom || window.ConfigApp.helpers;
+	var dom = window.ConfigApp.dom;
 	var ideBridge = window.ConfigApp.ideBridge;
 
 	authentication.authenticate = function () {
@@ -23,8 +23,7 @@
 
 	authentication.logout = function () {
 		// Clear the token field
-		var domHelper = dom || window.ConfigApp.helpers;
-		var tokenInput = domHelper ? domHelper.get("token") : document.getElementById("token");
+		var tokenInput = dom.get("token");
 		if (tokenInput) {
 			tokenInput.value = "";
 		}

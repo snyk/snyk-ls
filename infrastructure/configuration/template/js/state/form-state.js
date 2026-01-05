@@ -16,12 +16,8 @@
 		// Create global dirty tracker instance
 		window.dirtyTracker = new window.DirtyTracker();
 
-		// Use formHandler.collectData if available, otherwise use legacy formData.collectData
-		var collectDataFn = (window.ConfigApp.formHandler && window.ConfigApp.formHandler.collectData) ||
-			(window.ConfigApp.formData && window.ConfigApp.formData.collectData);
-
-		if (collectDataFn) {
-			window.dirtyTracker.initialize(collectDataFn);
+		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.collectData) {
+			window.dirtyTracker.initialize(window.ConfigApp.formHandler.collectData);
 		}
 
 		// Create debounced dirty check function
@@ -48,7 +44,7 @@
 			return;
 		}
 
-		var dom = window.ConfigApp.dom || window.ConfigApp.helpers;
+		var dom = window.ConfigApp.dom;
 		if (!dom) return;
 
 		var form = dom.get("configForm");

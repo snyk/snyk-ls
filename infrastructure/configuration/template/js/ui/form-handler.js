@@ -4,16 +4,15 @@
 (function () {
 	window.ConfigApp = window.ConfigApp || {};
 	var formHandler = {};
-	var dom = window.ConfigApp.dom || window.ConfigApp.helpers;
+	var dom = window.ConfigApp.dom;
 
 	// Collect form data
 	formHandler.collectData = function () {
-		var domHelper = dom || window.ConfigApp.helpers;
 		var data = {
 			folderConfigs: [],
 		};
 
-		var form = domHelper.get("configForm");
+		var form = dom.get("configForm");
 		if (!form) return data;
 
 		var inputs = form.getElementsByTagName("input");
@@ -100,8 +99,7 @@
 
 						// Skip preferredOrg if orgSetByUser is false (auto-org is enabled)
 						if (field === "preferredOrg") {
-							var domHelper = dom || window.ConfigApp.helpers;
-							var orgSetByUserInput = domHelper.get("folder_" + index + "_orgSetByUser");
+							var orgSetByUserInput = dom.get("folder_" + index + "_orgSetByUser");
 							if (orgSetByUserInput && orgSetByUserInput.value === "false") {
 								continue;
 							}
@@ -146,11 +144,10 @@
 	}
 
 	function processFilterSeverity(data) {
-		var domHelper = dom || window.ConfigApp.helpers;
-		var critical = domHelper.getByName("filterSeverity_critical")[0];
-		var high = domHelper.getByName("filterSeverity_high")[0];
-		var medium = domHelper.getByName("filterSeverity_medium")[0];
-		var low = domHelper.getByName("filterSeverity_low")[0];
+		var critical = dom.getByName("filterSeverity_critical")[0];
+		var high = dom.getByName("filterSeverity_high")[0];
+		var medium = dom.getByName("filterSeverity_medium")[0];
+		var low = dom.getByName("filterSeverity_low")[0];
 
 		if (critical || high || medium || low) {
 			data.filterSeverity = {
@@ -163,9 +160,8 @@
 	}
 
 	function processIssueViewOptions(data) {
-		var domHelper = dom || window.ConfigApp.helpers;
-		var openIssues = domHelper.getByName("issueViewOptions_openIssues")[0];
-		var ignoredIssues = domHelper.getByName("issueViewOptions_ignoredIssues")[0];
+		var openIssues = dom.getByName("issueViewOptions_openIssues")[0];
+		var ignoredIssues = dom.getByName("issueViewOptions_ignoredIssues")[0];
 
 		if (openIssues || ignoredIssues) {
 			data.issueViewOptions = {
@@ -175,7 +171,5 @@
 		}
 	}
 
-	// Maintain backward compatibility with old namespace
-	window.ConfigApp.formData = formHandler;
 	window.ConfigApp.formHandler = formHandler;
 })();

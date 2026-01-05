@@ -41,7 +41,5 @@
 		}
 	};
 
-	// Maintain backward compatibility with old helpers namespace
-	window.ConfigApp.helpers = dom;
 	window.ConfigApp.dom = dom;
 })();

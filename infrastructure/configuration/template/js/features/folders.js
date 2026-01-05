@@ -4,7 +4,7 @@
 (function() {
 	window.ConfigApp = window.ConfigApp || {};
 	var folders = {};
-	var dom = window.ConfigApp.dom || window.ConfigApp.helpers;
+	var dom = window.ConfigApp.dom;
 
 	var trustedFolderIndex = 0;
 

@@ -4,7 +4,7 @@
 (function() {
 	window.ConfigApp = window.ConfigApp || {};
 	var autoSave = {};
-	var dom = window.ConfigApp.dom || window.ConfigApp.helpers;
+	var dom = window.ConfigApp.dom;
 	var ideBridge = window.ConfigApp.ideBridge;
 
 	var saveTimeout = null;
@@ -13,8 +13,7 @@
 
 	// Get current form data, validate, and call __saveIdeConfig__
 	autoSave.getAndSaveIdeConfig = function() {
-		var domHelper = dom || window.ConfigApp.helpers;
-		var endpointInput = domHelper ? domHelper.get("endpoint") : document.getElementById("endpoint");
+		var endpointInput = dom.get("endpoint");
 		var currentEndpoint = endpointInput ? endpointInput.value : "";
 
 		// Check validation state
@@ -26,16 +25,15 @@
 			return;
 		}
 
-		// Collect form data using formHandler if available, otherwise use legacy formData
-		var formDataCollector = window.ConfigApp.formHandler || window.ConfigApp.formData;
-		if (!formDataCollector || !formDataCollector.collectData) {
+		// Collect form data
+		if (!window.ConfigApp.formHandler || !window.ConfigApp.formHandler.collectData) {
 			if (ideBridge) {
 				ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.ERROR);
 			}
 			return;
 		}
 
-		var data = formDataCollector.collectData();
+		var data = window.ConfigApp.formHandler.collectData();
 		var jsonString = JSON.stringify(data);
 
 		// Try to save using IDE bridge
