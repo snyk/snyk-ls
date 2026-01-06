@@ -17,12 +17,10 @@
 
 		var inputs = form.getElementsByTagName("input");
 		var selects = form.getElementsByTagName("select");
-		var textareas = form.getElementsByTagName("textarea");
 
 		// Process all elements
 		processElements(inputs, data);
 		processElements(selects, data);
-		processElements(textareas, data);
 
 		// Process complex objects
 		processFilterSeverity(data);
@@ -96,6 +94,11 @@
 						}
 					} else {
 						var field = parts.slice(2).join("_");
+          if (field === "additionalParameters") {
+							// Split by whitespace and filter out empty strings
+							data.folderConfigs[index][field] = el.value ? el.value.trim().split(/\s+/).filter(function(item) { return item.length > 0; }) : [];
+              continue
+            }
 
 						// Skip preferredOrg if orgSetByUser is false (auto-org is enabled)
 						if (field === "preferredOrg") {
@@ -120,17 +123,6 @@
 			obj[field] = el.checked;
 		} else if (el.type === "number") {
 			obj[field] = el.value ? parseInt(el.value) : null;
-		} else if (el.tagName.toLowerCase() === "textarea") {
-			// Try to parse as JSON, fallback to string
-			try {
-				if (el.value && el.value.trim()) {
-					obj[field] = JSON.parse(el.value);
-				} else {
-					obj[field] = null;
-				}
-			} catch (e) {
-				obj[field] = el.value;
-			}
 		} else {
 			// Convert string boolean values to actual booleans
 			if (el.value === "true") {
