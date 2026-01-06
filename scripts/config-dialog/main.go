@@ -224,6 +224,45 @@ func main() {
 			cursor: pointer;
 			margin: 0;
 		}
+		.toggle-switch {
+			position: relative;
+			display: inline-block;
+			width: 48px;
+			height: 24px;
+		}
+		.toggle-switch input {
+			opacity: 0;
+			width: 0;
+			height: 0;
+		}
+		.toggle-slider {
+			position: absolute;
+			cursor: pointer;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background-color: #ccc;
+			transition: 0.3s;
+			border-radius: 24px;
+		}
+		.toggle-slider:before {
+			position: absolute;
+			content: "";
+			height: 18px;
+			width: 18px;
+			left: 3px;
+			bottom: 3px;
+			background-color: white;
+			transition: 0.3s;
+			border-radius: 50%;
+		}
+		input:checked + .toggle-slider {
+			background-color: #28a745;
+		}
+		input:checked + .toggle-slider:before {
+			transform: translateX(24px);
+		}
 	</style>
 	<div id="test-panel">
 		<div class="status-row">
@@ -234,6 +273,13 @@ func main() {
 			<span class="status-label">Form Dirty:</span>
 			<span id="status-dirty" class="status-clean">✅ Clean</span>
 		</div>
+		<div class="status-row">
+			<span class="status-label">Auto-Save:</span>
+			<label class="toggle-switch">
+				<input type="checkbox" id="auto-save-toggle" checked>
+				<span class="toggle-slider"></span>
+			</label>
+		</div>
 		<button id="test-save-btn" type="button">💾 Save Configuration</button>
 		<div id="json-output">
 			<div class="json-header">
@@ -243,6 +289,11 @@ func main() {
 		</div>
 	</div>
 	<script nonce="ideNonce">
+		// Initialize IDE auto-save flag (default to true for testing)
+		if (typeof window.__IS_IDE_AUTOSAVE_ENABLED__ === 'undefined') {
+			window.__IS_IDE_AUTOSAVE_ENABLED__ = true;
+		}
+
 		// Update validation status display
 		function updateValidationStatus() {
 			var validationInfo = window.ConfigApp.validation.getFormValidationInfo();
@@ -268,7 +319,7 @@ func main() {
 			}
 		};
 
-		// Mock save function for testing
+		// Mock save function for testing (called by auto-save when form changes)
 		window.__saveIdeConfig__ = function(jsonString) {
 			var formatted = JSON.stringify(JSON.parse(jsonString), null, 2);
 			var jsonOutput = document.getElementById('json-output');
@@ -288,6 +339,14 @@ func main() {
 		window.__ideLogout__ = function() {
 			alert("🚪 Logout triggered");
 		};
+
+		// Initialize toggle to match IDE auto-save state
+		document.getElementById('auto-save-toggle').checked = window.__IS_IDE_AUTOSAVE_ENABLED__;
+
+		// Wire up auto-save toggle
+		document.getElementById('auto-save-toggle').addEventListener('change', function(e) {
+			window.__IS_IDE_AUTOSAVE_ENABLED__ = e.target.checked;
+		});
 
 		// Wire up test save button
 		document.getElementById('test-save-btn').addEventListener('click', function() {

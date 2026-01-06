@@ -7,8 +7,6 @@
 	var dom = window.ConfigApp.dom;
 	var ideBridge = window.ConfigApp.ideBridge;
 
-	var saveTimeout = null;
-	var SAVE_DELAY = 500; // milliseconds delay for debouncing
 	var originalEndpoint = "";
 
 	// Get current form data, validate, and call __saveIdeConfig__
@@ -83,20 +81,6 @@
 				ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.SUCCESS);
 			}
 		}
-	};
-
-	// Debounced save - delays save until user stops changing inputs
-	autoSave.debouncedSave = function() {
-		// Check if auto-save is enabled using IDE bridge
-		var isEnabled = ideBridge ? ideBridge.isAutoSaveEnabled() : window.__IS_IDE_AUTOSAVE_ENABLED__;
-		if (!isEnabled) return;
-
-		if (saveTimeout) {
-			clearTimeout(saveTimeout);
-		}
-		saveTimeout = setTimeout(function () {
-			autoSave.getAndSaveIdeConfig();
-		}, SAVE_DELAY);
 	};
 
 	autoSave.setOriginalEndpoint = function(endpoint) {

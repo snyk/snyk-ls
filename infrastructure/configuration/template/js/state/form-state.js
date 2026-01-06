@@ -1,14 +1,14 @@
 // ABOUTME: Consolidated form state coordination for dirty state and auto-save
 // ABOUTME: Manages state transitions and coordinates between dirty tracking and auto-save
 
-(function() {
+(function () {
 	window.ConfigApp = window.ConfigApp || {};
 	var formState = {};
 
 	var debouncedDirtyCheck = null;
 
 	// Initialize dirty tracking
-	formState.initializeDirtyTracking = function() {
+	formState.initializeDirtyTracking = function () {
 		if (typeof window.DirtyTracker === "undefined") {
 			return;
 		}
@@ -16,7 +16,10 @@
 		// Create global dirty tracker instance
 		window.dirtyTracker = new window.DirtyTracker();
 
-		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.collectData) {
+		if (
+			window.ConfigApp.formHandler &&
+			window.ConfigApp.formHandler.collectData
+		) {
 			window.dirtyTracker.initialize(window.ConfigApp.formHandler.collectData);
 		}
 
@@ -27,19 +30,22 @@
 	};
 
 	// Consolidated function that triggers both dirty check and auto-save
-	formState.triggerChangeHandlers = function() {
+	formState.triggerChangeHandlers = function () {
 		// Trigger dirty check
 		if (debouncedDirtyCheck) {
 			debouncedDirtyCheck();
 		}
 		// Trigger auto-save
-		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.debouncedSave) {
-			window.ConfigApp.autoSave.debouncedSave();
+		if (
+			window.ConfigApp.autoSave &&
+			window.ConfigApp.ideBridge.isAutoSaveEnabled()
+		) {
+			window.ConfigApp.autoSave.getAndSaveIdeConfig();
 		}
 	};
 
 	// Attach listeners to all form inputs (consolidated for both dirty tracking and auto-save)
-	formState.attachFormStateListeners = function() {
+	formState.attachFormStateListeners = function () {
 		if (!window.dirtyTracker) {
 			return;
 		}
@@ -52,7 +58,6 @@
 
 		var inputs = form.getElementsByTagName("input");
 		var selects = form.getElementsByTagName("select");
-		var textareas = form.getElementsByTagName("textarea");
 
 		// Add blur listeners to all text inputs
 		for (var i = 0; i < inputs.length; i++) {
@@ -66,11 +71,6 @@
 		// Add change listeners to all selects
 		for (var j = 0; j < selects.length; j++) {
 			dom.addEvent(selects[j], "change", formState.triggerChangeHandlers);
-		}
-
-		// Add blur listeners to all textareas
-		for (var k = 0; k < textareas.length; k++) {
-			dom.addEvent(textareas[k], "blur", formState.triggerChangeHandlers);
 		}
 	};
 
