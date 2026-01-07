@@ -132,7 +132,6 @@ func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(path ty
 		ReadOnly:         true,
 		EnrichFromGit:    false,
 	})
-
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to get folder config for scanned directory")
 	}
@@ -141,6 +140,7 @@ func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(path ty
 		// Create a new folder config and copy the organization settings from the working directory folder config
 		logger.Debug().Msg("creating new folder config for scanned directory")
 		scannedFolderConfig = c.FolderConfig(path)
+		// TODO copy all other properties
 		scannedFolderConfig.OrgMigratedFromGlobalConfig = folderConfig.OrgMigratedFromGlobalConfig
 		scannedFolderConfig.OrgSetByUser = folderConfig.OrgSetByUser
 		scannedFolderConfig.PreferredOrg = folderConfig.PreferredOrg

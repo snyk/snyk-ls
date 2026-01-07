@@ -29,7 +29,7 @@
 		}
 
 		// Initialize folder organization field toggles
-		var folders = window.ConfigApp.folders || window.ConfigApp.folderManagement;
+		var folders = window.ConfigApp.folders;
 		if (folders && folders.initializeFolderOrgFields) {
 			folders.initializeFolderOrgFields();
 		}
@@ -46,7 +46,7 @@
 		}
 
 		// Initialize dirty tracking
-		var formState = window.ConfigApp.formState || window.ConfigApp.formStateTracking;
+		var formState = window.ConfigApp.formState;
 		if (formState && formState.initializeDirtyTracking) {
 			formState.initializeDirtyTracking();
 		}

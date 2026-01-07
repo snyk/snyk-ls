@@ -11,15 +11,10 @@
 	// Validate Endpoint
 	validation.validateEndpoint = function(url) {
 		if (!url) return true; // Empty URL allows default
-		// Regex for api.*.snyk.io or api.*.snykgov.io
-		var snykRegex = /^https:\/\/api\..*\.snyk\.io/;
-		var snykgovRegex = /^https:\/\/api\..*\.snykgov\.io/;
+		// Regex for api.snyk.io, api.*.snyk.io or api.*.snykgov.io
+		var snykRegex = /^https:\/\/api\.(.*\.)?snyk(gov)?\.io$/;
 
-		return (
-			snykRegex.test(url) ||
-			snykgovRegex.test(url) ||
-			url === "https://api.snyk.io"
-		);
+		return snykRegex.test(url);
 	};
 
 	// Validate risk score

@@ -13,12 +13,7 @@
 			window.ConfigApp.autoSave.getAndSaveIdeConfig();
 		}
 
-		// Use IDE bridge if available, otherwise fall back to direct window call
-		if (ideBridge) {
-			ideBridge.login();
-		} else if (typeof window.__ideLogin__ === "function") {
-			window.__ideLogin__();
-		}
+		ideBridge.login();
 	};
 
 	authentication.logout = function () {
@@ -28,12 +23,7 @@
 			tokenInput.value = "";
 		}
 
-		// Use IDE bridge if available, otherwise fall back to direct window call
-		if (ideBridge) {
-			ideBridge.logout();
-		} else if (typeof window.__ideLogout__ === "function") {
-			window.__ideLogout__();
-		}
+		ideBridge.logout();
 	};
 
 	window.ConfigApp.authentication = authentication;

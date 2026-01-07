@@ -34,32 +34,8 @@
 		var data = window.ConfigApp.formHandler.collectData();
 		var jsonString = JSON.stringify(data);
 
-		// Try to save using IDE bridge
-		var saveSuccess = false;
-		if (ideBridge) {
-			saveSuccess = ideBridge.saveConfig(jsonString);
-		}
-
-		// Fallback to direct window call if bridge is not available
-		if (!saveSuccess) {
-			if (typeof window.__saveIdeConfig__ === "function") {
-				try {
-					window.__saveIdeConfig__(jsonString);
-					saveSuccess = true;
-				} catch (e) {
-					alert("Error saving configuration: " + e.message);
-					if (ideBridge) {
-						ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.ERROR);
-					}
-					return;
-				}
-			} else {
-				if (ideBridge) {
-					ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.BRIDGE_MISSING);
-				}
-				return;
-			}
-		}
+		// Save using IDE bridge
+		var saveSuccess = ideBridge.saveConfig(jsonString);
 
 		// If save was successful
 		if (saveSuccess) {
@@ -70,11 +46,7 @@
 
 			// If endpoint changed, trigger logout
 			if (originalEndpoint && currentEndpoint !== originalEndpoint) {
-				if (ideBridge) {
-					ideBridge.logout();
-				} else if (typeof window.__ideLogout__ === "function") {
-					window.__ideLogout__();
-				}
+				ideBridge.logout();
 			}
 
 			if (ideBridge) {

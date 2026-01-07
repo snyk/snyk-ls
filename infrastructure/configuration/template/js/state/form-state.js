@@ -74,6 +74,5 @@
 		}
 	};
 
-	window.ConfigApp.formStateTracking = formState;
 	window.ConfigApp.formState = formState;
 })();

@@ -41,7 +41,7 @@
 		// Trigger dirty check and auto-save since we changed the value programmatically
 		// Skip during initialization to avoid premature auto-save
 		if (!skipTrigger) {
-			var formState = window.ConfigApp.formState || window.ConfigApp.formStateTracking;
+			var formState = window.ConfigApp.formState;
 			if (formState && formState.triggerChangeHandlers) {
 				formState.triggerChangeHandlers();
 			}
@@ -97,7 +97,7 @@
 		input.placeholder = "/path/to/trusted/folder";
 
 		// Attach blur listener for form state tracking
-		var formState = window.ConfigApp.formState || window.ConfigApp.formStateTracking;
+		var formState = window.ConfigApp.formState;
 		if (formState && formState.triggerChangeHandlers) {
 			dom.addEvent(input, "blur", formState.triggerChangeHandlers);
 		}
@@ -129,7 +129,7 @@
 		}
 
 		// Trigger dirty check and auto-save
-		var formState = window.ConfigApp.formState || window.ConfigApp.formStateTracking;
+		var formState = window.ConfigApp.formState;
 		if (formState && formState.triggerChangeHandlers) {
 			formState.triggerChangeHandlers();
 		}
@@ -151,8 +151,5 @@
 		}
 	};
 
-	// Maintain backward compatibility with old namespaces
-	window.ConfigApp.folderManagement = folders;
-	window.ConfigApp.trustedFolders = folders;
 	window.ConfigApp.folders = folders;
 })();

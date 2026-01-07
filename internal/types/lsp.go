@@ -582,7 +582,8 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 		AutoDeterminedOrg:           fc.AutoDeterminedOrg,
 		OrgMigratedFromGlobalConfig: fc.OrgMigratedFromGlobalConfig,
 		OrgSetByUser:                fc.OrgSetByUser,
-		SastSettings:                fc.SastSettings,
+		// TODO clone this properly
+		SastSettings: fc.SastSettings,
 	}
 
 	if fc.LocalBranches != nil {
