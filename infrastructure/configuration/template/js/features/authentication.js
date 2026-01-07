@@ -4,28 +4,26 @@
 (function () {
 	window.ConfigApp = window.ConfigApp || {};
 	var authentication = {};
+	var dom = window.ConfigApp.dom;
+	var ideBridge = window.ConfigApp.ideBridge;
 
 	authentication.authenticate = function () {
 		// Save config before authenticating, because of possible endpoint/token type changes
-		window.ConfigApp.autoSave.getAndSaveIdeConfig();
-		window.__ideLogin__();
+		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
+			window.ConfigApp.autoSave.getAndSaveIdeConfig();
+		}
+
+		ideBridge.login();
 	};
 
 	authentication.logout = function () {
 		// Clear the token field
-		var tokenInput = window.ConfigApp.helpers.get("token");
+		var tokenInput = dom.get("token");
 		if (tokenInput) {
 			tokenInput.value = "";
 		}
 
-		// Disable the logout button
-		var logoutBtn = window.ConfigApp.helpers.get("logout-btn");
-		if (logoutBtn) {
-			logoutBtn.disabled = true;
-		}
-
-		// Call IDE logout function
-		window.__ideLogout__();
+		ideBridge.logout();
 	};
 
 	window.ConfigApp.authentication = authentication;

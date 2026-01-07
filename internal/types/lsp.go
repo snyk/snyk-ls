@@ -582,7 +582,8 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 		AutoDeterminedOrg:           fc.AutoDeterminedOrg,
 		OrgMigratedFromGlobalConfig: fc.OrgMigratedFromGlobalConfig,
 		OrgSetByUser:                fc.OrgSetByUser,
-		SastSettings:                fc.SastSettings,
+		// TODO clone this properly
+		SastSettings: fc.SastSettings,
 	}
 
 	if fc.LocalBranches != nil {
@@ -625,7 +626,7 @@ type Settings struct {
 	ActivateSnykIac                     string               `json:"activateSnykIac,omitempty"`
 	Insecure                            string               `json:"insecure,omitempty"`
 	Endpoint                            string               `json:"endpoint,omitempty"`
-	BaseUrl                             string               `json:"baseUrl,omitempty"`
+	CliBaseDownloadURL                  string               `json:"cliBaseDownloadURL,omitempty"`
 	Organization                        string               `json:"organization,omitempty"`
 	Path                                string               `json:"path,omitempty"`
 	CliPath                             string               `json:"cliPath,omitempty"`

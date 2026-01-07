@@ -3,24 +3,24 @@
 
 (function () {
 	window.ConfigApp = window.ConfigApp || {};
-	var formData = {};
-	var helpers = window.ConfigApp.helpers;
+	var formHandler = {};
+	var dom = window.ConfigApp.dom;
 
 	// Collect form data
-	formData.collectData = function () {
+	formHandler.collectData = function () {
 		var data = {
 			folderConfigs: [],
 		};
 
-		var form = helpers.get("configForm");
+		var form = dom.get("configForm");
+		if (!form) return data;
+
 		var inputs = form.getElementsByTagName("input");
 		var selects = form.getElementsByTagName("select");
-		var textareas = form.getElementsByTagName("textarea");
 
 		// Process all elements
 		processElements(inputs, data);
 		processElements(selects, data);
-		processElements(textareas, data);
 
 		// Process complex objects
 		processFilterSeverity(data);
@@ -94,6 +94,20 @@
 						}
 					} else {
 						var field = parts.slice(2).join("_");
+          if (field === "additionalParameters") {
+							// Split by whitespace and filter out empty strings
+							data.folderConfigs[index][field] = el.value ? el.value.trim().split(/\s+/).filter(function(item) { return item.length > 0; }) : [];
+              continue
+            }
+
+						// Skip preferredOrg if orgSetByUser is false (auto-org is enabled)
+						if (field === "preferredOrg") {
+							var orgSetByUserInput = dom.get("folder_" + index + "_orgSetByUser");
+							if (orgSetByUserInput && orgSetByUserInput.value === "false") {
+								continue;
+							}
+						}
+
 						setFieldValue(data.folderConfigs[index], field, el);
 					}
 				}
@@ -109,27 +123,23 @@
 			obj[field] = el.checked;
 		} else if (el.type === "number") {
 			obj[field] = el.value ? parseInt(el.value) : null;
-		} else if (el.tagName.toLowerCase() === "textarea") {
-			// Try to parse as JSON, fallback to string
-			try {
-				if (el.value && el.value.trim()) {
-					obj[field] = JSON.parse(el.value);
-				} else {
-					obj[field] = null;
-				}
-			} catch (e) {
+		} else {
+			// Convert string boolean values to actual booleans
+			if (el.value === "true") {
+				obj[field] = true;
+			} else if (el.value === "false") {
+				obj[field] = false;
+			} else {
 				obj[field] = el.value;
 			}
-		} else {
-			obj[field] = el.value;
 		}
 	}
 
 	function processFilterSeverity(data) {
-		var critical = helpers.getByName("filterSeverity_critical")[0];
-		var high = helpers.getByName("filterSeverity_high")[0];
-		var medium = helpers.getByName("filterSeverity_medium")[0];
-		var low = helpers.getByName("filterSeverity_low")[0];
+		var critical = dom.getByName("filterSeverity_critical")[0];
+		var high = dom.getByName("filterSeverity_high")[0];
+		var medium = dom.getByName("filterSeverity_medium")[0];
+		var low = dom.getByName("filterSeverity_low")[0];
 
 		if (critical || high || medium || low) {
 			data.filterSeverity = {
@@ -142,8 +152,8 @@
 	}
 
 	function processIssueViewOptions(data) {
-		var openIssues = helpers.getByName("issueViewOptions_openIssues")[0];
-		var ignoredIssues = helpers.getByName("issueViewOptions_ignoredIssues")[0];
+		var openIssues = dom.getByName("issueViewOptions_openIssues")[0];
+		var ignoredIssues = dom.getByName("issueViewOptions_ignoredIssues")[0];
 
 		if (openIssues || ignoredIssues) {
 			data.issueViewOptions = {
@@ -153,5 +163,5 @@
 		}
 	}
 
-	window.ConfigApp.formData = formData;
+	window.ConfigApp.formHandler = formHandler;
 })();

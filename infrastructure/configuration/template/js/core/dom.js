@@ -3,20 +3,20 @@
 
 (function() {
 	window.ConfigApp = window.ConfigApp || {};
-	var helpers = {};
+	var dom = {};
 
 	// Helper to get element by ID
-	helpers.get = function(id) {
+	dom.get = function(id) {
 		return document.getElementById(id);
 	};
 
 	// Helper to get elements by name
-	helpers.getByName = function(name) {
+	dom.getByName = function(name) {
 		return document.getElementsByName(name);
 	};
 
 	// Helper to add event listener (IE7 compatible)
-	helpers.addEvent = function(element, event, handler) {
+	dom.addEvent = function(element, event, handler) {
 		if (element.addEventListener) {
 			element.addEventListener(event, handler, false);
 		} else if (element.attachEvent) {
@@ -27,19 +27,19 @@
 	};
 
 	// Helper to remove class (IE7 compatible)
-	helpers.removeClass = function(element, className) {
+	dom.removeClass = function(element, className) {
 		if (!element) return;
 		var reg = new RegExp("(\\s|^)" + className + "(\\s|$)");
 		element.className = element.className.replace(reg, " ");
 	};
 
 	// Helper to add class (IE7 compatible)
-	helpers.addClass = function(element, className) {
+	dom.addClass = function(element, className) {
 		if (!element) return;
 		if (element.className.indexOf(className) === -1) {
 			element.className += " " + className;
 		}
 	};
 
-	window.ConfigApp.helpers = helpers;
+	window.ConfigApp.dom = dom;
 })();

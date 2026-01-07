@@ -152,7 +152,7 @@
                     <div class="form-group">
                         <label for="endpoint"><span data-toggle="tooltip" title="If you're using SSO with Snyk and OAuth2, this is automatically populated. For public regional instances, see Snyk documentation. For private instances, contact your team or account manager">Endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="endpoint"></span></label>
                         <input type="text" id="endpoint" name="endpoint" value="{{.Settings.Endpoint}}" placeholder="https://app.snyk.io/api">
-                        <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: https://api.snyk.io or https://api.*.snykgov.io</span>
+                        <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: api.snyk.io, api.*.snyk.io or api.*.snykgov.io</span>
                     </div>
 
                     <div class="form-group">
@@ -170,6 +170,7 @@
                             <button type="button" id="authenticate-btn">Authenticate</button>
                             <button type="button" id="logout-btn" class="secondary">Logout</button>
                         </div>
+                        <span id="token-error" class="error-message hidden"></span>
                     </div>
                 </div>
             </div>
@@ -201,8 +202,8 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="baseUrl"><span data-toggle="tooltip" title="Base URL for downloading Snyk CLI binaries">Base URL</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="baseUrl"></span></label>
-                        <input type="text" id="baseUrl" name="baseUrl" value="{{.Settings.BaseUrl}}" placeholder="https://downloads.snyk.io">
+                        <label for="cliBaseDownloadURL"><span data-toggle="tooltip" title="Base URL for downloading Snyk CLI binaries">CLI Download Base URL</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliBaseDownloadURL"></span></label>
+                        <input type="text" id="cliBaseDownloadURL" name="cliBaseDownloadURL" value="{{.Settings.CliBaseDownloadURL}}" placeholder="https://downloads.snyk.io">
                     </div>
                 </div>
             </div>
@@ -214,7 +215,6 @@
                 <div class="section">
                     <h2>Permissions</h2>
 
-                    <input type="hidden" name="enableTrustedFoldersFeature" value="{{.Settings.EnableTrustedFoldersFeature}}">
                     <div class="form-group">
                         <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#trustedFoldersSection" aria-expanded="false" aria-controls="trustedFoldersSection">
                             <span><span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">Trusted Folders</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="trustedFolders"></span></span>
@@ -381,44 +381,63 @@
         </div>
     </form>
 
+    <!-- Third-party libraries -->
     <script nonce="{{.Nonce}}">
         {{.JQuery}}
     </script>
     <script nonce="{{.Nonce}}">
         {{.BootstrapJS}}
     </script>
+
+    <!-- Core utilities and polyfills -->
+    <script nonce="{{.Nonce}}">
+        {{.Polyfills}}
+    </script>
     <script nonce="{{.Nonce}}">
         {{.Utils}}
     </script>
     <script nonce="{{.Nonce}}">
+        {{.Dom}}
+    </script>
+
+    <!-- State management -->
+    <script nonce="{{.Nonce}}">
         {{.DirtyTracker}}
     </script>
     <script nonce="{{.Nonce}}">
-        {{.Helpers}}
+        {{.FormState}}
     </script>
+
+    <!-- IDE integration -->
+    <script nonce="{{.Nonce}}">
+        {{.IdeBridge}}
+    </script>
+
+    <!-- UI modules -->
+    <script nonce="{{.Nonce}}">
+        {{.FormHandler}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.Tooltips}}
+    </script>
+
+    <!-- Features -->
     <script nonce="{{.Nonce}}">
         {{.Validation}}
     </script>
     <script nonce="{{.Nonce}}">
-        {{.FormData}}
-    </script>
-    <script nonce="{{.Nonce}}">
-        {{.AutoSave}}
+        {{.Folders}}
     </script>
     <script nonce="{{.Nonce}}">
         {{.Authentication}}
     </script>
     <script nonce="{{.Nonce}}">
-        {{.FolderManagement}}
+        {{.AutoSave}}
     </script>
+
+    <!-- App initialization -->
     <script nonce="{{.Nonce}}">
-        {{.TrustedFolders}}
-    </script>
-    <script nonce="{{.Nonce}}">
-        {{.FormStateTracking}}
-    </script>
-    <script nonce="{{.Nonce}}">
-        {{.Init}}
+        {{.App}}
     </script>
 </body>
 </html>
