@@ -29,7 +29,6 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -215,9 +214,8 @@ func Test_GetOrCreateFolderConfig_StoredConfigBaseBranchNotOverwrittenByGit(t *t
 	assert.Equal(t, storedBaseBranch, folderConfig.BaseBranch)
 }
 
-func Test_GetOrCreateFolderConfig_NewFolder_EAMode(t *testing.T) {
+func Test_GetOrCreateFolderConfig_NewFolder(t *testing.T) {
 	conf, _ := SetupConfigurationWithStorage(t)
-	conf.Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
 	path := types.FilePath(t.TempDir())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
@@ -227,42 +225,24 @@ func Test_GetOrCreateFolderConfig_NewFolder_EAMode(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, actual)
-	assert.True(t, actual.OrgSetByUser, "Auto-org should be disabled in EA mode")
-	assert.False(t, actual.OrgMigratedFromGlobalConfig, "New folders in EA mode should be marked as not migrated")
-	assert.Empty(t, actual.PreferredOrg, "PreferredOrg should be empty for new folders")
-	assert.Empty(t, actual.AutoDeterminedOrg, "AutoDeterminedOrg should be empty initially")
-}
-
-func Test_GetOrCreateFolderConfig_NewFolder_PostEAMode(t *testing.T) {
-	conf, _ := SetupConfigurationWithStorage(t)
-	conf.Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
-	path := types.FilePath(t.TempDir())
-	logger := zerolog.New(zerolog.NewTestWriter(t))
-
-	// Action
-	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
-
-	// Assert
-	require.NoError(t, err)
-	require.NotNil(t, actual)
-	assert.False(t, actual.OrgSetByUser, "Auto-org should be enabled in post-EA mode")
-	assert.True(t, actual.OrgMigratedFromGlobalConfig, "New folders in post-EA mode should be treated as migrated")
+	assert.False(t, actual.OrgSetByUser, "Auto-org should be enabled")
+	assert.True(t, actual.OrgMigratedFromGlobalConfig, "New folders should be treated as migrated")
 	assert.Empty(t, actual.PreferredOrg, "PreferredOrg should be empty for new folders")
 	assert.Empty(t, actual.AutoDeterminedOrg, "AutoDeterminedOrg will be set by LDX-Sync later")
 }
 
-func Test_GetOrCreateFolderConfig_PreEAFolderWithZeroValues_EAMode(t *testing.T) {
+func Test_GetOrCreateFolderConfig_ExistingFolderWithZeroValues(t *testing.T) {
+	// Setup: existing folder with Go zero-values
 	conf, _ := SetupConfigurationWithStorage(t)
-	conf.Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
 	path := types.FilePath(t.TempDir())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
-	// Create a pre-EA folder config with zero-values (simulates old data)
-	preEAConfig := &types.FolderConfig{
+	// Create a folder config with zero-values
+	preExistingConfig := &types.FolderConfig{
 		FolderPath: path,
 		// Remaining fields will get their respective default "zero" values
 	}
-	err := UpdateFolderConfig(conf, preEAConfig, &logger)
+	err := UpdateFolderConfig(conf, preExistingConfig, &logger)
 	require.NoError(t, err)
 
 	// Action
@@ -271,39 +251,13 @@ func Test_GetOrCreateFolderConfig_PreEAFolderWithZeroValues_EAMode(t *testing.T)
 	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, actual)
-	assert.True(t, actual.OrgSetByUser, "EA fix should set OrgSetByUser to true to disable auto-org")
-	assert.False(t, actual.OrgMigratedFromGlobalConfig, "Should remain unmigrated for future migration")
-}
-
-func Test_GetOrCreateFolderConfig_PreEAFolderWithZeroValues_PostEAMode(t *testing.T) {
-	// Setup: AutoOrgEnabledByDefault = true, existing folder with Go zero-values
-	conf, _ := SetupConfigurationWithStorage(t)
-	conf.Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
-	path := types.FilePath(t.TempDir())
-	logger := zerolog.New(zerolog.NewTestWriter(t))
-
-	// Create a pre-EA folder config with zero-values
-	preEAConfig := &types.FolderConfig{
-		FolderPath: path,
-		// Remaining fields will get their respective default "zero" values
-	}
-	err := UpdateFolderConfig(conf, preEAConfig, &logger)
-	require.NoError(t, err)
-
-	// Action
-	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
-
-	// Assert
-	require.NoError(t, err)
-	require.NotNil(t, actual)
-	assert.False(t, actual.OrgSetByUser, "Should NOT be modified in post-EA mode, will go through migration")
+	assert.False(t, actual.OrgSetByUser, "Should NOT be modified, will go through migration")
 	assert.False(t, actual.OrgMigratedFromGlobalConfig, "Should remain unmigrated, migration will handle it")
 }
 
-func Test_GetOrCreateFolderConfig_AlreadyMigratedFolder_EAMode(t *testing.T) {
-	// Setup: AutoOrgEnabledByDefault = false, folder already migrated
+func Test_GetOrCreateFolderConfig_AlreadyMigratedFolder(t *testing.T) {
+	// Setup: folder already migrated
 	conf, _ := SetupConfigurationWithStorage(t)
-	conf.Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
 	path := types.FilePath(t.TempDir())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
@@ -326,62 +280,6 @@ func Test_GetOrCreateFolderConfig_AlreadyMigratedFolder_EAMode(t *testing.T) {
 	assert.True(t, actual.OrgSetByUser, "Should remain unchanged")
 	assert.True(t, actual.OrgMigratedFromGlobalConfig, "Should remain migrated")
 	assert.Equal(t, "some-org-id", actual.PreferredOrg, "PreferredOrg should be preserved")
-}
-
-func Test_GetOrCreateFolderConfig_AlreadyMigratedFolder_PostEAMode(t *testing.T) {
-	// Setup: AutoOrgEnabledByDefault = true, folder already migrated
-	conf, _ := SetupConfigurationWithStorage(t)
-	conf.Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
-	path := types.FilePath(t.TempDir())
-	logger := zerolog.New(zerolog.NewTestWriter(t))
-
-	// Create an already-migrated folder config
-	migratedConfig := &types.FolderConfig{
-		FolderPath:                  path,
-		OrgSetByUser:                true,
-		OrgMigratedFromGlobalConfig: true,
-		PreferredOrg:                "some-org-id",
-	}
-	err := UpdateFolderConfig(conf, migratedConfig, &logger)
-	require.NoError(t, err)
-
-	// Action
-	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
-
-	// Assert
-	require.NoError(t, err)
-	require.NotNil(t, actual)
-	assert.True(t, actual.OrgSetByUser, "Should remain unchanged")
-	assert.True(t, actual.OrgMigratedFromGlobalConfig, "Should remain migrated")
-	assert.Equal(t, "some-org-id", actual.PreferredOrg, "PreferredOrg should be preserved")
-}
-
-func Test_GetOrCreateFolderConfig_EAFolderLoadedPostEA(t *testing.T) {
-	// This simulates a user upgrading from EA (having made no changes to the folder level org settings) to post-EA.
-	conf, _ := SetupConfigurationWithStorage(t)
-	path := types.FilePath(t.TempDir())
-	logger := zerolog.New(zerolog.NewTestWriter(t))
-
-	// Phase 1: Create folder during EA (auto-org disabled by default)
-	conf.Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
-	eaFolder, err := GetOrCreateFolderConfig(conf, path, &logger)
-	require.NoError(t, err)
-	require.NotNil(t, eaFolder)
-
-	// Verify EA behavior
-	assert.True(t, eaFolder.OrgSetByUser, "Auto-org should be disabled in EA mode")
-	assert.False(t, eaFolder.OrgMigratedFromGlobalConfig, "Should be marked as not migrated")
-
-	// Phase 2: Upgrade to post-EA and load the same folder
-	conf.Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
-	postEAFolder, err := GetOrCreateFolderConfig(conf, path, &logger)
-	require.NoError(t, err)
-	require.NotNil(t, postEAFolder)
-
-	// Assert: EA fix should NOT run in post-EA mode, folder should remain unmigrated
-	// Migration logic (not tested here) will handle the transition
-	assert.True(t, postEAFolder.OrgSetByUser, "Should preserve EA setting")
-	assert.False(t, postEAFolder.OrgMigratedFromGlobalConfig, "Should remain unmigrated, but will go through migration by the caller (e.g. on initialized or login)")
 }
 
 func SetupConfigurationWithStorage(t *testing.T) (configuration.Configuration, string) {
