@@ -25,7 +25,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -62,9 +61,6 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 
 	fc := sc.FolderConfigs[normalizedPath]
 
-	// IDE-1548: Check if auto-org is enabled by default (false for EA rollout)
-	autoOrgEnabledByDefault := conf.GetBool(constants.AutoOrgEnabledByDefaultKey)
-
 	if fc == nil {
 		if !createIfNotExist {
 			// Don't create: return nil if not found
@@ -74,49 +70,22 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 				Msg("Folder config not found in storage, will not create as in do not create mode")
 			return nil, nil
 		}
-		if autoOrgEnabledByDefault {
-			logger.Debug().
-				Str("normalizedPath", string(normalizedPath)).
-				Str("originalPath", string(path)).
-				Int("existingFolderCount", len(sc.FolderConfigs)).
-				Msg("Folder fc not found in storage, creating new one with OrgMigratedFromGlobalConfig=true")
-			fc = &types.FolderConfig{
-				// New folder configs should never go through org migration; we treat them as migrated.
-				OrgMigratedFromGlobalConfig: true,
-				// New folder configs should have their org determined via LDX-Sync.
-				OrgSetByUser: false,
-			}
-		} else {
-			logger.Debug().
-				Str("normalizedPath", string(normalizedPath)).
-				Str("originalPath", string(path)).
-				Int("existingFolderCount", len(sc.FolderConfigs)).
-				Msg("Folder fc not found in storage, creating new one with auto-org (EA) disabled by default and marked as not migrated")
-			fc = &types.FolderConfig{
-				// Auto-org is disabled by default for EA rollout (see IDE-1548).
-				// Users must explicitly opt-in to automatic organization selection.
-				OrgSetByUser: true,
-				// New folder configs are marked as not migrated for now (see IDE-1548).
-				// When auto-org is enabled by default post-EA, these folders will go through migration.
-				OrgMigratedFromGlobalConfig: false,
-			}
+		logger.Debug().
+			Str("normalizedPath", string(normalizedPath)).
+			Str("originalPath", string(path)).
+			Int("existingFolderCount", len(sc.FolderConfigs)).
+			Msg("Folder fc not found in storage, creating new one with OrgMigratedFromGlobalConfig=true")
+		fc = &types.FolderConfig{
+			// New folder configs should never go through org migration; we treat them as migrated.
+			OrgMigratedFromGlobalConfig: true,
+			// New folder configs should have their org determined via LDX-Sync.
+			OrgSetByUser: false,
 		}
 	} else {
 		logger.Debug().
 			Str("normalizedPath", string(normalizedPath)).
 			Bool("orgMigratedFromGlobalConfig", fc.OrgMigratedFromGlobalConfig).
 			Msg("Found existing folder fc in storage")
-
-		if !autoOrgEnabledByDefault {
-			// If the folder is not migrated (during EA, see IDE-1548, this means the user has not made the explicit choice to either change their preferred org or opt into auto-org),
-			// then we need to opt them out of auto-org that has just been set as the default zero value for the field by Go.
-			if !fc.OrgMigratedFromGlobalConfig && !fc.OrgSetByUser {
-				logger.Debug().
-					Str("normalizedPath", string(normalizedPath)).
-					Msg("First time seeing this folder since new fields were added, since auto-org is disabled by default for EA rollout, opting out of auto-org")
-				fc.OrgSetByUser = true
-			}
-		}
 	}
 
 	// Normalize the folder path for consistent storage
