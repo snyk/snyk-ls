@@ -181,3 +181,41 @@ func TestConfigHtmlRenderer_NoWorkspaceFiltersAllFolders(t *testing.T) {
 	// Verify message about no folders configured is shown
 	assert.Contains(t, html, "No folder")
 }
+
+func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
+	c := config.CurrentConfig()
+
+	// Set up mock workspace with a folder
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+
+	folderPath := types.FilePath("/path/to/project")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+
+	c.SetWorkspace(mockWorkspace)
+
+	renderer, err := NewConfigHtmlRenderer(c)
+	assert.NoError(t, err)
+	assert.NotNil(t, renderer)
+
+	settings := types.Settings{
+		IntegrationName:    "ECLIPSE",
+		Token:              "test-token",
+		Endpoint:           "https://test.snyk.io",
+		ActivateSnykCode:   "true",
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath: folderPath,
+			},
+		},
+	}
+
+	html := renderer.GetConfigHtml(settings)
+
+	// Verify Eclipse shows "Project Settings" instead of "Folder Settings"
+	assert.Contains(t, html, "Project Settings")
+}

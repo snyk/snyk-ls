@@ -128,10 +128,12 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 // The IDE can query dirty state via window.__isFormDirty__() or reset it via window.__resetDirtyState__().
 // Folder configs are filtered to only show folders that are currently in the workspace.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
-	// Determine folder/solution label based on IDE
+	// Determine folder/solution/project label based on IDE
 	folderLabel := "Folder"
 	if isVisualStudio(settings.IntegrationName) {
 		folderLabel = "Solution"
+	} else if isEclipse(settings.IntegrationName) {
+		folderLabel = "Project"
 	}
 
 	// Filter folder configs to only include those in the current workspace
@@ -198,6 +200,11 @@ func filterFolderConfigs(settings types.Settings, c *config.Config) types.Settin
 // isVisualStudio checks if the integration name indicates Visual Studio
 func isVisualStudio(integrationName string) bool {
 	return integrationName == "VISUAL_STUDIO" || integrationName == "Visual Studio"
+}
+
+// isEclipse checks if the integration name indicates Eclipse
+func isEclipse(integrationName string) bool {
+	return integrationName == "ECLIPSE" || integrationName == "Eclipse"
 }
 
 // getCliReleaseChannel derives the CLI release channel from the runtime version
