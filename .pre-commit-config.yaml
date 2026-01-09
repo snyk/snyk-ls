@@ -17,11 +17,12 @@ repos:
         stages: [pre-push]
         verbose: true
         pass_filenames: false
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.17.0
+  - repo: https://github.com/gitguardian/ggshield
+    rev: v1.43.0
     hooks:
-      - id: gitleaks
-
+      - id: ggshield
+        language_version: python3
+        stages: [pre-commit]
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
     rev: v9.22.0
     hooks:
