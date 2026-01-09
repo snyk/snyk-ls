@@ -280,6 +280,15 @@ textarea {
     font-size: inherit;
 }
 
+/* IE11 placeholder support */
+input:-ms-input-placeholder,
+textarea:-ms-input-placeholder {
+    color: var(--disabled-foreground);
+    opacity: 0.6;
+    font-style: italic;
+}
+
+/* Modern browsers placeholder support */
 input::placeholder,
 textarea::placeholder {
     color: var(--disabled-foreground);
@@ -368,6 +377,7 @@ button.secondary[disabled] {
     padding: 8px 0 !important;
     font-weight: 600;
     color: var(--text-color);
+    -ms-user-select: none;
     user-select: none;
     border: none;
     background-color: transparent;
