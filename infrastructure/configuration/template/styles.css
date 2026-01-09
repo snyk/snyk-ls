@@ -252,6 +252,14 @@ label {
     color: var(--disabled-foreground);
 }
 
+.deprecated-label {
+    color: var(--disabled-foreground);
+    font-size: var(--tiny-font-size);
+    margin-left: 8px;
+    font-weight: normal;
+    opacity: 0.7;
+}
+
 .checkbox-label input[type="checkbox"] {
     margin-right: var(--checkbox-gap);
 }
@@ -270,6 +278,13 @@ textarea {
     box-sizing: border-box;
     font-family: inherit;
     font-size: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--disabled-foreground);
+    opacity: 0.6;
+    font-style: italic;
 }
 
 input[type="file"] {
