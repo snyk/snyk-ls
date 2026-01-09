@@ -60,6 +60,7 @@ var (
 		"composer.lock":     "composer.json",
 		"Podfile.lock":      "Podfile",
 		"poetry.lock":       "pyproject.toml",
+		"uv.lock":           "pyproject.toml",
 	}
 
 	// see https://github.com/snyk/cli/blob/765e53a67ea1cbad79c2ee8c436e5e5816003744/src/cli/main.ts#L388-L397
@@ -139,6 +140,8 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 			"poetry.lock":             true,
 			"mix.exs":                 true,
 			"mix.lock":                true,
+			"uv.lock":                 true,
+			"pyproject.toml":          true,
 		},
 	}
 	return &scanner
@@ -346,7 +349,7 @@ func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs
 
 	// this asks the client for the current SDK and blocks on it
 	additionalParameters, env := cliScanner.updateSDKs(folderConfig.FolderPath)
-
+	// process folder config additional env
 	if len(folderConfigArgs) > 0 {
 		additionalParameters = append(additionalParameters, folderConfigArgs...)
 	}
