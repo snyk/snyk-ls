@@ -132,7 +132,6 @@ func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(path ty
 		ReadOnly:         true,
 		EnrichFromGit:    false,
 	})
-
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to get folder config for scanned directory")
 	}
@@ -141,6 +140,7 @@ func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(path ty
 		// Create a new folder config and copy the organization settings from the working directory folder config
 		logger.Debug().Msg("creating new folder config for scanned directory")
 		scannedFolderConfig = c.FolderConfig(path)
+		// TODO copy all other properties
 		scannedFolderConfig.OrgMigratedFromGlobalConfig = folderConfig.OrgMigratedFromGlobalConfig
 		scannedFolderConfig.OrgSetByUser = folderConfig.OrgSetByUser
 		scannedFolderConfig.PreferredOrg = folderConfig.PreferredOrg
@@ -182,8 +182,20 @@ func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.Folder
 		// this is not a performance problem
 		// jdk repository hashing (2.1 GB with lots of files) takes 5.9s on a Mac M3 Pro
 		persistHash, err = hashdir.Make(string(folderConfig.ReferenceFolderPath), "sha256")
+		if err == nil {
+			logger.Debug().
+				Str("referenceFolderPath", string(folderConfig.ReferenceFolderPath)).
+				Str("persistHash", persistHash).
+				Msg("using directory hash as baseline identifier")
+		}
 	} else if folderConfig.BaseBranch != "" {
 		persistHash, err = vcs.HeadRefHashForBranch(&logger, folderConfig.FolderPath, folderConfig.BaseBranch)
+		if err == nil {
+			logger.Debug().
+				Str("baseBranch", folderConfig.BaseBranch).
+				Str("persistHash", persistHash).
+				Msg("using commit hash as baseline identifier")
+		}
 	} else {
 		return "", ErrMissingDeltaReference
 	}

@@ -67,7 +67,6 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 		"activateSnykCode",
 		"activateSnykIac",
 		"scanningMode",
-		"additionalEnv",
 		"filterSeverity_critical",
 		"filterSeverity_high",
 		"filterSeverity_medium",
@@ -83,7 +82,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 		"cliPath",
 		"manageBinariesAutomatically",
 		"cliReleaseChannel",
-		"baseUrl",
+		"cliBaseDownloadURL",
 		"trustedFolders",
 	}
 
@@ -203,10 +202,10 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 	assert.NotNil(t, renderer)
 
 	settings := types.Settings{
-		IntegrationName:    "ECLIPSE",
-		Token:              "test-token",
-		Endpoint:           "https://test.snyk.io",
-		ActivateSnykCode:   "true",
+		IntegrationName:  "ECLIPSE",
+		Token:            "test-token",
+		Endpoint:         "https://test.snyk.io",
+		ActivateSnykCode: "true",
 		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath: folderPath,

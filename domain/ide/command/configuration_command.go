@@ -68,7 +68,7 @@ func constructSettingsFromConfig(c *config.Config) types.Settings {
 		// Core Authentication
 		Token:                   c.Token(),
 		Endpoint:                c.Endpoint(),
-		BaseUrl:                 c.BaseUrl(),
+		CliBaseDownloadURL:      c.CliBaseDownloadURL(),
 		Organization:            c.Organization(),
 		AuthenticationMethod:    c.AuthenticationMethod(),
 		AutomaticAuthentication: fmt.Sprintf("%v", c.AutomaticAuthentication()),
@@ -139,7 +139,6 @@ func populateAdvancedSettings(s *types.Settings, c *config.Config) {
 	s.RuntimeName = c.RuntimeName()
 	s.RuntimeVersion = c.RuntimeVersion()
 	s.RequiredProtocolVersion = c.ClientProtocolVersion()
-	s.AdditionalEnv = "" // Not currently stored in config
 }
 
 // populatePointerFields sets pointer-based configuration fields
@@ -152,6 +151,9 @@ func populatePointerFields(s *types.Settings, c *config.Config) {
 
 	hoverVerbosity := c.HoverVerbosity()
 	s.HoverVerbosity = &hoverVerbosity
+
+	riskScoreThreshold := c.RiskScoreThreshold()
+	s.RiskScoreThreshold = &riskScoreThreshold
 }
 
 // populateFolderConfigs populates folder-specific configuration
@@ -170,6 +172,7 @@ func populateFolderConfigs(s *types.Settings, c *config.Config) {
 			fc.BaseBranch = storedFc.BaseBranch
 			fc.LocalBranches = storedFc.LocalBranches
 			fc.AdditionalParameters = storedFc.AdditionalParameters
+			fc.AdditionalEnv = storedFc.AdditionalEnv
 			fc.ReferenceFolderPath = storedFc.ReferenceFolderPath
 			fc.PreferredOrg = storedFc.PreferredOrg
 			fc.AutoDeterminedOrg = storedFc.AutoDeterminedOrg

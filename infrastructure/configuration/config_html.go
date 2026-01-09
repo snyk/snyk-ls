@@ -20,38 +20,65 @@ var configHtmlTemplate string
 //go:embed template/styles.css
 var configStylesTemplate string
 
-//go:embed template/js/utils.js
+// Core utilities
+//
+//go:embed template/js/core/utils.js
 var configUtilsTemplate string
 
-//go:embed template/js/dirty-tracker.js
+//go:embed template/js/core/dom.js
+var configDomTemplate string
+
+//go:embed template/js/core/polyfills.js
+var configPolyfillsTemplate string
+
+// State management
+//
+//go:embed template/js/state/dirty-tracker.js
 var configDirtyTrackerTemplate string
 
-//go:embed template/js/helpers.js
-var configHelpersTemplate string
+//go:embed template/js/state/form-state.js
+var configFormStateTemplate string
 
-//go:embed template/js/validation.js
+// IDE integration
+//
+//go:embed template/js/ide/bridge.js
+var configIdeBridgeTemplate string
+
+// Features
+//
+//go:embed template/js/features/validation.js
 var configValidationTemplate string
 
-//go:embed template/js/form-data.js
-var configFormDataTemplate string
-
-//go:embed template/js/auto-save.js
+//go:embed template/js/features/auto-save.js
 var configAutoSaveTemplate string
 
-//go:embed template/js/authentication.js
+//go:embed template/js/features/authentication.js
 var configAuthenticationTemplate string
 
-//go:embed template/js/folder-management.js
-var configFolderManagementTemplate string
+//go:embed template/js/features/folders.js
+var configFoldersTemplate string
 
-//go:embed template/js/trusted-folders.js
-var configTrustedFoldersTemplate string
+// UI
+//
+//go:embed template/js/ui/form-handler.js
+var configFormHandlerTemplate string
 
-//go:embed template/js/dirty-tracking.js
-var configDirtyTrackingModuleTemplate string
+//go:embed template/js/ui/tooltips.js
+var configTooltipsTemplate string
 
-//go:embed template/js/init.js
-var configInitTemplate string
+// App initialization
+//
+//go:embed template/js/app.js
+var configAppTemplate string
+
+//go:embed template/vendor/bootstrap.min.css
+var bootstrapCssTemplate string
+
+//go:embed template/vendor/jquery.slim.min.js
+var jqueryJsTemplate string
+
+//go:embed template/vendor/bootstrap.bundle.min.js
+var bootstrapJsTemplate string
 
 type ConfigHtmlRenderer struct {
 	c        *config.Config
@@ -61,47 +88,14 @@ type ConfigHtmlRenderer struct {
 func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
-		"list": func(items ...interface{}) []interface{} {
-			return items
-		},
-		"dict": func(values ...interface{}) map[string]interface{} {
-			if len(values)%2 != 0 {
-				return nil
-			}
-			dict := make(map[string]interface{}, len(values)/2)
-			for i := 0; i < len(values); i += 2 {
-				key, ok := values[i].(string)
-				if !ok {
-					return nil
-				}
-				dict[key] = values[i+1]
-			}
-			return dict
-		},
-		// toLower converts a string to lowercase
-		"toLower": func(s string) string {
-			return strings.ToLower(s)
-		},
-		// getScanConfig retrieves scan configuration for a specific product from a map
+		"toLower": strings.ToLower,
+		// getScanConfig retrieves scan command config for a product from the map
 		"getScanConfig": func(scanConfigMap map[product.Product]types.ScanCommandConfig, productName string) *types.ScanCommandConfig {
-			if scanConfigMap == nil {
+			config, exists := scanConfigMap[product.Product(productName)]
+			if !exists {
 				return nil
 			}
-			var prod product.Product
-			switch productName {
-			case "oss", "Snyk Open Source":
-				prod = product.ProductOpenSource
-			case "code", "Snyk Code":
-				prod = product.ProductCode
-			case "iac", "Snyk IaC":
-				prod = product.ProductInfrastructureAsCode
-			default:
-				return nil
-			}
-			if config, ok := scanConfigMap[prod]; ok {
-				return &config
-			}
-			return nil
+			return &config
 		},
 	}
 
@@ -125,7 +119,8 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 // - window.__onFormDirtyChange__(isDirty): [Optional] Called when form dirty state changes
 // The IDE can optionally set window.__IS_IDE_AUTOSAVE_ENABLED__ = true to enable auto-save on form changes.
 // The IDE can also call window.getAndSaveIdeConfig() to retrieve and save current form values.
-// The IDE can query dirty state via window.__isFormDirty__() or reset it via window.__resetDirtyState__().
+// The IDE can call window.setAuthToken(token) to inject an authentication token into the token input field.
+// Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
 // Folder configs are filtered to only show folders that are currently in the workspace.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	// Determine folder/solution/project label based on IDE
@@ -143,22 +138,33 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	cliReleaseChannel := getCliReleaseChannel(r.c)
 
 	data := map[string]interface{}{
-		"Settings":            filteredSettings,
-		"Styles":              template.CSS(configStylesTemplate),
-		"Utils":               template.JS(configUtilsTemplate),
-		"DirtyTracker":        template.JS(configDirtyTrackerTemplate),
-		"Helpers":             template.JS(configHelpersTemplate),
-		"Validation":          template.JS(configValidationTemplate),
-		"FormData":            template.JS(configFormDataTemplate),
-		"AutoSave":            template.JS(configAutoSaveTemplate),
-		"Authentication":      template.JS(configAuthenticationTemplate),
-		"FolderManagement":    template.JS(configFolderManagementTemplate),
-		"TrustedFolders":      template.JS(configTrustedFoldersTemplate),
-		"DirtyTrackingModule": template.JS(configDirtyTrackingModuleTemplate),
-		"Init":                template.JS(configInitTemplate),
-		"Nonce":               "ideNonce", // Replaced by IDE extension
-		"FolderLabel":         folderLabel,
-		"CliReleaseChannel":   cliReleaseChannel,
+		"Settings":     filteredSettings,
+		"BootstrapCSS": template.CSS(bootstrapCssTemplate),
+		"Styles":       template.CSS(configStylesTemplate),
+		"JQuery":       template.JS(jqueryJsTemplate),
+		"BootstrapJS":  template.JS(bootstrapJsTemplate),
+		// Core modules
+		"Polyfills": template.JS(configPolyfillsTemplate),
+		"Dom":       template.JS(configDomTemplate),
+		"Utils":     template.JS(configUtilsTemplate),
+		// State management
+		"DirtyTracker": template.JS(configDirtyTrackerTemplate),
+		"FormState":    template.JS(configFormStateTemplate),
+		// IDE integration
+		"IdeBridge": template.JS(configIdeBridgeTemplate),
+		// Features
+		"Validation":     template.JS(configValidationTemplate),
+		"AutoSave":       template.JS(configAutoSaveTemplate),
+		"Authentication": template.JS(configAuthenticationTemplate),
+		"Folders":        template.JS(configFoldersTemplate),
+		// UI
+		"FormHandler": template.JS(configFormHandlerTemplate),
+		"Tooltips":    template.JS(configTooltipsTemplate),
+		// App initialization
+		"App":               template.JS(configAppTemplate),
+		"Nonce":             "ideNonce", // Replaced by IDE extension
+		"FolderLabel":       folderLabel,
+		"CliReleaseChannel": cliReleaseChannel,
 	}
 
 	var buffer bytes.Buffer

@@ -19,11 +19,13 @@ package progress
 
 import (
 	"maps"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/ui"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -32,6 +34,7 @@ import (
 var trackersMutex sync.RWMutex
 var trackers = make(map[types.ProgressToken]*Tracker)
 var ToServerProgressChannel = make(chan types.ProgressParams, 100000)
+var _ ui.ProgressBar = (*Tracker)(nil)
 
 type Tracker struct {
 	channel              chan types.ProgressParams
@@ -103,6 +106,40 @@ func (t *Tracker) BeginWithMessage(title, message string) {
 	t.begin(title, message, false)
 }
 
+func (t *Tracker) SetTitle(title string) {
+	t.m.Lock()
+	started := !t.lastReport.IsZero()
+	percentage := t.lastReportPercentage
+	t.m.Unlock()
+
+	if !started {
+		t.Begin(title)
+		return
+	}
+
+	if percentage < 0 {
+		percentage = 0
+	}
+	t.ReportWithMessage(percentage, title)
+}
+
+func (t *Tracker) UpdateProgress(progress float64) error {
+	if math.IsNaN(progress) || math.IsInf(progress, 0) {
+		progress = 0
+	}
+
+	if progress < 0 {
+		progress = 0
+	}
+	if progress > 1 {
+		progress = 1
+	}
+
+	percentage := int(math.Round(progress * 100))
+	t.Report(percentage)
+	return nil
+}
+
 func (t *Tracker) ReportWithMessage(percentage int, message string) {
 	t.m.Lock()
 	defer t.m.Unlock()
@@ -147,6 +184,30 @@ func (t *Tracker) EndWithMessage(message string) {
 	}
 
 	t.send(progress, logger)
+}
+
+func (t *Tracker) Clear() error {
+	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.Clear").Logger()
+
+	t.m.Lock()
+	if t.finished {
+		t.m.Unlock()
+		return nil
+	}
+	t.finished = true
+	t.m.Unlock()
+
+	progress := types.ProgressParams{
+		Token: t.token,
+		Value: types.WorkDoneProgressEnd{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressEndKind},
+			Message:              "",
+		},
+	}
+
+	t.send(progress, logger)
+	t.deleteTracker()
+	return nil
 }
 
 func (t *Tracker) CancelOrDone(onCancel func(), doneCh <-chan struct{}) {
@@ -196,8 +257,9 @@ func newProgressParams(title, message string, cancellable, unquantifiableLength 
 }
 
 func (t *Tracker) send(progress types.ProgressParams, logger zerolog.Logger) {
-	if progress.Token == "" {
-		logger.Warn().Msg("progress has no token")
+	if progress.Token == "" || progress.Value == nil {
+		logger.Warn().Any("progress", progress).Msg("invalid progress param, token or value not filled")
+		return
 	}
 	t.channel <- progress
 }

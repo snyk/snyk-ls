@@ -19,6 +19,7 @@ package maven
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,13 +37,23 @@ func TestCreateDependencyTree(t *testing.T) {
 	children := tree.Root.Children
 	assert.Len(t, children, 2, "Should have extracted 2 deps from pom.xml")
 
-	assert.Equal(t, 54, children[0].Line)
-	assert.Equal(t, 15, children[0].StartChar)
-	assert.Equal(t, 21, children[0].EndChar)
+	lines := strings.Split(strings.ReplaceAll(string(testContent), "\r", ""), "\n")
+	version := "2.14.1"
 
-	assert.Equal(t, 59, children[1].Line)
-	assert.Equal(t, 15, children[1].StartChar)
-	assert.Equal(t, 21, children[1].EndChar)
+	expectedLineNumber := 54
+	node := children[0]
+
+	assert.Equal(t, expectedLineNumber, node.Line)
+	index := strings.Index(lines[expectedLineNumber], version)
+	assert.Equal(t, index, node.StartChar)
+	assert.Equal(t, index+len(version), node.EndChar)
+
+	expectedLineNumber = 59
+	node = children[1]
+	assert.Equal(t, expectedLineNumber, node.Line)
+	index = strings.Index(lines[expectedLineNumber], version)
+	assert.Equal(t, index, node.StartChar)
+	assert.Equal(t, index+len(version), node.EndChar)
 }
 
 func TestCreateHierarchicalDependencyTree(t *testing.T) {

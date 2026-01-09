@@ -52,10 +52,18 @@ pushd $CLI_DIR
     echo "Creating new PR"
     TITLE="chore(language-server): integrate LS"
     gh pr create --repo github.com/snyk/cli --base main --head $BRANCH --title "$TITLE" --body "$BODY"
+    sleep 5
+    PR=$(gh pr list --repo github.com/snyk/cli --head $BRANCH --state open --json number --jq '.[0].number' || true)
+    if [[ -z "$PR" ]]; then
+      echo "PR created but then not found. Something went wrong or GitHub is slow to propergate the new PR. Auto-merge will not be enabled."
+      exit 1
+    fi
+    echo "PR created #$PR"
   else
     echo "Updating existing PR #$PR"
     gh pr edit $PR --repo github.com/snyk/cli --body "$BODY"
   fi
 
-  gh pr merge -m --auto --delete-branch
+  echo "Enabling auto-merge for PR #$PR"
+  gh pr merge $PR --repo github.com/snyk/cli -m --auto --delete-branch
 popd

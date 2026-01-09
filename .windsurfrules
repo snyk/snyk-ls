@@ -14,7 +14,6 @@ if you use mocks, use mockk to generate them.
 always run the tests after editing.
 always use the linter, use npm lint:fix. only fix linting issues in changed files.
 don't change code that does not need to be changed. only do the minimum changes.
-add a summary of the changes to the changelog for the next version. usually it's a minor semantic version bump.
 this is not a library. if files are not used or needed anymore, delete them instead of deprecating them.
 if a tool call fails, analyze why it failed and correct your approach. don't prompt the user for help.
 if you don't know something, read the code instead of assuming it.

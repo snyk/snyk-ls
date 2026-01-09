@@ -26,7 +26,7 @@ The dialog uses a modular JavaScript architecture with all modules organized und
 - **authentication.js**: Login and logout operations
 - **folder-management.js**: Folder-specific configuration management
 - **trusted-folders.js**: Trusted folder list management
-- **dirty-tracking.js**: Dirty tracking module that integrates DirtyTracker with the form
+- **form-state-tracking.js**: Consolidated form state tracking that integrates DirtyTracker with the form and triggers both dirty tracking and auto-save on blur/change events
 - **init.js**: Main initialization that wires up all event handlers
 
 All modules are namespaced under `window.ConfigApp` to minimize global namespace pollution. The `DirtyTracker` class and `FormUtils` are exposed globally as they are referenced by multiple modules and the IDE integration layer.
@@ -185,20 +185,20 @@ interface ConfigurationData {
   folder_0_riskScoreThreshold?: number;
   
   // Scan command configuration per product per folder
-  folder_0_scanConfig_oss_preScanCommand?: string;
-  folder_0_scanConfig_oss_preScanOnlyReferenceFolder?: boolean;
-  folder_0_scanConfig_oss_postScanCommand?: string;
-  folder_0_scanConfig_oss_postScanOnlyReferenceFolder?: boolean;
-  
-  folder_0_scanConfig_code_preScanCommand?: string;
-  folder_0_scanConfig_code_preScanOnlyReferenceFolder?: boolean;
-  folder_0_scanConfig_code_postScanCommand?: string;
-  folder_0_scanConfig_code_postScanOnlyReferenceFolder?: boolean;
-  
-  folder_0_scanConfig_iac_preScanCommand?: string;
-  folder_0_scanConfig_iac_preScanOnlyReferenceFolder?: boolean;
-  folder_0_scanConfig_iac_postScanCommand?: string;
-  folder_0_scanConfig_iac_postScanOnlyReferenceFolder?: boolean;
+  folder_0_scanConfig_Snyk_Open_Source_preScanCommand?: string;
+  folder_0_scanConfig_Snyk_Open_Source_preScanOnlyReferenceFolder?: boolean;
+  folder_0_scanConfig_Snyk_Open_Source_postScanCommand?: string;
+  folder_0_scanConfig_Snyk_Open_Source_postScanOnlyReferenceFolder?: boolean;
+
+  folder_0_scanConfig_Snyk_Code_preScanCommand?: string;
+  folder_0_scanConfig_Snyk_Code_preScanOnlyReferenceFolder?: boolean;
+  folder_0_scanConfig_Snyk_Code_postScanCommand?: string;
+  folder_0_scanConfig_Snyk_Code_postScanOnlyReferenceFolder?: boolean;
+
+  folder_0_scanConfig_Snyk_IaC_preScanCommand?: string;
+  folder_0_scanConfig_Snyk_IaC_preScanOnlyReferenceFolder?: boolean;
+  folder_0_scanConfig_Snyk_IaC_postScanCommand?: string;
+  folder_0_scanConfig_Snyk_IaC_postScanOnlyReferenceFolder?: boolean;
   
   // ... additional folders follow the same pattern with folder_1_, folder_2_, etc.
 }

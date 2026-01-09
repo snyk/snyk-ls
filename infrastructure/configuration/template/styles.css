@@ -105,11 +105,11 @@ form {
 }
 
 .row {
-    margin-left: 0;
-    margin-right: 0;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
     margin-bottom: var(--container-padding);
-    flex-grow: 1;
-    display: flex;
+    flex-wrap: wrap !important;
+    width: 100%;
 }
 
 form > .section {
@@ -117,15 +117,42 @@ form > .section {
     margin-right: 0;
 }
 
-.col-md-6 {
-    padding-left: 10px;
-    padding-right: 10px;
-    display: flex;
-    flex-direction: column;
+@media (min-width: 768px) {
+    .col-md-6 {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 0 0 50% !important;
+        max-width: 50% !important;
+    }
+
+    .col-md-12 {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+}
+
+@media (max-width: 767px) {
+    .col-md-6,
+    .col-md-12 {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+
+    .col-md-6 {
+        display: flex !important;
+        flex-direction: column !important;
+    }
 }
 
 .col-md-6 > .section {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 /* - - - Typography - - - */
@@ -168,6 +195,7 @@ h3 {
     border-radius: var(--border-radius);
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .folder-config {
@@ -182,14 +210,16 @@ h3 {
 .form-group {
     margin-bottom: var(--form-group-margin);
     flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: auto;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .checkbox-group {
     display: flex;
     flex-direction: column;
-    gap: var(--checkbox-gap);
     margin-top: var(--checkbox-gap);
 }
 
@@ -205,6 +235,11 @@ label {
     align-items: center;
     font-weight: normal;
     cursor: pointer;
+    margin-bottom: 8px;
+}
+
+.checkbox-label:last-child {
+    margin-bottom: 0;
 }
 
 .config-scope-slot:empty {
@@ -351,16 +386,21 @@ button.secondary[disabled] {
 /* - - - Button Groups - - - */
 .button-group {
     display: flex;
-    gap: 10px;
     align-items: center;
 }
 
 .button-group input {
-    flex: 1;
+    flex: 1 1 auto;
+    margin-right: 10px;
 }
 
 .button-group button {
     flex-shrink: 0;
+    margin-right: 10px;
+}
+
+.button-group button:last-child {
+    margin-right: 0;
 }
 
 /* - - - Folder Toggles - - - */
@@ -407,6 +447,7 @@ button.secondary[disabled] {
 
 .folder-content {
     padding-top: var(--section-padding);
+    margin-left: 10px;
 }
 
 /* - - - Trusted Folders - - - */
@@ -414,11 +455,38 @@ button.secondary[disabled] {
     margin-bottom: 10px;
 }
 
+.button-container-right {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 15px;
+}
+
 /* - - - Tooltips - - - */
-.badge.bg-secondary[data-bs-toggle="tooltip"] {
-    margin-left: var(--checkbox-gap);
-    vertical-align: middle;
+[data-toggle="tooltip"] {
     cursor: help;
-    font-size: var(--tiny-font-size);
-    padding: 2px 6px;
+}
+
+.tooltip {
+    z-index: 10000;
+    pointer-events: none;
+}
+
+.tooltip .tooltip-inner {
+    background-color: var(--input-background);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    font-size: var(--small-font-size);
+    max-width: 300px;
+    text-align: left;
+    padding: 8px 12px;
+}
+
+.tooltip.bs-tooltip-top .arrow::before,
+.tooltip.bs-tooltip-auto[x-placement^="top"] .arrow::before {
+    border-top-color: var(--border-color);
+}
+
+.tooltip.bs-tooltip-top .arrow::after,
+.tooltip.bs-tooltip-auto[x-placement^="top"] .arrow::after {
+    border-top-color: var(--input-background);
 }

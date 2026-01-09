@@ -17,8 +17,10 @@
 package command
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
@@ -29,9 +31,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
+
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
@@ -125,6 +130,35 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
 	assert.Empty(t, messages)
+}
+
+func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
+	c := testutil.UnitTest(t)
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+
+	originalService := Service()
+	t.Cleanup(func() {
+		SetService(originalService)
+	})
+	SetService(types.NewCommandServiceMock(nil))
+
+	called := make(chan struct{}, 1)
+	mockEngine.EXPECT().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, gomock.Any()).
+		DoAndReturn(func(_ workflow.Identifier, _ configuration.Configuration) ([]workflow.Data, error) {
+			called <- struct{}{}
+			return nil, nil
+		}).Times(1)
+
+	_, notifier := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
+
+	HandleFolders(c, context.Background(), nil, notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+
+	select {
+	case <-called:
+		// ok
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for MCP config workflow invocation")
+	}
 }
 
 // setupOrgResolverTest is a helper function to reduce duplication in org resolver tests
@@ -398,34 +432,13 @@ func Test_isOrgDefault(t *testing.T) {
 	}
 }
 
-func Test_MigrateFolderConfigOrgSettings_EAMode_MigrationSkipped(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
-
-	folderConfig := &types.FolderConfig{
-		FolderPath:                  types.FilePath(t.TempDir()),
-		OrgSetByUser:                true,
-		OrgMigratedFromGlobalConfig: false,
-		PreferredOrg:                "",
-	}
-
-	// Action
-	MigrateFolderConfigOrgSettings(c, folderConfig)
-
-	// Assert: Migration should be skipped, no fields modified
-	assert.True(t, folderConfig.OrgSetByUser, "OrgSetByUser should remain unchanged")
-	assert.False(t, folderConfig.OrgMigratedFromGlobalConfig, "Should remain unmigrated in EA mode")
-	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should remain unchanged")
-}
-
-func Test_MigrateFolderConfigOrgSettings_PostEAMode_DefaultOrg(t *testing.T) {
+func Test_MigrateFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup: Use immutable defaults so isOrgDefault() can clone config, set org="", and still retrieve the default org
 	gafConfig := c.Engine().GetConfiguration()
 	gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("default-org-uuid"))
 	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("default-org-slug"))
-	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 
 	folderConfig := &types.FolderConfig{
 		FolderPath:                  types.FilePath(t.TempDir()),
@@ -443,7 +456,7 @@ func Test_MigrateFolderConfigOrgSettings_PostEAMode_DefaultOrg(t *testing.T) {
 	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
 }
 
-func Test_MigrateFolderConfigOrgSettings_PostEAMode_NonDefaultOrg(t *testing.T) {
+func Test_MigrateFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup: Use a regular (mutable) DefaultValueFunction so Set() can override it
@@ -460,7 +473,6 @@ func Test_MigrateFolderConfigOrgSettings_PostEAMode_NonDefaultOrg(t *testing.T) 
 
 	// Set the user's non-default org
 	c.SetOrganization("non-default-org-id")
-	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 
 	folderConfig := &types.FolderConfig{
 		FolderPath:                  types.FilePath(t.TempDir()),
@@ -478,10 +490,8 @@ func Test_MigrateFolderConfigOrgSettings_PostEAMode_NonDefaultOrg(t *testing.T) 
 	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
 }
 
-func Test_MigrateFolderConfigOrgSettings_PostEAMode_Unauthenticated_MigrationSkipped(t *testing.T) {
+func Test_MigrateFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(t *testing.T) {
 	c := testutil.UnitTest(t)
-
-	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 
 	// Setup: Unauthenticated state - using default value functions that return errors where API calls would be
 	gafConfig := c.Engine().GetConfiguration()

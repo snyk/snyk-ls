@@ -36,14 +36,14 @@ type Parser struct {
 }
 
 type Parent struct {
-	Group        string `xml:"group"`
+	Group        string `xml:"groupId"`
 	ArtifactId   string `xml:"artifactId"`
 	Version      string `xml:"version"`
 	RelativePath string `xml:"relativePath"`
 }
 
 type Dependency struct {
-	Group      string `xml:"group"`
+	Group      string `xml:"groupId"`
 	ArtifactId string `xml:"artifactId"`
 	Version    string `xml:"version"`
 	Scope      string `xml:"scope"`
@@ -57,6 +57,7 @@ func New(logger *zerolog.Logger) Parser {
 }
 
 func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
+	content = strings.ReplaceAll(content, "\r", "")
 	tree := p.initTree(path, content)
 	d := xml.NewDecoder(strings.NewReader(content))
 	var offset int64
@@ -152,20 +153,30 @@ func (p *Parser) addNewNodeTo(parent *ast.Node, offsetBefore int64, offsetAfter 
 
 	startTag := "<version>"
 	endTag := "</version>"
-
 	if dep.Version == "" {
-		// highlight artifact, if version is not there (bom/parent pom)
+		// highlight artifactId if version is not present (parent pom / dependencyManagement)
 		startTag = "<artifactId>"
 		endTag = "</artifactId>"
 	}
 
 	startTagOffset := strings.LastIndex(contentInclusiveDep, startTag)
-	contentToVersionStart := content[0:startTagOffset]
-	line = strings.Count(contentToVersionStart, "\n")
-	lineStartOffset := strings.LastIndex(contentToVersionStart, "\n") + 1
-	startChar = startTagOffset + len(startTag) - lineStartOffset
-	versionEndOffset := strings.LastIndex(contentInclusiveDep, endTag)
-	endChar = versionEndOffset - lineStartOffset
+	endTagOffset := strings.LastIndex(contentInclusiveDep, endTag)
+
+	valueStartOffset := startTagOffset + len(startTag)
+	valueEndOffset := endTagOffset
+	if startTagOffset != -1 && endTagOffset != -1 && endTagOffset >= valueStartOffset {
+		value := content[valueStartOffset:valueEndOffset]
+		trimmedValue := strings.Trim(value, " \t\n")
+		leadingWhitespace := len(value) - len(strings.TrimLeft(value, " \t\n"))
+		valueStartOffset += leadingWhitespace
+		valueEndOffset = valueStartOffset + len(trimmedValue)
+	}
+
+	contentToValueStart := content[0:valueStartOffset]
+	line = strings.Count(contentToValueStart, "\n")
+	lineStartOffset := strings.LastIndex(contentToValueStart, "\n") + 1
+	startChar = valueStartOffset - lineStartOffset
+	endChar = valueEndOffset - lineStartOffset
 
 	node := ast.Node{
 		Line:       line,
