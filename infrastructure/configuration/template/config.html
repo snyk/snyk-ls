@@ -163,7 +163,7 @@
                     <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" name="insecure" {{if eq .Settings.Insecure "true"}}checked{{end}}>
-                            Insecure (Skip SSL Verification)
+                            <span data-toggle="tooltip" title="If enabled, the plugin will ignore SSL certificate errors. Use this when connecting to self-signed or internal CA servers.">Insecure (Skip SSL Verification)</span>
                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="insecure"></span>
                         </label>
                     </div>
@@ -186,7 +186,7 @@
 
                     <div class="form-group">
                         <label for="cliPath"><span data-toggle="tooltip" title="Path to Snyk CLI executable">CLI Path</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliPath"></span></label>
-                        <input type="text" id="cliPath" name="cliPath" value="{{.Settings.CliPath}}" placeholder="Path to Snyk CLI">
+                        <input type="text" id="cliPath" name="cliPath" value="{{.Settings.CliPath}}" placeholder="/path/to/snyk-cli">
                     </div>
 
                     <div class="form-group">
@@ -207,7 +207,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="cliBaseDownloadURL"><span data-toggle="tooltip" title="Base URL for downloading Snyk CLI binaries">CLI Download Base URL</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliBaseDownloadURL"></span></label>
+                        <label for="cliBaseDownloadURL"><span data-toggle="tooltip" title="Base URL for downloading Snyk CLI binaries. The default is https://downloads.snyk.io. For FIPS-enabled CLIs (Windows/Linux only), use https://downloads.snyk.io/fips">CLI Download Base URL</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliBaseDownloadURL"></span></label>
                         <input type="text" id="cliBaseDownloadURL" name="cliBaseDownloadURL" value="{{.Settings.CliBaseDownloadURL}}" placeholder="https://downloads.snyk.io">
                     </div>
                 </div>
