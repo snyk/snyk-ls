@@ -605,13 +605,11 @@ func updateCliBaseDownloadURL(c *config.Config, settings types.Settings, trigger
 
 func updateOrganization(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
 	newOrg := strings.TrimSpace(settings.Organization)
-	if newOrg != "" {
-		oldOrgId := c.Organization()
-		c.SetOrganization(newOrg)
-		newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
-		if oldOrgId != newOrgId && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configOrganization, oldOrgId, newOrgId, triggerSource)
-		}
+	oldOrgId := c.Organization()
+	c.SetOrganization(newOrg)
+	newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
+	if oldOrgId != newOrgId && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configOrganization, oldOrgId, newOrgId, triggerSource)
 	}
 }
 

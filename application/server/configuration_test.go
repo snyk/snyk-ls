@@ -36,6 +36,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -298,13 +299,41 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, c.Format(), config.FormatMd)
 	})
 
-	t.Run("blank organization is ignored", func(t *testing.T) {
+	t.Run("blank organization resets to default organization", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		c.SetOrganization(expectedOrgId)
+		di.TestInit(t)
 
+		defaultOrgId := "00000000-0000-0000-0000-000000000002"
+		// Set an immutable default value to avoid API calls
+		c.Engine().GetConfiguration().AddDefaultValue(configuration.DEFAULT_ORGANIZATION, configuration.ImmutableDefaultValueFunction(defaultOrgId))
+
+		// Set to a specific org first
+		c.SetOrganization(expectedOrgId)
+		assert.Equal(t, expectedOrgId, c.Organization())
+
+		// Set to empty - should reset to default
+		// Include another setting to avoid early return on empty settings struct
+		UpdateSettings(c, types.Settings{Organization: "", RiskScoreThreshold: utils.Ptr(100)}, analytics.TriggerSourceTest)
+
+		assert.Equal(t, defaultOrgId, c.Organization())
+	})
+
+	t.Run("whitespace organization resets to default organization", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		di.TestInit(t)
+
+		defaultOrgId := "00000000-0000-0000-0000-000000000002"
+		// Set an immutable default value to avoid API calls
+		c.Engine().GetConfiguration().AddDefaultValue(configuration.DEFAULT_ORGANIZATION, configuration.ImmutableDefaultValueFunction(defaultOrgId))
+
+		// Set to a specific org first
+		c.SetOrganization(expectedOrgId)
+		assert.Equal(t, expectedOrgId, c.Organization())
+
+		// Set to single space - should be trimmed to empty and reset to default
 		UpdateSettings(c, types.Settings{Organization: " "}, analytics.TriggerSourceTest)
 
-		assert.Equal(t, expectedOrgId, c.Organization())
+		assert.Equal(t, defaultOrgId, c.Organization())
 	})
 
 	t.Run("incomplete env vars", func(t *testing.T) {
