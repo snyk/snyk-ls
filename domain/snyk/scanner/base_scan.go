@@ -137,13 +137,13 @@ func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(path ty
 	}
 
 	if scannedFolderConfig == nil {
-		// Create a new folder config and copy the organization settings from the working directory folder config
+		// Create a new folder config and copy all settings from the working directory folder config
 		logger.Debug().Msg("creating new folder config for scanned directory")
-		scannedFolderConfig = c.FolderConfig(path)
-		// TODO copy all other properties
-		scannedFolderConfig.OrgMigratedFromGlobalConfig = folderConfig.OrgMigratedFromGlobalConfig
-		scannedFolderConfig.OrgSetByUser = folderConfig.OrgSetByUser
-		scannedFolderConfig.PreferredOrg = folderConfig.PreferredOrg
+
+		// Clone the working directory folder config to preserve all settings
+		scannedFolderConfig = folderConfig.Clone()
+		// Update the folder path to the scanned directory
+		scannedFolderConfig.FolderPath = path
 
 		// Persist the folder config so it's available for future scans
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), scannedFolderConfig, &logger)

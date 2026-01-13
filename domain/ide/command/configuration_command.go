@@ -163,27 +163,9 @@ func populateFolderConfigs(s *types.Settings, c *config.Config) {
 	}
 
 	for _, f := range c.Workspace().Folders() {
-		fc := types.FolderConfig{
-			FolderPath: f.Path(),
+		if storedFc := c.FolderConfig(f.Path()); storedFc != nil {
+			s.FolderConfigs = append(s.FolderConfigs, *storedFc)
 		}
-
-		// Merge with stored config if available
-		if storedFc := c.FolderConfig(fc.FolderPath); storedFc != nil {
-			fc.BaseBranch = storedFc.BaseBranch
-			fc.LocalBranches = storedFc.LocalBranches
-			fc.AdditionalParameters = storedFc.AdditionalParameters
-			fc.AdditionalEnv = storedFc.AdditionalEnv
-			fc.ReferenceFolderPath = storedFc.ReferenceFolderPath
-			fc.PreferredOrg = storedFc.PreferredOrg
-			fc.AutoDeterminedOrg = storedFc.AutoDeterminedOrg
-			fc.OrgMigratedFromGlobalConfig = storedFc.OrgMigratedFromGlobalConfig
-			fc.OrgSetByUser = storedFc.OrgSetByUser
-			fc.FeatureFlags = storedFc.FeatureFlags
-			fc.SastSettings = storedFc.SastSettings
-			fc.ScanCommandConfig = storedFc.ScanCommandConfig
-		}
-
-		s.FolderConfigs = append(s.FolderConfigs, fc)
 	}
 }
 
