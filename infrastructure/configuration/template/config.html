@@ -55,6 +55,11 @@
                             <option value="manual" {{if eq .Settings.ScanningMode "manual"}}selected{{end}}>Manual</option>
                         </select>
                     </div>
+
+                    <div class="form-group">
+                        <label for="organization"><span data-toggle="tooltip" title="DEPRECATED: This global organization setting is deprecated. Please use the {{.FolderLabel | toLower}}-specific organization settings in the {{.FolderLabel}} Settings section below for better control">Organization <span class="deprecated-label">⚠ Deprecated</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span></label>
+                        <input type="text" id="organization" name="organization" value="{{.Settings.Organization}}" placeholder="Organization UUID or Slug">
+                    </div>
                 </div>
             </div>
 
