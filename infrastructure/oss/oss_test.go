@@ -203,7 +203,7 @@ func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, _ = scanner.Scan(ctx, "", "", nil)
+	_, _ = scanner.Scan(ctx, "", &types.FolderConfig{FolderPath: "."})
 
 	assert.False(t, cliMock.WasExecuted())
 }
@@ -346,7 +346,8 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 			// Adding a short delay so the cancel listener will start before a new scan is sending the cancel signal
 			time.Sleep(200 * time.Millisecond)
 			ctx := EnrichContextForTest(t, t.Context(), c, workingDir)
-			_, _ = scanner.Scan(ctx, types.FilePath(p), types.FilePath(folderPath), nil)
+			folderConfig := c.FolderConfig(types.FilePath(folderPath))
+			_, _ = scanner.Scan(ctx, types.FilePath(p), folderConfig)
 			wg.Done()
 		}()
 	}
@@ -586,7 +587,8 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 
 	// Act
 	ctx = EnrichContextForTest(t, ctx, c, workingDir)
-	_, _ = scanner.Scan(ctx, types.FilePath(targetFile), "", nil)
+	folderConfig := c.FolderConfig(types.FilePath(workingDir))
+	_, _ = scanner.Scan(ctx, types.FilePath(targetFile), folderConfig)
 
 	// Assert
 	assert.Eventually(t, func() bool { return fakeCli.GetFinishedScans() >= 2 }, 3*time.Second, 50*time.Millisecond)
@@ -679,7 +681,8 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 
 	// Act
 	ctx := EnrichContextForTest(t, t.Context(), c, workingDir)
-	analysis, err := scanner.Scan(ctx, types.FilePath(filePath), "", nil)
+	folderConfig := c.FolderConfig(types.FilePath(workingDir))
+	analysis, err := scanner.Scan(ctx, types.FilePath(filePath), folderConfig)
 
 	// Assert
 	assert.NoError(t, err)

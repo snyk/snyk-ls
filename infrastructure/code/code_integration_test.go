@@ -109,7 +109,7 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 
 		// Scan a file in folder 1
 		// The FakeCodeScannerClient will return SARIF that gets converted to issues
-		issues, err := scanner.Scan(context.Background(), types.FilePath("test1.js"), folderPath1, folderConfig1)
+		issues, err := scanner.Scan(context.Background(), types.FilePath("test1.js"), folderConfig1)
 		require.NoError(t, err, "Scan should succeed for folder 1")
 		require.NotEmpty(t, issues, "Should return issues from scan")
 
@@ -136,7 +136,7 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 		scanner.codeScanner = factoryWithOrgCapture
 
 		// Scan a file in folder 2
-		issues, err := scanner.Scan(context.Background(), types.FilePath("test2.js"), folderPath2, folderConfig2)
+		issues, err := scanner.Scan(context.Background(), types.FilePath("test2.js"), folderConfig2)
 		require.NoError(t, err, "Scan should succeed for folder 2")
 		require.NotEmpty(t, issues, "Should return issues from scan")
 

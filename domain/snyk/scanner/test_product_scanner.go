@@ -39,21 +39,31 @@ func NewTestProductScanner(product product.Product, enabled bool) *TestProductSc
 }
 
 type TestProductScanner struct {
-	product      product.Product
-	enabled      bool
-	scans        int
-	mutex        sync.Mutex
-	scanDuration time.Duration
-	c            *config.Config
+	product             product.Product
+	enabled             bool
+	scans               int
+	mutex               sync.Mutex
+	scanDuration        time.Duration
+	c                   *config.Config
+	lastFolderConfig    *types.FolderConfig
+	lastPath            types.FilePath
+	folderConfigHistory []*types.FolderConfig
 }
 
 func (t *TestProductScanner) GetInlineValues(_ types.FilePath, _ types.Range) ([]snyk.InlineValue, error) {
 	return []snyk.InlineValue{}, nil
 }
 
-func (t *TestProductScanner) Scan(ctx context.Context, _ types.FilePath, _ types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
+func (t *TestProductScanner) Scan(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	t.c.Logger().Debug().Msg("Test product scanner running scan")
 	defer t.c.Logger().Debug().Msg("Test product scanner scan finished")
+
+	// Capture the folderConfig and path for test verification
+	t.mutex.Lock()
+	t.lastFolderConfig = folderConfig
+	t.lastPath = path
+	t.folderConfigHistory = append(t.folderConfigHistory, folderConfig)
+	t.mutex.Unlock()
 
 	// Checking for cancellation before the select statement, because if both cases are available
 	// (scanDuration passed & context is done) then one of the cases will be picked at random.
@@ -92,3 +102,21 @@ func (t *TestProductScanner) Product() product.Product {
 }
 
 func (t *TestProductScanner) SetScanDuration(duration time.Duration) { t.scanDuration = duration }
+
+func (t *TestProductScanner) LastFolderConfig() *types.FolderConfig {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	return t.lastFolderConfig
+}
+
+func (t *TestProductScanner) LastPath() types.FilePath {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	return t.lastPath
+}
+
+func (t *TestProductScanner) FolderConfigHistory() []*types.FolderConfig {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	return t.folderConfigHistory
+}

@@ -45,8 +45,9 @@ var (
 )
 
 type Scanner interface {
-	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
-	Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, folderPath types.FilePath)
+	// Scan scans a workspace folder or file for issues, given its path. The folderConfig provides workspace context
+	// including the workspace folder path (folderConfig.FolderPath) for organization lookup and other settings.
+	Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, folderConfig *types.FolderConfig)
 	Init() error
 }
 
@@ -199,16 +200,16 @@ func (sc *DelegatingConcurrentScanner) Init() error {
 	return nil
 }
 
-func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, folderPath types.FilePath) {
+func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, folderConfig *types.FolderConfig) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	logger := sc.c.Logger().With().Str("method", method).Logger()
 
+	folderPath := folderConfig.FolderPath
 	if sc.c.Offline() {
 		logger.Warn().Str("method", "ScanPackages").Msgf("we are offline, not scanning %s, %s", folderPath, path)
 		return
 	}
 
-	folderConfig := sc.c.FolderConfig(folderPath)
 	ctx, logger = sc.enrichContextAndLogger(ctx, logger, folderConfig, folderPath, path)
 
 	authenticated := sc.authService.IsAuthenticated()
@@ -270,7 +271,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 				}
 
 				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
-				foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, path, folderPath, folderConfig)
+				foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, path, folderConfig)
 
 				// this span allows differentiation between processing time and scan time
 				sc.instrumentor.Finish(scanSpan)
@@ -346,7 +347,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 	}()
 }
 
-func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types.ProductScanner, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) ([]types.Issue, error) {
+func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types.ProductScanner, path types.FilePath, folderConfig *types.FolderConfig) ([]types.Issue, error) {
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
@@ -355,14 +356,14 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types
 	logger := sc.c.Logger().With().
 		Str("method", "internalScan").
 		Str("path", string(path)).
-		Str("folderPath", string(folderPath)).
+		Str("folderPath", string(folderConfig.FolderPath)).
 		Str("scanType", scanType).
 		Str("product", string(s.Product())).
 		Logger()
 
 	logger.Debug().Msg("internalScan: calling ProductScanner.Scan")
 
-	foundIssues, err := s.Scan(ctx, path, folderPath, folderConfig)
+	foundIssues, err := s.Scan(ctx, path, folderConfig)
 	if err != nil {
 		logger.Debug().Err(err).Msg("internalScan: scan returned error")
 		return nil, err

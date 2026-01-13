@@ -40,7 +40,7 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 	instrumentor := performance.NewInstrumentor()
 	scanner := New(c, instrumentor, error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c))
 
-	_, _ = scanner.Scan(t.Context(), "fake.yml", "", nil)
+	_, _ = scanner.Scan(t.Context(), "fake.yml", &types.FolderConfig{FolderPath: "."})
 
 	if spanRecorder, ok := instrumentor.(performance.SpanRecorder); ok {
 		spans := spanRecorder.Spans()
@@ -89,7 +89,7 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 	cancel()
 
 	// Act
-	_, _ = scanner.Scan(ctx, "", "", nil)
+	_, _ = scanner.Scan(ctx, "", &types.FolderConfig{FolderPath: "."})
 
 	// Assert
 	assert.False(t, cliMock.WasExecuted())

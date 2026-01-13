@@ -102,14 +102,11 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 
 	// scan
 	var results []types.Issue
-	if s.Product() == product.ProductCode {
-		logger.Debug().Msg("scanBaseBranch: scanning reference folder (Code product)")
-		results, err = s.Scan(ctx, "", baseFolderPath, folderConfig)
-	} else {
-		logger.Debug().Msg("scanBaseBranch: scanning reference folder")
+	logger.Debug().Msg("scanBaseBranch: scanning reference folder")
+	if s.Product() != product.ProductCode {
 		sc.populateOrgForScannedFolderConfig(baseFolderPath, folderConfig)
-		results, err = s.Scan(ctx, baseFolderPath, "", folderConfig)
 	}
+	results, err = s.Scan(ctx, baseFolderPath, folderConfig)
 	if err != nil {
 		logger.Error().Err(err).Msgf("skipping base scan persistence in %s %v", folderPath, err)
 		return err

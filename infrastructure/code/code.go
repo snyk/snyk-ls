@@ -149,16 +149,17 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
 	}
+	workspaceFolder := folderConfig.FolderPath
 	logger := sc.C.Logger().With().
 		Str("method", "code.Scan").
 		Str("path", string(path)).
-		Str("folderPath", string(folderPath)).
+		Str("workspaceFolder", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
 
@@ -170,7 +171,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	}
 
 	if folderConfig == nil || folderConfig.SastSettings == nil {
-		logger.Error().Str("folderPath", string(folderPath)).Msg("folder config or SAST settings is nil")
+		logger.Error().Str("workspaceFolder", string(workspaceFolder)).Msg("folder config or SAST settings is nil")
 		return issues, errors.New("folder config or SAST settings not available")
 	}
 
@@ -185,17 +186,17 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	}
 
 	sc.changedFilesMutex.Lock()
-	if sc.changedPaths[folderPath] == nil {
-		sc.changedPaths[folderPath] = map[types.FilePath]bool{}
+	if sc.changedPaths[workspaceFolder] == nil {
+		sc.changedPaths[workspaceFolder] = map[types.FilePath]bool{}
 	}
-	sc.changedPaths[folderPath][path] = true
+	sc.changedPaths[workspaceFolder][path] = true
 	sc.changedFilesMutex.Unlock()
 
-	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
+	// When starting a scan for a workspace folder that's already scanned, the new scan will wait for the previous scan
 	// to finish before starting.
 	// When there's already a scan waiting, the function returns immediately with empty results.
 	scanStatus := NewScanStatus()
-	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
+	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, workspaceFolder)
 	if isAlreadyWaiting {
 		return []types.Issue{}, nil // Returning an empty slice implies that no issues were found
 	}
@@ -209,15 +210,15 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	// Proceed to scan only if there are any changed paths. This ensures the following race condition coverage:
 	// It could be that one of throttled scans updated the changedPaths set, but the initial scan has picked up it's updated and proceeded with a scan in the meantime.
 	sc.changedFilesMutex.Lock()
-	if len(sc.changedPaths[folderPath]) <= 0 {
+	if len(sc.changedPaths[workspaceFolder]) <= 0 {
 		sc.changedFilesMutex.Unlock()
 		return []types.Issue{}, nil
 	}
 
-	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
+	filesToBeScanned := sc.getFilesToBeScanned(workspaceFolder)
 	sc.changedFilesMutex.Unlock()
 
-	results, err := internalScan(ctx, sc, folderPath, folderConfig, logger, filesToBeScanned)
+	results, err := internalScan(ctx, sc, workspaceFolder, folderConfig, logger, filesToBeScanned)
 	if err != nil {
 		return nil, err
 	}
