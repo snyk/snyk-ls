@@ -10,6 +10,7 @@
 	formHandler.collectData = function () {
 		var data = {
 			folderConfigs: [],
+      trustedFolders: [],
 		};
 
 		var form = dom.get("configForm");
@@ -46,9 +47,6 @@
 
 			// Trusted folder logic: trustedFolder_INDEX
 			if (name.indexOf("trustedFolder_") === 0) {
-				if (!data.trustedFolders) {
-					data.trustedFolders = [];
-				}
 				// Only add non-empty values
 				if (el.value && el.value.trim()) {
 					data.trustedFolders.push(el.value);
