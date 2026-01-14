@@ -185,11 +185,18 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderConfig *
 		updateCodeApiLocalEngine(sc.C, sastResponse)
 	}
 
+	// Determine if this is a full folder scan (path equals workspaceFolder or is a directory)
+	// vs an incremental file scan (path is a specific file)
+	isFolderScan := path == workspaceFolder || uri.IsDirectory(path)
+
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[workspaceFolder] == nil {
 		sc.changedPaths[workspaceFolder] = map[types.FilePath]bool{}
 	}
-	sc.changedPaths[workspaceFolder][path] = true
+	// Only track specific file paths for incremental scans, not folder paths
+	if !isFolderScan {
+		sc.changedPaths[workspaceFolder][path] = true
+	}
 	sc.changedFilesMutex.Unlock()
 
 	// When starting a scan for a workspace folder that's already scanned, the new scan will wait for the previous scan
@@ -207,16 +214,18 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderConfig *
 		sc.scanStatusMutex.Unlock()
 	}()
 
-	// Proceed to scan only if there are any changed paths. This ensures the following race condition coverage:
-	// It could be that one of throttled scans updated the changedPaths set, but the initial scan has picked up it's updated and proceeded with a scan in the meantime.
-	sc.changedFilesMutex.Lock()
-	if len(sc.changedPaths[workspaceFolder]) <= 0 {
+	// For incremental file scans, only proceed if there are changed paths to scan.
+	// For folder scans, always proceed to scan all files in the folder.
+	var filesToBeScanned map[types.FilePath]bool
+	if !isFolderScan {
+		sc.changedFilesMutex.Lock()
+		if len(sc.changedPaths[workspaceFolder]) <= 0 {
+			sc.changedFilesMutex.Unlock()
+			return []types.Issue{}, nil
+		}
+		filesToBeScanned = sc.getFilesToBeScanned(workspaceFolder)
 		sc.changedFilesMutex.Unlock()
-		return []types.Issue{}, nil
 	}
-
-	filesToBeScanned := sc.getFilesToBeScanned(workspaceFolder)
-	sc.changedFilesMutex.Unlock()
 
 	results, err := internalScan(ctx, sc, workspaceFolder, folderConfig, logger, filesToBeScanned)
 	if err != nil {

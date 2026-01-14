@@ -107,6 +107,7 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 		// Snyk Code scanner uses folderConfig.FolderPath as the scan root.
 		// For a base branch scan, this must be the temporary directory of the base branch checkout.
 		// We clone the folderConfig to avoid modifying the original and to pass the correct scan root.
+		// Pass baseFolderPath as path - when path == folderConfig.FolderPath, it's a full folder scan.
 		codeScanConfig := *folderConfig
 		codeScanConfig.FolderPath = baseFolderPath
 		results, err = s.Scan(ctx, baseFolderPath, &codeScanConfig)
