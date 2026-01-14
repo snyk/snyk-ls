@@ -252,14 +252,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
 
-	// normalize path
-	filePath, err := filepath.Abs(string(path))
-	if err != nil {
-		logger.Err(err).Msg("Error while extracting file absolutePath")
-	}
-
 	// Use workspace folder from folderConfig for CLI execution (org lookup, etc.)
-	// but keep track of the specific path being scanned
 	workspaceFolder := folderConfig.FolderPath
 
 	// cancel running scans on same workspace folder
@@ -275,7 +268,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	cliScanner.runningScans[workspaceFolder] = newScan
 	cliScanner.mutex.Unlock()
 
-	cmd, env := commandFunc([]string{filePath}, map[string]bool{"": true}, workspaceFolder, folderConfig)
+	cmd, env := commandFunc([]string{string(workspaceFolder)}, map[string]bool{"": true}, workspaceFolder, folderConfig)
 
 	// check if scan was canceled
 	if ctx.Err() != nil {
@@ -289,6 +282,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 
 	// do actual scan
 	var output any
+	var err error
 	if useLegacyScan {
 		logger.Info().Msg("⚠️ using legacy OSS scanner")
 

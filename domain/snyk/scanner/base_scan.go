@@ -103,10 +103,17 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	// scan
 	var results []types.Issue
 	logger.Debug().Msg("scanBaseBranch: scanning reference folder")
-	if s.Product() != product.ProductCode {
+	if s.Product() == product.ProductCode {
+		// Snyk Code scanner uses folderConfig.FolderPath as the scan root.
+		// For a base branch scan, this must be the temporary directory of the base branch checkout.
+		// We clone the folderConfig to avoid modifying the original and to pass the correct scan root.
+		codeScanConfig := *folderConfig
+		codeScanConfig.FolderPath = baseFolderPath
+		results, err = s.Scan(ctx, baseFolderPath, &codeScanConfig)
+	} else {
 		sc.populateOrgForScannedFolderConfig(baseFolderPath, folderConfig)
+		results, err = s.Scan(ctx, baseFolderPath, folderConfig)
 	}
-	results, err = s.Scan(ctx, baseFolderPath, folderConfig)
 	if err != nil {
 		logger.Error().Err(err).Msgf("skipping base scan persistence in %s %v", folderPath, err)
 		return err
