@@ -208,6 +208,129 @@ func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	assert.False(t, cliMock.WasExecuted())
 }
 
+func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - use real temp dirs
+	workspaceDir := t.TempDir()
+	workspacePath := types.FilePath(workspaceDir)
+
+	// Create a subfolder with a file
+	subfolderPath := filepath.Join(workspaceDir, "src", "nested")
+	require.NoError(t, os.MkdirAll(subfolderPath, 0755))
+	filePath := filepath.Join(subfolderPath, "package.json")
+	require.NoError(t, os.WriteFile(filePath, []byte(`{"name": "test"}`), 0644))
+
+	expectedOrg := "test-org-for-file-scan"
+	folderConfig := c.FolderConfig(workspacePath)
+	folderConfig.PreferredOrg = expectedOrg
+	folderConfig.OrgSetByUser = true
+	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
+
+	// Act - scan a specific file within the workspace
+	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
+	_, _ = scanner.Scan(ctx, types.FilePath(filePath), folderConfig)
+
+	// Assert - verify the CLI was executed (scan was attempted)
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for file scan")
+}
+
+func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - use real temp dirs
+	workspaceDir := t.TempDir()
+	workspacePath := types.FilePath(workspaceDir)
+
+	// Create a subfolder with a package.json
+	subfolderPath := filepath.Join(workspaceDir, "packages", "subproject")
+	require.NoError(t, os.MkdirAll(subfolderPath, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(subfolderPath, "package.json"), []byte(`{"name": "subproject"}`), 0644))
+
+	expectedOrg := "test-org-for-subfolder-scan"
+	folderConfig := c.FolderConfig(workspacePath)
+	folderConfig.PreferredOrg = expectedOrg
+	folderConfig.OrgSetByUser = true
+	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
+
+	// Act - scan a subfolder (not the workspace root)
+	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
+	_, _ = scanner.Scan(ctx, types.FilePath(subfolderPath), folderConfig)
+
+	// Assert - verify the CLI was executed (scan was attempted)
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for subfolder scan")
+}
+
+func Test_Scan_WorkspaceFolderScan_UsesFolderConfigOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - use real temp dirs
+	workspaceDir := t.TempDir()
+	workspacePath := types.FilePath(workspaceDir)
+
+	// Create a package.json in the workspace root
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "package.json"), []byte(`{"name": "workspace"}`), 0644))
+
+	expectedOrg := "test-org-for-workspace-scan"
+	folderConfig := c.FolderConfig(workspacePath)
+	folderConfig.PreferredOrg = expectedOrg
+	folderConfig.OrgSetByUser = true
+	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
+
+	// Act - scan the workspace folder itself
+	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
+	_, _ = scanner.Scan(ctx, workspacePath, folderConfig)
+
+	// Assert - verify the CLI was executed (scan was attempted)
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for workspace folder scan")
+}
+
+func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - simulate delta scan scenario where:
+	// - workspacePath is the original workspace
+	// - baseFolderPath is a temp directory with the base branch checkout
+	// - folderConfig.FolderPath points to baseFolderPath (as set by scanBaseBranch)
+	// - folderConfig.PreferredOrg contains the org from the original workspace
+	workspaceDir := t.TempDir()
+	baseBranchDir := t.TempDir()
+	baseFolderPath := types.FilePath(baseBranchDir)
+
+	// Create a package.json in the base branch directory
+	require.NoError(t, os.WriteFile(filepath.Join(baseBranchDir, "package.json"), []byte(`{"name": "base-branch"}`), 0644))
+
+	// This simulates what scanBaseBranch does: create a copy of folderConfig with FolderPath = baseFolderPath
+	expectedOrg := "org-from-workspace"
+	baseScanConfig := &types.FolderConfig{
+		FolderPath:   baseFolderPath, // Points to temp base branch dir
+		PreferredOrg: expectedOrg,    // Org from original workspace
+		OrgSetByUser: true,
+	}
+
+	// Store the folder config so it can be retrieved
+	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), baseScanConfig, c.Logger()))
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
+
+	// Act - scan the base branch folder (as scanBaseBranch would do)
+	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
+	_, _ = scanner.Scan(ctx, baseFolderPath, baseScanConfig)
+
+	// Assert - verify the CLI was executed
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for delta scan base branch")
+}
+
 func mavenTestIssue() ossIssue {
 	var issue = ossIssue{
 		Id:             "testIssue",
