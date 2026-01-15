@@ -835,7 +835,15 @@ func isNotStandardRegion(c *config.Config) bool {
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
 	t.Helper()
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), repo, commit, c.Logger(), false)
+	tempDir := t.TempDir()
+
+	// Register cleanup to wait for scans AFTER t.TempDir() so it runs BEFORE temp dir removal (LIFO order).
+	// This prevents Windows file locking issues where HTTP requests are still in flight during cleanup.
+	t.Cleanup(func() {
+		waitForAllScansToComplete(t, di.ScanStateAggregator())
+	})
+
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(tempDir), repo, commit, c.Logger(), false)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -843,6 +851,17 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 	ensureInitialized(t, c, loc, initParams, nil)
 	return cloneTargetDir
+}
+
+// waitForAllScansToComplete waits for all in-progress scans to finish.
+// This is used in cleanup to ensure file handles are released before temp directory removal.
+func waitForAllScansToComplete(t *testing.T, agg scanstates.Aggregator) {
+	t.Helper()
+	// Wait for both working directory and reference scans to complete
+	_ = assert.Eventually(t, func() bool {
+		snapshot := agg.StateSnapshot()
+		return snapshot.AllScansFinishedWorkingDirectory && snapshot.AllScansFinishedReference
+	}, 30*time.Second, 100*time.Millisecond)
 }
 
 func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Config) types.InitializeParams {
