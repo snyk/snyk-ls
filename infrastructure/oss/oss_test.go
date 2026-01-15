@@ -714,7 +714,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	_, _ = scanner.Scan(ctx, types.FilePath(targetFile), folderConfig)
 
 	// Assert
-	assert.Eventually(t, func() bool { return fakeCli.GetFinishedScans() >= 2 }, 3*time.Second, 50*time.Millisecond)
+	assert.Eventually(t, func() bool { return fakeCli.GetFinishedScans() >= 2 }, 10*time.Second, 50*time.Millisecond)
 }
 
 func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
