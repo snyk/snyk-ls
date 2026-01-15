@@ -608,9 +608,10 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	p, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
+	folderConfig := c.FolderConfig(types.FilePath(workingDir))
 
 	// Act
-	scanner.scheduleRefreshScan(ctx, types.FilePath(p))
+	scanner.scheduleRefreshScan(ctx, types.FilePath(p), folderConfig)
 
 	// Assert
 	time.Sleep(scanner.refreshScanWaitDuration + fakeCli.ExecuteDuration + 10*time.Millisecond)
@@ -632,12 +633,13 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	ctx2, cancel2 := context.WithCancel(t.Context())
 	t.Cleanup(cancel1)
 	t.Cleanup(cancel2)
+	folderConfig := c.FolderConfig(types.FilePath(workingDir))
 
 	// Act
 	ctx1 = EnrichContextForTest(t, ctx1, c, workingDir)
 	ctx2 = EnrichContextForTest(t, ctx2, c, workingDir)
-	scanner.scheduleRefreshScan(ctx1, types.FilePath(targetPath))
-	scanner.scheduleRefreshScan(ctx2, types.FilePath(targetPath))
+	scanner.scheduleRefreshScan(ctx1, types.FilePath(targetPath), folderConfig)
+	scanner.scheduleRefreshScan(ctx2, types.FilePath(targetPath), folderConfig)
 
 	// Assert
 	assert.Eventuallyf(t, func() bool {
@@ -657,9 +659,10 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	workingDir, _ := os.Getwd()
 	targetPath, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
 	ctx, cancel := context.WithCancel(t.Context())
+	folderConfig := c.FolderConfig(types.FilePath(workingDir))
 
 	// Act
-	scanner.scheduleRefreshScan(ctx, types.FilePath(targetPath))
+	scanner.scheduleRefreshScan(ctx, types.FilePath(targetPath), folderConfig)
 	cancel()
 
 	// Assert

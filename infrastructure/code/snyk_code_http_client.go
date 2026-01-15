@@ -102,14 +102,7 @@ func getCodeApiUrlFromFolderConfig(c *config.Config, folderConfig *types.FolderC
 	u.Host = codeApiRegex.ReplaceAllString(u.Host, "api.")
 
 	// Get organization directly from folderConfig for FedRAMP
-	var org string
-	if folderConfig.OrgSetByUser && folderConfig.PreferredOrg != "" {
-		org = folderConfig.PreferredOrg
-	} else if folderConfig.AutoDeterminedOrg != "" {
-		org = folderConfig.AutoDeterminedOrg
-	} else {
-		org = c.Organization()
-	}
+	org := c.FolderConfigOrganization(folderConfig)
 	if org == "" {
 		return "", fmt.Errorf("organization is required in a fedramp environment")
 	}

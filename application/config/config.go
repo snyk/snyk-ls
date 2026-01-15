@@ -1365,21 +1365,27 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 		logger.Debug().Str("globalOrg", globalOrg).Msg("no folder config in storage, falling back to global organization")
 		return globalOrg
 	}
+	return c.FolderConfigOrganization(fc)
+}
 
-	if fc.OrgSetByUser {
-		if fc.PreferredOrg == "" {
+// FolderConfigOrganization returns the organization configured for a given folderConfig.
+func (c *Config) FolderConfigOrganization(folderConfig *types.FolderConfig) string {
+	logger := c.Logger().With().Str("method", "FolderConfigOrganization").Str("folderConfig for path", string(folderConfig.FolderPath)).Logger()
+
+	if folderConfig.OrgSetByUser {
+		if folderConfig.PreferredOrg == "" {
 			return c.Organization()
 		} else {
-			return fc.PreferredOrg
+			return folderConfig.PreferredOrg
 		}
 	} else {
 		// If AutoDeterminedOrg is empty, fall back to global organization
-		if fc.AutoDeterminedOrg == "" {
+		if folderConfig.AutoDeterminedOrg == "" {
 			globalOrg := c.Organization()
 			logger.Debug().Str("globalOrg", globalOrg).Msg("AutoDeterminedOrg is empty, falling back to global organization")
 			return globalOrg
 		}
-		return fc.AutoDeterminedOrg
+		return folderConfig.AutoDeterminedOrg
 	}
 }
 

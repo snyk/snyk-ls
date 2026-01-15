@@ -170,9 +170,10 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderConfig *
 		return issues, err
 	}
 
-	if folderConfig == nil || folderConfig.SastSettings == nil {
-		logger.Error().Str("workspaceFolder", string(workspaceFolder)).Msg("folder config or SAST settings is nil")
-		return issues, errors.New("folder config or SAST settings not available")
+	if folderConfig.SastSettings == nil {
+		errMsg := "SAST settings not available"
+		logger.Error().Str("workspaceFolder", string(workspaceFolder)).Msg(errMsg)
+		return issues, errors.New(errMsg)
 	}
 
 	sastResponse := folderConfig.SastSettings
@@ -485,15 +486,7 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 	// This is important for base branch scans where FolderPath is a temporary directory
 	// that isn't registered as a workspace folder.
 	workspaceFolderPath := folderConfig.FolderPath
-	var organization string
-	if folderConfig.OrgSetByUser && folderConfig.PreferredOrg != "" {
-		organization = folderConfig.PreferredOrg
-	} else if folderConfig.AutoDeterminedOrg != "" {
-		organization = folderConfig.AutoDeterminedOrg
-	} else {
-		// Fall back to global organization
-		organization = sc.C.Organization()
-	}
+	organization := sc.C.FolderConfigOrganization(folderConfig)
 	if organization == "" {
 		return nil, fmt.Errorf("no organization found for workspace folder %s", workspaceFolderPath)
 	}

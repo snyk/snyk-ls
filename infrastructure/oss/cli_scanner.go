@@ -311,7 +311,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 
 	// scan again after cache expiry
 	if issues != nil {
-		cliScanner.scheduleRefreshScan(parentCtx, path)
+		cliScanner.scheduleRefreshScan(parentCtx, path, folderConfig)
 	}
 	return issues, nil
 }
@@ -582,7 +582,7 @@ func determineTargetFile(displayTargetFile string) string {
 // scheduleRefreshScan Schedules new scan after refreshScanWaitDuration once existing OSS results might be stale.
 // The timer is reset if a new scan is scheduled before the previous one is executed.
 // Canceling the context will stop the timer and abort the scheduled scan.
-func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path types.FilePath) {
+func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig) {
 	logger := cliScanner.getLogger(ctx)
 	cliScanner.scheduledScanMtx.Lock()
 	if cliScanner.scheduledScan != nil {
@@ -616,17 +616,6 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 			defer cliScanner.instrumentor.Finish(span)
 
 			logger.Info().Msg("Starting scheduled scan")
-			// Get folderConfig from context for scheduled scan
-			deps, found := ctx2.DependenciesFromContext(span.Context())
-			if !found {
-				logger.Warn().Msg("Dependencies not found in context for scheduled scan")
-				return
-			}
-			folderConfig, ok := deps[ctx2.DepFolderConfig].(*types.FolderConfig)
-			if !ok || folderConfig == nil {
-				logger.Warn().Msg("FolderConfig not found in context for scheduled scan")
-				return
-			}
 			_, _ = cliScanner.Scan(span.Context(), path, folderConfig)
 		case <-ctx.Done():
 			logger.Info().Msg("Scheduled scan canceled")
