@@ -71,7 +71,14 @@ func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, er
 		return "", err
 	}
 
+	return getCodeApiUrlFromFolderConfig(c, folderConfig)
+}
+
+// getCodeApiUrlFromFolderConfig returns the Code API URL using the provided folderConfig directly.
+// This is useful for base branch scans where the folder path is a temporary directory.
+func getCodeApiUrlFromFolderConfig(c *config.Config, folderConfig *types.FolderConfig) (string, error) {
 	var endpoint string
+	var err error
 	if isLocalEngineEnabled(folderConfig.SastSettings) {
 		endpoint = updateCodeApiLocalEngine(c, folderConfig.SastSettings)
 	} else {
@@ -94,9 +101,17 @@ func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, er
 
 	u.Host = codeApiRegex.ReplaceAllString(u.Host, "api.")
 
-	org, err := c.FolderOrganizationForSubPath(folder)
-	if err != nil {
-		return "", fmt.Errorf("organization is required in a fedramp environment: %w", err)
+	// Get organization directly from folderConfig for FedRAMP
+	var org string
+	if folderConfig.OrgSetByUser && folderConfig.PreferredOrg != "" {
+		org = folderConfig.PreferredOrg
+	} else if folderConfig.AutoDeterminedOrg != "" {
+		org = folderConfig.AutoDeterminedOrg
+	} else {
+		org = c.Organization()
+	}
+	if org == "" {
+		return "", fmt.Errorf("organization is required in a fedramp environment")
 	}
 
 	u.Path = "/hidden/orgs/" + org + "/code"
