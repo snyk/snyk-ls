@@ -86,32 +86,6 @@
 	};
 
 	/**
-	 * Create a debounced version of a function
-	 * IE7-compatible implementation
-	 * @param {Function} func - The function to debounce
-	 * @param {number} wait - The delay in milliseconds
-	 * @returns {Function} The debounced function
-	 */
-	utils.debounce = function (func, wait) {
-		var timeout = null;
-
-		return function () {
-			var context = this;
-			var args = arguments;
-
-			var later = function () {
-				timeout = null;
-				func.apply(context, args);
-			};
-
-			if (timeout) {
-				clearTimeout(timeout);
-			}
-			timeout = setTimeout(later, wait);
-		};
-	};
-
-	/**
 	 * Get object keys (polyfill for IE7)
 	 * @param {Object} obj - The object to get keys from
 	 * @returns {Array} Array of object keys
