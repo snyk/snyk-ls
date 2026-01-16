@@ -11,6 +11,7 @@
 		this.originalData = null;
 		this.isDirty = false;
 		this.collectDataFn = null;
+		this.changeListeners = [];
 	}
 
 	/**
@@ -48,6 +49,9 @@
 		if (wasDirty !== this.isDirty) {
 			this._notifyStateChange(this.isDirty);
 		}
+
+		// Notify change listeners with original and current data
+		this._notifyChangeListeners(this.originalData, currentData);
 
 		return this.isDirty;
 	};
@@ -198,6 +202,34 @@
 		// Notify if state changed
 		if (wasDirty !== this.isDirty) {
 			this._notifyStateChange(this.isDirty);
+		}
+	};
+
+	/**
+	 * Register a change listener callback
+	 * @param {Function} callback - Called with (originalData, currentData) when data changes
+	 */
+	DirtyTracker.prototype.addChangeListener = function (callback) {
+		if (typeof callback === "function") {
+			this.changeListeners.push(callback);
+		}
+	};
+
+	/**
+	 * Notify all change listeners
+	 * @private
+	 * @param {Object} originalData - Original form data
+	 * @param {Object} currentData - Current form data
+	 */
+	DirtyTracker.prototype._notifyChangeListeners = function (originalData, currentData) {
+		for (var i = 0; i < this.changeListeners.length; i++) {
+			try {
+				this.changeListeners[i](originalData, currentData);
+			} catch (e) {
+				if (window.console && console.error) {
+					console.error("Error in change listener:", e);
+				}
+			}
 		}
 	};
 

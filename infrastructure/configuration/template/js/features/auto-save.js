@@ -4,16 +4,10 @@
 (function() {
 	window.ConfigApp = window.ConfigApp || {};
 	var autoSave = {};
-	var dom = window.ConfigApp.dom;
 	var ideBridge = window.ConfigApp.ideBridge;
-
-	var originalEndpoint = "";
 
 	// Get current form data, validate, and call __saveIdeConfig__
 	autoSave.getAndSaveIdeConfig = function() {
-		var endpointInput = dom.get("endpoint");
-		var currentEndpoint = endpointInput ? endpointInput.value : "";
-
 		// Check validation state
 		var validationInfo = window.ConfigApp.validation.getFormValidationInfo();
 		if (!validationInfo.isValid) {
@@ -44,19 +38,10 @@
 				window.dirtyTracker.reset(data);
 			}
 
-			// If endpoint changed, trigger logout
-			if (originalEndpoint && currentEndpoint !== originalEndpoint) {
-				ideBridge.logout();
-			}
-
 			if (ideBridge) {
 				ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.SUCCESS);
 			}
 		}
-	};
-
-	autoSave.setOriginalEndpoint = function(endpoint) {
-		originalEndpoint = endpoint;
 	};
 
 	window.ConfigApp.autoSave = autoSave;
