@@ -191,35 +191,86 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 	if err != nil {
 		// Fallback to disk: if cache doesn't have entry, try to find it on disk
 		// This fixes IDE-1514: GetPersistedIssueList fails when cache is not initialized
-		logger.Debug().Msgf("cache miss, attempting fallback to disk lookup")
+		logger.Debug().
+			Str("cacheDir", cacheDir).
+			Msg("cache miss, attempting fallback to disk lookup")
 		hash := getHashForFolderPath(folderPath)
 
 		// Look for cache files on disk matching this folder path and product
 		persistedFiles, diskErr := g.getPersistedFiles(cacheDir)
-		if diskErr == nil {
+		if diskErr != nil {
+			logger.Debug().
+				Err(diskErr).
+				Str("cacheDir", cacheDir).
+				Msg("failed to read persisted files from cache directory during fallback")
+		} else {
+			logger.Debug().
+				Int("fileCount", len(persistedFiles)).
+				Str("expectedHash", string(hash)).
+				Str("expectedProduct", string(p)).
+				Msg("scanning disk files for matching cache entry")
+			foundMatch := false
 			for _, fileName := range persistedFiles {
 				fullPath := filepath.Join(cacheDir, fileName)
 				schemaVersion, fileHash, fileCommitHash, fileProduct, parseErr := g.fileSchema(fullPath)
-				if parseErr == nil && fileHash == hash && fileProduct == p {
-					// Check if file is expired before using it
-					if !g.isExpired(schemaVersion, fullPath) {
-						commitHash = fileCommitHash
-						// Update in-memory cache for future lookups
-						g.createOrAppendToCache(hash, commitHash, p)
-						logger.Debug().
-							Str("commitHash", commitHash).
-							Str("filePath", fullPath).
-							Msg("found commit hash on disk, updated cache")
-						err = nil // Clear the error since we found it
-						break
-					}
+				if parseErr != nil {
+					logger.Debug().
+						Err(parseErr).
+						Str("filePath", fullPath).
+						Msg("failed to parse cache file schema, skipping")
+					continue
 				}
+				if fileHash != hash {
+					logger.Debug().
+						Str("filePath", fullPath).
+						Str("fileHash", string(fileHash)).
+						Str("expectedHash", string(hash)).
+						Msg("file hash mismatch, skipping")
+					continue
+				}
+				if fileProduct != p {
+					logger.Debug().
+						Str("filePath", fullPath).
+						Str("fileProduct", string(fileProduct)).
+						Str("expectedProduct", string(p)).
+						Msg("file product mismatch, skipping")
+					continue
+				}
+				// Check if file is expired before using it
+				if g.isExpired(schemaVersion, fullPath) {
+					logger.Debug().
+						Str("filePath", fullPath).
+						Str("commitHash", fileCommitHash).
+						Msg("found matching file on disk but it is expired, skipping")
+					continue
+				}
+				// Found a valid match!
+				commitHash = fileCommitHash
+				// Update in-memory cache for future lookups
+				g.createOrAppendToCache(hash, commitHash, p)
+				logger.Debug().
+					Str("commitHash", commitHash).
+					Str("filePath", fullPath).
+					Msg("found commit hash on disk, updated cache")
+				err = nil // Clear the error since we found it
+				foundMatch = true
+				break
+			}
+			if !foundMatch {
+				logger.Debug().
+					Int("filesScanned", len(persistedFiles)).
+					Str("expectedHash", string(hash)).
+					Str("expectedProduct", string(p)).
+					Msg("no matching cache file found on disk after scanning all files")
 			}
 		}
 
 		// If still no commit hash found, return the original error
 		if err != nil || commitHash == "" {
-			logger.Debug().Msgf("returning error: %v", err)
+			logger.Debug().
+				Err(err).
+				Str("cacheDir", cacheDir).
+				Msg("fallback to disk failed, returning error")
 			return nil, err
 		}
 	}
