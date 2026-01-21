@@ -189,8 +189,39 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 	commitHash, err := g.getCommitHashForProduct(folderPath, p)
 	logger.Debug().Msgf("commitHash=%s, err=%v", commitHash, err)
 	if err != nil {
-		logger.Debug().Msgf("returning error: %v", err)
-		return nil, err
+		// Fallback to disk: if cache doesn't have entry, try to find it on disk
+		// This fixes IDE-1514: GetPersistedIssueList fails when cache is not initialized
+		logger.Debug().Msgf("cache miss, attempting fallback to disk lookup")
+		hash := getHashForFolderPath(folderPath)
+
+		// Look for cache files on disk matching this folder path and product
+		persistedFiles, diskErr := g.getPersistedFiles(cacheDir)
+		if diskErr == nil {
+			for _, fileName := range persistedFiles {
+				fullPath := filepath.Join(cacheDir, fileName)
+				schemaVersion, fileHash, fileCommitHash, fileProduct, parseErr := g.fileSchema(fullPath)
+				if parseErr == nil && fileHash == hash && fileProduct == p {
+					// Check if file is expired before using it
+					if !g.isExpired(schemaVersion, fullPath) {
+						commitHash = fileCommitHash
+						// Update in-memory cache for future lookups
+						g.createOrAppendToCache(hash, commitHash, p)
+						logger.Debug().
+							Str("commitHash", commitHash).
+							Str("filePath", fullPath).
+							Msg("found commit hash on disk, updated cache")
+						err = nil // Clear the error since we found it
+						break
+					}
+				}
+			}
+		}
+
+		// If still no commit hash found, return the original error
+		if err != nil || commitHash == "" {
+			logger.Debug().Msgf("returning error: %v", err)
+			return nil, err
+		}
 	}
 
 	if commitHash == "" {
