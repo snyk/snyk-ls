@@ -714,7 +714,6 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCReco
 			// "cfenv": "^1.0.4", 1 fixable issue
 			if lens.Range.Start.Line == 19 {
 				assert.Contains(t, lens.Command.Title, "and fix ")
-				assert.NotContains(t, lens.Command.Title, "and fix ")
 			}
 
 			// "tap": "^11.1.3", 12 fixable, 11 unfixable
