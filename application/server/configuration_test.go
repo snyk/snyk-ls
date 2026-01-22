@@ -303,9 +303,10 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
 
-		defaultOrgId := "00000000-0000-0000-0000-000000000002"
+		preferredOrgId := "00000000-0000-0000-0000-000000000002"
 		// Set an immutable default value to avoid API calls
-		c.Engine().GetConfiguration().AddDefaultValue(configuration.DEFAULT_ORGANIZATION, configuration.ImmutableDefaultValueFunction(defaultOrgId))
+		err := configuration.RegisterUserPreferredOrganizationDefault(c.Engine().GetConfiguration(), configuration.ImmutableDefaultValueFunction(preferredOrgId), nil)
+		require.NoError(t, err)
 
 		// Set to a specific org first
 		c.SetOrganization(expectedOrgId)
@@ -315,16 +316,17 @@ func Test_UpdateSettings(t *testing.T) {
 		// Include another setting to avoid early return on empty settings struct
 		UpdateSettings(c, types.Settings{Organization: "", RiskScoreThreshold: utils.Ptr(100)}, analytics.TriggerSourceTest)
 
-		assert.Equal(t, defaultOrgId, c.Organization())
+		assert.Equal(t, preferredOrgId, c.Organization())
 	})
 
 	t.Run("whitespace organization resets to default organization", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
 
-		defaultOrgId := "00000000-0000-0000-0000-000000000002"
+		preferredOrgId := "00000000-0000-0000-0000-000000000002"
 		// Set an immutable default value to avoid API calls
-		c.Engine().GetConfiguration().AddDefaultValue(configuration.DEFAULT_ORGANIZATION, configuration.ImmutableDefaultValueFunction(defaultOrgId))
+		err := configuration.RegisterUserPreferredOrganizationDefault(c.Engine().GetConfiguration(), configuration.ImmutableDefaultValueFunction(preferredOrgId), nil)
+		require.NoError(t, err)
 
 		// Set to a specific org first
 		c.SetOrganization(expectedOrgId)
@@ -333,7 +335,7 @@ func Test_UpdateSettings(t *testing.T) {
 		// Set to single space - should be trimmed to empty and reset to default
 		UpdateSettings(c, types.Settings{Organization: " "}, analytics.TriggerSourceTest)
 
-		assert.Equal(t, defaultOrgId, c.Organization())
+		assert.Equal(t, preferredOrgId, c.Organization())
 	})
 
 	t.Run("incomplete env vars", func(t *testing.T) {
