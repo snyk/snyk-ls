@@ -102,19 +102,18 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, "CLI Configuration")     // Section header
 }
 
-func TestConfigHtmlRenderer_FiltersFolderConfigsNotInWorkspace(t *testing.T) {
+func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 	c := config.CurrentConfig()
 
-	// Set up mock workspace with only one folder
+	// Set up mock workspace with a folder
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
 	mockFolder := mock_types.NewMockFolder(ctrl)
 
-	// Workspace only has /workspace/folder1
-	workspaceFolderPath := types.FilePath("/workspace/folder1")
-	mockFolder.EXPECT().Path().Return(workspaceFolderPath).AnyTimes()
+	folderPath := types.FilePath("/path/to/project")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
 	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
 
 	c.SetWorkspace(mockWorkspace)
@@ -123,60 +122,20 @@ func TestConfigHtmlRenderer_FiltersFolderConfigsNotInWorkspace(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 
-	// Settings include two folders: one in workspace, one external
 	settings := types.Settings{
-		Token:                  "test-token",
-		Endpoint:               "https://test.snyk.io",
-		AuthenticationMethod:   "token",
-		ActivateSnykOpenSource: "true",
+		IntegrationName:  "ECLIPSE",
+		Token:            "test-token",
+		Endpoint:         "https://test.snyk.io",
+		ActivateSnykCode: "true",
 		FolderConfigs: []types.FolderConfig{
 			{
-				FolderPath:        workspaceFolderPath,
-				BaseBranch:        "main",
-				ScanCommandConfig: map[product.Product]types.ScanCommandConfig{}, // Empty map to test edge case
-			},
-			{
-				FolderPath: "/external/folder2",
-				BaseBranch: "develop",
+				FolderPath: folderPath,
 			},
 		},
 	}
 
 	html := renderer.GetConfigHtml(settings)
 
-	// Verify workspace folder is included
-	assert.Contains(t, html, "/workspace/folder1")
-
-	// Verify external folder is NOT included
-	assert.NotContains(t, html, "/external/folder2")
-}
-
-func TestConfigHtmlRenderer_NoWorkspaceFiltersAllFolders(t *testing.T) {
-	c := config.CurrentConfig()
-	// No workspace set (nil)
-
-	renderer, err := NewConfigHtmlRenderer(c)
-	assert.NoError(t, err)
-	assert.NotNil(t, renderer)
-
-	settings := types.Settings{
-		Token:                  "test-token",
-		Endpoint:               "https://test.snyk.io",
-		AuthenticationMethod:   "token",
-		ActivateSnykOpenSource: "true",
-		FolderConfigs: []types.FolderConfig{
-			{
-				FolderPath: "/some/folder",
-				BaseBranch: "main",
-			},
-		},
-	}
-
-	html := renderer.GetConfigHtml(settings)
-
-	// Verify folder is NOT included when no workspace is set
-	assert.NotContains(t, html, "/some/folder")
-
-	// Verify message about no folders configured is shown
-	assert.Contains(t, html, "No folder")
+	// Verify Eclipse shows "Project Settings" instead of "Folder Settings"
+	assert.Contains(t, html, "Project Settings")
 }

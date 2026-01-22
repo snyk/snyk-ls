@@ -59,13 +59,12 @@
 		var inputs = form.getElementsByTagName("input");
 		var selects = form.getElementsByTagName("select");
 
-		// Add blur listeners to all text inputs
 		for (var i = 0; i < inputs.length; i++) {
-			dom.addEvent(inputs[i], "blur", formState.triggerChangeHandlers);
-			// Also track change for checkboxes and radios
 			if (inputs[i].type === "checkbox" || inputs[i].type === "radio") {
 				dom.addEvent(inputs[i], "change", formState.triggerChangeHandlers);
-			}
+			} else {
+        dom.addEvent(inputs[i], "blur", formState.triggerChangeHandlers);
+      }
 		}
 
 		// Add change listeners to all selects

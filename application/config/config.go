@@ -105,7 +105,7 @@ func NewCliSettings(c *Config) *CliSettings {
 func (c *CliSettings) Installed() bool {
 	c.cliPathAccessMutex.RLock()
 	defer c.cliPathAccessMutex.RUnlock()
-	stat, err := c.CliPathFileInfo()
+	stat, err := c.cliPathFileInfo()
 	isDirectory := stat != nil && stat.IsDir()
 	if isDirectory {
 		c.C.Logger().Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
@@ -113,12 +113,11 @@ func (c *CliSettings) Installed() bool {
 	return c.cliPath != "" && err == nil && !isDirectory
 }
 
-func (c *CliSettings) CliPathFileInfo() (os.FileInfo, error) {
-	c.cliPathAccessMutex.RLock()
-	defer c.cliPathAccessMutex.RUnlock()
+// cliPathFileInfo returns file info for the CLI path.
+func (c *CliSettings) cliPathFileInfo() (os.FileInfo, error) {
 	stat, err := os.Stat(c.cliPath)
 	if err == nil {
-		c.C.Logger().Trace().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
+		c.C.Logger().Trace().Str("method", "config.cliSettings.cliPathFileInfo").Msgf("CLI path: %s, Size: %d, Perm: %s",
 			c.cliPath,
 			stat.Size(),
 			stat.Mode().Perm())
