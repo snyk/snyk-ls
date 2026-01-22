@@ -1,6 +1,12 @@
 package entrypoint
 
-import "testing"
+import (
+	"io"
+	"runtime"
+	"testing"
+
+	"github.com/rs/zerolog"
+)
 
 func Test_desiredMaxProcs(t *testing.T) {
 	t.Parallel()
@@ -26,5 +32,21 @@ func Test_desiredMaxProcs(t *testing.T) {
 				t.Fatalf("desiredMaxProcs(%d) = %d, want %d", tc.numCPU, got, tc.want)
 			}
 		})
+	}
+}
+
+func Test_ApplyDefaultCPUCap_WhenGOMAXPROCSIsSet_DoesNotOverride(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+
+	t.Setenv("GOMAXPROCS", "99")
+
+	original := runtime.GOMAXPROCS(0)
+	defer runtime.GOMAXPROCS(original)
+
+	ApplyDefaultCPUCap(&logger)
+
+	after := runtime.GOMAXPROCS(0)
+	if after != original {
+		t.Fatalf("expected ApplyDefaultCPUCap to keep GOMAXPROCS unchanged when env var is set; got %d, want %d", after, original)
 	}
 }

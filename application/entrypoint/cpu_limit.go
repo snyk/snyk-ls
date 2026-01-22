@@ -1,6 +1,7 @@
 package entrypoint
 
 import (
+	"os"
 	"runtime"
 
 	"github.com/rs/zerolog"
@@ -16,6 +17,11 @@ func desiredMaxProcs(numCPU int) int {
 
 func ApplyDefaultCPUCap(logger *zerolog.Logger) {
 	if logger == nil {
+		return
+	}
+
+	if goMaxProcs := os.Getenv("GOMAXPROCS"); goMaxProcs != "" {
+		logger.Info().Str("GOMAXPROCS", goMaxProcs).Msg("GOMAXPROCS is set via environment variable, not applying default cap")
 		return
 	}
 
