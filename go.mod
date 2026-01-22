@@ -31,7 +31,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/cli-extension-os-flows v0.0.0-20251216105957-6fea9cc0c94b
 	github.com/snyk/code-client-go v1.25.0
-	github.com/snyk/go-application-framework v0.0.0-20251215143646-9f078499ac30
+	github.com/snyk/go-application-framework v0.0.0-20260121120647-98a75e529220
 	github.com/snyk/studio-mcp v1.2.3
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.10
@@ -106,7 +106,7 @@ require (
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
-	github.com/snyk/error-catalog-golang-public v0.0.0-20251008132755-b542bb643649 // indirect
+	github.com/snyk/error-catalog-golang-public v0.0.0-20260108110943-21ad0c940c14 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.14.0 // indirect
