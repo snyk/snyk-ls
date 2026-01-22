@@ -121,22 +121,21 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 // The IDE can also call window.getAndSaveIdeConfig() to retrieve and save current form values.
 // The IDE can call window.setAuthToken(token) to inject an authentication token into the token input field.
 // Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
-// Folder configs are filtered to only show folders that are currently in the workspace.
+// Note: Settings should be populated using populateFolderConfigs which ensures only workspace folders are included.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
-	// Determine folder/solution label based on IDE
+	// Determine folder/solution/project label based on IDE
 	folderLabel := "Folder"
 	if isVisualStudio(settings.IntegrationName) {
 		folderLabel = "Solution"
+	} else if isEclipse(settings.IntegrationName) {
+		folderLabel = "Project"
 	}
-
-	// Filter folder configs to only include those in the current workspace
-	filteredSettings := filterFolderConfigs(settings, r.c)
 
 	// Get CLI release channel from runtime version
 	cliReleaseChannel := getCliReleaseChannel(r.c)
 
-	data := map[string]interface{}{
-		"Settings":     filteredSettings,
+	data := map[string]any{
+		"Settings":     settings,
 		"BootstrapCSS": template.CSS(bootstrapCssTemplate),
 		"Styles":       template.CSS(configStylesTemplate),
 		"JQuery":       template.JS(jqueryJsTemplate),
@@ -174,36 +173,14 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	return buffer.String()
 }
 
-// filterFolderConfigs filters the settings to only include folder configs
-// that correspond to folders currently in the workspace.
-func filterFolderConfigs(settings types.Settings, c *config.Config) types.Settings {
-	// If no workspace, return settings with empty folder configs
-	if c.Workspace() == nil {
-		settings.FolderConfigs = []types.FolderConfig{}
-		return settings
-	}
-
-	// Build a map of workspace folder paths for O(1) lookup
-	workspaceFolders := make(map[types.FilePath]bool)
-	for _, folder := range c.Workspace().Folders() {
-		workspaceFolders[folder.Path()] = true
-	}
-
-	// Filter folder configs to only include those in the workspace
-	filteredConfigs := make([]types.FolderConfig, 0, len(settings.FolderConfigs))
-	for _, fc := range settings.FolderConfigs {
-		if workspaceFolders[fc.FolderPath] {
-			filteredConfigs = append(filteredConfigs, fc)
-		}
-	}
-
-	settings.FolderConfigs = filteredConfigs
-	return settings
-}
-
 // isVisualStudio checks if the integration name indicates Visual Studio
 func isVisualStudio(integrationName string) bool {
 	return integrationName == "VISUAL_STUDIO" || integrationName == "Visual Studio"
+}
+
+// isEclipse checks if the integration name indicates Eclipse
+func isEclipse(integrationName string) bool {
+	return integrationName == "ECLIPSE" || integrationName == "Eclipse"
 }
 
 // getCliReleaseChannel derives the CLI release channel from the runtime version
