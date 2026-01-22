@@ -47,6 +47,7 @@ const (
 	ClearCacheCommand               = "snyk.clearCache"
 	GenerateIssueDescriptionCommand = "snyk.generateIssueDescription"
 	SubmitIgnoreRequest             = "snyk.submitIgnoreRequest"
+	WorkspaceConfigurationCommand   = "snyk.workspace.configuration"
 	// Snyk Code specific commands
 	CodeFixCommand          = "snyk.code.fix"
 	CodeFixDiffsCommand     = "snyk.code.fixDiffs"
@@ -54,8 +55,7 @@ const (
 	CodeSubmitFixFeedback   = "snyk.code.submitFixFeedback"
 
 	// bridging commands
-	ExecuteCLICommand  = "snyk.executeCLI"
-	ExecuteMCPToolCall = "snyk.executeMCPToolCall"
+	ExecuteCLICommand = "snyk.executeCLI"
 )
 
 type OpenBrowserFunc func(url string)

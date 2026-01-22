@@ -40,6 +40,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -98,9 +99,22 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{}
 }
 
-func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
 	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "iac.Scan").Logger()
+
+	// Log scan type and paths
+	scanType := "WorkingDirectory"
+	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
+		scanType = deltaScanType.String()
+	}
+	logger := c.Logger().With().
+		Str("method", "iac.Scan").
+		Str("path", string(path)).
+		Str("scanType", scanType).
+		Logger()
+
+	logger.Debug().Msg("IAC scanner: starting scan")
+
 	if !c.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
@@ -116,6 +130,7 @@ func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FileP
 
 	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
+		logger.Debug().Msg("IAC scanner: skipping unsupported file/directory")
 		return issues, nil
 	}
 	p := progress.NewTracker(true) // todo - get progress trackers via DI
@@ -202,7 +217,7 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 	defer iac.mutex.Unlock()
 
 	cmd := iac.cliCmd(documentURI)
-	res, err := iac.cli.Execute(ctx, cmd, workspacePath)
+	res, err := iac.cli.Execute(ctx, cmd, workspacePath, nil)
 
 	if ctx.Err() != nil {
 		return nil, ctx.Err()

@@ -1,0 +1,165 @@
+// ABOUTME: Form data collection and serialization functions
+// ABOUTME: Handles gathering all form inputs and converting them to JSON format
+
+(function () {
+	window.ConfigApp = window.ConfigApp || {};
+	var formHandler = {};
+	var dom = window.ConfigApp.dom;
+
+	// Collect form data
+	formHandler.collectData = function () {
+		var data = {
+			folderConfigs: [],
+      trustedFolders: [],
+		};
+
+		var form = dom.get("configForm");
+		if (!form) return data;
+
+		var inputs = form.getElementsByTagName("input");
+		var selects = form.getElementsByTagName("select");
+
+		// Process all elements
+		processElements(inputs, data);
+		processElements(selects, data);
+
+		// Process complex objects
+		processFilterSeverity(data);
+		processIssueViewOptions(data);
+
+		return data;
+	};
+
+	function processElements(elements, data) {
+		for (var i = 0; i < elements.length; i++) {
+			var el = elements[i];
+			var name = el.name;
+
+			if (!name) continue;
+
+			// Skip complex object fields (handled separately)
+			if (
+				name.indexOf("filterSeverity_") === 0 ||
+				name.indexOf("issueViewOptions_") === 0
+			) {
+				continue;
+			}
+
+			// Trusted folder logic: trustedFolder_INDEX
+			if (name.indexOf("trustedFolder_") === 0) {
+				// Only add non-empty values
+				if (el.value && el.value.trim()) {
+					data.trustedFolders.push(el.value);
+				}
+				continue;
+			}
+
+			// Folder logic: folder_INDEX_FIELD or folder_INDEX_scanConfig_PRODUCT_FIELD
+			if (name.indexOf("folder_") === 0) {
+				var parts = name.split("_");
+				if (parts.length >= 3) {
+					var index = parseInt(parts[1]);
+
+					if (!data.folderConfigs[index]) {
+						data.folderConfigs[index] = {};
+					}
+
+					// Check if this is a scanConfig field: folder_INDEX_scanConfig_PRODUCT_PARTS_FIELD
+					if (parts.length >= 5 && parts[2] === "scanConfig") {
+						// Product name is everything between "scanConfig" and the last part (field name)
+						// e.g., folder_0_scanConfig_Snyk_Open_Source_preScanCommand
+						// parts = ["folder", "0", "scanConfig", "Snyk", "Open", "Source", "preScanCommand"]
+						// product = "Snyk Open Source"
+						// field = "preScanCommand"
+						var productParts = parts.slice(3, -1); // ["Snyk", "Open", "Source"]
+						var product = productParts.join(" ");
+						var field = parts[parts.length - 1]; // "preScanCommand"
+
+						if (!data.folderConfigs[index].scanCommandConfig) {
+							data.folderConfigs[index].scanCommandConfig = {};
+						}
+						if (!data.folderConfigs[index].scanCommandConfig[product]) {
+							data.folderConfigs[index].scanCommandConfig[product] = {};
+						}
+
+						if (el.type === "checkbox") {
+							data.folderConfigs[index].scanCommandConfig[product][field] =
+								el.checked;
+						} else {
+							// Always set the value, even if empty, to allow clearing
+							data.folderConfigs[index].scanCommandConfig[product][field] =
+								el.value;
+						}
+					} else {
+						var field = parts.slice(2).join("_");
+          if (field === "additionalParameters") {
+							// Split by whitespace and filter out empty strings
+							data.folderConfigs[index][field] = el.value ? el.value.trim().split(/\s+/).filter(function(item) { return item.length > 0; }) : [];
+              continue
+            }
+
+						// Skip preferredOrg if orgSetByUser is false (auto-org is enabled)
+						if (field === "preferredOrg") {
+							var orgSetByUserInput = dom.get("folder_" + index + "_orgSetByUser");
+							if (orgSetByUserInput && orgSetByUserInput.value === "false") {
+								continue;
+							}
+						}
+
+						setFieldValue(data.folderConfigs[index], field, el);
+					}
+				}
+			} else {
+				// Global setting
+				setFieldValue(data, name, el);
+			}
+		}
+	}
+
+	function setFieldValue(obj, field, el) {
+		if (el.type === "checkbox") {
+			obj[field] = el.checked;
+		} else if (el.type === "number") {
+			obj[field] = el.value ? parseInt(el.value) : null;
+		} else {
+			// Convert string boolean values to actual booleans
+			if (el.value === "true") {
+				obj[field] = true;
+			} else if (el.value === "false") {
+				obj[field] = false;
+			} else {
+				obj[field] = el.value;
+			}
+		}
+	}
+
+	function processFilterSeverity(data) {
+		var critical = dom.getByName("filterSeverity_critical")[0];
+		var high = dom.getByName("filterSeverity_high")[0];
+		var medium = dom.getByName("filterSeverity_medium")[0];
+		var low = dom.getByName("filterSeverity_low")[0];
+
+		if (critical || high || medium || low) {
+			data.filterSeverity = {
+				critical: critical ? critical.checked : false,
+				high: high ? high.checked : false,
+				medium: medium ? medium.checked : false,
+				low: low ? low.checked : false,
+			};
+		}
+	}
+
+	function processIssueViewOptions(data) {
+		var openIssues = dom.getByName("issueViewOptions_openIssues")[0];
+		var ignoredIssues = dom.getByName("issueViewOptions_ignoredIssues")[0];
+
+		if (openIssues || ignoredIssues) {
+			data.issueViewOptions = {
+				openIssues: openIssues ? openIssues.checked : false,
+				ignoredIssues: ignoredIssues ? ignoredIssues.checked : false,
+			};
+		}
+	}
+
+	window.ConfigApp.formHandler = formHandler;
+})();

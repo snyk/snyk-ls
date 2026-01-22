@@ -181,16 +181,6 @@ Right now the language server supports the following actions:
   - note: alias for textDocument/publishDiagnostics
 
 
-- MCP Server URL Notification to publish the listening address. The server listens for `POST` requests on `/messages` and for SSE subscriptions on `/sse`. An example can be found in the mcp package in the smoke test.
-  - method: `$/snyk.mcpServerURL`
-  - params: `types.McpServerURLParams`
-  - example:
-  ```json5
-  {
-    "url": "https://127.0.0.1:7595"
-  }
-  ``` 
-
 - Authentication Notification
   - method: `$/snyk.hasAuthenticated`
   - params: `types.AuthenticationParams`
@@ -259,7 +249,20 @@ Right now the language server supports the following actions:
     "scanSummary": "<html><body<p> Summary </p></body></html>"
   }
   ```
-
+- Register MCP Notification
+  - method: `$/snyk.registerMcp`
+  - params: `types.SnykRegisterMcpParams`
+  - example:
+  ```json5
+    {
+      "command": "/path/to/cli",
+      "args": [ "mcp", "-t", "stdio" ],
+      "env": {
+        "ENV1": "value1",
+        "ENV2": "value2"
+      }
+    }
+  ```
 ### Commands
 
 - `NavigateToRangeCommand` navigates the client to the given range
@@ -429,6 +432,23 @@ Right now the language server supports the following actions:
   - command: `snyk.generateIssueDescription`
   - args:
     - `issueId` string
+- `Configuration Dialog` Opens the configuration dialog with all Snyk settings.
+  - command: `snyk.workspace.configuration`
+  - args: empty
+  - returns: HTML string containing the configuration dialog
+  - example:
+  ```html
+  <html>
+    <head>
+      <title>Snyk Configuration</title>
+      ...
+    </head>
+    <body>
+      <!-- Configuration form with all settings -->
+    </body>
+  </html>
+  ```
+  - See [Configuration Dialog Integration Guide](docs/configuration-dialog.md) for full integration details.
 
 ## Installation
 
@@ -499,6 +519,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "medium": true,
     "low": true,
   },
+  "riskScoreThreshold": 400, // Optional filter to be applied for the determined issues (if omitted: no filtering) (valid range: 0-1000)
   "issueViewOptions": { // Optional filter to be applied for the determined issues (if omitted: no filtering)
     "openIssues": true,
     "ignoredIssues": false,

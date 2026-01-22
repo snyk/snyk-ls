@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/samber/lo"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -529,17 +530,23 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	defer f.mutex.Unlock()
 
 	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
+	logger.Debug().Msgf("getting delta for product %s, folderPath %s", p, f.path)
+
 	issueByFile := f.IssuesByProduct()[p]
 
 	if len(issueByFile) == 0 {
 		// If no issues found in current branch scan. We can't have deltas.
+		logger.Debug().Msg("no current issues, returning empty")
 		return issueByFile, nil
 	}
 
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
 	if err != nil {
+		logger.Debug().Msgf("GetPersistedIssueList returned error: %v", err)
 		return nil, err
 	}
+
+	logger.Debug().Msgf("base issues count=%d", len(baseIssueList))
 
 	baseFindingIdentifiable := make([]delta.Identifiable, len(baseIssueList))
 	for i := range baseIssueList {
@@ -547,6 +554,8 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	currentFlatIssueList := getFlatIssueList(issueByFile)
+	logger.Debug().Msgf("current issues count=%d", len(currentFlatIssueList))
+
 	currentFindingIdentifiable := make([]delta.Identifiable, len(currentFlatIssueList))
 	for i := range currentFlatIssueList {
 		currentFindingIdentifiable[i] = currentFlatIssueList[i]
@@ -561,8 +570,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	deltaSnykIssues := []types.Issue{}
-	for i := range enrichedIssues {
-		identifiable := enrichedIssues[i]
+	for _, identifiable := range enrichedIssues {
 		if identifiable == nil || !identifiable.GetIsNew() {
 			continue
 		}
@@ -573,6 +581,8 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 		}
 	}
 	issueByFile = getIssuePerFileFromFlatList(deltaSnykIssues)
+
+	logger.Debug().Msgf("returning %d delta issues", len(deltaSnykIssues))
 
 	return issueByFile, nil
 }
@@ -624,60 +634,125 @@ func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.Filterab
 	return deltaList
 }
 
+// FilterReason describes why an issue was filtered out
+type FilterReason string
+
+const (
+	FilterReasonNotFiltered      FilterReason = ""
+	FilterReasonUnsupportedType  FilterReason = "unsupported issue type"
+	FilterReasonSeverity         FilterReason = "severity filter"
+	FilterReasonRiskScore        FilterReason = "risk score threshold"
+	FilterReasonIssueViewOptions FilterReason = "issue view options"
+)
+
 func (f *Folder) FilterIssues(
 	issues snyk.IssuesByFile,
 	supportedIssueTypes map[product.FilterableIssueType]bool,
 ) snyk.IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 	filteredIssues := snyk.IssuesByFile{}
+	filterReasonCounts := make(map[FilterReason]int)
 
 	if f.c.IsDeltaFindingsEnabled() {
 		deltaForAllProducts := f.GetDeltaForAllProducts(supportedIssueTypes)
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
 
-	codeConsistentIgnoresEnabled := f.featureFlagService.GetFromFolderConfig(f.path, featureflag.SnykCodeConsistentIgnores)
+	folderConfig := f.c.FolderConfig(f.path)
 
 	for path, issueSlice := range issues {
 		if !f.Contains(path) {
-			logger.Error().Msg("issue found in cache that does not pertain to folder")
+			logger.Error().Msg("issues found in cache that do not pertain to folder")
 			continue
 		}
 		for _, issue := range issueSlice {
 			// Logging here will spam the logs
-			if isVisibleSeverity(f.c, issue) && (!codeConsistentIgnoresEnabled || isVisibleForIssueViewOptions(f.c, issue)) && supportedIssueTypes[issue.GetFilterableIssueType()] {
+			filterReason := f.isIssueVisible(issue, supportedIssueTypes, folderConfig)
+			if filterReason == FilterReasonNotFiltered {
 				filteredIssues[path] = append(filteredIssues[path], issue)
+			} else {
+				filterReasonCounts[filterReason]++
 			}
 		}
 	}
+
+	if len(filterReasonCounts) > 0 {
+		logger.Debug().Interface("filterReasons", filterReasonCounts).Msgf("%d issue(s) filtered", lo.Sum(lo.Values(filterReasonCounts)))
+	} else {
+		logger.Debug().Msg("No issues were filtered out")
+	}
+
 	return filteredIssues
 }
 
-func isVisibleSeverity(c *config.Config, issue types.Issue) bool {
-	logger := c.Logger().With().Str("method", "isVisibleSeverity").Logger()
+func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, folderConfig *types.FolderConfig) FilterReason {
+	if !supportedIssueTypes[issue.GetFilterableIssueType()] {
+		return FilterReasonUnsupportedType
+	}
+	if !f.isVisibleSeverity(issue) {
+		return FilterReasonSeverity
+	}
+	riskScoreInCLIEnabled := featureflag.UseOsTestWorkflow(folderConfig)
+	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue) {
+		return FilterReasonRiskScore
+	}
+	codeConsistentIgnoresEnabled := folderConfig.FeatureFlags[featureflag.SnykCodeConsistentIgnores]
+	if codeConsistentIgnoresEnabled && !f.isVisibleForIssueViewOptions(issue) {
+		return FilterReasonIssueViewOptions
+	}
+	return FilterReasonNotFiltered
+}
 
-	filterSeverity := c.FilterSeverity()
-	logger.Debug().Interface("filterSeverity", filterSeverity).Msg("Filtering issues by severity")
-
+func (f *Folder) isVisibleSeverity(issue types.Issue) bool {
 	switch issue.GetSeverity() {
 	case types.Critical:
-		return c.FilterSeverity().Critical
+		return f.c.FilterSeverity().Critical
 	case types.High:
-		return c.FilterSeverity().High
+		return f.c.FilterSeverity().High
 	case types.Medium:
-		return c.FilterSeverity().Medium
+		return f.c.FilterSeverity().Medium
 	case types.Low:
-		return c.FilterSeverity().Low
+		return f.c.FilterSeverity().Low
 	}
 	return false
 }
 
-func isVisibleForIssueViewOptions(c *config.Config, issue types.Issue) bool {
-	logger := c.Logger().With().Str("method", "isVisibleForIssueViewOptions").Logger()
+func (f *Folder) isVisibleRiskScore(issue types.Issue) bool {
+	riskScoreThreshold := f.c.RiskScoreThreshold()
+	switch {
+	case riskScoreThreshold == 0:
+		// Showing all issues because threshold is 0
+		return true
+	case riskScoreThreshold < 0:
+		// Invalid negative risk score threshold. Showing all issues.
+		return true
+	case riskScoreThreshold > 1000:
+		// Invalid high risk score threshold. Showing no issues.
+		return false
+	}
 
-	issueViewOptions := c.IssueViewOptions()
-	logger.Debug().Interface("issueViewOptions", issueViewOptions).Msg("Filtering issues by issue view options")
+	// Get risk score from issue's additional data
+	additionalData := issue.GetAdditionalData()
+	ossIssueData, ok := additionalData.(snyk.OssIssueData)
+	if !ok {
+		// If it's not an OSS issue, don't filter by risk score
+		return true
+	}
 
+	issueRiskScore := ossIssueData.RiskScore
+
+	// If issue has no risk score (0 means not set for legacy scans), show all issues
+	// This handles legacy scans that don't provide risk scores if somehow we got here with the risk score feature flag enabled
+	if issueRiskScore == 0 {
+		return true
+	}
+
+	// Issue is visible if its risk score meets or exceeds the filter threshold
+	return issueRiskScore >= uint16(riskScoreThreshold)
+}
+
+func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue) bool {
+	issueViewOptions := f.c.IssueViewOptions()
 	if issue.GetIsIgnored() {
 		return issueViewOptions.IgnoredIssues
 	} else {

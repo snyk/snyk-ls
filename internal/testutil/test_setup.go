@@ -19,7 +19,6 @@ package testutil
 
 import (
 	"context"
-	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -73,7 +72,6 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	c.SetTrustedFolderFeatureEnabled(false)
 	c.SetAuthenticationMethod(types.FakeAuthentication)
-	setMCPServerURL(t, c)
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t, c)
@@ -159,7 +157,6 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *con
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
 	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, true)))
-	setMCPServerURL(t, c)
 	redirectConfigAndDataHome(t, c)
 
 	config.SetCurrentConfig(c)
@@ -168,13 +165,6 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *con
 		cleanupFakeCliFile(c)
 	})
 	return c
-}
-
-func setMCPServerURL(t *testing.T, c *config.Config) {
-	t.Helper()
-	u, err := url.Parse("http://localhost:1111")
-	require.NoError(t, err)
-	c.SetMCPServerURL(u)
 }
 
 func redirectConfigAndDataHome(t *testing.T, c *config.Config) {

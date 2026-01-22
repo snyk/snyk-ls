@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/subosito/gotenv"
 
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -68,7 +69,7 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 
 	// Run
 	executorUnderTest := NewExtensionExecutor(c)
-	actualData, err := executorUnderTest.Execute(t.Context(), cmd, expectedWorkingDir)
+	actualData, err := executorUnderTest.Execute(t.Context(), cmd, expectedWorkingDir, nil)
 	assert.Nil(t, err)
 
 	// Compare
@@ -92,7 +93,7 @@ func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {
 
 	// Run
 	executorUnderTest := NewExtensionExecutor(c)
-	actualData, err := executorUnderTest.Execute(t.Context(), cmd, "")
+	actualData, err := executorUnderTest.Execute(t.Context(), cmd, "", nil)
 
 	// Compare
 	assert.NotNil(t, err)
@@ -126,7 +127,7 @@ func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
 
 	// Execute the extension executor which should load config files
 	executorUnderTest := NewExtensionExecutor(c)
-	_, err = executorUnderTest.Execute(t.Context(), []string{"snyk", "fake-cmd-for-testing"}, types.FilePath(tempDir))
+	_, err = executorUnderTest.Execute(t.Context(), []string{"snyk", "fake-cmd-for-testing"}, types.FilePath(tempDir), nil)
 	require.NoError(t, err)
 
 	// Verify environment variable was loaded from config file
@@ -174,7 +175,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 	var execErr error
 	go func() {
 		started <- true
-		result, execErr = executor.Execute(t.Context(), []string{"snyk", "fake-cmd-for-testing"}, types.FilePath(t.TempDir()))
+		result, execErr = executor.Execute(t.Context(), []string{"snyk", "fake-cmd-for-testing"}, types.FilePath(t.TempDir()), nil)
 		unblocked <- true
 	}()
 
@@ -309,11 +310,12 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 	require.NoError(t, err)
 
 	executor := NewExtensionExecutor(c)
-	_, err = executor.Execute(t.Context(), []string{"snyk", "test"}, folderPath)
+	_, err = executor.Execute(t.Context(), []string{"snyk", "test"}, folderPath, nil)
 	require.NoError(t, err)
 
 	// Verify the org flag was added to the command args
 	assert.Contains(t, capturedArgs, "--org="+folderOrgUUID, "Command args should contain folder org flag")
+	assert.NotContains(t, capturedArgs, "--org="+globalOrgUUID, "Command args should not contain global org flag")
 }
 
 func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T) {
@@ -343,4 +345,30 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 
 	// Verify we fell back to global org when resolution failed
 	assert.Equal(t, globalOrgUUID, capturedOrg, "Should fall back to global org when resolution fails")
+}
+
+func Test_ExtensionExecutor_SetsSubprocessEnvironment(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	workflowId := workflow.NewWorkflowIdentifier("legacycli")
+	engine := c.Engine()
+	var capturedEnv []string
+	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		gafConf := invocation.GetConfiguration()
+		capturedEnv = gafConf.GetStringSlice(configuration.SUBPROCESS_ENVIRONMENT)
+		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
+		return []workflow.Data{data}, nil
+	})
+	require.NoError(t, err)
+
+	executor := NewExtensionExecutor(c)
+	env := gotenv.Env{
+		"SIMPLE": "x",
+		"MULTI":  "line1\nline2",
+	}
+	_, err = executor.Execute(t.Context(), []string{"snyk", "test"}, types.FilePath(t.TempDir()), env)
+	require.NoError(t, err)
+
+	assert.Contains(t, capturedEnv, "SIMPLE=x")
+	assert.Contains(t, capturedEnv, "MULTI=line1\nline2")
 }
