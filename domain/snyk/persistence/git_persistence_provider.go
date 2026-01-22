@@ -272,11 +272,11 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 	logger.Debug().Msgf("getting persisted issue list")
 
 	cacheDir := snykCacheDir(g.conf)
+	hash := getHashForFolderPath(folderPath)
 	commitHash, err := g.getCommitHashForProduct(folderPath, p)
 	logger.Debug().Msgf("commitHash=%s, err=%v", commitHash, err)
 
 	if err != nil {
-		hash := getHashForFolderPath(folderPath)
 		commitHash = g.findCommitHashOnDisk(cacheDir, hash, p, logger)
 		if commitHash == "" {
 			logger.Debug().
@@ -290,8 +290,6 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 	if commitHash == "" {
 		return nil, errors.New("no commit hash found in cache")
 	}
-
-	hash := getHashForFolderPath(folderPath)
 	filePath := getLocalFilePath(cacheDir, hash, commitHash, p)
 	content, err := os.ReadFile(filePath)
 	if err != nil {
