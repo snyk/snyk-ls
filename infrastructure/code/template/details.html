@@ -268,13 +268,19 @@
             <section id="fixes-section" class="sn-ai-fixes delimiter-top {{if eq .AiFixDiffStatus "SUCCESS"}} show {{else}} hidden {{end}}">
               <div id="info-no-diffs" class="font-light {{if eq .AiFixResult "{}"}} show {{else}} hidden {{end}}">
                 <h3 class="ai-fix-header">No AI Fix Available:</h3>
-                We couldn’t generate fixes that meet our high-quality standards.
+                We attempted to generate a fix, but the suggestions did not pass validation
                 <br>
-                To ensure your code remains secure and error-free, no automatic fix suggestion will be recommended for this issue.
+                Each generated fix suggestion goes through multiple validations
                 <br>
-                You can review suggested areas to improve or retry once updates have been made.
+                to ensure the generated code is secure and error-free. In this
                 <br>
-                Read more in our
+                case, we were unable to generate a quality fix and must refer
+                <br>
+                you to the Fix Analysis and Issue Overview for manual
+                <br>
+                remediation of the issue.
+                <br>
+                For more information on the limitations and validations for Agent Fix, see our
                 <a class="styled-link" href="https://docs.snyk.io/scan-with-snyk/snyk-code/manage-code-vulnerabilities/fix-code-vulnerabilities-automatically#limitations">
                 [documentation]
                 </a>
