@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -42,10 +43,11 @@ const (
 	DontTrust = "Don't trust folders"
 )
 
-func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service) {
+func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, authService authentication.AuthenticationService) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
 	sendFolderConfigs(c, notifier, featureFlagService)
+
 	HandleUntrustedFolders(ctx, c, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
 }
@@ -68,7 +70,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 
 		// Always update AutoDeterminedOrg from LDX-Sync (even for folders where OrgSetByUser is true)
 		// This ensures we always know what LDX-Sync recommends, regardless of whether the user has opted out
-		org, err := GetBestOrgFromLdxSync(c, folderConfig)
+		org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath)
 		if err != nil {
 			logger.Err(err).Msg("unable to resolve organization, continuing...")
 		} else {
@@ -98,14 +100,21 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 	notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
 }
 
-func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (ldx_sync_config.Organization, error) {
+// GetOrgFromCachedLdxSync retrieves the organization from the cached LDX-Sync result
+// Falls back to global organization if no cache entry exists
+func GetOrgFromCachedLdxSync(c *config.Config, folderPath types.FilePath) (ldx_sync_config.Organization, error) {
 	engine := c.Engine()
 	gafConfig := engine.GetConfiguration()
 
-	resolver := Service().GetOrgResolver()
-	if resolver != nil {
-		return resolver.ResolveOrganization(gafConfig, engine, c.Logger(), string(folderConfig.FolderPath))
+	// Get cached result
+	cachedResult := c.GetLdxSyncResult(folderPath)
+
+	// If we have a cached result, use it to resolve the org
+	if cachedResult != nil {
+		return ldx_sync_config.ResolveOrgFromUserConfig(engine, *cachedResult)
 	}
+
+	// Fall back to global org if no cache entry
 	fallbackOrg := gafConfig.GetString(configuration.ORGANIZATION)
 	return ldx_sync_config.Organization{Id: fallbackOrg}, nil
 }
