@@ -268,19 +268,9 @@
             <section id="fixes-section" class="sn-ai-fixes delimiter-top {{if eq .AiFixDiffStatus "SUCCESS"}} show {{else}} hidden {{end}}">
               <div id="info-no-diffs" class="font-light {{if eq .AiFixResult "{}"}} show {{else}} hidden {{end}}">
                 <h3 class="ai-fix-header">No AI Fix Available:</h3>
-                We attempted to generate a fix, but the suggestions did not pass validation.
-                <br>
-                Each generated fix suggestion goes through multiple validations to ensure the generated code
-                <br>
-                is secure and error-free. In this case, we were unable to generate a quality fix and must
-                <br>
-                refer you to the Fix Analysis and Issue Overview for manual remediation of the issue.
-                <br>
-                <br>
-                For more information on the limitations and validations for Agent Fix, see our
-                <a class="styled-link" href="https://docs.snyk.io/scan-with-snyk/snyk-code/manage-code-vulnerabilities/fix-code-vulnerabilities-automatically#limitations">
-                [documentation]
-                </a>
+                <p>We attempted to generate a fix, but the suggestions did not pass validation. Each generated fix suggestion goes through multiple validations to ensure the generated code is secure and error-free.</p>
+                <p>In this case, we were unable to generate a quality fix and must refer you to the Fix Analysis and Issue Overview for manual remediation of the issue.</p>
+                <p>For more information on the limitations and validations for Agent Fix, see our <a class="styled-link" href="https://docs.snyk.io/scan-with-snyk/snyk-code/manage-code-vulnerabilities/fix-code-vulnerabilities-automatically#limitations">documentation</a>.</p>
               </div>
 
               <div class="diffs-section {{if eq .AiFixResult "{}"}} hidden {{else}} show {{end}}">
