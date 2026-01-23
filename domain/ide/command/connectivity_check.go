@@ -19,10 +19,8 @@ package command
 import (
 	"context"
 	"errors"
-	"os"
 
 	connectivityworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension/connectivity"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -46,16 +44,6 @@ func (cmd *connectivityCheckCommand) Execute(ctx context.Context) (any, error) {
 	gafConfig := engine.GetConfiguration().Clone()
 	gafConfig.Set("json", false)
 	gafConfig.Set("no-color", true)
-
-	// Add LS-specific directories to check (temp dir for delta scans)
-	additionalDirs := []connectivity.UsedDirectory{
-		{
-			PathWanted:    os.TempDir(),
-			Purpose:       "Example of System Temp Storage for Delta Scans",
-			MayContainCLI: false,
-		},
-	}
-	gafConfig.Set("additional-check-dirs", additionalDirs)
 
 	// Invoke the GAF workflow directly
 	output, err := engine.InvokeWithConfig(connectivityworkflow.WORKFLOWID_CONNECTIVITY_CHECK, gafConfig)

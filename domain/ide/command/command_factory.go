@@ -109,6 +109,8 @@ func CreateFromCommandData(
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
 	case types.ConnectivityCheckCommand:
 		return &connectivityCheckCommand{command: commandData, c: c}, nil
+	case types.DirectoryDiagnosticsCommand:
+		return &directoryDiagnosticsCommand{command: commandData, c: c}, nil
 	case types.ClearCacheCommand:
 		return &clearCache{command: commandData, c: c}, nil
 	case types.GenerateIssueDescriptionCommand:

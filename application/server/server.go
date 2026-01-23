@@ -298,6 +298,7 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 						types.CodeFixApplyEditCommand,
 						types.ExecuteCLICommand,
 						types.ConnectivityCheckCommand,
+						types.DirectoryDiagnosticsCommand,
 						types.ClearCacheCommand,
 						types.GenerateIssueDescriptionCommand,
 						types.ReportAnalyticsCommand,
