@@ -26,8 +26,14 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/subosito/gotenv"
+
+	"github.com/snyk/cli-extension-os-flows/pkg/flags"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
@@ -380,6 +386,118 @@ func sampleIssue() ossIssue {
 	}
 }
 
+func TestCLIScanner_ostestScan_AddsFlagSetAndAllowsUnknownFlags(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Mock engine so we can capture the config passed to InvokeWithConfig
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+
+	// Pick a deterministic boolean flag from the OS test flagset.
+	// We then assert that its value is reflected in the config passed to the workflow.
+	fs := flags.OSTestFlagSet()
+	var boolFlag *pflag.Flag
+	fs.VisitAll(func(f *pflag.Flag) {
+		if boolFlag != nil {
+			return
+		}
+		if f == nil || f.Value == nil {
+			return
+		}
+		if f.Value.Type() != "bool" {
+			return
+		}
+		if f.Name == "help" {
+			return
+		}
+		boolFlag = f
+	})
+	require.NotNil(t, boolFlag)
+
+	var capturedConfigs []configuration.Configuration
+	workflowID := workflow.NewWorkflowIdentifier("test")
+	mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
+		Times(2).
+		Do(func(_ workflow.Identifier, cfg configuration.Configuration) {
+			capturedConfigs = append(capturedConfigs, cfg)
+		}).
+		Return([]workflow.Data{}, nil)
+
+	cliScanner := &CLIScanner{
+		config:        c,
+		errorReporter: error_reporting.NewTestErrorReporter(),
+	}
+
+	workDir := types.FilePath(t.TempDir())
+	path := types.FilePath(filepath.Join(string(workDir), "package.json"))
+
+	cmdWithoutFlag := []string{"snyk", "test"}
+	_, err := cliScanner.ostestScan(context.Background(), path, cmdWithoutFlag, workDir, gotenv.Env{})
+	require.NoError(t, err)
+
+	cmdWithFlag := []string{"snyk", "test", "--definitely-unknown-flag"}
+	expectedWithout := boolFlag.DefValue == "true"
+	expectedWith := !expectedWithout
+	if expectedWithout {
+		cmdWithFlag = append(cmdWithFlag, "--"+boolFlag.Name+"=false")
+	} else {
+		cmdWithFlag = append(cmdWithFlag, "--"+boolFlag.Name)
+	}
+	_, err = cliScanner.ostestScan(context.Background(), path, cmdWithFlag, workDir, gotenv.Env{})
+	require.NoError(t, err)
+
+	require.Len(t, capturedConfigs, 2)
+	assert.Equal(t, cmdWithoutFlag[1:], capturedConfigs[0].GetStringSlice(configuration.RAW_CMD_ARGS))
+	assert.Equal(t, cmdWithFlag[1:], capturedConfigs[1].GetStringSlice(configuration.RAW_CMD_ARGS))
+	assert.Equal(t, expectedWithout, capturedConfigs[0].GetBool(boolFlag.Name))
+	assert.Equal(t, expectedWith, capturedConfigs[1].GetBool(boolFlag.Name))
+}
+
+func TestCLIScanner_ostestScan_SetsSubprocessEnvironment(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+
+	var capturedConfig configuration.Configuration
+	workflowID := workflow.NewWorkflowIdentifier("test")
+	mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
+		Times(1).
+		Do(func(_ workflow.Identifier, cfg configuration.Configuration) {
+			capturedConfig = cfg
+		}).
+		Return([]workflow.Data{}, nil)
+
+	cliScanner := &CLIScanner{
+		config:        c,
+		errorReporter: error_reporting.NewTestErrorReporter(),
+	}
+
+	workDir := types.FilePath(t.TempDir())
+	targetPath := types.FilePath(filepath.Join(string(workDir), "package.json"))
+	cmd := []string{"snyk", "test"}
+	inputEnv := gotenv.Env{
+		"SIMPLE": "x",
+		"MULTI":  "line1\nline2",
+	}
+
+	_, err := cliScanner.ostestScan(context.Background(), targetPath, cmd, workDir, inputEnv)
+	require.NoError(t, err)
+	require.NotNil(t, capturedConfig)
+
+	capturedEnv := capturedConfig.GetStringSlice(configuration.SUBPROCESS_ENVIRONMENT)
+	assert.Contains(t, capturedEnv, "SIMPLE=x")
+	assert.Contains(t, capturedEnv, "MULTI=line1\nline2")
+}
+
+func getLearnMock(t *testing.T) learn.Service {
+	t.Helper()
+	learnMock := mock_learn.NewMockService(gomock.NewController(t))
+	learnMock.
+		EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&learn.Lesson{Url: "url"}, nil).AnyTimes()
+	return learnMock
+}
+
 func Test_prepareScanCommand(t *testing.T) {
 	t.Run("Expands parameters", func(t *testing.T) {
 		c := testutil.UnitTest(t)
@@ -396,7 +514,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 		require.NoError(t, err)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, nil)
 
 		assert.Contains(t, cmd, "--dev")
 		assert.Contains(t, cmd, "-d")
@@ -412,7 +530,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
 
 		assert.NotContains(t, cmd, "--all-projects")
 		assert.Contains(t, cmd, "-d")
@@ -429,7 +547,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
 
 		assert.Contains(t, cmd, "--")
 		assert.Equal(t, "-x", cmd[len(cmd)-1])
@@ -445,7 +563,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
 
 		assert.Contains(t, cmd, "--all-projects")
 		assert.Lenf(t, cmd, 6, "cmd: %v", cmd)
@@ -566,14 +684,4 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 	assert.Len(t, analysis, 87)
-}
-
-func getLearnMock(t *testing.T) learn.Service {
-	t.Helper()
-	learnMock := mock_learn.NewMockService(gomock.NewController(t))
-	learnMock.
-		EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{Url: "url"}, nil).AnyTimes()
-	return learnMock
 }

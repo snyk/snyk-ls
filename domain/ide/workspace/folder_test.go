@@ -77,8 +77,8 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssue("id1", path1),
-			NewMockIssue("id2", path2),
+			testutil.NewMockIssue("id1", path1),
+			testutil.NewMockIssue("id2", path2),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -103,8 +103,8 @@ func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssue("id1", filePath),
-			NewMockIssue("id2", filePath),
+			testutil.NewMockIssue("id1", filePath),
+			testutil.NewMockIssue("id2", filePath),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -127,9 +127,9 @@ func Test_ProcessResults_whenDifferentPaths_AccumulatesIssues(t *testing.T) {
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssue("id1", path1),
-			NewMockIssue("id2", path2),
-			NewMockIssue("id3", path3),
+			testutil.NewMockIssue("id1", path1),
+			testutil.NewMockIssue("id2", path2),
+			testutil.NewMockIssue("id3", path3),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -152,9 +152,9 @@ func Test_ProcessResults_whenSamePaths_AccumulatesIssues(t *testing.T) {
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssue("id1", path1),
-			NewMockIssue("id2", path1),
-			NewMockIssue("id3", path1),
+			testutil.NewMockIssue("id1", path1),
+			testutil.NewMockIssue("id2", path1),
+			testutil.NewMockIssue("id3", path1),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -175,11 +175,11 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	path2 := types.FilePath(filepath.Join(string(f.path), "path2"))
-	issue1 := NewMockIssue("id1", path1)
-	issue2 := NewMockIssue("id2", path1)
-	issue3 := NewMockIssue("id3", path1)
-	issue4 := NewMockIssue("id1", path2)
-	issue5 := NewMockIssue("id3", path2)
+	issue1 := testutil.NewMockIssue("id1", path1)
+	issue2 := testutil.NewMockIssue("id2", path1)
+	issue3 := testutil.NewMockIssue("id3", path1)
+	issue4 := testutil.NewMockIssue("id1", path2)
+	issue5 := testutil.NewMockIssue("id3", path2)
 
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
@@ -216,11 +216,11 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssueWithSeverity("id1", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Critical),
-			NewMockIssueWithSeverity("id2", types.FilePath(filepath.Join(string(f.path), string(path1))), types.High),
-			NewMockIssueWithSeverity("id3", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Medium),
-			NewMockIssueWithSeverity("id4", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Low),
-			NewMockIssueWithSeverity("id5", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Critical),
+			testutil.NewMockIssueWithSeverity("id1", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Critical),
+			testutil.NewMockIssueWithSeverity("id2", types.FilePath(filepath.Join(string(f.path), string(path1))), types.High),
+			testutil.NewMockIssueWithSeverity("id3", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Medium),
+			testutil.NewMockIssueWithSeverity("id4", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Low),
+			testutil.NewMockIssueWithSeverity("id5", types.FilePath(filepath.Join(string(f.path), string(path1))), types.Critical),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -260,21 +260,28 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 	issueViewOptions := types.NewIssueViewOptions(false, true)
 	c.SetIssueViewOptions(&issueViewOptions)
 
-	fakeFeatureFlagService := featureflag.NewFakeService()
-	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+	folderPath := types.FilePath("dummy")
+	folderConfig := &types.FolderConfig{
+		FolderPath: folderPath,
+		FeatureFlags: map[string]bool{
+			featureflag.SnykCodeConsistentIgnores: true,
+		},
+	}
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	require.NoError(t, err)
 
 	notifier := notification.NewNotifier()
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), fakeFeatureFlagService)
+	f := NewFolder(c, folderPath, "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssueWithIgnored("id1", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
-			NewMockIssueWithIgnored("id2", types.FilePath(filepath.Join(string(f.path), string(path1))), false),
-			NewMockIssueWithIgnored("id3", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
-			NewMockIssueWithIgnored("id4", types.FilePath(filepath.Join(string(f.path), string(path1))), false),
-			NewMockIssueWithIgnored("id5", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
+			testutil.NewMockIssueWithIgnored("id1", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
+			testutil.NewMockIssueWithIgnored("id2", types.FilePath(filepath.Join(string(f.path), string(path1))), false),
+			testutil.NewMockIssueWithIgnored("id3", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
+			testutil.NewMockIssueWithIgnored("id4", types.FilePath(filepath.Join(string(f.path), string(path1))), false),
+			testutil.NewMockIssueWithIgnored("id5", types.FilePath(filepath.Join(string(f.path), string(path1))), true),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     false,
@@ -320,8 +327,8 @@ func Test_Clear(t *testing.T) {
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
 		Issues: []types.Issue{
-			NewMockIssue("id1", path1),
-			NewMockIssue("id2", path2),
+			testutil.NewMockIssue("id1", path1),
+			testutil.NewMockIssue("id2", path2),
 		},
 		UpdateGlobalCache: true,
 		SendAnalytics:     true,
@@ -467,6 +474,15 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 	// arrange
 	filePath, folderPath := types.FilePath("test/path"), types.FilePath("test")
 
+	folderConfig := &types.FolderConfig{
+		FolderPath: folderPath,
+		FeatureFlags: map[string]bool{
+			featureflag.SnykCodeConsistentIgnores: true,
+		},
+	}
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	require.NoError(t, err)
+
 	openIssue1 := &snyk.Issue{
 		AffectedFilePath: filePath,
 		IsIgnored:        false,
@@ -501,10 +517,7 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 		ignoredIssue2,
 	}
 
-	fakeFeatureFlagService := featureflag.NewFakeService()
-	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
-
-	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), fakeFeatureFlagService)
+	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
 	ctx := t.Context()
 
 	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, false)))
@@ -519,6 +532,222 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 	assert.Contains(t, filteredDiagnostics[filePath], openIssue2)
 }
 
+func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
+	// Shared setup for all subtests
+	c := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+
+	// Create minimal folder for testing FilterIssues
+	sc := scanner.NewTestScanner()
+	folder := NewFolder(c, folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+
+	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
+
+	// Create issues with different risk scores
+	issue1 := &snyk.Issue{
+		ID:               "issue-1",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "issue-1-key",
+			RiskScore: 300,
+		},
+	}
+
+	issue2 := &snyk.Issue{
+		ID:               "issue-2",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "issue-2-key",
+			RiskScore: 500,
+		},
+	}
+
+	issue3 := &snyk.Issue{
+		ID:               "issue-3",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "issue-3-key",
+			RiskScore: 600,
+		},
+	}
+
+	supportedIssueTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeOpenSource: true,
+	}
+
+	issuesByFile := snyk.IssuesByFile{
+		filePath: {issue1, issue2, issue3},
+	}
+
+	t.Run("shows all issues when threshold is zero", func(t *testing.T) {
+		// Set folder config with feature flag enabled
+		folderConfig := &types.FolderConfig{
+			FolderPath: folderPath,
+			FeatureFlags: map[string]bool{
+				featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
+				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
+			},
+		}
+		err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
+		require.NoError(t, err)
+
+		// Set global risk score threshold to 0 (show all)
+		c.SetRiskScoreThreshold(util.Ptr(0))
+
+		// Verify all issues are visible when threshold is 0
+		filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
+		require.Contains(t, filteredIssues, filePath)
+		assert.ElementsMatch(t, filteredIssues[filePath], []types.Issue{issue1, issue2, issue3}, "All issues should be visible when threshold is 0")
+	})
+
+	t.Run("filters issues by threshold", func(t *testing.T) {
+		// Set folder config with feature flag enabled
+		folderConfig := &types.FolderConfig{
+			FolderPath: folderPath,
+			FeatureFlags: map[string]bool{
+				featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
+				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
+			},
+		}
+		err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
+		require.NoError(t, err)
+
+		// Set global risk score threshold of 400
+		c.SetRiskScoreThreshold(util.Ptr(400))
+
+		// Verify filtering works correctly with threshold of 400
+		filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
+		require.Contains(t, filteredIssues, filePath)
+
+		assert.Len(t, filteredIssues[filePath], 2, "Only issues with risk score >= 400 should be visible")
+		assert.NotContains(t, filteredIssues[filePath], issue1, "Issue 1 (risk score 300) should be filtered out")
+		assert.Contains(t, filteredIssues[filePath], issue2, "Issue 2 (risk score 500) should be visible")
+		assert.Contains(t, filteredIssues[filePath], issue3, "Issue 3 (risk score 600) should be visible")
+	})
+}
+
+func Test_FilterIssues_CombinedFiltering(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	engineConfig := c.Engine().GetConfiguration()
+	logger := c.Logger()
+
+	// Set up folder config with feature flags enabled
+	folderConfig := &types.FolderConfig{
+		FolderPath: folderPath,
+		FeatureFlags: map[string]bool{
+			featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
+			// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
+			featureflag.SnykCodeConsistentIgnores: true,
+		},
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
+	require.NoError(t, err)
+
+	// Set global risk score threshold
+	c.SetRiskScoreThreshold(util.Ptr(400))
+	// Disable low severity in global config
+	severityFilter := types.NewSeverityFilter(true, true, true, false)
+	c.SetSeverityFilter(&severityFilter)
+	// Only show open issues (not ignored)
+	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, false)))
+
+	sc := scanner.NewTestScanner()
+	folder := NewFolder(c, folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+
+	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
+
+	// Issue that passes all filters (visible)
+	visibleIssue := &snyk.Issue{
+		ID:               "visible",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		IsIgnored:        false,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "visible-key",
+			RiskScore: 500,
+		},
+	}
+
+	// Issue filtered by unsupported type (IaC not in supportedIssueTypes)
+	unsupportedTypeIssue := &snyk.Issue{
+		ID:               "unsupported-type",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductInfrastructureAsCode,
+	}
+
+	// Issue filtered by severity (Low severity disabled)
+	lowSeverityIssue := &snyk.Issue{
+		ID:               "low-severity",
+		AffectedFilePath: filePath,
+		Severity:         types.Low,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "low-severity-key",
+			RiskScore: 500,
+		},
+	}
+
+	// Issue filtered by risk score (below threshold of 400)
+	lowRiskScoreIssue := &snyk.Issue{
+		ID:               "low-risk-score",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "low-risk-key",
+			RiskScore: 300,
+		},
+	}
+
+	// Issue filtered by issue view options (ignored issue when only showing open)
+	ignoredIssue := &snyk.Issue{
+		ID:               "ignored",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		IsIgnored:        true,
+		Product:          product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			Key:       "ignored-key",
+			RiskScore: 500,
+		},
+	}
+
+	supportedIssueTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeOpenSource: true,
+		// IaC intentionally not included to test unsupported type filtering
+	}
+
+	issuesByFile := snyk.IssuesByFile{
+		filePath: {visibleIssue, unsupportedTypeIssue, lowSeverityIssue, lowRiskScoreIssue, ignoredIssue},
+	}
+
+	// Test FilterIssues returns only the visible issue
+	// All other issues should be filtered for their respective reasons
+	filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
+	require.Contains(t, filteredIssues, filePath)
+
+	// Only the visible issue should pass all filters
+	assert.Len(t, filteredIssues[filePath], 1, "Only one issue should be visible (4 filtered: unsupported type, severity, risk score, issue view options)")
+	assert.Contains(t, filteredIssues[filePath], visibleIssue, "Issue passing all filters should be visible")
+	assert.NotContains(t, filteredIssues[filePath], unsupportedTypeIssue, "IaC issue should be filtered (unsupported type)")
+	assert.NotContains(t, filteredIssues[filePath], lowSeverityIssue, "Low severity issue should be filtered (severity filter)")
+	assert.NotContains(t, filteredIssues[filePath], lowRiskScoreIssue, "Low risk score issue should be filtered (risk score threshold)")
+	assert.NotContains(t, filteredIssues[filePath], ignoredIssue, "Ignored issue should be filtered (issue view options)")
+}
+
 func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
@@ -526,10 +755,10 @@ func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	f := NewMockFolder(c, notifier)
 	setupWorkspaceWithFolder(c, f, notifier)
 	filePath := types.FilePath(filepath.Join(string(f.path), "path1"))
-	mockOpenSourceIssue := NewMockIssue("id1", filePath)
+	mockOpenSourceIssue := testutil.NewMockIssue("id1", filePath)
 	removedIssueType := product.FilterableIssueTypeOpenSource
 	mockOpenSourceIssue.Product = product.ProductOpenSource
-	mockIacIssue := NewMockIssue("id2", filePath)
+	mockIacIssue := testutil.NewMockIssue("id2", filePath)
 	mockIacIssue.Product = product.ProductInfrastructureAsCode
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
@@ -567,7 +796,7 @@ func Test_processResults_ShouldSendSuccess(t *testing.T) {
 	f, scanNotifier := NewMockFolderWithScanNotifier(c, notifier)
 	setupWorkspaceWithFolder(c, f, notifier)
 	var path = "path1"
-	mockCodeIssue := NewMockIssue("id1", types.FilePath(filepath.Join(string(f.path), path)))
+	mockCodeIssue := testutil.NewMockIssue("id1", types.FilePath(filepath.Join(string(f.path), path)))
 
 	data := types.ScanData{
 		Product:           product.ProductOpenSource,
@@ -590,7 +819,7 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 	f, scanNotifier := NewMockFolderWithScanNotifier(c, notifier)
 	setupWorkspaceWithFolder(c, f, notifier)
 	const filePath = "path1"
-	mockCodeIssue := NewMockIssue("id1", filePath)
+	mockCodeIssue := testutil.NewMockIssue("id1", filePath)
 
 	data := types.ScanData{
 		Product: product.ProductOpenSource,
@@ -629,7 +858,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	require.NoError(t, err)
 
 	filePath := types.FilePath(filepath.Join(string(f.path), "path1"))
-	mockCodeIssue := NewMockIssue("id1", filePath)
+	mockCodeIssue := testutil.NewMockIssue("id1", filePath)
 
 	data := types.ScanData{
 		Product:           product.ProductOpenSource,
@@ -801,30 +1030,6 @@ func NewMockFolder(c *config.Config, notifier notification.Notifier) *Folder {
 func NewMockFolderWithScanNotifier(c *config.Config, notifier notification.Notifier) (*Folder, *scanner.MockScanNotifier) {
 	scanNotifier := scanner.NewMockScanNotifier()
 	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanNotifier, notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService()), scanNotifier
-}
-
-func NewMockIssue(id string, path types.FilePath) *snyk.Issue {
-	return &snyk.Issue{
-		ID:               id,
-		AffectedFilePath: path,
-		Product:          product.ProductOpenSource,
-		Severity:         types.Medium,
-		AdditionalData:   snyk.OssIssueData{Key: util.Result(uuid.NewUUID()).String()},
-	}
-}
-
-func NewMockIssueWithSeverity(id string, path types.FilePath, severity types.Severity) *snyk.Issue {
-	issue := NewMockIssue(id, path)
-	issue.Severity = severity
-
-	return issue
-}
-
-func NewMockIssueWithIgnored(id string, path types.FilePath, ignored bool) *snyk.Issue {
-	issue := NewMockIssue(id, path)
-	issue.IsIgnored = ignored
-
-	return issue
 }
 
 func GetValueFromMap(m *xsync.MapOf[types.FilePath, []types.Issue], key types.FilePath) []types.Issue {

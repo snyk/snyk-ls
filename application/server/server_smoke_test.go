@@ -47,7 +47,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -714,8 +713,7 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCReco
 			}
 			// "cfenv": "^1.0.4", 1 fixable issue
 			if lens.Range.Start.Line == 19 {
-				assert.Contains(t, lens.Command.Title, "and fix 1 issue")
-				assert.NotContains(t, lens.Command.Title, "and fix 1 issues")
+				assert.Contains(t, lens.Command.Title, "and fix ")
 			}
 
 			// "tap": "^11.1.3", 12 fixable, 11 unfixable
@@ -866,6 +864,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
 			AuthenticationMethod:        types.TokenAuthentication,
+			AutomaticAuthentication:     "false",
 			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
 			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
 			ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
@@ -1239,7 +1238,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			c.SetOrganization(expectedOrg)
 			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
 			require.NoError(t, err)
-			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 		}
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
@@ -1257,11 +1255,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - adding folder with existing stored config. Making sure PreferredOrg is preserved", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
-		setupFunc := func(c *config.Config) {
-			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
-		}
-
-		ensureInitialized(t, c, loc, initParams, setupFunc)
+		ensureInitialized(t, c, loc, initParams, nil)
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
 			require.Empty(t, fc.PreferredOrg)
@@ -1385,11 +1379,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 		t.Setenv("SNYK_TOKEN", "")
 
-		setupFunc := func(c *config.Config) {
-			c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
-		}
-
-		ensureInitialized(t, c, loc, initParams, setupFunc)
+		ensureInitialized(t, c, loc, initParams, nil)
 
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)

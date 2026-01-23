@@ -41,7 +41,6 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
-	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -1092,72 +1091,12 @@ func Test_updateFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *testing.T)
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
 }
 
-func Test_updateFolderConfig_EAMode_UnmigratedUserOptsIntoAutoOrg(t *testing.T) {
-	setup := setupFolderConfigTest(t)
-
-	setup.c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
-
-	// Setup: EA default folder (auto-org disabled, not migrated, no org)
-	setup.createStoredConfig("", false, true)
-	setup.c.SetOrganization("global-org-id")
-
-	// Action: User explicitly opts into auto-org
-	settings := types.Settings{
-		FolderConfigs: []types.FolderConfig{
-			{
-				FolderPath:                  setup.folderPath,
-				PreferredOrg:                "",
-				OrgSetByUser:                false, // User opted into auto-org
-				OrgMigratedFromGlobalConfig: false,
-			},
-		},
-	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
-
-	// Verify: Folder should be marked as migrated to preserve user choice
-	updatedConfig := setup.getUpdatedConfig()
-	assert.False(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be false (user opted into auto-org)")
-	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated to preserve user choice")
-	assert.Empty(t, updatedConfig.PreferredOrg, "PreferredOrg should be empty (using auto-org)")
-}
-
-func Test_updateFolderConfig_EAMode_UnmigratedUserSetsPreferredOrg(t *testing.T) {
-	setup := setupFolderConfigTest(t)
-
-	setup.c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, false) // EA mode
-
-	// Setup: EA default folder (auto-org disabled, not migrated, no org)
-	setup.createStoredConfig("", false, true)
-	setup.c.SetOrganization("global-org-id")
-
-	// Action: User explicitly sets a preferred org
-	settings := types.Settings{
-		FolderConfigs: []types.FolderConfig{
-			{
-				FolderPath:                  setup.folderPath,
-				PreferredOrg:                "new-user-chosen-org",
-				OrgSetByUser:                true,
-				OrgMigratedFromGlobalConfig: false,
-			},
-		},
-	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
-
-	// Verify: Folder should be marked as migrated to preserve user choice
-	updatedConfig := setup.getUpdatedConfig()
-	assert.Equal(t, "new-user-chosen-org", updatedConfig.PreferredOrg, "PreferredOrg should be set to user choice")
-	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true (user manually set org)")
-	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated to preserve user choice")
-}
-
-func Test_updateFolderConfig_PostEAMode_Unauthenticated_UnmigratedUserSetsPreferredOrg(t *testing.T) {
+func Test_updateFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
 	engineConfig := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(t.TempDir())
-
-	c.Engine().GetConfiguration().Set(constants.AutoOrgEnabledByDefaultKey, true) // Post-EA mode
 
 	// Set up mock org resolver that returns error (simulates unauthenticated/failed resolution)
 	ctrl := gomock.NewController(t)

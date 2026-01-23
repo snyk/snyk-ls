@@ -106,7 +106,7 @@ func NewCliSettings(c *Config) *CliSettings {
 func (c *CliSettings) Installed() bool {
 	c.cliPathAccessMutex.RLock()
 	defer c.cliPathAccessMutex.RUnlock()
-	stat, err := c.CliPathFileInfo()
+	stat, err := c.cliPathFileInfo()
 	isDirectory := stat != nil && stat.IsDir()
 	if isDirectory {
 		c.C.Logger().Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
@@ -114,12 +114,11 @@ func (c *CliSettings) Installed() bool {
 	return c.cliPath != "" && err == nil && !isDirectory
 }
 
-func (c *CliSettings) CliPathFileInfo() (os.FileInfo, error) {
-	c.cliPathAccessMutex.RLock()
-	defer c.cliPathAccessMutex.RUnlock()
+// cliPathFileInfo returns file info for the CLI path.
+func (c *CliSettings) cliPathFileInfo() (os.FileInfo, error) {
 	stat, err := os.Stat(c.cliPath)
 	if err == nil {
-		c.C.Logger().Trace().Str("method", "config.cliSettings.Installed").Msgf("CLI path: %s, Size: %d, Perm: %s",
+		c.C.Logger().Trace().Str("method", "config.cliSettings.cliPathFileInfo").Msgf("CLI path: %s, Size: %d, Perm: %s",
 			c.cliPath,
 			stat.Size(),
 			stat.Mode().Perm())
@@ -160,55 +159,57 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 }
 
 type Config struct {
-	scrubbingWriter                  zerolog.LevelWriter
-	cliSettings                      *CliSettings
-	configFile                       string
-	format                           string
-	isErrorReportingEnabled          bool
-	isSnykCodeEnabled                bool
-	isSnykOssEnabled                 bool
-	isSnykIacEnabled                 bool
-	isSnykAdvisorEnabled             bool
-	manageBinariesAutomatically      bool
-	logPath                          string
-	logFile                          *os.File
-	snykCodeAnalysisTimeout          time.Duration
-	snykApiUrl                       string
-	token                            string
-	deviceId                         string
-	clientCapabilities               types.ClientCapabilities
-	binarySearchPaths                []string
-	automaticAuthentication          bool
-	tokenChangeChannels              []chan string
-	prepareDefaultEnvChannel         chan bool
-	filterSeverity                   types.SeverityFilter
-	issueViewOptions                 types.IssueViewOptions
-	trustedFolders                   []types.FilePath
-	trustedFoldersFeatureEnabled     bool
-	activateSnykCodeSecurity         bool
-	osPlatform                       string
-	osArch                           string
-	runtimeName                      string
-	runtimeVersion                   string
-	automaticScanning                bool
-	authenticationMethod             types.AuthenticationMethod
-	engine                           workflow.Engine
-	enableSnykLearnCodeActions       bool
-	enableSnykOSSQuickFixCodeActions bool
-	enableDeltaFindings              bool
-	logger                           *zerolog.Logger
-	storage                          storage.StorageWithCallbacks
-	m                                sync.RWMutex
-	clientProtocolVersion            string
-	isOpenBrowserActionEnabled       bool
-	hoverVerbosity                   int
-	offline                          bool
-	ws                               types.Workspace
-	mcpServerEnabled                 bool
-	mcpBaseURL                       *url.URL
-	isLSPInitialized                 bool
-	cachedOriginalPath               string
-	userSettingsPath                 string
+	scrubbingWriter                     zerolog.LevelWriter
+	cliSettings                         *CliSettings
+	configFile                          string
+	format                              string
+	isErrorReportingEnabled             bool
+	isSnykCodeEnabled                   bool
+	isSnykOssEnabled                    bool
+	isSnykIacEnabled                    bool
+	isSnykAdvisorEnabled                bool
+	manageBinariesAutomatically         bool
+	logPath                             string
+	logFile                             *os.File
+	snykCodeAnalysisTimeout             time.Duration
+	snykApiUrl                          string
+	cliBaseDownloadURL                  string
+	token                               string
+	deviceId                            string
+	clientCapabilities                  types.ClientCapabilities
+	binarySearchPaths                   []string
+	automaticAuthentication             bool
+	tokenChangeChannels                 []chan string
+	prepareDefaultEnvChannel            chan bool
+	filterSeverity                      types.SeverityFilter
+	riskScoreThreshold                  int
+	issueViewOptions                    types.IssueViewOptions
+	trustedFolders                      []types.FilePath
+	trustedFoldersFeatureEnabled        bool
+	activateSnykCodeSecurity            bool
+	osPlatform                          string
+	osArch                              string
+	runtimeName                         string
+	runtimeVersion                      string
+	automaticScanning                   bool
+	authenticationMethod                types.AuthenticationMethod
+	engine                              workflow.Engine
+	enableSnykLearnCodeActions          bool
+	enableSnykOSSQuickFixCodeActions    bool
+	enableDeltaFindings                 bool
+	logger                              *zerolog.Logger
+	storage                             storage.StorageWithCallbacks
+	m                                   sync.RWMutex
+	clientProtocolVersion               string
+	isOpenBrowserActionEnabled          bool
+	hoverVerbosity                      int
+	offline                             bool
+	ws                                  types.Workspace
+	isLSPInitialized                    bool
+	cachedOriginalPath                  string
+	userSettingsPath                    string
+	autoConfigureMcpEnabled             bool
+	secureAtInceptionExecutionFrequency string
 }
 
 func CurrentConfig() *Config {
@@ -278,6 +279,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 		// Engine is provided externally, e.g. we were invoked from CLI.
 		c.engine = engine
 	}
+
 	gafConfig := c.engine.GetConfiguration()
 	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
 	gafConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
@@ -485,6 +487,19 @@ func (c *Config) SnykUI() string {
 
 	return snykUiUrl
 }
+
+func (c *Config) CliBaseDownloadURL() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.cliBaseDownloadURL
+}
+
+func (c *Config) SetCliBaseDownloadURL(cliBaseDownloadURL string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.cliBaseDownloadURL = cliBaseDownloadURL
+}
+
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
 func (c *Config) IntegrationName() string {
 	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_NAME)
@@ -498,6 +513,12 @@ func (c *Config) FilterSeverity() types.SeverityFilter {
 	c.m.RLock()
 	defer c.m.RUnlock()
 	return c.filterSeverity
+}
+
+func (c *Config) RiskScoreThreshold() int {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.riskScoreThreshold
 }
 
 func (c *Config) IssueViewOptions() types.IssueViewOptions {
@@ -613,9 +634,21 @@ func (c *Config) SetSeverityFilter(severityFilter *types.SeverityFilter) bool {
 		return false
 	}
 	filterModified := c.filterSeverity != *severityFilter
-	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter:")
+	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
 	c.filterSeverity = *severityFilter
 	return filterModified
+}
+
+func (c *Config) SetRiskScoreThreshold(riskScoreThreshold *int) bool {
+	c.m.Lock()
+	defer c.m.Unlock()
+	if riskScoreThreshold == nil {
+		return false
+	}
+	modified := c.riskScoreThreshold != *riskScoreThreshold
+	c.logger.Debug().Str("method", "SetRiskScoreThreshold").Int("riskScoreThreshold", *riskScoreThreshold).Msg("Setting risk score threshold")
+	c.riskScoreThreshold = *riskScoreThreshold
+	return modified
 }
 
 func (c *Config) SetIssueViewOptions(issueViewOptions *types.IssueViewOptions) bool {
@@ -625,7 +658,7 @@ func (c *Config) SetIssueViewOptions(issueViewOptions *types.IssueViewOptions) b
 		return false
 	}
 	issueViewOptionsModified := c.issueViewOptions != *issueViewOptions
-	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options:")
+	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options")
 	c.issueViewOptions = *issueViewOptions
 	return issueViewOptionsModified
 }
@@ -1315,9 +1348,11 @@ func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfi
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
 // the folder, it returns the global organization (which if unset, GAF will return the default org).
 func (c *Config) FolderOrganization(path types.FilePath) string {
+	logger := c.Logger().With().Str("method", "FolderOrganization").Str("path", string(path)).Logger()
 	if path == "" {
-		c.Logger().Warn().Str("method", "FolderOrganization").Str("path", "").Msg("called with empty path, falling back to global organization")
-		return c.Organization()
+		globalOrg := c.Organization()
+		logger.Warn().Str("globalOrg", globalOrg).Msg("called with empty path, falling back to global organization")
+		return globalOrg
 	}
 
 	fc, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
@@ -1326,12 +1361,14 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 		EnrichFromGit:    false,
 	})
 	if err != nil {
-		c.Logger().Warn().Err(err).Str("method", "FolderOrganization").Str("path", string(path)).Msg("error getting folder config, falling back to global organization")
-		return c.Organization()
+		globalOrg := c.Organization()
+		logger.Warn().Err(err).Str("globalOrg", globalOrg).Msg("error getting folder config, falling back to global organization")
+		return globalOrg
 	}
 	if fc == nil {
-		c.Logger().Debug().Str("method", "FolderOrganization").Str("path", string(path)).Msg("no folder config in storage, falling back to global organization")
-		return c.Organization()
+		globalOrg := c.Organization()
+		logger.Debug().Str("globalOrg", globalOrg).Msg("no folder config in storage, falling back to global organization")
+		return globalOrg
 	}
 
 	if fc.OrgSetByUser {
@@ -1343,7 +1380,9 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 	} else {
 		// If AutoDeterminedOrg is empty, fall back to global organization
 		if fc.AutoDeterminedOrg == "" {
-			return c.Organization()
+			globalOrg := c.Organization()
+			logger.Debug().Str("globalOrg", globalOrg).Msg("AutoDeterminedOrg is empty, falling back to global organization")
+			return globalOrg
 		}
 		return fc.AutoDeterminedOrg
 	}
@@ -1442,26 +1481,6 @@ func (c *Config) SetWorkspace(workspace types.Workspace) {
 	c.ws = workspace
 }
 
-func (c *Config) McpServerEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.mcpServerEnabled
-}
-
-func (c *Config) SetMCPServerURL(baseURL *url.URL) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.mcpBaseURL = baseURL
-}
-
-func (c *Config) GetMCPServerURL() *url.URL {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.mcpBaseURL
-}
-
 func (c *Config) IsLSPInitialized() bool {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -1476,4 +1495,28 @@ func (c *Config) SetLSPInitialized(initialized bool) {
 
 func (c *Config) EmptyToken() bool {
 	return !c.NonEmptyToken()
+}
+
+func (c *Config) IsAutoConfigureMcpEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.autoConfigureMcpEnabled
+}
+
+func (c *Config) SetAutoConfigureMcpEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.autoConfigureMcpEnabled = enabled
+}
+
+func (c *Config) GetSecureAtInceptionExecutionFrequency() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.secureAtInceptionExecutionFrequency
+}
+
+func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.secureAtInceptionExecutionFrequency = frequency
 }

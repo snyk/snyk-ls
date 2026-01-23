@@ -33,6 +33,7 @@ import (
 
 type FakeCodeScannerClient struct {
 	UploadAndAnalyzeWasCalled bool
+	Organization              string // Captures the org the scanner was created with
 }
 
 const (
@@ -426,6 +427,10 @@ func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(
 }
 
 // NewFakeCodeScannerClient creates a fake code scanner for testing
-func NewFakeCodeScannerClient(_ *Scanner, _ *types.FolderConfig) (codeClient.CodeScanner, error) {
-	return &FakeCodeScannerClient{}, nil
+func NewFakeCodeScannerClient(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error) {
+	// Extract the org that would be used for this folder config
+	org := sc.C.FolderOrganization(folderConfig.FolderPath)
+	return &FakeCodeScannerClient{
+		Organization: org,
+	}, nil
 }

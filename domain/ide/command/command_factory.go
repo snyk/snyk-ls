@@ -109,8 +109,6 @@ func CreateFromCommandData(
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
 	case types.ConnectivityCheckCommand:
 		return &connectivityCheckCommand{command: commandData, c: c}, nil
-	case types.ExecuteMCPToolCall:
-		return &executeMcpCallCommand{command: commandData, notifier: notifier, logger: c.Logger(), baseURL: c.GetMCPServerURL().String()}, nil
 	case types.ClearCacheCommand:
 		return &clearCache{command: commandData, c: c}, nil
 	case types.GenerateIssueDescriptionCommand:
@@ -121,6 +119,8 @@ func CreateFromCommandData(
 		}, nil
 	case types.SubmitIgnoreRequest:
 		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, c: c}, nil
+	case types.WorkspaceConfigurationCommand:
+		return &configurationCommand{command: commandData, srv: srv, logger: c.Logger(), c: c}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

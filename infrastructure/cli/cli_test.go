@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -33,6 +34,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -57,6 +60,25 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	assert.Contains(t, cmd, "--insecure")
 }
 
+func Test_GetCommand_UsesProvidedEnv(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctx := t.Context()
+
+	t.Setenv("TEST_VAR", "system")
+
+	cli := &SnykCli{c: c}
+
+	providedEnv := map[string]string{
+		"TEST_VAR": "provided",
+	}
+
+	cmd, err := cli.getCommand([]string{"test", "command"}, types.FilePath(t.TempDir()), ctx, providedEnv)
+	require.NoError(t, err)
+	require.NotNil(t, cmd)
+
+	assert.Contains(t, cmd.Env, "TEST_VAR=provided")
+}
+
 func Test_GetCommand_UsesConfigFiles(t *testing.T) {
 	c := testutil.UnitTest(t)
 	originalPathValue := "original_path" + pathListSep + "in_both_path"
@@ -76,7 +98,7 @@ func Test_GetCommand_UsesConfigFiles(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
 
 	// Call getCommand which should load config files and prepare an isolated environment
-	cmd, err := cli.getCommand([]string{"test", "command"}, types.FilePath(tempDir), t.Context())
+	cmd, err := cli.getCommand([]string{"test", "command"}, types.FilePath(tempDir), t.Context(), nil)
 
 	// Verify the command was created
 	require.NoError(t, err)
@@ -119,7 +141,7 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 	var cmdErr error
 	go func() {
 		started <- true
-		builtCmd, cmdErr = cli.getCommand([]string{"test"}, types.FilePath(t.TempDir()), t.Context())
+		builtCmd, cmdErr = cli.getCommand([]string{"test"}, types.FilePath(t.TempDir()), t.Context(), nil)
 		unblocked <- true
 	}()
 
@@ -159,4 +181,87 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 	require.NoError(t, cmdErr)
 	require.NotNil(t, builtCmd)
 	assert.Contains(t, builtCmd.Args, "test")
+}
+
+func Test_SnykCli_GetCommand_UsesFolderOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctx := t.Context()
+
+	er := error_reporting.NewTestErrorReporter()
+	notifier := notification.NewMockNotifier()
+	cliExecutor := NewExecutor(c, er, notifier).(*SnykCli)
+
+	// Set up two folders with different orgs
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+
+	// Test folder 1: verify getCommand() adds --org flag with folder org
+	baseCmd := []string{"snyk", "test", "--json"}
+	command1, err := cliExecutor.getCommand(baseCmd, folderPath1, ctx, nil)
+	require.NoError(t, err)
+	require.NotNil(t, command1)
+
+	// Verify the command includes --org flag with folder1's org
+	foundOrg1 := false
+	for _, arg := range command1.Args {
+		if strings.HasPrefix(arg, "--org=") {
+			orgValue := strings.TrimPrefix(arg, "--org=")
+			assert.Equal(t, folderOrg1, orgValue, "Folder 1 should use its own org")
+			foundOrg1 = true
+			break
+		}
+	}
+	assert.True(t, foundOrg1, "Command for folder 1 should contain --org flag with folder org")
+
+	// Test folder 2: verify getCommand() adds --org flag with different folder org
+	command2, err := cliExecutor.getCommand(baseCmd, folderPath2, ctx, nil)
+	require.NoError(t, err)
+	require.NotNil(t, command2)
+
+	// Verify the command includes --org flag with folder2's org
+	foundOrg2 := false
+	for _, arg := range command2.Args {
+		if strings.HasPrefix(arg, "--org=") {
+			orgValue := strings.TrimPrefix(arg, "--org=")
+			assert.Equal(t, folderOrg2, orgValue, "Folder 2 should use its own org")
+			foundOrg2 = true
+			break
+		}
+	}
+	assert.True(t, foundOrg2, "Command for folder 2 should contain --org flag with folder org")
+
+	// Verify the orgs are different
+	assert.NotEqual(t, folderOrg1, folderOrg2, "Folder orgs should be different")
+}
+
+// Test_SnykCli_GetCommand_ReplacesExistingOrgFlag verifies that getCommand() replaces
+// an existing --org flag with the folder-specific org.
+func Test_SnykCli_GetCommand_ReplacesExistingOrgFlag(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctx := t.Context()
+
+	er := error_reporting.NewTestErrorReporter()
+	notifier := notification.NewMockNotifier()
+	cliExecutor := NewExecutor(c, er, notifier).(*SnykCli)
+
+	const folderOrg = "folder-org-replacement"
+	const existingOrg = "existing-org"
+
+	folderPath := testutil.SetupFolderWithOrg(t, c, folderOrg)
+
+	// Test with a command that already has an --org flag
+	baseCmd := []string{"snyk", "test", "--json", "--org=" + existingOrg}
+	command, err := cliExecutor.getCommand(baseCmd, folderPath, ctx, nil)
+	require.NoError(t, err)
+	require.NotNil(t, command)
+
+	// Verify the existing --org flag was replaced with folder org
+	orgCount := 0
+	for _, arg := range command.Args {
+		if strings.HasPrefix(arg, "--org=") {
+			orgValue := strings.TrimPrefix(arg, "--org=")
+			assert.Equal(t, folderOrg, orgValue, "Existing --org flag should be replaced with folder org")
+			orgCount++
+		}
+	}
+	assert.Equal(t, 1, orgCount, "Command should contain exactly one --org flag")
 }

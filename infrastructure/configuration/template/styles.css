@@ -1,0 +1,517 @@
+/* Bootstrap overrides for IDE theme compatibility */
+:root {
+    /* Spacing */
+    --container-padding: 20px;
+    --section-padding: 15px;
+    --input-padding: 8px;
+    --button-padding-vertical: 10px;
+    --button-padding-horizontal: 20px;
+    --form-group-margin: 15px;
+    --section-margin: 30px;
+    --folder-config-margin: 20px;
+    --checkbox-gap: 8px;
+
+    /* Typography */
+    --default-font: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
+    --editor-font-family: var(--vscode-editor-font-family, 'Monaco', 'Courier New', monospace);
+    --base-font-size: var(--vscode-font-size, 13px);
+    --small-font-size: 12px;
+    --tiny-font-size: 11px;
+    --h1-font-size: 24px;
+    --h2-font-size: 18px;
+    --collapse-icon-size: 12px;
+    --folder-toggle-font-size: 14px;
+    --nested-toggle-font-size: 13px;
+
+    /* Colors - Map to vscode theme variables with fallbacks */
+    --background-color: var(--vscode-editor-background, #1e1e1e);
+    --text-color: var(--vscode-foreground, #cccccc);
+    --input-foreground: var(--vscode-input-foreground, #cccccc);
+    --editor-foreground: var(--vscode-editor-foreground, #ffffff);
+    --disabled-foreground: var(--vscode-disabledForeground, #808080);
+    --error-foreground: var(--vscode-errorForeground, #f48771);
+
+    /* Backgrounds */
+    --input-background: var(--vscode-input-background, #3c3c3c);
+    --section-background: var(--vscode-editor-inactiveSelectionBackground, #2a2d2e);
+    --button-background-color: var(--vscode-button-background, #0e639c);
+    --button-foreground: var(--vscode-button-foreground, #ffffff);
+    --button-hover-background: var(--vscode-button-hoverBackground, #1177bb);
+    --button-secondary-background: var(--vscode-button-secondaryBackground, #3a3d41);
+    --button-secondary-foreground: var(--vscode-button-secondaryForeground, #ffffff);
+    --button-secondary-hover-background: var(--vscode-button-secondaryHoverBackground, #45494e);
+    --list-hover-background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.05));
+
+    /* Borders */
+    --input-border: var(--vscode-input-border, #454545);
+    --border-color: var(--vscode-panel-border, #454545);
+    --focus-border: var(--vscode-focusBorder, #007acc);
+
+    /* Scrollbar */
+    --scrollbar-background: var(--vscode-scrollbarSlider-background, #424242);
+    --scrollbar-hover-background: var(--vscode-scrollbarSlider-hoverBackground, #4f4f4f);
+    --scrollbar-active-background: var(--vscode-scrollbarSlider-activeBackground, #555555);
+
+    /* Other */
+    --border-radius: 4px;
+    --border-radius-small: 2px;
+    --scrollbar-width: 10px;
+    --scrollbar-border-radius: 5px;
+    --max-form-width: 1400px;
+}
+
+body {
+    font-family: var(--default-font);
+    font-size: var(--base-font-size);
+    color: var(--text-color);
+    background-color: var(--background-color);
+    padding: var(--container-padding);
+    margin: 0;
+    accent-color: var(--focus-border);
+}
+
+/* - - - Scrollbars - - - */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-background) var(--background-color);
+}
+
+*::-webkit-scrollbar {
+    width: var(--scrollbar-width);
+    height: var(--scrollbar-width);
+}
+
+*::-webkit-scrollbar-track {
+    background: var(--background-color);
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-background);
+    border-radius: var(--scrollbar-border-radius);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-hover-background);
+}
+
+*::-webkit-scrollbar-thumb:active {
+    background: var(--scrollbar-active-background);
+}
+
+/* - - - Layout - - - */
+form {
+    max-width: var(--max-form-width);
+    margin: 0 auto;
+}
+
+.row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: var(--container-padding);
+    flex-wrap: wrap !important;
+    width: 100%;
+}
+
+form > .section {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+@media (min-width: 768px) {
+    .col-md-6 {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 0 0 50% !important;
+        max-width: 50% !important;
+    }
+
+    .col-md-12 {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+}
+
+@media (max-width: 767px) {
+    .col-md-6,
+    .col-md-12 {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+
+    .col-md-6 {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+}
+
+.col-md-6 > .section {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* - - - Typography - - - */
+h1 {
+    font-size: var(--h1-font-size);
+    margin-bottom: var(--container-padding);
+    color: var(--editor-foreground);
+    max-width: var(--max-form-width);
+    margin-left: auto;
+    margin-right: auto;
+}
+
+h2 {
+    font-size: var(--h2-font-size);
+    margin-top: var(--container-padding);
+    margin-bottom: var(--section-padding);
+    color: var(--editor-foreground);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.section > h2 {
+    margin-top: 0;
+}
+
+h3 {
+    font-size: inherit;
+    margin-top: 0;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: var(--input-foreground);
+}
+
+/* - - - Sections - - - */
+.section {
+    margin-bottom: var(--section-margin);
+    padding: var(--section-padding);
+    background-color: var(--section-background);
+    border-radius: var(--border-radius);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.folder-config {
+    margin-bottom: var(--folder-config-margin);
+    padding: var(--section-padding);
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+/* - - - Form Elements - - - */
+.form-group {
+    margin-bottom: var(--form-group-margin);
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    margin-top: var(--checkbox-gap);
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: var(--input-foreground);
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    font-weight: normal;
+    cursor: pointer;
+    margin-bottom: 8px;
+}
+
+.checkbox-label:last-child {
+    margin-bottom: 0;
+}
+
+.config-scope-slot:empty {
+    display: none;
+}
+
+.config-scope-slot:not(:empty) {
+    margin-left: var(--checkbox-gap);
+    font-size: var(--tiny-font-size);
+    color: var(--disabled-foreground);
+}
+
+.deprecated-label {
+    color: var(--disabled-foreground);
+    font-size: var(--tiny-font-size);
+    margin-left: 8px;
+    font-weight: normal;
+    opacity: 0.7;
+}
+
+.checkbox-label input[type="checkbox"] {
+    margin-right: var(--checkbox-gap);
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+    width: 100%;
+    padding: var(--input-padding);
+    background-color: var(--input-background);
+    color: var(--input-foreground);
+    border: 1px solid var(--input-border);
+    border-radius: var(--border-radius-small);
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: inherit;
+}
+
+/* IE11 placeholder support */
+input:-ms-input-placeholder,
+textarea:-ms-input-placeholder {
+    color: var(--disabled-foreground);
+    opacity: 0.6;
+    font-style: italic;
+}
+
+/* Modern browsers placeholder support */
+input::placeholder,
+textarea::placeholder {
+    color: var(--disabled-foreground);
+    opacity: 0.6;
+    font-style: italic;
+}
+
+input[type="file"] {
+    display: none !important;
+}
+
+input[readonly] {
+    background-color: var(--input-background);
+    color: var(--disabled-foreground);
+    cursor: not-allowed;
+}
+
+textarea {
+    resize: vertical;
+    font-family: var(--editor-font-family);
+    font-size: var(--small-font-size);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: 1px solid var(--focus-border);
+    outline-offset: -1px;
+}
+
+.error-message {
+    color: var(--error-foreground);
+    font-size: var(--small-font-size);
+    margin-top: 5px;
+    display: block;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* - - - Buttons - - - */
+button {
+    padding: var(--button-padding-vertical) var(--button-padding-horizontal);
+    background-color: var(--button-background-color);
+    color: var(--button-foreground);
+    border: none;
+    border-radius: var(--border-radius-small);
+    cursor: pointer;
+    font-size: var(--base-font-size);
+    font-weight: 600;
+}
+
+button:hover {
+    background-color: var(--button-hover-background);
+}
+
+button:active {
+    background-color: var(--button-background-color);
+}
+
+button.secondary {
+    background-color: var(--button-secondary-background);
+    color: var(--button-secondary-foreground);
+}
+
+button.secondary:hover {
+    background-color: var(--button-secondary-hover-background);
+}
+
+button:disabled,
+button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--button-secondary-background) !important;
+}
+
+button.secondary:disabled,
+button.secondary[disabled] {
+    background-color: var(--button-secondary-background) !important;
+}
+
+/* - - - Collapsible Elements - - - */
+.collapsible-header {
+    cursor: pointer;
+    padding: 8px 0 !important;
+    font-weight: 600;
+    color: var(--text-color);
+    -ms-user-select: none;
+    user-select: none;
+    border: none;
+    background-color: transparent;
+    font-size: inherit;
+    font-family: inherit;
+}
+
+.collapsible-header:hover {
+    color: var(--editor-foreground);
+    background-color: transparent;
+}
+
+.collapsible-header:focus {
+    outline: 1px solid var(--focus-border);
+    background-color: transparent;
+}
+
+.collapsible-header[aria-expanded="true"] .collapse-icon {
+    transform: rotate(180deg);
+}
+
+.collapse {
+    transition: height 0.35s ease;
+}
+
+.collapse-icon {
+    transition: transform 0.2s ease;
+    font-size: var(--collapse-icon-size);
+}
+
+/* - - - Button Groups - - - */
+.button-group {
+    display: flex;
+    align-items: center;
+}
+
+.button-group input {
+    flex: 1 1 auto;
+    margin-right: 10px;
+}
+
+.button-group button {
+    flex-shrink: 0;
+    margin-right: 10px;
+}
+
+.button-group button:last-child {
+    margin-right: 0;
+}
+
+/* - - - Folder Toggles - - - */
+.folder-toggle {
+    color: var(--editor-foreground);
+    text-decoration: none;
+    font-size: var(--folder-toggle-font-size);
+    font-weight: 600;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 10px 0 !important;
+    margin-bottom: 0;
+    background-color: transparent;
+}
+
+.folder-toggle:hover {
+    color: var(--editor-foreground) !important;
+    text-decoration: none;
+    background-color: var(--list-hover-background);
+}
+
+.folder-toggle:focus {
+    box-shadow: none;
+    outline: 1px solid var(--focus-border);
+}
+
+.folder-toggle[aria-expanded="true"] .collapse-icon {
+    transform: rotate(180deg);
+}
+
+.collapse .folder-toggle {
+    color: var(--text-color);
+    border-bottom: none;
+    font-size: var(--nested-toggle-font-size);
+}
+
+.collapse .folder-toggle:hover {
+    color: var(--editor-foreground) !important;
+}
+
+.collapse .folder-toggle[aria-expanded="true"] .collapse-icon {
+    transform: rotate(90deg);
+}
+
+.folder-content {
+    padding-top: var(--section-padding);
+    margin-left: 10px;
+}
+
+/* - - - Trusted Folders - - - */
+.trusted-folder-item {
+    margin-bottom: 10px;
+}
+
+.button-container-right {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 15px;
+}
+
+/* - - - Tooltips - - - */
+[data-toggle="tooltip"] {
+    cursor: help;
+}
+
+.tooltip {
+    z-index: 10000;
+    pointer-events: none;
+}
+
+.tooltip .tooltip-inner {
+    background-color: var(--input-background);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    font-size: var(--small-font-size);
+    max-width: 300px;
+    text-align: left;
+    padding: 8px 12px;
+}
+
+.tooltip.bs-tooltip-top .arrow::before,
+.tooltip.bs-tooltip-auto[x-placement^="top"] .arrow::before {
+    border-top-color: var(--border-color);
+}
+
+.tooltip.bs-tooltip-top .arrow::after,
+.tooltip.bs-tooltip-auto[x-placement^="top"] .arrow::after {
+    border-top-color: var(--input-background);
+}

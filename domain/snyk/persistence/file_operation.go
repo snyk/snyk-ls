@@ -28,6 +28,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -86,6 +88,10 @@ func snykCacheDir(conf configuration.Configuration) string {
 	conf.Set(constants.DataHome, dh)
 	cacheDir := filepath.Join(dh, CacheFolder)
 	return cacheDir
+}
+
+func getHashForFolderPath(folderPath types.FilePath) hashedFolderPath {
+	return hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
 }
 
 func getLocalFilePath(cacheDir string, folderPathHash hashedFolderPath, commitHash string, p product.Product) string {

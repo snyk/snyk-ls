@@ -29,41 +29,46 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/google/go-cmp/cmp"
 	"github.com/rs/zerolog"
-	sglsp "github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // Constants for configName strings used in analytics
 const (
-	configActivateSnykCode                 = "activateSnykCode"
-	configActivateSnykIac                  = "activateSnykIac"
-	configActivateSnykOpenSource           = "activateSnykOpenSource"
-	configAdditionalParameters             = "additionalParameters"
-	configAuthenticationMethod             = "authenticationMethod"
-	configBaseBranch                       = "baseBranch"
-	configEnableDeltaFindings              = "enableDeltaFindings"
-	configEnableSnykLearnCodeActions       = "enableSnykLearnCodeActions"
-	configEnableSnykOSSQuickFixCodeActions = "enableSnykOSSQuickFixCodeActions"
-	configEnableTrustedFoldersFeature      = "enableTrustedFoldersFeature"
-	configEndpoint                         = "endpoint"
-	configFolderPath                       = "folderPath"
-	configLocalBranches                    = "localBranches"
-	configManageBinariesAutomatically      = "manageBinariesAutomatically"
-	configOrgMigratedFromGlobalConfig      = "orgMigratedFromGlobalConfig"
-	configOrgSetByUser                     = "orgSetByUser"
-	configOrganization                     = "organization"
-	configPreferredOrg                     = "preferredOrg"
-	configReferenceFolderPath              = "referenceFolderPath"
-	configSendErrorReports                 = "sendErrorReports"
-	configSnykCodeApi                      = "snykCodeApi"
+	configActivateSnykCode                    = "activateSnykCode"
+	configActivateSnykIac                     = "activateSnykIac"
+	configActivateSnykOpenSource              = "activateSnykOpenSource"
+	configAdditionalParameters                = "additionalParameters"
+	configAuthenticationMethod                = "authenticationMethod"
+	configBaseBranch                          = "baseBranch"
+	configCliBaseDownloadURL                  = "cliBaseDownloadURL"
+	configEnableDeltaFindings                 = "enableDeltaFindings"
+	configEnableSnykLearnCodeActions          = "enableSnykLearnCodeActions"
+	configEnableSnykOSSQuickFixCodeActions    = "enableSnykOSSQuickFixCodeActions"
+	configEnableTrustedFoldersFeature         = "enableTrustedFoldersFeature"
+	configEndpoint                            = "endpoint"
+	configFolderPath                          = "folderPath"
+	configLocalBranches                       = "localBranches"
+	configManageBinariesAutomatically         = "manageBinariesAutomatically"
+	configOrgMigratedFromGlobalConfig         = "orgMigratedFromGlobalConfig"
+	configOrgSetByUser                        = "orgSetByUser"
+	configOrganization                        = "organization"
+	configPreferredOrg                        = "preferredOrg"
+	configReferenceFolderPath                 = "referenceFolderPath"
+	configScanCommandConfig                   = "scanCommandConfig"
+	configSendErrorReports                    = "sendErrorReports"
+	configSnykCodeApi                         = "snykCodeApi"
+	configAutoConfigureSnykMcpServer          = "autoConfigureSnykMcpServer"
+	configSecureAtInceptionExecutionFrequency = "secureAtInceptionExecutionFrequency"
 )
 
 func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
@@ -173,11 +178,13 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	}
 
 	updateSeverityFilter(c, settings.FilterSeverity, triggerSource)
+	updateRiskScoreThreshold(c, settings, triggerSource)
 	updateIssueViewOptions(c, settings.IssueViewOptions, triggerSource)
 	updateProductEnablement(c, settings, triggerSource)
 	updateCliConfig(c, settings)
 	updateApiEndpoints(c, settings, triggerSource) // Must be called before token is set, as it may trigger a logout which clears the token.
-	updateToken(settings.Token)                    // Must be called before the Authentication method is set, as the latter checks the token.
+	updateCliBaseDownloadURL(c, settings, triggerSource)
+	updateToken(settings.Token) // Must be called before the Authentication method is set, as the latter checks the token.
 	updateAuthenticationMethod(c, settings, triggerSource)
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings)
@@ -195,6 +202,7 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateFolderConfig(c, settings, c.Logger(), triggerSource)
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
+	updateMcpConfiguration(c, settings, triggerSource)
 }
 
 func updateFormat(c *config.Config, settings types.Settings) {
@@ -218,47 +226,130 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 
 func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
 	notifier := di.Notifier()
+	incomingMap := buildIncomingConfigMap(settings.FolderConfigs)
+	allPaths := gatherAllFolderPaths(incomingMap, c.Workspace())
+
 	var folderConfigs []types.FolderConfig
 	needsToSendUpdateToClient := false
 
-	for _, folderConfig := range settings.FolderConfigs {
-		path := folderConfig.FolderPath
+	for path := range allPaths {
+		folderConfig, configChanged := processSingleFolderConfig(c, path, incomingMap, notifier)
 
-		storedConfig := c.FolderConfig(path)
-		// Never trust the IDE for what the FFs and SAST settings are
-		folderConfig.FeatureFlags = storedConfig.FeatureFlags
-		folderConfig.SastSettings = storedConfig.SastSettings
-
-		// Folder config might be new or changed, so (re)resolve the org before saving it.
-		// We should also check that the folder's org is still valid if the globally set org has changed.
-		// Also, if the config hasn't been migrated yet, we need to perform the initial migration.
-		needsMigration := !storedConfig.OrgMigratedFromGlobalConfig
-		orgSettingsChanged := !folderConfigsOrgSettingsEqual(folderConfig, storedConfig)
-
-		if needsMigration || orgSettingsChanged {
-			updateFolderConfigOrg(c, storedConfig, &folderConfig)
-			err := c.UpdateFolderConfig(&folderConfig) // a lot of methods depend on correct persisted organization values
-			if err != nil {
-				notifier.SendShowMessage(sglsp.MTError, err.Error())
-			}
-		}
-
-		di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
-
-		if !cmp.Equal(folderConfig, *storedConfig) {
+		if configChanged {
 			needsToSendUpdateToClient = true
-			err := c.UpdateFolderConfig(&folderConfig)
-			if err != nil {
-				notifier.SendShowMessage(sglsp.MTError, err.Error())
-			}
 		}
 
-		sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
-
+		handleFolderCacheClearing(c, path, folderConfig, logger, triggerSource)
 		folderConfigs = append(folderConfigs, folderConfig)
 	}
 
-	if needsToSendUpdateToClient && triggerSource != analytics.TriggerSourceInitialize { // Don't send folder configs on initialize, since initialized will always send them.
+	sendFolderConfigUpdateIfNeeded(notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
+}
+
+func buildIncomingConfigMap(folderConfigs []types.FolderConfig) map[types.FilePath]types.FolderConfig {
+	incomingMap := make(map[types.FilePath]types.FolderConfig)
+	for _, fc := range folderConfigs {
+		incomingMap[fc.FolderPath] = fc
+	}
+	return incomingMap
+}
+
+func gatherAllFolderPaths(incomingMap map[types.FilePath]types.FolderConfig, workspace types.Workspace) map[types.FilePath]bool {
+	allPaths := make(map[types.FilePath]bool)
+
+	// Add incoming paths
+	for path := range incomingMap {
+		allPaths[path] = true
+	}
+
+	// Add stored paths from all workspace folders
+	if workspace != nil {
+		for _, folder := range workspace.Folders() {
+			allPaths[folder.Path()] = true
+		}
+	}
+
+	return allPaths
+}
+
+func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.FolderConfig, notifier notification.Notifier) (types.FolderConfig, bool) {
+	storedConfig := c.FolderConfig(path)
+
+	var folderConfig types.FolderConfig
+	// Use incoming config if present, otherwise use stored config or create new
+	if incoming, hasIncoming := incomingMap[path]; hasIncoming {
+		folderConfig = incoming
+	} else if storedConfig != nil {
+		folderConfig = *storedConfig
+	} else {
+		folderConfig = types.FolderConfig{FolderPath: path}
+	}
+
+	// Never trust the IDE for what the FFs and SAST settings are - always use stored values
+	if storedConfig != nil {
+		folderConfig.FeatureFlags = storedConfig.FeatureFlags
+		folderConfig.SastSettings = storedConfig.SastSettings
+	}
+
+	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
+	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
+
+	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
+	if configChanged {
+		err := c.UpdateFolderConfig(&folderConfig)
+		if err != nil {
+			c.Logger().Err(err).Str("path", string(path)).Msg("failed to update folder config")
+			notifier.SendErrorDiagnostic(path, err)
+		}
+	}
+
+	return folderConfig, configChanged
+}
+
+func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {
+	needsMigration := storedConfig != nil && !storedConfig.OrgMigratedFromGlobalConfig
+	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(*folderConfig, storedConfig)
+
+	if needsMigration || orgSettingsChanged {
+		updateFolderConfigOrg(c, storedConfig, folderConfig)
+		err := c.UpdateFolderConfig(folderConfig) // a lot of methods depend on correct persisted organization values
+		if err != nil {
+			c.Logger().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("failed to update folder config during org migration")
+			notifier.SendErrorDiagnostic(folderConfig.FolderPath, err)
+		}
+	}
+}
+
+func handleFolderCacheClearing(c *config.Config, path types.FilePath, folderConfig types.FolderConfig, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
+	storedConfig := c.FolderConfig(path)
+	if storedConfig == nil {
+		return
+	}
+
+	baseBranchChanged := storedConfig.BaseBranch != folderConfig.BaseBranch
+	referenceFolderChanged := storedConfig.ReferenceFolderPath != folderConfig.ReferenceFolderPath
+
+	if baseBranchChanged || referenceFolderChanged {
+		logger.Info().
+			Str("folderPath", string(path)).
+			Str("oldBaseBranch", storedConfig.BaseBranch).
+			Str("newBaseBranch", folderConfig.BaseBranch).
+			Str("oldReferenceFolderPath", string(storedConfig.ReferenceFolderPath)).
+			Str("newReferenceFolderPath", string(folderConfig.ReferenceFolderPath)).
+			Msg("base branch or reference folder changed, clearing persisted scan cache for folder")
+
+		ws := c.Workspace()
+		if ws != nil {
+			ws.GetScanSnapshotClearerExister().ClearFolder(path)
+		}
+	}
+
+	sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
+}
+
+func sendFolderConfigUpdateIfNeeded(notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
+	// Don't send folder configs on initialize, since initialized will always send them.
+	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
 		notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
 	}
 }
@@ -290,7 +381,11 @@ func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSou
 	}
 
 	// ScanCommandConfig change
-	// Dont send analytics for newStoredConfig.ScanCommandConfig until we need it.
+	if !reflect.DeepEqual(oldStoredConfig.ScanCommandConfig, newStoredConfig.ScanCommandConfig) {
+		oldConfigJSON, _ := json.Marshal(oldStoredConfig.ScanCommandConfig)
+		newConfigJSON, _ := json.Marshal(newStoredConfig.ScanCommandConfig)
+		go analytics.SendConfigChangedAnalyticsEvent(c, configScanCommandConfig, string(oldConfigJSON), string(newConfigJSON), path, triggerSource)
+	}
 
 	// PreferredOrg change
 	if oldStoredConfig.PreferredOrg != newStoredConfig.PreferredOrg && newStoredConfig.PreferredOrg != "" {
@@ -497,6 +592,17 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource
 	}
 }
 
+func updateCliBaseDownloadURL(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
+	newCliBaseDownloadURL := strings.TrimSpace(settings.CliBaseDownloadURL)
+
+	oldCliBaseDownloadURL := c.CliBaseDownloadURL()
+	c.SetCliBaseDownloadURL(newCliBaseDownloadURL)
+
+	if oldCliBaseDownloadURL != newCliBaseDownloadURL && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configCliBaseDownloadURL, oldCliBaseDownloadURL, newCliBaseDownloadURL, triggerSource)
+	}
+}
+
 func updateOrganization(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
 	newOrg := strings.TrimSpace(settings.Organization)
 	if newOrg != "" {
@@ -647,7 +753,7 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 }
 
 func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, triggerSource analytics.TriggerSource) {
-	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options:")
+	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options")
 	oldValue := c.IssueViewOptions()
 	modified := c.SetIssueViewOptions(s)
 
@@ -667,8 +773,26 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, trigger
 	}
 }
 
+func updateRiskScoreThreshold(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
+	c.Logger().Debug().Str("method", "updateRiskScoreThreshold").Interface("riskScoreThreshold", settings.RiskScoreThreshold).Msg("Updating risk score threshold")
+	oldValue := c.RiskScoreThreshold()
+	modified := c.SetRiskScoreThreshold(settings.RiskScoreThreshold)
+
+	if !modified {
+		return
+	}
+
+	// Send UI update
+	sendDiagnosticsForNewSettings(c)
+
+	// Send analytics
+	if c.IsLSPInitialized() && settings.RiskScoreThreshold != nil {
+		analytics.SendConfigChangedAnalytics(c, "riskScoreThreshold", oldValue, *settings.RiskScoreThreshold, triggerSource)
+	}
+}
+
 func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSource analytics.TriggerSource) {
-	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter:")
+	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter")
 	oldValue := c.FilterSeverity()
 	modified := c.SetSeverityFilter(s)
 
@@ -697,4 +821,39 @@ func sendDiagnosticsForNewSettings(c *config.Config) {
 		return
 	}
 	go ws.HandleConfigChange()
+}
+
+func updateMcpConfiguration(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
+	logger := c.Logger().With().Str("method", "updateMcpConfiguration").Logger()
+	n := di.Notifier()
+	// Update autoConfigureSnykMcpServer
+	if settings.AutoConfigureSnykMcpServer != "" {
+		parseBool, err := strconv.ParseBool(settings.AutoConfigureSnykMcpServer)
+		if err != nil {
+			logger.Debug().Msgf("couldn't parse autoConfigureSnykMcpServer %s", settings.AutoConfigureSnykMcpServer)
+		} else {
+			oldValue := c.IsAutoConfigureMcpEnabled()
+			c.SetAutoConfigureMcpEnabled(parseBool)
+
+			if oldValue != parseBool {
+				if c.IsLSPInitialized() {
+					go analytics.SendConfigChangedAnalytics(c, configAutoConfigureSnykMcpServer, oldValue, parseBool, triggerSource)
+				}
+				mcpWorkflow.CallMcpConfigWorkflow(c, n, true, false)
+			}
+		}
+	}
+
+	// Update secureAtInceptionExecutionFrequency
+	if settings.SecureAtInceptionExecutionFrequency != "" {
+		oldValue := c.GetSecureAtInceptionExecutionFrequency()
+		c.SetSecureAtInceptionExecutionFrequency(settings.SecureAtInceptionExecutionFrequency)
+
+		if oldValue != settings.SecureAtInceptionExecutionFrequency {
+			if c.IsLSPInitialized() {
+				go analytics.SendConfigChangedAnalytics(c, configSecureAtInceptionExecutionFrequency, oldValue, settings.SecureAtInceptionExecutionFrequency, triggerSource)
+			}
+			mcpWorkflow.CallMcpConfigWorkflow(c, n, false, true)
+		}
+	}
 }

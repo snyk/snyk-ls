@@ -19,7 +19,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gosimple/hashdir v1.0.2
 	github.com/hexops/gotextdiff v1.0.3
-	github.com/mark3labs/mcp-go v0.31.0
 	github.com/otiai10/copy v1.14.1
 	github.com/pact-foundation/pact-go v1.10.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
@@ -30,20 +29,21 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/samber/lo v1.52.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/cli-extension-os-flows v0.0.0-20251125150934-8bac76166638
-	github.com/snyk/code-client-go v1.24.4
-	github.com/snyk/go-application-framework v0.0.0-20251201153730-7c7d1363c01c
+	github.com/snyk/cli-extension-os-flows v0.0.0-20251216105957-6fea9cc0c94b
+	github.com/snyk/code-client-go v1.25.0
+	github.com/snyk/go-application-framework v0.0.0-20260121120647-98a75e529220
+	github.com/snyk/studio-mcp v1.2.3
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
-	github.com/spf13/pflag v1.0.6
-	github.com/stretchr/testify v1.10.0
+	github.com/spf13/pflag v1.0.10
+	github.com/stretchr/testify v1.11.1
 	github.com/subosito/gotenv v1.6.0
 	github.com/writeas/go-strip-markdown v2.0.1+incompatible
 	go.lsp.dev/uri v0.3.0
-	golang.org/x/exp v0.0.0-20250215185904-eff6e970281f
-	golang.org/x/mod v0.27.0
-	golang.org/x/net v0.43.0
-	golang.org/x/oauth2 v0.27.0
-	golang.org/x/sync v0.17.0
+	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546
+	golang.org/x/mod v0.30.0
+	golang.org/x/net v0.48.0
+	golang.org/x/oauth2 v0.33.0
+	golang.org/x/sync v0.19.0
 )
 
 require (
@@ -59,6 +59,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.8.0 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
+	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/cloudflare/circl v1.6.0 // indirect
 	github.com/creachadair/mds v0.23.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
@@ -72,7 +73,7 @@ require (
 	github.com/go-git/go-billy/v5 v5.6.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
-	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
+	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/pprof v0.0.0-20250403155104-27863c87afa6 // indirect
@@ -89,6 +90,8 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
+	github.com/manifoldco/promptui v0.9.0 // indirect
+	github.com/mark3labs/mcp-go v0.31.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
@@ -103,7 +106,7 @@ require (
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
-	github.com/snyk/error-catalog-golang-public v0.0.0-20251008132755-b542bb643649 // indirect
+	github.com/snyk/error-catalog-golang-public v0.0.0-20260108110943-21ad0c940c14 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.14.0 // indirect
@@ -121,11 +124,10 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
-	golang.org/x/crypto v0.42.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/term v0.35.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
-	golang.org/x/tools v0.36.0 // indirect
+	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/tools v0.39.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250409194420-de1ac958c67a // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
