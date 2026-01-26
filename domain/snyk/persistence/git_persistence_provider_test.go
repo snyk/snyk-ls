@@ -445,10 +445,62 @@ func TestClearFolder_ClearsInMemoryCacheForFolder(t *testing.T) {
 	// Verify in-memory cache is cleared for the folder
 	assert.Empty(t, persistenceProvider.cache[hash])
 
-	// GetPersistedIssueList should now return an error since the cache entry is gone
-	_, err = persistenceProvider.GetPersistedIssueList(folderPath, productName)
-	assert.Error(t, err)
-	assert.Equal(t, ErrPathHashDoesntExist, err)
+	// GetPersistedIssueList should now fall back to disk and find the file
+	// This tests the fix for IDE-1514: fallback to disk when cache is empty
+	loadedIssues, err := persistenceProvider.GetPersistedIssueList(folderPath, productName)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, loadedIssues)
+	assert.Equal(t, existingCodeIssues[0].GetGlobalIdentity(), loadedIssues[0].GetGlobalIdentity())
+
+	// Verify cache was updated after fallback
+	assert.NotEmpty(t, persistenceProvider.cache[hash])
+	assert.Equal(t, commitHash, persistenceProvider.cache[hash][productName])
+}
+
+// TestGetPersistedIssueList_FallbackToDiskWhenCacheEmpty tests the fix for IDE-1514
+// When the in-memory cache doesn't have an entry, GetPersistedIssueList should
+// fall back to checking disk and update the cache if found.
+func TestGetPersistedIssueList_FallbackToDiskWhenCacheEmpty(t *testing.T) {
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
+	folderPath := types.FilePath(conf.GetString(constants.DataHome))
+	repo := initGitRepo(t, folderPath, false)
+
+	expectedIssue := &snyk.Issue{
+		GlobalIdentity:   uuid.New().String(),
+		Fingerprint:      "test-fingerprint-fallback",
+		ContentRoot:      folderPath,
+		AffectedFilePath: types.FilePath(filepath.Join(string(folderPath), "test.js")),
+	}
+	existingIssues := []types.Issue{expectedIssue}
+
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+	pc := product.ProductCode
+
+	// First, persist data to disk using one provider
+	provider1 := NewGitPersistenceProvider(c.Logger(), conf)
+	err = provider1.Init([]types.FilePath{folderPath})
+	assert.NoError(t, err)
+	err = provider1.Add(folderPath, commitHash, existingIssues, pc)
+	assert.NoError(t, err)
+
+	// Create a new provider instance WITHOUT calling Init (simulating cache not initialized)
+	// This simulates the bug scenario where cache is empty but file exists on disk
+	provider2 := NewGitPersistenceProvider(c.Logger(), conf)
+	// Note: NOT calling Init() - cache will be empty
+
+	// GetPersistedIssueList should fall back to disk and find the file
+	loadedIssues, err := provider2.GetPersistedIssueList(folderPath, pc)
+	assert.NoError(t, err)
+	assert.Len(t, loadedIssues, 1)
+	assert.Equal(t, expectedIssue.GetGlobalIdentity(), loadedIssues[0].GetGlobalIdentity())
+	assert.Equal(t, expectedIssue.GetFingerprint(), loadedIssues[0].GetFingerprint())
+
+	// Verify cache was updated after fallback
+	hash := getHashForFolderPath(folderPath)
+	assert.NotEmpty(t, provider2.cache[hash])
+	assert.Equal(t, commitHash, provider2.cache[hash][pc])
 }
 
 func TestClearFolder_DoesNotAffectOtherFolders(t *testing.T) {
