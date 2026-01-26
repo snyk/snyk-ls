@@ -566,6 +566,10 @@ type FolderConfig struct {
 	OrgSetByUser                bool                                  `json:"orgSetByUser"`
 	FeatureFlags                map[string]bool                       `json:"featureFlags"`
 	SastSettings                *sast_contract.SastResponse           `json:"sastSettings"`
+	// UserOverrides stores user-specified overrides for org-scope settings.
+	// Key presence indicates the user has explicitly set this value (even if it matches the default).
+	// Key absence means we should use LDX-Sync or default value.
+	UserOverrides               map[string]any                        `json:"userOverrides,omitempty"`
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {
@@ -618,7 +622,58 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 		}
 	}
 
+	if fc.UserOverrides != nil {
+		clone.UserOverrides = make(map[string]any, len(fc.UserOverrides))
+		maps.Copy(clone.UserOverrides, fc.UserOverrides)
+	}
+
 	return clone
+}
+
+// HasUserOverride checks if the user has explicitly set a value for the given setting
+func (fc *FolderConfig) HasUserOverride(settingName string) bool {
+	_, exists := fc.GetUserOverride(settingName)
+	return exists
+}
+
+// GetUserOverride returns the user override value for the given setting, or nil if not set
+func (fc *FolderConfig) GetUserOverride(settingName string) (any, bool) {
+	if fc == nil || fc.UserOverrides == nil {
+		return nil, false
+	}
+	val, exists := fc.UserOverrides[settingName]
+	return val, exists
+}
+
+// SetUserOverride explicitly sets a user override value for the given setting
+func (fc *FolderConfig) SetUserOverride(settingName string, value any) {
+	if fc.UserOverrides == nil {
+		fc.UserOverrides = make(map[string]any)
+	}
+	fc.UserOverrides[settingName] = value
+}
+
+// ResetToDefault removes a user override, reverting to LDX-Sync or default value
+func (fc *FolderConfig) ResetToDefault(settingName string) {
+	if fc.UserOverrides != nil {
+		delete(fc.UserOverrides, settingName)
+	}
+}
+
+// GetEffectiveOrg returns the effective organization for this folder config.
+// Returns the org that should be used for LDX-Sync lookups:
+// - If OrgSetByUser is true: returns PreferredOrg (may be empty, meaning use global)
+// - If OrgSetByUser is false: returns AutoDeterminedOrg (may be empty, meaning use global)
+// Note: This does NOT fall back to the global org - callers should use Config.FolderOrganization()
+// for the full resolution logic including global fallback.
+func (fc *FolderConfig) GetEffectiveOrg() string {
+	if fc == nil {
+		return ""
+	}
+	if fc.OrgSetByUser {
+		return fc.PreferredOrg
+	}
+	return fc.AutoDeterminedOrg
 }
 
 type Pair struct {
