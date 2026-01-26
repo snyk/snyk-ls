@@ -97,4 +97,71 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 
 	// Update cache with all results
 	c.UpdateLdxSyncCache(results)
+
+	// Update the org config cache and machine config for ConfigResolver
+	s.updateOrgConfigCache(c, results)
+	s.updateMachineConfig(c, results)
+}
+
+// updateOrgConfigCache converts LDX-Sync results to org configs and updates the cache
+// Note: Only org-level settings are stored in the org config cache.
+// Folder-specific settings remain in the raw ldxSyncCache (keyed by folder path)
+// and are accessed via ExtractFolderSettings when needed by ConfigResolver.
+func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
+	logger := c.Logger().With().Str("method", "updateOrgConfigCache").Logger()
+
+	for folderPath, result := range results {
+		if result == nil || result.Config == nil {
+			continue
+		}
+
+		// Extract org ID from the response
+		orgId := types.ExtractOrgIdFromResponse(result.Config)
+		if orgId == "" {
+			logger.Debug().
+				Str("folder", string(folderPath)).
+				Msg("No org ID found in LDX-Sync response, skipping org config cache update")
+			continue
+		}
+
+		// Convert to our org config format (org-level settings only)
+		// Folder-specific settings are NOT merged here - they stay in the raw cache
+		// and are extracted per-folder when needed
+		orgConfig := types.ConvertLDXSyncResponseToOrgConfig(orgId, result.Config)
+		if orgConfig == nil {
+			continue
+		}
+
+		// Update the cache
+		c.UpdateLdxSyncOrgConfig(orgConfig)
+
+		logger.Debug().
+			Str("folder", string(folderPath)).
+			Str("orgId", orgId).
+			Int("fieldCount", len(orgConfig.Fields)).
+			Msg("Updated org config cache from LDX-Sync")
+	}
+}
+
+// updateMachineConfig extracts machine-scope settings from LDX-Sync results
+// Machine settings are global and don't vary by org, so we take the first available result
+func (s *DefaultLdxSyncService) updateMachineConfig(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
+	logger := c.Logger().With().Str("method", "updateMachineConfig").Logger()
+
+	for folderPath, result := range results {
+		if result == nil || result.Config == nil {
+			continue
+		}
+
+		// Extract machine-scope settings from the first valid response
+		machineConfig := types.ExtractMachineSettings(result.Config)
+		if machineConfig != nil {
+			c.UpdateLdxSyncMachineConfig(machineConfig)
+			logger.Debug().
+				Str("folder", string(folderPath)).
+				Int("fieldCount", len(machineConfig)).
+				Msg("Updated machine config from LDX-Sync")
+			return // Only need to extract once since machine settings are global
+		}
+	}
 }

@@ -569,7 +569,7 @@ type FolderConfig struct {
 	// UserOverrides stores user-specified overrides for org-scope settings.
 	// Key presence indicates the user has explicitly set this value (even if it matches the default).
 	// Key absence means we should use LDX-Sync or default value.
-	UserOverrides               map[string]any                        `json:"userOverrides,omitempty"`
+	UserOverrides map[string]any `json:"userOverrides,omitempty"`
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {

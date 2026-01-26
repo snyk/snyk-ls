@@ -45,8 +45,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 
-	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/google/uuid"
+	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 )
 
 // setupMockEngineWithNetworkAccess sets up a mock engine with GetNetworkAccess mocked
@@ -78,23 +78,23 @@ func createLdxSyncResult(orgId, orgName, orgSlug string, isDefault bool) *ldx_sy
 		Config: &v20241015.UserConfigResponse{
 			Data: struct {
 				Attributes struct {
-					CreatedAt      *time.Time                                          `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata    `json:"folder_settings,omitempty"`
-					LastModifiedAt *time.Time                                          `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                           `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope    `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata               `json:"settings,omitempty"`
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
 				} `json:"attributes"`
 				Id   uuid.UUID                            `json:"id"`
 				Type v20241015.UserConfigResponseDataType `json:"type"`
 			}{
 				Attributes: struct {
-					CreatedAt      *time.Time                                          `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata    `json:"folder_settings,omitempty"`
-					LastModifiedAt *time.Time                                          `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                           `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope    `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata               `json:"settings,omitempty"`
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
 				}{
 					Organizations: &orgs,
 				},
@@ -583,8 +583,9 @@ func Test_RefreshConfigFromLdxSync_NoFolders(t *testing.T) {
 	// Setup workspace with no folders
 	workspaceutil.SetupWorkspace(t, c)
 
-	// Call the function
-	RefreshConfigFromLdxSync(c, c.Workspace().Folders())
+	// Call the function via service
+	service := NewLdxSyncService()
+	service.RefreshConfigFromLdxSync(c, c.Workspace().Folders())
 
 	// Should handle empty folder list gracefully
 }
@@ -603,8 +604,9 @@ func Test_RefreshConfigFromLdxSync_PopulatesCache(t *testing.T) {
 	}
 	workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-	// Call the function
-	RefreshConfigFromLdxSync(c, c.Workspace().Folders())
+	// Call the function via service
+	service := NewLdxSyncService()
+	service.RefreshConfigFromLdxSync(c, c.Workspace().Folders())
 
 	// Verify cache is populated for all folders
 	for _, path := range folderPaths {
@@ -634,8 +636,9 @@ func Test_RefreshConfigFromLdxSync_PassesPreferredOrg(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
 	require.NoError(t, err)
 
-	// Call the function
-	RefreshConfigFromLdxSync(c, c.Workspace().Folders())
+	// Call the function via service
+	service := NewLdxSyncService()
+	service.RefreshConfigFromLdxSync(c, c.Workspace().Folders())
 
 	// Verify cache was populated (the actual passing of PreferredOrg to GetUserConfigForProject
 	// would require mocking the engine, which is complex - this test verifies the function runs)
@@ -655,8 +658,9 @@ func Test_RefreshConfigFromLdxSync_HandlesErrors(t *testing.T) {
 	}
 	workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-	// Call the function - even if some folders fail, others should succeed
-	RefreshConfigFromLdxSync(c, c.Workspace().Folders())
+	// Call the function via service - even if some folders fail, others should succeed
+	service := NewLdxSyncService()
+	service.RefreshConfigFromLdxSync(c, c.Workspace().Folders())
 
 	// Function should complete without panicking
 	// Cache may have some entries even if some folders failed

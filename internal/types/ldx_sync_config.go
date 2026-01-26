@@ -1,5 +1,5 @@
 /*
- * © 2022-2025 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -172,15 +172,15 @@ const (
 	SettingCliReleaseChannel               = "cli_release_channel"
 
 	// Org-scope settings
-	SettingEnabledSeverities     = "enabled_severities"
-	SettingRiskScoreThreshold    = "risk_score_threshold"
-	SettingCweIds                = "cwe_ids"
-	SettingCveIds                = "cve_ids"
-	SettingRuleIds               = "rule_ids"
-	SettingEnabledProducts       = "enabled_products"
-	SettingScanAutomatic         = "scan_automatic"
-	SettingScanNetNew            = "scan_net_new"
-	SettingIssueViewOpenIssues   = "issue_view_open_issues"
+	SettingEnabledSeverities      = "enabled_severities"
+	SettingRiskScoreThreshold     = "risk_score_threshold"
+	SettingCweIds                 = "cwe_ids"
+	SettingCveIds                 = "cve_ids"
+	SettingRuleIds                = "rule_ids"
+	SettingEnabledProducts        = "enabled_products"
+	SettingScanAutomatic          = "scan_automatic"
+	SettingScanNetNew             = "scan_net_new"
+	SettingIssueViewOpenIssues    = "issue_view_open_issues"
 	SettingIssueViewIgnoredIssues = "issue_view_ignored_issues"
 
 	// Folder-scope settings

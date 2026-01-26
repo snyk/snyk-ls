@@ -1,5 +1,5 @@
 /*
- * © 2022-2025 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,27 +22,39 @@ import (
 
 // ConfigResolver is the single entry point for reading configuration values.
 // It encapsulates the resolution logic and ensures correct precedence:
-// 1. Machine-wide settings → Global Config
-// 2. Folder-scoped settings → FolderConfig
+// 1. Machine-wide settings → Locked LDX-Sync > Global Config > LDX-Sync > Default
+// 2. Folder-scoped settings → FolderConfig (with LDX-Sync folder settings)
 // 3. Org-scoped settings → Locked LDX-Sync > User Override > LDX-Sync > Global Default
 type ConfigResolver struct {
-	ldxSyncCache   *LDXSyncConfigCache
-	globalSettings *Settings
-	logger         *zerolog.Logger
+	ldxSyncCache         *LDXSyncConfigCache
+	ldxSyncMachineConfig map[string]*LDXSyncField
+	globalSettings       *Settings
+	logger               *zerolog.Logger
 }
 
 // NewConfigResolver creates a new ConfigResolver with the given dependencies
 func NewConfigResolver(ldxSyncCache *LDXSyncConfigCache, globalSettings *Settings, logger *zerolog.Logger) *ConfigResolver {
 	return &ConfigResolver{
-		ldxSyncCache:   ldxSyncCache,
-		globalSettings: globalSettings,
-		logger:         logger,
+		ldxSyncCache:         ldxSyncCache,
+		ldxSyncMachineConfig: make(map[string]*LDXSyncField),
+		globalSettings:       globalSettings,
+		logger:               logger,
 	}
 }
 
-// SetLDXSyncCache updates the LDX-Sync cache reference
+// SetLDXSyncCache updates the LDX-Sync org config cache reference
 func (r *ConfigResolver) SetLDXSyncCache(cache *LDXSyncConfigCache) {
 	r.ldxSyncCache = cache
+}
+
+// SetLDXSyncMachineConfig updates the LDX-Sync machine-wide config
+func (r *ConfigResolver) SetLDXSyncMachineConfig(config map[string]*LDXSyncField) {
+	r.ldxSyncMachineConfig = config
+}
+
+// GetLDXSyncMachineConfig returns the current LDX-Sync machine-wide config
+func (r *ConfigResolver) GetLDXSyncMachineConfig() map[string]*LDXSyncField {
+	return r.ldxSyncMachineConfig
 }
 
 // SetGlobalSettings updates the global settings reference
@@ -67,15 +79,50 @@ func (r *ConfigResolver) GetValue(settingName string, folderConfig *FolderConfig
 	}
 }
 
-// resolveMachineSetting resolves a machine-scoped setting from global config
+// resolveMachineSetting resolves a machine-scoped setting
+// Precedence: Locked LDX-Sync > Global Config (user setting) > LDX-Sync (enforced) > Default
 func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigSource) {
-	value := r.getGlobalSettingValue(settingName)
-	source := ConfigSourceGlobal
-	if value == nil {
-		source = ConfigSourceDefault
+	// Check LDX-Sync machine config
+	var ldxField *LDXSyncField
+	if r.ldxSyncMachineConfig != nil {
+		ldxField = r.ldxSyncMachineConfig[settingName]
 	}
 
-	r.logResolution(settingName, "", "", value, source, false, false, false)
+	ldxSyncHasField := ldxField != nil
+	isLocked := ldxField != nil && ldxField.IsLocked
+
+	// Get user's global setting value
+	globalValue := r.getGlobalSettingValue(settingName)
+	userHasSet := globalValue != nil
+
+	var value any
+	var source ConfigSource
+
+	if ldxField != nil {
+		if ldxField.IsLocked {
+			// Locked: LDX-Sync value wins, user cannot override
+			value = ldxField.Value
+			source = ConfigSourceLDXSyncLocked
+		} else if userHasSet {
+			// User has set a value in global config, use it
+			value = globalValue
+			source = ConfigSourceGlobal
+		} else {
+			// Use LDX-Sync value as default (enforced)
+			value = ldxField.Value
+			source = ConfigSourceLDXSync
+		}
+	} else {
+		if userHasSet {
+			value = globalValue
+			source = ConfigSourceGlobal
+		} else {
+			value = nil
+			source = ConfigSourceDefault
+		}
+	}
+
+	r.logResolution(settingName, "", "", value, source, ldxSyncHasField, isLocked, false)
 	return value, source
 }
 
@@ -312,22 +359,6 @@ func (r *ConfigResolver) GetInt(settingName string, folderConfig *FolderConfig) 
 		return int(v)
 	default:
 		return 0
-	}
-}
-
-// GetIntPtr returns an integer pointer value for the given setting
-func (r *ConfigResolver) GetIntPtr(settingName string, folderConfig *FolderConfig) *int {
-	val, _ := r.GetValue(settingName, folderConfig)
-	switch v := val.(type) {
-	case int:
-		return &v
-	case *int:
-		return v
-	case float64:
-		i := int(v)
-		return &i
-	default:
-		return nil
 	}
 }
 

@@ -1,5 +1,5 @@
 /*
- * © 2022-2025 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,9 +48,9 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 	resolver := NewConfigResolver(nil, nil, &logger)
 
 	folderConfig := &FolderConfig{
-		FolderPath:          "/path/to/folder",
-		BaseBranch:          "main",
-		ReferenceFolderPath: "/path/to/reference",
+		FolderPath:           "/path/to/folder",
+		BaseBranch:           "main",
+		ReferenceFolderPath:  "/path/to/reference",
 		AdditionalParameters: []string{"--debug"},
 	}
 
@@ -81,8 +81,8 @@ func TestConfigResolver_GetValue_OrgScope_NoLDXSync(t *testing.T) {
 	resolver := NewConfigResolver(nil, globalSettings, &logger)
 
 	folderConfig := &FolderConfig{
-		FolderPath:    "/path/to/folder",
-		PreferredOrg:  "org1",
+		FolderPath:   "/path/to/folder",
+		PreferredOrg: "org1",
 	}
 
 	t.Run("returns global value when no LDX-Sync cache", func(t *testing.T) {
@@ -193,9 +193,9 @@ func TestConfigResolver_GetValue_OrgScope_DifferentOrgs(t *testing.T) {
 func TestConfigResolver_TypedAccessors(t *testing.T) {
 	logger := zerolog.Nop()
 	globalSettings := &Settings{
-		Endpoint:             "https://api.snyk.io",
-		ActivateSnykCode:     "true",
-		EnableDeltaFindings:  "true",
+		Endpoint:            "https://api.snyk.io",
+		ActivateSnykCode:    "true",
+		EnableDeltaFindings: "true",
 	}
 
 	riskScore := 500
@@ -216,12 +216,6 @@ func TestConfigResolver_TypedAccessors(t *testing.T) {
 	t.Run("GetInt", func(t *testing.T) {
 		value := resolver.GetInt(SettingRiskScoreThreshold, nil)
 		assert.Equal(t, 500, value)
-	})
-
-	t.Run("GetIntPtr", func(t *testing.T) {
-		value := resolver.GetIntPtr(SettingRiskScoreThreshold, nil)
-		assert.NotNil(t, value)
-		assert.Equal(t, 500, *value)
 	})
 
 	t.Run("GetStringSlice", func(t *testing.T) {

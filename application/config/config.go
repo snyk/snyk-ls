@@ -41,8 +41,8 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
-	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
@@ -212,6 +212,9 @@ type Config struct {
 	secureAtInceptionExecutionFrequency string
 	ldxSyncCache                        map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult
 	ldxSyncCacheMutex                   sync.RWMutex
+	ldxSyncOrgConfigCache               *types.LDXSyncConfigCache
+	ldxSyncOrgConfigCacheMutex          sync.RWMutex
+	configResolver                      *types.ConfigResolver
 }
 
 func CurrentConfig() *Config {
@@ -295,6 +298,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c.clientSettingsFromEnv()
 	c.hoverVerbosity = 3
 	c.InitLdxSyncCache()
+	c.InitLdxSyncOrgConfigCache()
 	return c
 }
 
@@ -1547,4 +1551,62 @@ func (c *Config) ClearLdxSyncCache() {
 	c.ldxSyncCacheMutex.Lock()
 	defer c.ldxSyncCacheMutex.Unlock()
 	c.ldxSyncCache = make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
+}
+
+// InitLdxSyncOrgConfigCache initializes the LDX-Sync org config cache and ConfigResolver
+func (c *Config) InitLdxSyncOrgConfigCache() {
+	c.ldxSyncOrgConfigCacheMutex.Lock()
+	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	c.ldxSyncOrgConfigCache = types.NewLDXSyncConfigCache()
+	c.configResolver = types.NewConfigResolver(c.ldxSyncOrgConfigCache, nil, c.logger)
+}
+
+// GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache
+func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
+	c.ldxSyncOrgConfigCacheMutex.RLock()
+	defer c.ldxSyncOrgConfigCacheMutex.RUnlock()
+	return c.ldxSyncOrgConfigCache
+}
+
+// GetConfigResolver returns the ConfigResolver for reading configuration values
+func (c *Config) GetConfigResolver() *types.ConfigResolver {
+	c.ldxSyncOrgConfigCacheMutex.RLock()
+	defer c.ldxSyncOrgConfigCacheMutex.RUnlock()
+	return c.configResolver
+}
+
+// UpdateLdxSyncOrgConfig updates the org config cache with a new org config
+func (c *Config) UpdateLdxSyncOrgConfig(orgConfig *types.LDXSyncOrgConfig) {
+	c.ldxSyncOrgConfigCacheMutex.Lock()
+	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	if c.ldxSyncOrgConfigCache == nil {
+		c.ldxSyncOrgConfigCache = types.NewLDXSyncConfigCache()
+	}
+	c.ldxSyncOrgConfigCache.SetOrgConfig(orgConfig)
+}
+
+// ClearLdxSyncOrgConfigCache clears the LDX-Sync org config cache (called on logout/cleanup)
+func (c *Config) ClearLdxSyncOrgConfigCache() {
+	c.ldxSyncOrgConfigCacheMutex.Lock()
+	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	c.ldxSyncOrgConfigCache = types.NewLDXSyncConfigCache()
+}
+
+// UpdateLdxSyncMachineConfig updates the machine-wide LDX-Sync config in the ConfigResolver
+func (c *Config) UpdateLdxSyncMachineConfig(machineConfig map[string]*types.LDXSyncField) {
+	c.ldxSyncOrgConfigCacheMutex.Lock()
+	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	if c.configResolver != nil {
+		c.configResolver.SetLDXSyncMachineConfig(machineConfig)
+	}
+}
+
+// GetLdxSyncMachineConfig returns the machine-wide LDX-Sync config from the ConfigResolver
+func (c *Config) GetLdxSyncMachineConfig() map[string]*types.LDXSyncField {
+	c.ldxSyncOrgConfigCacheMutex.RLock()
+	defer c.ldxSyncOrgConfigCacheMutex.RUnlock()
+	if c.configResolver != nil {
+		return c.configResolver.GetLDXSyncMachineConfig()
+	}
+	return nil
 }
