@@ -629,7 +629,6 @@ func Test_processIssue_WithUpgradePath_HasCodeActions(t *testing.T) {
 		trIssue,
 		logger,
 		types.FilePath(filePath),
-		types.FilePath(filePath),
 		types.FilePath(workDir),
 	)
 
@@ -718,7 +717,6 @@ func Test_processIssue_FeatureFlagDisabled(t *testing.T) {
 		trIssue,
 		logger,
 		types.FilePath(filePath),
-		types.FilePath(filePath),
 		types.FilePath(workDir),
 	)
 
@@ -790,7 +788,6 @@ func Test_processIssue_WithUpgradePath_HasCodeLens(t *testing.T) {
 		ctx,
 		trIssue,
 		logger,
-		types.FilePath(filePath),
 		types.FilePath(filePath),
 		types.FilePath(workDir),
 	)
@@ -866,7 +863,6 @@ func Test_processIssue_WrongTypeInContextDeps(t *testing.T) {
 		trIssue,
 		logger,
 		types.FilePath(filePath),
-		types.FilePath(filePath),
 		types.FilePath(workDir),
 	)
 
@@ -921,7 +917,6 @@ func Test_processIssue_MissingContextDeps(t *testing.T) {
 		ctx,
 		trIssue,
 		logger,
-		types.FilePath(filePath),
 		types.FilePath(filePath),
 		types.FilePath(workDir),
 	)
@@ -992,7 +987,6 @@ func Test_processIssue_NilDependencyNode(t *testing.T) {
 		ctx,
 		trIssue,
 		logger,
-		types.FilePath(filePath),
 		types.FilePath(filePath),
 		types.FilePath(workDir),
 	)
@@ -1066,7 +1060,6 @@ func Test_processIssue_SingleVulnerability(t *testing.T) {
 		trIssue,
 		logger,
 		types.FilePath(filePath),
-		types.FilePath(filePath),
 		types.FilePath(workDir),
 	)
 
@@ -1137,7 +1130,6 @@ func Test_processIssue_NoFixRelationships_DepsCorrect(t *testing.T) {
 		ctx,
 		trIssue,
 		logger,
-		types.FilePath(filePath),
 		types.FilePath(filePath),
 		types.FilePath(workDir),
 	)
