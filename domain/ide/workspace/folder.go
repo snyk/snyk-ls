@@ -653,7 +653,7 @@ func (f *Folder) FilterIssues(
 	filteredIssues := snyk.IssuesByFile{}
 	filterReasonCounts := make(map[FilterReason]int)
 
-	if f.c.IsDeltaFindingsEnabled() {
+	if f.c.IsDeltaFindingsEnabledForFolder(f.path) {
 		deltaForAllProducts := f.GetDeltaForAllProducts(supportedIssueTypes)
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
@@ -704,21 +704,22 @@ func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[produ
 }
 
 func (f *Folder) isVisibleSeverity(issue types.Issue) bool {
+	filter := f.c.FilterSeverityForFolder(f.path)
 	switch issue.GetSeverity() {
 	case types.Critical:
-		return f.c.FilterSeverity().Critical
+		return filter.Critical
 	case types.High:
-		return f.c.FilterSeverity().High
+		return filter.High
 	case types.Medium:
-		return f.c.FilterSeverity().Medium
+		return filter.Medium
 	case types.Low:
-		return f.c.FilterSeverity().Low
+		return filter.Low
 	}
 	return false
 }
 
 func (f *Folder) isVisibleRiskScore(issue types.Issue) bool {
-	riskScoreThreshold := f.c.RiskScoreThreshold()
+	riskScoreThreshold := f.c.RiskScoreThresholdForFolder(f.path)
 	switch {
 	case riskScoreThreshold == 0:
 		// Showing all issues because threshold is 0
@@ -752,7 +753,7 @@ func (f *Folder) isVisibleRiskScore(issue types.Issue) bool {
 }
 
 func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue) bool {
-	issueViewOptions := f.c.IssueViewOptions()
+	issueViewOptions := f.c.IssueViewOptionsForFolder(f.path)
 	if issue.GetIsIgnored() {
 		return issueViewOptions.IgnoredIssues
 	} else {
@@ -763,7 +764,7 @@ func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue) bool {
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.c.IsDeltaFindingsEnabled())
+	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.c.IsDeltaFindingsEnabledForFolder(f.path))
 	if scanErr != nil {
 		f.sendScanError(p, scanErr)
 	} else {

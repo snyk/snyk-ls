@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/google/uuid"
@@ -445,4 +446,109 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestFolderAwareConfigAccessors(t *testing.T) {
+	t.Run("FilterSeverityForFolder falls back to global when no LDX-Sync config", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		// Set global severity filter
+		globalFilter := &types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
+		c.SetSeverityFilter(globalFilter)
+
+		// Create a folder path
+		folderPath := types.FilePath("/test/folder")
+
+		// Get filter for folder - should return global filter
+		result := c.FilterSeverityForFolder(folderPath)
+		assert.Equal(t, globalFilter.Critical, result.Critical)
+		assert.Equal(t, globalFilter.High, result.High)
+		assert.Equal(t, globalFilter.Medium, result.Medium)
+		assert.Equal(t, globalFilter.Low, result.Low)
+	})
+
+	t.Run("RiskScoreThresholdForFolder falls back to global when no LDX-Sync config", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		// Set global risk score threshold
+		threshold := 500
+		c.SetRiskScoreThreshold(&threshold)
+
+		// Create a folder path
+		folderPath := types.FilePath("/test/folder")
+
+		// Get threshold for folder - should return global threshold
+		result := c.RiskScoreThresholdForFolder(folderPath)
+		assert.Equal(t, threshold, result)
+	})
+
+	t.Run("IssueViewOptionsForFolder falls back to global when no LDX-Sync config", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		// Set global issue view options
+		options := types.NewIssueViewOptions(false, true)
+		c.SetIssueViewOptions(&options)
+
+		// Create a folder path
+		folderPath := types.FilePath("/test/folder")
+
+		// Get options for folder - should return global options
+		result := c.IssueViewOptionsForFolder(folderPath)
+		assert.Equal(t, options.OpenIssues, result.OpenIssues)
+		assert.Equal(t, options.IgnoredIssues, result.IgnoredIssues)
+	})
+
+	t.Run("IsDeltaFindingsEnabledForFolder falls back to global when no LDX-Sync config", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		// Set global delta findings
+		c.SetDeltaFindingsEnabled(true)
+
+		// Create a folder path
+		folderPath := types.FilePath("/test/folder")
+
+		// Get delta findings for folder - should return global setting
+		result := c.IsDeltaFindingsEnabledForFolder(folderPath)
+		assert.True(t, result)
+	})
+
+	t.Run("FilterSeverityForFolder uses LDX-Sync config when available", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		// Set global severity filter
+		globalFilter := &types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}
+		c.SetSeverityFilter(globalFilter)
+
+		// Initialize LDX-Sync cache
+		c.InitLdxSyncOrgConfigCache()
+
+		// Create org config with different severity filter
+		orgId := "test-org-id"
+		orgConfig := types.NewLDXSyncOrgConfig(orgId)
+		ldxFilter := &types.SeverityFilter{Critical: true, High: false, Medium: false, Low: false}
+		orgConfig.SetField(types.SettingEnabledSeverities, ldxFilter, false, true, "org")
+		c.UpdateLdxSyncOrgConfig(orgConfig)
+
+		// Create a folder path and folder config with the org
+		folderPath := types.FilePath("/test/folder")
+		folderConfig := c.FolderConfig(folderPath)
+		folderConfig.AutoDeterminedOrg = orgId
+
+		// Save the folder config back to storage so subsequent calls see the org
+		gafConfig := c.Engine().GetConfiguration()
+		err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
+		require.NoError(t, err)
+
+		// Get filter for folder - should return LDX-Sync filter
+		result := c.FilterSeverityForFolder(folderPath)
+		assert.Equal(t, ldxFilter.Critical, result.Critical)
+		assert.Equal(t, ldxFilter.High, result.High)
+		assert.Equal(t, ldxFilter.Medium, result.Medium)
+		assert.Equal(t, ldxFilter.Low, result.Low)
+	})
 }

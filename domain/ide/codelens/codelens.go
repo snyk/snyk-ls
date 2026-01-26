@@ -53,7 +53,7 @@ func GetFor(filePath types.FilePath) (lenses []sglsp.CodeLens) {
 	// group by range first
 	lensesByRange := make(map[types.Range]*lensesWithIssueCount)
 	for _, issue := range issues {
-		if c.IsDeltaFindingsEnabled() && !issue.GetIsNew() {
+		if c.IsDeltaFindingsEnabledForFolder(f.Path()) && !issue.GetIsNew() {
 			continue
 		}
 		for _, lens := range issue.GetCodelensCommands() {

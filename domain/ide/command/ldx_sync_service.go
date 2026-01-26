@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -38,11 +39,13 @@ type LdxSyncService interface {
 }
 
 // DefaultLdxSyncService is the default implementation of LdxSyncService
-type DefaultLdxSyncService struct{}
+type DefaultLdxSyncService struct {
+	notifier notification.Notifier
+}
 
 // NewLdxSyncService creates a new LdxSyncService
-func NewLdxSyncService() LdxSyncService {
-	return &DefaultLdxSyncService{}
+func NewLdxSyncService(notifier notification.Notifier) LdxSyncService {
+	return &DefaultLdxSyncService{notifier: notifier}
 }
 
 // RefreshConfigFromLdxSync refreshes the user configuration from LDX-Sync for all workspace folders in parallel
@@ -146,6 +149,7 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 
 // updateMachineConfig extracts machine-scope settings from LDX-Sync results
 // Machine settings are global and don't vary by org, so we take the first available result
+// After updating, sends a notification to the IDE so it can persist the settings
 func (s *DefaultLdxSyncService) updateMachineConfig(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
 	logger := c.Logger().With().Str("method", "updateMachineConfig").Logger()
 
@@ -156,12 +160,20 @@ func (s *DefaultLdxSyncService) updateMachineConfig(c *config.Config, results ma
 
 		// Extract machine-scope settings from the first valid response
 		machineConfig := types.ExtractMachineSettings(result.Config)
-		if machineConfig != nil {
+		if len(machineConfig) > 0 {
 			c.UpdateLdxSyncMachineConfig(machineConfig)
+
+			// Send machine config to IDE for persistence
+			if s.notifier != nil {
+				s.notifier.Send(types.MachineConfigParam{
+					LDXSyncMachineConfig: machineConfig,
+				})
+			}
+
 			logger.Debug().
 				Str("folder", string(folderPath)).
 				Int("fieldCount", len(machineConfig)).
-				Msg("Updated machine config from LDX-Sync")
+				Msg("Updated machine config from LDX-Sync and notified IDE")
 			return // Only need to extract once since machine settings are global
 		}
 	}

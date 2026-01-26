@@ -151,6 +151,9 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		case types.SnykRegisterMcpParams:
 			notifier(c, srv, "$/snyk.registerMcp", params)
 			logger.Debug().Interface("mcpConfig", params).Msg("sending MCP config to client")
+		case types.MachineConfigParam:
+			notifier(c, srv, "$/snyk.machineConfig", params)
+			logger.Debug().Int("fieldCount", len(params.LDXSyncMachineConfig)).Msg("sending machine config to client")
 		default:
 			logger.Warn().
 				Interface("params", params).

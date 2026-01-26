@@ -685,6 +685,14 @@ type FolderConfigsParam struct {
 	FolderConfigs []FolderConfig `json:"folderConfigs"`
 }
 
+// MachineConfigParam is sent to the IDE when machine-wide LDX-Sync settings change.
+// Machine config can be modified via MDM, IDE settings, or LDX-Sync.
+// IDEs should persist this in their global settings storage and send it back
+// in Settings.LDXSyncMachineConfig on initialization.
+type MachineConfigParam struct {
+	LDXSyncMachineConfig map[string]*LDXSyncField `json:"ldxSyncMachineConfig"`
+}
+
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
 	// Global settings start
@@ -726,6 +734,10 @@ type Settings struct {
 	OutputFormat                        *string              `json:"outputFormat,omitempty"`
 	AutoConfigureSnykMcpServer          string               `json:"autoConfigureSnykMcpServer,omitempty"`
 	SecureAtInceptionExecutionFrequency string               `json:"secureAtInceptionExecutionFrequency,omitempty"`
+
+	// LDX-Sync machine-wide settings - persisted by IDE, applied on startup
+	// These are security/proxy settings that must survive restarts
+	LDXSyncMachineConfig map[string]*LDXSyncField `json:"ldxSyncMachineConfig,omitempty"`
 	// Global settings end
 
 	// Folder specific settings start

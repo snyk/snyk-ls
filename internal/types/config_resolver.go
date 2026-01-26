@@ -20,6 +20,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// OrgResolverFunc is a function type that resolves the effective organization for a folder path.
+// It should return the org with full resolution logic including global fallback.
+type OrgResolverFunc func(folderPath FilePath) string
+
 // ConfigResolver is the single entry point for reading configuration values.
 // It encapsulates the resolution logic and ensures correct precedence:
 // 1. Machine-wide settings → Locked LDX-Sync > Global Config > LDX-Sync > Default
@@ -29,6 +33,7 @@ type ConfigResolver struct {
 	ldxSyncCache         *LDXSyncConfigCache
 	ldxSyncMachineConfig map[string]*LDXSyncField
 	globalSettings       *Settings
+	orgResolver          OrgResolverFunc
 	logger               *zerolog.Logger
 }
 
@@ -60,6 +65,12 @@ func (r *ConfigResolver) GetLDXSyncMachineConfig() map[string]*LDXSyncField {
 // SetGlobalSettings updates the global settings reference
 func (r *ConfigResolver) SetGlobalSettings(settings *Settings) {
 	r.globalSettings = settings
+}
+
+// SetOrgResolver sets the function used to resolve the effective organization for a folder.
+// This should be set by Config to provide full org resolution including global fallback.
+func (r *ConfigResolver) SetOrgResolver(resolver OrgResolverFunc) {
+	r.orgResolver = resolver
 }
 
 // GetValue resolves a configuration value for the given setting and folder.
@@ -139,7 +150,13 @@ func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig *
 func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig *FolderConfig) (any, ConfigSource) {
 	effectiveOrg := ""
 	if folderConfig != nil {
-		effectiveOrg = folderConfig.GetEffectiveOrg()
+		// Use orgResolver if available (provides full resolution including global fallback)
+		// Otherwise fall back to GetEffectiveOrg (which doesn't include global fallback)
+		if r.orgResolver != nil {
+			effectiveOrg = r.orgResolver(folderConfig.FolderPath)
+		} else {
+			effectiveOrg = folderConfig.GetEffectiveOrg()
+		}
 	}
 
 	var ldxField *LDXSyncField

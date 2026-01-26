@@ -283,7 +283,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 					Duration:          time.Duration(scanSpan.GetDurationMs()),
 					TimestampFinished: time.Now().UTC(),
 					Path:              folderPath,
-					IsDeltaScan:       sc.c.IsDeltaFindingsEnabled(),
+					IsDeltaScan:       sc.c.IsDeltaFindingsEnabledForFolder(folderPath),
 					SendAnalytics:     true,
 					UpdateGlobalCache: true,
 				}
@@ -310,7 +310,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 						refLogger.Debug().Msg("Skipping reference branch scan (single file scan)")
 					}
 
-					if !sc.c.IsDeltaFindingsEnabled() {
+					if !sc.c.IsDeltaFindingsEnabledForFolder(folderPath) {
 						refLogger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
 						return
 					}

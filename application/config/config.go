@@ -1559,6 +1559,8 @@ func (c *Config) InitLdxSyncOrgConfigCache() {
 	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
 	c.ldxSyncOrgConfigCache = types.NewLDXSyncConfigCache()
 	c.configResolver = types.NewConfigResolver(c.ldxSyncOrgConfigCache, nil, c.logger)
+	// Set the org resolver to use FolderOrganization which includes global fallback
+	c.configResolver.SetOrgResolver(c.FolderOrganization)
 }
 
 // GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache
@@ -1609,4 +1611,174 @@ func (c *Config) GetLdxSyncMachineConfig() map[string]*types.LDXSyncField {
 		return c.configResolver.GetLDXSyncMachineConfig()
 	}
 	return nil
+}
+
+// =============================================================================
+// Folder-Aware Config Accessors
+// These methods use ConfigResolver to get effective values considering LDX-Sync
+// =============================================================================
+
+// FilterSeverityForFolder returns the effective severity filter for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) FilterSeverityForFolder(folderPath types.FilePath) types.SeverityFilter {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.FilterSeverity() // fallback to global
+	}
+	folderConfig := c.FolderConfig(folderPath)
+	val, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+	// Only use resolver value if it came from LDX-Sync or user override
+	if source != types.ConfigSourceDefault {
+		if filter, ok := val.(*types.SeverityFilter); ok && filter != nil {
+			return *filter
+		}
+	}
+	return c.FilterSeverity() // fallback to global
+}
+
+// RiskScoreThresholdForFolder returns the effective risk score threshold for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) RiskScoreThresholdForFolder(folderPath types.FilePath) int {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.RiskScoreThreshold() // fallback to global
+	}
+	folderConfig := c.FolderConfig(folderPath)
+	val, source := resolver.GetValue(types.SettingRiskScoreThreshold, folderConfig)
+	// Only use resolver value if it came from LDX-Sync or user override
+	if source != types.ConfigSourceDefault {
+		if threshold, ok := val.(int); ok {
+			return threshold
+		}
+	}
+	return c.RiskScoreThreshold() // fallback to global
+}
+
+// IssueViewOptionsForFolder returns the effective issue view options for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IssueViewOptionsForFolder(folderPath types.FilePath) types.IssueViewOptions {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IssueViewOptions() // fallback to global
+	}
+	folderConfig := c.FolderConfig(folderPath)
+
+	openIssues, openSource := resolver.GetValue(types.SettingIssueViewOpenIssues, folderConfig)
+	ignoredIssues, ignoredSource := resolver.GetValue(types.SettingIssueViewIgnoredIssues, folderConfig)
+
+	// Start with global config values as base
+	result := c.IssueViewOptions()
+
+	// Only override if resolver returned a non-default value (i.e., from LDX-Sync or user override)
+	if openSource != types.ConfigSourceDefault {
+		if open, ok := openIssues.(bool); ok {
+			result.OpenIssues = open
+		}
+	}
+	if ignoredSource != types.ConfigSourceDefault {
+		if ignored, ok := ignoredIssues.(bool); ok {
+			result.IgnoredIssues = ignored
+		}
+	}
+	return result
+}
+
+// IsAutoScanEnabledForFolder returns whether automatic scanning is enabled for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsAutoScanEnabledForFolder(folderPath types.FilePath) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IsAutoScanEnabled() // fallback to global
+	}
+	folderConfig := c.FolderConfig(folderPath)
+	val, source := resolver.GetValue(types.SettingScanAutomatic, folderConfig)
+	if source != types.ConfigSourceDefault {
+		if enabled, ok := val.(bool); ok {
+			return enabled
+		}
+	}
+	return c.IsAutoScanEnabled() // fallback to global
+}
+
+// IsDeltaFindingsEnabledForFolder returns whether delta findings is enabled for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsDeltaFindingsEnabledForFolder(folderPath types.FilePath) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IsDeltaFindingsEnabled() // fallback to global
+	}
+	folderConfig := c.FolderConfig(folderPath)
+	val, source := resolver.GetValue(types.SettingScanNetNew, folderConfig)
+	if source != types.ConfigSourceDefault {
+		if enabled, ok := val.(bool); ok {
+			return enabled
+		}
+	}
+	return c.IsDeltaFindingsEnabled() // fallback to global
+}
+
+// IsSnykCodeEnabledForFolder returns whether Snyk Code is enabled for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsSnykCodeEnabledForFolder(folderPath types.FilePath) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IsSnykCodeEnabled() // fallback to global
+	}
+	folderConfig := c.FolderConfig(folderPath)
+	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
+	if source != types.ConfigSourceDefault {
+		if products, ok := val.([]string); ok {
+			for _, p := range products {
+				if p == "code" {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return c.IsSnykCodeEnabled() // fallback to global
+}
+
+// IsSnykOssEnabledForFolder returns whether Snyk OSS is enabled for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsSnykOssEnabledForFolder(folderPath types.FilePath) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IsSnykOssEnabled() // fallback to global
+	}
+	folderConfig := c.FolderConfig(folderPath)
+	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
+	if source != types.ConfigSourceDefault {
+		if products, ok := val.([]string); ok {
+			for _, p := range products {
+				if p == "oss" {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return c.IsSnykOssEnabled() // fallback to global
+}
+
+// IsSnykIacEnabledForFolder returns whether Snyk IaC is enabled for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsSnykIacEnabledForFolder(folderPath types.FilePath) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IsSnykIacEnabled() // fallback to global
+	}
+	folderConfig := c.FolderConfig(folderPath)
+	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
+	if source != types.ConfigSourceDefault {
+		if products, ok := val.([]string); ok {
+			for _, p := range products {
+				if p == "iac" {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return c.IsSnykIacEnabled() // fallback to global
 }

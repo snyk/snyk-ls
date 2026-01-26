@@ -203,6 +203,16 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
 	updateMcpConfiguration(c, settings, triggerSource)
+	updateLDXSyncMachineConfig(c, settings)
+}
+
+func updateLDXSyncMachineConfig(c *config.Config, settings types.Settings) {
+	if len(settings.LDXSyncMachineConfig) > 0 {
+		c.Logger().Debug().
+			Int("fieldCount", len(settings.LDXSyncMachineConfig)).
+			Msg("Loading LDX-Sync machine config from settings")
+		c.UpdateLdxSyncMachineConfig(settings.LDXSyncMachineConfig)
+	}
 }
 
 func updateFormat(c *config.Config, settings types.Settings) {

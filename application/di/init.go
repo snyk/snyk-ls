@@ -92,7 +92,7 @@ func Init() {
 func initDomain(c *config.Config) {
 	hoverService = hover.NewDefaultService(c)
 	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
-	ldxSyncService = command.NewLdxSyncService()
+	ldxSyncService = command.NewLdxSyncService(notifier)
 }
 
 func initInfrastructure(c *config.Config) {

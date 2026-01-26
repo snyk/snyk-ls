@@ -94,7 +94,7 @@ func TestInit(t *testing.T) {
 	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
 	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(c)
-	ldxSyncService = command.NewLdxSyncService()
+	ldxSyncService = command.NewLdxSyncService(notifier)
 	mockCommandService := types.NewCommandServiceMock()
 	command.SetService(mockCommandService)
 	// don't use getters or it'll deadlock
