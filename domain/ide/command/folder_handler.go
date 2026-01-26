@@ -90,7 +90,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 			}
 		}
 
-		folderConfigs = append(folderConfigs, *folderConfig)
+		folderConfigs = append(folderConfigs, folderConfig.SanitizeForIDE())
 	}
 
 	if folderConfigs == nil {

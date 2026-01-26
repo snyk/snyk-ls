@@ -1613,6 +1613,16 @@ func (c *Config) GetLdxSyncMachineConfig() map[string]*types.LDXSyncField {
 	return nil
 }
 
+// UpdateGlobalSettingsInResolver updates the global settings reference in ConfigResolver
+// This should be called when settings are received from the IDE
+func (c *Config) UpdateGlobalSettingsInResolver(settings *types.Settings) {
+	c.ldxSyncOrgConfigCacheMutex.Lock()
+	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	if c.configResolver != nil {
+		c.configResolver.SetGlobalSettings(settings)
+	}
+}
+
 // =============================================================================
 // Folder-Aware Config Accessors
 // These methods use ConfigResolver to get effective values considering LDX-Sync

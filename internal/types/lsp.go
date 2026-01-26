@@ -660,6 +660,17 @@ func (fc *FolderConfig) ResetToDefault(settingName string) {
 	}
 }
 
+// SanitizeForIDE returns a copy of the FolderConfig with LS-managed fields cleared.
+// This should be used when sending folder configs to the IDE, as these fields
+// are managed by the LS and should not be exposed to or modified by the IDE.
+func (fc *FolderConfig) SanitizeForIDE() FolderConfig {
+	sanitized := *fc
+	sanitized.UserOverrides = nil
+	sanitized.FeatureFlags = nil
+	sanitized.SastSettings = nil
+	return sanitized
+}
+
 // GetEffectiveOrg returns the effective organization for this folder config.
 // Returns the org that should be used for LDX-Sync lookups:
 // - If OrgSetByUser is true: returns PreferredOrg (may be empty, meaning use global)
@@ -683,14 +694,6 @@ type Pair struct {
 
 type FolderConfigsParam struct {
 	FolderConfigs []FolderConfig `json:"folderConfigs"`
-}
-
-// MachineConfigParam is sent to the IDE when machine-wide LDX-Sync settings change.
-// Machine config can be modified via MDM, IDE settings, or LDX-Sync.
-// IDEs should persist this in their global settings storage and send it back
-// in Settings.LDXSyncMachineConfig on initialization.
-type MachineConfigParam struct {
-	LDXSyncMachineConfig map[string]*LDXSyncField `json:"ldxSyncMachineConfig"`
 }
 
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
@@ -734,10 +737,6 @@ type Settings struct {
 	OutputFormat                        *string              `json:"outputFormat,omitempty"`
 	AutoConfigureSnykMcpServer          string               `json:"autoConfigureSnykMcpServer,omitempty"`
 	SecureAtInceptionExecutionFrequency string               `json:"secureAtInceptionExecutionFrequency,omitempty"`
-
-	// LDX-Sync machine-wide settings - persisted by IDE, applied on startup
-	// These are security/proxy settings that must survive restarts
-	LDXSyncMachineConfig map[string]*LDXSyncField `json:"ldxSyncMachineConfig,omitempty"`
 	// Global settings end
 
 	// Folder specific settings start

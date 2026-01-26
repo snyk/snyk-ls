@@ -177,6 +177,9 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 		return
 	}
 
+	// Update ConfigResolver with global settings for machine-scope resolution
+	c.UpdateGlobalSettingsInResolver(&settings)
+
 	updateSeverityFilter(c, settings.FilterSeverity, triggerSource)
 	updateRiskScoreThreshold(c, settings, triggerSource)
 	updateIssueViewOptions(c, settings.IssueViewOptions, triggerSource)
@@ -203,16 +206,6 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
 	updateMcpConfiguration(c, settings, triggerSource)
-	updateLDXSyncMachineConfig(c, settings)
-}
-
-func updateLDXSyncMachineConfig(c *config.Config, settings types.Settings) {
-	if len(settings.LDXSyncMachineConfig) > 0 {
-		c.Logger().Debug().
-			Int("fieldCount", len(settings.LDXSyncMachineConfig)).
-			Msg("Loading LDX-Sync machine config from settings")
-		c.UpdateLdxSyncMachineConfig(settings.LDXSyncMachineConfig)
-	}
 }
 
 func updateFormat(c *config.Config, settings types.Settings) {
@@ -295,10 +288,12 @@ func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMa
 		folderConfig = types.FolderConfig{FolderPath: path}
 	}
 
-	// Never trust the IDE for what the FFs and SAST settings are - always use stored values
+	// Never trust the IDE for LS-managed fields - always use stored values
+	// These are managed by the LS and should not be overwritten by IDE
 	if storedConfig != nil {
 		folderConfig.FeatureFlags = storedConfig.FeatureFlags
 		folderConfig.SastSettings = storedConfig.SastSettings
+		folderConfig.UserOverrides = storedConfig.UserOverrides
 	}
 
 	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
@@ -368,7 +363,11 @@ func handleFolderCacheClearing(c *config.Config, path types.FilePath, folderConf
 func sendFolderConfigUpdateIfNeeded(notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
 	// Don't send folder configs on initialize, since initialized will always send them.
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
-		notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
+		configsForIDE := make([]types.FolderConfig, len(folderConfigs))
+		for i, fc := range folderConfigs {
+			configsForIDE[i] = fc.SanitizeForIDE()
+		}
+		notifier.Send(types.FolderConfigsParam{FolderConfigs: configsForIDE})
 	}
 }
 

@@ -27,7 +27,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -39,13 +38,11 @@ type LdxSyncService interface {
 }
 
 // DefaultLdxSyncService is the default implementation of LdxSyncService
-type DefaultLdxSyncService struct {
-	notifier notification.Notifier
-}
+type DefaultLdxSyncService struct{}
 
 // NewLdxSyncService creates a new LdxSyncService
-func NewLdxSyncService(notifier notification.Notifier) LdxSyncService {
-	return &DefaultLdxSyncService{notifier: notifier}
+func NewLdxSyncService() LdxSyncService {
+	return &DefaultLdxSyncService{}
 }
 
 // RefreshConfigFromLdxSync refreshes the user configuration from LDX-Sync for all workspace folders in parallel
@@ -159,21 +156,16 @@ func (s *DefaultLdxSyncService) updateMachineConfig(c *config.Config, results ma
 		}
 
 		// Extract machine-scope settings from the first valid response
+		// These are stored in LS memory only for metadata (locked/enforced status)
+		// The actual values are applied to Config via existing update functions
 		machineConfig := types.ExtractMachineSettings(result.Config)
 		if len(machineConfig) > 0 {
 			c.UpdateLdxSyncMachineConfig(machineConfig)
 
-			// Send machine config to IDE for persistence
-			if s.notifier != nil {
-				s.notifier.Send(types.MachineConfigParam{
-					LDXSyncMachineConfig: machineConfig,
-				})
-			}
-
 			logger.Debug().
 				Str("folder", string(folderPath)).
 				Int("fieldCount", len(machineConfig)).
-				Msg("Updated machine config from LDX-Sync and notified IDE")
+				Msg("Updated machine config metadata from LDX-Sync")
 			return // Only need to extract once since machine settings are global
 		}
 	}
