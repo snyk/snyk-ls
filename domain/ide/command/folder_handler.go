@@ -31,7 +31,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -43,16 +42,16 @@ const (
 	DontTrust = "Don't trust folders"
 )
 
-func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, authService authentication.AuthenticationService) {
+func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, ldxSyncService LdxSyncService) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	sendFolderConfigs(c, notifier, featureFlagService)
+	sendFolderConfigs(c, notifier, featureFlagService, ldxSyncService)
 
 	HandleUntrustedFolders(ctx, c, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
 }
 
-func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service) {
+func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, ldxSyncService LdxSyncService) {
 	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
 	var folderConfigs []types.FolderConfig
@@ -70,7 +69,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 
 		// Always update AutoDeterminedOrg from LDX-Sync (even for folders where OrgSetByUser is true)
 		// This ensures we always know what LDX-Sync recommends, regardless of whether the user has opted out
-		org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath)
+		org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath, ldxSyncService)
 		if err != nil {
 			logger.Err(err).Msg("unable to resolve organization, continuing...")
 		} else {
@@ -102,16 +101,15 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 
 // GetOrgFromCachedLdxSync retrieves the organization from the cached LDX-Sync result
 // Falls back to global organization if no cache entry exists
-func GetOrgFromCachedLdxSync(c *config.Config, folderPath types.FilePath) (ldx_sync_config.Organization, error) {
-	engine := c.Engine()
-	gafConfig := engine.GetConfiguration()
+func GetOrgFromCachedLdxSync(c *config.Config, folderPath types.FilePath, ldxSyncService LdxSyncService) (ldx_sync_config.Organization, error) {
+	gafConfig := c.Engine().GetConfiguration()
 
 	// Get cached result
 	cachedResult := c.GetLdxSyncResult(folderPath)
 
 	// If we have a cached result, use it to resolve the org
 	if cachedResult != nil {
-		return ldx_sync_config.ResolveOrgFromUserConfig(engine, *cachedResult)
+		return ldxSyncService.ResolveOrg(c, *cachedResult)
 	}
 
 	// Fall back to global org if no cache entry

@@ -34,6 +34,7 @@ import (
 // LdxSyncService provides LDX-Sync configuration refresh functionality
 type LdxSyncService interface {
 	RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder)
+	ResolveOrg(c *config.Config, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error)
 }
 
 // DefaultLdxSyncService is the default implementation of LdxSyncService
@@ -97,4 +98,9 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 
 	// Update cache with all results
 	c.UpdateLdxSyncCache(results)
+}
+
+// ResolveOrg resolves the organization from an LDX-Sync result using GAF's ResolveOrgFromUserConfig
+func (s *DefaultLdxSyncService) ResolveOrg(c *config.Config, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error) {
+	return ldx_sync_config.ResolveOrgFromUserConfig(c.Engine(), result)
 }
