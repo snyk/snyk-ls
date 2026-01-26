@@ -131,3 +131,30 @@ func Test_directoryDiagnosticsCommand_Execute_includesConfiguredCLIPath(t *testi
 	assert.Contains(t, responseStr, tempDir)
 	assert.Contains(t, responseStr, "Configured CLI Path")
 }
+
+func Test_directoryDiagnosticsCommand_Execute_integration(t *testing.T) {
+	c := testutil.IntegTest(t)
+
+	cut := directoryDiagnosticsCommand{
+		command: types.CommandData{
+			Title:     "Directory Diagnostics",
+			CommandId: types.DirectoryDiagnosticsCommand,
+			Arguments: []any{},
+		},
+		c: c,
+	}
+
+	response, err := cut.Execute(t.Context())
+	require.NoError(t, err)
+
+	// Verify response is a string
+	responseStr, ok := response.(string)
+	require.True(t, ok, "Response should be a string")
+	require.NotEmpty(t, responseStr)
+
+	// Verify it contains expected directory diagnostics output
+	assert.Contains(t, responseStr, "IDE Directory Diagnostics")
+	assert.Contains(t, responseStr, "Current User Information")
+	assert.Contains(t, responseStr, "Potential Snyk Used Configuration and CLI Download Directories")
+	assert.Contains(t, responseStr, "Directory:")
+}
