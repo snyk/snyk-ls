@@ -54,7 +54,7 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 
 		// Refresh LDX-Sync configuration after successful authentication
 		cmd.ldxSyncService.RefreshConfigFromLdxSync(cmd.c, cmd.c.Workspace().Folders())
-		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService)
+		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.ldxSyncService)
 
 		return token, nil
 	}

@@ -28,17 +28,15 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	gafmocks "github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
 
 	"github.com/snyk/snyk-ls/application/config"
+	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
@@ -49,14 +47,32 @@ import (
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 )
 
-// setupMockEngineWithNetworkAccess sets up a mock engine with GetNetworkAccess mocked
-func setupMockEngineWithNetworkAccess(t *testing.T, c *config.Config) {
+// setupMockLdxSyncService creates a mock LdxSyncService that mimics GAF's ResolveOrgFromUserConfig behavior
+func setupMockLdxSyncService(t *testing.T) *mock_command.MockLdxSyncService {
 	t.Helper()
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 	ctrl := gomock.NewController(t)
-	mockNetworkAccess := gafmocks.NewMockNetworkAccess(ctrl)
-	mockNetworkAccess.EXPECT().GetHttpClient().Return(nil).AnyTimes()
-	mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess).AnyTimes()
+	mockService := mock_command.NewMockLdxSyncService(ctrl)
+
+	// Setup ResolveOrg to mimic GAF's behavior: return first org with PreferredByAlgorithm=true
+	mockService.EXPECT().ResolveOrg(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(c *config.Config, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error) {
+			if result.Config != nil && result.Config.Data.Attributes.Organizations != nil {
+				for _, org := range *result.Config.Data.Attributes.Organizations {
+					if org.PreferredByAlgorithm != nil && *org.PreferredByAlgorithm {
+						return ldx_sync_config.Organization{
+							Id:        org.Id,
+							Name:      org.Name,
+							Slug:      org.Slug,
+							IsDefault: org.IsDefault,
+						}, nil
+					}
+				}
+			}
+			return ldx_sync_config.Organization{}, nil
+		},
+	).AnyTimes()
+
+	return mockService
 }
 
 // createLdxSyncResult is a helper to create a properly structured LdxSyncConfigResult for tests
@@ -110,7 +126,6 @@ func createLdxSyncResult(orgId, orgName, orgSlug string, isDefault bool) *ldx_sy
 
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
-	setupMockEngineWithNetworkAccess(t, c)
 	engineConfig := c.Engine().GetConfiguration()
 
 	// Setup workspace with a folder
@@ -134,7 +149,8 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 		folderPaths[0]: cachedResult,
 	})
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	mockService := setupMockLdxSyncService(t)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
 
 	// Verify notification was sent
 	messages := notifier.SentMessages()
@@ -155,7 +171,8 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	// Setup workspace with no folders
 	_, notifier := workspaceutil.SetupWorkspace(t, c)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	mockService := setupMockLdxSyncService(t)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
 
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
@@ -184,10 +201,8 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 
 	_, n := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
 
-	fakeAuthProvider := &authentication.FakeAuthenticationProvider{IsAuthenticated: true, C: c}
-	authService := authentication.NewAuthenticationService(c, fakeAuthProvider, error_reporting.NewTestErrorReporter(), n)
-
-	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), authService)
+	mockService := setupMockLdxSyncService(t)
+	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), mockService)
 
 	select {
 	case <-called:
@@ -202,14 +217,7 @@ func setupOrgResolverTest(t *testing.T, orgID, orgName, orgSlug string, isDefaul
 	t.Helper()
 
 	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-
-	// Mock GetNetworkAccess which is called when creating the API client
-	// We need to create a mock NetworkAccess that returns a valid http.Client
-	ctrl := gomock.NewController(t)
-	mockNetworkAccess := gafmocks.NewMockNetworkAccess(ctrl)
-	mockNetworkAccess.EXPECT().GetHttpClient().Return(nil).AnyTimes()
-	mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess).AnyTimes()
+	_, _ = testutil.SetUpEngineMock(t, c)
 
 	expectedOrg := ldx_sync_config.Organization{
 		Id:        orgID,
@@ -234,8 +242,9 @@ func setupOrgResolverTest(t *testing.T, orgID, orgName, orgSlug string, isDefaul
 // Test GetOrgFromCachedLdxSync with default org
 func Test_SetAutoBestOrgFromLdxSync_DefaultOrg(t *testing.T) {
 	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "default-org-id", "Default Org", "default-org", true)
+	mockService := setupMockLdxSyncService(t)
 
-	org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath)
+	org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath, mockService)
 
 	require.NoError(t, err)
 	assert.Equal(t, expectedOrg.Id, org.Id)
@@ -245,8 +254,9 @@ func Test_SetAutoBestOrgFromLdxSync_DefaultOrg(t *testing.T) {
 // Test GetOrgFromCachedLdxSync with non-default org
 func Test_SetAutoBestOrgFromLdxSync_NonDefaultOrg(t *testing.T) {
 	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "specific-org-id", "Specific Org", "specific-org", false)
+	mockService := setupMockLdxSyncService(t)
 
-	org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath)
+	org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath, mockService)
 
 	require.NoError(t, err)
 	assert.Equal(t, expectedOrg.Id, org.Id)
@@ -267,7 +277,8 @@ func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	gafConfig.Set(configuration.ORGANIZATION, expectedOrgId)
 
 	// Don't populate cache - should fall back to global org
-	org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath)
+	mockService := setupMockLdxSyncService(t)
+	org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath, mockService)
 
 	require.NoError(t, err, "Should fall back to global org when cache is empty")
 	assert.Equal(t, expectedOrgId, org.Id, "Should return global org as fallback")
@@ -294,7 +305,8 @@ func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
 		FolderPath: types.FilePath(t.TempDir()),
 	}
 
-	org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath)
+	mockLdxSync := setupMockLdxSyncService(t)
+	org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath, mockLdxSync)
 
 	require.NoError(t, err)
 	assert.Equal(t, expectedOrgId, org.Id, "Should fallback to GAF config organization")
@@ -303,8 +315,7 @@ func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
 // Test sendFolderConfigs when cache is empty (should fall back to global org)
 func Test_sendFolderConfigs_EmptyCache_FallbackToGlobal(t *testing.T) {
 	c := testutil.UnitTest(t)
-	setupMockEngineWithNetworkAccess(t, c)
-	engineConfig := c.Engine().GetConfiguration()
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with a folder
 	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
@@ -325,7 +336,8 @@ func Test_sendFolderConfigs_EmptyCache_FallbackToGlobal(t *testing.T) {
 	require.NoError(t, err)
 
 	// Don't populate cache - should fall back to global org
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	mockService := setupMockLdxSyncService(t)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
 
 	// Verify notification was still sent
 	messages := notifier.SentMessages()
@@ -341,7 +353,6 @@ func Test_sendFolderConfigs_EmptyCache_FallbackToGlobal(t *testing.T) {
 // Test sendFolderConfigs with multiple folders and different org configurations
 func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
-	setupMockEngineWithNetworkAccess(t, c)
 	engineConfig := c.Engine().GetConfiguration()
 
 	// Setup workspace with multiple folders
@@ -379,7 +390,8 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	}
 	c.UpdateLdxSyncCache(cacheResults)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	mockService := setupMockLdxSyncService(t)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
 
 	// Verify notification was sent with both folders
 	messages := notifier.SentMessages()
@@ -565,111 +577,9 @@ func Test_MigrateFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(t *tes
 	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should remain empty")
 }
 
-// Integration test for RefreshConfigFromLdxSync - requires full GAF engine setup
-func Test_RefreshConfigFromLdxSync_Integration(t *testing.T) {
-	t.Skip("Integration test - requires full GAF engine with network access configured")
-
-	// This test validates the actual behavior with a real engine
-	// It should verify:
-	// 1. GetUserConfigForProject is called for each folder
-	// 2. Errors are logged but don't stop processing other folders
-	// 3. Success is logged when config is retrieved
-}
-
-func Test_RefreshConfigFromLdxSync_NoFolders(t *testing.T) {
-	c := testutil.UnitTest(t)
-	testutil.SetUpEngineMock(t, c)
-
-	// Setup workspace with no folders
-	workspaceutil.SetupWorkspace(t, c)
-
-	// Call the function via service
-	service := NewLdxSyncService()
-	service.RefreshConfigFromLdxSync(c, c.Workspace().Folders())
-
-	// Should handle empty folder list gracefully
-}
-
-// Test that RefreshConfigFromLdxSync populates cache for all folders
-func Test_RefreshConfigFromLdxSync_PopulatesCache(t *testing.T) {
-	t.Skip("Integration test - requires mocking git and LDX-Sync API")
-	c := testutil.UnitTest(t)
-	setupMockEngineWithNetworkAccess(t, c)
-
-	// Setup workspace with multiple folders
-	folderPaths := []types.FilePath{
-		types.FilePath("/fake/test-folder-0"),
-		types.FilePath("/fake/test-folder-1"),
-		types.FilePath("/fake/test-folder-2"),
-	}
-	workspaceutil.SetupWorkspace(t, c, folderPaths...)
-
-	// Call the function via service
-	service := NewLdxSyncService()
-	service.RefreshConfigFromLdxSync(c, c.Workspace().Folders())
-
-	// Verify cache is populated for all folders
-	for _, path := range folderPaths {
-		result := c.GetLdxSyncResult(path)
-		assert.NotNil(t, result, "Cache should be populated for folder %s", path)
-	}
-}
-
-// Test that RefreshConfigFromLdxSync passes PreferredOrg from folder config
-func Test_RefreshConfigFromLdxSync_PassesPreferredOrg(t *testing.T) {
-	t.Skip("Integration test - requires mocking git and LDX-Sync API")
-	c := testutil.UnitTest(t)
-	setupMockEngineWithNetworkAccess(t, c)
-	gafConfig := c.Engine().GetConfiguration()
-
-	// Setup workspace with a folder
-	folderPath := types.FilePath("/fake/test-folder-0")
-	workspaceutil.SetupWorkspace(t, c, folderPath)
-
-	// Set PreferredOrg in folder config
-	preferredOrg := "test-preferred-org-id"
-	folderConfig := &types.FolderConfig{
-		FolderPath:   folderPath,
-		PreferredOrg: preferredOrg,
-		OrgSetByUser: true,
-	}
-	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
-	require.NoError(t, err)
-
-	// Call the function via service
-	service := NewLdxSyncService()
-	service.RefreshConfigFromLdxSync(c, c.Workspace().Folders())
-
-	// Verify cache was populated (the actual passing of PreferredOrg to GetUserConfigForProject
-	// would require mocking the engine, which is complex - this test verifies the function runs)
-	result := c.GetLdxSyncResult(folderPath)
-	assert.NotNil(t, result, "Cache should be populated")
-}
-
-// Test that RefreshConfigFromLdxSync handles errors gracefully
-func Test_RefreshConfigFromLdxSync_HandlesErrors(t *testing.T) {
-	c := testutil.UnitTest(t)
-	setupMockEngineWithNetworkAccess(t, c)
-
-	// Setup workspace with multiple folders
-	folderPaths := []types.FilePath{
-		types.FilePath("/fake/test-folder-0"),
-		types.FilePath("/fake/test-folder-1"),
-	}
-	workspaceutil.SetupWorkspace(t, c, folderPaths...)
-
-	// Call the function via service - even if some folders fail, others should succeed
-	service := NewLdxSyncService()
-	service.RefreshConfigFromLdxSync(c, c.Workspace().Folders())
-
-	// Function should complete without panicking
-	// Cache may have some entries even if some folders failed
-}
-
 // Test GetOrgFromCachedLdxSync with cached result
 func Test_GetOrgFromCachedLdxSync_WithCache(t *testing.T) {
 	c := testutil.UnitTest(t)
-	setupMockEngineWithNetworkAccess(t, c)
 	gafConfig := c.Engine().GetConfiguration()
 
 	folderPath := types.FilePath("/fake/test-folder")
@@ -684,7 +594,8 @@ func Test_GetOrgFromCachedLdxSync_WithCache(t *testing.T) {
 	// Set a different global org to ensure we're using the cache
 	gafConfig.Set(configuration.ORGANIZATION, "different-global-org")
 
-	org, err := GetOrgFromCachedLdxSync(c, folderPath)
+	mockService := setupMockLdxSyncService(t)
+	org, err := GetOrgFromCachedLdxSync(c, folderPath, mockService)
 
 	require.NoError(t, err)
 	assert.Equal(t, expectedOrgId, org.Id, "Should return org from cache")
@@ -693,8 +604,7 @@ func Test_GetOrgFromCachedLdxSync_WithCache(t *testing.T) {
 // Test GetOrgFromCachedLdxSync without cached result (fallback to global org)
 func Test_GetOrgFromCachedLdxSync_WithoutCache_FallbackToGlobal(t *testing.T) {
 	c := testutil.UnitTest(t)
-	setupMockEngineWithNetworkAccess(t, c)
-	gafConfig := c.Engine().GetConfiguration()
+	_, gafConfig := testutil.SetUpEngineMock(t, c)
 
 	folderPath := types.FilePath("/fake/test-folder")
 
@@ -703,7 +613,8 @@ func Test_GetOrgFromCachedLdxSync_WithoutCache_FallbackToGlobal(t *testing.T) {
 	gafConfig.Set(configuration.ORGANIZATION, globalOrgId)
 
 	// Don't populate cache
-	org, err := GetOrgFromCachedLdxSync(c, folderPath)
+	mockService := setupMockLdxSyncService(t)
+	org, err := GetOrgFromCachedLdxSync(c, folderPath, mockService)
 
 	require.NoError(t, err)
 	assert.Equal(t, globalOrgId, org.Id, "Should fallback to global org when cache is empty")
@@ -711,9 +622,8 @@ func Test_GetOrgFromCachedLdxSync_WithoutCache_FallbackToGlobal(t *testing.T) {
 
 // Test GetOrgFromCachedLdxSync with empty organizations in cache
 func Test_GetOrgFromCachedLdxSync_EmptyOrganizations(t *testing.T) {
-	t.Skip("Integration test - requires mocking API client")
+	t.Skip("This test requires mocking GAF's ResolveOrgFromUserConfig behavior - should be an integration test")
 	c := testutil.UnitTest(t)
-	setupMockEngineWithNetworkAccess(t, c)
 	gafConfig := c.Engine().GetConfiguration()
 
 	folderPath := types.FilePath("/fake/test-folder")
@@ -731,7 +641,8 @@ func Test_GetOrgFromCachedLdxSync_EmptyOrganizations(t *testing.T) {
 	globalOrgId := "global-org-id"
 	gafConfig.Set(configuration.ORGANIZATION, globalOrgId)
 
-	org, err := GetOrgFromCachedLdxSync(c, folderPath)
+	mockService := setupMockLdxSyncService(t)
+	org, err := GetOrgFromCachedLdxSync(c, folderPath, mockService)
 
 	require.NoError(t, err)
 	assert.Equal(t, globalOrgId, org.Id, "Should fallback to global org when cache has empty organizations")

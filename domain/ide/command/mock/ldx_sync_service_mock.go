@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	ldx_sync_config "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	config "github.com/snyk/snyk-ls/application/config"
 	types "github.com/snyk/snyk-ls/internal/types"
 )
@@ -45,4 +46,19 @@ func (m *MockLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, workspac
 func (mr *MockLdxSyncServiceMockRecorder) RefreshConfigFromLdxSync(c, workspaceFolders interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshConfigFromLdxSync", reflect.TypeOf((*MockLdxSyncService)(nil).RefreshConfigFromLdxSync), c, workspaceFolders)
+}
+
+// ResolveOrg mocks base method.
+func (m *MockLdxSyncService) ResolveOrg(c *config.Config, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResolveOrg", c, result)
+	ret0, _ := ret[0].(ldx_sync_config.Organization)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResolveOrg indicates an expected call of ResolveOrg.
+func (mr *MockLdxSyncServiceMockRecorder) ResolveOrg(c, result interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveOrg", reflect.TypeOf((*MockLdxSyncService)(nil).ResolveOrg), c, result)
 }
