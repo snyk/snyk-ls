@@ -58,7 +58,7 @@ const (
 	ExecuteCLICommand = "snyk.executeCLI"
 
 	// diagnostic commands
-	ConnectivityCheckCommand    = "snyk.performConnectivityCheck"
+	ConnectivityCheckCommand    = "snyk.diagnostics.checkConnectivity"
 	DirectoryDiagnosticsCommand = "snyk.diagnostics.checkDirectories"
 )
 

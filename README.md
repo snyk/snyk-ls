@@ -451,7 +451,7 @@ Right now the language server supports the following actions:
   - See [Configuration Dialog Integration Guide](docs/configuration-dialog.md) for full integration details.
 
 - `Connectivity Check` Performs comprehensive connectivity diagnostics including network checks, proxy detection, authentication, and organization access.
-  - command: `snyk.performConnectivityCheck`
+  - command: `snyk.diagnostics.checkConnectivity`
   - args: empty
   - returns: string (formatted connectivity check results with no ANSI colors)
   - Checks performed:
