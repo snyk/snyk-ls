@@ -75,18 +75,6 @@ func (mr *MockWorkspaceMockRecorder) Clear() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clear", reflect.TypeOf((*MockWorkspace)(nil).Clear))
 }
 
-// ClearIssuesByType mocks base method.
-func (m *MockWorkspace) ClearIssuesByType(arg0 product.FilterableIssueType) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ClearIssuesByType", arg0)
-}
-
-// ClearIssuesByType indicates an expected call of ClearIssuesByType.
-func (mr *MockWorkspaceMockRecorder) ClearIssuesByType(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearIssuesByType", reflect.TypeOf((*MockWorkspace)(nil).ClearIssuesByType), arg0)
-}
-
 // DeleteFile mocks base method.
 func (m *MockWorkspace) DeleteFile(arg0 types.FilePath) {
 	m.ctrl.T.Helper()

@@ -195,8 +195,9 @@ func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Serv
 		}
 
 		command.HandleFolders(c, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.LdxSyncService())
-		if c.IsAutoScanEnabled() {
-			for _, f := range changedFolders {
+		for _, f := range changedFolders {
+			folderConfig := c.FolderConfig(f.Path())
+			if c.IsAutoScanEnabledForFolder(folderConfig) {
 				go f.ScanFolder(ctx)
 			}
 		}
@@ -680,7 +681,8 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 			return nil, nil
 		}
 
-		filteredIssues := fip.FilterIssues(fip.Issues(), c.DisplayableIssueTypes())
+		folderConfig := c.FolderConfig(folder.Path())
+		filteredIssues := fip.FilterIssues(fip.Issues(), c.DisplayableIssueTypesForFolder(folderConfig))
 
 		if len(filteredIssues) > 0 {
 			logger.Debug().Msg("Sending cached issues")
@@ -704,8 +706,6 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		logger := c.Logger().With().Str("method", "TextDocumentDidSaveHandler").Logger()
 		logger.Debug().Interface("params", params).Msg("Receiving")
 
-		autoScanEnabled := c.IsAutoScanEnabled()
-
 		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
@@ -719,6 +719,9 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 			logger.Warn().Msg(string("folder not trusted for file " + filePath))
 			return nil, nil
 		}
+
+		folderConfig := c.FolderConfig(folder.Path())
+		autoScanEnabled := c.IsAutoScanEnabledForFolder(folderConfig)
 
 		if autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
 			go folder.ScanFolder(bgCtx)

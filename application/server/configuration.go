@@ -38,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -154,16 +155,28 @@ func InitializeSettings(c *config.Config, settings types.Settings) {
 }
 
 func UpdateSettings(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	previouslyEnabledProducts := c.DisplayableIssueTypes()
+	ws := c.Workspace()
+
+	// Capture "before" state per folder
+	previousState := make(map[types.FilePath]map[product.FilterableIssueType]bool)
+	if ws != nil {
+		for _, folder := range ws.Folders() {
+			folderConfig := c.FolderConfig(folder.Path())
+			previousState[folder.Path()] = c.DisplayableIssueTypesForFolder(folderConfig)
+		}
+	}
+
 	writeSettings(c, settings, triggerSource)
 
-	// If a product was removed, clear all issues for this product
-	ws := c.Workspace()
+	// If a product was removed for a folder, clear all issues for that product in that folder
 	if ws != nil {
-		newSupportedProducts := c.DisplayableIssueTypes()
-		for removedIssueType, wasSupported := range previouslyEnabledProducts {
-			if wasSupported && !newSupportedProducts[removedIssueType] {
-				ws.ClearIssuesByType(removedIssueType)
+		for _, folder := range ws.Folders() {
+			folderConfig := c.FolderConfig(folder.Path())
+			newState := c.DisplayableIssueTypesForFolder(folderConfig)
+			for issueType, wasEnabled := range previousState[folder.Path()] {
+				if wasEnabled && !newState[issueType] {
+					folder.ClearDiagnosticsByIssueType(issueType)
+				}
 			}
 		}
 	}

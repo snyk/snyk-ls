@@ -417,13 +417,14 @@ func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir types.Fi
 	}
 }
 
-func Test_IsEnabled(t *testing.T) {
+func Test_IsEnabledForFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 	scanner := &Scanner{errorReporter: newTestCodeErrorReporter(), C: c}
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
 			c.SetSnykCodeEnabled(true)
-			enabled := scanner.IsEnabled()
+			enabled := scanner.IsEnabledForFolder(folderConfig)
 			assert.True(t, enabled)
 		},
 	)
@@ -431,7 +432,7 @@ func Test_IsEnabled(t *testing.T) {
 		"should return true if Snyk Code Security is enabled", func(t *testing.T) {
 			c.SetSnykCodeEnabled(false)
 			c.EnableSnykCodeSecurity(true)
-			enabled := scanner.IsEnabled()
+			enabled := scanner.IsEnabledForFolder(folderConfig)
 			assert.True(t, enabled)
 		},
 	)
@@ -440,7 +441,7 @@ func Test_IsEnabled(t *testing.T) {
 		func(t *testing.T) {
 			c.SetSnykCodeEnabled(false)
 			c.EnableSnykCodeSecurity(false)
-			enabled := scanner.IsEnabled()
+			enabled := scanner.IsEnabledForFolder(folderConfig)
 			assert.False(t, enabled)
 		},
 	)

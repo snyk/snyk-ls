@@ -147,8 +147,8 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 	return &scanner
 }
 
-func (cliScanner *CLIScanner) IsEnabled() bool {
-	return cliScanner.config.IsSnykOssEnabled()
+func (cliScanner *CLIScanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	return cliScanner.config.IsSnykOssEnabledForFolder(folderConfig)
 }
 
 func (cliScanner *CLIScanner) Product() product.Product {
@@ -607,7 +607,8 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 	go func() {
 		select {
 		case <-timer.C:
-			if !cliScanner.IsEnabled() {
+			folderConfig := cliScanner.config.FolderConfig(path)
+			if !cliScanner.IsEnabledForFolder(folderConfig) {
 				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
 				return
 			}

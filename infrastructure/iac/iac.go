@@ -87,8 +87,8 @@ func New(c *config.Config, instrumentor performance.Instrumentor, errorReporter 
 	}
 }
 
-func (iac *Scanner) IsEnabled() bool {
-	return config.CurrentConfig().IsSnykIacEnabled()
+func (iac *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	return config.CurrentConfig().IsSnykIacEnabledForFolder(folderConfig)
 }
 
 func (iac *Scanner) Product() product.Product {

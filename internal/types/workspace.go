@@ -51,7 +51,6 @@ type Workspace interface {
 	ScanWorkspace(ctx context.Context)
 	ChangeWorkspaceFolders(params DidChangeWorkspaceFoldersParams) []Folder
 	GetFolderTrust() (trusted []Folder, untrusted []Folder)
-	ClearIssuesByType(removedType product.FilterableIssueType)
 	TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []Folder)
 	HandleConfigChange()
 }

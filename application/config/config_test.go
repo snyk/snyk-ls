@@ -460,8 +460,16 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		// Create a folder path
 		folderPath := types.FilePath("/test/folder")
 
+		// Get folder config for the path
+		folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, c.Logger(), storedconfig.GetFolderConfigOptions{
+			CreateIfNotExist: false,
+			ReadOnly:         true,
+			EnrichFromGit:    false,
+		})
+		require.NoError(t, err)
+
 		// Get filter for folder - should return global filter
-		result := c.FilterSeverityForFolder(folderPath)
+		result := c.FilterSeverityForFolder(folderConfig)
 		assert.Equal(t, globalFilter.Critical, result.Critical)
 		assert.Equal(t, globalFilter.High, result.High)
 		assert.Equal(t, globalFilter.Medium, result.Medium)
@@ -479,8 +487,16 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		// Create a folder path
 		folderPath := types.FilePath("/test/folder")
 
+		// Get folder config for the path
+		folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, c.Logger(), storedconfig.GetFolderConfigOptions{
+			CreateIfNotExist: false,
+			ReadOnly:         true,
+			EnrichFromGit:    false,
+		})
+		require.NoError(t, err)
+
 		// Get threshold for folder - should return global threshold
-		result := c.RiskScoreThresholdForFolder(folderPath)
+		result := c.RiskScoreThresholdForFolder(folderConfig)
 		assert.Equal(t, threshold, result)
 	})
 
@@ -492,11 +508,11 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		options := types.NewIssueViewOptions(false, true)
 		c.SetIssueViewOptions(&options)
 
-		// Create a folder path
-		folderPath := types.FilePath("/test/folder")
+		// Create a folder config
+		folderConfig := &types.FolderConfig{FolderPath: "/test/folder"}
 
 		// Get options for folder - should return global options
-		result := c.IssueViewOptionsForFolder(folderPath)
+		result := c.IssueViewOptionsForFolder(folderConfig)
 		assert.Equal(t, options.OpenIssues, result.OpenIssues)
 		assert.Equal(t, options.IgnoredIssues, result.IgnoredIssues)
 	})
@@ -508,11 +524,11 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		// Set global delta findings
 		c.SetDeltaFindingsEnabled(true)
 
-		// Create a folder path
-		folderPath := types.FilePath("/test/folder")
+		// Create a folder config
+		folderConfig := &types.FolderConfig{FolderPath: "/test/folder"}
 
 		// Get delta findings for folder - should return global setting
-		result := c.IsDeltaFindingsEnabledForFolder(folderPath)
+		result := c.IsDeltaFindingsEnabledForFolder(folderConfig)
 		assert.True(t, result)
 	})
 
@@ -545,7 +561,7 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get filter for folder - should return LDX-Sync filter
-		result := c.FilterSeverityForFolder(folderPath)
+		result := c.FilterSeverityForFolder(folderConfig)
 		assert.Equal(t, ldxFilter.Critical, result.Critical)
 		assert.Equal(t, ldxFilter.High, result.High)
 		assert.Equal(t, ldxFilter.Medium, result.Medium)

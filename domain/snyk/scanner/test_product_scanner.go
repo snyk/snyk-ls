@@ -83,7 +83,7 @@ func (t *TestProductScanner) Scans() int {
 	return t.scans
 }
 
-func (t *TestProductScanner) IsEnabled() bool {
+func (t *TestProductScanner) IsEnabledForFolder(_ *types.FolderConfig) bool {
 	return t.enabled
 }
 

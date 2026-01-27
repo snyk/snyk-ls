@@ -47,6 +47,8 @@ type Scanner interface {
 type ProductScanner interface {
 	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
 	Scan(ctx context.Context, path FilePath, folderPath FilePath, folderConfig *FolderConfig) (issues []Issue, err error)
-	IsEnabled() bool
+	// IsEnabledForFolder returns whether this scanner is enabled for the given folder config.
+	// Product enablement can vary per folder based on LDX-Sync org config.
+	IsEnabledForFolder(folderConfig *FolderConfig) bool
 	Product() product.Product
 }

@@ -109,6 +109,9 @@ func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigS
 	var value any
 	var source ConfigSource
 
+	// TODO this is wrong - we might not have LDX-Sync provided values, and cannot enforce locked/enforced here.
+	// TODO check logic on the other resolvers as well.
+	// We do want to
 	if ldxField != nil {
 		if ldxField.IsLocked {
 			// Locked: LDX-Sync value wins, user cannot override
@@ -226,71 +229,70 @@ func (r *ConfigResolver) logResolution(settingName, folderPath, org string, valu
 		Msg("config value resolved")
 }
 
+// globalSettingGetter is a function type that extracts a value from global settings
+type globalSettingGetter func(*Settings) any
+
+// globalSettingGetters maps setting names to their getter functions
+var globalSettingGetters = map[string]globalSettingGetter{
+	SettingApiEndpoint:            func(s *Settings) any { return s.Endpoint },
+	SettingAuthenticationMethod:   func(s *Settings) any { return string(s.AuthenticationMethod) },
+	SettingAutoConfigureMcpServer: func(s *Settings) any { return s.AutoConfigureSnykMcpServer },
+	SettingAutomaticDownload:      func(s *Settings) any { return s.ManageBinariesAutomatically },
+	SettingBinaryBaseUrl:          func(s *Settings) any { return s.CliBaseDownloadURL },
+	SettingCliPath:                func(s *Settings) any { return s.CliPath },
+	SettingEnabledProducts:        func(s *Settings) any { return getEnabledProductsFromSettings(s) },
+	SettingEnabledSeverities: func(s *Settings) any {
+		if s.FilterSeverity != nil {
+			return s.FilterSeverity
+		}
+		return nil
+	},
+	SettingIssueViewIgnoredIssues: func(s *Settings) any {
+		if s.IssueViewOptions != nil {
+			return s.IssueViewOptions.IgnoredIssues
+		}
+		return nil
+	},
+	SettingIssueViewOpenIssues: func(s *Settings) any {
+		if s.IssueViewOptions != nil {
+			return s.IssueViewOptions.OpenIssues
+		}
+		return nil
+	},
+	SettingProxyInsecure:      func(s *Settings) any { return s.Insecure },
+	SettingRiskScoreThreshold: func(s *Settings) any { return s.RiskScoreThreshold },
+	SettingScanAutomatic:      func(s *Settings) any { return s.ScanningMode },
+	SettingScanNetNew:         func(s *Settings) any { return s.EnableDeltaFindings },
+	SettingTrustEnabled:       func(s *Settings) any { return s.EnableTrustedFoldersFeature },
+}
+
 // getGlobalSettingValue returns the value for a setting from global settings
 func (r *ConfigResolver) getGlobalSettingValue(settingName string) any {
 	if r.globalSettings == nil {
 		return nil
 	}
 
-	switch settingName {
-	case SettingApiEndpoint:
-		return r.globalSettings.Endpoint
-	case SettingAuthenticationMethod:
-		return string(r.globalSettings.AuthenticationMethod)
-	case SettingProxyInsecure:
-		return r.globalSettings.Insecure
-	case SettingAutoConfigureMcpServer:
-		return r.globalSettings.AutoConfigureSnykMcpServer
-	case SettingTrustEnabled:
-		return r.globalSettings.EnableTrustedFoldersFeature
-	case SettingBinaryBaseUrl:
-		return r.globalSettings.CliBaseDownloadURL
-	case SettingCliPath:
-		return r.globalSettings.CliPath
-	case SettingAutomaticDownload:
-		return r.globalSettings.ManageBinariesAutomatically
-	case SettingEnabledSeverities:
-		if r.globalSettings.FilterSeverity != nil {
-			return r.globalSettings.FilterSeverity
-		}
-		return nil
-	case SettingRiskScoreThreshold:
-		return r.globalSettings.RiskScoreThreshold
-	case SettingEnabledProducts:
-		return r.getEnabledProducts()
-	case SettingScanAutomatic:
-		return r.globalSettings.ScanningMode
-	case SettingScanNetNew:
-		return r.globalSettings.EnableDeltaFindings
-	case SettingIssueViewOpenIssues:
-		if r.globalSettings.IssueViewOptions != nil {
-			return r.globalSettings.IssueViewOptions.OpenIssues
-		}
-		return nil
-	case SettingIssueViewIgnoredIssues:
-		if r.globalSettings.IssueViewOptions != nil {
-			return r.globalSettings.IssueViewOptions.IgnoredIssues
-		}
-		return nil
-	default:
-		return nil
+	if getter, exists := globalSettingGetters[settingName]; exists {
+		return getter(r.globalSettings)
 	}
+
+	return nil
 }
 
-// getEnabledProducts returns a list of enabled products from global settings
-func (r *ConfigResolver) getEnabledProducts() []string {
-	if r.globalSettings == nil {
+// getEnabledProductsFromSettings returns a list of enabled products from the given settings
+func getEnabledProductsFromSettings(settings *Settings) []string {
+	if settings == nil {
 		return nil
 	}
 
 	var products []string
-	if r.globalSettings.ActivateSnykOpenSource == "true" {
+	if settings.ActivateSnykOpenSource == "true" {
 		products = append(products, "oss")
 	}
-	if r.globalSettings.ActivateSnykCode == "true" {
+	if settings.ActivateSnykCode == "true" {
 		products = append(products, "code")
 	}
-	if r.globalSettings.ActivateSnykIac == "true" {
+	if settings.ActivateSnykIac == "true" {
 		products = append(products, "iac")
 	}
 	return products
