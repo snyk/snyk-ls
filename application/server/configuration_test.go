@@ -305,8 +305,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 		preferredOrgId := "00000000-0000-0000-0000-000000000002"
 		// Set an immutable default value to avoid API calls
-		err := configuration.RegisterUserPreferredOrganizationDefault(c.Engine().GetConfiguration(), configuration.ImmutableDefaultValueFunction(preferredOrgId), nil)
-		require.NoError(t, err)
+		c.Engine().GetConfiguration().AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(preferredOrgId))
 
 		// Set to a specific org first
 		c.SetOrganization(expectedOrgId)
@@ -325,8 +324,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 		preferredOrgId := "00000000-0000-0000-0000-000000000002"
 		// Set an immutable default value to avoid API calls
-		err := configuration.RegisterUserPreferredOrganizationDefault(c.Engine().GetConfiguration(), configuration.ImmutableDefaultValueFunction(preferredOrgId), nil)
-		require.NoError(t, err)
+		c.Engine().GetConfiguration().AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(preferredOrgId))
 
 		// Set to a specific org first
 		c.SetOrganization(expectedOrgId)
