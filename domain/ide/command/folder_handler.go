@@ -25,7 +25,6 @@ import (
 
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -69,7 +68,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 
 		// Always update AutoDeterminedOrg from LDX-Sync (even for folders where OrgSetByUser is true)
 		// This ensures we always know what LDX-Sync recommends, regardless of whether the user has opted out
-		org, err := GetOrgFromCachedLdxSync(c, folderConfig.FolderPath, ldxSyncService)
+		org, err := ldxSyncService.ResolveOrg(c, folderConfig.FolderPath)
 		if err != nil {
 			logger.Err(err).Msg("unable to resolve organization, continuing...")
 		} else {
@@ -97,24 +96,6 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 		return
 	}
 	notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
-}
-
-// GetOrgFromCachedLdxSync retrieves the organization from the cached LDX-Sync result
-// Falls back to global organization if no cache entry exists
-func GetOrgFromCachedLdxSync(c *config.Config, folderPath types.FilePath, ldxSyncService LdxSyncService) (ldx_sync_config.Organization, error) {
-	gafConfig := c.Engine().GetConfiguration()
-
-	// Get cached result
-	cachedResult := c.GetLdxSyncResult(folderPath)
-
-	// If we have a cached result, use it to resolve the org
-	if cachedResult != nil {
-		return ldxSyncService.ResolveOrg(c, *cachedResult)
-	}
-
-	// Fall back to global org if no cache entry
-	fallbackOrg := gafConfig.GetString(configuration.ORGANIZATION)
-	return ldx_sync_config.Organization{Id: fallbackOrg}, nil
 }
 
 // MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration

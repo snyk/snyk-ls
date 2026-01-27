@@ -49,16 +49,16 @@ func (mr *MockLdxSyncServiceMockRecorder) RefreshConfigFromLdxSync(c, workspaceF
 }
 
 // ResolveOrg mocks base method.
-func (m *MockLdxSyncService) ResolveOrg(c *config.Config, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error) {
+func (m *MockLdxSyncService) ResolveOrg(c *config.Config, folderPath types.FilePath) (ldx_sync_config.Organization, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResolveOrg", c, result)
+	ret := m.ctrl.Call(m, "ResolveOrg", c, folderPath)
 	ret0, _ := ret[0].(ldx_sync_config.Organization)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ResolveOrg indicates an expected call of ResolveOrg.
-func (mr *MockLdxSyncServiceMockRecorder) ResolveOrg(c, result interface{}) *gomock.Call {
+func (mr *MockLdxSyncServiceMockRecorder) ResolveOrg(c, folderPath interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveOrg", reflect.TypeOf((*MockLdxSyncService)(nil).ResolveOrg), c, result)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveOrg", reflect.TypeOf((*MockLdxSyncService)(nil).ResolveOrg), c, folderPath)
 }
