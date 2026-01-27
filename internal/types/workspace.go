@@ -70,4 +70,12 @@ type Folder interface {
 	Status() FolderStatus
 	IsTrusted() bool
 	ScanResultProcessor() ScanResultProcessor
+	// FolderConfig returns the FolderConfig for this folder.
+	FolderConfig() *FolderConfig
+	// IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
+	IsDeltaFindingsEnabled() bool
+	// IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
+	IsAutoScanEnabled() bool
+	// DisplayableIssueTypes returns which issue types are enabled for this folder.
+	DisplayableIssueTypes() map[product.FilterableIssueType]bool
 }

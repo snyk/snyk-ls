@@ -196,8 +196,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Serv
 
 		command.HandleFolders(c, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.LdxSyncService())
 		for _, f := range changedFolders {
-			folderConfig := c.FolderConfig(f.Path())
-			if c.IsAutoScanEnabledForFolder(folderConfig) {
+			if f.IsAutoScanEnabled() {
 				go f.ScanFolder(ctx)
 			}
 		}
@@ -681,8 +680,7 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 			return nil, nil
 		}
 
-		folderConfig := c.FolderConfig(folder.Path())
-		filteredIssues := fip.FilterIssues(fip.Issues(), c.DisplayableIssueTypesForFolder(folderConfig))
+		filteredIssues := fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
 			logger.Debug().Msg("Sending cached issues")
@@ -720,15 +718,12 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 			return nil, nil
 		}
 
-		folderConfig := c.FolderConfig(folder.Path())
-		autoScanEnabled := c.IsAutoScanEnabledForFolder(folderConfig)
-
-		if autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
+		if folder.IsAutoScanEnabled() && uri.IsDotSnykFile(params.TextDocument.URI) {
 			go folder.ScanFolder(bgCtx)
 			return nil, nil
 		}
 
-		if autoScanEnabled {
+		if folder.IsAutoScanEnabled() {
 			go folder.ScanFile(bgCtx, filePath)
 		} else {
 			logger.Warn().Msg("Not scanning, auto-scan is disabled")

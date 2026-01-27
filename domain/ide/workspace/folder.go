@@ -613,8 +613,7 @@ func getIssuePerFileFromFlatList(issueList []types.Issue) snyk.IssuesByFile {
 }
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
-	folderConfig := f.c.FolderConfig(f.path)
-	supportedIssueTypes := f.c.DisplayableIssueTypesForFolder(folderConfig)
+	supportedIssueTypes := f.DisplayableIssueTypes()
 	filteredIssuesByFile := f.FilterIssues(issues, supportedIssueTypes)
 	return filteredIssuesByFile
 }
@@ -654,9 +653,9 @@ func (f *Folder) FilterIssues(
 	filteredIssues := snyk.IssuesByFile{}
 	filterReasonCounts := make(map[FilterReason]int)
 
-	folderConfig := f.c.FolderConfig(f.path)
+	folderConfig := f.FolderConfig()
 
-	if f.c.IsDeltaFindingsEnabledForFolder(folderConfig) {
+	if f.IsDeltaFindingsEnabled() {
 		deltaForAllProducts := f.GetDeltaForAllProducts(supportedIssueTypes)
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
@@ -765,8 +764,7 @@ func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig *t
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	folderConfig := f.c.FolderConfig(f.path)
-	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.c.IsDeltaFindingsEnabledForFolder(folderConfig))
+	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.IsDeltaFindingsEnabled())
 	if scanErr != nil {
 		f.sendScanError(p, scanErr)
 	} else {
@@ -817,6 +815,27 @@ func (f *Folder) Uri() lsp.DocumentURI { return uri.PathToUri(f.path) }
 func (f *Folder) Name() string { return f.name }
 
 func (f *Folder) Status() types.FolderStatus { return f.status }
+
+// FolderConfig returns the FolderConfig for this folder.
+// This is a convenience method that fetches the config based on the folder's path.
+func (f *Folder) FolderConfig() *types.FolderConfig {
+	return f.c.FolderConfig(f.path)
+}
+
+// IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
+func (f *Folder) IsDeltaFindingsEnabled() bool {
+	return f.c.IsDeltaFindingsEnabledForFolder(f.FolderConfig())
+}
+
+// IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
+func (f *Folder) IsAutoScanEnabled() bool {
+	return f.c.IsAutoScanEnabledForFolder(f.FolderConfig())
+}
+
+// DisplayableIssueTypes returns which issue types are enabled for this folder.
+func (f *Folder) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
+	return f.c.DisplayableIssueTypesForFolder(f.FolderConfig())
+}
 
 func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIssues []types.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"

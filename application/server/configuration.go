@@ -161,8 +161,7 @@ func UpdateSettings(c *config.Config, settings types.Settings, triggerSource ana
 	previousState := make(map[types.FilePath]map[product.FilterableIssueType]bool)
 	if ws != nil {
 		for _, folder := range ws.Folders() {
-			folderConfig := c.FolderConfig(folder.Path())
-			previousState[folder.Path()] = c.DisplayableIssueTypesForFolder(folderConfig)
+			previousState[folder.Path()] = folder.DisplayableIssueTypes()
 		}
 	}
 
@@ -171,8 +170,7 @@ func UpdateSettings(c *config.Config, settings types.Settings, triggerSource ana
 	// If a product was removed for a folder, clear all issues for that product in that folder
 	if ws != nil {
 		for _, folder := range ws.Folders() {
-			folderConfig := c.FolderConfig(folder.Path())
-			newState := c.DisplayableIssueTypesForFolder(folderConfig)
+			newState := folder.DisplayableIssueTypes()
 			for issueType, wasEnabled := range previousState[folder.Path()] {
 				if wasEnabled && !newState[issueType] {
 					folder.ClearDiagnosticsByIssueType(issueType)

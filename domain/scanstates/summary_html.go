@@ -108,8 +108,7 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 	logger := renderer.c.Logger().With().Str("method", "getIssuesFromFolders").Logger()
 
 	for _, f := range renderer.c.Workspace().Folders() {
-		folderConfig := renderer.c.FolderConfig(f.Path())
-		issueTypes := renderer.c.DisplayableIssueTypesForFolder(folderConfig)
+		issueTypes := f.DisplayableIssueTypes()
 
 		if ip, ok := f.(snyk.FilteringIssueProvider); ok {
 			// Note that IssueProvider.Issues() does not return enriched issues (i.e, we don't know if they're new). so we
