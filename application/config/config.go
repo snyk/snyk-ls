@@ -1315,15 +1315,37 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 }
 
 // FolderConfig gets or creates a new folder config for the given folder path.
-// Will cause a rewrite to storage, for read-only operations, use storedconfig.GetFolderConfigWithOptions instead.
+// Will cause a rewrite to storage, for read-only operations, use FolderConfigReadOnly instead.
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
-	var folderConfig *types.FolderConfig
-	var err error
-	folderConfig, err = storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
+	folderConfig, err := storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
 	if err != nil {
-		folderConfig = &types.FolderConfig{FolderPath: path}
+		c.logger.Err(err).Msg("unable to get or create folder config")
+		return c.getMinimalFolderConfig(path)
 	}
 	return folderConfig
+}
+
+// FolderConfigReadOnly returns the folder config for a path without writing to storage
+// or enriching from Git. This is suitable for read-only configuration checks.
+// If no config exists in storage, creates one in-memory with proper default initialization
+// (OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
+func (c *Config) FolderConfigReadOnly(path types.FilePath) *types.FolderConfig {
+	folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
+		CreateIfNotExist: true,
+		ReadOnly:         true,
+		EnrichFromGit:    false,
+	})
+	if err != nil {
+		c.logger.Err(err).Msg("unable to get or create folder config")
+		return c.getMinimalFolderConfig(path)
+	}
+	return folderConfig
+}
+
+// getMinimalFolderConfig returns a folder config with only the path set, and no other fields. Used as a fallback
+// when a folder config cannot be retrieved from storage.
+func (c *Config) getMinimalFolderConfig(path types.FilePath) *types.FolderConfig {
+	return &types.FolderConfig{FolderPath: path}
 }
 
 func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
@@ -1625,16 +1647,8 @@ func (c *Config) UpdateGlobalSettingsInResolver(settings *types.Settings) {
 
 // =============================================================================
 // Folder-Aware Config Accessors
-// These methods use ConfigResolver to get effective values considering LDX-Sync
+// These methods use ConfigResolver to get effective values based on LDX-Sync org config and user overrides
 // =============================================================================
-
-//TODO - Check for usages of FilePath checkers in this file, replace with folderconfig if possible
-//TODO - Check for usages of FilePath checkers in this file, replace with folderconfig if possible
-//TODO - Check for usages of FilePath checkers in this file, replace with folderconfig if possible
-//TODO - Check for usages of FilePath checkers in this file, replace with folderconfig if possible
-//TODO - Check for usages of FilePath checkers in this file, replace with folderconfig if possible
-//TODO - Check for usages of FilePath checkers in this file, replace with folderconfig if possible
-//TODO - Check for usages of FilePath checkers in this file, replace with folderconfig if possible
 
 // FilterSeverityForFolder returns the effective severity filter for a folder,
 // considering LDX-Sync org config and user overrides.

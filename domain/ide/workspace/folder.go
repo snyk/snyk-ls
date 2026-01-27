@@ -613,8 +613,9 @@ func getIssuePerFileFromFlatList(issueList []types.Issue) snyk.IssuesByFile {
 }
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
-	supportedIssueTypes := f.DisplayableIssueTypes()
-	filteredIssuesByFile := f.FilterIssues(issues, supportedIssueTypes)
+	folderConfig := f.FolderConfigReadOnly()
+	supportedIssueTypes := f.c.DisplayableIssueTypesForFolder(folderConfig)
+	filteredIssuesByFile := f.filterIssuesWithConfig(issues, supportedIssueTypes, folderConfig)
 	return filteredIssuesByFile
 }
 
@@ -649,13 +650,19 @@ func (f *Folder) FilterIssues(
 	issues snyk.IssuesByFile,
 	supportedIssueTypes map[product.FilterableIssueType]bool,
 ) snyk.IssuesByFile {
+	return f.filterIssuesWithConfig(issues, supportedIssueTypes, f.FolderConfigReadOnly())
+}
+
+func (f *Folder) filterIssuesWithConfig(
+	issues snyk.IssuesByFile,
+	supportedIssueTypes map[product.FilterableIssueType]bool,
+	folderConfig *types.FolderConfig,
+) snyk.IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 	filteredIssues := snyk.IssuesByFile{}
 	filterReasonCounts := make(map[FilterReason]int)
 
-	folderConfig := f.FolderConfig()
-
-	if f.IsDeltaFindingsEnabled() {
+	if f.c.IsDeltaFindingsEnabledForFolder(folderConfig) {
 		deltaForAllProducts := f.GetDeltaForAllProducts(supportedIssueTypes)
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
@@ -764,7 +771,8 @@ func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig *t
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.IsDeltaFindingsEnabled())
+	// Use global delta findings check here since GetScanErr just needs to know if delta mode is active
+	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.c.IsDeltaFindingsEnabled())
 	if scanErr != nil {
 		f.sendScanError(p, scanErr)
 	} else {
@@ -816,25 +824,26 @@ func (f *Folder) Name() string { return f.name }
 
 func (f *Folder) Status() types.FolderStatus { return f.status }
 
-// FolderConfig returns the FolderConfig for this folder.
-// This is a convenience method that fetches the config based on the folder's path.
-func (f *Folder) FolderConfig() *types.FolderConfig {
-	return f.c.FolderConfig(f.path)
+// FolderConfigReadOnly returns the FolderConfig for this folder using read-only access
+// (no storage writes, no Git enrichment). For operations that need to create or update
+// the config, use c.FolderConfig(f.Path()) directly.
+func (f *Folder) FolderConfigReadOnly() *types.FolderConfig {
+	return f.c.FolderConfigReadOnly(f.path)
 }
 
 // IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
 func (f *Folder) IsDeltaFindingsEnabled() bool {
-	return f.c.IsDeltaFindingsEnabledForFolder(f.FolderConfig())
+	return f.c.IsDeltaFindingsEnabledForFolder(f.FolderConfigReadOnly())
 }
 
 // IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
 func (f *Folder) IsAutoScanEnabled() bool {
-	return f.c.IsAutoScanEnabledForFolder(f.FolderConfig())
+	return f.c.IsAutoScanEnabledForFolder(f.FolderConfigReadOnly())
 }
 
 // DisplayableIssueTypes returns which issue types are enabled for this folder.
 func (f *Folder) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
-	return f.c.DisplayableIssueTypesForFolder(f.FolderConfig())
+	return f.c.DisplayableIssueTypesForFolder(f.FolderConfigReadOnly())
 }
 
 func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIssues []types.Issue) {

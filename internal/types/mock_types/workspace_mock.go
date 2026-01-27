@@ -317,18 +317,18 @@ func (mr *MockFolderMockRecorder) FilterAndPublishDiagnostics(arg0 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterAndPublishDiagnostics", reflect.TypeOf((*MockFolder)(nil).FilterAndPublishDiagnostics), arg0)
 }
 
-// FolderConfig mocks base method.
-func (m *MockFolder) FolderConfig() *types.FolderConfig {
+// FolderConfigReadOnly mocks base method.
+func (m *MockFolder) FolderConfigReadOnly() *types.FolderConfig {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FolderConfig")
+	ret := m.ctrl.Call(m, "FolderConfigReadOnly")
 	ret0, _ := ret[0].(*types.FolderConfig)
 	return ret0
 }
 
-// FolderConfig indicates an expected call of FolderConfig.
-func (mr *MockFolderMockRecorder) FolderConfig() *gomock.Call {
+// FolderConfigReadOnly indicates an expected call of FolderConfigReadOnly.
+func (mr *MockFolderMockRecorder) FolderConfigReadOnly() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FolderConfig", reflect.TypeOf((*MockFolder)(nil).FolderConfig))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FolderConfigReadOnly", reflect.TypeOf((*MockFolder)(nil).FolderConfigReadOnly))
 }
 
 // IsAutoScanEnabled mocks base method.
