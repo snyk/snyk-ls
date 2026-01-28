@@ -21,12 +21,7 @@ import (
 	"sync"
 
 	"github.com/pkg/browser"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 const (
@@ -105,28 +100,17 @@ func (c CommandData) GetGroupingType() GroupingType {
 
 type CommandName string
 
-//go:generate go tool github.com/golang/mock/mockgen -destination=mock_types/org_resolver_mock.go -package=mock_types github.com/snyk/snyk-ls/internal/types OrgResolver
-
-// OrgResolver defines the interface for organization resolution
-type OrgResolver interface {
-	ResolveOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, dir string) (ldx_sync_config.Organization, error)
-}
-
 type CommandService interface {
 	ExecuteCommandData(ctx context.Context, commandData CommandData, server Server) (any, error)
-	GetOrgResolver() OrgResolver
 }
 
 type CommandServiceMock struct {
 	m                sync.Mutex
 	executedCommands []CommandData
-	orgResolver      OrgResolver
 }
 
-func NewCommandServiceMock(orgResolver OrgResolver) *CommandServiceMock {
-	return &CommandServiceMock{
-		orgResolver: orgResolver,
-	}
+func NewCommandServiceMock() *CommandServiceMock {
+	return &CommandServiceMock{}
 }
 
 func (service *CommandServiceMock) ExecuteCommandData(_ context.Context, command CommandData, _ Server) (any, error) {
@@ -134,14 +118,6 @@ func (service *CommandServiceMock) ExecuteCommandData(_ context.Context, command
 	service.executedCommands = append(service.executedCommands, command)
 	service.m.Unlock()
 	return nil, nil
-}
-
-func (service *CommandServiceMock) GetOrgResolver() OrgResolver {
-	return service.orgResolver
-}
-
-func (service *CommandServiceMock) SetOrgResolver(resolver OrgResolver) {
-	service.orgResolver = resolver
 }
 
 func (service *CommandServiceMock) ExecutedCommands() []CommandData {
