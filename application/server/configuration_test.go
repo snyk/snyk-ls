@@ -36,7 +36,6 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -299,43 +298,6 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, c.Format(), config.FormatMd)
 	})
 
-	t.Run("blank organization resets to default organization", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		di.TestInit(t)
-
-		preferredOrgId := "00000000-0000-0000-0000-000000000002"
-		// Set an immutable default value to avoid API calls
-		c.Engine().GetConfiguration().AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(preferredOrgId))
-
-		// Set to a specific org first
-		c.SetOrganization(expectedOrgId)
-		assert.Equal(t, expectedOrgId, c.Organization())
-
-		// Set to empty - should reset to default
-		// Include another setting to avoid early return on empty settings struct
-		UpdateSettings(c, types.Settings{Organization: "", RiskScoreThreshold: utils.Ptr(100)}, analytics.TriggerSourceTest)
-
-		assert.Equal(t, preferredOrgId, c.Organization())
-	})
-
-	t.Run("whitespace organization resets to default organization", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		di.TestInit(t)
-
-		preferredOrgId := "00000000-0000-0000-0000-000000000002"
-		// Set an immutable default value to avoid API calls
-		c.Engine().GetConfiguration().AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(preferredOrgId))
-
-		// Set to a specific org first
-		c.SetOrganization(expectedOrgId)
-		assert.Equal(t, expectedOrgId, c.Organization())
-
-		// Set to single space - should be trimmed to empty and reset to default
-		UpdateSettings(c, types.Settings{Organization: " "}, analytics.TriggerSourceTest)
-
-		assert.Equal(t, preferredOrgId, c.Organization())
-	})
-
 	t.Run("incomplete env vars", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
@@ -528,6 +490,50 @@ func setupMockOrgResolver(t *testing.T, orgId, orgName string) {
 		mockService := types.NewCommandServiceMock(mockResolver)
 		command.SetService(mockService)
 	}
+}
+
+func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing.T) {
+	c := testutil.IntegTest(t)
+
+	// Set to a specific org first
+	initialOrgId := "00000000-0000-0000-0000-000000000001"
+	c.SetOrganization(initialOrgId)
+	require.Equal(t, initialOrgId, c.Organization(), "org should be set to the value we just set it to")
+
+	// Set to empty string to reset to the user's preferred default org they defined in the web UI.
+	updateOrganization(c, types.Settings{Organization: ""}, analytics.TriggerSourceTest)
+
+	// Verify it's not the initial org or empty string.
+	actualOrgAfterBlank := c.Organization()
+	assert.NotEqual(t, initialOrgId, actualOrgAfterBlank, "org should have changed from initial value")
+	assert.NotEmpty(t, actualOrgAfterBlank, "org should have resolved to the user's preferred default org they defined in the web UI")
+
+	// Verify it's a valid UUID (preferred orgs are always UUIDs).
+	_, err := uuid.Parse(actualOrgAfterBlank)
+	assert.NoError(t, err, "resolved org should be a valid UUID")
+}
+
+func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *testing.T) {
+	c := testutil.IntegTest(t)
+	//di.TestInit(t)
+
+	// Set to a specific org first
+	initialOrgId := "00000000-0000-0000-0000-000000000001"
+	c.SetOrganization(initialOrgId)
+	require.Equal(t, initialOrgId, c.Organization(), "org should be set to the value we just set it to")
+
+	// Set to whitespace to reset to the user's preferred default org they defined in the web UI.
+	// Whitespace should be trimmed to empty string.
+	updateOrganization(c, types.Settings{Organization: " "}, analytics.TriggerSourceTest)
+
+	// Verify it's not the initial org or empty string.
+	actualOrgAfterWhitespace := c.Organization()
+	assert.NotEqual(t, initialOrgId, actualOrgAfterWhitespace, "org should have changed from initial value")
+	assert.NotEmpty(t, actualOrgAfterWhitespace, "org should have resolved to the user's preferred default org they defined in the web UI")
+
+	// Verify it's a valid UUID (preferred orgs are always UUIDs).
+	_, err := uuid.Parse(actualOrgAfterWhitespace)
+	assert.NoError(t, err, "resolved org should be a valid UUID")
 }
 
 // Common test setup for updateFolderConfig tests
