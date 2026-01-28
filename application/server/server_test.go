@@ -365,7 +365,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			ActivateSnykCode:            "true",
 			ActivateSnykOpenSource:      "false",
 			ActivateSnykIac:             "false",
-			Organization:                "fancy org",
+			Organization:                util.Ptr("fancy org"),
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -430,7 +430,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 			ActivateSnykCode:            "true",
 			ActivateSnykOpenSource:      "false",
 			ActivateSnykIac:             "false",
-			Organization:                "fancy org",
+			Organization:                util.Ptr("fancy org"),
 			Token:                       "xxx",
 			ManageBinariesAutomatically: "true",
 			CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -488,7 +488,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 
 	clientParams := types.InitializeParams{
 		InitializationOptions: types.Settings{
-			Organization:     expectedOrgId,
+			Organization:     &expectedOrgId,
 			Token:            "xxx",
 			FilterSeverity:   util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions: util.Ptr(types.DefaultIssueViewOptions()),

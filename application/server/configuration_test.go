@@ -45,6 +45,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var sampleSettings = types.Settings{
@@ -204,7 +205,7 @@ func Test_UpdateSettings(t *testing.T) {
 			AdditionalEnv:                "a=b;c=d",
 			Path:                         "addPath",
 			SendErrorReports:             "true",
-			Organization:                 expectedOrgId,
+			Organization:                 &expectedOrgId,
 			ManageBinariesAutomatically:  "false",
 			CliPath:                      filepath.Join(t.TempDir(), "cli"),
 			Token:                        "a fancy token",
@@ -501,7 +502,7 @@ func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing
 	require.Equal(t, initialOrgId, c.Organization(), "org should be set to the value we just set it to")
 
 	// Set to empty string to reset to the user's preferred default org they defined in the web UI.
-	updateOrganization(c, types.Settings{Organization: ""}, analytics.TriggerSourceTest)
+	updateOrganization(c, types.Settings{Organization: util.Ptr("")}, analytics.TriggerSourceTest)
 
 	// Verify it's not the initial org or empty string.
 	actualOrgAfterBlank := c.Organization()
@@ -523,7 +524,7 @@ func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *te
 
 	// Set to whitespace to reset to the user's preferred default org they defined in the web UI.
 	// Whitespace should be trimmed to empty string.
-	updateOrganization(c, types.Settings{Organization: " "}, analytics.TriggerSourceTest)
+	updateOrganization(c, types.Settings{Organization: util.Ptr(" ")}, analytics.TriggerSourceTest)
 
 	// Verify it's not the initial org or empty string.
 	actualOrgAfterWhitespace := c.Organization()
@@ -660,7 +661,7 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 
 	// Call updateFolderConfig with the folder config
 	settings := types.Settings{
-		Organization: "global-org-id", // Include settings.Organization for the condition check
+		Organization: util.Ptr("global-org-id"), // Include settings.Organization for the condition check
 		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath:                  folderPath,
@@ -806,7 +807,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 	// Call updateFolderConfig with exact same config and same global org
 	// DeepEqual should return true, so UpdateFolderConfigOrg should be skipped
 	settings := types.Settings{
-		Organization: "test-org",
+		Organization: util.Ptr("test-org"),
 		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath:                  folderPath,
@@ -840,7 +841,7 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 
 	// Call updateFolderConfig with a folder that doesn't exist
 	settings := types.Settings{
-		Organization: "test-org",
+		Organization: util.Ptr("test-org"),
 		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath:   folderPath,
