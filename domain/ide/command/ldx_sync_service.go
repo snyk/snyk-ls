@@ -182,6 +182,7 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 func (s *DefaultLdxSyncService) updateMachineConfig(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
 	logger := c.Logger().With().Str("method", "updateMachineConfig").Logger()
 
+	var configUpdated = false
 	for folderPath, result := range results {
 		if result == nil || result.Config == nil {
 			continue
@@ -189,16 +190,26 @@ func (s *DefaultLdxSyncService) updateMachineConfig(c *config.Config, results ma
 
 		// Extract machine-scope settings from the first valid response
 		// These are stored in LS memory only for metadata (locked/enforced status)
-		// The actual values are applied to Config via existing update functions
-		machineConfig := types.ExtractMachineSettings(result.Config)
-		if len(machineConfig) > 0 {
-			c.UpdateLdxSyncMachineConfig(machineConfig)
+		// The actual values are configUpdated to Config via existing update functions
+		if !configUpdated {
+			machineConfig := types.ExtractMachineSettings(result.Config)
+			if len(machineConfig) > 0 {
+				c.UpdateLdxSyncMachineConfig(machineConfig)
 
+				logger.Debug().
+					Str("folder", string(folderPath)).
+					Int("fieldCount", len(machineConfig)).
+					Msg("Updated machine config metadata from LDX-Sync")
+				configUpdated = true
+			} else {
+				logger.Debug().
+					Str("folder", string(folderPath)).
+					Msg("No machine config found in LDX-Sync response, skipping machine config cache update")
+			}
+		} else {
 			logger.Debug().
 				Str("folder", string(folderPath)).
-				Int("fieldCount", len(machineConfig)).
-				Msg("Updated machine config metadata from LDX-Sync")
-			return // Only need to extract once since machine settings are global
+				Msg("Machine config already applied from another folder, skipping machine config cache update")
 		}
 	}
 }

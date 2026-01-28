@@ -771,8 +771,7 @@ func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig *t
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	// Use global delta findings check here since GetScanErr just needs to know if delta mode is active
-	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.c.IsDeltaFindingsEnabled())
+	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.IsDeltaFindingsEnabled())
 	if scanErr != nil {
 		f.sendScanError(p, scanErr)
 	} else {

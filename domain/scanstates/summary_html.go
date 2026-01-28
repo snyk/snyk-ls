@@ -59,7 +59,7 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	var deltaIssues []types.Issue
 	var currentIssuesFound int
 	var currentFixableIssueCount int
-	isDeltaEnabled := renderer.c.IsDeltaFindingsEnabled()
+	isDeltaEnabled := renderer.isDeltaEnabledInAnyFolder()
 	logger.Debug().Msgf("has wd scans in progress %t, has ref scans in progress %t", state.AnyScanInProgressWorkingDirectory, state.AnyScanInProgressReference)
 	logger.Debug().Msgf("scans in progress count %d, ref scans in progress count %d", state.ScansInProgressCount, state.ScansInProgressCount)
 	if state.AnyScanSucceededReference || state.AnyScanSucceededWorkingDirectory {
@@ -150,6 +150,20 @@ func (renderer *HtmlRenderer) isAutofixEnabledInAnyFolder() bool {
 	for _, folder := range renderer.c.Workspace().Folders() {
 		folderConfig := renderer.c.FolderConfig(folder.Path())
 		if folderConfig != nil && folderConfig.SastSettings != nil && folderConfig.SastSettings.AutofixEnabled {
+			return true
+		}
+	}
+	return false
+}
+
+// isDeltaEnabledInAnyFolder checks if delta findings is enabled in any folder
+func (renderer *HtmlRenderer) isDeltaEnabledInAnyFolder() bool {
+	if renderer.c.Workspace() == nil {
+		return false
+	}
+
+	for _, folder := range renderer.c.Workspace().Folders() {
+		if folder.IsDeltaFindingsEnabled() {
 			return true
 		}
 	}

@@ -87,7 +87,7 @@ func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, folderUri *lsp
 		}
 		logger.Info().Msgf("deleting in-memory cache for folder %s", folder.Path())
 		folder.Clear()
-		if cmd.c.IsAutoScanEnabled() {
+		if folder.IsAutoScanEnabled() {
 			go folder.ScanFolder(context.Background())
 		}
 	}
