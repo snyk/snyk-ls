@@ -237,7 +237,7 @@ func Test_ResolveOrg_WithCachedResult_Error(t *testing.T) {
 	assert.Empty(t, org.Id)
 }
 
-func Test_ResolveOrg_NoCachedResult_FallbackToGlobal(t *testing.T) {
+func Test_ResolveOrg_NoCachedResult_ReturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
@@ -250,13 +250,14 @@ func Test_ResolveOrg_NoCachedResult_FallbackToGlobal(t *testing.T) {
 	c.SetOrganization(globalOrg)
 
 	// No cache entry exists
-	// No API calls expected - should fall back directly
+	// No API calls expected - should return error instead of falling back
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	org, err := service.ResolveOrg(c, folderPath)
 
-	require.NoError(t, err)
-	assert.Equal(t, globalOrg, org.Id)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no organization was able to be determined for folder")
+	assert.Empty(t, org.Id)
 }
 
 func Test_ResolveOrg_MultipleFolders_DifferentCachedResults(t *testing.T) {
@@ -381,7 +382,7 @@ func Test_RefreshConfigFromLdxSync_EmptyFolderPath(t *testing.T) {
 	assert.NotNil(t, cachedResult)
 }
 
-func Test_ResolveOrg_EmptyFolderPath_FallbackToGlobal(t *testing.T) {
+func Test_ResolveOrg_EmptyFolderPath_ReturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
@@ -393,11 +394,12 @@ func Test_ResolveOrg_EmptyFolderPath_FallbackToGlobal(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	org, err := service.ResolveOrg(c, emptyPath)
 
-	require.NoError(t, err)
-	assert.Equal(t, globalOrg, org.Id)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no organization was able to be determined for folder")
+	assert.Empty(t, org.Id)
 }
 
-func Test_ResolveOrg_EmptyGlobalOrg_ReturnsEmptyId(t *testing.T) {
+func Test_ResolveOrg_EmptyGlobalOrg_ReturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
@@ -408,7 +410,7 @@ func Test_ResolveOrg_EmptyGlobalOrg_ReturnsEmptyId(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	org, err := service.ResolveOrg(c, folderPath)
 
-	require.NoError(t, err)
-	// Should return empty org ID when no global org is set
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no organization was able to be determined for folder")
 	assert.Empty(t, org.Id)
 }

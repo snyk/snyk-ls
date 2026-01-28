@@ -22,10 +22,10 @@ package command
 //go:generate go tool github.com/golang/mock/mockgen -source=ldx_sync_service.go -destination mock/ldx_sync_service_mock.go -package mock_command
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -133,10 +133,9 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 }
 
 // ResolveOrg retrieves the organization from the cached LDX-Sync result for a folder
-// Falls back to global organization if no cache entry exists
+// Returns an error if no cache entry exists
 func (s *DefaultLdxSyncService) ResolveOrg(c *config.Config, folderPath types.FilePath) (ldx_sync_config.Organization, error) {
 	logger := c.Logger().With().Str("method", "ResolveOrg").Logger()
-	gafConfig := c.Engine().GetConfiguration()
 
 	// Get cached result
 	cachedResult := c.GetLdxSyncResult(folderPath)
@@ -146,11 +145,9 @@ func (s *DefaultLdxSyncService) ResolveOrg(c *config.Config, folderPath types.Fi
 		return s.apiClient.ResolveOrgFromUserConfig(c.Engine(), *cachedResult)
 	}
 
-	// Fall back to global org if no cache entry
-	fallbackOrg := gafConfig.GetString(configuration.ORGANIZATION)
+	// Return error if no cache entry
 	logger.Warn().
 		Str("folder", string(folderPath)).
-		Str("fallbackOrg", fallbackOrg).
 		Msg("No LDX-Sync cache entry found, falling back to global organization")
-	return ldx_sync_config.Organization{Id: fallbackOrg}, nil
+	return ldx_sync_config.Organization{}, errors.New("no organization was able to be determined for folder: " + string(folderPath))
 }

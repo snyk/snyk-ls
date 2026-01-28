@@ -189,7 +189,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 	}
 }
 
-// Test LdxSyncService.ResolveOrg error handling - now falls back to global org when cache is empty
+// Test LdxSyncService.ResolveOrg error handling - returns error when cache is empty
 func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, gafConfig := testutil.SetUpEngineMock(t, c)
@@ -198,26 +198,25 @@ func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 		FolderPath: types.FilePath(t.TempDir()),
 	}
 
-	// Set global org as fallback
-	expectedOrgId := "fallback-global-org"
-	gafConfig.Set(configuration.ORGANIZATION, expectedOrgId)
+	// Set global org
+	gafConfig.Set(configuration.ORGANIZATION, "fallback-global-org")
 
-	// Don't populate cache - should fall back to global org
+	// Don't populate cache - should return error
 	mockService := setupLdxSyncService(t)
 	org, err := mockService.ResolveOrg(c, folderConfig.FolderPath)
 
-	require.NoError(t, err, "Should fall back to global org when cache is empty")
-	assert.Equal(t, expectedOrgId, org.Id, "Should return global org as fallback")
+	require.Error(t, err, "Should return error when cache is empty")
+	assert.Contains(t, err.Error(), "no organization was able to be determined for folder")
+	assert.Empty(t, org.Id)
 }
 
-// Test LdxSyncService.ResolveOrgfallback when cache is empty
-func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
+// Test LdxSyncService.ResolveOrg returns error when cache is empty
+func Test_SetAutoBestOrgFromLdxSync_NoCachereturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, gafConfig := testutil.SetUpEngineMock(t, c)
 
 	// Set organization in GAF config
-	expectedOrgId := "fallback-org-id"
-	gafConfig.Set(configuration.ORGANIZATION, expectedOrgId)
+	gafConfig.Set(configuration.ORGANIZATION, "fallback-org-id")
 
 	// Ensure no resolver is set (default state)
 	originalService := Service()
@@ -234,12 +233,13 @@ func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
 	mockLdxSync := setupLdxSyncService(t)
 	org, err := mockLdxSync.ResolveOrg(c, folderConfig.FolderPath)
 
-	require.NoError(t, err)
-	assert.Equal(t, expectedOrgId, org.Id, "Should fallback to GAF config organization")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no organization was able to be determined for folder")
+	assert.Empty(t, org.Id)
 }
 
-// Test sendFolderConfigs when cache is empty (should fall back to global org)
-func Test_sendFolderConfigs_EmptyCache_FallbackToGlobal(t *testing.T) {
+// Test sendFolderConfigs when cache is empty (should leave AutoDeterminedOrg empty)
+func Test_sendFolderConfigs_EmptyCache_NoAutoDeterminedOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
@@ -247,9 +247,8 @@ func Test_sendFolderConfigs_EmptyCache_FallbackToGlobal(t *testing.T) {
 	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-	// Set global org as fallback
-	globalOrgId := "global-fallback-org"
-	engineConfig.Set(configuration.ORGANIZATION, globalOrgId)
+	// Set global org
+	engineConfig.Set(configuration.ORGANIZATION, "global-fallback-org")
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
@@ -261,7 +260,7 @@ func Test_sendFolderConfigs_EmptyCache_FallbackToGlobal(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
-	// Don't populate cache - should fall back to global org
+	// Don't populate cache - should not set AutoDeterminedOrg
 	mockService := setupLdxSyncService(t)
 	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
 
@@ -272,8 +271,8 @@ func Test_sendFolderConfigs_EmptyCache_FallbackToGlobal(t *testing.T) {
 	folderConfigsParam, ok := messages[0].(types.FolderConfigsParam)
 	require.True(t, ok, "Expected FolderConfigsParam notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
-	// AutoDeterminedOrg should be set to global org when cache is empty
-	assert.Equal(t, globalOrgId, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should fall back to global org when cache is empty")
+	// AutoDeterminedOrg should be empty when cache is empty
+	assert.Empty(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be empty when cache is empty")
 }
 
 // Test sendFolderConfigs with multiple folders and different org configurations
@@ -327,10 +326,19 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	require.True(t, ok, "Expected FolderConfigsParam notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 2)
 
-	// Verify each folder has its own AutoDeterminedOrg
-	for i, fc := range folderConfigsParam.FolderConfigs {
+	// Verify each folder has its own AutoDeterminedOrg based on FolderPath
+	for _, fc := range folderConfigsParam.FolderConfigs {
 		assert.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for each folder")
-		assert.Equal(t, fmt.Sprintf("org-id-for-folder-%d", i), fc.AutoDeterminedOrg, "AutoDeterminedOrg should be folder-specific")
+
+		// Match based on FolderPath since iteration order is not guaranteed
+		switch fc.FolderPath {
+		case folderPaths[0]:
+			assert.Equal(t, "org-id-for-folder-0", fc.AutoDeterminedOrg, "AutoDeterminedOrg should match cached value for folder 0")
+		case folderPaths[1]:
+			assert.Equal(t, "org-id-for-folder-1", fc.AutoDeterminedOrg, "AutoDeterminedOrg should match cached value for folder 1")
+		default:
+			t.Fatalf("Unexpected folder path: %s", fc.FolderPath)
+		}
 	}
 }
 
@@ -527,21 +535,21 @@ func Test_GetOrgFromCachedLdxSync_WithCache(t *testing.T) {
 	assert.Equal(t, expectedOrgId, org.Id, "Should return org from cache")
 }
 
-// Test LdxSyncService.ResolveOrgwithout cached result (fallback to global org)
-func Test_GetOrgFromCachedLdxSync_WithoutCache_FallbackToGlobal(t *testing.T) {
+// Test LdxSyncService.ResolveOrg without cached result (returns error)
+func Test_GetOrgFromCachedLdxSync_WithoutCache_ReturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, gafConfig := testutil.SetUpEngineMock(t, c)
 
 	folderPath := types.FilePath("/fake/test-folder")
 
 	// Set global org
-	globalOrgId := "global-org-id"
-	gafConfig.Set(configuration.ORGANIZATION, globalOrgId)
+	gafConfig.Set(configuration.ORGANIZATION, "global-org-id")
 
 	// Don't populate cache
 	mockService := setupLdxSyncService(t)
 	org, err := mockService.ResolveOrg(c, folderPath)
 
-	require.NoError(t, err)
-	assert.Equal(t, globalOrgId, org.Id, "Should fallback to global org when cache is empty")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no organization was able to be determined for folder")
+	assert.Empty(t, org.Id)
 }
