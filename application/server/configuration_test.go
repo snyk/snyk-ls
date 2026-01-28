@@ -515,7 +515,6 @@ func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing
 
 func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *testing.T) {
 	c := testutil.IntegTest(t)
-	//di.TestInit(t)
 
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"

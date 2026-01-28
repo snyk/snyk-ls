@@ -360,52 +360,33 @@ func Test_isOrgDefault(t *testing.T) {
 	tests := []struct {
 		name                 string
 		setDefaultOrgValue   string
-		setDefaultSlugValue  string
 		testValue            string
 		expectedIsDefault    bool
 		expectedErrorMessage string
 	}{
 		{
-			name:                "empty organization",
-			setDefaultOrgValue:  "test-default-org-uuid",
-			setDefaultSlugValue: "test-default-org-slug",
-			testValue:           "",
-			expectedIsDefault:   true,
+			name:               "empty organization",
+			setDefaultOrgValue: "test-default-org-uuid",
+			testValue:          "",
+			expectedIsDefault:  true,
 		},
 		{
-			name:                "matching UUID",
-			setDefaultOrgValue:  "test-default-org-uuid",
-			setDefaultSlugValue: "test-default-org-slug",
-			testValue:           "test-default-org-uuid",
-			expectedIsDefault:   true,
+			name:               "matching UUID",
+			setDefaultOrgValue: "test-default-org-uuid",
+			testValue:          "test-default-org-uuid",
+			expectedIsDefault:  true,
 		},
 		{
-			name:                "matching slug",
-			setDefaultOrgValue:  "test-default-org-uuid",
-			setDefaultSlugValue: "test-default-org-slug",
-			testValue:           "test-default-org-slug",
-			expectedIsDefault:   true,
-		},
-		{
-			name:                "non-matching organization",
-			setDefaultOrgValue:  "test-default-org-uuid",
-			setDefaultSlugValue: "test-default-org-slug",
-			testValue:           "different-org-id",
-			expectedIsDefault:   false,
+			name:               "non-matching organization",
+			setDefaultOrgValue: "test-default-org-uuid",
+			testValue:          "different-org-id",
+			expectedIsDefault:  false,
 		},
 		{
 			name:                 "failed to fetch default UUID returns error",
 			setDefaultOrgValue:   "",
-			setDefaultSlugValue:  "test-default-org-slug",
 			testValue:            "some-org-id",
 			expectedErrorMessage: "could not retrieve the user's default organization",
-		},
-		{
-			name:                 "failed to fetch default slug returns error when UUID not matched",
-			setDefaultOrgValue:   "test-default-org-uuid",
-			setDefaultSlugValue:  "",
-			testValue:            "some-org-id",
-			expectedErrorMessage: "could not retrieve the user's default organization slug",
 		},
 	}
 
@@ -416,7 +397,6 @@ func Test_isOrgDefault(t *testing.T) {
 
 			// Setup mock default values for org config - these will not be overridden by a GAF config clone, which the function does.
 			gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(tt.setDefaultOrgValue))
-			gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction(tt.setDefaultSlugValue))
 
 			isDefault, err := isOrgDefault(c, tt.testValue)
 
@@ -438,7 +418,6 @@ func Test_MigrateFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
 	// Setup: Use immutable defaults so isOrgDefault() can clone config, set org="", and still retrieve the default org
 	gafConfig := c.Engine().GetConfiguration()
 	gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("default-org-uuid"))
-	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("default-org-slug"))
 
 	folderConfig := &types.FolderConfig{
 		FolderPath:                  types.FilePath(t.TempDir()),
@@ -469,7 +448,6 @@ func Test_MigrateFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
 		}
 		return "default-org-uuid", nil
 	})
-	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("default-org-slug"))
 
 	// Set the user's non-default org
 	c.SetOrganization("non-default-org-id")
@@ -500,12 +478,6 @@ func Test_MigrateFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(t *tes
 			return existingValue, nil
 		}
 		return "", fmt.Errorf("unable to retrieve org ID: API request failed (status: 401)")
-	})
-	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, func(c configuration.Configuration, existingValue any) (any, error) {
-		if existingValue != nil && existingValue != "" {
-			return existingValue, nil
-		}
-		return "", fmt.Errorf("unable to retrieve org slug: API request failed (status: 401)")
 	})
 
 	// User has a custom global org set
