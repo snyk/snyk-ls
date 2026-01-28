@@ -53,6 +53,7 @@ func main() {
 	}
 	zerolog.TimeFieldFormat = time.RFC3339
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
+	entrypoint.ApplyDefaultCPUCap(c.Logger())
 	server.Start(c)
 	log.Info().Msg("Exiting...")
 }
