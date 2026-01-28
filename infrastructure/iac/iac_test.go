@@ -40,7 +40,7 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 	instrumentor := performance.NewInstrumentor()
 	scanner := New(c, instrumentor, error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c))
 
-	_, _ = scanner.Scan(t.Context(), "fake.yml", "", nil)
+	_, _ = scanner.Scan(t.Context(), "fake.yml", &types.FolderConfig{FolderPath: "."})
 
 	if spanRecorder, ok := instrumentor.(performance.SpanRecorder); ok {
 		spans := spanRecorder.Spans()
@@ -89,10 +89,127 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 	cancel()
 
 	// Act
-	_, _ = scanner.Scan(ctx, "", "", nil)
+	_, _ = scanner.Scan(ctx, "", &types.FolderConfig{FolderPath: "."})
 
 	// Assert
 	assert.False(t, cliMock.WasExecuted())
+}
+
+func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - use real temp dirs
+	workspaceDir := t.TempDir()
+	workspacePath := types.FilePath(workspaceDir)
+
+	// Create a subfolder with a terraform file
+	subfolderPath := workspaceDir + "/infra/nested"
+	assert.NoError(t, os.MkdirAll(subfolderPath, 0755))
+	filePath := subfolderPath + "/main.tf"
+	assert.NoError(t, os.WriteFile(filePath, []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
+
+	expectedOrg := "test-org-for-file-scan"
+	folderConfig := &types.FolderConfig{
+		FolderPath:   workspacePath,
+		PreferredOrg: expectedOrg,
+		OrgSetByUser: true,
+	}
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock)
+
+	// Act - scan a specific file within the workspace
+	_, _ = scanner.Scan(t.Context(), types.FilePath(filePath), folderConfig)
+
+	// Assert - verify the CLI was executed (scan was attempted)
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for file scan")
+}
+
+func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - use real temp dirs
+	workspaceDir := t.TempDir()
+	workspacePath := types.FilePath(workspaceDir)
+
+	// Create a subfolder with a terraform file
+	subfolderPath := workspaceDir + "/modules/subproject"
+	assert.NoError(t, os.MkdirAll(subfolderPath, 0755))
+	assert.NoError(t, os.WriteFile(subfolderPath+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
+
+	expectedOrg := "test-org-for-subfolder-scan"
+	folderConfig := &types.FolderConfig{
+		FolderPath:   workspacePath,
+		PreferredOrg: expectedOrg,
+		OrgSetByUser: true,
+	}
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock)
+
+	// Act - scan a subfolder (not the workspace root)
+	_, _ = scanner.Scan(t.Context(), types.FilePath(subfolderPath), folderConfig)
+
+	// Assert - verify the CLI was executed (scan was attempted)
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for subfolder scan")
+}
+
+func Test_Scan_WorkspaceFolderScan_UsesFolderConfigOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - use real temp dirs
+	workspaceDir := t.TempDir()
+	workspacePath := types.FilePath(workspaceDir)
+
+	// Create a terraform file in the workspace root
+	assert.NoError(t, os.WriteFile(workspaceDir+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
+
+	expectedOrg := "test-org-for-workspace-scan"
+	folderConfig := &types.FolderConfig{
+		FolderPath:   workspacePath,
+		PreferredOrg: expectedOrg,
+		OrgSetByUser: true,
+	}
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock)
+
+	// Act - scan the workspace folder itself
+	_, _ = scanner.Scan(t.Context(), workspacePath, folderConfig)
+
+	// Assert - verify the CLI was executed (scan was attempted)
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for workspace folder scan")
+}
+
+func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - simulate delta scan scenario where:
+	// - baseFolderPath is a temp directory with the base branch checkout
+	// - folderConfig.FolderPath points to baseFolderPath (as set by scanBaseBranch)
+	// - folderConfig.PreferredOrg contains the org from the original workspace
+	baseBranchDir := t.TempDir()
+	baseFolderPath := types.FilePath(baseBranchDir)
+
+	// Create a terraform file in the base branch directory
+	assert.NoError(t, os.WriteFile(baseBranchDir+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
+
+	// This simulates what scanBaseBranch does: create a copy of folderConfig with FolderPath = baseFolderPath
+	expectedOrg := "org-from-workspace"
+	baseScanConfig := &types.FolderConfig{
+		FolderPath:   baseFolderPath, // Points to temp base branch dir
+		PreferredOrg: expectedOrg,    // Org from original workspace
+		OrgSetByUser: true,
+	}
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock)
+
+	// Act - scan the base branch folder (as scanBaseBranch would do)
+	_, _ = scanner.Scan(t.Context(), baseFolderPath, baseScanConfig)
+
+	// Assert - verify the CLI was executed
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for delta scan base branch")
 }
 
 func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {

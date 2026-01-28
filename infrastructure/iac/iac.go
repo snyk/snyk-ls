@@ -99,7 +99,7 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{}
 }
 
-func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
+func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	c := config.CurrentConfig()
 
 	// Log scan type and paths
@@ -107,9 +107,11 @@ func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FileP
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
 	}
+	workspaceFolder := folderConfig.FolderPath
 	logger := c.Logger().With().
 		Str("method", "iac.Scan").
 		Str("path", string(path)).
+		Str("workspaceFolder", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
 
@@ -137,13 +139,6 @@ func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FileP
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(path))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")
-
-	var workspacePath types.FilePath
-	if uri.IsUriDirectory(documentURI) {
-		workspacePath = uri.PathFromUri(documentURI)
-	} else {
-		workspacePath = types.FilePath(filepath.Dir(string(uri.PathFromUri(documentURI))))
-	}
 	iac.mutex.Lock()
 	i := scanCount
 	previousScan, wasFound := iac.runningScans[documentURI]
@@ -162,7 +157,7 @@ func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FileP
 	iac.runningScans[documentURI] = newScan
 	iac.mutex.Unlock()
 
-	scanResults, err := iac.doScan(ctx, documentURI, workspacePath)
+	scanResults, err := iac.doScan(ctx, documentURI, workspaceFolder)
 	p.Report(80)
 	if err != nil {
 		noCancellation := ctx.Err() == nil
@@ -177,7 +172,7 @@ func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FileP
 		return issues, err
 	}
 
-	issues, err = iac.retrieveIssues(scanResults, issues, workspacePath)
+	issues, err = iac.retrieveIssues(scanResults, issues, workspaceFolder)
 	if err != nil {
 		return nil, pkgerrors.Wrap(err, "unable to retrieve IaC issues")
 	}

@@ -149,16 +149,17 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
 	}
+	workspaceFolder := folderConfig.FolderPath
 	logger := sc.C.Logger().With().
 		Str("method", "code.Scan").
 		Str("path", string(path)).
-		Str("folderPath", string(folderPath)).
+		Str("workspaceFolder", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
 
@@ -169,9 +170,10 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		return issues, err
 	}
 
-	if folderConfig == nil || folderConfig.SastSettings == nil {
-		logger.Error().Str("folderPath", string(folderPath)).Msg("folder config or SAST settings is nil")
-		return issues, errors.New("folder config or SAST settings not available")
+	if folderConfig.SastSettings == nil {
+		errMsg := "SAST settings not available"
+		logger.Error().Str("workspaceFolder", string(workspaceFolder)).Msg(errMsg)
+		return issues, errors.New(errMsg)
 	}
 
 	sastResponse := folderConfig.SastSettings
@@ -185,17 +187,17 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	}
 
 	sc.changedFilesMutex.Lock()
-	if sc.changedPaths[folderPath] == nil {
-		sc.changedPaths[folderPath] = map[types.FilePath]bool{}
+	if sc.changedPaths[workspaceFolder] == nil {
+		sc.changedPaths[workspaceFolder] = map[types.FilePath]bool{}
 	}
-	sc.changedPaths[folderPath][path] = true
+	sc.changedPaths[workspaceFolder][path] = true
 	sc.changedFilesMutex.Unlock()
 
-	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
+	// When starting a scan for a workspace folder that's already scanned, the new scan will wait for the previous scan
 	// to finish before starting.
 	// When there's already a scan waiting, the function returns immediately with empty results.
 	scanStatus := NewScanStatus()
-	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
+	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, workspaceFolder)
 	if isAlreadyWaiting {
 		return []types.Issue{}, nil // Returning an empty slice implies that no issues were found
 	}
@@ -209,15 +211,15 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	// Proceed to scan only if there are any changed paths. This ensures the following race condition coverage:
 	// It could be that one of throttled scans updated the changedPaths set, but the initial scan has picked up it's updated and proceeded with a scan in the meantime.
 	sc.changedFilesMutex.Lock()
-	if len(sc.changedPaths[folderPath]) <= 0 {
+	if len(sc.changedPaths[workspaceFolder]) <= 0 {
 		sc.changedFilesMutex.Unlock()
 		return []types.Issue{}, nil
 	}
 
-	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
+	filesToBeScanned := sc.getFilesToBeScanned(workspaceFolder)
 	sc.changedFilesMutex.Unlock()
 
-	results, err := internalScan(ctx, sc, folderPath, folderConfig, logger, filesToBeScanned)
+	results, err := internalScan(ctx, sc, workspaceFolder, folderConfig, logger, filesToBeScanned)
 	if err != nil {
 		return nil, err
 	}
@@ -480,9 +482,11 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 		return nil, fmt.Errorf("folder config is required to create code config")
 	}
 
-	// TODO - we are being inefficient and re-fetching the folder config in the function calls instead of passing it in
+	// Get organization directly from folderConfig instead of looking it up by path.
+	// This is important for base branch scans where FolderPath is a temporary directory
+	// that isn't registered as a workspace folder.
 	workspaceFolderPath := folderConfig.FolderPath
-	organization := sc.C.FolderOrganization(workspaceFolderPath)
+	organization := sc.C.FolderConfigOrganization(folderConfig)
 	if organization == "" {
 		return nil, fmt.Errorf("no organization found for workspace folder %s", workspaceFolderPath)
 	}
@@ -494,7 +498,7 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 		return nil, fmt.Errorf("failed to resolve organization to UUID for workspace folder %s: %w", workspaceFolderPath, err)
 	}
 
-	codeApiURL, err := GetCodeApiUrlForFolder(sc.C, workspaceFolderPath)
+	codeApiURL, err := getCodeApiUrlFromFolderConfig(sc.C, folderConfig)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to get code api url for workspace folder %s", workspaceFolderPath)
 		logger.Error().Msg(msg)

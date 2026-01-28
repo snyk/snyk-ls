@@ -221,7 +221,7 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func(i int) {
-				_, _ = scanner.Scan(t.Context(), types.FilePath("file"+strconv.Itoa(i)+".go"), tempDir, getTestFolderConfig(tempDir))
+				_, _ = scanner.Scan(t.Context(), types.FilePath("file"+strconv.Itoa(i)+".go"), getTestFolderConfig(tempDir))
 				wg.Done()
 			}(i)
 		}
@@ -257,7 +257,7 @@ func Test_Scan(t *testing.T) {
 
 		folderConfig := getTestFolderConfig(tempDir)
 		folderConfig.SastSettings.SastEnabled = false
-		_, _ = scanner.Scan(t.Context(), "", tempDir, folderConfig)
+		_, _ = scanner.Scan(t.Context(), "", folderConfig)
 	})
 
 	testCases := []struct {
@@ -314,7 +314,7 @@ func Test_Scan(t *testing.T) {
 			)
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
-			issues, err := scanner.Scan(t.Context(), "", tempDir, getTestFolderConfig(tempDir))
+			issues, err := scanner.Scan(t.Context(), "", getTestFolderConfig(tempDir))
 			assert.Nil(t, err)
 			assert.NotNil(t, issues)
 		})
@@ -789,7 +789,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 			NewFakeCodeScannerClient,
 		)
 
-		_, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
+		_, err := scanner.Scan(t.Context(), types.FilePath("test.go"), folderConfig)
 		assert.NoError(t, err)
 	})
 
@@ -810,7 +810,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 
-		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
+		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), folderConfig)
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues)
@@ -842,12 +842,12 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		scanner2 := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService2, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
 
 		// Scan with org1 (should succeed since SAST is enabled)
-		issues1, err1 := scanner1.Scan(t.Context(), types.FilePath("test1.go"), tempDir1, folderConfig1)
+		issues1, err1 := scanner1.Scan(t.Context(), types.FilePath("test1.go"), folderConfig1)
 		assert.NoError(t, err1)
 		assert.NotNil(t, issues1)
 
 		// Scan with org2 (should fail since SAST is disabled)
-		issues2, err2 := scanner2.Scan(t.Context(), types.FilePath("test2.go"), tempDir2, folderConfig2)
+		issues2, err2 := scanner2.Scan(t.Context(), types.FilePath("test2.go"), folderConfig2)
 		assert.Error(t, err2)
 		assert.ErrorContains(t, err2, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues2)

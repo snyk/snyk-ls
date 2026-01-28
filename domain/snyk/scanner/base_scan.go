@@ -102,13 +102,18 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 
 	// scan
 	var results []types.Issue
+	logger.Debug().Msg("scanBaseBranch: scanning reference folder")
+	// All scanners use folderConfig.FolderPath as the scan root.
+	// For a base branch scan, this must be the temporary directory of the base branch checkout.
+	// We clone the folderConfig to avoid modifying the original and to pass the correct scan root.
+	baseScanConfig := *folderConfig
+	baseScanConfig.FolderPath = baseFolderPath
 	if s.Product() == product.ProductCode {
-		logger.Debug().Msg("scanBaseBranch: scanning reference folder (Code product)")
-		results, err = s.Scan(ctx, "", baseFolderPath, folderConfig)
+		// Code scanner expects empty path for folder scans (path is used for incremental file tracking)
+		results, err = s.Scan(ctx, "", &baseScanConfig)
 	} else {
-		logger.Debug().Msg("scanBaseBranch: scanning reference folder")
-		sc.populateOrgForScannedFolderConfig(baseFolderPath, folderConfig)
-		results, err = s.Scan(ctx, baseFolderPath, "", folderConfig)
+		sc.populateOrgForScannedFolderConfig(baseFolderPath, &baseScanConfig)
+		results, err = s.Scan(ctx, baseFolderPath, &baseScanConfig)
 	}
 	if err != nil {
 		logger.Error().Err(err).Msgf("skipping base scan persistence in %s %v", folderPath, err)
