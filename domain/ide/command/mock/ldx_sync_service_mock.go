@@ -9,9 +9,62 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	ldx_sync_config "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+	workflow "github.com/snyk/go-application-framework/pkg/workflow"
 	config "github.com/snyk/snyk-ls/application/config"
 	types "github.com/snyk/snyk-ls/internal/types"
 )
+
+// MockLdxSyncApiClient is a mock of LdxSyncApiClient interface.
+type MockLdxSyncApiClient struct {
+	ctrl     *gomock.Controller
+	recorder *MockLdxSyncApiClientMockRecorder
+}
+
+// MockLdxSyncApiClientMockRecorder is the mock recorder for MockLdxSyncApiClient.
+type MockLdxSyncApiClientMockRecorder struct {
+	mock *MockLdxSyncApiClient
+}
+
+// NewMockLdxSyncApiClient creates a new mock instance.
+func NewMockLdxSyncApiClient(ctrl *gomock.Controller) *MockLdxSyncApiClient {
+	mock := &MockLdxSyncApiClient{ctrl: ctrl}
+	mock.recorder = &MockLdxSyncApiClientMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockLdxSyncApiClient) EXPECT() *MockLdxSyncApiClientMockRecorder {
+	return m.recorder
+}
+
+// GetUserConfigForProject mocks base method.
+func (m *MockLdxSyncApiClient) GetUserConfigForProject(engine workflow.Engine, projectPath, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserConfigForProject", engine, projectPath, preferredOrg)
+	ret0, _ := ret[0].(ldx_sync_config.LdxSyncConfigResult)
+	return ret0
+}
+
+// GetUserConfigForProject indicates an expected call of GetUserConfigForProject.
+func (mr *MockLdxSyncApiClientMockRecorder) GetUserConfigForProject(engine, projectPath, preferredOrg interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserConfigForProject", reflect.TypeOf((*MockLdxSyncApiClient)(nil).GetUserConfigForProject), engine, projectPath, preferredOrg)
+}
+
+// ResolveOrgFromUserConfig mocks base method.
+func (m *MockLdxSyncApiClient) ResolveOrgFromUserConfig(engine workflow.Engine, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResolveOrgFromUserConfig", engine, result)
+	ret0, _ := ret[0].(ldx_sync_config.Organization)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResolveOrgFromUserConfig indicates an expected call of ResolveOrgFromUserConfig.
+func (mr *MockLdxSyncApiClientMockRecorder) ResolveOrgFromUserConfig(engine, result interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveOrgFromUserConfig", reflect.TypeOf((*MockLdxSyncApiClient)(nil).ResolveOrgFromUserConfig), engine, result)
+}
 
 // MockLdxSyncService is a mock of LdxSyncService interface.
 type MockLdxSyncService struct {
@@ -49,16 +102,16 @@ func (mr *MockLdxSyncServiceMockRecorder) RefreshConfigFromLdxSync(c, workspaceF
 }
 
 // ResolveOrg mocks base method.
-func (m *MockLdxSyncService) ResolveOrg(c *config.Config, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error) {
+func (m *MockLdxSyncService) ResolveOrg(c *config.Config, folderPath types.FilePath) (ldx_sync_config.Organization, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResolveOrg", c, result)
+	ret := m.ctrl.Call(m, "ResolveOrg", c, folderPath)
 	ret0, _ := ret[0].(ldx_sync_config.Organization)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ResolveOrg indicates an expected call of ResolveOrg.
-func (mr *MockLdxSyncServiceMockRecorder) ResolveOrg(c, result interface{}) *gomock.Call {
+func (mr *MockLdxSyncServiceMockRecorder) ResolveOrg(c, folderPath interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveOrg", reflect.TypeOf((*MockLdxSyncService)(nil).ResolveOrg), c, result)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveOrg", reflect.TypeOf((*MockLdxSyncService)(nil).ResolveOrg), c, folderPath)
 }
