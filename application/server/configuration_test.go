@@ -198,6 +198,7 @@ func Test_UpdateSettings(t *testing.T) {
 			ActivateSnykOpenSource:       "false",
 			ActivateSnykCode:             "false",
 			ActivateSnykIac:              "false",
+			ActivateSnykContainer:        "false",
 			Insecure:                     "true",
 			Endpoint:                     "https://api.snyk.io",
 			AdditionalParams:             "--all-projects -d",
@@ -244,6 +245,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, false, c.IsSnykCodeEnabled())
 		assert.Equal(t, false, c.IsSnykOssEnabled())
 		assert.Equal(t, false, c.IsSnykIacEnabled())
+		assert.Equal(t, false, c.IsSnykContainerEnabled())
 		assert.Equal(t, true, c.CliSettings().Insecure)
 		assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
 		assert.Equal(t, "https://api.snyk.io", c.SnykApi())
