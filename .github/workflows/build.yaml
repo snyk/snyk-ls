@@ -112,7 +112,7 @@ jobs:
           name: junit-test-summary-${{ matrix.os }}
           path: .
           workflow: build.yaml
-          branch: main
+          # branch: main
           workflow_conclusion: success
           if_no_artifact_found: warn
 
