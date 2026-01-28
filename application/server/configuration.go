@@ -288,10 +288,14 @@ func gatherAllFolderPaths(incomingMap map[types.FilePath]types.FolderConfig, wor
 
 func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.FolderConfig, notifier notification.Notifier) (types.FolderConfig, bool) {
 	storedConfig := c.FolderConfig(path)
+	logger := c.Logger().With().Str("method", "processSingleFolderConfig").Str("path", string(path)).Logger()
 
 	var folderConfig types.FolderConfig
+	var incoming types.FolderConfig
+	var hasIncoming bool
+
 	// Use incoming config if present, otherwise use stored config or create new
-	if incoming, hasIncoming := incomingMap[path]; hasIncoming {
+	if incoming, hasIncoming = incomingMap[path]; hasIncoming {
 		folderConfig = incoming
 	} else if storedConfig != nil {
 		folderConfig = *storedConfig
@@ -307,6 +311,16 @@ func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMa
 		folderConfig.UserOverrides = storedConfig.UserOverrides
 	}
 
+	// Process ModifiedFields from IDE to update UserOverrides
+	// This is how the IDE communicates user changes to org-scope settings
+	if hasIncoming && incoming.ModifiedFields != nil && len(incoming.ModifiedFields) > 0 {
+		processModifiedFields(c, &folderConfig, incoming.ModifiedFields, &logger)
+	}
+
+	// Clear transient fields that shouldn't be stored
+	folderConfig.EffectiveConfig = nil
+	folderConfig.ModifiedFields = nil
+
 	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
 	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
 
@@ -314,12 +328,48 @@ func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMa
 	if configChanged {
 		err := c.UpdateFolderConfig(&folderConfig)
 		if err != nil {
-			c.Logger().Err(err).Str("path", string(path)).Msg("failed to update folder config")
+			logger.Err(err).Msg("failed to update folder config")
 			notifier.SendErrorDiagnostic(path, err)
 		}
 	}
 
 	return folderConfig, configChanged
+}
+
+// processModifiedFields processes user changes from the IDE and updates UserOverrides accordingly.
+// - If a field has a non-nil value, it's added/updated as a user override
+// - If a field has a nil value, the user override is removed (reset to default/LDX-Sync)
+// - Locked fields are rejected with a warning log
+func processModifiedFields(c *config.Config, folderConfig *types.FolderConfig, modifiedFields map[string]any, logger *zerolog.Logger) {
+	resolver := c.GetConfigResolver()
+
+	for settingName, newValue := range modifiedFields {
+		// Validate that the field is not locked
+		if resolver != nil {
+			_, source := resolver.GetValue(settingName, folderConfig)
+			if source == types.ConfigSourceLDXSyncLocked {
+				logger.Warn().
+					Str("setting", settingName).
+					Msg("Rejecting change to locked setting - enforced by organization policy")
+				continue
+			}
+		}
+
+		if newValue == nil {
+			// User wants to reset/clear the override
+			folderConfig.ResetToDefault(settingName)
+			logger.Debug().
+				Str("setting", settingName).
+				Msg("User override cleared, reverting to LDX-Sync or default")
+		} else {
+			// User is setting/updating an override
+			folderConfig.SetUserOverride(settingName, newValue)
+			logger.Debug().
+				Str("setting", settingName).
+				Interface("value", newValue).
+				Msg("User override set")
+		}
+	}
 }
 
 func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {

@@ -156,17 +156,53 @@ func populatePointerFields(s *types.Settings, c *config.Config) {
 	s.RiskScoreThreshold = &riskScoreThreshold
 }
 
-// populateFolderConfigs populates folder-specific configuration
+// populateFolderConfigs populates folder-specific configuration with effective values
 func populateFolderConfigs(s *types.Settings, c *config.Config) {
 	if c.Workspace() == nil {
 		return
 	}
 
+	resolver := c.GetConfigResolver()
+
 	for _, f := range c.Workspace().Folders() {
-		if storedFc := c.FolderConfig(f.Path()); storedFc != nil {
-			s.FolderConfigs = append(s.FolderConfigs, *storedFc)
+		storedFc := c.FolderConfig(f.Path())
+		if storedFc == nil {
+			continue
 		}
+
+		// Clone the stored config so we don't modify the original
+		fc := *storedFc
+
+		// Compute EffectiveConfig for org-scope settings if resolver is available
+		if resolver != nil {
+			fc.EffectiveConfig = computeEffectiveConfig(resolver, &fc)
+		}
+
+		s.FolderConfigs = append(s.FolderConfigs, fc)
 	}
+}
+
+// computeEffectiveConfig computes effective values for all org-scope settings
+// that can be displayed/edited in the HTML settings page
+func computeEffectiveConfig(resolver *types.ConfigResolver, fc *types.FolderConfig) map[string]types.EffectiveValue {
+	effectiveConfig := make(map[string]types.EffectiveValue)
+
+	// Org-scope settings that can be overridden per-folder
+	orgScopeSettings := []string{
+		types.SettingEnabledSeverities,
+		types.SettingIssueViewOpenIssues,
+		types.SettingIssueViewIgnoredIssues,
+		types.SettingScanAutomatic,
+		types.SettingScanNetNew,
+		types.SettingEnabledProducts,
+		types.SettingRiskScoreThreshold,
+	}
+
+	for _, settingName := range orgScopeSettings {
+		effectiveConfig[settingName] = resolver.GetEffectiveValue(settingName, fc)
+	}
+
+	return effectiveConfig
 }
 
 // convertFilePathsToStrings converts []types.FilePath to []string

@@ -211,6 +211,16 @@ func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig *Fol
 	return value, source
 }
 
+// GetEffectiveValue resolves a configuration value and returns it as an EffectiveValue
+// with source information for display to the IDE.
+func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig *FolderConfig) EffectiveValue {
+	value, source := r.GetValue(settingName, folderConfig)
+	return EffectiveValue{
+		Value:  value,
+		Source: source.String(),
+	}
+}
+
 // logResolution logs the config resolution decision for debugging
 func (r *ConfigResolver) logResolution(settingName, folderPath, org string, value any, source ConfigSource, userOverrideExists, ldxSyncHasField, isLocked bool) {
 	if r.logger == nil {

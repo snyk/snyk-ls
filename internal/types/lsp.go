@@ -551,6 +551,14 @@ type ScanCommandConfig struct {
 
 // FolderConfig is exchanged between IDE and LS
 // IDE sends this as part of the settings/initialization
+// EffectiveValue represents a computed configuration value with its source.
+// This is sent to the IDE so it can display the effective value.
+// Lock status can be derived from Source == "ldx-sync-locked".
+type EffectiveValue struct {
+	Value  any    `json:"value"`
+	Source string `json:"source"` // ConfigSource as string: "default", "global", "ldx-sync", "ldx-sync-locked", "user-override"
+}
+
 // LS sends this via the $/snyk.folderConfig notification
 type FolderConfig struct {
 	FolderPath                  FilePath                              `json:"folderPath"`
@@ -569,7 +577,17 @@ type FolderConfig struct {
 	// UserOverrides stores user-specified overrides for org-scope settings.
 	// Key presence indicates the user has explicitly set this value (even if it matches the default).
 	// Key absence means we should use LDX-Sync or default value.
+	// This is LS-managed and should not be directly set by the IDE.
 	UserOverrides map[string]any `json:"userOverrides,omitempty"`
+	// EffectiveConfig contains computed effective values for org-scope settings.
+	// Sent to IDE for display and to drive IDE behavior. Read-only from IDE perspective.
+	// Key is the setting name (e.g., SettingEnabledSeverities), value is EffectiveValue.
+	EffectiveConfig map[string]EffectiveValue `json:"effectiveConfig,omitempty"`
+	// ModifiedFields is sent from IDE to LS when user changes settings.
+	// Key is the setting name, value is the new value (or null to clear/reset override).
+	// Only fields the user actually modified should be included.
+	// This field is ignored when LS sends to IDE.
+	ModifiedFields map[string]any `json:"modifiedFields,omitempty"`
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {
@@ -627,6 +645,16 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 		maps.Copy(clone.UserOverrides, fc.UserOverrides)
 	}
 
+	if fc.EffectiveConfig != nil {
+		clone.EffectiveConfig = make(map[string]EffectiveValue, len(fc.EffectiveConfig))
+		maps.Copy(clone.EffectiveConfig, fc.EffectiveConfig)
+	}
+
+	if fc.ModifiedFields != nil {
+		clone.ModifiedFields = make(map[string]any, len(fc.ModifiedFields))
+		maps.Copy(clone.ModifiedFields, fc.ModifiedFields)
+	}
+
 	return clone
 }
 
@@ -660,14 +688,16 @@ func (fc *FolderConfig) ResetToDefault(settingName string) {
 	}
 }
 
-// SanitizeForIDE returns a copy of the FolderConfig with LS-managed fields cleared.
-// This should be used when sending folder configs to the IDE, as these fields
-// are managed by the LS and should not be exposed to or modified by the IDE.
+// SanitizeForIDE returns a copy of the FolderConfig prepared for sending to the IDE.
+// - UserOverrides, FeatureFlags, SastSettings are cleared (LS-managed, not exposed to IDE)
+// - EffectiveConfig is kept (IDE needs this for display and behavior)
+// - ModifiedFields is cleared (only used for IDE → LS communication)
 func (fc *FolderConfig) SanitizeForIDE() FolderConfig {
 	sanitized := *fc
 	sanitized.UserOverrides = nil
 	sanitized.FeatureFlags = nil
 	sanitized.SastSettings = nil
+	sanitized.ModifiedFields = nil
 	return sanitized
 }
 
