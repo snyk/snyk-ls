@@ -28,6 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
@@ -180,6 +182,12 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 			assert.Len(t, folders, 1)
 			assert.Equal(t, folder.Path(), folders[0].Path())
 		})
+
+	// Expect ResolveOrg to be called during initialized handler for each folder
+	mockLdxSyncService.EXPECT().
+		ResolveOrg(c, folder.Path()).
+		Return(ldx_sync_config.Organization{}, nil).
+		AnyTimes()
 
 	// reset to use real service with mock injected
 	command.SetService(command.NewService(authenticationService, di.FeatureFlagService(), di.Notifier(), di.LearnService(), nil, nil, nil, mockLdxSyncService))
