@@ -1031,7 +1031,6 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 
 	setup.c.SetOrganization("global-org-id")
 
-
 	// Call updateFolderConfig with DIFFERENT org to trigger updateFolderConfigOrg
 	settings := types.Settings{
 		FolderConfigs: []types.FolderConfig{

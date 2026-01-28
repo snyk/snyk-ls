@@ -41,8 +41,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 
-	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/google/uuid"
+	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 )
 
 // setupLdxSyncService returns a real LdxSyncService implementation for tests
@@ -71,23 +71,23 @@ func createLdxSyncResult(orgId, orgName, orgSlug string, isDefault bool) *ldx_sy
 		Config: &v20241015.UserConfigResponse{
 			Data: struct {
 				Attributes struct {
-					CreatedAt      *time.Time                                          `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata    `json:"folder_settings,omitempty"`
-					LastModifiedAt *time.Time                                          `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                           `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope    `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata               `json:"settings,omitempty"`
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
 				} `json:"attributes"`
 				Id   uuid.UUID                            `json:"id"`
 				Type v20241015.UserConfigResponseDataType `json:"type"`
 			}{
 				Attributes: struct {
-					CreatedAt      *time.Time                                          `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata    `json:"folder_settings,omitempty"`
-					LastModifiedAt *time.Time                                          `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                           `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope    `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata               `json:"settings,omitempty"`
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
 				}{
 					Organizations: &orgs,
 				},
