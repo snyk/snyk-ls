@@ -38,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -154,16 +155,26 @@ func InitializeSettings(c *config.Config, settings types.Settings) {
 }
 
 func UpdateSettings(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	previouslyEnabledProducts := c.DisplayableIssueTypes()
+	ws := c.Workspace()
+
+	// Capture "before" state per folder
+	previousState := make(map[types.FilePath]map[product.FilterableIssueType]bool)
+	if ws != nil {
+		for _, folder := range ws.Folders() {
+			previousState[folder.Path()] = folder.DisplayableIssueTypes()
+		}
+	}
+
 	writeSettings(c, settings, triggerSource)
 
-	// If a product was removed, clear all issues for this product
-	ws := c.Workspace()
+	// If a product was removed for a folder, clear all issues for that product in that folder
 	if ws != nil {
-		newSupportedProducts := c.DisplayableIssueTypes()
-		for removedIssueType, wasSupported := range previouslyEnabledProducts {
-			if wasSupported && !newSupportedProducts[removedIssueType] {
-				ws.ClearIssuesByType(removedIssueType)
+		for _, folder := range ws.Folders() {
+			newState := folder.DisplayableIssueTypes()
+			for issueType, wasEnabled := range previousState[folder.Path()] {
+				if wasEnabled && !newState[issueType] {
+					folder.ClearDiagnosticsByIssueType(issueType)
+				}
 			}
 		}
 	}
@@ -176,6 +187,9 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	if reflect.DeepEqual(settings, emptySettings) {
 		return
 	}
+
+	// Update ConfigResolver with global settings for machine-scope resolution
+	c.UpdateGlobalSettingsInResolver(&settings)
 
 	updateSeverityFilter(c, settings.FilterSeverity, triggerSource)
 	updateRiskScoreThreshold(c, settings, triggerSource)
@@ -285,10 +299,12 @@ func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMa
 		folderConfig = types.FolderConfig{FolderPath: path}
 	}
 
-	// Never trust the IDE for what the FFs and SAST settings are - always use stored values
+	// Never trust the IDE for LS-managed fields - always use stored values
+	// These are managed by the LS and should not be overwritten by IDE
 	if storedConfig != nil {
 		folderConfig.FeatureFlags = storedConfig.FeatureFlags
 		folderConfig.SastSettings = storedConfig.SastSettings
+		folderConfig.UserOverrides = storedConfig.UserOverrides
 	}
 
 	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
@@ -316,6 +332,14 @@ func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig,
 		if err != nil {
 			c.Logger().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("failed to update folder config during org migration")
 			notifier.SendErrorDiagnostic(folderConfig.FolderPath, err)
+		}
+
+		// User changed org settings, refresh from LDX-Sync
+		if orgSettingsChanged {
+			folder := c.Workspace().GetFolderContaining(folderConfig.FolderPath)
+			if folder != nil {
+				di.LdxSyncService().RefreshConfigFromLdxSync(c, []types.Folder{folder})
+			}
 		}
 	}
 }
@@ -350,7 +374,11 @@ func handleFolderCacheClearing(c *config.Config, path types.FilePath, folderConf
 func sendFolderConfigUpdateIfNeeded(notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
 	// Don't send folder configs on initialize, since initialized will always send them.
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
-		notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
+		configsForIDE := make([]types.FolderConfig, len(folderConfigs))
+		for i, fc := range folderConfigs {
+			configsForIDE[i] = fc.SanitizeForIDE()
+		}
+		notifier.Send(types.FolderConfigsParam{FolderConfigs: configsForIDE})
 	}
 }
 
@@ -419,7 +447,7 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 		} else {
 			// Case when Folder Configs were provided as part of initialize request
 			// or when user is not logged in during initialized notification
-			org, err := command.GetBestOrgFromLdxSync(c, folderConfig)
+			org, err := di.LdxSyncService().ResolveOrg(c, folderConfig.FolderPath)
 			if err == nil { // No need to log the error, it will have already been logged.
 				folderConfig.AutoDeterminedOrg = org.Id
 			}

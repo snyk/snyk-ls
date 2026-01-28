@@ -136,9 +136,9 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 	return sc
 }
 
-func (sc *Scanner) IsEnabled() bool {
-	return sc.C.IsSnykCodeEnabled() ||
-		sc.C.IsSnykCodeSecurityEnabled()
+func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	return sc.C.IsSnykCodeEnabledForFolder(folderConfig) ||
+		sc.C.IsSnykCodeSecurityEnabledForFolder(folderConfig)
 }
 
 func (sc *Scanner) Product() product.Product {

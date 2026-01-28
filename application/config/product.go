@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,28 +16,35 @@
 
 package config
 
-import "github.com/snyk/snyk-ls/internal/product"
+import (
+	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
+)
 
-func (c *Config) IsProductEnabled(p product.Product) bool {
+// IsProductEnabledForFolder returns whether a product is enabled for a specific folder config,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsProductEnabledForFolder(p product.Product, folderConfig *types.FolderConfig) bool {
 	switch p {
 	case product.ProductCode:
-		return c.IsSnykCodeEnabled() || c.IsSnykCodeSecurityEnabled()
+		return c.IsSnykCodeEnabledForFolder(folderConfig) || c.IsSnykCodeSecurityEnabledForFolder(folderConfig)
 	case product.ProductOpenSource:
-		return c.IsSnykOssEnabled()
+		return c.IsSnykOssEnabledForFolder(folderConfig)
 	case product.ProductInfrastructureAsCode:
-		return c.IsSnykIacEnabled()
+		return c.IsSnykIacEnabledForFolder(folderConfig)
 	default:
 		return false
 	}
 }
 
-func (c *Config) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
+// DisplayableIssueTypesForFolder returns which issue types are enabled for a specific folder config,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) DisplayableIssueTypesForFolder(folderConfig *types.FolderConfig) map[product.FilterableIssueType]bool {
 	enabled := make(map[product.FilterableIssueType]bool)
-	enabled[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabled()
+	enabled[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabledForFolder(folderConfig)
 
 	// Handle backwards compatibility.
-	enabled[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabled() || c.IsSnykCodeSecurityEnabled()
-	enabled[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabled()
+	enabled[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabledForFolder(folderConfig) || c.IsSnykCodeSecurityEnabledForFolder(folderConfig)
+	enabled[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabledForFolder(folderConfig)
 
 	return enabled
 }

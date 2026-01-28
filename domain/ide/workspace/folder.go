@@ -613,8 +613,9 @@ func getIssuePerFileFromFlatList(issueList []types.Issue) snyk.IssuesByFile {
 }
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
-	supportedIssueTypes := f.c.DisplayableIssueTypes()
-	filteredIssuesByFile := f.FilterIssues(issues, supportedIssueTypes)
+	folderConfig := f.FolderConfigReadOnly()
+	supportedIssueTypes := f.c.DisplayableIssueTypesForFolder(folderConfig)
+	filteredIssuesByFile := f.filterIssuesWithConfig(issues, supportedIssueTypes, folderConfig)
 	return filteredIssuesByFile
 }
 
@@ -649,16 +650,22 @@ func (f *Folder) FilterIssues(
 	issues snyk.IssuesByFile,
 	supportedIssueTypes map[product.FilterableIssueType]bool,
 ) snyk.IssuesByFile {
+	return f.filterIssuesWithConfig(issues, supportedIssueTypes, f.FolderConfigReadOnly())
+}
+
+func (f *Folder) filterIssuesWithConfig(
+	issues snyk.IssuesByFile,
+	supportedIssueTypes map[product.FilterableIssueType]bool,
+	folderConfig *types.FolderConfig,
+) snyk.IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 	filteredIssues := snyk.IssuesByFile{}
 	filterReasonCounts := make(map[FilterReason]int)
 
-	if f.c.IsDeltaFindingsEnabled() {
+	if f.c.IsDeltaFindingsEnabledForFolder(folderConfig) {
 		deltaForAllProducts := f.GetDeltaForAllProducts(supportedIssueTypes)
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
-
-	folderConfig := f.c.FolderConfig(f.path)
 
 	for path, issueSlice := range issues {
 		if !f.Contains(path) {
@@ -689,36 +696,37 @@ func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[produ
 	if !supportedIssueTypes[issue.GetFilterableIssueType()] {
 		return FilterReasonUnsupportedType
 	}
-	if !f.isVisibleSeverity(issue) {
+	if !f.isVisibleSeverity(issue, folderConfig) {
 		return FilterReasonSeverity
 	}
 	riskScoreInCLIEnabled := featureflag.UseOsTestWorkflow(folderConfig)
-	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue) {
+	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue, folderConfig) {
 		return FilterReasonRiskScore
 	}
 	codeConsistentIgnoresEnabled := folderConfig.FeatureFlags[featureflag.SnykCodeConsistentIgnores]
-	if codeConsistentIgnoresEnabled && !f.isVisibleForIssueViewOptions(issue) {
+	if codeConsistentIgnoresEnabled && !f.isVisibleForIssueViewOptions(issue, folderConfig) {
 		return FilterReasonIssueViewOptions
 	}
 	return FilterReasonNotFiltered
 }
 
-func (f *Folder) isVisibleSeverity(issue types.Issue) bool {
+func (f *Folder) isVisibleSeverity(issue types.Issue, folderConfig *types.FolderConfig) bool {
+	filter := f.c.FilterSeverityForFolder(folderConfig)
 	switch issue.GetSeverity() {
 	case types.Critical:
-		return f.c.FilterSeverity().Critical
+		return filter.Critical
 	case types.High:
-		return f.c.FilterSeverity().High
+		return filter.High
 	case types.Medium:
-		return f.c.FilterSeverity().Medium
+		return filter.Medium
 	case types.Low:
-		return f.c.FilterSeverity().Low
+		return filter.Low
 	}
 	return false
 }
 
-func (f *Folder) isVisibleRiskScore(issue types.Issue) bool {
-	riskScoreThreshold := f.c.RiskScoreThreshold()
+func (f *Folder) isVisibleRiskScore(issue types.Issue, folderConfig *types.FolderConfig) bool {
+	riskScoreThreshold := f.c.RiskScoreThresholdForFolder(folderConfig)
 	switch {
 	case riskScoreThreshold == 0:
 		// Showing all issues because threshold is 0
@@ -751,8 +759,8 @@ func (f *Folder) isVisibleRiskScore(issue types.Issue) bool {
 	return issueRiskScore >= uint16(riskScoreThreshold)
 }
 
-func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue) bool {
-	issueViewOptions := f.c.IssueViewOptions()
+func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig *types.FolderConfig) bool {
+	issueViewOptions := f.c.IssueViewOptionsForFolder(folderConfig)
 	if issue.GetIsIgnored() {
 		return issueViewOptions.IgnoredIssues
 	} else {
@@ -763,7 +771,7 @@ func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue) bool {
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.c.IsDeltaFindingsEnabled())
+	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.IsDeltaFindingsEnabled())
 	if scanErr != nil {
 		f.sendScanError(p, scanErr)
 	} else {
@@ -815,6 +823,28 @@ func (f *Folder) Name() string { return f.name }
 
 func (f *Folder) Status() types.FolderStatus { return f.status }
 
+// FolderConfigReadOnly returns the FolderConfig for this folder using read-only access
+// (no storage writes, no Git enrichment). For operations that need to create or update
+// the config, use c.FolderConfig(f.Path()) directly.
+func (f *Folder) FolderConfigReadOnly() *types.FolderConfig {
+	return f.c.FolderConfigReadOnly(f.path)
+}
+
+// IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
+func (f *Folder) IsDeltaFindingsEnabled() bool {
+	return f.c.IsDeltaFindingsEnabledForFolder(f.FolderConfigReadOnly())
+}
+
+// IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
+func (f *Folder) IsAutoScanEnabled() bool {
+	return f.c.IsAutoScanEnabledForFolder(f.FolderConfigReadOnly())
+}
+
+// DisplayableIssueTypes returns which issue types are enabled for this folder.
+func (f *Folder) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
+	return f.c.DisplayableIssueTypesForFolder(f.FolderConfigReadOnly())
+}
+
 func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIssues []types.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"
 	if !f.Contains(path) {
@@ -851,9 +881,10 @@ func (f *Folder) IsTrusted() bool {
 }
 
 func (f *Folder) sendSuccess(processedProduct product.Product) {
+	folderConfig := f.c.FolderConfig(f.path)
 	if processedProduct != "" {
-		f.scanNotifier.SendSuccess(processedProduct, f.Path())
+		f.scanNotifier.SendSuccess(processedProduct, folderConfig)
 	} else {
-		f.scanNotifier.SendSuccessForAllProducts(f.Path())
+		f.scanNotifier.SendSuccessForAllProducts(folderConfig)
 	}
 }

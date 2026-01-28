@@ -77,25 +77,29 @@ func (n *scanNotifier) SendError(product product.Product, folderPath types.FileP
 }
 
 // SendSuccessForAllProducts reports success for all enabled products
-func (n *scanNotifier) SendSuccessForAllProducts(folderPath types.FilePath) {
+func (n *scanNotifier) SendSuccessForAllProducts(folderConfig *types.FolderConfig) {
 	for _, p := range n.supportedProducts() {
-		if n.c.IsProductEnabled(p) {
-			n.sendSuccess(p, folderPath)
+		if n.c.IsProductEnabledForFolder(p, folderConfig) {
+			n.sendSuccess(p, folderConfig)
 		}
 	}
 }
 
 // SendSuccess sends scan success message for a single enabled product
-func (n *scanNotifier) SendSuccess(product product.Product, folderPath types.FilePath) {
+func (n *scanNotifier) SendSuccess(pr product.Product, folderConfig *types.FolderConfig) {
 	// If no issues found, we still should send success message the reported product
-	n.sendSuccess(product, folderPath)
+	n.sendSuccess(pr, folderConfig)
 }
 
-func (n *scanNotifier) sendSuccess(pr product.Product, folderPath types.FilePath) {
-	if !n.c.IsProductEnabled(pr) {
+func (n *scanNotifier) sendSuccess(pr product.Product, folderConfig *types.FolderConfig) {
+	if !n.c.IsProductEnabledForFolder(pr, folderConfig) {
 		return
 	}
 
+	folderPath := types.FilePath("")
+	if folderConfig != nil {
+		folderPath = folderConfig.FolderPath
+	}
 	n.notifier.Send(
 		types.SnykScanParams{
 			Status:     types.Success,
@@ -106,13 +110,17 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderPath types.FilePath
 }
 
 // SendInProgress Notifies all snyk/scan enabled product messages
-func (n *scanNotifier) SendInProgress(folderPath types.FilePath) {
+func (n *scanNotifier) SendInProgress(folderConfig *types.FolderConfig) {
 	products := n.supportedProducts()
 	for _, pr := range products {
-		if !n.c.IsProductEnabled(pr) {
+		if !n.c.IsProductEnabledForFolder(pr, folderConfig) {
 			continue
 		}
 
+		folderPath := types.FilePath("")
+		if folderConfig != nil {
+			folderPath = folderConfig.FolderPath
+		}
 		n.notifier.Send(
 			types.SnykScanParams{
 				Status:     types.InProgress,

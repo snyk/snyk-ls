@@ -1,0 +1,190 @@
+/*
+ * © 2022-2026 Snyk Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package types
+
+import (
+	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+)
+
+// LDXSyncSettingKey maps our internal setting names to LDX-Sync API field names
+var ldxSyncSettingKeyMap = map[string]string{
+	SettingApiEndpoint:                     "api_endpoint",
+	SettingCodeEndpoint:                    "code_endpoint",
+	SettingAuthenticationMethod:            "authentication_method",
+	SettingProxyHttp:                       "proxy_http",
+	SettingProxyHttps:                      "proxy_https",
+	SettingProxyNoProxy:                    "proxy_no_proxy",
+	SettingProxyInsecure:                   "proxy_insecure",
+	SettingAutoConfigureMcpServer:          "auto_configure_mcp_server",
+	SettingPublishSecurityAtInceptionRules: "publish_security_at_inception_rules",
+	SettingTrustEnabled:                    "trust_enabled",
+	SettingBinaryBaseUrl:                   "binary_base_url",
+	SettingCliPath:                         "cli_path",
+	SettingAutomaticDownload:               "automatic_download",
+	SettingCliReleaseChannel:               "cli_release_channel",
+	SettingEnabledSeverities:               "severities",
+	SettingRiskScoreThreshold:              "risk_score_threshold",
+	SettingCweIds:                          "cwe",
+	SettingCveIds:                          "cve",
+	SettingRuleIds:                         "rule",
+	SettingEnabledProducts:                 "products",
+	SettingScanAutomatic:                   "automatic",
+	SettingScanNetNew:                      "net_new",
+	SettingIssueViewOpenIssues:             "open_issues",
+	SettingIssueViewIgnoredIssues:          "ignored_issues",
+	SettingReferenceFolder:                 "reference_folder",
+	SettingReferenceBranch:                 "reference_branch",
+	SettingAdditionalParameters:            "additional_parameters",
+	SettingAdditionalEnvironment:           "additional_environment",
+}
+
+// ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format
+// Only extracts org-scope settings (not machine-scope or folder-scope)
+func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserConfigResponse) *LDXSyncOrgConfig {
+	if response == nil {
+		return nil
+	}
+
+	orgConfig := NewLDXSyncOrgConfig(orgId)
+
+	// Extract only org-scope settings from the response
+	if response.Data.Attributes.Settings != nil {
+		for settingName, metadata := range *response.Data.Attributes.Settings {
+			internalName := getInternalSettingName(settingName)
+			if internalName != "" && GetSettingScope(internalName) == SettingScopeOrg {
+				orgConfig.SetField(
+					internalName,
+					metadata.Value,
+					ptrToBool(metadata.Locked),
+					ptrToBool(metadata.Enforced),
+					string(metadata.Origin),
+				)
+			}
+		}
+	}
+
+	return orgConfig
+}
+
+// ExtractMachineSettings extracts machine-scope settings from a UserConfigResponse
+// These settings apply globally regardless of org
+func ExtractMachineSettings(response *v20241015.UserConfigResponse) map[string]*LDXSyncField {
+	if response == nil || response.Data.Attributes.Settings == nil {
+		return nil
+	}
+
+	result := make(map[string]*LDXSyncField)
+	for settingName, metadata := range *response.Data.Attributes.Settings {
+		internalName := getInternalSettingName(settingName)
+		if internalName != "" && GetSettingScope(internalName) == SettingScopeMachine {
+			result[internalName] = &LDXSyncField{
+				Value:       metadata.Value,
+				IsLocked:    ptrToBool(metadata.Locked),
+				IsEnforced:  ptrToBool(metadata.Enforced),
+				OriginScope: string(metadata.Origin),
+			}
+		}
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+// ExtractFolderSettings extracts folder-specific settings from a UserConfigResponse for the given remote URL
+// These settings should be stored per-folder, NOT merged into the org config cache
+// Returns nil if no folder-specific settings are found
+func ExtractFolderSettings(response *v20241015.UserConfigResponse, remoteUrl string) map[string]*LDXSyncField {
+	if response == nil || response.Data.Attributes.FolderSettings == nil || remoteUrl == "" {
+		return nil
+	}
+
+	folderSettings, ok := (*response.Data.Attributes.FolderSettings)[remoteUrl]
+	if !ok || len(folderSettings) == 0 {
+		return nil
+	}
+
+	result := make(map[string]*LDXSyncField)
+	for settingName, metadata := range folderSettings {
+		internalName := getInternalSettingName(settingName)
+		if internalName != "" {
+			result[internalName] = &LDXSyncField{
+				Value:       metadata.Value,
+				IsLocked:    ptrToBool(metadata.Locked),
+				IsEnforced:  ptrToBool(metadata.Enforced),
+				OriginScope: string(metadata.Origin),
+			}
+		}
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+// getInternalSettingName maps an LDX-Sync API field name to our internal setting name
+func getInternalSettingName(ldxSyncKey string) string {
+	for internal, ldx := range ldxSyncSettingKeyMap {
+		if ldx == ldxSyncKey {
+			return internal
+		}
+	}
+	return ""
+}
+
+// GetLDXSyncKey returns the LDX-Sync API field name for an internal setting name
+func GetLDXSyncKey(internalName string) string {
+	return ldxSyncSettingKeyMap[internalName]
+}
+
+// ptrToBool safely converts a *bool to bool, returning false if nil
+func ptrToBool(b *bool) bool {
+	if b == nil {
+		return false
+	}
+	return *b
+}
+
+// ExtractOrgIdFromResponse extracts the preferred organization ID from a UserConfigResponse
+func ExtractOrgIdFromResponse(response *v20241015.UserConfigResponse) string {
+	if response == nil || response.Data.Attributes.Organizations == nil {
+		return ""
+	}
+
+	// First try to find the preferred organization
+	for _, org := range *response.Data.Attributes.Organizations {
+		if org.PreferredByAlgorithm != nil && *org.PreferredByAlgorithm {
+			return org.Id
+		}
+	}
+
+	// Fall back to default organization
+	for _, org := range *response.Data.Attributes.Organizations {
+		if org.IsDefault != nil && *org.IsDefault {
+			return org.Id
+		}
+	}
+
+	// Return first org if available
+	if len(*response.Data.Attributes.Organizations) > 0 {
+		return (*response.Data.Attributes.Organizations)[0].Id
+	}
+
+	return ""
+}

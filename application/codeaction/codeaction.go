@@ -93,8 +93,10 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	if !codeConsistentIgnoresEnabled {
 		filteredIssues = issues
 	} else {
-		isViewingOpenIssues := c.c.IssueViewOptions().OpenIssues
-		isViewingIgnoredIssues := c.c.IssueViewOptions().IgnoredIssues
+		folderConfig := c.c.FolderConfig(folder.Path())
+		issueViewOptions := c.c.IssueViewOptionsForFolder(folderConfig)
+		isViewingOpenIssues := issueViewOptions.OpenIssues
+		isViewingIgnoredIssues := issueViewOptions.IgnoredIssues
 		for _, issue := range issues {
 			if !isViewingOpenIssues && !issue.GetIsIgnored() {
 				continue

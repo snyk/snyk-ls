@@ -41,6 +41,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -209,6 +210,11 @@ type Config struct {
 	userSettingsPath                    string
 	autoConfigureMcpEnabled             bool
 	secureAtInceptionExecutionFrequency string
+	ldxSyncCache                        map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult
+	ldxSyncCacheMutex                   sync.RWMutex
+	ldxSyncOrgConfigCache               *types.LDXSyncConfigCache
+	ldxSyncOrgConfigCacheMutex          sync.RWMutex
+	configResolver                      *types.ConfigResolver
 }
 
 func CurrentConfig() *Config {
@@ -291,6 +297,8 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
 	c.hoverVerbosity = 3
+	c.InitLdxSyncCache()
+	c.InitLdxSyncOrgConfigCache()
 	return c
 }
 
@@ -1307,15 +1315,37 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 }
 
 // FolderConfig gets or creates a new folder config for the given folder path.
-// Will cause a rewrite to storage, for read-only operations, use storedconfig.GetFolderConfigWithOptions instead.
+// Will cause a rewrite to storage, for read-only operations, use FolderConfigReadOnly instead.
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
-	var folderConfig *types.FolderConfig
-	var err error
-	folderConfig, err = storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
+	folderConfig, err := storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
 	if err != nil {
-		folderConfig = &types.FolderConfig{FolderPath: path}
+		c.logger.Err(err).Msg("unable to get or create folder config")
+		return c.getMinimalFolderConfig(path)
 	}
 	return folderConfig
+}
+
+// FolderConfigReadOnly returns the folder config for a path without writing to storage
+// or enriching from Git. This is suitable for read-only configuration checks.
+// If no config exists in storage, creates one in-memory with proper default initialization
+// (OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
+func (c *Config) FolderConfigReadOnly(path types.FilePath) *types.FolderConfig {
+	folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
+		CreateIfNotExist: true,
+		ReadOnly:         true,
+		EnrichFromGit:    false,
+	})
+	if err != nil {
+		c.logger.Err(err).Msg("unable to get or create folder config")
+		return c.getMinimalFolderConfig(path)
+	}
+	return folderConfig
+}
+
+// getMinimalFolderConfig returns a folder config with only the path set, and no other fields. Used as a fallback
+// when a folder config cannot be retrieved from storage.
+func (c *Config) getMinimalFolderConfig(path types.FilePath) *types.FolderConfig {
+	return &types.FolderConfig{FolderPath: path}
 }
 
 func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
@@ -1513,4 +1543,287 @@ func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.secureAtInceptionExecutionFrequency = frequency
+}
+
+// InitLdxSyncCache initializes the LDX-Sync cache map
+func (c *Config) InitLdxSyncCache() {
+	c.ldxSyncCacheMutex.Lock()
+	defer c.ldxSyncCacheMutex.Unlock()
+	c.ldxSyncCache = make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
+}
+
+// GetLdxSyncResult retrieves a cached LDX-Sync result for a folder path
+func (c *Config) GetLdxSyncResult(path types.FilePath) *ldx_sync_config.LdxSyncConfigResult {
+	c.ldxSyncCacheMutex.RLock()
+	defer c.ldxSyncCacheMutex.RUnlock()
+	return c.ldxSyncCache[path]
+}
+
+// UpdateLdxSyncCache updates the cache with new results
+func (c *Config) UpdateLdxSyncCache(results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
+	c.ldxSyncCacheMutex.Lock()
+	defer c.ldxSyncCacheMutex.Unlock()
+	for path, result := range results {
+		c.ldxSyncCache[path] = result
+	}
+}
+
+// ClearLdxSyncCache clears the LDX-Sync cache (called on logout/cleanup)
+func (c *Config) ClearLdxSyncCache() {
+	c.ldxSyncCacheMutex.Lock()
+	defer c.ldxSyncCacheMutex.Unlock()
+	c.ldxSyncCache = make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
+}
+
+// InitLdxSyncOrgConfigCache initializes the LDX-Sync org config cache and ConfigResolver
+func (c *Config) InitLdxSyncOrgConfigCache() {
+	c.ldxSyncOrgConfigCacheMutex.Lock()
+	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	c.ldxSyncOrgConfigCache = types.NewLDXSyncConfigCache()
+	c.configResolver = types.NewConfigResolver(c.ldxSyncOrgConfigCache, nil, c.logger)
+	// Set the org resolver to use FolderOrganization which includes global fallback
+	c.configResolver.SetOrgResolver(c.FolderOrganization)
+}
+
+// GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache
+func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
+	c.ldxSyncOrgConfigCacheMutex.RLock()
+	defer c.ldxSyncOrgConfigCacheMutex.RUnlock()
+	return c.ldxSyncOrgConfigCache
+}
+
+// GetConfigResolver returns the ConfigResolver for reading configuration values
+func (c *Config) GetConfigResolver() *types.ConfigResolver {
+	c.ldxSyncOrgConfigCacheMutex.RLock()
+	defer c.ldxSyncOrgConfigCacheMutex.RUnlock()
+	return c.configResolver
+}
+
+// UpdateLdxSyncOrgConfig updates the org config cache with a new org config
+func (c *Config) UpdateLdxSyncOrgConfig(orgConfig *types.LDXSyncOrgConfig) {
+	c.ldxSyncOrgConfigCacheMutex.Lock()
+	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	if c.ldxSyncOrgConfigCache == nil {
+		c.ldxSyncOrgConfigCache = types.NewLDXSyncConfigCache()
+	}
+	c.ldxSyncOrgConfigCache.SetOrgConfig(orgConfig)
+}
+
+// ClearLdxSyncOrgConfigCache clears the LDX-Sync org config cache (called on logout/cleanup)
+func (c *Config) ClearLdxSyncOrgConfigCache() {
+	c.ldxSyncOrgConfigCacheMutex.Lock()
+	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	c.ldxSyncOrgConfigCache = types.NewLDXSyncConfigCache()
+}
+
+// UpdateLdxSyncMachineConfig updates the machine-wide LDX-Sync config in the ConfigResolver
+func (c *Config) UpdateLdxSyncMachineConfig(machineConfig map[string]*types.LDXSyncField) {
+	c.ldxSyncOrgConfigCacheMutex.Lock()
+	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	if c.configResolver != nil {
+		c.configResolver.SetLDXSyncMachineConfig(machineConfig)
+	}
+}
+
+// GetLdxSyncMachineConfig returns the machine-wide LDX-Sync config from the ConfigResolver
+func (c *Config) GetLdxSyncMachineConfig() map[string]*types.LDXSyncField {
+	c.ldxSyncOrgConfigCacheMutex.RLock()
+	defer c.ldxSyncOrgConfigCacheMutex.RUnlock()
+	if c.configResolver != nil {
+		return c.configResolver.GetLDXSyncMachineConfig()
+	}
+	return nil
+}
+
+// UpdateGlobalSettingsInResolver updates the global settings reference in ConfigResolver
+// This should be called when settings are received from the IDE
+func (c *Config) UpdateGlobalSettingsInResolver(settings *types.Settings) {
+	c.ldxSyncOrgConfigCacheMutex.Lock()
+	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	if c.configResolver != nil {
+		c.configResolver.SetGlobalSettings(settings)
+	}
+}
+
+// =============================================================================
+// Folder-Aware Config Accessors
+// These methods use ConfigResolver to get effective values based on LDX-Sync org config and user overrides
+// =============================================================================
+
+// FilterSeverityForFolder returns the effective severity filter for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) FilterSeverityForFolder(folderConfig *types.FolderConfig) types.SeverityFilter {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.FilterSeverity() // fallback to global
+	}
+	val, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+	// Only use resolver value if it came from LDX-Sync or user override
+	if source != types.ConfigSourceDefault {
+		if filter, ok := val.(*types.SeverityFilter); ok && filter != nil {
+			return *filter
+		}
+	}
+	return c.FilterSeverity() // fallback to global
+}
+
+// RiskScoreThresholdForFolder returns the effective risk score threshold for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) RiskScoreThresholdForFolder(folderConfig *types.FolderConfig) int {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.RiskScoreThreshold() // fallback to global
+	}
+	val, source := resolver.GetValue(types.SettingRiskScoreThreshold, folderConfig)
+	// Only use resolver value if it came from LDX-Sync or user override
+	if source != types.ConfigSourceDefault {
+		if threshold, ok := val.(int); ok {
+			return threshold
+		}
+	}
+	return c.RiskScoreThreshold() // fallback to global
+}
+
+// IssueViewOptionsForFolder returns the effective issue view options for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IssueViewOptionsForFolder(folderConfig *types.FolderConfig) types.IssueViewOptions {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IssueViewOptions() // fallback to global
+	}
+
+	openIssues, openSource := resolver.GetValue(types.SettingIssueViewOpenIssues, folderConfig)
+	ignoredIssues, ignoredSource := resolver.GetValue(types.SettingIssueViewIgnoredIssues, folderConfig)
+
+	// Start with global config values as base
+	result := c.IssueViewOptions()
+
+	// Only override if resolver returned a non-default value (i.e., from LDX-Sync or user override)
+	if openSource != types.ConfigSourceDefault {
+		if open, ok := openIssues.(bool); ok {
+			result.OpenIssues = open
+		}
+	}
+	if ignoredSource != types.ConfigSourceDefault {
+		if ignored, ok := ignoredIssues.(bool); ok {
+			result.IgnoredIssues = ignored
+		}
+	}
+	return result
+}
+
+// IsAutoScanEnabledForFolder returns whether automatic scanning is enabled for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsAutoScanEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IsAutoScanEnabled() // fallback to global
+	}
+	val, source := resolver.GetValue(types.SettingScanAutomatic, folderConfig)
+	if source != types.ConfigSourceDefault {
+		if enabled, ok := val.(bool); ok {
+			return enabled
+		}
+	}
+	return c.IsAutoScanEnabled() // fallback to global
+}
+
+// IsDeltaFindingsEnabledForFolder returns whether delta findings is enabled for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsDeltaFindingsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IsDeltaFindingsEnabled() // fallback to global
+	}
+	val, source := resolver.GetValue(types.SettingScanNetNew, folderConfig)
+	if source != types.ConfigSourceDefault {
+		if enabled, ok := val.(bool); ok {
+			return enabled
+		}
+	}
+	return c.IsDeltaFindingsEnabled() // fallback to global
+}
+
+// IsSnykCodeEnabledForFolder returns whether Snyk Code is enabled for a folder config,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsSnykCodeEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IsSnykCodeEnabled() // fallback to global
+	}
+	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
+	if source != types.ConfigSourceDefault {
+		if products, ok := val.([]string); ok {
+			for _, p := range products {
+				if p == "code" {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return c.IsSnykCodeEnabled() // fallback to global
+}
+
+// IsSnykOssEnabledForFolder returns whether Snyk OSS is enabled for a folder config,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsSnykOssEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IsSnykOssEnabled() // fallback to global
+	}
+	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
+	if source != types.ConfigSourceDefault {
+		if products, ok := val.([]string); ok {
+			for _, p := range products {
+				if p == "oss" {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return c.IsSnykOssEnabled() // fallback to global
+}
+
+// IsSnykIacEnabledForFolder returns whether Snyk IaC is enabled for a folder config,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsSnykIacEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IsSnykIacEnabled() // fallback to global
+	}
+	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
+	if source != types.ConfigSourceDefault {
+		if products, ok := val.([]string); ok {
+			for _, p := range products {
+				if p == "iac" {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return c.IsSnykIacEnabled() // fallback to global
+}
+
+// IsSnykCodeSecurityEnabledForFolder returns whether Snyk Code Security is enabled for a folder config,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsSnykCodeSecurityEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return c.IsSnykCodeSecurityEnabled() // fallback to global
+	}
+	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
+	if source != types.ConfigSourceDefault {
+		if products, ok := val.([]string); ok {
+			for _, p := range products {
+				if p == "code_security" {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return c.IsSnykCodeSecurityEnabled() // fallback to global
 }

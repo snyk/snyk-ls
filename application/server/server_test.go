@@ -28,6 +28,7 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -38,6 +39,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -353,7 +355,6 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
-	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -418,7 +419,6 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
-	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -672,7 +672,6 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -698,7 +697,6 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		Token:                       "token",
@@ -729,7 +727,6 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -977,7 +974,6 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
 	c := testutil.IntegTest(t)
 	loc, _ := setupServer(t, c)
-	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	testutil.CreateDummyProgressListener(t)
 	file := testsupport.CreateTempFile(t, t.TempDir())
 	w := c.Workspace()
@@ -1007,6 +1003,117 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	}
 
 	assert.Nil(t, w.GetFolderContaining(uri.PathFromUri(f.Uri)))
+}
+
+func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Configure authentication method before server setup
+	c.SetAuthenticationMethod(types.FakeAuthentication)
+
+	// Setup server
+	loc, _ := setupServerWithCustomDI(t, c, false)
+
+	// Setup mock LdxSyncService AFTER setupServer to avoid it being overwritten by di.TestInit
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+	originalService := di.LdxSyncService()
+	di.SetLdxSyncService(mockLdxSyncService)
+	defer di.SetLdxSyncService(originalService)
+
+	// Setup authentication service to be authenticated
+	di.AuthenticationService().ConfigureProviders(c)
+	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider.IsAuthenticated = true
+
+	// Expect RefreshConfigFromLdxSync to be called during initialization (with empty folders)
+	mockLdxSyncService.EXPECT().
+		RefreshConfigFromLdxSync(c, gomock.Any()).
+		Times(1)
+
+	// Initialize server
+	_, err := loc.Client.Call(ctx, "initialize", nil)
+	require.NoError(t, err)
+
+	// Add a workspace folder
+	newFolderPath := t.TempDir()
+	newFolder := types.WorkspaceFolder{
+		Name: "test-folder",
+		Uri:  uri.PathToUri(types.FilePath(newFolderPath)),
+	}
+
+	// Expect RefreshConfigFromLdxSync to be called with the added folder
+	// The call will happen with the actual folder object created by the workspace
+	mockLdxSyncService.EXPECT().
+		RefreshConfigFromLdxSync(c, gomock.Any()).
+		Times(1).
+		Do(func(_ *config.Config, folders []types.Folder) {
+			// Verify that we received exactly one folder
+			assert.Len(t, folders, 1)
+			// Verify the folder path matches what we added
+			assert.Equal(t, types.FilePath(newFolderPath), folders[0].Path())
+		})
+
+	// Trigger workspace folder change
+	params := types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{
+			Added: []types.WorkspaceFolder{newFolder},
+		},
+	}
+
+	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", params)
+	assert.NoError(t, err)
+}
+
+func Test_initialized_CallsRefreshConfigFromLdxSync(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup workspace folders before initialization
+	folder1Path := t.TempDir()
+	folder2Path := t.TempDir()
+	folder1 := types.WorkspaceFolder{
+		Uri:  uri.PathToUri(types.FilePath(folder1Path)),
+		Name: "workspace1",
+	}
+	folder2 := types.WorkspaceFolder{
+		Uri:  uri.PathToUri(types.FilePath(folder2Path)),
+		Name: "workspace2",
+	}
+
+	// Setup server
+	loc, _ := setupServerWithCustomDI(t, c, false)
+
+	// Setup mock LdxSyncService AFTER setupServer to avoid it being overwritten by di.TestInit
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+	originalService := di.LdxSyncService()
+	di.SetLdxSyncService(mockLdxSyncService)
+	defer di.SetLdxSyncService(originalService)
+
+	// Expect RefreshConfigFromLdxSync to be called during initialization with all workspace folders
+	mockLdxSyncService.EXPECT().
+		RefreshConfigFromLdxSync(c, gomock.Any()).
+		Times(1).
+		Do(func(_ *config.Config, folders []types.Folder) {
+			// Verify that we received two folders
+			assert.Len(t, folders, 2)
+			// Verify the folder paths match
+			folderPaths := []types.FilePath{folders[0].Path(), folders[1].Path()}
+			assert.Contains(t, folderPaths, types.FilePath(folder1Path))
+			assert.Contains(t, folderPaths, types.FilePath(folder2Path))
+		})
+
+	// Initialize with workspace folders
+	params := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{folder1, folder2},
+	}
+
+	_, err := loc.Client.Call(ctx, "initialize", params)
+	assert.NoError(t, err)
 }
 
 // Check if published diagnostics for given testPath match the expectedNumber.
@@ -1045,7 +1152,6 @@ func checkForSnykScan(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder
 func Test_IntegrationHoverResults(t *testing.T) {
 	c := testutil.IntegTest(t)
 	loc, _ := setupServer(t, c)
-	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true

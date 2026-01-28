@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -33,7 +32,6 @@ import (
 
 	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -41,54 +39,71 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/util"
+
+	"github.com/google/uuid"
+	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 )
 
-// setupMockOrgResolver sets up a mock organization resolver that returns the given organization
-func setupMockOrgResolver(t *testing.T, org ldx_sync_config.Organization) {
+// setupLdxSyncService returns a real LdxSyncService implementation for tests
+// No mocking needed since ResolveOrg just reads from cache (which tests populate) and GAF config
+func setupLdxSyncService(t *testing.T) LdxSyncService {
 	t.Helper()
-	originalService := Service()
-	t.Cleanup(func() {
-		SetService(originalService)
-	})
-
-	ctrl := gomock.NewController(t)
-	mockResolver := mock_types.NewMockOrgResolver(ctrl)
-	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(org, nil).AnyTimes()
-	mockService := types.NewCommandServiceMock(nil)
-	mockService.SetOrgResolver(mockResolver)
-	SetService(mockService)
+	return NewLdxSyncService()
 }
 
-// setupMockOrgResolverWithError sets up a mock organization resolver that returns an error
-func setupMockOrgResolverWithError(t *testing.T, err error) {
-	t.Helper()
-	originalService := Service()
-	t.Cleanup(func() {
-		SetService(originalService)
-	})
+// createLdxSyncResult is a helper to create a properly structured LdxSyncConfigResult for tests
+func createLdxSyncResult(orgId, orgName, orgSlug string, isDefault bool) *ldx_sync_config.LdxSyncConfigResult {
+	orgs := []v20241015.Organization{
+		{
+			Id:                   orgId,
+			Name:                 orgName,
+			Slug:                 orgSlug,
+			IsDefault:            util.Ptr(isDefault),
+			PreferredByAlgorithm: util.Ptr(true), // Always mark as preferred for test purposes
+		},
+	}
 
-	ctrl := gomock.NewController(t)
-	mockResolver := mock_types.NewMockOrgResolver(ctrl)
-	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{}, err).AnyTimes()
-	mockService := types.NewCommandServiceMock(nil)
-	mockService.SetOrgResolver(mockResolver)
-	SetService(mockService)
+	// Create a UUID for the config ID
+	configId := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
+	return &ldx_sync_config.LdxSyncConfigResult{
+		Config: &v20241015.UserConfigResponse{
+			Data: struct {
+				Attributes struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				} `json:"attributes"`
+				Id   uuid.UUID                            `json:"id"`
+				Type v20241015.UserConfigResponseDataType `json:"type"`
+			}{
+				Attributes: struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				}{
+					Organizations: &orgs,
+				},
+				Id:   configId,
+				Type: "configuration",
+			},
+		},
+		RemoteUrl:   "https://github.com/test/repo.git",
+		ProjectRoot: "/fake/test-folder",
+		Error:       nil,
+	}
 }
 
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
-	_, engineConfig := testutil.SetUpEngineMock(t, c)
-
-	// Setup mock organization resolver
-	expectedOrg := ldx_sync_config.Organization{
-		Id:        "resolved-org-id",
-		Name:      "Resolved Org",
-		Slug:      "resolved-org",
-		IsDefault: util.Ptr(false),
-	}
-	setupMockOrgResolver(t, expectedOrg)
+	engineConfig := c.Engine().GetConfiguration()
 
 	// Setup workspace with a folder
 	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
@@ -104,7 +119,15 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	// Populate cache with LDX-Sync result
+	expectedOrgId := "resolved-org-id"
+	cachedResult := createLdxSyncResult(expectedOrgId, "Resolved Org", "resolved-org", false)
+	c.UpdateLdxSyncCache(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
+		folderPaths[0]: cachedResult,
+	})
+
+	mockService := setupLdxSyncService(t)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
 
 	// Verify notification was sent
 	messages := notifier.SentMessages()
@@ -115,7 +138,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
 	assert.Equal(t, "test-org", folderConfigsParam.FolderConfigs[0].PreferredOrg, "Notification should contain correct organization")
 	assert.True(t, folderConfigsParam.FolderConfigs[0].OrgSetByUser, "Notification should reflect OrgSetByUser flag")
-	assert.Equal(t, "resolved-org-id", folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set by LDX-Sync")
+	assert.Equal(t, expectedOrgId, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
@@ -125,7 +148,8 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	// Setup workspace with no folders
 	_, notifier := workspaceutil.SetupWorkspace(t, c)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	mockService := setupLdxSyncService(t)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
 
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
@@ -140,7 +164,10 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 	t.Cleanup(func() {
 		SetService(originalService)
 	})
-	SetService(types.NewCommandServiceMock(nil))
+	SetService(types.NewCommandServiceMock())
+
+	// Clear token to prevent RefreshConfigFromLdxSync from being called in this test
+	c.SetToken("")
 
 	called := make(chan struct{}, 1)
 	mockEngine.EXPECT().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, gomock.Any()).
@@ -149,9 +176,10 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 			return nil, nil
 		}).Times(1)
 
-	_, notifier := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
+	_, n := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
 
-	HandleFolders(c, context.Background(), nil, notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	mockService := setupLdxSyncService(t)
+	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), mockService)
 
 	select {
 	case <-called:
@@ -161,70 +189,28 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 	}
 }
 
-// setupOrgResolverTest is a helper function to reduce duplication in org resolver tests
-func setupOrgResolverTest(t *testing.T, orgID, orgName, orgSlug string, isDefault bool) (*config.Config, *types.FolderConfig, ldx_sync_config.Organization) {
-	t.Helper()
-
-	c := testutil.UnitTest(t)
-	_, _ = testutil.SetUpEngineMock(t, c)
-
-	expectedOrg := ldx_sync_config.Organization{
-		Id:        orgID,
-		Name:      orgName,
-		Slug:      orgSlug,
-		IsDefault: &isDefault,
-	}
-
-	// Setup mock organization resolver
-	setupMockOrgResolver(t, expectedOrg)
-
-	folderConfig := &types.FolderConfig{
-		FolderPath: types.FilePath(t.TempDir()),
-	}
-
-	return c, folderConfig, expectedOrg
-}
-
-// Test GetBestOrgFromLdxSync with default org
-func Test_SetAutoBestOrgFromLdxSync_DefaultOrg(t *testing.T) {
-	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "default-org-id", "Default Org", "default-org", true)
-
-	org, err := GetBestOrgFromLdxSync(c, folderConfig)
-
-	require.NoError(t, err)
-	assert.Equal(t, expectedOrg.Id, org.Id)
-	assert.True(t, *org.IsDefault)
-}
-
-// Test GetBestOrgFromLdxSync with non-default org
-func Test_SetAutoBestOrgFromLdxSync_NonDefaultOrg(t *testing.T) {
-	c, folderConfig, expectedOrg := setupOrgResolverTest(t, "specific-org-id", "Specific Org", "specific-org", false)
-
-	org, err := GetBestOrgFromLdxSync(c, folderConfig)
-
-	require.NoError(t, err)
-	assert.Equal(t, expectedOrg.Id, org.Id)
-	assert.False(t, *org.IsDefault)
-}
-
-// Test GetBestOrgFromLdxSync error handling
+// Test LdxSyncService.ResolveOrg error handling - now falls back to global org when cache is empty
 func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
 	c := testutil.UnitTest(t)
-	_, _ = testutil.SetUpEngineMock(t, c)
-
-	// Setup mock organization resolver to return error
-	setupMockOrgResolverWithError(t, assert.AnError)
+	_, gafConfig := testutil.SetUpEngineMock(t, c)
 
 	folderConfig := &types.FolderConfig{
 		FolderPath: types.FilePath(t.TempDir()),
 	}
 
-	_, err := GetBestOrgFromLdxSync(c, folderConfig)
+	// Set global org as fallback
+	expectedOrgId := "fallback-global-org"
+	gafConfig.Set(configuration.ORGANIZATION, expectedOrgId)
 
-	require.Error(t, err)
+	// Don't populate cache - should fall back to global org
+	mockService := setupLdxSyncService(t)
+	org, err := mockService.ResolveOrg(c, folderConfig.FolderPath)
+
+	require.NoError(t, err, "Should fall back to global org when cache is empty")
+	assert.Equal(t, expectedOrgId, org.Id, "Should return global org as fallback")
 }
 
-// Test GetBestOrgFromLdxSync fallback when resolver is nil
+// Test LdxSyncService.ResolveOrgfallback when cache is empty
 func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, gafConfig := testutil.SetUpEngineMock(t, c)
@@ -238,30 +224,32 @@ func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
 	t.Cleanup(func() {
 		SetService(originalService)
 	})
-	mockService := types.NewCommandServiceMock(nil)
+	mockService := types.NewCommandServiceMock()
 	SetService(mockService)
 
 	folderConfig := &types.FolderConfig{
 		FolderPath: types.FilePath(t.TempDir()),
 	}
 
-	org, err := GetBestOrgFromLdxSync(c, folderConfig)
+	mockLdxSync := setupLdxSyncService(t)
+	org, err := mockLdxSync.ResolveOrg(c, folderConfig.FolderPath)
 
 	require.NoError(t, err)
 	assert.Equal(t, expectedOrgId, org.Id, "Should fallback to GAF config organization")
 }
 
-// Test sendFolderConfigs with LDX-Sync error (should continue with other folders)
-func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
+// Test sendFolderConfigs when cache is empty (should fall back to global org)
+func Test_sendFolderConfigs_EmptyCache_FallbackToGlobal(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, c)
-
-	// Setup mock organization resolver to return error
-	setupMockOrgResolverWithError(t, assert.AnError)
 
 	// Setup workspace with a folder
 	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
+
+	// Set global org as fallback
+	globalOrgId := "global-fallback-org"
+	engineConfig.Set(configuration.ORGANIZATION, globalOrgId)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
@@ -272,44 +260,26 @@ func Test_sendFolderConfigs_LdxSyncError_ContinuesProcessing(t *testing.T) {
 	}
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
-	// Verify notification was still sent despite error
+	// Don't populate cache - should fall back to global org
+	mockService := setupLdxSyncService(t)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
+
+	// Verify notification was still sent
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
 
 	folderConfigsParam, ok := messages[0].(types.FolderConfigsParam)
 	require.True(t, ok, "Expected FolderConfigsParam notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
-	// AutoDeterminedOrg should be empty due to error
-	assert.Empty(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be empty when LDX-Sync fails")
+	// AutoDeterminedOrg should be set to global org when cache is empty
+	assert.Equal(t, globalOrgId, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should fall back to global org when cache is empty")
 }
 
 // Test sendFolderConfigs with multiple folders and different org configurations
 func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
-	_, engineConfig := testutil.SetUpEngineMock(t, c)
-
-	// Setup mock organization resolver to return different orgs based on input path
-	originalService := Service()
-	t.Cleanup(func() {
-		SetService(originalService)
-	})
-
-	ctrl := gomock.NewController(t)
-	mockResolver := mock_types.NewMockOrgResolver(ctrl)
-	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path string) (ldx_sync_config.Organization, error) {
-			return ldx_sync_config.Organization{
-				Id:        "org-id-for-" + path,
-				Name:      "Org Name for " + path,
-				Slug:      "org-slug-for-" + path,
-				IsDefault: util.Ptr(false),
-			}, nil
-		}).AnyTimes()
-	mockService := types.NewCommandServiceMock(nil)
-	mockService.SetOrgResolver(mockResolver)
-	SetService(mockService)
+	engineConfig := c.Engine().GetConfiguration()
 
 	// Setup workspace with multiple folders
 	folderPaths := []types.FilePath{
@@ -339,7 +309,15 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig2, logger)
 	require.NoError(t, err)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	// Populate cache with different orgs for each folder
+	cacheResults := map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
+		folderPaths[0]: createLdxSyncResult("org-id-for-folder-0", "Org for folder 0", "org-folder-0", false),
+		folderPaths[1]: createLdxSyncResult("org-id-for-folder-1", "Org for folder 1", "org-folder-1", false),
+	}
+	c.UpdateLdxSyncCache(cacheResults)
+
+	mockService := setupLdxSyncService(t)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
 
 	// Verify notification was sent with both folders
 	messages := notifier.SentMessages()
@@ -350,9 +328,9 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	require.Len(t, folderConfigsParam.FolderConfigs, 2)
 
 	// Verify each folder has its own AutoDeterminedOrg
-	for _, fc := range folderConfigsParam.FolderConfigs {
+	for i, fc := range folderConfigsParam.FolderConfigs {
 		assert.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for each folder")
-		assert.Contains(t, fc.AutoDeterminedOrg, "org-id-for-", "AutoDeterminedOrg should be path-specific")
+		assert.Equal(t, fmt.Sprintf("org-id-for-folder-%d", i), fc.AutoDeterminedOrg, "AutoDeterminedOrg should be folder-specific")
 	}
 }
 
@@ -523,4 +501,47 @@ func Test_MigrateFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(t *tes
 	assert.False(t, folderConfig.OrgMigratedFromGlobalConfig, "Should remain unmigrated (migration skipped)")
 	assert.False(t, folderConfig.OrgSetByUser, "OrgSetByUser should remain false")
 	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should remain empty")
+}
+
+// Test LdxSyncService.ResolveOrgwith cached result
+func Test_GetOrgFromCachedLdxSync_WithCache(t *testing.T) {
+	c := testutil.UnitTest(t)
+	gafConfig := c.Engine().GetConfiguration()
+
+	folderPath := types.FilePath("/fake/test-folder")
+
+	// Populate cache with a result
+	expectedOrgId := "cached-org-id"
+	cachedResult := createLdxSyncResult(expectedOrgId, "Cached Org", "cached-org", false)
+	c.UpdateLdxSyncCache(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
+		folderPath: cachedResult,
+	})
+
+	// Set a different global org to ensure we're using the cache
+	gafConfig.Set(configuration.ORGANIZATION, "different-global-org")
+
+	mockService := setupLdxSyncService(t)
+	org, err := mockService.ResolveOrg(c, folderPath)
+
+	require.NoError(t, err)
+	assert.Equal(t, expectedOrgId, org.Id, "Should return org from cache")
+}
+
+// Test LdxSyncService.ResolveOrgwithout cached result (fallback to global org)
+func Test_GetOrgFromCachedLdxSync_WithoutCache_FallbackToGlobal(t *testing.T) {
+	c := testutil.UnitTest(t)
+	_, gafConfig := testutil.SetUpEngineMock(t, c)
+
+	folderPath := types.FilePath("/fake/test-folder")
+
+	// Set global org
+	globalOrgId := "global-org-id"
+	gafConfig.Set(configuration.ORGANIZATION, globalOrgId)
+
+	// Don't populate cache
+	mockService := setupLdxSyncService(t)
+	org, err := mockService.ResolveOrg(c, folderPath)
+
+	require.NoError(t, err)
+	assert.Equal(t, globalOrgId, org.Id, "Should fallback to global org when cache is empty")
 }

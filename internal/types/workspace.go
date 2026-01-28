@@ -51,7 +51,6 @@ type Workspace interface {
 	ScanWorkspace(ctx context.Context)
 	ChangeWorkspaceFolders(params DidChangeWorkspaceFoldersParams) []Folder
 	GetFolderTrust() (trusted []Folder, untrusted []Folder)
-	ClearIssuesByType(removedType product.FilterableIssueType)
 	TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []Folder)
 	HandleConfigChange()
 }
@@ -71,4 +70,14 @@ type Folder interface {
 	Status() FolderStatus
 	IsTrusted() bool
 	ScanResultProcessor() ScanResultProcessor
+	// FolderConfigReadOnly returns the FolderConfig for this folder using read-only access
+	// (no storage writes, no Git enrichment). For operations that need to create or update
+	// the config, use c.FolderConfig(folder.Path()) directly.
+	FolderConfigReadOnly() *FolderConfig
+	// IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
+	IsDeltaFindingsEnabled() bool
+	// IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
+	IsAutoScanEnabled() bool
+	// DisplayableIssueTypes returns which issue types are enabled for this folder.
+	DisplayableIssueTypes() map[product.FilterableIssueType]bool
 }

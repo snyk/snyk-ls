@@ -44,6 +44,7 @@ func CreateFromCommandData(
 	issueProvider snyk.IssueProvider,
 	codeScanner *code.Scanner,
 	cli cli.Executor,
+	ldxSyncService LdxSyncService,
 ) (types.Command, error) {
 	snykApiClient := snyk_api.NewSnykApiClient(c, c.Engine().GetNetworkAccess().GetHttpClient)
 
@@ -63,7 +64,7 @@ func CreateFromCommandData(
 	case types.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData, logger: c.Logger()}, nil
 	case types.LoginCommand:
-		return &loginCommand{command: commandData, authService: authService, notifier: notifier, c: c, featureFlagService: featureFlagService}, nil
+		return &loginCommand{command: commandData, authService: authService, notifier: notifier, c: c, featureFlagService: featureFlagService, ldxSyncService: ldxSyncService}, nil
 	case types.CopyAuthLinkCommand:
 		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
 	case types.LogoutCommand:

@@ -278,9 +278,3 @@ func (w *Workspace) GetFolderTrust() (trusted []types.Folder, untrusted []types.
 	}
 	return trusted, untrusted
 }
-
-func (w *Workspace) ClearIssuesByType(removedType product.FilterableIssueType) {
-	for _, folder := range w.folders {
-		folder.ClearDiagnosticsByIssueType(removedType)
-	}
-}
