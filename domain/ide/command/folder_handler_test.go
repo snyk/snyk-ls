@@ -32,6 +32,7 @@ import (
 
 	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
 
+	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -45,8 +46,8 @@ import (
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 )
 
-// setupLdxSyncService returns a real LdxSyncService implementation for tests
-// No mocking needed since ResolveOrg just reads from cache (which tests populate) and GAF config
+// setupLdxSyncService returns a real LdxSyncService implementation for tests that specifically test cache logic
+// For most tests, prefer using mock.NewMockLdxSyncService() instead of pre-populating cache
 func setupLdxSyncService(t *testing.T) LdxSyncService {
 	t.Helper()
 	return NewLdxSyncService()
@@ -105,6 +106,11 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	engineConfig := c.Engine().GetConfiguration()
 
+	// Setup mock LdxSyncService
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+
 	// Setup workspace with a folder
 	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
@@ -119,15 +125,14 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
-	// Populate cache with LDX-Sync result
+	// Mock ResolveOrg to return the expected organization
 	expectedOrgId := "resolved-org-id"
-	cachedResult := createLdxSyncResult(expectedOrgId, "Resolved Org", "resolved-org", false)
-	c.UpdateLdxSyncCache(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
-		folderPaths[0]: cachedResult,
-	})
+	mockLdxSyncService.EXPECT().
+		ResolveOrg(c, folderPaths[0]).
+		Return(ldx_sync_config.Organization{Id: expectedOrgId}, nil).
+		AnyTimes()
 
-	mockService := setupLdxSyncService(t)
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockLdxSyncService)
 
 	// Verify notification was sent
 	messages := notifier.SentMessages()
@@ -138,7 +143,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
 	assert.Equal(t, "test-org", folderConfigsParam.FolderConfigs[0].PreferredOrg, "Notification should contain correct organization")
 	assert.True(t, folderConfigsParam.FolderConfigs[0].OrgSetByUser, "Notification should reflect OrgSetByUser flag")
-	assert.Equal(t, expectedOrgId, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
+	assert.Equal(t, expectedOrgId, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from ResolveOrg")
 }
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
@@ -280,6 +285,11 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
 	engineConfig := c.Engine().GetConfiguration()
 
+	// Setup mock LdxSyncService
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+
 	// Setup workspace with multiple folders
 	folderPaths := []types.FilePath{
 		types.FilePath("/fake/test-folder-0"),
@@ -308,15 +318,17 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig2, logger)
 	require.NoError(t, err)
 
-	// Populate cache with different orgs for each folder
-	cacheResults := map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
-		folderPaths[0]: createLdxSyncResult("org-id-for-folder-0", "Org for folder 0", "org-folder-0", false),
-		folderPaths[1]: createLdxSyncResult("org-id-for-folder-1", "Org for folder 1", "org-folder-1", false),
-	}
-	c.UpdateLdxSyncCache(cacheResults)
+	// Mock ResolveOrg to return different orgs for each folder
+	mockLdxSyncService.EXPECT().
+		ResolveOrg(c, folderPaths[0]).
+		Return(ldx_sync_config.Organization{Id: "org-id-for-folder-0"}, nil).
+		AnyTimes()
+	mockLdxSyncService.EXPECT().
+		ResolveOrg(c, folderPaths[1]).
+		Return(ldx_sync_config.Organization{Id: "org-id-for-folder-1"}, nil).
+		AnyTimes()
 
-	mockService := setupLdxSyncService(t)
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockLdxSyncService)
 
 	// Verify notification was sent with both folders
 	messages := notifier.SentMessages()
@@ -333,9 +345,9 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 		// Match based on FolderPath since iteration order is not guaranteed
 		switch fc.FolderPath {
 		case folderPaths[0]:
-			assert.Equal(t, "org-id-for-folder-0", fc.AutoDeterminedOrg, "AutoDeterminedOrg should match cached value for folder 0")
+			assert.Equal(t, "org-id-for-folder-0", fc.AutoDeterminedOrg, "AutoDeterminedOrg should match mocked value for folder 0")
 		case folderPaths[1]:
-			assert.Equal(t, "org-id-for-folder-1", fc.AutoDeterminedOrg, "AutoDeterminedOrg should match cached value for folder 1")
+			assert.Equal(t, "org-id-for-folder-1", fc.AutoDeterminedOrg, "AutoDeterminedOrg should match mocked value for folder 1")
 		default:
 			t.Fatalf("Unexpected folder path: %s", fc.FolderPath)
 		}

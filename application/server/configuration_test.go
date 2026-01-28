@@ -1024,6 +1024,15 @@ func Test_updateFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
 func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
+	// Setup mock LdxSyncService to control ResolveOrg behavior
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+	originalService := di.LdxSyncService()
+	di.SetLdxSyncService(mockLdxSyncService)
+	defer di.SetLdxSyncService(originalService)
+
 	// Setup stored config WITHOUT AutoDeterminedOrg (simulating old config)
 	engineConfig := setup.c.Engine().GetConfiguration()
 	storedConfig := &types.FolderConfig{
@@ -1037,6 +1046,14 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	require.NoError(setup.t, err)
 
 	setup.c.SetOrganization("global-org-id")
+
+	// Mock ResolveOrg to return the expected organization
+	expectedOrg := ldx_sync_config.Organization{
+		Id: "test-default-org-uuid",
+	}
+	mockLdxSyncService.EXPECT().
+		ResolveOrg(setup.c, setup.folderPath).
+		Return(expectedOrg, nil)
 
 	// Call updateFolderConfig with DIFFERENT org to trigger updateFolderConfigOrg
 	settings := types.Settings{
@@ -1055,8 +1072,7 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	// Verify: AutoDeterminedOrg should be fetched and set by updateFolderConfigOrg
 	updatedConfig := setup.getUpdatedConfig()
 	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be fetched and set")
-	// When LDX-Sync cache is empty, GetOrgFromCachedLdxSync falls back to global org
-	assert.Equal(t, "test-default-org-uuid", updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should fall back to global org when cache is empty")
+	assert.Equal(t, "test-default-org-uuid", updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be resolved from LDX-Sync")
 }
 
 // Test: Migrated config where user changes org from auto to manual
