@@ -56,6 +56,10 @@ const (
 
 	// bridging commands
 	ExecuteCLICommand = "snyk.executeCLI"
+
+	// diagnostic commands
+	ConnectivityCheckCommand    = "snyk.diagnostics.checkConnectivity"
+	DirectoryDiagnosticsCommand = "snyk.diagnostics.checkDirectories"
 )
 
 type OpenBrowserFunc func(url string)
