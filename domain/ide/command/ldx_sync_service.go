@@ -26,11 +26,31 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+// LdxSyncApiClient abstracts the external LDX-Sync API calls for testability
+type LdxSyncApiClient interface {
+	GetUserConfigForProject(engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult
+	ResolveOrgFromUserConfig(engine workflow.Engine, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error)
+}
+
+// DefaultLdxSyncApiClient wraps the real GAF LDX-Sync functions
+type DefaultLdxSyncApiClient struct{}
+
+// GetUserConfigForProject calls the GAF ldx_sync_config package
+func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
+	return ldx_sync_config.GetUserConfigForProject(engine, projectPath, preferredOrg)
+}
+
+// ResolveOrgFromUserConfig calls the GAF ldx_sync_config package
+func (a *DefaultLdxSyncApiClient) ResolveOrgFromUserConfig(engine workflow.Engine, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error) {
+	return ldx_sync_config.ResolveOrgFromUserConfig(engine, result)
+}
 
 // LdxSyncService provides LDX-Sync configuration refresh functionality
 type LdxSyncService interface {
@@ -39,11 +59,22 @@ type LdxSyncService interface {
 }
 
 // DefaultLdxSyncService is the default implementation of LdxSyncService
-type DefaultLdxSyncService struct{}
+type DefaultLdxSyncService struct {
+	apiClient LdxSyncApiClient
+}
 
-// NewLdxSyncService creates a new LdxSyncService
+// NewLdxSyncService creates a new LdxSyncService with the default API client
 func NewLdxSyncService() LdxSyncService {
-	return &DefaultLdxSyncService{}
+	return &DefaultLdxSyncService{
+		apiClient: &DefaultLdxSyncApiClient{},
+	}
+}
+
+// NewLdxSyncServiceWithApiClient creates a new LdxSyncService with a custom API client (for testing)
+func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient) LdxSyncService {
+	return &DefaultLdxSyncService{
+		apiClient: apiClient,
+	}
 }
 
 // RefreshConfigFromLdxSync refreshes the user configuration from LDX-Sync for all workspace folders in parallel
@@ -74,7 +105,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 			}
 
 			// Call GetUserConfigForProject with 3 params including preferredOrg
-			cfgResult := ldx_sync_config.GetUserConfigForProject(engine, string(f.Path()), preferredOrg)
+			cfgResult := s.apiClient.GetUserConfigForProject(engine, string(f.Path()), preferredOrg)
 
 			if cfgResult.Error != nil {
 				logger.Err(cfgResult.Error).
@@ -112,7 +143,7 @@ func (s *DefaultLdxSyncService) ResolveOrg(c *config.Config, folderPath types.Fi
 
 	// If we have a cached result, use it to resolve the org
 	if cachedResult != nil {
-		return ldx_sync_config.ResolveOrgFromUserConfig(c.Engine(), *cachedResult)
+		return s.apiClient.ResolveOrgFromUserConfig(c.Engine(), *cachedResult)
 	}
 
 	// Fall back to global org if no cache entry
