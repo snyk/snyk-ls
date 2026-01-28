@@ -56,46 +56,53 @@ func Test_buildUpgradePath(t *testing.T) {
 			description:     "Should return [false] when no upgrade information available",
 		},
 		{
-			name:            "Upgrade path with fix relationships",
-			dependencyPath:  []string{"goof@1.0.0", "lodash@4.17.20"},
-			finding:         createFindingWithFixRelationship(t, "lodash", []string{"goof@1.0.0", "lodash@4.17.21"}),
+			name:            "Single upgrade path",
+			dependencyPath:  []string{"goof@1.0.0", "lodash@4.2.3"},
+			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false, "lodash@4.17.21"},
 			description:     "Should extract upgrade path from fix relationships",
 		},
 		{
-			name:            "Multiple upgrade paths - filters by package name",
-			dependencyPath:  []string{"goof@1.0.0", "lodash@4.17.20"},
-			finding:         createFindingWithMultipleUpgradePaths(t, "lodash", []string{"goof@1.0.0", "lodash@4.17.21"}, []string{"goof@1.0.0", "other-pkg@2.0.0"}),
-			expectedUpgrade: []any{false, "lodash@4.17.21"},
+			name:            "Multi-level dependency path",
+			dependencyPath:  []string{"root@1.0.0", "direct-dependency@1.7.1", "lodash@4.2.3"},
+			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"root@1.0.0", "direct-dependency@2.0.0", "lodash@4.17.21"}}),
+			expectedUpgrade: []any{false, "direct-dependency@2.0.0", "lodash@4.17.21"},
+			description:     "Should handle multi-level transitive dependencies",
+		},
+		{
+			name:            "Multiple upgrade paths - filters to correct direct dependency",
+			dependencyPath:  []string{"goof@1.0.0", "direct-dependency@1.7.1", "lodash@4.2.3"},
+			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "another-direct-dependency@2.0.0", "lodash@4.17.22"}, {"goof@1.0.0", "direct-dependency@2.0.0", "lodash@4.17.21"}}),
+			expectedUpgrade: []any{false, "direct-dependency@2.0.0", "lodash@4.17.21"},
 			description:     "Should filter and return the upgrade path matching the dependency package name",
 		},
 		{
-			name:            "Transitive dependency with multi-level path",
-			dependencyPath:  []string{"root@1.0.0", "intermediate@2.0.0", "lodash@4.17.20"},
-			finding:         createFindingWithFixRelationship(t, "lodash", []string{"root@1.0.0", "intermediate@2.0.0", "lodash@4.17.21"}),
-			expectedUpgrade: []any{false, "intermediate@2.0.0", "lodash@4.17.21"},
-			description:     "Should handle multi-level transitive dependencies",
+			name:            "Only an upgrade path for a different package",
+			dependencyPath:  []string{"root@1.0.0", "lodash@4.2.3", "vuln-pkg@0.0.4"},
+			finding:         createFindingWithUpgradePaths(t, "vuln-pkg", [][]string{{"root@1.0.0", "other-pkg@2.0.0", "vuln-pkg@0.2.8"}}),
+			expectedUpgrade: []any{false},
+			description:     "Should return [false] when fixes only exist for a different dependency path (e.g., via other-pkg instead of lodash).",
 		},
 		{
 			name:            "Empty dependency path",
 			dependencyPath:  []string{},
-			finding:         createFindingWithFixRelationship(t, "lodash", []string{"goof@1.0.0", "lodash@4.17.21"}),
+			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false},
 			description:     "Should return [false] when dependency path is empty",
 		},
 		{
 			name:            "Malformed data: single element dependency path - handles gracefully",
 			dependencyPath:  []string{"root@1.0.0"},
-			finding:         createFindingWithFixRelationship(t, "lodash", []string{"goof@1.0.0", "lodash@4.17.21"}),
+			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false},
 			description:     "Should return [false] when dependency path has only root (length 1, malformed) to avoid panic",
 		},
 		{
-			name:            "Malformed data: fix relationships for different package - handles gracefully",
-			dependencyPath:  []string{"root@1.0.0", "lodash@4.17.20"},
-			finding:         createFindingWithFixRelationship(t, "other-pkg", []string{"root@1.0.0", "other-pkg@2.0.0"}),
+			name:            "Malformed data: UpgradePackageAdvice is for a different package - handles gracefully",
+			dependencyPath:  []string{"root@1.0.0", "lodash@4.2.3"},
+			finding:         createFindingWithUpgradePaths(t, "other-pkg", [][]string{{"root@1.0.0", "other-pkg@2.0.0"}}),
 			expectedUpgrade: []any{false},
-			description:     "Should return [false] when fix relationships exist but target a different package than the vulnerable one (malformed API data)",
+			description:     "Should return [false] when UpgradePackageAdvice exists but targets a different package than the vulnerable one (malformed API data)",
 		},
 	}
 
@@ -222,7 +229,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 		{
 			name:           "Edge case: upgrade path for different package than vulnerable one",
 			dependencyPath: []string{"root@1.0.0", "test-package@1.0.0"},
-			finding:        createFindingWithFixRelationship(t, "other-pkg", []string{"root@1.0.0", "other-pkg@2.0.0"}),
+			finding:        createFindingWithUpgradePaths(t, "other-pkg", [][]string{{"root@1.0.0", "other-pkg@2.0.0"}}),
 			vuln: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
@@ -530,35 +537,35 @@ func Test_extractUpgradePackage(t *testing.T) {
 		{
 			name:           "Fix relationship with upgrade path",
 			dependencyPath: []string{"goof@1.0.0", "lodash@4.17.4"},
-			finding:        createFindingWithFixRelationship(t, "lodash", []string{"goof@1.0.0", "lodash@4.17.21"}),
+			finding:        createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expected:       []string{"goof@1.0.0", "lodash@4.17.21"},
 			description:    "Should extract upgrade path from fix relationships",
 		},
 		{
 			name:           "Multiple upgrade paths - returns matching package",
 			dependencyPath: []string{"goof@1.0.0", "lodash@4.17.4"},
-			finding:        createFindingWithMultipleUpgradePaths(t, "lodash", []string{"goof@1.0.0", "lodash@4.17.21"}, []string{"goof@1.0.0", "other-pkg@2.0.0"}),
+			finding:        createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}, {"goof@1.0.0", "other-pkg@2.0.0"}}),
 			expected:       []string{"goof@1.0.0", "lodash@4.17.21"},
 			description:    "Should return the upgrade path matching the dependency package name",
 		},
 		{
 			name:           "Empty dependency path",
 			dependencyPath: []string{},
-			finding:        createFindingWithFixRelationship(t, "lodash", []string{"goof@1.0.0", "lodash@4.17.21"}),
+			finding:        createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expected:       nil,
 			description:    "Should return nil when dependency path is empty",
 		},
 		{
 			name:           "Wrong package name in upgrade path",
 			dependencyPath: []string{"goof@1.0.0", "lodash@4.17.4"},
-			finding:        createFindingWithFixRelationship(t, "other-pkg", []string{"goof@1.0.0", "other-pkg@2.0.0"}),
+			finding:        createFindingWithUpgradePaths(t, "other-pkg", [][]string{{"goof@1.0.0", "other-pkg@2.0.0"}}),
 			expected:       []string{},
 			description:    "Should return empty when upgrade path doesn't match dependency package",
 		},
 		{
 			name:           "Malformed data: single element dependency path - handles gracefully",
 			dependencyPath: []string{"root@1.0.0"},
-			finding:        createFindingWithFixRelationship(t, "lodash", []string{"goof@1.0.0", "lodash@4.17.21"}),
+			finding:        createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expected:       nil,
 			description:    "Should return nil when dependency path has only root (length 1, malformed) to avoid panic",
 		},
@@ -1518,92 +1525,31 @@ func createBaseFindingWithRelationshipsStruct(t *testing.T) *testapi.FindingData
 	}
 }
 
-// createFindingWithFixRelationship creates a FindingData with fix relationships
-func createFindingWithFixRelationship(t *testing.T, packageName string, upgradePath []string) *testapi.FindingData {
+// createFindingWithUpgradePaths creates a FindingData with fix relationships for one or more upgrade paths
+func createFindingWithUpgradePaths(t *testing.T, packageName string, upgradePaths [][]string) *testapi.FindingData {
 	t.Helper()
 	finding := createBaseFindingWithRelationshipsStruct(t)
 
-	// Build upgrade path packages
-	packages := make([]testapi.Package, len(upgradePath))
-	for i, pkgStr := range upgradePath {
-		parts := strings.Split(pkgStr, "@")
-		packages[i] = testapi.Package{Name: parts[0], Version: parts[1]}
+	// Convert each upgrade path to UpgradePath structs
+	apiUpgradePaths := make([]testapi.UpgradePath, len(upgradePaths))
+	for i, path := range upgradePaths {
+		packages := make([]testapi.Package, len(path))
+		for j, pkgStr := range path {
+			parts := strings.Split(pkgStr, "@")
+			packages[j] = testapi.Package{Name: parts[0], Version: parts[1]}
+		}
+		apiUpgradePaths[i] = testapi.UpgradePath{
+			DependencyPath: packages,
+			IsDrop:         false,
+		}
 	}
 
-	// Create fix action
+	// Create fix action with all upgrade paths
 	var fixAction testapi.FixAction
 	upgradeAdvice := testapi.UpgradePackageAdvice{
-		Format:      testapi.UpgradePackageAdviceFormatUpgradePackageAdvice,
-		PackageName: packageName,
-		UpgradePaths: []testapi.UpgradePath{
-			{
-				DependencyPath: packages,
-				IsDrop:         false,
-			},
-		},
-	}
-	err := fixAction.FromUpgradePackageAdvice(upgradeAdvice)
-	require.NoError(t, err)
-
-	fixID := uuid.New()
-	finding.Relationships.Fix = &struct {
-		Data *struct {
-			Attributes *testapi.FixAttributes `json:"attributes,omitempty"`
-			Id         uuid.UUID              `json:"id"`
-			Type       string                 `json:"type"`
-		} `json:"data,omitempty"`
-	}{
-		Data: &struct {
-			Attributes *testapi.FixAttributes `json:"attributes,omitempty"`
-			Id         uuid.UUID              `json:"id"`
-			Type       string                 `json:"type"`
-		}{
-			Attributes: &testapi.FixAttributes{
-				Action:  &fixAction,
-				Outcome: "resolved",
-			},
-			Id:   fixID,
-			Type: "fix",
-		},
-	}
-
-	return finding
-}
-
-// createFindingWithMultipleUpgradePaths creates a FindingData with multiple upgrade paths in fix relationships
-func createFindingWithMultipleUpgradePaths(t *testing.T, packageName string, path1 []string, path2 []string) *testapi.FindingData {
-	t.Helper()
-	finding := createBaseFindingWithRelationshipsStruct(t)
-
-	// Convert path1 to packages
-	packages1 := make([]testapi.Package, len(path1))
-	for i, pkgStr := range path1 {
-		parts := strings.Split(pkgStr, "@")
-		packages1[i] = testapi.Package{Name: parts[0], Version: parts[1]}
-	}
-
-	// Convert path2 to packages
-	packages2 := make([]testapi.Package, len(path2))
-	for i, pkgStr := range path2 {
-		parts := strings.Split(pkgStr, "@")
-		packages2[i] = testapi.Package{Name: parts[0], Version: parts[1]}
-	}
-
-	// Create fix action with multiple paths
-	var fixAction testapi.FixAction
-	upgradeAdvice := testapi.UpgradePackageAdvice{
-		Format:      testapi.UpgradePackageAdviceFormatUpgradePackageAdvice,
-		PackageName: packageName,
-		UpgradePaths: []testapi.UpgradePath{
-			{
-				DependencyPath: packages1,
-				IsDrop:         false,
-			},
-			{
-				DependencyPath: packages2,
-				IsDrop:         false,
-			},
-		},
+		Format:       testapi.UpgradePackageAdviceFormatUpgradePackageAdvice,
+		PackageName:  packageName,
+		UpgradePaths: apiUpgradePaths,
 	}
 	err := fixAction.FromUpgradePackageAdvice(upgradeAdvice)
 	require.NoError(t, err)
