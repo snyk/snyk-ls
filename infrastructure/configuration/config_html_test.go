@@ -35,7 +35,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	settings := types.Settings{
 		Token:                  "test-token",
 		Endpoint:               "https://test.snyk.io",
-		Organization:           "test-org",
+		Organization:           util.Ptr("test-org"),
 		Insecure:               "true",
 		ActivateSnykOpenSource: "true",
 		ActivateSnykCode:       "true",
