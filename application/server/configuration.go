@@ -348,10 +348,9 @@ func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMa
 // - If a field has a non-nil value, it's added/updated as a user override
 // - If a field has a nil value, the user override is removed (reset to default/LDX-Sync)
 // - Locked fields are rejected with a warning log
-// Returns true if any locked fields were rejected
-func processModifiedFields(c *config.Config, folderConfig *types.FolderConfig, modifiedFields map[string]any, logger *zerolog.Logger) bool {
+// Returns true if any updates were rejected (e.g, because the field was locked)
+func processModifiedFields(c *config.Config, folderConfig *types.FolderConfig, modifiedFields map[string]any, logger *zerolog.Logger) (updatesRejected bool) {
 	resolver := c.GetConfigResolver()
-	hasLockedFieldRejections := false
 
 	for settingName, newValue := range modifiedFields {
 		// Validate that the field is not locked
@@ -361,7 +360,7 @@ func processModifiedFields(c *config.Config, folderConfig *types.FolderConfig, m
 				logger.Warn().
 					Str("setting", settingName).
 					Msg("Rejecting change to locked setting - enforced by organization policy")
-				hasLockedFieldRejections = true
+				updatesRejected = true
 				continue
 			}
 		}
@@ -382,7 +381,7 @@ func processModifiedFields(c *config.Config, folderConfig *types.FolderConfig, m
 		}
 	}
 
-	return hasLockedFieldRejections
+	return
 }
 
 func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {
