@@ -85,18 +85,115 @@ type ConfigHtmlRenderer struct {
 	template *template.Template
 }
 
+// Template helper functions (extracted to reduce cyclomatic complexity)
+
+func tmplGetScanConfig(scanConfigMap map[product.Product]types.ScanCommandConfig, productName string) *types.ScanCommandConfig {
+	cfg, exists := scanConfigMap[product.Product(productName)]
+	if !exists {
+		return nil
+	}
+	return &cfg
+}
+
+func tmplGetEffectiveValue(effectiveConfig map[string]types.EffectiveValue, settingName string) *types.EffectiveValue {
+	if effectiveConfig == nil {
+		return nil
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return nil
+	}
+	return &val
+}
+
+func tmplIsLocked(effectiveConfig map[string]types.EffectiveValue, settingName string) bool {
+	if effectiveConfig == nil {
+		return false
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return false
+	}
+	return val.Source == "ldx-sync-locked"
+}
+
+func tmplGetSource(effectiveConfig map[string]types.EffectiveValue, settingName string) string {
+	if effectiveConfig == nil {
+		return ""
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return ""
+	}
+	return val.Source
+}
+
+func tmplGetSourceLabel(effectiveConfig map[string]types.EffectiveValue, settingName string) string {
+	if effectiveConfig == nil {
+		return ""
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return ""
+	}
+	return sourceToLabel(val.Source)
+}
+
+func tmplGetSourceClass(effectiveConfig map[string]types.EffectiveValue, settingName string) string {
+	if effectiveConfig == nil {
+		return ""
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return ""
+	}
+	return sourceToClass(val.Source)
+}
+
+func sourceToLabel(source string) string {
+	switch source {
+	case "ldx-sync-locked":
+		return "Organization (Locked)"
+	case "ldx-sync":
+		return "Organization"
+	case "user-override":
+		return "Your Override"
+	case "global":
+		return "Global Setting"
+	case "default":
+		return "Default"
+	default:
+		return source
+	}
+}
+
+func sourceToClass(source string) string {
+	switch source {
+	case "ldx-sync-locked":
+		return "source-org-locked"
+	case "ldx-sync":
+		return "source-org"
+	case "user-override":
+		return "source-override"
+	case "global":
+		return "source-global"
+	case "default":
+		return "source-default"
+	default:
+		return ""
+	}
+}
+
 func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
-		"toLower": strings.ToLower,
-		// getScanConfig retrieves scan command config for a product from the map
-		"getScanConfig": func(scanConfigMap map[product.Product]types.ScanCommandConfig, productName string) *types.ScanCommandConfig {
-			config, exists := scanConfigMap[product.Product(productName)]
-			if !exists {
-				return nil
-			}
-			return &config
-		},
+		"toLower":           strings.ToLower,
+		"getScanConfig":     tmplGetScanConfig,
+		"getEffectiveValue": tmplGetEffectiveValue,
+		"isLocked":          tmplIsLocked,
+		"getSource":         tmplGetSource,
+		"getSourceLabel":    tmplGetSourceLabel,
+		"getSourceClass":    tmplGetSourceClass,
 	}
 
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)

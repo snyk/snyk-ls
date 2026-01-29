@@ -117,12 +117,84 @@ func main() {
 						PreScanCommand: "terraform init",
 					},
 				},
+				// EffectiveConfig shows computed values with their sources
+				EffectiveConfig: map[string]types.EffectiveValue{
+					"scan_automatic": {
+						Value:  "auto",
+						Source: "global",
+					},
+					"scan_net_new": {
+						Value:  false,
+						Source: "ldx-sync", // Enforced by org but not locked
+					},
+					"enabled_severities": {
+						Value: &types.SeverityFilter{
+							Critical: true,
+							High:     true,
+							Medium:   false,
+							Low:      false,
+						},
+						Source: "ldx-sync-locked", // Locked by org policy
+					},
+					"enabled_products": {
+						Value:  []string{"oss", "code"},
+						Source: "ldx-sync",
+					},
+					"issue_view_open_issues": {
+						Value:  true,
+						Source: "global",
+					},
+					"issue_view_ignored_issues": {
+						Value:  false,
+						Source: "default",
+					},
+					"risk_score_threshold": {
+						Value:  500,
+						Source: "ldx-sync-locked",
+					},
+				},
 			},
 			{
 				FolderPath:        "/Users/username/workspace/your-project",
 				PreferredOrg:      "manual-org-uuid-11111",
 				AutoDeterminedOrg: "auto-determined-uuid-99999",
 				OrgSetByUser:      false,
+				// EffectiveConfig for second folder - different sources
+				EffectiveConfig: map[string]types.EffectiveValue{
+					"scan_automatic": {
+						Value:  "manual",
+						Source: "user-override", // User has overridden this
+					},
+					"scan_net_new": {
+						Value:  true,
+						Source: "global",
+					},
+					"enabled_severities": {
+						Value: &types.SeverityFilter{
+							Critical: true,
+							High:     true,
+							Medium:   true,
+							Low:      true,
+						},
+						Source: "default",
+					},
+					"enabled_products": {
+						Value:  []string{"oss", "code", "iac"},
+						Source: "user-override",
+					},
+					"issue_view_open_issues": {
+						Value:  true,
+						Source: "default",
+					},
+					"issue_view_ignored_issues": {
+						Value:  true,
+						Source: "user-override",
+					},
+					"risk_score_threshold": {
+						Value:  0,
+						Source: "default",
+					},
+				},
 			},
 		},
 	}

@@ -161,5 +161,107 @@
 		}
 	}
 
+	// Track initial effective values for folder configs to detect modifications
+	var initialFolderEffectiveValues = {};
+
+	// Initialize tracking of folder effective values from the page data
+	formHandler.initializeFolderTracking = function(folderConfigs) {
+		initialFolderEffectiveValues = {};
+		if (!folderConfigs) return;
+
+		for (var i = 0; i < folderConfigs.length; i++) {
+			var fc = folderConfigs[i];
+			if (fc.effectiveConfig) {
+				initialFolderEffectiveValues[fc.folderPath] = window.FormUtils.deepClone(fc.effectiveConfig);
+			}
+		}
+	};
+
+	// Get modified fields for a folder by comparing current form values to initial effective values
+	formHandler.getModifiedFieldsForFolder = function(folderPath, currentValues) {
+		var initial = initialFolderEffectiveValues[folderPath];
+		if (!initial) return null;
+
+		var modifiedFields = {};
+		var hasModifications = false;
+
+		// Check each setting that has an effective value
+		for (var settingName in initial) {
+			if (initial.hasOwnProperty(settingName)) {
+				var initialValue = initial[settingName].value;
+				var currentValue = currentValues[settingName];
+
+				// Compare values - if different, it's a modification
+				// Use dirtyTracker's deepEquals if available, otherwise simple comparison
+				var areEqual = window.dirtyTracker 
+					? window.dirtyTracker.deepEquals(initialValue, currentValue)
+					: (window.FormUtils.normalizeValue(initialValue) === window.FormUtils.normalizeValue(currentValue));
+				
+				if (!areEqual) {
+					modifiedFields[settingName] = currentValue;
+					hasModifications = true;
+				}
+			}
+		}
+
+		return hasModifications ? modifiedFields : null;
+	};
+
+	// Enhanced collectData that includes modifiedFields for folder configs
+	formHandler.collectDataWithModifiedFields = function() {
+		var data = formHandler.collectData();
+
+		// For each folder config, compute modifiedFields
+		if (data.folderConfigs) {
+			for (var i = 0; i < data.folderConfigs.length; i++) {
+				var fc = data.folderConfigs[i];
+				if (fc.folderPath) {
+					// Collect current effective values from form for this folder
+					var currentEffectiveValues = collectFolderEffectiveValues(i);
+					var modifiedFields = formHandler.getModifiedFieldsForFolder(fc.folderPath, currentEffectiveValues);
+					if (modifiedFields) {
+						fc.modifiedFields = modifiedFields;
+					}
+				}
+			}
+		}
+
+		return data;
+	};
+
+	// Collect current form values that correspond to effective config settings for a folder
+	function collectFolderEffectiveValues(folderIndex) {
+		var values = {};
+
+		// Scanning Mode Override
+		var scanAutomatic = dom.get("folder_" + folderIndex + "_override_scanAutomatic");
+		if (scanAutomatic) {
+			values.scanAutomatic = scanAutomatic.value;
+		}
+
+		// Delta Findings Override
+		var scanNetNew = dom.get("folder_" + folderIndex + "_override_scanNetNew");
+		if (scanNetNew) {
+			values.scanNetNew = scanNetNew.value === "true";
+		}
+
+		// Severity Filter Override
+		var severityCritical = dom.getByName("folder_" + folderIndex + "_override_severity_critical")[0];
+		var severityHigh = dom.getByName("folder_" + folderIndex + "_override_severity_high")[0];
+		var severityMedium = dom.getByName("folder_" + folderIndex + "_override_severity_medium")[0];
+		var severityLow = dom.getByName("folder_" + folderIndex + "_override_severity_low")[0];
+
+		if (severityCritical || severityHigh || severityMedium || severityLow) {
+			values.enabledSeverities = {
+				critical: severityCritical ? severityCritical.checked : false,
+				high: severityHigh ? severityHigh.checked : false,
+				medium: severityMedium ? severityMedium.checked : false,
+				low: severityLow ? severityLow.checked : false
+			};
+		}
+
+		return values;
+	}
+
 	window.ConfigApp.formHandler = formHandler;
 })();

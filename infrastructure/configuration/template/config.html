@@ -375,6 +375,140 @@
                         </div>
                     </div>
                 </div>
+
+                {{if $folder.EffectiveConfig}}
+                <div class="form-group">
+                    <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-overrides" aria-expanded="false" aria-controls="folder-{{$index}}-overrides">
+                        <span data-toggle="tooltip" title="Override organization policy settings for this folder. Locked settings cannot be changed.">Policy Overrides</span>
+                        <span class="collapse-icon">▼</span>
+                    </button>
+                    <div class="collapse ml-1" id="folder-{{$index}}-overrides">
+                        <div class="mt-2">
+                            <p class="text-muted small">These settings can be customized per-folder. Locked settings are enforced by your organization.</p>
+                            
+                            <!-- Scanning Mode Override -->
+                            {{with getEffectiveValue $folder.EffectiveConfig "scan_automatic"}}
+                            <div class="form-group {{if isLocked $folder.EffectiveConfig "scan_automatic"}}field-locked{{end}}">
+                                <label for="folder_{{$index}}_override_scan_automatic">
+                                    <span data-toggle="tooltip" title="Override scanning mode for this folder">Scanning Mode</span>
+                                    {{if isLocked $folder.EffectiveConfig "scan_automatic"}}<span class="locked-indicator">Locked</span>{{end}}
+                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "scan_automatic"}}">{{getSourceLabel $folder.EffectiveConfig "scan_automatic"}}</span>
+                                </label>
+                                <select id="folder_{{$index}}_override_scan_automatic" name="folder_{{$index}}_override_scan_automatic" data-setting="scan_automatic" {{if isLocked $folder.EffectiveConfig "scan_automatic"}}disabled{{end}}>
+                                    <option value="auto" {{if eq .Value "auto"}}selected{{end}}>Auto</option>
+                                    <option value="manual" {{if eq .Value "manual"}}selected{{end}}>Manual</option>
+                                </select>
+                            </div>
+                            {{end}}
+
+                            <!-- Delta Findings Override -->
+                            {{with getEffectiveValue $folder.EffectiveConfig "scan_net_new"}}
+                            <div class="form-group {{if isLocked $folder.EffectiveConfig "scan_net_new"}}field-locked{{end}}">
+                                <label for="folder_{{$index}}_override_scan_net_new">
+                                    <span data-toggle="tooltip" title="Override delta findings setting for this folder">Delta Findings</span>
+                                    {{if isLocked $folder.EffectiveConfig "scan_net_new"}}<span class="locked-indicator">Locked</span>{{end}}
+                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "scan_net_new"}}">{{getSourceLabel $folder.EffectiveConfig "scan_net_new"}}</span>
+                                </label>
+                                <select id="folder_{{$index}}_override_scan_net_new" name="folder_{{$index}}_override_scan_net_new" data-setting="scan_net_new" {{if isLocked $folder.EffectiveConfig "scan_net_new"}}disabled{{end}}>
+                                    <option value="false" {{if not .Value}}selected{{end}}>All Issues</option>
+                                    <option value="true" {{if .Value}}selected{{end}}>Net New Issues</option>
+                                </select>
+                            </div>
+                            {{end}}
+
+                            <!-- Severity Filter Override -->
+                            {{with getEffectiveValue $folder.EffectiveConfig "enabled_severities"}}
+                            <div class="form-group {{if isLocked $folder.EffectiveConfig "enabled_severities"}}field-locked{{end}}">
+                                <label>
+                                    <span data-toggle="tooltip" title="Override severity filter for this folder">Severity Filter</span>
+                                    {{if isLocked $folder.EffectiveConfig "enabled_severities"}}<span class="locked-indicator">Locked</span>{{end}}
+                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "enabled_severities"}}">{{getSourceLabel $folder.EffectiveConfig "enabled_severities"}}</span>
+                                </label>
+                                <div class="checkbox-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="folder_{{$index}}_override_severity_critical" data-setting="enabled_severities" data-severity="critical" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                        Critical
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="folder_{{$index}}_override_severity_high" data-setting="enabled_severities" data-severity="high" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                        High
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="folder_{{$index}}_override_severity_medium" data-setting="enabled_severities" data-severity="medium" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                        Medium
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="folder_{{$index}}_override_severity_low" data-setting="enabled_severities" data-severity="low" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                        Low
+                                    </label>
+                                </div>
+                            </div>
+                            {{end}}
+
+                            <!-- Enabled Products Override -->
+                            {{with getEffectiveValue $folder.EffectiveConfig "enabled_products"}}
+                            <div class="form-group {{if isLocked $folder.EffectiveConfig "enabled_products"}}field-locked{{end}}">
+                                <label>
+                                    <span data-toggle="tooltip" title="Override enabled products for this folder">Enabled Products</span>
+                                    {{if isLocked $folder.EffectiveConfig "enabled_products"}}<span class="locked-indicator">Locked</span>{{end}}
+                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "enabled_products"}}">{{getSourceLabel $folder.EffectiveConfig "enabled_products"}}</span>
+                                </label>
+                                <div class="checkbox-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="folder_{{$index}}_override_product_oss" data-setting="enabled_products" data-product="oss" {{if isLocked $folder.EffectiveConfig "enabled_products"}}disabled{{end}}>
+                                        Snyk Open Source
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="folder_{{$index}}_override_product_code" data-setting="enabled_products" data-product="code" {{if isLocked $folder.EffectiveConfig "enabled_products"}}disabled{{end}}>
+                                        Snyk Code
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="folder_{{$index}}_override_product_iac" data-setting="enabled_products" data-product="iac" {{if isLocked $folder.EffectiveConfig "enabled_products"}}disabled{{end}}>
+                                        Snyk IaC
+                                    </label>
+                                </div>
+                            </div>
+                            {{end}}
+
+                            <!-- Issue View Options Override -->
+                            {{with getEffectiveValue $folder.EffectiveConfig "issue_view_open_issues"}}
+                            <div class="form-group {{if isLocked $folder.EffectiveConfig "issue_view_open_issues"}}field-locked{{end}}">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="folder_{{$index}}_override_issueViewOpenIssues" data-setting="issue_view_open_issues" {{if isLocked $folder.EffectiveConfig "issue_view_open_issues"}}disabled{{end}}>
+                                    <span data-toggle="tooltip" title="Show open issues for this folder">Show Open Issues</span>
+                                    {{if isLocked $folder.EffectiveConfig "issue_view_open_issues"}}<span class="locked-indicator">Locked</span>{{end}}
+                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "issue_view_open_issues"}}">{{getSourceLabel $folder.EffectiveConfig "issue_view_open_issues"}}</span>
+                                </label>
+                            </div>
+                            {{end}}
+
+                            {{with getEffectiveValue $folder.EffectiveConfig "issue_view_ignored_issues"}}
+                            <div class="form-group {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}field-locked{{end}}">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="folder_{{$index}}_override_issueViewIgnoredIssues" data-setting="issue_view_ignored_issues" {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}disabled{{end}}>
+                                    <span data-toggle="tooltip" title="Show ignored issues for this folder">Show Ignored Issues</span>
+                                    {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}<span class="locked-indicator">Locked</span>{{end}}
+                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "issue_view_ignored_issues"}}">{{getSourceLabel $folder.EffectiveConfig "issue_view_ignored_issues"}}</span>
+                                </label>
+                            </div>
+                            {{end}}
+
+                            <!-- Risk Score Threshold Override -->
+                            {{with getEffectiveValue $folder.EffectiveConfig "risk_score_threshold"}}
+                            <div class="form-group {{if isLocked $folder.EffectiveConfig "risk_score_threshold"}}field-locked{{end}}">
+                                <label for="folder_{{$index}}_override_riskScoreThreshold">
+                                    <span data-toggle="tooltip" title="Minimum risk score to display issues (0-1000)">Risk Score Threshold</span>
+                                    {{if isLocked $folder.EffectiveConfig "risk_score_threshold"}}<span class="locked-indicator">Locked</span>{{end}}
+                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "risk_score_threshold"}}">{{getSourceLabel $folder.EffectiveConfig "risk_score_threshold"}}</span>
+                                </label>
+                                <input type="number" id="folder_{{$index}}_override_riskScoreThreshold" name="folder_{{$index}}_override_riskScoreThreshold" data-setting="risk_score_threshold" min="0" max="1000" value="{{.Value}}" {{if isLocked $folder.EffectiveConfig "risk_score_threshold"}}disabled{{end}}>
+                            </div>
+                            {{end}}
+                        </div>
+                    </div>
+                </div>
+                {{end}}
+
                 </div>
             </div>
                     {{end}}
