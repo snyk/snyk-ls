@@ -586,3 +586,54 @@ button.secondary[disabled] {
 .field-locked input[type="checkbox"] {
     pointer-events: none;
 }
+
+/* Reset button styling */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.section-header h2 {
+    margin-bottom: 0;
+}
+
+.reset-section-btn {
+    padding: 4px 12px;
+    font-size: var(--small-font-size);
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--muted-foreground);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.reset-section-btn:hover {
+    background-color: var(--input-background);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.reset-section-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.reset-overrides-btn {
+    padding: 4px 12px;
+    font-size: var(--tiny-font-size);
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--muted-foreground);
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 1rem;
+}
+
+.reset-overrides-btn:hover {
+    background-color: var(--input-background);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}

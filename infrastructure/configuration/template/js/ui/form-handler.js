@@ -211,16 +211,36 @@
 	formHandler.collectDataWithModifiedFields = function() {
 		var data = formHandler.collectData();
 
+		// List of all org-scope settings that can be reset
+		var orgScopeSettings = [
+			"scan_automatic",
+			"scan_net_new",
+			"enabled_severities",
+			"enabled_products",
+			"issue_view_open_issues",
+			"issue_view_ignored_issues",
+			"risk_score_threshold"
+		];
+
 		// For each folder config, compute modifiedFields
 		if (data.folderConfigs) {
 			for (var i = 0; i < data.folderConfigs.length; i++) {
 				var fc = data.folderConfigs[i];
 				if (fc.folderPath) {
-					// Collect current effective values from form for this folder
-					var currentEffectiveValues = collectFolderEffectiveValues(i);
-					var modifiedFields = formHandler.getModifiedFieldsForFolder(fc.folderPath, currentEffectiveValues);
-					if (modifiedFields) {
-						fc.modifiedFields = modifiedFields;
+					// Check if this folder is marked for complete reset
+					if (formHandler.isFolderMarkedForReset(i)) {
+						// Set all org-scope settings to null to indicate reset
+						fc.modifiedFields = {};
+						for (var j = 0; j < orgScopeSettings.length; j++) {
+							fc.modifiedFields[orgScopeSettings[j]] = null;
+						}
+					} else {
+						// Collect current effective values from form for this folder
+						var currentEffectiveValues = collectFolderEffectiveValues(i);
+						var modifiedFields = formHandler.getModifiedFieldsForFolder(fc.folderPath, currentEffectiveValues);
+						if (modifiedFields) {
+							fc.modifiedFields = modifiedFields;
+						}
 					}
 				}
 			}
@@ -234,15 +254,15 @@
 		var values = {};
 
 		// Scanning Mode Override
-		var scanAutomatic = dom.get("folder_" + folderIndex + "_override_scanAutomatic");
+		var scanAutomatic = dom.get("folder_" + folderIndex + "_override_scan_automatic");
 		if (scanAutomatic) {
-			values.scanAutomatic = scanAutomatic.value;
+			values.scan_automatic = scanAutomatic.value;
 		}
 
 		// Delta Findings Override
-		var scanNetNew = dom.get("folder_" + folderIndex + "_override_scanNetNew");
+		var scanNetNew = dom.get("folder_" + folderIndex + "_override_scan_net_new");
 		if (scanNetNew) {
-			values.scanNetNew = scanNetNew.value === "true";
+			values.scan_net_new = scanNetNew.value === "true";
 		}
 
 		// Severity Filter Override
@@ -252,7 +272,7 @@
 		var severityLow = dom.getByName("folder_" + folderIndex + "_override_severity_low")[0];
 
 		if (severityCritical || severityHigh || severityMedium || severityLow) {
-			values.enabledSeverities = {
+			values.enabled_severities = {
 				critical: severityCritical ? severityCritical.checked : false,
 				high: severityHigh ? severityHigh.checked : false,
 				medium: severityMedium ? severityMedium.checked : false,
@@ -260,8 +280,54 @@
 			};
 		}
 
+		// Enabled Products Override
+		var productOss = dom.getByName("folder_" + folderIndex + "_override_product_oss")[0];
+		var productCode = dom.getByName("folder_" + folderIndex + "_override_product_code")[0];
+		var productIac = dom.getByName("folder_" + folderIndex + "_override_product_iac")[0];
+
+		if (productOss || productCode || productIac) {
+			var products = [];
+			if (productOss && productOss.checked) products.push("oss");
+			if (productCode && productCode.checked) products.push("code");
+			if (productIac && productIac.checked) products.push("iac");
+			values.enabled_products = products;
+		}
+
+		// Issue View Options Override
+		var issueViewOpen = dom.getByName("folder_" + folderIndex + "_override_issueViewOpenIssues")[0];
+		if (issueViewOpen) {
+			values.issue_view_open_issues = issueViewOpen.checked;
+		}
+
+		var issueViewIgnored = dom.getByName("folder_" + folderIndex + "_override_issueViewIgnoredIssues")[0];
+		if (issueViewIgnored) {
+			values.issue_view_ignored_issues = issueViewIgnored.checked;
+		}
+
+		// Risk Score Threshold Override
+		var riskScore = dom.get("folder_" + folderIndex + "_override_riskScoreThreshold");
+		if (riskScore && riskScore.value !== "") {
+			values.risk_score_threshold = parseInt(riskScore.value, 10);
+		}
+
 		return values;
 	}
+
+	// Mark a folder for complete reset (all overrides will be set to null)
+	formHandler.markFolderForReset = function(folderIndex) {
+		window.ConfigApp.folderResets = window.ConfigApp.folderResets || {};
+		window.ConfigApp.folderResets[folderIndex] = true;
+	};
+
+	// Check if a folder is marked for reset
+	formHandler.isFolderMarkedForReset = function(folderIndex) {
+		return window.ConfigApp.folderResets && window.ConfigApp.folderResets[folderIndex];
+	};
+
+	// Clear folder reset markers after save
+	formHandler.clearFolderResets = function() {
+		window.ConfigApp.folderResets = {};
+	};
 
 	window.ConfigApp.formHandler = formHandler;
 })();

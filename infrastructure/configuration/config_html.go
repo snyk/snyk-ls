@@ -66,6 +66,9 @@ var configFormHandlerTemplate string
 //go:embed template/js/ui/tooltips.js
 var configTooltipsTemplate string
 
+//go:embed template/js/ui/reset-handler.js
+var configResetHandlerTemplate string
+
 // App initialization
 //
 //go:embed template/js/app.js
@@ -252,8 +255,9 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		"Authentication": template.JS(configAuthenticationTemplate),
 		"Folders":        template.JS(configFoldersTemplate),
 		// UI
-		"FormHandler": template.JS(configFormHandlerTemplate),
-		"Tooltips":    template.JS(configTooltipsTemplate),
+		"FormHandler":  template.JS(configFormHandlerTemplate),
+		"Tooltips":     template.JS(configTooltipsTemplate),
+		"ResetHandler": template.JS(configResetHandlerTemplate),
 		// App initialization
 		"App":               template.JS(configAppTemplate),
 		"Nonce":             "ideNonce", // Replaced by IDE extension

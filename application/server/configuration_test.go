@@ -1123,3 +1123,180 @@ func Test_updateFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOrg(t *t
 	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true (LS fixes IDE's false)")
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
 }
+
+// Tests for processModifiedFields - the write path for user overrides
+
+func Test_processModifiedFields_SetsUserOverride(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+
+	folderConfig := &types.FolderConfig{
+		FolderPath: "/test/path",
+	}
+
+	modifiedFields := map[string]any{
+		types.SettingScanAutomatic: "manual",
+		types.SettingScanNetNew:    true,
+	}
+
+	processModifiedFields(c, folderConfig, modifiedFields, logger)
+
+	// Verify user overrides are set
+	assert.True(t, folderConfig.HasUserOverride(types.SettingScanAutomatic))
+	assert.True(t, folderConfig.HasUserOverride(types.SettingScanNetNew))
+
+	val, ok := folderConfig.GetUserOverride(types.SettingScanAutomatic)
+	assert.True(t, ok)
+	assert.Equal(t, "manual", val)
+
+	val, ok = folderConfig.GetUserOverride(types.SettingScanNetNew)
+	assert.True(t, ok)
+	assert.Equal(t, true, val)
+}
+
+func Test_processModifiedFields_ClearsUserOverrideOnNil(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+
+	// Setup: folder config with existing user override
+	folderConfig := &types.FolderConfig{
+		FolderPath: "/test/path",
+	}
+	folderConfig.SetUserOverride(types.SettingScanAutomatic, "manual")
+	folderConfig.SetUserOverride(types.SettingScanNetNew, true)
+
+	// Verify setup
+	assert.True(t, folderConfig.HasUserOverride(types.SettingScanAutomatic))
+	assert.True(t, folderConfig.HasUserOverride(types.SettingScanNetNew))
+
+	// Action: send nil to reset one setting
+	modifiedFields := map[string]any{
+		types.SettingScanAutomatic: nil, // Reset this one
+	}
+
+	processModifiedFields(c, folderConfig, modifiedFields, logger)
+
+	// Verify: scanAutomatic override is cleared, scanNetNew remains
+	assert.False(t, folderConfig.HasUserOverride(types.SettingScanAutomatic), "Override should be cleared")
+	assert.True(t, folderConfig.HasUserOverride(types.SettingScanNetNew), "Other override should remain")
+}
+
+func Test_processModifiedFields_RejectsLockedFields(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+
+	// Initialize LDX-Sync cache and add a locked field
+	c.InitLdxSyncOrgConfigCache()
+	orgConfig := types.NewLDXSyncOrgConfig("test-org")
+	orgConfig.SetField(types.SettingScanAutomatic, "auto", true, false, "group") // Locked
+	c.UpdateLdxSyncOrgConfig(orgConfig)
+
+	// Create a folder config with the org set
+	folderPath := types.FilePath(t.TempDir())
+	folderConfig := &types.FolderConfig{
+		FolderPath:   folderPath,
+		PreferredOrg: "test-org",
+		OrgSetByUser: true,
+	}
+	// Store the folder config so the resolver can find it
+	err := c.UpdateFolderConfig(folderConfig)
+	require.NoError(t, err)
+
+	// Try to modify the locked field
+	modifiedFields := map[string]any{
+		types.SettingScanAutomatic: "manual", // Should be rejected
+	}
+
+	processModifiedFields(c, folderConfig, modifiedFields, logger)
+
+	// Verify: locked field should NOT be set as user override
+	assert.False(t, folderConfig.HasUserOverride(types.SettingScanAutomatic), "Locked field should not be overridden")
+}
+
+func Test_processModifiedFields_AllowsUnlockedFields(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+
+	// Initialize LDX-Sync cache and add an enforced (but not locked) field
+	c.InitLdxSyncOrgConfigCache()
+	orgConfig := types.NewLDXSyncOrgConfig("test-org")
+	orgConfig.SetField(types.SettingScanAutomatic, "auto", false, true, "group") // Enforced, not locked
+	c.UpdateLdxSyncOrgConfig(orgConfig)
+
+	folderConfig := &types.FolderConfig{
+		FolderPath:   "/test/path",
+		PreferredOrg: "test-org",
+		OrgSetByUser: true,
+	}
+
+	// Modify the enforced (but not locked) field
+	modifiedFields := map[string]any{
+		types.SettingScanAutomatic: "manual",
+	}
+
+	processModifiedFields(c, folderConfig, modifiedFields, logger)
+
+	// Verify: enforced field CAN be overridden by user
+	assert.True(t, folderConfig.HasUserOverride(types.SettingScanAutomatic), "Enforced field should be overridable")
+	val, _ := folderConfig.GetUserOverride(types.SettingScanAutomatic)
+	assert.Equal(t, "manual", val)
+}
+
+func Test_processModifiedFields_ResetAllOverrides(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+
+	// Setup: folder config with multiple user overrides
+	folderConfig := &types.FolderConfig{
+		FolderPath: "/test/path",
+	}
+	folderConfig.SetUserOverride(types.SettingScanAutomatic, "manual")
+	folderConfig.SetUserOverride(types.SettingScanNetNew, true)
+	folderConfig.SetUserOverride(types.SettingEnabledSeverities, []string{"critical", "high"})
+	folderConfig.SetUserOverride(types.SettingEnabledProducts, []string{"code"})
+
+	// Verify setup
+	assert.Equal(t, 4, len(folderConfig.UserOverrides))
+
+	// Action: reset all overrides by sending nil for each
+	modifiedFields := map[string]any{
+		types.SettingScanAutomatic:     nil,
+		types.SettingScanNetNew:        nil,
+		types.SettingEnabledSeverities: nil,
+		types.SettingEnabledProducts:   nil,
+	}
+
+	processModifiedFields(c, folderConfig, modifiedFields, logger)
+
+	// Verify: all overrides are cleared
+	assert.Equal(t, 0, len(folderConfig.UserOverrides), "All overrides should be cleared")
+}
+
+func Test_updateFolderConfig_ProcessesModifiedFields(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	// Setup stored config
+	setup.createStoredConfig("test-org", true, true)
+
+	// Call updateFolderConfig with ModifiedFields
+	settings := types.Settings{
+		FolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:                  setup.folderPath,
+				PreferredOrg:                "test-org",
+				OrgSetByUser:                true,
+				OrgMigratedFromGlobalConfig: true,
+				ModifiedFields: map[string]any{
+					types.SettingScanAutomatic: "manual",
+					types.SettingScanNetNew:    true,
+				},
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+
+	// Verify: UserOverrides should be set in stored config
+	updatedConfig := setup.getUpdatedConfig()
+	assert.True(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic))
+	assert.True(t, updatedConfig.HasUserOverride(types.SettingScanNetNew))
+}
