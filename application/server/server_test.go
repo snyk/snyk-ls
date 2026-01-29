@@ -220,7 +220,7 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 	loc, jsonRpcRecorder := setupServer(t, c)
 
 	params := types.InitializeParams{
-		InitializationOptions: types.Settings{RequiredProtocolVersion: "22"},
+		InitializationOptions: types.Settings{RequiredProtocolVersion: "23"},
 	}
 
 	config.LsProtocolVersion = "12"
