@@ -150,7 +150,9 @@ func createNewStoredConfig(conf configuration.Configuration, logger *zerolog.Log
 	logger.Debug().Bool("dontSave", dontSave).Msg("createNewStoredConfig: Creating new stored config")
 	config := StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}
 	if !dontSave {
-		conf.Set(ConfigMainKey, config)
+		if err := Save(conf, &config); err != nil {
+			logger.Err(err).Msg("Failed to save new stored config")
+		}
 	}
 	return &config
 }

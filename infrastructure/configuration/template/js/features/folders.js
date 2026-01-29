@@ -11,8 +11,7 @@
 	// === Organization Field Management ===
 
 	// Toggle organization field based on auto-org checkbox
-	// skipTrigger: if true, don't trigger dirty check/auto-save (used during initialization)
-	folders.toggleOrgField = function(folderIndex, skipTrigger) {
+	folders.toggleOrgField = function(folderIndex) {
 		var autoOrgCheckbox = dom.get("folder_" + folderIndex + "_autoOrg");
 		var orgInput = dom.get("folder_" + folderIndex + "_preferredOrg");
 		var orgSetByUserInput = dom.get("folder_" + folderIndex + "_orgSetByUser");
@@ -37,15 +36,6 @@
 			orgInput.removeAttribute("readonly");
 			orgSetByUserInput.value = "true";
 		}
-
-		// Trigger dirty check and auto-save since we changed the value programmatically
-		// Skip during initialization to avoid premature auto-save
-		if (!skipTrigger) {
-			var formState = window.ConfigApp.formState;
-			if (formState && formState.triggerChangeHandlers) {
-				formState.triggerChangeHandlers();
-			}
-		}
 	};
 
 	// Initialize all folder org fields on page load
@@ -61,8 +51,8 @@
 			) {
 				var folderIndex = input.getAttribute("data-index");
 
-				// Initialize the field state (skip triggering handlers during init)
-				folders.toggleOrgField(folderIndex, true);
+				// Initialize the field state
+				folders.toggleOrgField(folderIndex);
 
 				// Attach click event listener (CSP-compliant)
 				(function(index) {

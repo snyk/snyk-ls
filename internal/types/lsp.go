@@ -582,8 +582,6 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 		AutoDeterminedOrg:           fc.AutoDeterminedOrg,
 		OrgMigratedFromGlobalConfig: fc.OrgMigratedFromGlobalConfig,
 		OrgSetByUser:                fc.OrgSetByUser,
-		// TODO clone this properly
-		SastSettings: fc.SastSettings,
 	}
 
 	if fc.LocalBranches != nil {
@@ -604,6 +602,20 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 	if fc.FeatureFlags != nil {
 		clone.FeatureFlags = make(map[string]bool, len(fc.FeatureFlags))
 		maps.Copy(clone.FeatureFlags, fc.FeatureFlags)
+	}
+
+	if fc.SastSettings != nil {
+		clone.SastSettings = &sast_contract.SastResponse{
+			SastEnabled:                 fc.SastSettings.SastEnabled,
+			LocalCodeEngine:             fc.SastSettings.LocalCodeEngine,
+			Org:                         fc.SastSettings.Org,
+			ReportFalsePositivesEnabled: fc.SastSettings.ReportFalsePositivesEnabled,
+			AutofixEnabled:              fc.SastSettings.AutofixEnabled,
+		}
+		if fc.SastSettings.SupportedLanguages != nil {
+			clone.SastSettings.SupportedLanguages = make([]string, len(fc.SastSettings.SupportedLanguages))
+			copy(clone.SastSettings.SupportedLanguages, fc.SastSettings.SupportedLanguages)
+		}
 	}
 
 	return clone
