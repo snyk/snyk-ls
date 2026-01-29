@@ -18,49 +18,36 @@ package scanner
 
 import (
 	"testing"
-	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence/mock_persistence"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T) {
+	// All scanners now receive baseFolderPath as objectToScan.
+	// The Code scanner determines it's a full workspace scan because objectToScan == workspaceFolderConfig.FolderPath.
 	testCases := []struct {
-		name         string
-		product      product.Product
-		expectedPath func(baseFolderPath types.FilePath) types.FilePath
+		name    string
+		product product.Product
 	}{
-		{
-			name:    "Code scanner receives empty path for folder scan",
-			product: product.ProductCode,
-			expectedPath: func(_ types.FilePath) types.FilePath {
-				return types.FilePath("")
-			},
-		},
-		{
-			name:    "OSS scanner receives baseFolderPath as path",
-			product: product.ProductOpenSource,
-			expectedPath: func(baseFolderPath types.FilePath) types.FilePath {
-				return baseFolderPath
-			},
-		},
-		{
-			name:    "IaC scanner receives baseFolderPath as path",
-			product: product.ProductInfrastructureAsCode,
-			expectedPath: func(baseFolderPath types.FilePath) types.FilePath {
-				return baseFolderPath
-			},
-		},
+		{name: "Code scanner receives baseFolderPath as objectToScan", product: product.ProductCode},
+		{name: "OSS scanner receives baseFolderPath as objectToScan", product: product.ProductOpenSource},
+		{name: "IaC scanner receives baseFolderPath as objectToScan", product: product.ProductInfrastructureAsCode},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testutil.UnitTest(t)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
 			// Setup - use real temp dirs for path validation
 			workspacePath := types.FilePath(t.TempDir())
@@ -73,33 +60,39 @@ func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T
 				PreferredOrg:        expectedOrg,
 			}
 
-			productScanner := NewTestProductScanner(tc.product, true)
-			scanner, _ := setupScanner(t, c, productScanner)
+			// Create mock scanner with expectations
+			mockScanner := mock_types.NewMockProductScanner(ctrl)
+			mockScanner.EXPECT().Product().Return(tc.product).AnyTimes()
+			mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+
+			// Expect Scan to be called with baseFolderPath and a config where FolderPath == baseFolderPath
+			mockScanner.EXPECT().Scan(
+				gomock.Any(),
+				baseFolderPath, // objectToScan should be baseFolderPath
+				gomock.Any(),   // workspaceFolderConfig
+			).DoAndReturn(func(_ interface{}, path types.FilePath, cfg *types.FolderConfig) ([]types.Issue, error) {
+				// Verify the config passed has the correct values
+				assert.Equal(t, baseFolderPath, cfg.FolderPath, "folderConfig.FolderPath should be baseFolderPath")
+				assert.Equal(t, expectedOrg, cfg.PreferredOrg, "folderConfig.PreferredOrg should be preserved")
+				return []types.Issue{}, nil
+			}).Times(1)
+
+			scanner, _ := setupScannerWithMock(t, c, ctrl, mockScanner)
 			dcs := scanner.(*DelegatingConcurrentScanner)
 
 			// Act
-			err := dcs.scanBaseBranch(t.Context(), productScanner, folderConfig, nil)
+			err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
 
 			// Assert
 			require.NoError(t, err)
-			assert.Eventually(t, func() bool {
-				return productScanner.Scans() == 1
-			}, 1*time.Second, 10*time.Millisecond)
-
-			// Verify scanner received correct path
-			assert.Equal(t, tc.expectedPath(baseFolderPath), productScanner.LastPath())
-
-			// Verify folderConfig.FolderPath was set to baseFolderPath
-			receivedConfig := productScanner.LastFolderConfig()
-			require.NotNil(t, receivedConfig)
-			assert.Equal(t, baseFolderPath, receivedConfig.FolderPath)
-			assert.Equal(t, expectedOrg, receivedConfig.PreferredOrg)
 		})
 	}
 }
 
 func TestScanBaseBranch_PreservesOriginalFolderConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	// Setup - use real temp dirs for path validation
 	workspacePath := types.FilePath(t.TempDir())
@@ -112,19 +105,19 @@ func TestScanBaseBranch_PreservesOriginalFolderConfig(t *testing.T) {
 		PreferredOrg:        expectedOrg,
 	}
 
-	ossScanner := NewTestProductScanner(product.ProductOpenSource, true)
-	scanner, _ := setupScanner(t, c, ossScanner)
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
+	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
+
+	scanner, _ := setupScannerWithMock(t, c, ctrl, mockScanner)
 	dcs := scanner.(*DelegatingConcurrentScanner)
 
 	// Act
-	err := dcs.scanBaseBranch(t.Context(), ossScanner, folderConfig, nil)
+	err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
 
 	// Assert
 	require.NoError(t, err)
-	assert.Eventually(t, func() bool {
-		return ossScanner.Scans() == 1
-	}, 1*time.Second, 10*time.Millisecond)
-
 	// Verify original folderConfig was NOT modified
 	assert.Equal(t, workspacePath, folderConfig.FolderPath, "Original folderConfig.FolderPath should not be modified")
 	assert.Equal(t, baseFolderPath, folderConfig.ReferenceFolderPath, "Original folderConfig.ReferenceFolderPath should not be modified")
@@ -132,22 +125,29 @@ func TestScanBaseBranch_PreservesOriginalFolderConfig(t *testing.T) {
 
 func TestScanBaseBranch_NilFolderConfig_ReturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	ossScanner := NewTestProductScanner(product.ProductOpenSource, true)
-	scanner, _ := setupScanner(t, c, ossScanner)
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
+	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	// Scan should NOT be called when folderConfig is nil
+
+	scanner, _ := setupScannerWithMock(t, c, ctrl, mockScanner)
 	dcs := scanner.(*DelegatingConcurrentScanner)
 
 	// Act
-	err := dcs.scanBaseBranch(t.Context(), ossScanner, nil, nil)
+	err := dcs.scanBaseBranch(t.Context(), mockScanner, nil, nil)
 
 	// Assert
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "folder config is required")
-	assert.Equal(t, 0, ossScanner.Scans(), "Scanner should not be called when folderConfig is nil")
 }
 
 func TestScanBaseBranch_SkipsWhenSnapshotExists(t *testing.T) {
 	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	// Setup - use real temp dirs for path validation
 	workspacePath := types.FilePath(t.TempDir())
@@ -158,28 +158,27 @@ func TestScanBaseBranch_SkipsWhenSnapshotExists(t *testing.T) {
 		ReferenceFolderPath: baseFolderPath,
 	}
 
-	ossScanner := NewTestProductScanner(product.ProductOpenSource, true)
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
+	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	// Scan should NOT be called when snapshot exists
 
-	// Create a persister that reports snapshot exists
-	persister := &mockScanPersister{existsResult: true}
+	// Create a mock persister that reports snapshot exists
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().Exists(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
-	scanner, _ := setupScanner(t, c, ossScanner)
+	scanner, _ := setupScannerWithMock(t, c, ctrl, mockScanner)
 	dcs := scanner.(*DelegatingConcurrentScanner)
-	dcs.scanPersister = persister
+	dcs.scanPersister = mockPersister
 
 	// Act
-	err := dcs.scanBaseBranch(t.Context(), ossScanner, folderConfig, nil)
+	err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
 
 	// Assert
 	require.NoError(t, err)
-	// Give some time for potential async operations
-	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, 0, ossScanner.Scans(), "Scanner should not be called when snapshot exists")
 }
 
 func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) {
-	c := testutil.UnitTest(t)
-
 	products := []product.Product{
 		product.ProductCode,
 		product.ProductOpenSource,
@@ -188,6 +187,10 @@ func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) 
 
 	for _, p := range products {
 		t.Run(string(p), func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			// Use real temp dirs for path validation
 			workspacePath := types.FilePath(t.TempDir())
 			baseFolderPath := types.FilePath(t.TempDir())
@@ -200,51 +203,38 @@ func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) 
 				OrgSetByUser:        true,
 			}
 
-			productScanner := NewTestProductScanner(p, true)
-			scanner, _ := setupScanner(t, c, productScanner)
+			mockScanner := mock_types.NewMockProductScanner(ctrl)
+			mockScanner.EXPECT().Product().Return(p).AnyTimes()
+			mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+
+			// Expect Scan to be called and verify the org is correctly passed and resolved
+			mockScanner.EXPECT().Scan(
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+			).DoAndReturn(func(_ interface{}, _ types.FilePath, cfg *types.FolderConfig) ([]types.Issue, error) {
+				// Verify the config has the correct org
+				assert.Equal(t, expectedOrg, cfg.PreferredOrg, "Scanner should receive the org from folderConfig")
+				// Verify that FolderConfigOrganization resolves correctly (simulating what real scanners do)
+				resolvedOrg := c.FolderConfigOrganization(cfg)
+				assert.Equal(t, expectedOrg, resolvedOrg, "Scanner should resolve the expected org")
+				return []types.Issue{}, nil
+			}).Times(1)
+
+			scanner, _ := setupScannerWithMock(t, c, ctrl, mockScanner)
 			dcs := scanner.(*DelegatingConcurrentScanner)
 
 			// Act
-			err := dcs.scanBaseBranch(t.Context(), productScanner, folderConfig, nil)
+			err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
 
 			// Assert
 			require.NoError(t, err)
-			assert.Eventually(t, func() bool {
-				return productScanner.Scans() == 1
-			}, 1*time.Second, 10*time.Millisecond)
-
-			receivedConfig := productScanner.LastFolderConfig()
-			require.NotNil(t, receivedConfig)
-			assert.Equal(t, expectedOrg, receivedConfig.PreferredOrg, "Scanner should receive the org from folderConfig")
 		})
 	}
 }
 
-// mockScanPersister is a test double for ScanSnapshotPersister
-type mockScanPersister struct {
-	existsResult bool
-	addedIssues  []types.Issue
+// setupScannerWithMock creates a scanner with a mock ProductScanner for testing
+func setupScannerWithMock(t *testing.T, c *config.Config, ctrl *gomock.Controller, mockScanner *mock_types.MockProductScanner) (Scanner, ScanNotifier) {
+	t.Helper()
+	return setupScanner(t, c, mockScanner)
 }
-
-func (m *mockScanPersister) Exists(_ types.FilePath, _ string, _ product.Product) bool {
-	return m.existsResult
-}
-
-func (m *mockScanPersister) Clear(_ []types.FilePath, _ bool) {}
-
-func (m *mockScanPersister) ClearFolder(_ types.FilePath) {}
-
-func (m *mockScanPersister) Init(_ []types.FilePath) error {
-	return nil
-}
-
-func (m *mockScanPersister) Add(_ types.FilePath, _ string, issues []types.Issue, _ product.Product) error {
-	m.addedIssues = issues
-	return nil
-}
-
-func (m *mockScanPersister) GetPersistedIssueList(_ types.FilePath, _ product.Product) ([]types.Issue, error) {
-	return nil, nil
-}
-
-var _ persistence.ScanSnapshotPersister = (*mockScanPersister)(nil)

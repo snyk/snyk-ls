@@ -155,9 +155,11 @@ func (cliScanner *CLIScanner) Product() product.Product {
 	return product.ProductOpenSource
 }
 
-func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
-	if folderConfig == nil {
-		return nil, errors.New("folderConfig is required")
+// Scan implements types.ProductScanner.
+// For CLI-based scanners, objectToScan is the target file or folder to scan.
+func (cliScanner *CLIScanner) Scan(ctx context.Context, objectToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+	if workspaceFolderConfig == nil {
+		return nil, errors.New("workspaceFolderConfig is required")
 	}
 
 	// Log scan type and paths
@@ -165,9 +167,9 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, fol
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
 	}
-	workspaceFolder := folderConfig.FolderPath
+	workspaceFolder := workspaceFolderConfig.FolderPath
 	logger := cliScanner.getLogger(ctx).With().
-		Str("path", string(path)).
+		Str("objectToScan", string(objectToScan)).
 		Str("workspaceFolder", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
@@ -177,14 +179,14 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, fol
 	ctx = cliScanner.enrichContext(ctx)
 
 	// Add path to context so it can be used by scheduled scans
-	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, path)
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, objectToScan)
 
 	{
 		deps, found := ctx2.DependenciesFromContext(ctx)
 		if !found {
 			deps = map[string]any{}
 		}
-		deps[ctx2.DepFolderConfig] = folderConfig
+		deps[ctx2.DepFolderConfig] = workspaceFolderConfig
 		ctx = ctx2.NewContextWithDependencies(ctx, deps)
 	}
 
@@ -192,7 +194,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, fol
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
-	cliPathScan := cliScanner.isSupported(path)
+	cliPathScan := cliScanner.isSupported(objectToScan)
 	if !cliPathScan {
 		logger.Debug().Msg("OSS scanner: skipping unsupported file/directory")
 		return issues, nil

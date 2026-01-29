@@ -149,16 +149,20 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+// Scan implements types.ProductScanner.
+// The Code scanner uses bundle-based incremental scanning:
+//   - If objectToScan is blank or equals workspaceFolderConfig.FolderPath, a full workspace scan is performed.
+//   - Otherwise, objectToScan is treated as a changed file for incremental re-analysis.
+func (sc *Scanner) Scan(ctx context.Context, objectToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
 	}
-	workspaceFolder := folderConfig.FolderPath
+	workspaceFolder := workspaceFolderConfig.FolderPath
 	logger := sc.C.Logger().With().
 		Str("method", "code.Scan").
-		Str("path", string(path)).
+		Str("objectToScan", string(objectToScan)).
 		Str("workspaceFolder", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
@@ -170,13 +174,13 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderConfig *
 		return issues, err
 	}
 
-	if folderConfig.SastSettings == nil {
+	if workspaceFolderConfig.SastSettings == nil {
 		errMsg := "SAST settings not available"
 		logger.Error().Str("workspaceFolder", string(workspaceFolder)).Msg(errMsg)
 		return issues, errors.New(errMsg)
 	}
 
-	sastResponse := folderConfig.SastSettings
+	sastResponse := workspaceFolderConfig.SastSettings
 
 	if !sastResponse.SastEnabled {
 		return issues, errors.New(utils.ErrSnykCodeNotEnabled)
@@ -186,11 +190,17 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderConfig *
 		updateCodeApiLocalEngine(sc.C, sastResponse)
 	}
 
+	// Determine if this is a full workspace scan or incremental file scan
+	isFullWorkspaceScan := objectToScan == "" || objectToScan == workspaceFolder
+
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[workspaceFolder] == nil {
 		sc.changedPaths[workspaceFolder] = map[types.FilePath]bool{}
 	}
-	sc.changedPaths[workspaceFolder][path] = true
+	if !isFullWorkspaceScan {
+		// Track the specific file that changed for incremental scanning
+		sc.changedPaths[workspaceFolder][objectToScan] = true
+	}
 	sc.changedFilesMutex.Unlock()
 
 	// When starting a scan for a workspace folder that's already scanned, the new scan will wait for the previous scan
@@ -219,7 +229,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderConfig *
 	filesToBeScanned := sc.getFilesToBeScanned(workspaceFolder)
 	sc.changedFilesMutex.Unlock()
 
-	results, err := internalScan(ctx, sc, workspaceFolder, folderConfig, logger, filesToBeScanned)
+	results, err := internalScan(ctx, sc, workspaceFolder, workspaceFolderConfig, logger, filesToBeScanned)
 	if err != nil {
 		return nil, err
 	}
@@ -475,18 +485,15 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 
 // createCodeConfig creates a new codeConfig with Organization populated from folder configuration
 // and delegates other values to the language server config
-func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClientConfig.Config, error) {
+func (sc *Scanner) createCodeConfig(workspaceFolderConfig *types.FolderConfig) (codeClientConfig.Config, error) {
 	logger := sc.C.Logger().With().Str("method", "code.createCodeConfig").Logger()
 
-	if folderConfig == nil {
+	if workspaceFolderConfig == nil {
 		return nil, fmt.Errorf("folder config is required to create code config")
 	}
 
-	// Get organization directly from folderConfig instead of looking it up by path.
-	// This is important for base branch scans where FolderPath is a temporary directory
-	// that isn't registered as a workspace folder.
-	workspaceFolderPath := folderConfig.FolderPath
-	organization := sc.C.FolderConfigOrganization(folderConfig)
+	workspaceFolderPath := workspaceFolderConfig.FolderPath
+	organization := sc.C.FolderConfigOrganization(workspaceFolderConfig)
 	if organization == "" {
 		return nil, fmt.Errorf("no organization found for workspace folder %s", workspaceFolderPath)
 	}
@@ -498,7 +505,7 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 		return nil, fmt.Errorf("failed to resolve organization to UUID for workspace folder %s: %w", workspaceFolderPath, err)
 	}
 
-	codeApiURL, err := getCodeApiUrlFromFolderConfig(sc.C, folderConfig)
+	codeApiURL, err := getCodeApiUrlFromFolderConfig(sc.C, workspaceFolderConfig)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to get code api url for workspace folder %s", workspaceFolderPath)
 		logger.Error().Msg(msg)
@@ -515,7 +522,7 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 
 // CreateCodeScanner creates a real code scanner with Organization populated from folder configuration
 func CreateCodeScanner(scanner *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error) {
-	// Create a new codeConfig with Organization populated from folder configuration
+	// Create a new codeConfig with Organization populated from workspace folder configuration
 	codeConfig, err := scanner.createCodeConfig(folderConfig)
 	if err != nil {
 		return nil, err
