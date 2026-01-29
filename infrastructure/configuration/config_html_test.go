@@ -10,6 +10,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
