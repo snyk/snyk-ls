@@ -23,12 +23,27 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// testOrgResolver is a simple org resolver for tests.
+// It looks up the folder config and returns PreferredOrg (if OrgSetByUser) or AutoDeterminedOrg.
+func testOrgResolver(folderConfigs map[FilePath]*FolderConfig) OrgResolverFunc {
+	return func(folderPath FilePath) string {
+		fc, ok := folderConfigs[folderPath]
+		if !ok || fc == nil {
+			return ""
+		}
+		if fc.OrgSetByUser {
+			return fc.PreferredOrg
+		}
+		return fc.AutoDeterminedOrg
+	}
+}
+
 func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
 	logger := zerolog.Nop()
 	globalSettings := &Settings{
 		Endpoint: "https://api.snyk.io",
 	}
-	resolver := NewConfigResolver(nil, globalSettings, &logger)
+	resolver := NewConfigResolver(nil, globalSettings, nil, &logger)
 
 	t.Run("returns global value for machine-scoped setting", func(t *testing.T) {
 		value, source := resolver.GetValue(SettingApiEndpoint, nil)
@@ -45,7 +60,7 @@ func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
 
 func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 	logger := zerolog.Nop()
-	resolver := NewConfigResolver(nil, nil, &logger)
+	resolver := NewConfigResolver(nil, nil, nil, &logger)
 
 	folderConfig := &FolderConfig{
 		FolderPath:           "/path/to/folder",
@@ -78,12 +93,14 @@ func TestConfigResolver_GetValue_OrgScope_NoLDXSync(t *testing.T) {
 	globalSettings := &Settings{
 		ActivateSnykCode: "true",
 	}
-	resolver := NewConfigResolver(nil, globalSettings, &logger)
 
 	folderConfig := &FolderConfig{
 		FolderPath:   "/path/to/folder",
 		PreferredOrg: "org1",
+		OrgSetByUser: true,
 	}
+	orgResolver := testOrgResolver(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	resolver := NewConfigResolver(nil, globalSettings, orgResolver, &logger)
 
 	t.Run("returns global value when no LDX-Sync cache", func(t *testing.T) {
 		value, source := resolver.GetValue(SettingEnabledProducts, folderConfig)
@@ -110,13 +127,13 @@ func TestConfigResolver_GetValue_OrgScope_WithLDXSync(t *testing.T) {
 	orgConfig.SetField(SettingEnabledSeverities, []string{"critical"}, false, false, "org")
 	ldxCache.SetOrgConfig(orgConfig)
 
-	resolver := NewConfigResolver(ldxCache, globalSettings, &logger)
-
 	folderConfig := &FolderConfig{
 		FolderPath:   "/path/to/folder",
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
+	orgResolver := testOrgResolver(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	resolver := NewConfigResolver(ldxCache, globalSettings, orgResolver, &logger)
 
 	t.Run("returns LDX-Sync value when no user override", func(t *testing.T) {
 		value, source := resolver.GetValue(SettingEnabledSeverities, folderConfig)
@@ -142,13 +159,13 @@ func TestConfigResolver_GetValue_OrgScope_Locked(t *testing.T) {
 	orgConfig.SetField(SettingEnabledSeverities, []string{"critical"}, true, false, "group")
 	ldxCache.SetOrgConfig(orgConfig)
 
-	resolver := NewConfigResolver(ldxCache, globalSettings, &logger)
-
 	folderConfig := &FolderConfig{
 		FolderPath:   "/path/to/folder",
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
+	orgResolver := testOrgResolver(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	resolver := NewConfigResolver(ldxCache, globalSettings, orgResolver, &logger)
 
 	t.Run("returns LDX-Sync locked value even when user override exists", func(t *testing.T) {
 		folderConfig.SetUserOverride(SettingEnabledSeverities, []string{"critical", "high", "medium"})
@@ -173,12 +190,12 @@ func TestConfigResolver_GetValue_OrgScope_DifferentOrgs(t *testing.T) {
 	org2Config.SetField(SettingEnabledSeverities, []string{"critical", "high"}, true, false, "group")
 	ldxCache.SetOrgConfig(org2Config)
 
-	resolver := NewConfigResolver(ldxCache, globalSettings, &logger)
+	folder1 := &FolderConfig{FolderPath: "/folder1", PreferredOrg: "org1", OrgSetByUser: true}
+	folder2 := &FolderConfig{FolderPath: "/folder2", PreferredOrg: "org2", OrgSetByUser: true}
+	orgResolver := testOrgResolver(map[FilePath]*FolderConfig{folder1.FolderPath: folder1, folder2.FolderPath: folder2})
+	resolver := NewConfigResolver(ldxCache, globalSettings, orgResolver, &logger)
 
 	t.Run("uses correct org config based on folder", func(t *testing.T) {
-		folder1 := &FolderConfig{FolderPath: "/folder1", PreferredOrg: "org1", OrgSetByUser: true}
-		folder2 := &FolderConfig{FolderPath: "/folder2", PreferredOrg: "org2", OrgSetByUser: true}
-
 		value1, source1 := resolver.GetValue(SettingEnabledSeverities, folder1)
 		value2, source2 := resolver.GetValue(SettingEnabledSeverities, folder2)
 
@@ -201,7 +218,7 @@ func TestConfigResolver_TypedAccessors(t *testing.T) {
 	riskScore := 500
 	globalSettings.RiskScoreThreshold = &riskScore
 
-	resolver := NewConfigResolver(nil, globalSettings, &logger)
+	resolver := NewConfigResolver(nil, globalSettings, nil, &logger)
 
 	t.Run("GetString", func(t *testing.T) {
 		value := resolver.GetString(SettingApiEndpoint, nil)
@@ -237,13 +254,13 @@ func TestConfigResolver_IsLocked(t *testing.T) {
 	orgConfig.SetField(SettingEnabledProducts, []string{"code"}, false, false, "org")
 	ldxCache.SetOrgConfig(orgConfig)
 
-	resolver := NewConfigResolver(ldxCache, nil, &logger)
-
 	folderConfig := &FolderConfig{
 		FolderPath:   "/path",
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
+	orgResolver := testOrgResolver(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	resolver := NewConfigResolver(ldxCache, nil, orgResolver, &logger)
 
 	t.Run("returns true for locked setting", func(t *testing.T) {
 		assert.True(t, resolver.IsLocked(SettingEnabledSeverities, folderConfig))
@@ -271,13 +288,13 @@ func TestConfigResolver_IsEnforced(t *testing.T) {
 	orgConfig.SetField(SettingEnabledProducts, []string{"code"}, false, false, "org")
 	ldxCache.SetOrgConfig(orgConfig)
 
-	resolver := NewConfigResolver(ldxCache, nil, &logger)
-
 	folderConfig := &FolderConfig{
 		FolderPath:   "/path",
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
+	orgResolver := testOrgResolver(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	resolver := NewConfigResolver(ldxCache, nil, orgResolver, &logger)
 
 	t.Run("returns true for enforced setting", func(t *testing.T) {
 		assert.True(t, resolver.IsEnforced(SettingEnabledSeverities, folderConfig))
@@ -293,7 +310,7 @@ func TestConfigResolver_GetSource(t *testing.T) {
 	globalSettings := &Settings{
 		Endpoint: "https://api.snyk.io",
 	}
-	resolver := NewConfigResolver(nil, globalSettings, &logger)
+	resolver := NewConfigResolver(nil, globalSettings, nil, &logger)
 
 	source := resolver.GetSource(SettingApiEndpoint, nil)
 	assert.Equal(t, ConfigSourceGlobal, source)
@@ -349,47 +366,6 @@ func TestFolderConfig_UserOverrideMethods(t *testing.T) {
 	})
 }
 
-func TestFolderConfig_GetEffectiveOrg(t *testing.T) {
-	t.Run("returns empty for nil config", func(t *testing.T) {
-		var fc *FolderConfig
-		assert.Equal(t, "", fc.GetEffectiveOrg())
-	})
-
-	t.Run("returns PreferredOrg when OrgSetByUser is true", func(t *testing.T) {
-		fc := &FolderConfig{
-			PreferredOrg:      "preferred",
-			AutoDeterminedOrg: "auto",
-			OrgSetByUser:      true,
-		}
-		assert.Equal(t, "preferred", fc.GetEffectiveOrg())
-	})
-
-	t.Run("returns empty when OrgSetByUser is true but PreferredOrg is empty", func(t *testing.T) {
-		fc := &FolderConfig{
-			AutoDeterminedOrg: "auto",
-			OrgSetByUser:      true,
-		}
-		assert.Equal(t, "", fc.GetEffectiveOrg())
-	})
-
-	t.Run("returns AutoDeterminedOrg when OrgSetByUser is false", func(t *testing.T) {
-		fc := &FolderConfig{
-			PreferredOrg:      "preferred",
-			AutoDeterminedOrg: "auto",
-			OrgSetByUser:      false,
-		}
-		assert.Equal(t, "auto", fc.GetEffectiveOrg())
-	})
-
-	t.Run("returns empty when OrgSetByUser is false and AutoDeterminedOrg is empty", func(t *testing.T) {
-		fc := &FolderConfig{
-			PreferredOrg: "preferred",
-			OrgSetByUser: false,
-		}
-		assert.Equal(t, "", fc.GetEffectiveOrg())
-	})
-}
-
 func TestFolderConfig_Clone_WithUserOverrides(t *testing.T) {
 	original := &FolderConfig{
 		FolderPath:   "/path",
@@ -411,5 +387,67 @@ func TestFolderConfig_Clone_WithUserOverrides(t *testing.T) {
 	t.Run("clone is independent", func(t *testing.T) {
 		clone.UserOverrides["setting1"] = "modified"
 		assert.Equal(t, "value1", original.UserOverrides["setting1"])
+	})
+}
+
+func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
+	logger := zerolog.Nop()
+	globalSettings := &Settings{}
+
+	ldxCache := NewLDXSyncConfigCache()
+	orgConfig := NewLDXSyncOrgConfig("org1")
+	orgConfig.SetField(SettingEnabledSeverities, []string{"critical"}, false, false, "tenant")
+	orgConfig.SetField(SettingEnabledProducts, []string{"code"}, true, false, "group")
+	ldxCache.SetOrgConfig(orgConfig)
+
+	folderConfig := &FolderConfig{
+		FolderPath:   "/path/to/folder",
+		PreferredOrg: "org1",
+		OrgSetByUser: true,
+	}
+	orgResolver := testOrgResolver(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	resolver := NewConfigResolver(ldxCache, globalSettings, orgResolver, &logger)
+
+	t.Run("includes OriginScope for LDX-Sync value", func(t *testing.T) {
+		effectiveValue := resolver.GetEffectiveValue(SettingEnabledSeverities, folderConfig)
+
+		assert.Equal(t, []string{"critical"}, effectiveValue.Value)
+		assert.Equal(t, "ldx-sync", effectiveValue.Source)
+		assert.Equal(t, "tenant", effectiveValue.OriginScope)
+	})
+
+	t.Run("includes OriginScope for locked LDX-Sync value", func(t *testing.T) {
+		effectiveValue := resolver.GetEffectiveValue(SettingEnabledProducts, folderConfig)
+
+		assert.Equal(t, []string{"code"}, effectiveValue.Value)
+		assert.Equal(t, "ldx-sync-locked", effectiveValue.Source)
+		assert.Equal(t, "group", effectiveValue.OriginScope)
+	})
+
+	t.Run("OriginScope is empty for user override", func(t *testing.T) {
+		folderConfigWithOverride := &FolderConfig{
+			FolderPath:   "/path/to/folder",
+			PreferredOrg: "org1",
+			OrgSetByUser: true,
+		}
+		folderConfigWithOverride.SetUserOverride(SettingEnabledSeverities, []string{"high"})
+
+		effectiveValue := resolver.GetEffectiveValue(SettingEnabledSeverities, folderConfigWithOverride)
+
+		assert.Equal(t, []string{"high"}, effectiveValue.Value)
+		assert.Equal(t, "user-override", effectiveValue.Source)
+		assert.Equal(t, "", effectiveValue.OriginScope)
+	})
+
+	t.Run("OriginScope is empty for global fallback", func(t *testing.T) {
+		folderConfigNoOrg := &FolderConfig{
+			FolderPath: "/path/to/folder",
+		}
+		orgResolverNoOrg := testOrgResolver(map[FilePath]*FolderConfig{folderConfigNoOrg.FolderPath: folderConfigNoOrg})
+		resolverNoLdx := NewConfigResolver(nil, globalSettings, orgResolverNoOrg, &logger)
+
+		effectiveValue := resolverNoLdx.GetEffectiveValue(SettingEnabledSeverities, folderConfigNoOrg)
+
+		assert.Equal(t, "", effectiveValue.OriginScope)
 	})
 }

@@ -37,12 +37,14 @@ type ConfigResolver struct {
 	logger               *zerolog.Logger
 }
 
-// NewConfigResolver creates a new ConfigResolver with the given dependencies
-func NewConfigResolver(ldxSyncCache *LDXSyncConfigCache, globalSettings *Settings, logger *zerolog.Logger) *ConfigResolver {
+// NewConfigResolver creates a new ConfigResolver with the given dependencies.
+// orgResolver is required and should provide full org resolution including global fallback.
+func NewConfigResolver(ldxSyncCache *LDXSyncConfigCache, globalSettings *Settings, orgResolver OrgResolverFunc, logger *zerolog.Logger) *ConfigResolver {
 	return &ConfigResolver{
 		ldxSyncCache:         ldxSyncCache,
 		ldxSyncMachineConfig: make(map[string]*LDXSyncField),
 		globalSettings:       globalSettings,
+		orgResolver:          orgResolver,
 		logger:               logger,
 	}
 }
@@ -65,12 +67,6 @@ func (r *ConfigResolver) GetLDXSyncMachineConfig() map[string]*LDXSyncField {
 // SetGlobalSettings updates the global settings reference
 func (r *ConfigResolver) SetGlobalSettings(settings *Settings) {
 	r.globalSettings = settings
-}
-
-// SetOrgResolver sets the function used to resolve the effective organization for a folder.
-// This should be set by Config to provide full org resolution including global fallback.
-func (r *ConfigResolver) SetOrgResolver(resolver OrgResolverFunc) {
-	r.orgResolver = resolver
 }
 
 // GetValue resolves a configuration value for the given setting and folder.
@@ -152,14 +148,8 @@ func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig *
 // resolveOrgSetting resolves an org-scoped setting with full precedence logic
 func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig *FolderConfig) (any, ConfigSource) {
 	effectiveOrg := ""
-	if folderConfig != nil {
-		// Use orgResolver if available (provides full resolution including global fallback)
-		// Otherwise fall back to GetEffectiveOrg (which doesn't include global fallback)
-		if r.orgResolver != nil {
-			effectiveOrg = r.orgResolver(folderConfig.FolderPath)
-		} else {
-			effectiveOrg = folderConfig.GetEffectiveOrg()
-		}
+	if folderConfig != nil && r.orgResolver != nil {
+		effectiveOrg = r.orgResolver(folderConfig.FolderPath)
 	}
 
 	var ldxField *LDXSyncField
@@ -215,10 +205,46 @@ func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig *Fol
 // with source information for display to the IDE.
 func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig *FolderConfig) EffectiveValue {
 	value, source := r.GetValue(settingName, folderConfig)
-	return EffectiveValue{
-		Value:  value,
-		Source: source.String(),
+
+	originScope := ""
+	if source == ConfigSourceLDXSync || source == ConfigSourceLDXSyncLocked {
+		originScope = r.getOriginScope(settingName, folderConfig)
 	}
+
+	return EffectiveValue{
+		Value:       value,
+		Source:      source.String(),
+		OriginScope: originScope,
+	}
+}
+
+// getOriginScope retrieves the server-side origin scope for a setting from LDX-Sync
+func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *FolderConfig) string {
+	scope := GetSettingScope(settingName)
+
+	switch scope {
+	case SettingScopeMachine:
+		if r.ldxSyncMachineConfig != nil {
+			if field := r.ldxSyncMachineConfig[settingName]; field != nil {
+				return field.OriginScope
+			}
+		}
+	case SettingScopeOrg:
+		if folderConfig != nil && r.ldxSyncCache != nil && r.orgResolver != nil {
+			effectiveOrg := r.orgResolver(folderConfig.FolderPath)
+			if effectiveOrg != "" {
+				if orgConfig := r.ldxSyncCache.GetOrgConfig(effectiveOrg); orgConfig != nil {
+					if field := orgConfig.GetField(settingName); field != nil {
+						return field.OriginScope
+					}
+				}
+			}
+		}
+	case SettingScopeFolder:
+		// Folder-scoped settings don't have LDX-Sync origin scope
+	}
+
+	return ""
 }
 
 // logResolution logs the config resolution decision for debugging
@@ -399,11 +425,11 @@ func (r *ConfigResolver) GetSource(settingName string, folderConfig *FolderConfi
 
 // IsLocked returns true if the setting is locked by LDX-Sync for the folder's org
 func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig) bool {
-	if folderConfig == nil || r.ldxSyncCache == nil {
+	if folderConfig == nil || r.ldxSyncCache == nil || r.orgResolver == nil {
 		return false
 	}
 
-	effectiveOrg := folderConfig.GetEffectiveOrg()
+	effectiveOrg := r.orgResolver(folderConfig.FolderPath)
 	if effectiveOrg == "" {
 		return false
 	}
@@ -419,11 +445,11 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig
 
 // IsEnforced returns true if the setting is enforced by LDX-Sync for the folder's org
 func (r *ConfigResolver) IsEnforced(settingName string, folderConfig *FolderConfig) bool {
-	if folderConfig == nil || r.ldxSyncCache == nil {
+	if folderConfig == nil || r.ldxSyncCache == nil || r.orgResolver == nil {
 		return false
 	}
 
-	effectiveOrg := folderConfig.GetEffectiveOrg()
+	effectiveOrg := r.orgResolver(folderConfig.FolderPath)
 	if effectiveOrg == "" {
 		return false
 	}

@@ -1580,9 +1580,7 @@ func (c *Config) InitLdxSyncOrgConfigCache() {
 	c.ldxSyncOrgConfigCacheMutex.Lock()
 	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
 	c.ldxSyncOrgConfigCache = types.NewLDXSyncConfigCache()
-	c.configResolver = types.NewConfigResolver(c.ldxSyncOrgConfigCache, nil, c.logger)
-	// Set the org resolver to use FolderOrganization which includes global fallback
-	c.configResolver.SetOrgResolver(c.FolderOrganization)
+	c.configResolver = types.NewConfigResolver(c.ldxSyncOrgConfigCache, nil, c.FolderOrganization, c.logger)
 }
 
 // GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache

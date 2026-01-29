@@ -381,7 +381,7 @@ func processModifiedFields(c *config.Config, folderConfig *types.FolderConfig, m
 		}
 	}
 
-	return
+	return updatesRejected
 }
 
 func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {

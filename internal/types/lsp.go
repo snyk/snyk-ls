@@ -555,8 +555,9 @@ type ScanCommandConfig struct {
 // This is sent to the IDE so it can display the effective value.
 // Lock status can be derived from Source == "ldx-sync-locked".
 type EffectiveValue struct {
-	Value  any    `json:"value"`
-	Source string `json:"source"` // ConfigSource as string: "default", "global", "ldx-sync", "ldx-sync-locked", "user-override"
+	Value       any    `json:"value"`
+	Source      string `json:"source"`                // ConfigSource as string: "default", "global", "ldx-sync", "ldx-sync-locked", "user-override"
+	OriginScope string `json:"originScope,omitempty"` // Server-side hierarchy where the config was set (e.g., "tenant", "group", "organization")
 }
 
 // LS sends this via the $/snyk.folderConfig notification
@@ -699,22 +700,6 @@ func (fc *FolderConfig) SanitizeForIDE() FolderConfig {
 	sanitized.SastSettings = nil
 	sanitized.ModifiedFields = nil
 	return sanitized
-}
-
-// GetEffectiveOrg returns the effective organization for this folder config.
-// Returns the org that should be used for LDX-Sync lookups:
-// - If OrgSetByUser is true: returns PreferredOrg (may be empty, meaning use global)
-// - If OrgSetByUser is false: returns AutoDeterminedOrg (may be empty, meaning use global)
-// Note: This does NOT fall back to the global org - callers should use Config.FolderOrganization()
-// for the full resolution logic including global fallback.
-func (fc *FolderConfig) GetEffectiveOrg() string {
-	if fc == nil {
-		return ""
-	}
-	if fc.OrgSetByUser {
-		return fc.PreferredOrg
-	}
-	return fc.AutoDeterminedOrg
 }
 
 type Pair struct {
