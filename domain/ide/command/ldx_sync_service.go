@@ -107,17 +107,18 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 			// Call GetUserConfigForProject with 3 params including preferredOrg
 			cfgResult := s.apiClient.GetUserConfigForProject(engine, string(f.Path()), preferredOrg)
 
+			// Store result in temporary map (even if there's an error)
+			// This allows ResolveOrg to distinguish between "never attempted" and "attempted but failed"
+			resultsMutex.Lock()
+			results[f.Path()] = &cfgResult
+			resultsMutex.Unlock()
+
 			if cfgResult.Error != nil {
 				logger.Err(cfgResult.Error).
 					Str("folder", string(f.Path())).
 					Msg("Failed to get user config from LDX-Sync")
 				return
 			}
-
-			// Store result in temporary map
-			resultsMutex.Lock()
-			results[f.Path()] = &cfgResult
-			resultsMutex.Unlock()
 
 			logger.Debug().
 				Str("folder", string(f.Path())).
@@ -133,21 +134,30 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 }
 
 // ResolveOrg retrieves the organization from the cached LDX-Sync result for a folder
-// Returns an error if no cache entry exists
+// Returns an error if no cache entry exists or if the cached result contains an error
 func (s *DefaultLdxSyncService) ResolveOrg(c *config.Config, folderPath types.FilePath) (ldx_sync_config.Organization, error) {
 	logger := c.Logger().With().Str("method", "ResolveOrg").Logger()
 
 	// Get cached result
 	cachedResult := c.GetLdxSyncResult(folderPath)
 
-	// If we have a cached result, use it to resolve the org
-	if cachedResult != nil {
-		return s.apiClient.ResolveOrgFromUserConfig(c.Engine(), *cachedResult)
+	// Return error if no cache entry
+	if cachedResult == nil {
+		logger.Warn().
+			Str("folder", string(folderPath)).
+			Msg("No LDX-Sync cache entry found")
+		return ldx_sync_config.Organization{}, errors.New("no organization was able to be determined for folder: " + string(folderPath))
 	}
 
-	// Return error if no cache entry
-	logger.Warn().
-		Str("folder", string(folderPath)).
-		Msg("No LDX-Sync cache entry found, falling back to global organization")
-	return ldx_sync_config.Organization{}, errors.New("no organization was able to be determined for folder: " + string(folderPath))
+	// Return error if the cached result has an error
+	if cachedResult.Error != nil {
+		logger.Warn().
+			Str("folder", string(folderPath)).
+			Err(cachedResult.Error).
+			Msg("LDX-Sync cache entry contains error")
+		return ldx_sync_config.Organization{}, errors.New("failed to resolve organization from LDX-Sync for folder: " + string(folderPath))
+	}
+
+	// If we have a valid cached result, use it to resolve the org
+	return s.apiClient.ResolveOrgFromUserConfig(c.Engine(), *cachedResult)
 }

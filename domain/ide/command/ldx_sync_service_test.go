@@ -150,7 +150,7 @@ func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 	assert.NotNil(t, c.GetLdxSyncResult(folder3Path))
 }
 
-func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
+func Test_RefreshConfigFromLdxSync_ApiError_IsCached(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
@@ -171,9 +171,11 @@ func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)
 
-	// Verify error result was NOT cached
+	// Verify error result was cached
+	// This allows ResolveOrg to distinguish between "never attempted" and "attempted but failed"
 	cachedResult := c.GetLdxSyncResult(folderPath)
-	assert.Nil(t, cachedResult, "Error results should not be cached")
+	assert.NotNil(t, cachedResult, "Error results should be cached")
+	assert.Equal(t, apiError, cachedResult.Error, "Cached error should match the API error")
 }
 
 func Test_ResolveOrg_WithCachedResult_Success(t *testing.T) {
@@ -257,6 +259,31 @@ func Test_ResolveOrg_NoCachedResult_ReturnsError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no organization was able to be determined for folder")
+	assert.Empty(t, org.Id)
+}
+
+func Test_ResolveOrg_CachedResultWithError_ReturnsError(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.FilePath("/test/folder")
+	apiError := errors.New("LDX-Sync API error")
+
+	// Pre-populate cache with error result
+	cachedResult := ldx_sync_config.LdxSyncConfigResult{
+		Error: apiError,
+	}
+	c.UpdateLdxSyncCache(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
+		folderPath: &cachedResult,
+	})
+
+	// No API calls expected - should return error based on cached error
+	service := NewLdxSyncServiceWithApiClient(mockApiClient)
+	org, err := service.ResolveOrg(c, folderPath)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to resolve organization from LDX-Sync for folder")
 	assert.Empty(t, org.Id)
 }
 
