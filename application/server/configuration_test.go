@@ -1207,10 +1207,11 @@ func Test_processModifiedFields_RejectsLockedFields(t *testing.T) {
 		types.SettingScanAutomatic: "manual", // Should be rejected
 	}
 
-	processModifiedFields(c, folderConfig, modifiedFields, logger)
+	hasRejections := processModifiedFields(c, folderConfig, modifiedFields, logger)
 
 	// Verify: locked field should NOT be set as user override
 	assert.False(t, folderConfig.HasUserOverride(types.SettingScanAutomatic), "Locked field should not be overridden")
+	assert.True(t, hasRejections, "Should return true when locked fields are rejected")
 }
 
 func Test_processModifiedFields_AllowsUnlockedFields(t *testing.T) {

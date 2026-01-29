@@ -53,6 +53,7 @@ func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, noti
 func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, ldxSyncService LdxSyncService) {
 	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
+	resolver := c.GetConfigResolver()
 	var folderConfigs []types.FolderConfig
 
 	for _, folder := range c.Workspace().Folders() {
@@ -87,6 +88,11 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 			if err != nil {
 				logger.Err(err).Msg("unable to save folder config")
 			}
+		}
+
+		// Compute EffectiveConfig for org-scope settings so IDE knows current effective values
+		if resolver != nil {
+			folderConfig.EffectiveConfig = computeEffectiveConfig(resolver, folderConfig)
 		}
 
 		folderConfigs = append(folderConfigs, folderConfig.SanitizeForIDE())

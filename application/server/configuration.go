@@ -20,7 +20,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -30,6 +32,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
@@ -257,7 +260,7 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		folderConfigs = append(folderConfigs, folderConfig)
 	}
 
-	sendFolderConfigUpdateIfNeeded(notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
+	sendFolderConfigUpdateIfNeeded(c, notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
 }
 
 func buildIncomingConfigMap(folderConfigs []types.FolderConfig) map[types.FilePath]types.FolderConfig {
@@ -314,7 +317,12 @@ func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMa
 	// Process ModifiedFields from IDE to update UserOverrides
 	// This is how the IDE communicates user changes to org-scope settings
 	if hasIncoming && incoming.ModifiedFields != nil && len(incoming.ModifiedFields) > 0 {
-		processModifiedFields(c, &folderConfig, incoming.ModifiedFields, &logger)
+		hasLockedFieldRejections := processModifiedFields(c, &folderConfig, incoming.ModifiedFields, &logger)
+		if hasLockedFieldRejections {
+			projectName := filepath.Base(string(folderConfig.FolderPath))
+			notifier.SendShowMessage(sglsp.MTWarning,
+				fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", projectName))
+		}
 	}
 
 	// Clear transient fields that shouldn't be stored
@@ -340,8 +348,10 @@ func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMa
 // - If a field has a non-nil value, it's added/updated as a user override
 // - If a field has a nil value, the user override is removed (reset to default/LDX-Sync)
 // - Locked fields are rejected with a warning log
-func processModifiedFields(c *config.Config, folderConfig *types.FolderConfig, modifiedFields map[string]any, logger *zerolog.Logger) {
+// Returns true if any locked fields were rejected
+func processModifiedFields(c *config.Config, folderConfig *types.FolderConfig, modifiedFields map[string]any, logger *zerolog.Logger) bool {
 	resolver := c.GetConfigResolver()
+	hasLockedFieldRejections := false
 
 	for settingName, newValue := range modifiedFields {
 		// Validate that the field is not locked
@@ -351,6 +361,7 @@ func processModifiedFields(c *config.Config, folderConfig *types.FolderConfig, m
 				logger.Warn().
 					Str("setting", settingName).
 					Msg("Rejecting change to locked setting - enforced by organization policy")
+				hasLockedFieldRejections = true
 				continue
 			}
 		}
@@ -370,6 +381,8 @@ func processModifiedFields(c *config.Config, folderConfig *types.FolderConfig, m
 				Msg("User override set")
 		}
 	}
+
+	return hasLockedFieldRejections
 }
 
 func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {
@@ -421,11 +434,16 @@ func handleFolderCacheClearing(c *config.Config, path types.FilePath, folderConf
 	sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
 }
 
-func sendFolderConfigUpdateIfNeeded(notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
+func sendFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
 	// Don't send folder configs on initialize, since initialized will always send them.
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
+		resolver := c.GetConfigResolver()
 		configsForIDE := make([]types.FolderConfig, len(folderConfigs))
 		for i, fc := range folderConfigs {
+			// Compute EffectiveConfig for org-scope settings so IDE knows current effective values
+			if resolver != nil {
+				fc.EffectiveConfig = computeEffectiveConfigForFolder(resolver, &fc)
+			}
 			configsForIDE[i] = fc.SanitizeForIDE()
 		}
 		notifier.Send(types.FolderConfigsParam{FolderConfigs: configsForIDE})
@@ -934,4 +952,27 @@ func updateMcpConfiguration(c *config.Config, settings types.Settings, triggerSo
 			mcpWorkflow.CallMcpConfigWorkflow(c, n, false, true)
 		}
 	}
+}
+
+// computeEffectiveConfigForFolder computes effective values for all org-scope settings
+// that can be displayed/edited in the HTML settings page
+func computeEffectiveConfigForFolder(resolver *types.ConfigResolver, fc *types.FolderConfig) map[string]types.EffectiveValue {
+	effectiveConfig := make(map[string]types.EffectiveValue)
+
+	// Org-scope settings that can be overridden per-folder
+	orgScopeSettings := []string{
+		types.SettingEnabledSeverities,
+		types.SettingIssueViewOpenIssues,
+		types.SettingIssueViewIgnoredIssues,
+		types.SettingScanAutomatic,
+		types.SettingScanNetNew,
+		types.SettingEnabledProducts,
+		types.SettingRiskScoreThreshold,
+	}
+
+	for _, settingName := range orgScopeSettings {
+		effectiveConfig[settingName] = resolver.GetEffectiveValue(settingName, fc)
+	}
+
+	return effectiveConfig
 }
