@@ -1573,8 +1573,8 @@ func (c *Config) UpdateLdxSyncOrgConfig(orgConfig *types.LDXSyncOrgConfig) {
 	c.ldxSyncConfigCache.SetOrgConfig(orgConfig)
 }
 
-// ClearLdxSyncOrgConfigCache clears the LDX-Sync org config cache (called on logout/cleanup)
-func (c *Config) ClearLdxSyncOrgConfigCache() {
+// ClearLdxSyncConfigCache clears the LDX-Sync config cache (called on logout/cleanup)
+func (c *Config) ClearLdxSyncConfigCache() {
 	c.ldxSyncConfigCacheMutex.Lock()
 	defer c.ldxSyncConfigCacheMutex.Unlock()
 	c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()

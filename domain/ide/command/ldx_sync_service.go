@@ -169,9 +169,12 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 	}
 }
 
-// updateMachineConfig extracts machine-scope settings from LDX-Sync results
-// Machine settings are global and don't vary by org, so we take the first available result
-// After updating, sends a notification to the IDE so it can persist the settings
+// updateMachineConfig extracts machine-scope settings from LDX-Sync results and applies them to Config.
+// Machine settings are global and don't vary by org, so we take the first available result.
+// For each setting:
+// - If locked: always use LDX-Sync value (user cannot override)
+// - If enforced: use LDX-Sync value (user can temporarily override between LDX-Sync runs)
+// - Otherwise: use LDX-Sync value only if user hasn't set a non-default value
 func (s *DefaultLdxSyncService) updateMachineConfig(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
 	logger := c.Logger().With().Str("method", "updateMachineConfig").Logger()
 
@@ -182,27 +185,100 @@ func (s *DefaultLdxSyncService) updateMachineConfig(c *config.Config, results ma
 		}
 
 		// Extract machine-scope settings from the first valid response
-		// These are stored in LS memory only for metadata (locked/enforced status)
-		// The actual values are configUpdated to Config via existing update functions
 		if !configUpdated {
 			machineConfig := types.ExtractMachineSettings(result.Config)
 			if len(machineConfig) > 0 {
+				// Store metadata (locked/enforced status) for ConfigResolver
 				c.UpdateLdxSyncMachineConfig(machineConfig)
+
+				// Apply actual values to Config
+				s.applyMachineConfigValues(c, machineConfig)
 
 				logger.Debug().
 					Str("folder", string(folderPath)).
 					Int("fieldCount", len(machineConfig)).
-					Msg("Updated machine config metadata from LDX-Sync")
+					Msg("Updated machine config from LDX-Sync")
 				configUpdated = true
 			} else {
 				logger.Debug().
 					Str("folder", string(folderPath)).
-					Msg("No machine config found in LDX-Sync response, skipping machine config cache update")
+					Msg("No machine config found in LDX-Sync response, skipping machine config update")
 			}
 		} else {
 			logger.Debug().
 				Str("folder", string(folderPath)).
-				Msg("Machine config already applied from another folder, skipping machine config cache update")
+				Msg("Machine config already applied from another folder, skipping")
 		}
 	}
+}
+
+// applyMachineConfigValues applies machine-scope setting values from LDX-Sync to Config.
+// For locked/enforced settings, the LDX-Sync value is always applied.
+// For non-locked/non-enforced settings, the value is only applied if the user hasn't set a custom value.
+func (s *DefaultLdxSyncService) applyMachineConfigValues(c *config.Config, machineConfig map[string]*types.LDXSyncField) {
+	logger := c.Logger().With().Str("method", "applyMachineConfigValues").Logger()
+
+	for settingName, field := range machineConfig {
+		if field == nil || field.Value == nil {
+			continue
+		}
+
+		applied := s.applyMachineSetting(c, settingName, field)
+		if applied {
+			logger.Debug().
+				Str("setting", settingName).
+				Bool("locked", field.IsLocked).
+				Bool("enforced", field.IsEnforced).
+				Msg("Applied LDX-Sync value")
+		}
+	}
+}
+
+// applyMachineSetting applies a single machine-scope setting value to Config.
+// Returns true if the value was applied.
+func (s *DefaultLdxSyncService) applyMachineSetting(c *config.Config, settingName string, field *types.LDXSyncField) bool {
+	shouldApply := field.IsLocked || field.IsEnforced
+
+	switch settingName {
+	case types.SettingApiEndpoint:
+		return s.applyStringSettingIfNeeded(field, shouldApply, c.Endpoint() == config.DefaultSnykApiUrl, func(v string) { c.UpdateApiEndpoints(v) })
+	case types.SettingCliPath:
+		return s.applyStringSettingIfNeeded(field, shouldApply, c.CliSettings().Path() == "", func(v string) { c.CliSettings().SetPath(v) })
+	case types.SettingBinaryBaseUrl:
+		return s.applyStringSettingIfNeeded(field, shouldApply, c.CliBaseDownloadURL() == "", func(v string) { c.SetCliBaseDownloadURL(v) })
+	case types.SettingAutomaticDownload:
+		return s.applyBoolSettingIfNeeded(field, shouldApply, c.ManageBinariesAutomatically(), func(v bool) { c.SetManageBinariesAutomatically(v) })
+	case types.SettingTrustEnabled:
+		return s.applyBoolSettingIfNeeded(field, shouldApply, c.IsTrustedFolderFeatureEnabled(), func(v bool) { c.SetTrustedFolderFeatureEnabled(v) })
+	case types.SettingAutoConfigureMcpServer:
+		return s.applyBoolSettingIfNeeded(field, shouldApply, !c.IsAutoConfigureMcpEnabled(), func(v bool) { c.SetAutoConfigureMcpEnabled(v) })
+	case types.SettingAuthenticationMethod:
+		if strVal, ok := field.Value.(string); ok && strVal != "" {
+			if shouldApply || c.AuthenticationMethod() == types.EmptyAuthenticationMethod {
+				c.SetAuthenticationMethod(types.AuthenticationMethod(strVal))
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *DefaultLdxSyncService) applyStringSettingIfNeeded(field *types.LDXSyncField, shouldApply, isDefault bool, setter func(string)) bool {
+	if strVal, ok := field.Value.(string); ok && strVal != "" {
+		if shouldApply || isDefault {
+			setter(strVal)
+			return true
+		}
+	}
+	return false
+}
+
+func (s *DefaultLdxSyncService) applyBoolSettingIfNeeded(field *types.LDXSyncField, shouldApply, isDefault bool, setter func(bool)) bool {
+	if boolVal, ok := field.Value.(bool); ok {
+		if shouldApply || isDefault {
+			setter(boolVal)
+			return true
+		}
+	}
+	return false
 }
