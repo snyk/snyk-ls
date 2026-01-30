@@ -1040,9 +1040,10 @@ func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	// 1. Global default org - should NOT be used
 	// 2. Org stored for the scan path - should NOT be used
 	// 3. Org in the passed FolderConfig - SHOULD be used
-	globalDefaultOrg := "00000000-0000-0000-0000-000000000001"
-	orgStoredForPath := "00000000-0000-0000-0000-000000000002"
-	expectedOrg := "00000000-0000-0000-0000-000000000003"
+	// Note: Code scanner requires valid UUID format orgs (validated by ResolveOrgToUUID)
+	globalDefaultOrg := "11111111-1111-1111-1111-111111111111"
+	orgStoredForPath := "22222222-2222-2222-2222-222222222222"
+	expectedOrg := "33333333-3333-3333-3333-333333333333"
 
 	// Set global default org
 	c.SetOrganization(globalDefaultOrg)
