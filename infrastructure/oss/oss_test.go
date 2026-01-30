@@ -732,7 +732,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 		require.NoError(t, err)
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, folderConfig)
 
 		assert.Contains(t, cmd, "--dev")
 		assert.Contains(t, cmd, "-d")
@@ -747,8 +747,9 @@ func Test_prepareScanCommand(t *testing.T) {
 			C:                       c,
 		}
 		c.SetCliSettings(&settings)
+		folderConfig := &types.FolderConfig{}
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
 
 		assert.NotContains(t, cmd, "--all-projects")
 		assert.Contains(t, cmd, "-d")
@@ -764,8 +765,9 @@ func Test_prepareScanCommand(t *testing.T) {
 			C:                       c,
 		}
 		c.SetCliSettings(&settings)
+		folderConfig := &types.FolderConfig{}
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
 
 		assert.Contains(t, cmd, "--")
 		assert.Equal(t, "-x", cmd[len(cmd)-1])
@@ -780,8 +782,9 @@ func Test_prepareScanCommand(t *testing.T) {
 			C:                       c,
 		}
 		c.SetCliSettings(&settings)
+		folderConfig := &types.FolderConfig{}
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
 
 		assert.Contains(t, cmd, "--all-projects")
 		assert.Lenf(t, cmd, 6, "cmd: %v", cmd)
