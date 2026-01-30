@@ -1742,86 +1742,46 @@ func (c *Config) IsDeltaFindingsEnabledForFolder(folderConfig *types.FolderConfi
 	return c.IsDeltaFindingsEnabled() // fallback to global
 }
 
-// IsSnykCodeEnabledForFolder returns whether Snyk Code is enabled for a folder config,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) IsSnykCodeEnabledForFolder(folderConfig *types.FolderConfig) bool {
+// isProductEnabled is a private helper to check product enablement for a folder.
+func (c *Config) isProductEnabled(folderConfig *types.FolderConfig, productName string, fallback func() bool) bool {
 	resolver := c.GetConfigResolver()
 	if resolver == nil {
-		return c.IsSnykCodeEnabled() // fallback to global
+		return fallback()
 	}
 	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
 	if source != types.ConfigSourceDefault {
 		if products, ok := val.([]string); ok {
 			for _, p := range products {
-				if p == "code" {
+				if p == productName {
 					return true
 				}
 			}
 			return false
 		}
 	}
-	return c.IsSnykCodeEnabled() // fallback to global
+	return fallback()
+}
+
+// IsSnykCodeEnabledForFolder returns whether Snyk Code is enabled for a folder config,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsSnykCodeEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	return c.isProductEnabled(folderConfig, "code", c.IsSnykCodeEnabled)
 }
 
 // IsSnykOssEnabledForFolder returns whether Snyk OSS is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykOssEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	resolver := c.GetConfigResolver()
-	if resolver == nil {
-		return c.IsSnykOssEnabled() // fallback to global
-	}
-	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
-	if source != types.ConfigSourceDefault {
-		if products, ok := val.([]string); ok {
-			for _, p := range products {
-				if p == "oss" {
-					return true
-				}
-			}
-			return false
-		}
-	}
-	return c.IsSnykOssEnabled() // fallback to global
+	return c.isProductEnabled(folderConfig, "oss", c.IsSnykOssEnabled)
 }
 
 // IsSnykIacEnabledForFolder returns whether Snyk IaC is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykIacEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	resolver := c.GetConfigResolver()
-	if resolver == nil {
-		return c.IsSnykIacEnabled() // fallback to global
-	}
-	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
-	if source != types.ConfigSourceDefault {
-		if products, ok := val.([]string); ok {
-			for _, p := range products {
-				if p == "iac" {
-					return true
-				}
-			}
-			return false
-		}
-	}
-	return c.IsSnykIacEnabled() // fallback to global
+	return c.isProductEnabled(folderConfig, "iac", c.IsSnykIacEnabled)
 }
 
 // IsSnykCodeSecurityEnabledForFolder returns whether Snyk Code Security is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykCodeSecurityEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	resolver := c.GetConfigResolver()
-	if resolver == nil {
-		return c.IsSnykCodeSecurityEnabled() // fallback to global
-	}
-	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
-	if source != types.ConfigSourceDefault {
-		if products, ok := val.([]string); ok {
-			for _, p := range products {
-				if p == "code_security" {
-					return true
-				}
-			}
-			return false
-		}
-	}
-	return c.IsSnykCodeSecurityEnabled() // fallback to global
+	return c.isProductEnabled(folderConfig, "code_security", c.IsSnykCodeSecurityEnabled)
 }

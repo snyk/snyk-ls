@@ -105,9 +105,6 @@ func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigS
 	var value any
 	var source ConfigSource
 
-	// TODO this is wrong - we might not have LDX-Sync provided values, and cannot enforce locked/enforced here.
-	// TODO check logic on the other resolvers as well.
-	// We do want to
 	if ldxField != nil {
 		if ldxField.IsLocked {
 			// Locked: LDX-Sync value wins, user cannot override
@@ -118,7 +115,7 @@ func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigS
 			value = globalValue
 			source = ConfigSourceGlobal
 		} else {
-			// Use LDX-Sync value as default (enforced)
+			// Use LDX-Sync value
 			value = ldxField.Value
 			source = ConfigSourceLDXSync
 		}
