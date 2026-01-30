@@ -214,9 +214,10 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		initialArgs := []string{"--all-projects"}
 		parameterBlacklist := map[string]bool{}
 		path := types.FilePath("/path/to/project")
+		folderConfig := &types.FolderConfig{FolderPath: path}
 
 		// Call the method under test
-		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, folderConfig)
 
 		// Verify that --all-projects was initially removed (it may be added back later in the method)
 		// Count occurrences of --all-projects in the command
@@ -251,9 +252,10 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		initialArgs := []string{"--all-projects"}
 		parameterBlacklist := map[string]bool{}
 		path := types.FilePath("/path/to/project")
+		folderConfig := &types.FolderConfig{FolderPath: path}
 
 		// Call the method under test
-		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, folderConfig)
 
 		// Verify that --all-projects was removed and not added back due to conflict
 		containsAllProjects := false
@@ -329,8 +331,9 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 				initialArgs := []string{}
 				parameterBlacklist := map[string]bool{}
 				path := types.FilePath("/path/to/project")
+				folderConfig := &types.FolderConfig{FolderPath: path}
 
-				result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+				result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, folderConfig)
 
 				assert.NotContains(t, result, "--all-projects", tc.expectedMessage)
 				assert.Contains(t, result, tc.expectedInCmd, "Blacklisted parameter should be present")
