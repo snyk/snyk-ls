@@ -299,7 +299,7 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 			a.sendAuthenticationAnalytics()
 		}
 	}
-	logger.Debug().Msg("IsAuthenticated: " + user + ", adding to cache.")
+	logger.Debug().Str("userId", user).Msg("Authenticated, adding to cache.")
 	return true
 }
 
