@@ -304,6 +304,8 @@ github.com/snyk/code-client-go v1.25.0 h1:1lcg6asMpMWwpaZLKVDdci3OrAv6rRoCsCcT8C
 github.com/snyk/code-client-go v1.25.0/go.mod h1:YYggK3UbOHl5rg7uBhLzsKZBFNavcwFUse/EWCKWdzw=
 github.com/snyk/error-catalog-golang-public v0.0.0-20260108110943-21ad0c940c14 h1:R74dgtKtcrIOG/349YDV8arH7D09pob3lAcJc290FqI=
 github.com/snyk/error-catalog-golang-public v0.0.0-20260108110943-21ad0c940c14/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
+github.com/snyk/go-application-framework v0.0.0-20260128131202-72ae858e7d08 h1:spA/w4h6q+UJq054xF3rhaqIeF8UYuHPjiLGezViAYU=
+github.com/snyk/go-application-framework v0.0.0-20260128131202-72ae858e7d08/go.mod h1:LPR080GrK2jqNN9/hgVwKkXTVS3BlvwqmTN60lX5wdA=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 h1:s9PHNkL6ueYRiAKNfd8OVxlUOqU3qY0VDbgCD1f6WQY=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530/go.mod h1:88KbbvGYlmLgee4OcQ19yr0bNpXpOr2kciOthaSzCAg=
 github.com/snyk/studio-mcp v1.2.3 h1:4zvKlfl1wL91QHvF1pjn4vXWRiqixL9X0Wc/Bo+Ukr8=
