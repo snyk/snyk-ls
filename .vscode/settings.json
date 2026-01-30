@@ -10,6 +10,5 @@
     "formatting.local": "github.com/snyk/snyk-ls"
   },
   "go.toolsManagement.autoUpdate": true,
-  "html.format.unformattedContentDelimiter": "<!--noformat-->",
-  "snyk.advanced.autoSelectOrganization": true
+  "html.format.unformattedContentDelimiter": "<!--noformat-->"
 }
