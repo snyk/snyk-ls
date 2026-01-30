@@ -216,6 +216,62 @@ func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
 	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from the original workspace folderConfig")
 }
 
+// Test_Scan_UsesOrgFromFolderConfigNotFromPath verifies that the scanner uses the org from the
+// passed FolderConfig parameter, not derived from the objectToScan path or global config.
+// This is critical for delta scans where the scan path is a temp directory but the org
+// should come from the original workspace's FolderConfig.
+func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup three different orgs to ensure we're using the right one:
+	// 1. Global default org - should NOT be used
+	// 2. Org stored for the scan path - should NOT be used
+	// 3. Org in the passed FolderConfig - SHOULD be used
+	globalDefaultOrg := "global-default-org"
+	orgStoredForPath := "org-stored-for-scan-path"
+	expectedOrg := "org-from-passed-folderconfig"
+
+	// Set global default org
+	c.SetOrganization(globalDefaultOrg)
+
+	// Create a directory that will be scanned
+	scanDir := t.TempDir()
+	scanPath := types.FilePath(scanDir)
+
+	// Create a terraform file
+	assert.NoError(t, os.WriteFile(scanDir+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
+
+	// Store a different org for the scan path (simulating a workspace with its own org)
+	pathFolderConfig := c.FolderConfig(scanPath)
+	pathFolderConfig.PreferredOrg = orgStoredForPath
+	pathFolderConfig.OrgSetByUser = true
+
+	// Create the FolderConfig we'll pass to Scan() - with a DIFFERENT org
+	// This simulates delta scan where we pass a config with the original workspace's org
+	passedFolderConfig := &types.FolderConfig{
+		FolderPath:   scanPath,
+		PreferredOrg: expectedOrg,
+		OrgSetByUser: true,
+	}
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock)
+
+	// Act
+	_, _ = scanner.Scan(t.Context(), scanPath, passedFolderConfig)
+
+	// Assert - verify the CLI was called with the org from the PASSED FolderConfig,
+	// not from the path's stored config or global default
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed")
+	cmd := cliMock.GetCommand()
+	assert.Contains(t, cmd, "--org="+expectedOrg,
+		"CLI should use org from passed FolderConfig, not from path lookup or global config")
+	assert.NotContains(t, cmd, "--org="+orgStoredForPath,
+		"CLI should NOT use org stored for the scan path")
+	assert.NotContains(t, cmd, "--org="+globalDefaultOrg,
+		"CLI should NOT use global default org")
+}
+
 func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 	c := testutil.UnitTest(t)
 

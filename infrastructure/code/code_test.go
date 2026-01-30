@@ -1028,6 +1028,68 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	assert.Equal(t, globalOrg, configOrg, "CodeConfig should fall back to global org when no folder org is set")
 }
 
+// Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath verifies that createCodeConfig uses the org from the
+// passed FolderConfig parameter, not derived from the objectToScan path or global config.
+// This is critical for delta scans where the scan path is a temp directory but the org
+// should come from the original workspace's FolderConfig.
+func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+
+	// Setup three different orgs to ensure we're using the right one:
+	// 1. Global default org - should NOT be used
+	// 2. Org stored for the scan path - should NOT be used
+	// 3. Org in the passed FolderConfig - SHOULD be used
+	globalDefaultOrg := "00000000-0000-0000-0000-000000000001"
+	orgStoredForPath := "00000000-0000-0000-0000-000000000002"
+	expectedOrg := "00000000-0000-0000-0000-000000000003"
+
+	// Set global default org
+	c.SetOrganization(globalDefaultOrg)
+
+	// Create a directory path that will be scanned
+	scanPath := types.FilePath("/fake/scan-path")
+
+	// Set up workspace with the scan path
+	_, _ = workspaceutil.SetupWorkspace(t, c, scanPath)
+
+	// Store a different org for the scan path (simulating a workspace with its own org)
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		FolderPath:                  scanPath,
+		PreferredOrg:                orgStoredForPath,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
+
+	// Create the FolderConfig we'll pass to createCodeConfig - with a DIFFERENT org
+	// This simulates delta scan where we pass a config with the original workspace's org
+	passedFolderConfig := &types.FolderConfig{
+		FolderPath:   scanPath,
+		PreferredOrg: expectedOrg,
+		OrgSetByUser: true,
+	}
+
+	scanner := &Scanner{
+		C: c,
+	}
+
+	// Act - call createCodeConfig with the passed FolderConfig
+	codeConfig, err := scanner.createCodeConfig(passedFolderConfig)
+	require.NoError(t, err, "createCodeConfig should succeed")
+	require.NotNil(t, codeConfig, "CodeConfig should not be nil")
+
+	// Assert - verify the CodeConfig uses the org from the PASSED FolderConfig,
+	// not from the path's stored config or global default
+	configOrg := codeConfig.Organization()
+	assert.Equal(t, expectedOrg, configOrg,
+		"CodeConfig should use org from passed FolderConfig, not from path lookup or global config")
+	assert.NotEqual(t, orgStoredForPath, configOrg,
+		"CodeConfig should NOT use org stored for the scan path")
+	assert.NotEqual(t, globalDefaultOrg, configOrg,
+		"CodeConfig should NOT use global default org")
+}
+
 func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
