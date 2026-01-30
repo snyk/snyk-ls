@@ -197,7 +197,11 @@ func (sc *Scanner) Scan(ctx context.Context, objectToScan types.FilePath, worksp
 	if sc.changedPaths[workspaceFolder] == nil {
 		sc.changedPaths[workspaceFolder] = map[types.FilePath]bool{}
 	}
-	if !isFullWorkspaceScan {
+	if isFullWorkspaceScan {
+		// For full workspace scans, add the workspace folder itself to signal a scan is needed.
+		// getFilesToBeScanned will skip directories but this ensures the changedPaths length check passes.
+		sc.changedPaths[workspaceFolder][workspaceFolder] = true
+	} else {
 		// Track the specific file that changed for incremental scanning
 		sc.changedPaths[workspaceFolder][objectToScan] = true
 	}
