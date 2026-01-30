@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -39,7 +40,7 @@ var (
 	}
 )
 
-var codeApiRegex = regexp.MustCompile(`^(deeproxy\.)?`)
+var deeproxyRegex = regexp.MustCompile(`^(deeproxy\.)?`)
 
 func issueSeverity(snykSeverity string) types.Severity {
 	sev, ok := issueSeverities[snykSeverity]
@@ -92,14 +93,18 @@ func getCodeApiUrlFromFolderConfig(c *config.Config, folderConfig *types.FolderC
 		return endpoint, nil
 	}
 
-	// we should not have SCLE in fedramp, but this code may still run and it should work even with SCLE
-
+	// We should not have SCLE in FedRAMP, but this code may still run and it should work even with SCLE
 	u, err := url.Parse(endpoint)
 	if err != nil {
 		return "", err
 	}
 
-	u.Host = codeApiRegex.ReplaceAllString(u.Host, "api.")
+	u.Host = deeproxyRegex.ReplaceAllString(u.Host, "api.")
+	if !strings.HasPrefix(u.Host, "api.") {
+		u.Host = "api." + u.Host
+	}
+	u.RawQuery = ""
+	u.Fragment = ""
 
 	// Get organization directly from folderConfig for FedRAMP
 	org := c.FolderConfigOrganization(folderConfig)

@@ -381,11 +381,23 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
-	cmd := cliScanner.cli.ExpandParametersFromConfig([]string{
+	cmd := []string{
 		cliScanner.config.CliSettings().Path(),
 		"test",
 		"--json",
-	})
+	}
+
+	// Get organization from folder config instead of global config
+	org := cliScanner.config.FolderConfigOrganization(folderConfig)
+	if org != "" {
+		cmd = append(cmd, "--org="+org)
+	}
+
+	// Add other config parameters (like --insecure) but not --org since we handle it explicitly
+	settings := cliScanner.config.CliSettings()
+	if settings.Insecure {
+		cmd = append(cmd, "--insecure")
+	}
 
 	args, env := cliScanner.updateArgs(path, args, folderConfig)
 	args = append(args, cliScanner.config.CliSettings().AdditionalOssParameters...)

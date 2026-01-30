@@ -234,8 +234,9 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
 	_, _ = scanner.Scan(ctx, types.FilePath(filePath), folderConfig)
 
-	// Assert - verify the CLI was executed (scan was attempted)
+	// Assert - verify the CLI was executed with the correct org
 	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for file scan")
+	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from folderConfig")
 }
 
 func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
@@ -263,8 +264,9 @@ func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
 	_, _ = scanner.Scan(ctx, types.FilePath(subfolderPath), folderConfig)
 
-	// Assert - verify the CLI was executed (scan was attempted)
+	// Assert - verify the CLI was executed with the correct org
 	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for subfolder scan")
+	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from folderConfig")
 }
 
 func Test_Scan_WorkspaceFolderScan_UsesFolderConfigOrganization(t *testing.T) {
@@ -290,8 +292,9 @@ func Test_Scan_WorkspaceFolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
 	_, _ = scanner.Scan(ctx, workspacePath, folderConfig)
 
-	// Assert - verify the CLI was executed (scan was attempted)
+	// Assert - verify the CLI was executed with the correct org
 	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for workspace folder scan")
+	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from folderConfig")
 }
 
 func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
@@ -327,8 +330,9 @@ func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
 	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
 	_, _ = scanner.Scan(ctx, baseFolderPath, baseScanConfig)
 
-	// Assert - verify the CLI was executed
+	// Assert - verify the CLI was executed with the correct org from the original workspace
 	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for delta scan base branch")
+	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from the original workspace folderConfig")
 }
 
 func mavenTestIssue() ossIssue {
