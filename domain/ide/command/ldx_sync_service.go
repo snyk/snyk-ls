@@ -71,8 +71,8 @@ func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient) LdxSyncService {
 
 // RefreshConfigFromLdxSync refreshes the user configuration from LDX-Sync for all workspace folders in parallel.
 // Results are stored in the LDXSyncConfigCache:
-// - FolderOrgMapping: maps folder paths to their resolved org IDs
-// - Configs: maps org IDs to their org-level settings
+// - FolderToOrgMapping: maps folder paths to their resolved org IDs
+// - OrgConfigs: maps org IDs to their org-level settings
 func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder) {
 	logger := c.Logger().With().Str("method", "RefreshConfigFromLdxSync").Logger()
 	engine := c.Engine()
@@ -129,8 +129,8 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 
 // updateOrgConfigCache converts LDX-Sync results to org configs and updates the cache.
 // This populates both:
-// - FolderOrgMapping: folder path → org ID (for callers to look up the resolved org)
-// - Configs: org ID → org-level settings (for ConfigResolver to read settings)
+// - FolderToOrgMapping: folder path → org ID (for callers to look up the resolved org)
+// - OrgConfigs: org ID → org-level settings (for ConfigResolver to read settings)
 func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
 	logger := c.Logger().With().Str("method", "updateOrgConfigCache").Logger()
 	cache := c.GetLdxSyncOrgConfigCache()

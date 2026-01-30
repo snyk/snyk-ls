@@ -964,7 +964,7 @@ func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
 		RefreshConfigFromLdxSync(setup.c, gomock.Eq([]types.Folder{folder})).
 		Times(1)
 
-	// Populate FolderOrgMapping so AutoDeterminedOrg can be looked up
+	// Populate FolderToOrgMapping so AutoDeterminedOrg can be looked up
 	cache := setup.c.GetLdxSyncOrgConfigCache()
 	cache.SetFolderOrg(setup.folderPath, "auto-determined-org")
 

@@ -209,8 +209,8 @@ type Config struct {
 	userSettingsPath                    string
 	autoConfigureMcpEnabled             bool
 	secureAtInceptionExecutionFrequency string
-	ldxSyncOrgConfigCache               *types.LDXSyncConfigCache
-	ldxSyncOrgConfigCacheMutex          sync.RWMutex
+	ldxSyncConfigCache                  *types.LDXSyncConfigCache
+	ldxSyncConfigCacheMutex             sync.RWMutex
 	configResolver                      *types.ConfigResolver
 }
 
@@ -1543,47 +1543,47 @@ func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
 
 // InitLdxSyncOrgConfigCache initializes the LDX-Sync org config cache and ConfigResolver
 func (c *Config) InitLdxSyncOrgConfigCache() {
-	c.ldxSyncOrgConfigCacheMutex.Lock()
-	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
-	c.ldxSyncOrgConfigCache = types.NewLDXSyncConfigCache()
-	c.configResolver = types.NewConfigResolver(c.ldxSyncOrgConfigCache, nil, c.FolderOrganization, c.logger)
+	c.ldxSyncConfigCacheMutex.Lock()
+	defer c.ldxSyncConfigCacheMutex.Unlock()
+	c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
+	c.configResolver = types.NewConfigResolver(c.ldxSyncConfigCache, nil, c.FolderOrganization, c.logger)
 }
 
 // GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache
 func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
-	c.ldxSyncOrgConfigCacheMutex.RLock()
-	defer c.ldxSyncOrgConfigCacheMutex.RUnlock()
-	return c.ldxSyncOrgConfigCache
+	c.ldxSyncConfigCacheMutex.RLock()
+	defer c.ldxSyncConfigCacheMutex.RUnlock()
+	return c.ldxSyncConfigCache
 }
 
 // GetConfigResolver returns the ConfigResolver for reading configuration values
 func (c *Config) GetConfigResolver() *types.ConfigResolver {
-	c.ldxSyncOrgConfigCacheMutex.RLock()
-	defer c.ldxSyncOrgConfigCacheMutex.RUnlock()
+	c.ldxSyncConfigCacheMutex.RLock()
+	defer c.ldxSyncConfigCacheMutex.RUnlock()
 	return c.configResolver
 }
 
 // UpdateLdxSyncOrgConfig updates the org config cache with a new org config
 func (c *Config) UpdateLdxSyncOrgConfig(orgConfig *types.LDXSyncOrgConfig) {
-	c.ldxSyncOrgConfigCacheMutex.Lock()
-	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
-	if c.ldxSyncOrgConfigCache == nil {
-		c.ldxSyncOrgConfigCache = types.NewLDXSyncConfigCache()
+	c.ldxSyncConfigCacheMutex.Lock()
+	defer c.ldxSyncConfigCacheMutex.Unlock()
+	if c.ldxSyncConfigCache == nil {
+		c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
 	}
-	c.ldxSyncOrgConfigCache.SetOrgConfig(orgConfig)
+	c.ldxSyncConfigCache.SetOrgConfig(orgConfig)
 }
 
 // ClearLdxSyncOrgConfigCache clears the LDX-Sync org config cache (called on logout/cleanup)
 func (c *Config) ClearLdxSyncOrgConfigCache() {
-	c.ldxSyncOrgConfigCacheMutex.Lock()
-	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
-	c.ldxSyncOrgConfigCache = types.NewLDXSyncConfigCache()
+	c.ldxSyncConfigCacheMutex.Lock()
+	defer c.ldxSyncConfigCacheMutex.Unlock()
+	c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
 }
 
 // UpdateLdxSyncMachineConfig updates the machine-wide LDX-Sync config in the ConfigResolver
 func (c *Config) UpdateLdxSyncMachineConfig(machineConfig map[string]*types.LDXSyncField) {
-	c.ldxSyncOrgConfigCacheMutex.Lock()
-	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	c.ldxSyncConfigCacheMutex.Lock()
+	defer c.ldxSyncConfigCacheMutex.Unlock()
 	if c.configResolver != nil {
 		c.configResolver.SetLDXSyncMachineConfig(machineConfig)
 	}
@@ -1591,8 +1591,8 @@ func (c *Config) UpdateLdxSyncMachineConfig(machineConfig map[string]*types.LDXS
 
 // GetLdxSyncMachineConfig returns the machine-wide LDX-Sync config from the ConfigResolver
 func (c *Config) GetLdxSyncMachineConfig() map[string]*types.LDXSyncField {
-	c.ldxSyncOrgConfigCacheMutex.RLock()
-	defer c.ldxSyncOrgConfigCacheMutex.RUnlock()
+	c.ldxSyncConfigCacheMutex.RLock()
+	defer c.ldxSyncConfigCacheMutex.RUnlock()
 	if c.configResolver != nil {
 		return c.configResolver.GetLDXSyncMachineConfig()
 	}
@@ -1602,8 +1602,8 @@ func (c *Config) GetLdxSyncMachineConfig() map[string]*types.LDXSyncField {
 // UpdateGlobalSettingsInResolver updates the global settings reference in ConfigResolver
 // This should be called when settings are received from the IDE
 func (c *Config) UpdateGlobalSettingsInResolver(settings *types.Settings) {
-	c.ldxSyncOrgConfigCacheMutex.Lock()
-	defer c.ldxSyncOrgConfigCacheMutex.Unlock()
+	c.ldxSyncConfigCacheMutex.Lock()
+	defer c.ldxSyncConfigCacheMutex.Unlock()
 	if c.configResolver != nil {
 		c.configResolver.SetGlobalSettings(settings)
 	}

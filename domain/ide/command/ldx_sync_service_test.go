@@ -15,7 +15,7 @@
  */
 
 // ABOUTME: Tests for LdxSyncService with full API mocking
-// ABOUTME: Covers RefreshConfigFromLdxSync and FolderOrgMapping population
+// ABOUTME: Covers RefreshConfigFromLdxSync and FolderToOrgMapping population
 
 package command
 
@@ -95,7 +95,7 @@ func Test_RefreshConfigFromLdxSync_NoFolders(t *testing.T) {
 	// No API calls should be made for empty folder list
 	service.RefreshConfigFromLdxSync(c, []types.Folder{})
 
-	// Verify FolderOrgMapping is empty
+	// Verify FolderToOrgMapping is empty
 	cache := c.GetLdxSyncOrgConfigCache()
 	orgId := cache.GetOrgIdForFolder(types.FilePath("/nonexistent"))
 	assert.Empty(t, orgId)
@@ -121,7 +121,7 @@ func Test_RefreshConfigFromLdxSync_SingleFolder_Success(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)
 
-	// Verify FolderOrgMapping was populated
+	// Verify FolderToOrgMapping was populated
 	cache := c.GetLdxSyncOrgConfigCache()
 	orgId := cache.GetOrgIdForFolder(folderPath)
 	assert.Equal(t, expectedOrgId, orgId)
@@ -156,7 +156,7 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)
 
-	// Verify FolderOrgMapping was populated
+	// Verify FolderToOrgMapping was populated
 	cache := c.GetLdxSyncOrgConfigCache()
 	orgId := cache.GetOrgIdForFolder(folderPath)
 	assert.Equal(t, expectedOrgId, orgId)
@@ -219,10 +219,10 @@ func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)
 
-	// Verify FolderOrgMapping was NOT populated for error result
+	// Verify FolderToOrgMapping was NOT populated for error result
 	cache := c.GetLdxSyncOrgConfigCache()
 	orgId := cache.GetOrgIdForFolder(folderPath)
-	assert.Empty(t, orgId, "Error results should not populate FolderOrgMapping")
+	assert.Empty(t, orgId, "Error results should not populate FolderToOrgMapping")
 }
 
 func Test_DefaultLdxSyncApiClient_GetUserConfigForProject(t *testing.T) {
@@ -288,7 +288,7 @@ func Test_RefreshConfigFromLdxSync_EmptyFolderPath(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)
 
-	// Should populate FolderOrgMapping even with empty path
+	// Should populate FolderToOrgMapping even with empty path
 	cache := c.GetLdxSyncOrgConfigCache()
 	orgId := cache.GetOrgIdForFolder(emptyPath)
 	assert.Equal(t, expectedOrgId, orgId)
