@@ -41,16 +41,16 @@ const (
 	DontTrust = "Don't trust folders"
 )
 
-func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, ldxSyncService LdxSyncService) {
+func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	sendFolderConfigs(c, notifier, featureFlagService, ldxSyncService)
+	sendFolderConfigs(c, notifier, featureFlagService)
 
 	HandleUntrustedFolders(ctx, c, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
 }
 
-func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, ldxSyncService LdxSyncService) {
+func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service) {
 	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
 	resolver := c.GetConfigResolver()
@@ -67,13 +67,11 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 
 		featureFlagService.PopulateFolderConfig(folderConfig)
 
-		// Always update AutoDeterminedOrg from LDX-Sync (even for folders where OrgSetByUser is true)
+		// Always update AutoDeterminedOrg from LDX-Sync cache (even for folders where OrgSetByUser is true)
 		// This ensures we always know what LDX-Sync recommends, regardless of whether the user has opted out
-		org, err := ldxSyncService.ResolveOrg(c, folderConfig.FolderPath)
-		if err != nil {
-			logger.Err(err).Msg("unable to resolve organization, continuing...")
-		} else {
-			folderConfig.AutoDeterminedOrg = org.Id
+		cache := c.GetLdxSyncOrgConfigCache()
+		if orgId := cache.GetOrgIdForFolder(folderConfig.FolderPath); orgId != "" {
+			folderConfig.AutoDeterminedOrg = orgId
 		}
 
 		// Trigger migration for folders that haven't been migrated yet
@@ -84,8 +82,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 
 		if !cmp.Equal(folderConfig, storedFolderConfig) {
 			// Save the migrated folder config back to storage
-			err = storedconfig.UpdateFolderConfig(gafConfig, folderConfig, &logger)
-			if err != nil {
+			if err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, &logger); err != nil {
 				logger.Err(err).Msg("unable to save folder config")
 			}
 		}

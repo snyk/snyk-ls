@@ -514,9 +514,10 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 		} else {
 			// Case when Folder Configs were provided as part of initialize request
 			// or when user is not logged in during initialized notification
-			org, err := di.LdxSyncService().ResolveOrg(c, folderConfig.FolderPath)
-			if err == nil { // No need to log the error, it will have already been logged.
-				folderConfig.AutoDeterminedOrg = org.Id
+			// Look up org from LDX-Sync cache
+			cache := c.GetLdxSyncOrgConfigCache()
+			if orgId := cache.GetOrgIdForFolder(folderConfig.FolderPath); orgId != "" {
+				folderConfig.AutoDeterminedOrg = orgId
 			}
 		}
 	}

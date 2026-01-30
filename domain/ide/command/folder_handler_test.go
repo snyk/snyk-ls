@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -39,66 +38,14 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
-
-	"github.com/google/uuid"
-	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 )
 
-// setupLdxSyncService returns a real LdxSyncService implementation for tests
-// No mocking needed since ResolveOrg just reads from cache (which tests populate) and GAF config
-func setupLdxSyncService(t *testing.T) LdxSyncService {
-	t.Helper()
-	return NewLdxSyncService()
-}
-
-// createLdxSyncResult is a helper to create a properly structured LdxSyncConfigResult for tests
-func createLdxSyncResult(orgId, orgName, orgSlug string, isDefault bool) *ldx_sync_config.LdxSyncConfigResult {
-	orgs := []v20241015.Organization{
-		{
-			Id:                   orgId,
-			Name:                 orgName,
-			Slug:                 orgSlug,
-			IsDefault:            util.Ptr(isDefault),
-			PreferredByAlgorithm: util.Ptr(true), // Always mark as preferred for test purposes
-		},
-	}
-
-	// Create a UUID for the config ID
-	configId := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-
-	return &ldx_sync_config.LdxSyncConfigResult{
-		Config: &v20241015.UserConfigResponse{
-			Data: struct {
-				Attributes struct {
-					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
-					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
-				} `json:"attributes"`
-				Id   uuid.UUID                            `json:"id"`
-				Type v20241015.UserConfigResponseDataType `json:"type"`
-			}{
-				Attributes: struct {
-					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
-					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
-				}{
-					Organizations: &orgs,
-				},
-				Id:   configId,
-				Type: "configuration",
-			},
-		},
-		RemoteUrl:   "https://github.com/test/repo.git",
-		ProjectRoot: "/fake/test-folder",
-		Error:       nil,
-	}
+// populateFolderOrgCache is a helper to populate the LDX-Sync org config cache for tests
+func populateFolderOrgCache(c interface {
+	GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache
+}, folderPath types.FilePath, orgId string) {
+	cache := c.GetLdxSyncOrgConfigCache()
+	cache.SetFolderOrg(folderPath, orgId)
 }
 
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
@@ -121,13 +68,9 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 
 	// Populate cache with LDX-Sync result
 	expectedOrgId := "resolved-org-id"
-	cachedResult := createLdxSyncResult(expectedOrgId, "Resolved Org", "resolved-org", false)
-	c.UpdateLdxSyncCache(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
-		folderPaths[0]: cachedResult,
-	})
+	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	mockService := setupLdxSyncService(t)
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify notification was sent
 	messages := notifier.SentMessages()
@@ -148,8 +91,7 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	// Setup workspace with no folders
 	_, notifier := workspaceutil.SetupWorkspace(t, c)
 
-	mockService := setupLdxSyncService(t)
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
@@ -178,8 +120,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 
 	_, n := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
 
-	mockService := setupLdxSyncService(t)
-	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), mockService)
+	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
 
 	select {
 	case <-called:
@@ -189,67 +130,14 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 	}
 }
 
-// Test LdxSyncService.ResolveOrg error handling - now falls back to global org when cache is empty
-func Test_SetAutoBestOrgFromLdxSync_ErrorHandling(t *testing.T) {
-	c := testutil.UnitTest(t)
-	_, gafConfig := testutil.SetUpEngineMock(t, c)
-
-	folderConfig := &types.FolderConfig{
-		FolderPath: types.FilePath(t.TempDir()),
-	}
-
-	// Set global org as fallback
-	expectedOrgId := "fallback-global-org"
-	gafConfig.Set(configuration.ORGANIZATION, expectedOrgId)
-
-	// Don't populate cache - should fall back to global org
-	mockService := setupLdxSyncService(t)
-	org, err := mockService.ResolveOrg(c, folderConfig.FolderPath)
-
-	require.NoError(t, err, "Should fall back to global org when cache is empty")
-	assert.Equal(t, expectedOrgId, org.Id, "Should return global org as fallback")
-}
-
-// Test LdxSyncService.ResolveOrgfallback when cache is empty
-func Test_SetAutoBestOrgFromLdxSync_FallbackToGafConfig(t *testing.T) {
-	c := testutil.UnitTest(t)
-	_, gafConfig := testutil.SetUpEngineMock(t, c)
-
-	// Set organization in GAF config
-	expectedOrgId := "fallback-org-id"
-	gafConfig.Set(configuration.ORGANIZATION, expectedOrgId)
-
-	// Ensure no resolver is set (default state)
-	originalService := Service()
-	t.Cleanup(func() {
-		SetService(originalService)
-	})
-	mockService := types.NewCommandServiceMock()
-	SetService(mockService)
-
-	folderConfig := &types.FolderConfig{
-		FolderPath: types.FilePath(t.TempDir()),
-	}
-
-	mockLdxSync := setupLdxSyncService(t)
-	org, err := mockLdxSync.ResolveOrg(c, folderConfig.FolderPath)
-
-	require.NoError(t, err)
-	assert.Equal(t, expectedOrgId, org.Id, "Should fallback to GAF config organization")
-}
-
-// Test sendFolderConfigs when cache is empty (should fall back to global org)
-func Test_sendFolderConfigs_EmptyCache_FallbackToGlobal(t *testing.T) {
+// Test cache lookup when cache is empty - AutoDeterminedOrg should remain empty
+func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with a folder
-	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
-
-	// Set global org as fallback
-	globalOrgId := "global-fallback-org"
-	engineConfig.Set(configuration.ORGANIZATION, globalOrgId)
 
 	logger := c.Logger()
 	storedConfig := &types.FolderConfig{
@@ -261,19 +149,53 @@ func Test_sendFolderConfigs_EmptyCache_FallbackToGlobal(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
-	// Don't populate cache - should fall back to global org
-	mockService := setupLdxSyncService(t)
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
+	// Don't populate cache - AutoDeterminedOrg should remain empty
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
-	// Verify notification was still sent
+	// Verify notification was sent
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
 
 	folderConfigsParam, ok := messages[0].(types.FolderConfigsParam)
 	require.True(t, ok, "Expected FolderConfigsParam notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
-	// AutoDeterminedOrg should be set to global org when cache is empty
-	assert.Equal(t, globalOrgId, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should fall back to global org when cache is empty")
+	// AutoDeterminedOrg should be empty when cache is empty
+	assert.Empty(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be empty when cache is empty")
+}
+
+// Test sendFolderConfigs when cache has org ID
+func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
+	c := testutil.UnitTest(t)
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
+
+	// Setup workspace with a folder
+	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
+	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
+
+	logger := c.Logger()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPaths[0],
+		PreferredOrg:                "test-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	require.NoError(t, err)
+
+	// Populate cache with org ID
+	expectedOrgId := "cached-org-id"
+	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
+
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+
+	// Verify notification was sent
+	messages := notifier.SentMessages()
+	require.Len(t, messages, 1)
+
+	folderConfigsParam, ok := messages[0].(types.FolderConfigsParam)
+	require.True(t, ok, "Expected FolderConfigsParam notification")
+	require.Len(t, folderConfigsParam.FolderConfigs, 1)
+	assert.Equal(t, expectedOrgId, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
 // Test sendFolderConfigs with multiple folders and different org configurations
@@ -283,8 +205,8 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 
 	// Setup workspace with multiple folders
 	folderPaths := []types.FilePath{
-		types.FilePath("/fake/test-folder-0"),
-		types.FilePath("/fake/test-folder-1"),
+		types.FilePath(t.TempDir() + "/folder-0"),
+		types.FilePath(t.TempDir() + "/folder-1"),
 	}
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
@@ -310,14 +232,10 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	require.NoError(t, err)
 
 	// Populate cache with different orgs for each folder
-	cacheResults := map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
-		folderPaths[0]: createLdxSyncResult("org-id-for-folder-0", "Org for folder 0", "org-folder-0", false),
-		folderPaths[1]: createLdxSyncResult("org-id-for-folder-1", "Org for folder 1", "org-folder-1", false),
-	}
-	c.UpdateLdxSyncCache(cacheResults)
+	populateFolderOrgCache(c, folderPaths[0], "org-id-for-folder-0")
+	populateFolderOrgCache(c, folderPaths[1], "org-id-for-folder-1")
 
-	mockService := setupLdxSyncService(t)
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockService)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify notification was sent with both folders
 	messages := notifier.SentMessages()
@@ -503,45 +421,32 @@ func Test_MigrateFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(t *tes
 	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should remain empty")
 }
 
-// Test LdxSyncService.ResolveOrgwith cached result
-func Test_GetOrgFromCachedLdxSync_WithCache(t *testing.T) {
+// Test GetOrgIdForFolder with cached result
+func Test_GetOrgIdForFolder_WithCache(t *testing.T) {
 	c := testutil.UnitTest(t)
-	gafConfig := c.Engine().GetConfiguration()
 
-	folderPath := types.FilePath("/fake/test-folder")
+	folderPath := types.FilePath(t.TempDir())
 
-	// Populate cache with a result
+	// Populate cache with org ID
 	expectedOrgId := "cached-org-id"
-	cachedResult := createLdxSyncResult(expectedOrgId, "Cached Org", "cached-org", false)
-	c.UpdateLdxSyncCache(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
-		folderPath: cachedResult,
-	})
+	populateFolderOrgCache(c, folderPath, expectedOrgId)
 
-	// Set a different global org to ensure we're using the cache
-	gafConfig.Set(configuration.ORGANIZATION, "different-global-org")
+	// Get org from cache
+	cache := c.GetLdxSyncOrgConfigCache()
+	orgId := cache.GetOrgIdForFolder(folderPath)
 
-	mockService := setupLdxSyncService(t)
-	org, err := mockService.ResolveOrg(c, folderPath)
-
-	require.NoError(t, err)
-	assert.Equal(t, expectedOrgId, org.Id, "Should return org from cache")
+	assert.Equal(t, expectedOrgId, orgId, "Should return org from cache")
 }
 
-// Test LdxSyncService.ResolveOrgwithout cached result (fallback to global org)
-func Test_GetOrgFromCachedLdxSync_WithoutCache_FallbackToGlobal(t *testing.T) {
+// Test GetOrgIdForFolder without cached result (returns empty string)
+func Test_GetOrgIdForFolder_WithoutCache_ReturnsEmpty(t *testing.T) {
 	c := testutil.UnitTest(t)
-	_, gafConfig := testutil.SetUpEngineMock(t, c)
 
-	folderPath := types.FilePath("/fake/test-folder")
-
-	// Set global org
-	globalOrgId := "global-org-id"
-	gafConfig.Set(configuration.ORGANIZATION, globalOrgId)
+	folderPath := types.FilePath(t.TempDir())
 
 	// Don't populate cache
-	mockService := setupLdxSyncService(t)
-	org, err := mockService.ResolveOrg(c, folderPath)
+	cache := c.GetLdxSyncOrgConfigCache()
+	orgId := cache.GetOrgIdForFolder(folderPath)
 
-	require.NoError(t, err)
-	assert.Equal(t, globalOrgId, org.Id, "Should fallback to global org when cache is empty")
+	assert.Empty(t, orgId, "Should return empty string when cache is empty")
 }

@@ -120,13 +120,15 @@ func (c *LDXSyncOrgConfig) SetField(settingName string, value any, isLocked, isE
 
 // LDXSyncConfigCache holds cached LDX-Sync configurations for all organizations
 type LDXSyncConfigCache struct {
-	Configs map[string]*LDXSyncOrgConfig `json:"configs"`
+	Configs          map[string]*LDXSyncOrgConfig `json:"configs"`
+	FolderOrgMapping map[FilePath]string          `json:"folderOrgMapping"`
 }
 
 // NewLDXSyncConfigCache creates a new empty LDXSyncConfigCache
 func NewLDXSyncConfigCache() *LDXSyncConfigCache {
 	return &LDXSyncConfigCache{
-		Configs: make(map[string]*LDXSyncOrgConfig),
+		Configs:          make(map[string]*LDXSyncOrgConfig),
+		FolderOrgMapping: make(map[FilePath]string),
 	}
 }
 
@@ -151,6 +153,27 @@ func (c *LDXSyncConfigCache) RemoveOrgConfig(orgId string) {
 	if c.Configs != nil {
 		delete(c.Configs, orgId)
 	}
+}
+
+// SetFolderOrg sets the org ID for a folder path
+func (c *LDXSyncConfigCache) SetFolderOrg(folderPath FilePath, orgId string) {
+	if c.FolderOrgMapping == nil {
+		c.FolderOrgMapping = make(map[FilePath]string)
+	}
+	c.FolderOrgMapping[folderPath] = orgId
+}
+
+// GetOrgIdForFolder returns the org ID for a folder path, or empty string if not found
+func (c *LDXSyncConfigCache) GetOrgIdForFolder(folderPath FilePath) string {
+	if c == nil || c.FolderOrgMapping == nil {
+		return ""
+	}
+	return c.FolderOrgMapping[folderPath]
+}
+
+// ClearFolderOrgMapping clears all folder-to-org mappings
+func (c *LDXSyncConfigCache) ClearFolderOrgMapping() {
+	c.FolderOrgMapping = make(map[FilePath]string)
 }
 
 // Setting name constants for all LDX-Sync settings

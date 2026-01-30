@@ -41,7 +41,6 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -210,8 +209,6 @@ type Config struct {
 	userSettingsPath                    string
 	autoConfigureMcpEnabled             bool
 	secureAtInceptionExecutionFrequency string
-	ldxSyncCache                        map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult
-	ldxSyncCacheMutex                   sync.RWMutex
 	ldxSyncOrgConfigCache               *types.LDXSyncConfigCache
 	ldxSyncOrgConfigCacheMutex          sync.RWMutex
 	configResolver                      *types.ConfigResolver
@@ -297,7 +294,6 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
 	c.hoverVerbosity = 3
-	c.InitLdxSyncCache()
 	c.InitLdxSyncOrgConfigCache()
 	return c
 }
@@ -1543,36 +1539,6 @@ func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.secureAtInceptionExecutionFrequency = frequency
-}
-
-// InitLdxSyncCache initializes the LDX-Sync cache map
-func (c *Config) InitLdxSyncCache() {
-	c.ldxSyncCacheMutex.Lock()
-	defer c.ldxSyncCacheMutex.Unlock()
-	c.ldxSyncCache = make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
-}
-
-// GetLdxSyncResult retrieves a cached LDX-Sync result for a folder path
-func (c *Config) GetLdxSyncResult(path types.FilePath) *ldx_sync_config.LdxSyncConfigResult {
-	c.ldxSyncCacheMutex.RLock()
-	defer c.ldxSyncCacheMutex.RUnlock()
-	return c.ldxSyncCache[path]
-}
-
-// UpdateLdxSyncCache updates the cache with new results
-func (c *Config) UpdateLdxSyncCache(results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
-	c.ldxSyncCacheMutex.Lock()
-	defer c.ldxSyncCacheMutex.Unlock()
-	for path, result := range results {
-		c.ldxSyncCache[path] = result
-	}
-}
-
-// ClearLdxSyncCache clears the LDX-Sync cache (called on logout/cleanup)
-func (c *Config) ClearLdxSyncCache() {
-	c.ldxSyncCacheMutex.Lock()
-	defer c.ldxSyncCacheMutex.Unlock()
-	c.ldxSyncCache = make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
 }
 
 // InitLdxSyncOrgConfigCache initializes the LDX-Sync org config cache and ConfigResolver

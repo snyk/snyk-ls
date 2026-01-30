@@ -51,21 +51,6 @@ func (mr *MockLdxSyncApiClientMockRecorder) GetUserConfigForProject(engine, proj
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserConfigForProject", reflect.TypeOf((*MockLdxSyncApiClient)(nil).GetUserConfigForProject), engine, projectPath, preferredOrg)
 }
 
-// ResolveOrgFromUserConfig mocks base method.
-func (m *MockLdxSyncApiClient) ResolveOrgFromUserConfig(engine workflow.Engine, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResolveOrgFromUserConfig", engine, result)
-	ret0, _ := ret[0].(ldx_sync_config.Organization)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ResolveOrgFromUserConfig indicates an expected call of ResolveOrgFromUserConfig.
-func (mr *MockLdxSyncApiClientMockRecorder) ResolveOrgFromUserConfig(engine, result interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveOrgFromUserConfig", reflect.TypeOf((*MockLdxSyncApiClient)(nil).ResolveOrgFromUserConfig), engine, result)
-}
-
 // MockLdxSyncService is a mock of LdxSyncService interface.
 type MockLdxSyncService struct {
 	ctrl     *gomock.Controller
@@ -99,19 +84,4 @@ func (m *MockLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, workspac
 func (mr *MockLdxSyncServiceMockRecorder) RefreshConfigFromLdxSync(c, workspaceFolders interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshConfigFromLdxSync", reflect.TypeOf((*MockLdxSyncService)(nil).RefreshConfigFromLdxSync), c, workspaceFolders)
-}
-
-// ResolveOrg mocks base method.
-func (m *MockLdxSyncService) ResolveOrg(c *config.Config, folderPath types.FilePath) (ldx_sync_config.Organization, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResolveOrg", c, folderPath)
-	ret0, _ := ret[0].(ldx_sync_config.Organization)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ResolveOrg indicates an expected call of ResolveOrg.
-func (mr *MockLdxSyncServiceMockRecorder) ResolveOrg(c, folderPath interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveOrg", reflect.TypeOf((*MockLdxSyncService)(nil).ResolveOrg), c, folderPath)
 }

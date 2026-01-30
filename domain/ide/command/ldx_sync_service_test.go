@@ -15,26 +15,75 @@
  */
 
 // ABOUTME: Tests for LdxSyncService with full API mocking
-// ABOUTME: Covers RefreshConfigFromLdxSync and ResolveOrg with various scenarios
+// ABOUTME: Covers RefreshConfigFromLdxSync and FolderOrgMapping population
 
 package command
 
 import (
-	"errors"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
+
+// createLdxSyncResultWithOrg is a helper to create a LdxSyncConfigResult with an org ID for tests
+func createLdxSyncResultWithOrg(orgId string) ldx_sync_config.LdxSyncConfigResult {
+	orgs := []v20241015.Organization{
+		{
+			Id:                   orgId,
+			Name:                 "Test Org",
+			Slug:                 "test-org",
+			IsDefault:            util.Ptr(true),
+			PreferredByAlgorithm: util.Ptr(true),
+		},
+	}
+
+	configId := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
+	return ldx_sync_config.LdxSyncConfigResult{
+		Config: &v20241015.UserConfigResponse{
+			Data: struct {
+				Attributes struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				} `json:"attributes"`
+				Id   uuid.UUID                            `json:"id"`
+				Type v20241015.UserConfigResponseDataType `json:"type"`
+			}{
+				Attributes: struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				}{
+					Organizations: &orgs,
+				},
+				Id:   configId,
+				Type: "configuration",
+			},
+		},
+		Error: nil,
+	}
+}
 
 func Test_RefreshConfigFromLdxSync_NoFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
@@ -46,9 +95,10 @@ func Test_RefreshConfigFromLdxSync_NoFolders(t *testing.T) {
 	// No API calls should be made for empty folder list
 	service.RefreshConfigFromLdxSync(c, []types.Folder{})
 
-	// Verify cache is empty
-	result := c.GetLdxSyncResult(types.FilePath("/nonexistent"))
-	assert.Nil(t, result)
+	// Verify FolderOrgMapping is empty
+	cache := c.GetLdxSyncOrgConfigCache()
+	orgId := cache.GetOrgIdForFolder(types.FilePath("/nonexistent"))
+	assert.Empty(t, orgId)
 }
 
 func Test_RefreshConfigFromLdxSync_SingleFolder_Success(t *testing.T) {
@@ -60,9 +110,8 @@ func Test_RefreshConfigFromLdxSync_SingleFolder_Success(t *testing.T) {
 	workspaceutil.SetupWorkspace(t, c, folderPath)
 	folders := c.Workspace().Folders()
 
-	expectedResult := ldx_sync_config.LdxSyncConfigResult{
-		Error: nil,
-	}
+	expectedOrgId := "test-org-id-123"
+	expectedResult := createLdxSyncResultWithOrg(expectedOrgId)
 
 	// Expect API call with empty preferredOrg (no folder config exists)
 	mockApiClient.EXPECT().
@@ -72,10 +121,10 @@ func Test_RefreshConfigFromLdxSync_SingleFolder_Success(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)
 
-	// Verify result was cached
-	cachedResult := c.GetLdxSyncResult(folderPath)
-	require.NotNil(t, cachedResult)
-	assert.Equal(t, expectedResult, *cachedResult)
+	// Verify FolderOrgMapping was populated
+	cache := c.GetLdxSyncOrgConfigCache()
+	orgId := cache.GetOrgIdForFolder(folderPath)
+	assert.Equal(t, expectedOrgId, orgId)
 }
 
 func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
@@ -96,9 +145,8 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	require.NoError(t, err)
 
-	expectedResult := ldx_sync_config.LdxSyncConfigResult{
-		Error: nil,
-	}
+	expectedOrgId := "resolved-org-id"
+	expectedResult := createLdxSyncResultWithOrg(expectedOrgId)
 
 	// Expect API call with preferredOrg from folder config
 	mockApiClient.EXPECT().
@@ -108,10 +156,10 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)
 
-	// Verify result was cached
-	cachedResult := c.GetLdxSyncResult(folderPath)
-	require.NotNil(t, cachedResult)
-	assert.Equal(t, expectedResult, *cachedResult)
+	// Verify FolderOrgMapping was populated
+	cache := c.GetLdxSyncOrgConfigCache()
+	orgId := cache.GetOrgIdForFolder(folderPath)
+	assert.Equal(t, expectedOrgId, orgId)
 }
 
 func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
@@ -126,9 +174,9 @@ func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 	workspaceutil.SetupWorkspace(t, c, folder1Path, folder2Path, folder3Path)
 	folders := c.Workspace().Folders()
 
-	result1 := ldx_sync_config.LdxSyncConfigResult{Error: nil}
-	result2 := ldx_sync_config.LdxSyncConfigResult{Error: nil}
-	result3 := ldx_sync_config.LdxSyncConfigResult{Error: nil}
+	result1 := createLdxSyncResultWithOrg("org-1")
+	result2 := createLdxSyncResultWithOrg("org-2")
+	result3 := createLdxSyncResultWithOrg("org-3")
 
 	// Expect API calls for all folders (order may vary due to parallel execution)
 	mockApiClient.EXPECT().
@@ -144,10 +192,11 @@ func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)
 
-	// Verify all results were cached
-	assert.NotNil(t, c.GetLdxSyncResult(folder1Path))
-	assert.NotNil(t, c.GetLdxSyncResult(folder2Path))
-	assert.NotNil(t, c.GetLdxSyncResult(folder3Path))
+	// Verify all FolderOrgMappings were populated
+	cache := c.GetLdxSyncOrgConfigCache()
+	assert.Equal(t, "org-1", cache.GetOrgIdForFolder(folder1Path))
+	assert.Equal(t, "org-2", cache.GetOrgIdForFolder(folder2Path))
+	assert.Equal(t, "org-3", cache.GetOrgIdForFolder(folder3Path))
 }
 
 func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
@@ -159,9 +208,8 @@ func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
 	workspaceutil.SetupWorkspace(t, c, folderPath)
 	folders := c.Workspace().Folders()
 
-	apiError := errors.New("LDX-Sync API error")
 	errorResult := ldx_sync_config.LdxSyncConfigResult{
-		Error: apiError,
+		Error: assert.AnError,
 	}
 
 	mockApiClient.EXPECT().
@@ -171,131 +219,10 @@ func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)
 
-	// Verify error result was NOT cached
-	cachedResult := c.GetLdxSyncResult(folderPath)
-	assert.Nil(t, cachedResult, "Error results should not be cached")
-}
-
-func Test_ResolveOrg_WithCachedResult_Success(t *testing.T) {
-	c := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
-
-	folderPath := types.FilePath("/test/folder")
-
-	// Pre-populate cache
-	cachedResult := ldx_sync_config.LdxSyncConfigResult{
-		Error: nil,
-	}
-	c.UpdateLdxSyncCache(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
-		folderPath: &cachedResult,
-	})
-
-	expectedOrg := ldx_sync_config.Organization{
-		Id: "resolved-org-id",
-	}
-
-	// Expect ResolveOrgFromUserConfig to be called with cached result
-	mockApiClient.EXPECT().
-		ResolveOrgFromUserConfig(c.Engine(), cachedResult).
-		Return(expectedOrg, nil)
-
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	org, err := service.ResolveOrg(c, folderPath)
-
-	require.NoError(t, err)
-	assert.Equal(t, expectedOrg.Id, org.Id)
-}
-
-func Test_ResolveOrg_WithCachedResult_Error(t *testing.T) {
-	c := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
-
-	folderPath := types.FilePath("/test/folder")
-
-	// Pre-populate cache
-	cachedResult := ldx_sync_config.LdxSyncConfigResult{
-		Error: nil,
-	}
-	c.UpdateLdxSyncCache(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
-		folderPath: &cachedResult,
-	})
-
-	resolveError := errors.New("failed to resolve org")
-
-	// Expect ResolveOrgFromUserConfig to return error
-	mockApiClient.EXPECT().
-		ResolveOrgFromUserConfig(c.Engine(), cachedResult).
-		Return(ldx_sync_config.Organization{}, resolveError)
-
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	org, err := service.ResolveOrg(c, folderPath)
-
-	assert.Error(t, err)
-	assert.Equal(t, resolveError, err)
-	assert.Empty(t, org.Id)
-}
-
-func Test_ResolveOrg_NoCachedResult_FallbackToGlobal(t *testing.T) {
-	c := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
-
-	folderPath := types.FilePath("/test/folder")
-	// Use valid UUID format to avoid API resolution issues in tests
-	globalOrg := "5b1ddf00-0000-0000-0000-000000000099"
-
-	// Set global org
-	c.SetOrganization(globalOrg)
-
-	// No cache entry exists
-	// No API calls expected - should fall back directly
-
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	org, err := service.ResolveOrg(c, folderPath)
-
-	require.NoError(t, err)
-	assert.Equal(t, globalOrg, org.Id)
-}
-
-func Test_ResolveOrg_MultipleFolders_DifferentCachedResults(t *testing.T) {
-	c := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
-
-	folder1Path := types.FilePath("/test/folder1")
-	folder2Path := types.FilePath("/test/folder2")
-
-	cachedResult1 := ldx_sync_config.LdxSyncConfigResult{Error: nil}
-	cachedResult2 := ldx_sync_config.LdxSyncConfigResult{Error: nil}
-
-	// Pre-populate cache with different results
-	c.UpdateLdxSyncCache(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult{
-		folder1Path: &cachedResult1,
-		folder2Path: &cachedResult2,
-	})
-
-	org1 := ldx_sync_config.Organization{Id: "org-1"}
-	org2 := ldx_sync_config.Organization{Id: "org-2"}
-
-	mockApiClient.EXPECT().
-		ResolveOrgFromUserConfig(c.Engine(), cachedResult1).
-		Return(org1, nil)
-
-	mockApiClient.EXPECT().
-		ResolveOrgFromUserConfig(c.Engine(), cachedResult2).
-		Return(org2, nil)
-
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-
-	resolvedOrg1, err1 := service.ResolveOrg(c, folder1Path)
-	require.NoError(t, err1)
-	assert.Equal(t, org1.Id, resolvedOrg1.Id)
-
-	resolvedOrg2, err2 := service.ResolveOrg(c, folder2Path)
-	require.NoError(t, err2)
-	assert.Equal(t, org2.Id, resolvedOrg2.Id)
+	// Verify FolderOrgMapping was NOT populated for error result
+	cache := c.GetLdxSyncOrgConfigCache()
+	orgId := cache.GetOrgIdForFolder(folderPath)
+	assert.Empty(t, orgId, "Error results should not populate FolderOrgMapping")
 }
 
 func Test_DefaultLdxSyncApiClient_GetUserConfigForProject(t *testing.T) {
@@ -310,22 +237,6 @@ func Test_DefaultLdxSyncApiClient_GetUserConfigForProject(t *testing.T) {
 
 	// We expect an error since we're not actually authenticated
 	assert.NotNil(t, result.Error, "Expected error from real API call without authentication")
-}
-
-func Test_DefaultLdxSyncApiClient_ResolveOrgFromUserConfig(t *testing.T) {
-	c := testutil.UnitTest(t)
-	client := &DefaultLdxSyncApiClient{}
-
-	// Create a valid LdxSyncConfigResult with proper structure
-	// Uses helper from folder_handler_test.go (same package)
-	expectedOrgId := "test-org-from-ldx-sync"
-	cachedResult := createLdxSyncResult(expectedOrgId, "Test Org", "test-org", true)
-
-	// Call real GAF function through wrapper
-	org, err := client.ResolveOrgFromUserConfig(c.Engine(), *cachedResult)
-
-	require.NoError(t, err)
-	assert.Equal(t, expectedOrgId, org.Id)
 }
 
 func Test_NewLdxSyncService_UsesDefaultApiClient(t *testing.T) {
@@ -366,7 +277,8 @@ func Test_RefreshConfigFromLdxSync_EmptyFolderPath(t *testing.T) {
 	workspaceutil.SetupWorkspace(t, c, emptyPath)
 	folders := c.Workspace().Folders()
 
-	expectedResult := ldx_sync_config.LdxSyncConfigResult{Error: nil}
+	expectedOrgId := "org-for-empty-path"
+	expectedResult := createLdxSyncResultWithOrg(expectedOrgId)
 
 	// Should handle empty path gracefully
 	mockApiClient.EXPECT().
@@ -376,39 +288,19 @@ func Test_RefreshConfigFromLdxSync_EmptyFolderPath(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)
 
-	// Should cache even with empty path
-	cachedResult := c.GetLdxSyncResult(emptyPath)
-	assert.NotNil(t, cachedResult)
+	// Should populate FolderOrgMapping even with empty path
+	cache := c.GetLdxSyncOrgConfigCache()
+	orgId := cache.GetOrgIdForFolder(emptyPath)
+	assert.Equal(t, expectedOrgId, orgId)
 }
 
-func Test_ResolveOrg_EmptyFolderPath_FallbackToGlobal(t *testing.T) {
+func Test_GetOrgIdForFolder_EmptyFolderPath_ReturnsEmpty(t *testing.T) {
 	c := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
 
-	emptyPath := types.FilePath("")
-	globalOrg := "5b1ddf00-0000-0000-0000-000000000088"
-	c.SetOrganization(globalOrg)
+	// Don't populate cache
+	cache := c.GetLdxSyncOrgConfigCache()
+	orgId := cache.GetOrgIdForFolder(types.FilePath(""))
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	org, err := service.ResolveOrg(c, emptyPath)
-
-	require.NoError(t, err)
-	assert.Equal(t, globalOrg, org.Id)
-}
-
-func Test_ResolveOrg_EmptyGlobalOrg_ReturnsEmptyId(t *testing.T) {
-	c := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
-
-	folderPath := types.FilePath("/test/folder")
-	// Don't set any organization - empty string
-
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	org, err := service.ResolveOrg(c, folderPath)
-
-	require.NoError(t, err)
-	// Should return empty org ID when no global org is set
-	assert.Empty(t, org.Id)
+	// Should return empty string when no mapping exists
+	assert.Empty(t, orgId)
 }

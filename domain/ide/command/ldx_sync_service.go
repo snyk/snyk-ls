@@ -25,7 +25,6 @@ import (
 	"sync"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -36,7 +35,6 @@ import (
 // LdxSyncApiClient abstracts the external LDX-Sync API calls for testability
 type LdxSyncApiClient interface {
 	GetUserConfigForProject(engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult
-	ResolveOrgFromUserConfig(engine workflow.Engine, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error)
 }
 
 // DefaultLdxSyncApiClient wraps the real GAF LDX-Sync functions
@@ -47,15 +45,9 @@ func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(engine workflow.Engine
 	return ldx_sync_config.GetUserConfigForProject(engine, projectPath, preferredOrg)
 }
 
-// ResolveOrgFromUserConfig calls the GAF ldx_sync_config package
-func (a *DefaultLdxSyncApiClient) ResolveOrgFromUserConfig(engine workflow.Engine, result ldx_sync_config.LdxSyncConfigResult) (ldx_sync_config.Organization, error) {
-	return ldx_sync_config.ResolveOrgFromUserConfig(engine, result)
-}
-
 // LdxSyncService provides LDX-Sync configuration refresh functionality
 type LdxSyncService interface {
 	RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder)
-	ResolveOrg(c *config.Config, folderPath types.FilePath) (ldx_sync_config.Organization, error)
 }
 
 // DefaultLdxSyncService is the default implementation of LdxSyncService
@@ -77,8 +69,10 @@ func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient) LdxSyncService {
 	}
 }
 
-// RefreshConfigFromLdxSync refreshes the user configuration from LDX-Sync for all workspace folders in parallel
-// Results are cached in memory for later use by ResolveOrg
+// RefreshConfigFromLdxSync refreshes the user configuration from LDX-Sync for all workspace folders in parallel.
+// Results are stored in the LDXSyncConfigCache:
+// - FolderOrgMapping: maps folder paths to their resolved org IDs
+// - Configs: maps org IDs to their org-level settings
 func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder) {
 	logger := c.Logger().With().Str("method", "RefreshConfigFromLdxSync").Logger()
 	engine := c.Engine()
@@ -128,20 +122,18 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 	// Wait for all goroutines to complete
 	wg.Wait()
 
-	// Update cache with all results
-	c.UpdateLdxSyncCache(results)
-
-	// Update the org config cache and machine config for ConfigResolver
+	// Update the org config cache (including folder-to-org mapping) and machine config
 	s.updateOrgConfigCache(c, results)
 	s.updateMachineConfig(c, results)
 }
 
-// updateOrgConfigCache converts LDX-Sync results to org configs and updates the cache
-// Note: Only org-level settings are stored in the org config cache.
-// Folder-specific settings remain in the raw ldxSyncCache (keyed by folder path)
-// and are accessed via ExtractFolderSettings when needed by ConfigResolver.
+// updateOrgConfigCache converts LDX-Sync results to org configs and updates the cache.
+// This populates both:
+// - FolderOrgMapping: folder path → org ID (for callers to look up the resolved org)
+// - Configs: org ID → org-level settings (for ConfigResolver to read settings)
 func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
 	logger := c.Logger().With().Str("method", "updateOrgConfigCache").Logger()
+	cache := c.GetLdxSyncOrgConfigCache()
 
 	for folderPath, result := range results {
 		if result == nil || result.Config == nil {
@@ -157,15 +149,16 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 			continue
 		}
 
+		// Store folder → org mapping for callers to look up
+		cache.SetFolderOrg(folderPath, orgId)
+
 		// Convert to our org config format (org-level settings only)
-		// Folder-specific settings are NOT merged here - they stay in the raw cache
-		// and are extracted per-folder when needed
 		orgConfig := types.ConvertLDXSyncResponseToOrgConfig(orgId, result.Config)
 		if orgConfig == nil {
 			continue
 		}
 
-		// Update the cache
+		// Update the org config in cache
 		c.UpdateLdxSyncOrgConfig(orgConfig)
 
 		logger.Debug().
@@ -212,27 +205,4 @@ func (s *DefaultLdxSyncService) updateMachineConfig(c *config.Config, results ma
 				Msg("Machine config already applied from another folder, skipping machine config cache update")
 		}
 	}
-}
-
-// ResolveOrg retrieves the organization from the cached LDX-Sync result for a folder
-// Falls back to global organization if no cache entry exists
-func (s *DefaultLdxSyncService) ResolveOrg(c *config.Config, folderPath types.FilePath) (ldx_sync_config.Organization, error) {
-	logger := c.Logger().With().Str("method", "ResolveOrg").Logger()
-	gafConfig := c.Engine().GetConfiguration()
-
-	// Get cached result
-	cachedResult := c.GetLdxSyncResult(folderPath)
-
-	// If we have a cached result, use it to resolve the org
-	if cachedResult != nil {
-		return s.apiClient.ResolveOrgFromUserConfig(c.Engine(), *cachedResult)
-	}
-
-	// Fall back to global org if no cache entry
-	fallbackOrg := gafConfig.GetString(configuration.ORGANIZATION)
-	logger.Warn().
-		Str("folder", string(folderPath)).
-		Str("fallbackOrg", fallbackOrg).
-		Msg("No LDX-Sync cache entry found, falling back to global organization")
-	return ldx_sync_config.Organization{Id: fallbackOrg}, nil
 }

@@ -34,7 +34,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -965,11 +964,9 @@ func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
 		RefreshConfigFromLdxSync(setup.c, gomock.Eq([]types.Folder{folder})).
 		Times(1)
 
-	// Expect ResolveOrg to be called when AutoDeterminedOrg is empty
-	mockLdxSyncService.EXPECT().
-		ResolveOrg(setup.c, setup.folderPath).
-		Return(ldx_sync_config.Organization{Id: "auto-determined-org"}, nil).
-		AnyTimes()
+	// Populate FolderOrgMapping so AutoDeterminedOrg can be looked up
+	cache := setup.c.GetLdxSyncOrgConfigCache()
+	cache.SetFolderOrg(setup.folderPath, "auto-determined-org")
 
 	// Call updateFolderConfig with a different org
 	settings := types.Settings{
