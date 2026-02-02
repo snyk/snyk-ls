@@ -304,7 +304,7 @@ func buildRemediationAdvice(
 		upgradePath[1] == dependencyPath[1]
 
 	// Match Legacy logic: check IsUpgradable
-	// IsUpgradable = len(vuln.InitiallyFixedInVersions) > 0
+	// IsUpgradable = len(problem.InitiallyFixedInVersions) > 0
 	// Note: IsPatchable is always false in unified workflow (patches not supported)
 	isUpgradable := len(problem.InitiallyFixedInVersions) > 0
 

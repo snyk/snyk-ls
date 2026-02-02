@@ -109,7 +109,7 @@ func Test_buildUpgradePath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := buildUpgradePath(tt.dependencyPath, tt.finding)
-			assert.Equal(t, tt.expectedUpgrade, result)
+			assert.Equal(t, tt.expectedUpgrade, result, tt.description)
 		})
 	}
 }
@@ -120,133 +120,132 @@ func Test_buildRemediationAdvice(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		dependencyPath  []string
 		finding         *testapi.FindingData
-		vuln            *testapi.SnykVulnProblem
-		upgradePath     []any
+		problem         *testapi.SnykVulnProblem
 		ecosystem       string
+		dependencyPath  []string
+		upgradePath     []any
 		expectedMessage string
 		description     string
 	}{
 		{
-			name:           "No remediation when no fixed versions",
-			dependencyPath: []string{"root@1.0.0", "test-package@1.0.0"},
-			finding:        createFindingWithoutUpgradePath(t),
-			vuln: &testapi.SnykVulnProblem{
+			name:        "No remediation when no fixed versions",
+			finding:     createFindingWithoutUpgradePath(t),
+			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
 				InitiallyFixedInVersions: []string{},
 			},
+			ecosystem:       "npm",
+			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false},
-			ecosystem:       "npm",
 			expectedMessage: "No remediation advice available",
-			description:     "Should return no remediation message when no fix available",
+			description: "Should return no remediation message when no fix available",
 		},
 		{
-			name:           "Has upgrade message when fix is available",
-			dependencyPath: []string{"root@1.0.0", "test-package@1.0.0"},
-			finding:        createFindingWithoutUpgradePath(t),
-			vuln: &testapi.SnykVulnProblem{
+			name:        "Has upgrade message when fix is available",
+			finding:     createFindingWithoutUpgradePath(t),
+			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
 				InitiallyFixedInVersions: []string{"1.0.1"},
 			},
+			ecosystem:       "npm",
+			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.1"},
-			ecosystem:       "npm",
 			expectedMessage: "Upgrade to test-package@1.0.1",
-			description:     "Should return upgrade message when fix is available",
+			description: "Should return upgrade message when fix is available",
 		},
 		{
-			name:           "Outdated dependency message when upgrade path equals dependency path - npm",
-			dependencyPath: []string{"root@1.0.0", "test-package@1.0.0"},
-			finding:        createFindingWithoutUpgradePath(t),
-			vuln: &testapi.SnykVulnProblem{
+			name:        "Outdated dependency message when upgrade path equals dependency path - npm",
+			finding:     createFindingWithoutUpgradePath(t),
+			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
 				InitiallyFixedInVersions: []string{"1.0.1"},
 			},
-			upgradePath:     []any{false, "test-package@1.0.0"}, // Same as dependencyPath[1]
 			ecosystem:       "npm",
+			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
+			upgradePath:     []any{false, "test-package@1.0.0"}, // Same as dependencyPath[1]
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try relocking your lockfile or deleting node_modules and reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description:     "Should return npm-specific outdated dependency message",
+			description: "Should return npm-specific outdated dependency message",
 		},
 		{
-			name:           "Outdated dependency message - yarn ecosystem",
-			dependencyPath: []string{"root@1.0.0", "test-package@1.0.0"},
-			finding:        createFindingWithoutUpgradePath(t),
-			vuln: &testapi.SnykVulnProblem{
+			name:        "Outdated dependency message - yarn ecosystem",
+			finding:     createFindingWithoutUpgradePath(t),
+			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
 				InitiallyFixedInVersions: []string{"1.0.1"},
 			},
-			upgradePath:     []any{false, "test-package@1.0.0"},
 			ecosystem:       "yarn",
+			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
+			upgradePath:     []any{false, "test-package@1.0.0"},
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try relocking your lockfile or deleting node_modules and reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description:     "Should return yarn-specific outdated dependency message (same as npm)",
+			description: "Should return yarn-specific outdated dependency message (same as npm)",
 		},
 		{
-			name:           "Outdated dependency message - maven ecosystem",
-			dependencyPath: []string{"root@1.0.0", "test-package@1.0.0"},
-			finding:        createFindingWithoutUpgradePath(t),
-			vuln: &testapi.SnykVulnProblem{
+			name:        "Outdated dependency message - maven ecosystem",
+			finding:     createFindingWithoutUpgradePath(t),
+			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
 				InitiallyFixedInVersions: []string{"1.0.1"},
 			},
-			upgradePath:     []any{false, "test-package@1.0.0"},
 			ecosystem:       "maven",
+			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
+			upgradePath:     []any{false, "test-package@1.0.0"},
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description:     "Should return maven-specific outdated dependency message (different from npm)",
+			description: "Should return maven-specific outdated dependency message (different from npm)",
 		},
 		{
-			name:           "Outdated dependency message - pip ecosystem",
-			dependencyPath: []string{"root@1.0.0", "test-package@1.0.0"},
-			finding:        createFindingWithoutUpgradePath(t),
-			vuln: &testapi.SnykVulnProblem{
+			name:        "Outdated dependency message - pip ecosystem",
+			finding:     createFindingWithoutUpgradePath(t),
+			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
 				InitiallyFixedInVersions: []string{"1.0.1"},
 			},
-			upgradePath:     []any{false, "test-package@1.0.0"},
 			ecosystem:       "pip",
+			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
+			upgradePath:     []any{false, "test-package@1.0.0"},
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description:     "Should return pip-specific outdated dependency message (different from npm)",
+			description: "Should return pip-specific outdated dependency message (different from npm)",
 		},
 		{
-			name:           "Edge case: upgradable but no upgrade path built",
-			dependencyPath: []string{"root@1.0.0", "test-package@1.0.0"},
-			finding:        createFindingWithoutUpgradePath(t),
-			vuln: &testapi.SnykVulnProblem{
+			name:        "Edge case: upgradable but no upgrade path built",
+			finding:     createFindingWithoutUpgradePath(t),
+			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
 				InitiallyFixedInVersions: []string{"1.0.1"}, // Has fixed versions
 			},
-			upgradePath:     []any{false}, // But upgrade path is empty (only [false])
 			ecosystem:       "npm",
-			expectedMessage: "", // Current behavior: returns empty when isUpgradable but no upgrade path (rare edge case per prod code)
-			description:     "Should return empty string when isUpgradable=true but upgradePath is empty (rare scenario where path construction fails)",
+			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
+			upgradePath:     []any{false}, // But upgrade path is empty (only [false])
+			expectedMessage: "",           // Current behavior: returns empty when isUpgradable but no upgrade path (rare edge case per prod code)
+			description: "Should return empty string when isUpgradable=true but upgradePath is empty (rare scenario where path construction fails)",
 		},
 		{
-			name:           "Edge case: upgrade path for different package than vulnerable one",
-			dependencyPath: []string{"root@1.0.0", "test-package@1.0.0"},
-			finding:        createFindingWithUpgradePaths(t, "other-pkg", [][]string{{"root@1.0.0", "other-pkg@2.0.0"}}),
-			vuln: &testapi.SnykVulnProblem{
+			name:        "Edge case: upgrade path for different package than vulnerable one",
+			finding:     createFindingWithUpgradePaths(t, "other-pkg", [][]string{{"root@1.0.0", "other-pkg@2.0.0"}}),
+			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
 				InitiallyFixedInVersions: []string{"1.0.1"},
 			},
-			upgradePath:     []any{false, "other-pkg@2.0.0"}, // Upgrade path is for wrong package (unexpected/malformed)
 			ecosystem:       "npm",
-			expectedMessage: "Upgrade to other-pkg@2.0.0", // Should still return the upgrade message even if mismatch
-			description:     "Should return upgrade message even when upgrade path mismatches vulnerable package (malformed data tolerance)",
+			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
+			upgradePath:     []any{false, "other-pkg@2.0.0"}, // Upgrade path is for wrong package (unexpected/malformed)
+			expectedMessage: "Upgrade to other-pkg@2.0.0",    // Should still return the upgrade message even if mismatch
+			description: "Should return upgrade message even when upgrade path mismatches vulnerable package (malformed data tolerance)",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := buildRemediationAdvice(tt.finding, tt.vuln, tt.ecosystem, tt.dependencyPath, tt.upgradePath)
-
-			assert.Equal(t, tt.expectedMessage, result)
+			result := buildRemediationAdvice(tt.finding, tt.problem, tt.ecosystem, tt.dependencyPath, tt.upgradePath)
+			assert.Equal(t, tt.expectedMessage, result, tt.description)
 		})
 	}
 }
