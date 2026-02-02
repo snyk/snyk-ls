@@ -588,6 +588,8 @@ func Test_prepareScanCommand(t *testing.T) {
 
 	t.Run("Uses --all-projects by default", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		// Clear the default org set by UnitTest to test command without --org parameter
+		c.SetOrganization("")
 		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
 
 		settings := config.CliSettings{
