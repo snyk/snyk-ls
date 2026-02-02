@@ -23,6 +23,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
+//go:generate go tool github.com/golang/mock/mockgen -source=scan.go -destination mock_types/scan_mock.go -package mock_types
+
 type ScanResultProcessor = func(ctx context.Context, scanData ScanData)
 
 func NoopResultProcessor(_ context.Context, _ ScanData) {}
@@ -40,21 +42,15 @@ type ScanData struct {
 }
 
 type Scanner interface {
-	// Scan scans a workspace folder or file for issues.
-	// - objectToScan: The target file or folder to scan. If blank or equal to workspaceFolderConfig.FolderPath,
-	//   a full workspace scan is performed.
-	// - workspaceFolderConfig: The workspace folder configuration, providing org settings and scan context.
-	Scan(ctx context.Context, objectToScan FilePath, processResults ScanResultProcessor, workspaceFolderConfig *FolderConfig)
+	// Scan scans a workspace folder or file for issues, given its path. The folderConfig provides workspace context
+	// including the workspace folder path (folderConfig.FolderPath) for organization lookup and other settings.
+	Scan(ctx context.Context, pathToScan FilePath, processResults ScanResultProcessor, workspaceFolderConfig *FolderConfig)
 }
 
-//go:generate go tool github.com/golang/mock/mockgen -source=scan.go -destination mock_types/scan_mock.go -package mock_types
-
 type ProductScanner interface {
-	// Scan scans a workspace folder or file for issues.
-	// - objectToScan: The target file or folder to scan. If blank or equal to workspaceFolderConfig.FolderPath,
-	//   a full workspace scan is performed.
-	// - workspaceFolderConfig: The workspace folder configuration, providing org settings and scan context.
-	Scan(ctx context.Context, objectToScan FilePath, workspaceFolderConfig *FolderConfig) (issues []Issue, err error)
+	// Scan scans a workspace folder or file for issues, given its path. The folderConfig provides workspace context
+	// including the workspace folder path (folderConfig.FolderPath) for organization lookup and other settings.
+	Scan(ctx context.Context, pathToScan FilePath, workspaceFolderConfig *FolderConfig) (issues []Issue, err error)
 	IsEnabled() bool
 	Product() product.Product
 }

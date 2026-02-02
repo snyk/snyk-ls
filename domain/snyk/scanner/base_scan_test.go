@@ -32,15 +32,15 @@ import (
 )
 
 func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T) {
-	// All scanners now receive baseFolderPath as objectToScan.
-	// The Code scanner determines it's a full workspace scan because objectToScan == workspaceFolderConfig.FolderPath.
+	// All scanners now receive baseFolderPath as pathToScan.
+	// The Code scanner determines it's a full workspace scan because pathToScan == workspaceFolderConfig.FolderPath.
 	testCases := []struct {
 		name    string
 		product product.Product
 	}{
-		{name: "Code scanner receives baseFolderPath as objectToScan", product: product.ProductCode},
-		{name: "OSS scanner receives baseFolderPath as objectToScan", product: product.ProductOpenSource},
-		{name: "IaC scanner receives baseFolderPath as objectToScan", product: product.ProductInfrastructureAsCode},
+		{name: "Code scanner receives baseFolderPath as pathToScan", product: product.ProductCode},
+		{name: "OSS scanner receives baseFolderPath as pathToScan", product: product.ProductOpenSource},
+		{name: "IaC scanner receives baseFolderPath as pathToScan", product: product.ProductInfrastructureAsCode},
 	}
 
 	for _, tc := range testCases {
@@ -58,6 +58,7 @@ func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T
 				FolderPath:          workspacePath,
 				ReferenceFolderPath: baseFolderPath,
 				PreferredOrg:        expectedOrg,
+				OrgSetByUser:        true,
 			}
 
 			// Create mock scanner with expectations
@@ -68,7 +69,7 @@ func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T
 			// Expect Scan to be called with baseFolderPath and a config where FolderPath == baseFolderPath
 			mockScanner.EXPECT().Scan(
 				gomock.Any(),
-				baseFolderPath, // objectToScan should be baseFolderPath
+				baseFolderPath, // pathToScan should be baseFolderPath
 				gomock.Any(),   // workspaceFolderConfig
 			).DoAndReturn(func(_ interface{}, path types.FilePath, cfg *types.FolderConfig) ([]types.Issue, error) {
 				// Verify the config passed has the correct values
@@ -77,13 +78,12 @@ func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T
 				return []types.Issue{}, nil
 			}).Times(1)
 
-			scanner, _ := setupScannerWithMock(t, c, ctrl, mockScanner)
-			dcs := scanner.(*DelegatingConcurrentScanner)
+			dcs := setupScannerWithMock(t, c, mockScanner)
 
 			// Act
 			err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
 
-			// Assert
+			// Check that there was no error. Note the actual test behavior is verified by the mock scanner.
 			require.NoError(t, err)
 		})
 	}
@@ -103,6 +103,7 @@ func TestScanBaseBranch_PreservesOriginalFolderConfig(t *testing.T) {
 		FolderPath:          workspacePath,
 		ReferenceFolderPath: baseFolderPath,
 		PreferredOrg:        expectedOrg,
+		OrgSetByUser:        true,
 	}
 
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
@@ -110,14 +111,14 @@ func TestScanBaseBranch_PreservesOriginalFolderConfig(t *testing.T) {
 	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-	scanner, _ := setupScannerWithMock(t, c, ctrl, mockScanner)
-	dcs := scanner.(*DelegatingConcurrentScanner)
+	dcs := setupScannerWithMock(t, c, mockScanner)
 
 	// Act
 	err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
 
-	// Assert
+	// // Check that there was no error. Note the actual test behavior is verified by the mock scanner.
 	require.NoError(t, err)
+
 	// Verify original folderConfig was NOT modified
 	assert.Equal(t, workspacePath, folderConfig.FolderPath, "Original folderConfig.FolderPath should not be modified")
 	assert.Equal(t, baseFolderPath, folderConfig.ReferenceFolderPath, "Original folderConfig.ReferenceFolderPath should not be modified")
@@ -132,9 +133,9 @@ func TestScanBaseBranch_NilFolderConfig_ReturnsError(t *testing.T) {
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
 	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
 	// Scan should NOT be called when folderConfig is nil
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
-	scanner, _ := setupScannerWithMock(t, c, ctrl, mockScanner)
-	dcs := scanner.(*DelegatingConcurrentScanner)
+	dcs := setupScannerWithMock(t, c, mockScanner)
 
 	// Act
 	err := dcs.scanBaseBranch(t.Context(), mockScanner, nil, nil)
@@ -162,19 +163,19 @@ func TestScanBaseBranch_SkipsWhenSnapshotExists(t *testing.T) {
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
 	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
 	// Scan should NOT be called when snapshot exists
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
 	// Create a mock persister that reports snapshot exists
 	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
 	mockPersister.EXPECT().Exists(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
-	scanner, _ := setupScannerWithMock(t, c, ctrl, mockScanner)
-	dcs := scanner.(*DelegatingConcurrentScanner)
+	dcs := setupScannerWithMock(t, c, mockScanner)
 	dcs.scanPersister = mockPersister
 
 	// Act
 	err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
 
-	// Assert
+	// Check that there was no error. Note the actual test behavior is verified by the mock scanner.
 	require.NoError(t, err)
 }
 
@@ -221,20 +222,20 @@ func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) 
 				return []types.Issue{}, nil
 			}).Times(1)
 
-			scanner, _ := setupScannerWithMock(t, c, ctrl, mockScanner)
-			dcs := scanner.(*DelegatingConcurrentScanner)
+			dcs := setupScannerWithMock(t, c, mockScanner)
 
 			// Act
 			err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
 
-			// Assert
+			// Check that there was no error. Note the actual test behavior is verified by the mock scanner.
 			require.NoError(t, err)
 		})
 	}
 }
 
 // setupScannerWithMock creates a scanner with a mock ProductScanner for testing
-func setupScannerWithMock(t *testing.T, c *config.Config, ctrl *gomock.Controller, mockScanner *mock_types.MockProductScanner) (Scanner, ScanNotifier) {
+func setupScannerWithMock(t *testing.T, c *config.Config, mockScanner *mock_types.MockProductScanner) *DelegatingConcurrentScanner {
 	t.Helper()
-	return setupScanner(t, c, mockScanner)
+	scanner, _ := setupScanner(t, c, mockScanner)
+	return scanner.(*DelegatingConcurrentScanner)
 }

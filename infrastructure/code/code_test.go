@@ -1029,7 +1029,7 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 }
 
 // Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath verifies that createCodeConfig uses the org from the
-// passed FolderConfig parameter, not derived from the objectToScan path or global config.
+// passed FolderConfig parameter, not derived from the pathToScan path or global config.
 // This is critical for delta scans where the scan path is a temp directory but the org
 // should come from the original workspace's FolderConfig.
 func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {

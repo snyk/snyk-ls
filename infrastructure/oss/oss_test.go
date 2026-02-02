@@ -337,7 +337,7 @@ func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
 }
 
 // Test_Scan_UsesOrgFromFolderConfigNotFromPath verifies that the scanner uses the org from the
-// passed FolderConfig parameter, not derived from the objectToScan path or global config.
+// passed FolderConfig parameter, not derived from the pathToScan path or global config.
 // This is critical for delta scans where the scan path is a temp directory but the org
 // should come from the original workspace's FolderConfig.
 func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
@@ -614,10 +614,11 @@ func TestCLIScanner_ostestScan_AddsFlagSetAndAllowsUnknownFlags(t *testing.T) {
 	}
 
 	workDir := types.FilePath(t.TempDir())
+	folderConfig := &types.FolderConfig{FolderPath: workDir}
 	path := types.FilePath(filepath.Join(string(workDir), "package.json"))
 
 	cmdWithoutFlag := []string{"snyk", "test"}
-	_, err := cliScanner.ostestScan(context.Background(), path, cmdWithoutFlag, workDir, gotenv.Env{})
+	_, err := cliScanner.ostestScan(context.Background(), path, cmdWithoutFlag, folderConfig, gotenv.Env{})
 	require.NoError(t, err)
 
 	cmdWithFlag := []string{"snyk", "test", "--definitely-unknown-flag"}
@@ -628,7 +629,7 @@ func TestCLIScanner_ostestScan_AddsFlagSetAndAllowsUnknownFlags(t *testing.T) {
 	} else {
 		cmdWithFlag = append(cmdWithFlag, "--"+boolFlag.Name)
 	}
-	_, err = cliScanner.ostestScan(context.Background(), path, cmdWithFlag, workDir, gotenv.Env{})
+	_, err = cliScanner.ostestScan(context.Background(), path, cmdWithFlag, folderConfig, gotenv.Env{})
 	require.NoError(t, err)
 
 	require.Len(t, capturedConfigs, 2)
@@ -658,6 +659,7 @@ func TestCLIScanner_ostestScan_SetsSubprocessEnvironment(t *testing.T) {
 	}
 
 	workDir := types.FilePath(t.TempDir())
+	folderConfig := &types.FolderConfig{FolderPath: workDir}
 	targetPath := types.FilePath(filepath.Join(string(workDir), "package.json"))
 	cmd := []string{"snyk", "test"}
 	inputEnv := gotenv.Env{
@@ -665,7 +667,7 @@ func TestCLIScanner_ostestScan_SetsSubprocessEnvironment(t *testing.T) {
 		"MULTI":  "line1\nline2",
 	}
 
-	_, err := cliScanner.ostestScan(context.Background(), targetPath, cmd, workDir, inputEnv)
+	_, err := cliScanner.ostestScan(context.Background(), targetPath, cmd, folderConfig, inputEnv)
 	require.NoError(t, err)
 	require.NotNil(t, capturedConfig)
 

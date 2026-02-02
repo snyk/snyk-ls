@@ -100,8 +100,8 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 }
 
 // Scan implements types.ProductScanner.
-// For CLI-based scanners, objectToScan is the target file or folder to scan.
-func (iac *Scanner) Scan(ctx context.Context, objectToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+// For CLI-based scanners, pathToScan is the target file or folder to scan.
+func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	c := config.CurrentConfig()
 
 	// Log scan type and paths
@@ -112,7 +112,7 @@ func (iac *Scanner) Scan(ctx context.Context, objectToScan types.FilePath, works
 	workspaceFolder := workspaceFolderConfig.FolderPath
 	logger := c.Logger().With().
 		Str("method", "iac.Scan").
-		Str("objectToScan", string(objectToScan)).
+		Str("pathToScan", string(pathToScan)).
 		Str("workspaceFolder", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
@@ -132,14 +132,14 @@ func (iac *Scanner) Scan(ctx context.Context, objectToScan types.FilePath, works
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	documentURI := uri.PathToUri(objectToScan) // todo get rid of lsp dep
+	documentURI := uri.PathToUri(pathToScan) // todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
 		logger.Debug().Msg("IAC scanner: skipping unsupported file/directory")
 		return issues, nil
 	}
 	p := progress.NewTracker(true) // todo - get progress trackers via DI
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
-	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(objectToScan))
+	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(pathToScan))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")
 	iac.mutex.Lock()
 	i := scanCount
@@ -164,7 +164,7 @@ func (iac *Scanner) Scan(ctx context.Context, objectToScan types.FilePath, works
 	if err != nil {
 		noCancellation := ctx.Err() == nil
 		if noCancellation { // Only reports errors that are not intentional cancellations
-			iac.errorReporter.CaptureErrorAndReportAsIssue(objectToScan, err)
+			iac.errorReporter.CaptureErrorAndReportAsIssue(pathToScan, err)
 		} else { // If the scan was canceled, return empty results
 			return issues, nil
 		}
@@ -288,19 +288,8 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI, workspaceFolderConfig *types.Fol
 		path = ""
 	}
 
-	// Get organization from folder config instead of global config
-	org := iac.c.FolderConfigOrganization(workspaceFolderConfig)
-
-	cmd := []string{config.CurrentConfig().CliSettings().Path(), "iac", "test", path, "--json"}
-	if org != "" {
-		cmd = append(cmd, "--org="+org)
-	}
-
-	// Add other config parameters (like --insecure) but not --org since we handle it explicitly
-	settings := config.CurrentConfig().CliSettings()
-	if settings.Insecure {
-		cmd = append(cmd, "--insecure")
-	}
+	cmd := []string{iac.c.CliSettings().Path(), "iac", "test", path, "--json"}
+	cmd = iac.cli.ExpandParametersFromConfig(cmd, workspaceFolderConfig)
 
 	iac.c.Logger().Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd

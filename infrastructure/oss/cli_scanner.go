@@ -156,8 +156,8 @@ func (cliScanner *CLIScanner) Product() product.Product {
 }
 
 // Scan implements types.ProductScanner.
-// For CLI-based scanners, objectToScan is the target file or folder to scan.
-func (cliScanner *CLIScanner) Scan(ctx context.Context, objectToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+// For CLI-based scanners, pathToScan is the target file or folder to scan.
+func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	if workspaceFolderConfig == nil {
 		return nil, errors.New("workspaceFolderConfig is required")
 	}
@@ -169,7 +169,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, objectToScan types.FileP
 	}
 	workspaceFolder := workspaceFolderConfig.FolderPath
 	logger := cliScanner.getLogger(ctx).With().
-		Str("objectToScan", string(objectToScan)).
+		Str("pathToScan", string(pathToScan)).
 		Str("workspaceFolder", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
@@ -179,7 +179,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, objectToScan types.FileP
 	ctx = cliScanner.enrichContext(ctx)
 
 	// Add path to context so it can be used by scheduled scans
-	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, objectToScan)
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, pathToScan)
 
 	{
 		deps, found := ctx2.DependenciesFromContext(ctx)
@@ -194,7 +194,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, objectToScan types.FileP
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
-	cliPathScan := cliScanner.isSupported(objectToScan)
+	cliPathScan := cliScanner.isSupported(pathToScan)
 	if !cliPathScan {
 		logger.Debug().Msg("OSS scanner: skipping unsupported file/directory")
 		return issues, nil
@@ -288,14 +288,14 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	if useLegacyScan {
 		logger.Info().Msg("⚠️ using legacy OSS scanner")
 
-		output, err = cliScanner.legacyScan(ctx, path, cmd, workspaceFolder, env)
+		output, err = cliScanner.legacyScan(ctx, path, cmd, folderConfig, env)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
 			return []types.Issue{}, err
 		}
 	} else {
 		logger.Info().Msg("🐉🪰using new ostest scanner")
-		output, err = cliScanner.ostestScan(ctx, path, cmd, workspaceFolder, env)
+		output, err = cliScanner.ostestScan(ctx, path, cmd, folderConfig, env)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
 			return []types.Issue{}, err
@@ -318,13 +318,13 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) legacyScan(ctx context.Context, path types.FilePath, cmd []string, workDir types.FilePath, env gotenv.Env) ([]byte, error) {
+func (cliScanner *CLIScanner) legacyScan(ctx context.Context, pathToScan types.FilePath, cmd []string, folderConfig *types.FolderConfig, env gotenv.Env) ([]byte, error) {
 	logger := cliScanner.config.Logger().With().Str("method", "cliScanner.legacyScan").Logger()
-	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir, env)
+	res, scanErr := cliScanner.cli.Execute(ctx, cmd, folderConfig.FolderPath, env)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
 		if noCancellation {
-			cliFailed, handledErr := cliScanner.handleError(path, scanErr, res, cmd)
+			cliFailed, handledErr := cliScanner.handleError(pathToScan, scanErr, res, cmd)
 			if cliFailed {
 				return nil, handledErr
 			}
@@ -387,17 +387,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		"--json",
 	}
 
-	// Get organization from folder config instead of global config
-	org := cliScanner.config.FolderConfigOrganization(folderConfig)
-	if org != "" {
-		cmd = append(cmd, "--org="+org)
-	}
-
-	// Add other config parameters (like --insecure) but not --org since we handle it explicitly
-	settings := cliScanner.config.CliSettings()
-	if settings.Insecure {
-		cmd = append(cmd, "--insecure")
-	}
+	cmd = cliScanner.cli.ExpandParametersFromConfig(cmd, folderConfig)
 
 	args, env := cliScanner.updateArgs(path, args, folderConfig)
 	args = append(args, cliScanner.config.CliSettings().AdditionalOssParameters...)

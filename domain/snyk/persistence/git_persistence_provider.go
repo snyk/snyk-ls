@@ -34,6 +34,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+//go:generate go tool github.com/golang/mock/mockgen -source=git_persistence_provider.go -destination mock_persistence/git_persistence_provider_mock.go -package mock_persistence
+
 const (
 	CacheFolder   = "snyk"
 	SchemaVersion = "v1_1"
@@ -51,8 +53,6 @@ var (
 )
 
 type hashedFolderPath string
-
-//go:generate go tool github.com/golang/mock/mockgen -source=git_persistence_provider.go -destination mock_persistence/scan_persister_mock.go -package mock_persistence
 
 type ScanSnapshotPersister interface {
 	types.ScanSnapshotClearerExister

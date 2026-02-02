@@ -151,9 +151,9 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 
 // Scan implements types.ProductScanner.
 // The Code scanner uses bundle-based incremental scanning:
-//   - If objectToScan is blank or equals workspaceFolderConfig.FolderPath, a full workspace scan is performed.
-//   - Otherwise, objectToScan is treated as a changed file for incremental re-analysis.
-func (sc *Scanner) Scan(ctx context.Context, objectToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+//   - If pathToScan is blank or equals workspaceFolderConfig.FolderPath, a full workspace scan is performed.
+//   - Otherwise, pathToScan is treated as a changed file for incremental re-analysis.
+func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
@@ -162,7 +162,7 @@ func (sc *Scanner) Scan(ctx context.Context, objectToScan types.FilePath, worksp
 	workspaceFolder := workspaceFolderConfig.FolderPath
 	logger := sc.C.Logger().With().
 		Str("method", "code.Scan").
-		Str("objectToScan", string(objectToScan)).
+		Str("pathToScan", string(pathToScan)).
 		Str("workspaceFolder", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
@@ -176,7 +176,7 @@ func (sc *Scanner) Scan(ctx context.Context, objectToScan types.FilePath, worksp
 
 	if workspaceFolderConfig.SastSettings == nil {
 		errMsg := "SAST settings not available"
-		logger.Error().Str("workspaceFolder", string(workspaceFolder)).Msg(errMsg)
+		logger.Error().Msg(errMsg)
 		return issues, errors.New(errMsg)
 	}
 
@@ -191,7 +191,7 @@ func (sc *Scanner) Scan(ctx context.Context, objectToScan types.FilePath, worksp
 	}
 
 	// Determine if this is a full workspace scan or incremental file scan
-	isFullWorkspaceScan := objectToScan == "" || objectToScan == workspaceFolder
+	isFullWorkspaceScan := pathToScan == "" || pathToScan == workspaceFolder
 
 	sc.changedFilesMutex.Lock()
 	if sc.changedPaths[workspaceFolder] == nil {
@@ -203,7 +203,7 @@ func (sc *Scanner) Scan(ctx context.Context, objectToScan types.FilePath, worksp
 		sc.changedPaths[workspaceFolder][workspaceFolder] = true
 	} else {
 		// Track the specific file that changed for incremental scanning
-		sc.changedPaths[workspaceFolder][objectToScan] = true
+		sc.changedPaths[workspaceFolder][pathToScan] = true
 	}
 	sc.changedFilesMutex.Unlock()
 

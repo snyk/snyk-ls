@@ -45,7 +45,7 @@ import (
 func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	enabledScanner := mock_types.NewMockProductScanner(ctrl)
 	enabledScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
@@ -54,7 +54,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 
 	disabledScanner := mock_types.NewMockProductScanner(ctrl)
 	disabledScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
-	disabledScanner.EXPECT().IsEnabled().Return(false).AnyTimes()
+	disabledScanner.EXPECT().IsEnabled().Return(false).MinTimes(1)
 	// Explicitly verify Scan is NOT called on disabled scanner
 	disabledScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
@@ -86,7 +86,7 @@ func setupScanner(t *testing.T, c *config.Config, testProductScanners ...types.P
 func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	// Arrange
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
@@ -107,7 +107,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	// Arrange - start with a valid token so scan begins
 	c.SetToken(uuid.New().String())
@@ -119,7 +119,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx interface{}, _ types.FilePath, _ *types.FolderConfig) ([]types.Issue, error) {
-			close(scanStarted)
+			scanStarted <- true
 			// Simulate slow scan - wait for context cancellation or timeout
 			select {
 			case <-ctx.(interface{ Done() <-chan struct{} }).Done():
@@ -140,11 +140,11 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 	}()
 
 	// Wait for scan to start, then change token to trigger cancellation
-	<-scanStarted
+	testsupport.RequireEventuallyReceive(t, scanStarted, 5*time.Second, 10*time.Millisecond, "scan should start")
 	c.SetToken(uuid.New().String())
 
 	// Wait for scan to complete
-	<-done
+	testsupport.RequireEventuallyReceive(t, done, 5*time.Second, 10*time.Millisecond, "scan should complete")
 
 	// Assert - verify the scan was canceled, not timed out
 	assert.True(t, wasCanceled, "Scan should have been canceled when token changed")

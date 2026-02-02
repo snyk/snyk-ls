@@ -104,7 +104,7 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	// We clone the folderConfig to avoid modifying the original and to pass the correct scan root.
 	baseScanConfig := *folderConfig
 	baseScanConfig.FolderPath = baseFolderPath
-	// Pass baseFolderPath as objectToScan as we want to perform a full workspace scan
+	// Pass baseFolderPath as pathToScan as we want to perform a full workspace scan
 	results, err = s.Scan(ctx, baseFolderPath, &baseScanConfig)
 	if err != nil {
 		logger.Error().Err(err).Msgf("skipping base scan persistence in %s %v", folderPath, err)
