@@ -225,9 +225,11 @@ func createLockFile(d *Downloader) (lockfileName string, err error) {
 
 func cleanupLockFile(lockFileName string) {
 	logger := config.CurrentConfig().Logger()
-	file, _ := os.Open(lockFileName)
-	_ = file.Close()
-	err := os.Remove(lockFileName)
+	file, err := os.Open(lockFileName)
+	if err == nil {
+		_ = file.Close()
+	}
+	err = os.Remove(lockFileName)
 	if err != nil {
 		logger.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg("couldn't clean up lockfile")
 	}
