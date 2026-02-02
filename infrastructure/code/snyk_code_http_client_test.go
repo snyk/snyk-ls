@@ -68,6 +68,9 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		// Clear env since it takes priority over the config.
 		t.Setenv(config.DeeproxyApiUrlKey, "")
 
+		// Clear the default org set by UnitTest to test the error case
+		c.SetOrganization("")
+
 		// Set up the API URL to use for the test.
 		c.UpdateApiEndpoints("https://api.snykgov.io")
 
