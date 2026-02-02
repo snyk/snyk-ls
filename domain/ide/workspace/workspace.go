@@ -112,6 +112,7 @@ func (w *Workspace) HandleConfigChange() {
 func sendPublishDiagnosticsForAllProducts(folder types.Folder) {
 	folder.FilterAndPublishDiagnostics(product.ProductOpenSource)
 	folder.FilterAndPublishDiagnostics(product.ProductInfrastructureAsCode)
+	folder.FilterAndPublishDiagnostics(product.ProductContainer)
 	folder.FilterAndPublishDiagnostics(product.ProductCode)
 }
 
