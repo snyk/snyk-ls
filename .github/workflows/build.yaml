@@ -91,6 +91,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        split-index: [0, 1, 2, 3]
     steps:
       - name: Prepare git
         run: |
@@ -104,53 +105,128 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      - name: Download JUnit timing summary from main
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          name: junit-test-summary-${{ matrix.os }}
+          path: .
+          workflow: build.yaml
+          # branch: main
+          workflow_conclusion: success
+          if_no_artifact_found: warn
+
       - name: Setup tools (`make tools`)
         if: matrix.os != 'windows-latest'
         uses: ./.github/actions/setup-tools
 
-      - name: Run integration & smoke tests with Pact
-        if: matrix.os == 'ubuntu-latest'
-        env:
-          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-          INTEG_TESTS: "true"
-          SMOKE_TESTS: "true"
-        run: |
-          export PATH=$PWD/.bin/pact/bin:$PATH
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
 
-          # this is required to be able to test the clipboard
-          export DISPLAY=:99
+      - name: Split tests
+        id: test_split
+        uses: hashicorp-forge/go-test-split-action@v1
+        with:
+          total: 4
+          index: ${{ matrix.split-index }}
+          junit-summary: ./junit-test-summary-${{ matrix.os }}.xml
+
+      - name: Setup Xvfb and clipboard tools (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          echo "DISPLAY=:99" >> $GITHUB_ENV
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
           sudo apt-get install -y xsel xclip wl-clipboard
 
-          make clean test
-
-      - name: Run integration tests with Pact
+      - name: Setup Xvfb and display (macOS)
         if: matrix.os == 'macos-latest'
-        env:
-          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-          INTEG_TESTS: "true"
-          SMOKE_TESTS: "true"
         run: |
-          export PATH=$PWD/.bin/pact/bin:$PATH
-
-          # this is required to be able to test the clipboard
-          export DISPLAY=:99
+          echo "DISPLAY=:99" >> $GITHUB_ENV
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
 
-          make clean test
+      - name: Add Pact to PATH
+        if: matrix.os != 'windows-latest'
+        run: echo "$PWD/.bin/pact/bin" >> $GITHUB_PATH
 
-      - name: Run integration tests without Pact
-        if: matrix.os == 'windows-latest'
+      - name: Clean build artifacts
+        run: make clean
+
+      - name: Verify test environment variables
+        run: |
+          echo "INTEG_TESTS=${{ env.INTEG_TESTS || 'not set' }}"
+          echo "SMOKE_TESTS=${{ env.SMOKE_TESTS || 'not set' }}"
+
+      - name: Run integration & smoke tests
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           INTEG_TESTS: "true"
           SMOKE_TESTS: "true"
         run: |
-          make clean test
+          gotestsum --junitfile node-summary.xml -- \
+            -timeout=45m -failfast \
+            -run "${{ steps.test_split.outputs.run }}" \
+            ./...
 
+      - name: Verify tests ran
+        shell: bash
+        run: |
+          # Verify the junit file exists and contains test results
+          if [ ! -f node-summary.xml ]; then
+            echo "ERROR: JUnit XML file not found - no tests ran!"
+            exit 1
+          fi
+          # Check that at least one test executed (look for testcase elements)
+          if ! grep -q '<testcase' node-summary.xml; then
+            echo "WARNING: No test cases found in split ${{ matrix.split-index }} for ${{ matrix.os }}"
+            echo "This may be expected if tests are unevenly distributed, but verify manually."
+          fi
+          # Verify we're running integration/smoke tests, not just unit tests
+          # Check for test names containing "Integ" or "Smoke" patterns
+          if grep -q '<testcase.*name=".*\(Integ\|Smoke\)' node-summary.xml; then
+            echo "✓ Confirmed: Integration/smoke tests are executing (env vars working)"
+          else
+            echo "INFO: No integration/smoke test patterns found in this split"
+            echo "This may be normal depending on test distribution"
+          fi
+
+      - name: Upload test summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-test-summary-${{ matrix.os }}-${{ matrix.split-index }}
+          path: node-summary.xml
+          retention-days: 1
+
+
+  combine-test-summaries:
+    name: Combine Test Summaries
+    needs: [integration-tests]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Install junit-report-merger
+        run: npm install -g junit-report-merger
+
+      - name: Merge reports
+        run: jrm ./junit-test-summary-${{ matrix.os }}.xml "junit-test-summary-${{ matrix.os }}-0/*.xml" "junit-test-summary-${{ matrix.os }}-1/*.xml" "junit-test-summary-${{ matrix.os }}-2/*.xml" "junit-test-summary-${{ matrix.os }}-3/*.xml"
+
+      - name: Upload combined test summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-test-summary-${{ matrix.os }}
+          path: ./junit-test-summary-${{ matrix.os }}.xml
+          retention-days: 90
 
   proxy-test:
     name: proxy-test

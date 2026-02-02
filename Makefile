@@ -31,13 +31,14 @@ TOOLS_BIN := $(shell pwd)/.bin
 OVERRIDE_GOCI_LINT_V := v2.6.1
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
+GOTESTSUM_V := latest
 
 TIMEOUT := "-timeout=45m"
 
 
 ## tools: Install required tooling.
 .PHONY: tools
-tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
+tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact $(TOOLS_BIN)/gotestsum
 
 .PHONY: hooks
 hooks:
@@ -54,6 +55,10 @@ $(TOOLS_BIN)/golangci-lint:
 
 $(TOOLS_BIN)/pact/bin/pact:
 	cd $(TOOLS_BIN); curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/v$(PACT_V)/install.sh | PACT_CLI_VERSION=v$(PACT_V) bash
+
+$(TOOLS_BIN)/gotestsum:
+	@echo "==> Installing gotestsum"
+	@GOBIN=$(TOOLS_BIN) go install gotest.tools/gotestsum@$(GOTESTSUM_V)
 
 ## clean: Delete the build directory
 .PHONY: clean
