@@ -166,7 +166,12 @@ func expandParametersFromConfig(base []string, folderConfig *types.FolderConfig)
 		expandedParams = append(expandedParams, "--insecure")
 	}
 
-	org := conf.FolderConfigOrganization(folderConfig)
+	var org string
+	if folderConfig != nil {
+		org = conf.FolderConfigOrganization(folderConfig)
+	} else {
+		org = conf.Organization()
+	}
 	if org != "" {
 		expandedParams = append(expandedParams, "--org="+org)
 	}
