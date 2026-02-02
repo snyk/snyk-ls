@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -39,7 +40,7 @@ var (
 	}
 )
 
-var codeApiRegex = regexp.MustCompile(`^(deeproxy\.)?`)
+var deeproxyRegex = regexp.MustCompile(`^(deeproxy\.)?`)
 
 func issueSeverity(snykSeverity string) types.Severity {
 	sev, ok := issueSeverities[snykSeverity]
@@ -71,7 +72,14 @@ func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, er
 		return "", err
 	}
 
+	return getCodeApiUrlFromFolderConfig(c, folderConfig)
+}
+
+// getCodeApiUrlFromFolderConfig returns the Code API URL using the provided folderConfig directly.
+// This is useful for base branch scans where the folder path is a temporary directory.
+func getCodeApiUrlFromFolderConfig(c *config.Config, folderConfig *types.FolderConfig) (string, error) {
 	var endpoint string
+	var err error
 	if isLocalEngineEnabled(folderConfig.SastSettings) {
 		endpoint = updateCodeApiLocalEngine(c, folderConfig.SastSettings)
 	} else {
@@ -85,18 +93,23 @@ func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, er
 		return endpoint, nil
 	}
 
-	// we should not have SCLE in fedramp, but this code may still run and it should work even with SCLE
-
+	// We should not have SCLE in FedRAMP, but this code may still run and it should work even with SCLE
 	u, err := url.Parse(endpoint)
 	if err != nil {
 		return "", err
 	}
 
-	u.Host = codeApiRegex.ReplaceAllString(u.Host, "api.")
+	u.Host = deeproxyRegex.ReplaceAllString(u.Host, "api.")
+	if !strings.HasPrefix(u.Host, "api.") {
+		u.Host = "api." + u.Host
+	}
+	u.RawQuery = ""
+	u.Fragment = ""
 
-	org, err := c.FolderOrganizationForSubPath(folder)
-	if err != nil {
-		return "", fmt.Errorf("organization is required in a fedramp environment: %w", err)
+	// Get organization directly from folderConfig for FedRAMP
+	org := c.FolderConfigOrganization(folderConfig)
+	if org == "" {
+		return "", fmt.Errorf("organization is required in a fedramp environment")
 	}
 
 	u.Path = "/hidden/orgs/" + org + "/code"

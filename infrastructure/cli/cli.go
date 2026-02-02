@@ -63,7 +63,7 @@ func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, 
 
 type Executor interface {
 	Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error)
-	ExpandParametersFromConfig(base []string) []string
+	ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string
 }
 
 func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error) {
@@ -157,7 +157,7 @@ func getArgsWithOrgSubstitution(cmd []string, org string) []string {
 	return effectiveArgs
 }
 
-func expandParametersFromConfig(base []string) []string {
+func expandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
 	var expandedParams = base
 	conf := config.CurrentConfig()
 
@@ -166,7 +166,12 @@ func expandParametersFromConfig(base []string) []string {
 		expandedParams = append(expandedParams, "--insecure")
 	}
 
-	org := conf.Organization()
+	var org string
+	if folderConfig != nil {
+		org = conf.FolderConfigOrganization(folderConfig)
+	} else {
+		org = conf.Organization()
+	}
 	if org != "" {
 		expandedParams = append(expandedParams, "--org="+org)
 	}
@@ -176,8 +181,8 @@ func expandParametersFromConfig(base []string) []string {
 
 // ExpandParametersFromConfig adds configuration parameters to the base command
 // todo no need to export that, we could have a simpler interface that looks more like an actual CLI
-func (c *SnykCli) ExpandParametersFromConfig(base []string) []string {
-	return expandParametersFromConfig(base)
+func (c *SnykCli) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
+	return expandParametersFromConfig(base, folderConfig)
 }
 
 func (c *SnykCli) CliVersion() string {
