@@ -844,6 +844,27 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 	return cloneTargetDir
 }
 
+// buildSmokeTestSettings creates a complete settings object from config
+// This ensures all critical fields (token, endpoint, etc.) are preserved
+func buildSmokeTestSettings(c *config.Config) types.Settings {
+	return types.Settings{
+		Endpoint:                    c.Endpoint(),
+		Token:                       c.Token(),
+		Organization:                c.Organization(),
+		EnableTrustedFoldersFeature: "false",
+		FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+		IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
+		AuthenticationMethod:        c.AuthenticationMethod(),
+		AutomaticAuthentication:     "false",
+		EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
+		ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
+		ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
+		ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
+		ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeSecurityEnabled()),
+		CliPath:                     c.CliSettings().Path(),
+	}
+}
+
 func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Config) types.InitializeParams {
 	t.Helper()
 
@@ -855,23 +876,8 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 	setUniqueCliPath(t, c)
 
 	clientParams := types.InitializeParams{
-		WorkspaceFolders: []types.WorkspaceFolder{folder},
-		InitializationOptions: types.Settings{
-			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       c.Token(),
-			Organization:                c.Organization(),
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-			AuthenticationMethod:        types.TokenAuthentication,
-			AutomaticAuthentication:     "false",
-			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
-			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
-			ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
-			ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
-			ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeSecurityEnabled()),
-			CliPath:                     c.CliSettings().Path(),
-		},
+		WorkspaceFolders:      []types.WorkspaceFolder{folder},
+		InitializationOptions: buildSmokeTestSettings(c),
 	}
 	return clientParams
 }
@@ -1650,9 +1656,12 @@ func sendModifiedFolderConfiguration(
 	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	require.NoError(t, err)
 	modification(storedConfig.FolderConfigs)
-	sendConfigurationDidChange(t, loc, types.Settings{
-		FolderConfigs: lo.Values(lo.MapValues(storedConfig.FolderConfigs, func(v *types.FolderConfig, k types.FilePath) types.FolderConfig { return *v })),
-	})
+
+	// Build full settings from config to avoid clearing token/endpoint
+	settings := buildSmokeTestSettings(c)
+	settings.FolderConfigs = lo.Values(lo.MapValues(storedConfig.FolderConfigs, func(v *types.FolderConfig, k types.FilePath) types.FolderConfig { return *v }))
+
+	sendConfigurationDidChange(t, loc, settings)
 }
 
 func sendConfigurationDidChange(t *testing.T, loc server.Local, s types.Settings) {

@@ -104,8 +104,21 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 				preferredOrg = folderConfig.PreferredOrg
 			}
 
-			// Call GetUserConfigForProject with 3 params including preferredOrg
+			logger.Debug().
+				Str("projectPath", string(f.Path())).
+				Str("preferredOrg", preferredOrg).
+				Msg("LDX-Sync API Request - calling GetUserConfigForProject")
+
 			cfgResult := s.apiClient.GetUserConfigForProject(engine, string(f.Path()), preferredOrg)
+
+			logger.Debug().
+				Str("projectPath", string(f.Path())).
+				Bool("hasError", cfgResult.Error != nil).
+				Bool("hasConfig", cfgResult.Config != nil).
+				Str("remoteUrl", cfgResult.RemoteUrl).
+				Str("projectRoot", cfgResult.ProjectRoot).
+				Interface("fullResult", cfgResult).
+				Msg("LDX-Sync API Response - full result")
 
 			// Store result in temporary map (even if there's an error)
 			// This allows ResolveOrg to distinguish between "never attempted" and "attempted but failed"
@@ -126,7 +139,6 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 		}(folder)
 	}
 
-	// Wait for all goroutines to complete
 	wg.Wait()
 
 	// Update cache with all results
@@ -138,10 +150,8 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 func (s *DefaultLdxSyncService) ResolveOrg(c *config.Config, folderPath types.FilePath) (ldx_sync_config.Organization, error) {
 	logger := c.Logger().With().Str("method", "ResolveOrg").Logger()
 
-	// Get cached result
 	cachedResult := c.GetLdxSyncResult(folderPath)
 
-	// Return error if no cache entry
 	if cachedResult == nil {
 		logger.Warn().
 			Str("folder", string(folderPath)).
@@ -149,7 +159,6 @@ func (s *DefaultLdxSyncService) ResolveOrg(c *config.Config, folderPath types.Fi
 		return ldx_sync_config.Organization{}, errors.New("no organization was able to be determined for folder: " + string(folderPath))
 	}
 
-	// Return error if the cached result has an error
 	if cachedResult.Error != nil {
 		logger.Warn().
 			Str("folder", string(folderPath)).
@@ -158,6 +167,5 @@ func (s *DefaultLdxSyncService) ResolveOrg(c *config.Config, folderPath types.Fi
 		return ldx_sync_config.Organization{}, errors.New("failed to resolve organization from LDX-Sync for folder: " + string(folderPath))
 	}
 
-	// If we have a valid cached result, use it to resolve the org
 	return s.apiClient.ResolveOrgFromUserConfig(c.Engine(), *cachedResult)
 }
