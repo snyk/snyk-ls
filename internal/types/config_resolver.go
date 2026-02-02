@@ -69,6 +69,22 @@ func (r *ConfigResolver) SetGlobalSettings(settings *Settings) {
 	r.globalSettings = settings
 }
 
+// getEffectiveOrg returns the effective org for a folder path.
+// It first checks the LDX-Sync FolderToOrgMapping cache, then falls back to the orgResolver.
+func (r *ConfigResolver) getEffectiveOrg(folderPath FilePath) string {
+	// First check if LDX-Sync has already resolved the org for this folder
+	if r.ldxSyncCache != nil {
+		if org := r.ldxSyncCache.GetOrgIdForFolder(folderPath); org != "" {
+			return org
+		}
+	}
+	// Fall back to orgResolver (which includes global org fallback)
+	if r.orgResolver != nil {
+		return r.orgResolver(folderPath)
+	}
+	return ""
+}
+
 // GetValue resolves a configuration value for the given setting and folder.
 // Returns the resolved value and the source it came from.
 func (r *ConfigResolver) GetValue(settingName string, folderConfig *FolderConfig) (any, ConfigSource) {
@@ -145,8 +161,8 @@ func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig *
 // resolveOrgSetting resolves an org-scoped setting with full precedence logic
 func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig *FolderConfig) (any, ConfigSource) {
 	effectiveOrg := ""
-	if folderConfig != nil && r.orgResolver != nil {
-		effectiveOrg = r.orgResolver(folderConfig.FolderPath)
+	if folderConfig != nil {
+		effectiveOrg = r.getEffectiveOrg(folderConfig.FolderPath)
 	}
 
 	var ldxField *LDXSyncField
