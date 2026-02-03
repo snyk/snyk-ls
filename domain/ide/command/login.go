@@ -33,6 +33,7 @@ type loginCommand struct {
 	featureFlagService featureflag.Service
 	notifier           noti.Notifier
 	c                  *config.Config
+	ldxSyncService     LdxSyncService
 }
 
 func (cmd *loginCommand) Command() types.CommandData {
@@ -51,9 +52,9 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
 
-		// Send folder configs after successful login,
-		// to re-fetch auto determined org from LDX-Sync.
-		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService)
+		// Refresh LDX-Sync configuration after successful authentication
+		cmd.ldxSyncService.RefreshConfigFromLdxSync(cmd.c, cmd.c.Workspace().Folders())
+		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.ldxSyncService)
 
 		return token, nil
 	}

@@ -23,12 +23,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
+	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -145,7 +149,17 @@ func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) 
 
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	c := testutil.UnitTest(t)
+
 	loc, jsonRPCRecorder := setupServer(t, c)
+
+	// Setup mock LdxSyncService AFTER setupServer to avoid it being overwritten by di.TestInit
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+	originalLdxService := di.LdxSyncService()
+	di.SetLdxSyncService(mockLdxSyncService)
+	defer di.SetLdxSyncService(originalLdxService)
 	c.SetAutomaticAuthentication(false)
 	c.SetAuthenticationMethod(types.FakeAuthentication)
 
@@ -153,8 +167,31 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	fakeAuthenticationProvider := authenticationService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = false
 
-	// reset to use real service
-	command.SetService(command.NewService(authenticationService, di.FeatureFlagService(), di.Notifier(), di.LearnService(), nil, nil, nil, nil))
+	// Add workspace folder
+	folder := workspace.NewFolder(c, "/test/path", "test", di.Scanner(), di.HoverService(),
+		di.ScanNotifier(), di.Notifier(), di.ScanPersister(),
+		di.ScanStateAggregator(), di.FeatureFlagService())
+	c.Workspace().AddFolder(folder)
+
+	// Expect RefreshConfigFromLdxSync to be called during initialization with the workspace folder
+	mockLdxSyncService.EXPECT().
+		RefreshConfigFromLdxSync(c, gomock.Any()).
+		Times(1).
+		Do(func(_ interface{}, folders []types.Folder) {
+			// Verify that we received the workspace folder during initialization
+			assert.Len(t, folders, 1)
+			assert.Equal(t, folder.Path(), folders[0].Path())
+		})
+
+	// Expect ResolveOrg to be called during initialized handler for each folder
+	// Use gomock.Any() for path to handle platform-specific path separators
+	mockLdxSyncService.EXPECT().
+		ResolveOrg(c, gomock.Any()).
+		Return(ldx_sync_config.Organization{}, nil).
+		AnyTimes()
+
+	// reset to use real service with mock injected
+	command.SetService(command.NewService(authenticationService, di.FeatureFlagService(), di.Notifier(), di.LearnService(), nil, nil, nil, mockLdxSyncService))
 
 	_, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -165,6 +202,16 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 
 	_, err = loc.Client.Call(ctx, "initialized", types.InitializedParams{})
 	assert.NoError(t, err)
+
+	// Expect RefreshConfigFromLdxSync to be called again after successful login
+	mockLdxSyncService.EXPECT().
+		RefreshConfigFromLdxSync(c, gomock.Any()).
+		Times(1).
+		Do(func(_ interface{}, folders []types.Folder) {
+			// Verify that we received the workspace folder after login
+			assert.Len(t, folders, 1)
+			assert.Equal(t, folder.Path(), folders[0].Path())
+		})
 
 	// Act
 	tokenResponse, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -284,10 +331,6 @@ func (tcs *testCommandService) ExecuteCommandData(ctx context.Context, cmdData t
 		return nil, errors.New("we only expect our special command to be run")
 	}
 	return tcs.testCmd.Execute(ctx)
-}
-
-func (tcs *testCommandService) GetOrgResolver() types.OrgResolver {
-	return nil
 }
 
 func Test_ExecuteCommand_CancelRequest(t *testing.T) {

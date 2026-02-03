@@ -844,6 +844,27 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 	return cloneTargetDir
 }
 
+// buildSmokeTestSettings creates a complete settings object from config
+// This ensures all critical fields (token, endpoint, etc.) are preserved
+func buildSmokeTestSettings(c *config.Config) types.Settings {
+	return types.Settings{
+		Endpoint:                    c.Endpoint(),
+		Token:                       c.Token(),
+		Organization:                c.Organization(),
+		EnableTrustedFoldersFeature: "false",
+		FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+		IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
+		AuthenticationMethod:        c.AuthenticationMethod(),
+		AutomaticAuthentication:     "false",
+		EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
+		ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
+		ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
+		ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
+		ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeSecurityEnabled()),
+		CliPath:                     c.CliSettings().Path(),
+	}
+}
+
 func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Config) types.InitializeParams {
 	t.Helper()
 
@@ -855,23 +876,8 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 	setUniqueCliPath(t, c)
 
 	clientParams := types.InitializeParams{
-		WorkspaceFolders: []types.WorkspaceFolder{folder},
-		InitializationOptions: types.Settings{
-			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       c.Token(),
-			Organization:                c.Organization(),
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-			AuthenticationMethod:        types.TokenAuthentication,
-			AutomaticAuthentication:     "false",
-			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
-			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
-			ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
-			ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
-			ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeSecurityEnabled()),
-			CliPath:                     c.CliSettings().Path(),
-		},
+		WorkspaceFolders:      []types.WorkspaceFolder{folder},
+		InitializationOptions: buildSmokeTestSettings(c),
 	}
 	return clientParams
 }
@@ -1286,10 +1292,12 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: repoValidator,
 		})
 
+		// Use a real organization slug instead of "any" to avoid LDX-Sync resolution errors with error caching
+		// This tests that PreferredOrg is preserved and AutoDeterminedOrg is refreshed from LDX-Sync
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  fakeDirFolderPath,
-			AutoDeterminedOrg:           "any",
-			PreferredOrg:                "any",
+			AutoDeterminedOrg:           "placeholder",
+			PreferredOrg:                "devex_ide",
 			OrgMigratedFromGlobalConfig: true,
 			OrgSetByUser:                false,
 		}, c.Logger())
@@ -1302,9 +1310,73 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: repoValidator,
 			fakeDirFolderPath: func(fc types.FolderConfig) {
 				require.False(t, fc.OrgSetByUser, "OrgSetByUser must be preserved")
-				require.Equal(t, "any", fc.PreferredOrg, "PreferredOrg must be preserved")
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
-				require.NotEqual(t, "any", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
+				require.Equal(t, "devex_ide", fc.PreferredOrg, "PreferredOrg must be preserved")
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must be refreshed from LDX-Sync")
+				require.NotEqual(t, "placeholder", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override placeholder value")
+				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+			},
+		})
+	})
+
+	t.Run("authenticated - invalid PreferredOrg falls back to auto-determination", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+
+		ensureInitialized(t, c, loc, initParams, nil)
+		repoValidator := func(fc types.FolderConfig) {
+			require.False(t, fc.OrgSetByUser)
+			require.Empty(t, fc.PreferredOrg)
+			require.NotEmpty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		}
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+		})
+
+		// add folder (LS has not seen before)
+		fakeDirFolder, fakeDirFolderPath := addFakeDirAsWorkspaceFolder(t, loc)
+
+		// Capture the actual AutoDeterminedOrg from the first add
+		var expectedAutoDeterminedOrg string
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+			fakeDirFolderPath: func(fc types.FolderConfig) {
+				require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
+				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+				expectedAutoDeterminedOrg = fc.AutoDeterminedOrg
+			},
+		})
+
+		// remove folder
+		removeWorkSpaceFolder(t, loc, fakeDirFolder)
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+		})
+
+		// Test fallback: Use invalid org slug "any" which will fail resolution
+		// But with OrgSetByUser=false, LDX-Sync should fallback to auto-determination
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+			FolderPath:                  fakeDirFolderPath,
+			AutoDeterminedOrg:           "placeholder",
+			PreferredOrg:                "any", // Invalid org slug - will trigger fallback
+			OrgMigratedFromGlobalConfig: true,
+			OrgSetByUser:                false, // Auto mode
+		}, c.Logger())
+		require.NoError(t, err)
+
+		// re-add folder - should fallback from "any" to auto-determination
+		addWorkSpaceFolder(t, loc, fakeDirFolder)
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+			fakeDirFolderPath: func(fc types.FolderConfig) {
+				require.False(t, fc.OrgSetByUser, "OrgSetByUser must be preserved")
+				require.Equal(t, "any", fc.PreferredOrg, "PreferredOrg must be preserved even though it's invalid")
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must be set via fallback")
+				require.NotEqual(t, "placeholder", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override placeholder")
+				require.Equal(t, expectedAutoDeterminedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be determined via fallback")
 				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
 			},
 		})
@@ -1633,6 +1705,19 @@ func textDocumentDidSave(t *testing.T, loc *server.Local, testPath types.FilePat
 func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.WorkspaceFolder, types.FilePath) {
 	t.Helper()
 	fakeDirFolderPath := types.FilePath(t.TempDir())
+
+	// Initialize a git repository so LDX-Sync can detect it
+	cmd := exec.Command("git", "init")
+	cmd.Dir = string(fakeDirFolderPath)
+	_, err := cmd.CombinedOutput()
+	require.NoError(t, err)
+
+	// Add a remote so LDX-Sync can resolve organization
+	cmd = exec.Command("git", "remote", "add", "origin", "https://github.com/snyk-labs/python-goof")
+	cmd.Dir = string(fakeDirFolderPath)
+	_, err = cmd.CombinedOutput()
+	require.NoError(t, err)
+
 	fakeDirFolder := types.WorkspaceFolder{Uri: uri.PathToUri(fakeDirFolderPath), Name: "fake-dir"}
 
 	addWorkSpaceFolder(t, loc, fakeDirFolder)
@@ -1650,9 +1735,12 @@ func sendModifiedFolderConfiguration(
 	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	require.NoError(t, err)
 	modification(storedConfig.FolderConfigs)
-	sendConfigurationDidChange(t, loc, types.Settings{
-		FolderConfigs: lo.Values(lo.MapValues(storedConfig.FolderConfigs, func(v *types.FolderConfig, k types.FilePath) types.FolderConfig { return *v })),
-	})
+
+	// Build full settings from config to avoid clearing token/endpoint
+	settings := buildSmokeTestSettings(c)
+	settings.FolderConfigs = lo.Values(lo.MapValues(storedConfig.FolderConfigs, func(v *types.FolderConfig, k types.FilePath) types.FolderConfig { return *v }))
+
+	sendConfigurationDidChange(t, loc, settings)
 }
 
 func sendConfigurationDidChange(t *testing.T, loc server.Local, s types.Settings) {

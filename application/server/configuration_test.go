@@ -39,12 +39,12 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/domain/ide/command"
+	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 var sampleSettings = types.Settings{
@@ -180,13 +180,6 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("All settings are updated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
-		setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
-
-		mockResolver := command.Service().GetOrgResolver().(*mock_types.MockOrgResolver)
-		mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{
-			Id:   expectedOrgId,
-			Name: t.Name(),
-		}, nil).AnyTimes()
 
 		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
@@ -474,33 +467,6 @@ func initTestRepo(t *testing.T, tempDir string) error {
 	return err
 }
 
-// setupMockOrgResolver sets up a mock organization resolver for tests
-func setupMockOrgResolver(t *testing.T, orgId, orgName string) {
-	t.Helper()
-	originalService := command.Service()
-	t.Cleanup(func() {
-		command.SetService(originalService)
-	})
-
-	ctrl := gomock.NewController(t)
-	mockResolver := mock_types.NewMockOrgResolver(ctrl)
-	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{
-		Id:   orgId,
-		Name: orgName,
-	}, nil).AnyTimes()
-
-	// Get the existing service or create a new mock
-	svc := command.Service()
-	if mockSvc, ok := svc.(*types.CommandServiceMock); ok {
-		// If it's already a mock service, just update the resolver
-		mockSvc.SetOrgResolver(mockResolver)
-	} else {
-		// Otherwise, create a new mock service
-		mockService := types.NewCommandServiceMock(mockResolver)
-		command.SetService(mockService)
-	}
-}
-
 // Common test setup for updateFolderConfig tests
 type folderConfigTestSetup struct {
 	t            *testing.T
@@ -520,9 +486,6 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	// Register mock default value functions for org config to avoid API calls in tests
 	engineConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("test-default-org-uuid"))
 	engineConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("test-default-org-slug"))
-
-	// Set up mock organization resolver for configuration tests
-	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
@@ -795,9 +758,6 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
-	// Set up mock organization resolver
-	setupMockOrgResolver(t, "resolved-org-id", "Resolved Org")
-
 	// Use a non-existent path that might return nil
 	folderPath := types.FilePath("/non/existent/path")
 	logger := c.Logger()
@@ -972,9 +932,44 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
 func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
+	// Setup mock LdxSyncService to verify it's called
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+	originalService := di.LdxSyncService()
+	di.SetLdxSyncService(mockLdxSyncService)
+	defer di.SetLdxSyncService(originalService)
+
+	// Add folder to workspace so GetFolderContaining can find it
+	folder := workspace.NewFolder(
+		setup.c,
+		setup.folderPath,
+		"test-folder",
+		nil,
+		di.HoverService(),
+		di.ScanNotifier(),
+		di.Notifier(),
+		di.ScanPersister(),
+		di.ScanStateAggregator(),
+		di.FeatureFlagService(),
+	)
+	setup.c.Workspace().AddFolder(folder)
+
 	// Setup stored config with initial org, migrated, and user-set
 	setup.createStoredConfig("initial-org", true, true)
 	setup.c.SetOrganization("global-org-id")
+
+	// Expect RefreshConfigFromLdxSync to be called once with the specific folder
+	mockLdxSyncService.EXPECT().
+		RefreshConfigFromLdxSync(setup.c, gomock.Eq([]types.Folder{folder})).
+		Times(1)
+
+	// Expect ResolveOrg to be called when AutoDeterminedOrg is empty
+	mockLdxSyncService.EXPECT().
+		ResolveOrg(setup.c, setup.folderPath).
+		Return(ldx_sync_config.Organization{Id: "auto-determined-org"}, nil).
+		AnyTimes()
 
 	// Call updateFolderConfig with a different org
 	settings := types.Settings{
@@ -994,6 +989,7 @@ func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
 	assert.Equal(t, "new-user-org", updatedConfig.PreferredOrg, "PreferredOrg should be updated")
 	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true after org change")
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
+	// Mock expectations are verified on ctrl.Finish()
 }
 
 // migration with user preferences or user changed settings while unmigrated and unauthenticated
@@ -1028,6 +1024,15 @@ func Test_updateFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
 func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
+	// Setup mock LdxSyncService to control ResolveOrg behavior
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+	originalService := di.LdxSyncService()
+	di.SetLdxSyncService(mockLdxSyncService)
+	defer di.SetLdxSyncService(originalService)
+
 	// Setup stored config WITHOUT AutoDeterminedOrg (simulating old config)
 	engineConfig := setup.c.Engine().GetConfiguration()
 	storedConfig := &types.FolderConfig{
@@ -1041,6 +1046,14 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	require.NoError(setup.t, err)
 
 	setup.c.SetOrganization("global-org-id")
+
+	// Mock ResolveOrg to return the expected organization
+	expectedOrg := ldx_sync_config.Organization{
+		Id: "test-default-org-uuid",
+	}
+	mockLdxSyncService.EXPECT().
+		ResolveOrg(setup.c, setup.folderPath).
+		Return(expectedOrg, nil)
 
 	// Call updateFolderConfig with DIFFERENT org to trigger updateFolderConfigOrg
 	settings := types.Settings{
@@ -1059,8 +1072,7 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	// Verify: AutoDeterminedOrg should be fetched and set by updateFolderConfigOrg
 	updatedConfig := setup.getUpdatedConfig()
 	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be fetched and set")
-	// The mock resolver returns "auto-determined-org-id" when givenOrg is not empty
-	assert.Equal(t, "auto-determined-org-id", updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync mock")
+	assert.Equal(t, "test-default-org-uuid", updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be resolved from LDX-Sync")
 }
 
 // Test: Migrated config where user changes org from auto to manual
@@ -1097,17 +1109,6 @@ func Test_updateFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOrg(t *t
 
 	engineConfig := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(t.TempDir())
-
-	// Set up mock org resolver that returns error (simulates unauthenticated/failed resolution)
-	ctrl := gomock.NewController(t)
-	mockResolver := mock_types.NewMockOrgResolver(ctrl)
-	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(ldx_sync_config.Organization{}, assert.AnError).AnyTimes()
-	mockService := types.NewCommandServiceMock(mockResolver)
-	command.SetService(mockService)
-	t.Cleanup(func() {
-		command.SetService(command.Service())
-	})
 
 	// Setup: Pre-feature folder with zero-value fields (never read during EA)
 	storedConfig := &types.FolderConfig{
