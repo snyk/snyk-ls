@@ -91,7 +91,7 @@ func requireValidLdxSyncCache(t *testing.T, c *config.Config, validators map[typ
 // Test_SmokeLdxSyncCache_InitializeWithMultipleFolders verifies cache population when
 // initializing the language server with multiple workspace folders
 func Test_SmokeLdxSyncCache_InitializeWithMultipleFolders(t *testing.T) {
-	c := testutil.SmokeTest(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	c := testutil.SmokeTest(t, "")
 	loc, _ := setupServer(t, c)
 
 	// Disable scanning products - only testing cache behavior
@@ -140,7 +140,7 @@ func Test_SmokeLdxSyncCache_InitializeWithMultipleFolders(t *testing.T) {
 // Test_SmokeLdxSyncCache_AddFolderRefreshesCache verifies cache updates when
 // adding a new workspace folder via didChangeWorkspaceFolders
 func Test_SmokeLdxSyncCache_AddFolderRefreshesCache(t *testing.T) {
-	c := testutil.SmokeTest(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	c := testutil.SmokeTest(t, "")
 
 	loc, _ := setupServer(t, c)
 
@@ -193,7 +193,7 @@ func Test_SmokeLdxSyncCache_ChangePreferredOrgTriggersRefetch(t *testing.T) {
 	di.Init()
 
 	// Initialize with folder
-	folder := setupRepoAndInitialize(t, testsupport.PythonGoof, "c32657c", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 
 	requireValidLdxSyncCache(t, c, map[types.FilePath]func(*ldx_sync_config.LdxSyncConfigResult){
 		folder: nil,

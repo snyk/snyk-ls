@@ -102,6 +102,13 @@ func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) 
 	if c == nil {
 		c = testutil.UnitTest(t)
 	}
+
+	// Ensure SNYK_API endpoint is set in config if environment variable is present
+	endpoint := os.Getenv("SNYK_API")
+	if endpoint != "" {
+		c.UpdateApiEndpoints(endpoint)
+	}
+
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
 	loc := startServer(c, callBackFn, jsonRPCRecorder)
 	di.TestInit(t)
