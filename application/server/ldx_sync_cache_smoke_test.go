@@ -19,9 +19,11 @@
 package server
 
 import (
+	"os"
 	"testing"
 	"time"
 
+	"github.com/creachadair/jrpc2/server"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/stretchr/testify/assert"
@@ -88,10 +90,11 @@ func requireValidLdxSyncCache(t *testing.T, c *config.Config, validators map[typ
 	}
 }
 
-// Test_SmokeLdxSyncCache_InitializeWithMultipleFolders verifies cache population when
-// initializing the language server with multiple workspace folders
-func Test_SmokeLdxSyncCache_InitializeWithMultipleFolders(t *testing.T) {
-	c := testutil.SmokeTest(t, "")
+// setupLdxSyncCacheTest creates test environment for LDX-Sync cache tests
+// tokenSecretName is optional - empty string uses default SNYK_TOKEN
+func setupLdxSyncCacheTest(t *testing.T, tokenSecretName string) (*config.Config, server.Local) {
+	t.Helper()
+	c := testutil.SmokeTest(t, tokenSecretName)
 	loc, _ := setupServer(t, c)
 
 	// Disable scanning products - only testing cache behavior
@@ -101,6 +104,20 @@ func Test_SmokeLdxSyncCache_InitializeWithMultipleFolders(t *testing.T) {
 
 	cleanupChannels()
 	di.Init()
+
+	// Cleanup stored folder configs to prevent test interference
+	t.Cleanup(func() {
+		s, _ := storedconfig.ConfigFile(c.IdeName())
+		_ = os.Remove(s)
+	})
+
+	return c, loc
+}
+
+// Test_SmokeLdxSyncCache_InitializeWithMultipleFolders verifies cache population when
+// initializing the language server with multiple workspace folders
+func Test_SmokeLdxSyncCache_InitializeWithMultipleFolders(t *testing.T) {
+	c, loc := setupLdxSyncCacheTest(t, "")
 
 	// Setup first folder
 	t.Log("Setting up first folder (nodejs-goof)...")
@@ -140,16 +157,7 @@ func Test_SmokeLdxSyncCache_InitializeWithMultipleFolders(t *testing.T) {
 // Test_SmokeLdxSyncCache_AddFolderRefreshesCache verifies cache updates when
 // adding a new workspace folder via didChangeWorkspaceFolders
 func Test_SmokeLdxSyncCache_AddFolderRefreshesCache(t *testing.T) {
-	c := testutil.SmokeTest(t, "")
-
-	loc, _ := setupServer(t, c)
-
-	c.SetSnykCodeEnabled(false)
-	c.SetSnykIacEnabled(false)
-	c.SetSnykOssEnabled(false)
-
-	cleanupChannels()
-	di.Init()
+	c, loc := setupLdxSyncCacheTest(t, "")
 
 	// Initialize with first folder
 	folder1 := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
@@ -182,15 +190,7 @@ func Test_SmokeLdxSyncCache_AddFolderRefreshesCache(t *testing.T) {
 // Test_SmokeLdxSyncCache_ChangePreferredOrgTriggersRefetch verifies that changing
 // the PreferredOrg setting triggers a cache refresh
 func Test_SmokeLdxSyncCache_ChangePreferredOrgTriggersRefetch(t *testing.T) {
-	c := testutil.SmokeTest(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
-	loc, _ := setupServer(t, c)
-
-	c.SetSnykCodeEnabled(false)
-	c.SetSnykIacEnabled(false)
-	c.SetSnykOssEnabled(false)
-
-	cleanupChannels()
-	di.Init()
+	c, loc := setupLdxSyncCacheTest(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
 
 	// Initialize with folder
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
