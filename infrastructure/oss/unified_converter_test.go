@@ -53,28 +53,28 @@ func Test_buildUpgradePath(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			finding:         createFindingWithoutUpgradePath(t),
 			expectedUpgrade: []any{false},
-			description:     "Should return [false] when no upgrade information available",
+			description:     "Should return [false] when no upgrade information available.",
 		},
 		{
 			name:            "Single upgrade path",
 			dependencyPath:  []string{"goof@1.0.0", "lodash@4.2.3"},
 			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false, "lodash@4.17.21"},
-			description:     "Should extract upgrade path from fix relationships",
+			description:     "Should extract upgrade path from fix relationships.",
 		},
 		{
 			name:            "Multi-level dependency path",
 			dependencyPath:  []string{"root@1.0.0", "direct-dependency@1.7.1", "lodash@4.2.3"},
 			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"root@1.0.0", "direct-dependency@2.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false, "direct-dependency@2.0.0", "lodash@4.17.21"},
-			description:     "Should handle multi-level transitive dependencies",
+			description:     "Should handle multi-level transitive dependencies.",
 		},
 		{
 			name:            "Multiple upgrade paths - filters to correct direct dependency",
 			dependencyPath:  []string{"goof@1.0.0", "direct-dependency@1.7.1", "lodash@4.2.3"},
 			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "another-direct-dependency@2.0.0", "lodash@4.17.22"}, {"goof@1.0.0", "direct-dependency@2.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false, "direct-dependency@2.0.0", "lodash@4.17.21"},
-			description:     "Should filter and return the upgrade path matching the dependency package name",
+			description:     "Should filter and return the upgrade path matching the dependency package name.",
 		},
 		{
 			name:            "Only an upgrade path for a different package",
@@ -88,21 +88,21 @@ func Test_buildUpgradePath(t *testing.T) {
 			dependencyPath:  []string{},
 			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false},
-			description:     "Should return [false] when dependency path is empty",
+			description:     "Should return [false] when dependency path is empty.",
 		},
 		{
 			name:            "Malformed data: single element dependency path - handles gracefully",
 			dependencyPath:  []string{"root@1.0.0"},
 			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false},
-			description:     "Should return [false] when dependency path has only root (length 1, malformed) to avoid panic",
+			description:     "Should return [false] when dependency path has only root (length 1, malformed) to avoid panic.",
 		},
 		{
 			name:            "Malformed data: UpgradePackageAdvice is for a different package - handles gracefully",
 			dependencyPath:  []string{"root@1.0.0", "lodash@4.2.3"},
 			finding:         createFindingWithUpgradePaths(t, "other-pkg", [][]string{{"root@1.0.0", "other-pkg@2.0.0"}}),
 			expectedUpgrade: []any{false},
-			description:     "Should return [false] when UpgradePackageAdvice exists but targets a different package than the vulnerable one (malformed API data)",
+			description:     "Should return [false] when UpgradePackageAdvice exists but targets a different package than the vulnerable one (malformed API data).",
 		},
 	}
 
@@ -140,7 +140,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false},
 			expectedMessage: "No remediation advice available",
-			description: "Should return no remediation message when no fix available",
+			description: "Should return no remediation message when no fix available.",
 		},
 		{
 			name:        "Direct dependency with fix available",
@@ -154,7 +154,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.1"},
 			expectedMessage: "Upgrade to test-package@1.0.1",
-			description: "Should return upgrade message when fix is available",
+			description: "Should return upgrade message when fix is available.",
 		},
 		{
 			name:        "Transitive dependency with fix and upgrade path available",
@@ -168,7 +168,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "intermediate@1.0.0", "vuln-pkg@1.0.0"},
 			upgradePath:     []any{false, "intermediate@2.0.0", "vuln-pkg@1.0.1"},
 			expectedMessage: "Upgrade to intermediate@2.0.0",
-			description: "Should return upgrade message showing intermediate package to upgrade for transitive dependency fixes",
+			description: "Should return upgrade message showing intermediate package to upgrade for transitive dependency fixes.",
 		},
 		{
 			name:        "Deep transitive dependency with fix available but no upgrade path",
@@ -182,7 +182,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "pkg-a@1.0.0", "pkg-b@1.0.0", "vuln-pkg@1.0.0"}, // Deep transitive
 			upgradePath:     []any{false}, // No upgrade path because intermediate deps haven't updated to consume the fix
 			expectedMessage: "",           // Returns empty when fix exists but no upgrade path available through dependency chain
-			description: "Should return empty when fix exists but intermediate dependencies haven't consumed it yet (common with deep transitive dependencies)",
+			description: "Should return empty when fix exists but intermediate dependencies haven't consumed it yet (common with deep transitive dependencies).",
 		},
 		{
 			name:        "Malformed data: upgrade path suggests same vulnerable version - npm",
@@ -196,7 +196,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.0"}, // Same as dependencyPath[1] - unrealistic but handled defensively
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try relocking your lockfile or deleting node_modules and reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description: "Should return outdated dependency message when upgradePath[1] == dependencyPath[1] (defensive handling - shouldn't occur with real API data)",
+			description: "Should return outdated dependency message when upgradePath[1] == dependencyPath[1] (defensive handling - shouldn't occur with real API data).",
 		},
 		{
 			name:        "Malformed data: upgrade path suggests same vulnerable version - yarn",
@@ -210,7 +210,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.0"}, // Same as dependencyPath[1] - unrealistic but handled defensively
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try relocking your lockfile or deleting node_modules and reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description: "Should return outdated dependency message for yarn (same behavior as npm for this edge case)",
+			description: "Should return outdated dependency message for yarn (same behavior as npm for this edge case).",
 		},
 		{
 			name:        "Malformed data: upgrade path suggests same vulnerable version - maven",
@@ -224,7 +224,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.0"}, // Same as dependencyPath[1] - unrealistic but handled defensively
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description: "Should return outdated dependency message for maven (different remediation steps than npm/yarn)",
+			description: "Should return outdated dependency message for maven (different remediation steps than npm/yarn).",
 		},
 		{
 			name:        "Malformed data: upgrade path suggests same vulnerable version - pip",
@@ -238,7 +238,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.0"}, // Same as dependencyPath[1] - unrealistic but handled defensively
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description: "Should return outdated dependency message for pip (different remediation steps than npm/yarn)",
+			description: "Should return outdated dependency message for pip (different remediation steps than npm/yarn).",
 		},
 		{
 			name:        "Malformed data: upgrade path for different package than vulnerable one",
@@ -252,7 +252,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "other-pkg@2.0.0"}, // Wrong package - unrealistic but handled defensively
 			expectedMessage: "Upgrade to other-pkg@2.0.0",    // Still returns upgrade message for defensive handling
-			description: "Should return upgrade message even when upgrade path targets wrong package (defensive handling of malformed API data)",
+			description: "Should return upgrade message even when upgrade path targets wrong package (defensive handling of malformed API data).",
 		},
 	}
 
@@ -272,39 +272,46 @@ func Test_extractDependencyPath(t *testing.T) {
 		name           string
 		finding        *testapi.FindingData
 		expected       []string
+		description    string
 		skipTestReason string
 	}{
 		{
-			name:     "Extract path from finding with dependency evidence",
-			finding:  createFindingWithDependencyPath(t, "goof@1.0.0", []string{"lodash@4.17.20"}),
-			expected: []string{"goof@1.0.0", "lodash@4.17.20"},
+			name:        "Extract path from finding with dependency evidence",
+			finding:     createFindingWithDependencyPath(t, "goof@1.0.0", []string{"lodash@4.17.20"}),
+			expected:    []string{"goof@1.0.0", "lodash@4.17.20"},
+			description: "Should extract dependency path from finding with valid dependency_path evidence.",
 		},
 		{
-			name:     "Empty path for finding without evidence",
-			finding:  &testapi.FindingData{Attributes: &testapi.FindingAttributes{}},
-			expected: []string{},
+			name:        "Empty path for finding without evidence",
+			finding:     &testapi.FindingData{Attributes: &testapi.FindingAttributes{}},
+			expected:    []string{},
+			description: "Should return empty slice when finding has attributes but no evidence.",
 		},
 		{
-			name:     "Empty path for nil attributes",
-			finding:  &testapi.FindingData{},
-			expected: nil,
+			name:        "Empty path for nil attributes",
+			finding:     &testapi.FindingData{},
+			expected:    nil,
+			description: "Should return nil when finding has nil attributes.",
 		},
 		{
-			name:     "Defensive: non-dependency_path evidence - returns empty slice",
-			finding:  createFindingWithNonDependencyPathEvidence(t),
-			expected: []string{},
+			name:        "Defensive: non-dependency_path evidence - returns empty slice",
+			finding:     createFindingWithNonDependencyPathEvidence(t),
+			expected:    []string{},
+			description: "Should return empty slice when evidence exists but none is of the dependency_path type.",
 		},
 		{
 			name:           "TODO: multiple dependency paths - should return all paths",
 			finding:        createFindingWithMultipleDependencyPaths(t, "goof@1.0.0", []string{"lodash@4.17.20"}, []string{"other-pkg@1.0.0"}),
-			expected:       []string{"goof@1.0.0", "lodash@4.17.20", "goof@1.0.0", "other-pkg@1.0.0"},
-			skipTestReason: "Prod code needs to be updated to return all dependency paths, not just the first one (FIXME in prod code first)",
+			expected:       []string{"goof@1.0.0", "lodash@4.17.20" /* path 1 */, "goof@1.0.0", "other-pkg@1.0.0" /* path 2 */}, // I would expect the output to be a 2D slice.
+			description:    "Should return all dependency paths when multiple exist.",
+			skipTestReason: "Prod code needs to be updated to return all dependency paths, not just the first one (FIXME in prod code first).",
 		},
 		{
 			name: "Wrong behavior: multiple dependency paths - returns first one only (FIXME in prod code)",
 			// TODO: Delete this test and enable the test above when the fix has been implemented in the prod code.
-			finding:  createFindingWithMultipleDependencyPaths(t, "goof@1.0.0", []string{"lodash@4.17.20"}, []string{"other-pkg@1.0.0"}),
-			expected: []string{"goof@1.0.0", "lodash@4.17.20"},
+			finding:     createFindingWithMultipleDependencyPaths(t, "goof@1.0.0", []string{"lodash@4.17.20"}, []string{"other-pkg@1.0.0"}),
+			expected:    []string{"goof@1.0.0", "lodash@4.17.20"}, // Wrong: should return both paths, but currently only returns first
+			description: "With the current incorrect behaviour, should returns only first path when multiple exist. If this bug has been fixed, please delete this test and enable the test above.",
 		},
 	}
 
@@ -314,7 +321,7 @@ func Test_extractDependencyPath(t *testing.T) {
 				t.Skip(tt.skipTestReason)
 			}
 			result := extractDependencyPath(tt.finding)
-			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.expected, result, tt.description)
 		})
 	}
 }
@@ -1387,13 +1394,13 @@ func createFindingWithNonDependencyPathEvidence(t *testing.T) *testapi.FindingDa
 		},
 	}
 
-	// Add package location evidence (not dependency_path)
-	var pkgLoc testapi.FindingLocation
-	err := pkgLoc.FromPackageLocation(testapi.PackageLocation{
-		Package: testapi.Package{Name: "test-pkg", Version: "1.0.0"},
+	// Add "other" evidence to the Evidence array (not dependency_path type)
+	var evidence testapi.Evidence
+	err := evidence.FromOtherEvidence(testapi.OtherEvidence{
+		Source: "other",
 	})
 	require.NoError(t, err)
-	finding.Attributes.Locations = append(finding.Attributes.Locations, pkgLoc)
+	finding.Attributes.Evidence = append(finding.Attributes.Evidence, evidence)
 
 	return finding
 }
