@@ -97,7 +97,7 @@ func Test_RefreshConfigFromLdxSync_NoFolders(t *testing.T) {
 
 	// Verify FolderToOrgMapping is empty
 	cache := c.GetLdxSyncOrgConfigCache()
-	orgId := cache.GetOrgIdForFolder(types.FilePath("/nonexistent"))
+	orgId := cache.GetOrgIdForFolder(types.FilePath("/nonexistent"), "")
 	assert.Empty(t, orgId)
 }
 
@@ -123,7 +123,7 @@ func Test_RefreshConfigFromLdxSync_SingleFolder_Success(t *testing.T) {
 
 	// Verify FolderToOrgMapping was populated
 	cache := c.GetLdxSyncOrgConfigCache()
-	orgId := cache.GetOrgIdForFolder(folderPath)
+	orgId := cache.GetOrgIdForFolder(folderPath, "")
 	assert.Equal(t, expectedOrgId, orgId)
 }
 
@@ -158,7 +158,7 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 
 	// Verify FolderToOrgMapping was populated
 	cache := c.GetLdxSyncOrgConfigCache()
-	orgId := cache.GetOrgIdForFolder(folderPath)
+	orgId := cache.GetOrgIdForFolder(folderPath, "")
 	assert.Equal(t, expectedOrgId, orgId)
 }
 
@@ -194,9 +194,9 @@ func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 
 	// Verify all FolderOrgMappings were populated
 	cache := c.GetLdxSyncOrgConfigCache()
-	assert.Equal(t, "org-1", cache.GetOrgIdForFolder(folder1Path))
-	assert.Equal(t, "org-2", cache.GetOrgIdForFolder(folder2Path))
-	assert.Equal(t, "org-3", cache.GetOrgIdForFolder(folder3Path))
+	assert.Equal(t, "org-1", cache.GetOrgIdForFolder(folder1Path, ""))
+	assert.Equal(t, "org-2", cache.GetOrgIdForFolder(folder2Path, ""))
+	assert.Equal(t, "org-3", cache.GetOrgIdForFolder(folder3Path, ""))
 }
 
 func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
@@ -221,7 +221,7 @@ func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
 
 	// Verify FolderToOrgMapping was NOT populated for error result
 	cache := c.GetLdxSyncOrgConfigCache()
-	orgId := cache.GetOrgIdForFolder(folderPath)
+	orgId := cache.GetOrgIdForFolder(folderPath, "")
 	assert.Empty(t, orgId, "Error results should not populate FolderToOrgMapping")
 }
 
@@ -290,7 +290,7 @@ func Test_RefreshConfigFromLdxSync_EmptyFolderPath(t *testing.T) {
 
 	// Should populate FolderToOrgMapping even with empty path
 	cache := c.GetLdxSyncOrgConfigCache()
-	orgId := cache.GetOrgIdForFolder(emptyPath)
+	orgId := cache.GetOrgIdForFolder(emptyPath, "")
 	assert.Equal(t, expectedOrgId, orgId)
 }
 
@@ -299,7 +299,7 @@ func Test_GetOrgIdForFolder_EmptyFolderPath_ReturnsEmpty(t *testing.T) {
 
 	// Don't populate cache
 	cache := c.GetLdxSyncOrgConfigCache()
-	orgId := cache.GetOrgIdForFolder(types.FilePath(""))
+	orgId := cache.GetOrgIdForFolder(types.FilePath(""), "")
 
 	// Should return empty string when no mapping exists
 	assert.Empty(t, orgId)

@@ -163,12 +163,16 @@ func (c *LDXSyncConfigCache) SetFolderOrg(folderPath FilePath, orgId string) {
 	c.FolderToOrgMapping[folderPath] = orgId
 }
 
-// GetOrgIdForFolder returns the org ID for a folder path, or empty string if not found
-func (c *LDXSyncConfigCache) GetOrgIdForFolder(folderPath FilePath) string {
-	if c == nil || c.FolderToOrgMapping == nil {
-		return ""
+// GetOrgIdForFolder returns the org ID for a folder path from the cache,
+// falling back to the provided fallbackOrg if the cache doesn't have a mapping.
+// The fallbackOrg should typically be the global org from Config.Organization().
+func (c *LDXSyncConfigCache) GetOrgIdForFolder(folderPath FilePath, fallbackOrg string) string {
+	if c != nil && c.FolderToOrgMapping != nil {
+		if orgId := c.FolderToOrgMapping[folderPath]; orgId != "" {
+			return orgId
+		}
 	}
-	return c.FolderToOrgMapping[folderPath]
+	return fallbackOrg
 }
 
 // ClearFolderOrgMapping clears all folder-to-org mappings
