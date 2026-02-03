@@ -514,9 +514,11 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 		} else {
 			// Case when Folder Configs were provided as part of initialize request
 			// or when user is not logged in during initialized notification
-			// Look up org from LDX-Sync cache, fall back to global org if not found
+			// Only set if LDX-Sync has a result - fallback to global org happens in FolderOrganization
 			cache := c.GetLdxSyncOrgConfigCache()
-			folderConfig.AutoDeterminedOrg = cache.GetOrgIdForFolder(folderConfig.FolderPath, c.Organization())
+			if orgId := cache.GetOrgIdForFolder(folderConfig.FolderPath); orgId != "" {
+				folderConfig.AutoDeterminedOrg = orgId
+			}
 		}
 	}
 

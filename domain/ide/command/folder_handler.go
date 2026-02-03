@@ -69,9 +69,11 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 
 		// Always update AutoDeterminedOrg from LDX-Sync cache (even for folders where OrgSetByUser is true)
 		// This ensures we always know what LDX-Sync recommends, regardless of whether the user has opted out
-		// Falls back to global org if LDX-Sync hasn't returned a result for this folder
+		// Only set if LDX-Sync has a result - fallback to global org happens in FolderOrganization
 		cache := c.GetLdxSyncOrgConfigCache()
-		folderConfig.AutoDeterminedOrg = cache.GetOrgIdForFolder(folderConfig.FolderPath, c.Organization())
+		if orgId := cache.GetOrgIdForFolder(folderConfig.FolderPath); orgId != "" {
+			folderConfig.AutoDeterminedOrg = orgId
+		}
 
 		// Trigger migration for folders that haven't been migrated yet
 		// This ensures that folders loaded from storage get migrated on initialization

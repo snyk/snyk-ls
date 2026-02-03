@@ -439,21 +439,20 @@ func Test_GetOrgIdForFolder_WithCache(t *testing.T) {
 
 	// Get org from cache
 	cache := c.GetLdxSyncOrgConfigCache()
-	orgId := cache.GetOrgIdForFolder(folderPath, "")
+	orgId := cache.GetOrgIdForFolder(folderPath)
 
 	assert.Equal(t, expectedOrgId, orgId, "Should return org from cache")
 }
 
-// Test GetOrgIdForFolder without cached result returns fallback
-func Test_GetOrgIdForFolder_WithoutCache_ReturnsFallback(t *testing.T) {
+// Test GetOrgIdForFolder without cached result returns empty string
+func Test_GetOrgIdForFolder_WithoutCache_ReturnsEmpty(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
-	fallbackOrg := "fallback-org"
 
 	// Don't populate cache
 	cache := c.GetLdxSyncOrgConfigCache()
-	orgId := cache.GetOrgIdForFolder(folderPath, fallbackOrg)
+	orgId := cache.GetOrgIdForFolder(folderPath)
 
-	assert.Equal(t, fallbackOrg, orgId, "Should return fallback when cache is empty")
+	assert.Empty(t, orgId, "Should return empty string when cache is empty")
 }
