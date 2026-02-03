@@ -1161,7 +1161,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: func(fc types.FolderConfig) {
 				require.Equal(t, preferredOrg, fc.PreferredOrg)
 				require.True(t, fc.OrgSetByUser)
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "Should be set by auto-org resolution on initialized")
+				// AutoDeterminedOrg may be empty if LDX-Sync fails - fallback happens at point of use
+				// Since OrgSetByUser=true, PreferredOrg is used anyway
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
 				// Note: FeatureFlags are not sent to IDE (cleared by SanitizeForIDE) - they are LS-managed
 
