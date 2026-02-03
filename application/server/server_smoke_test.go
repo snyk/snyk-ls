@@ -1318,6 +1318,70 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 	})
 
+	t.Run("authenticated - invalid PreferredOrg falls back to auto-determination", func(t *testing.T) {
+		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
+
+		ensureInitialized(t, c, loc, initParams, nil)
+		repoValidator := func(fc types.FolderConfig) {
+			require.False(t, fc.OrgSetByUser)
+			require.Empty(t, fc.PreferredOrg)
+			require.NotEmpty(t, fc.AutoDeterminedOrg)
+			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		}
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+		})
+
+		// add folder (LS has not seen before)
+		fakeDirFolder, fakeDirFolderPath := addFakeDirAsWorkspaceFolder(t, loc)
+
+		// Capture the actual AutoDeterminedOrg from the first add
+		var expectedAutoDeterminedOrg string
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+			fakeDirFolderPath: func(fc types.FolderConfig) {
+				require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
+				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+				expectedAutoDeterminedOrg = fc.AutoDeterminedOrg
+			},
+		})
+
+		// remove folder
+		removeWorkSpaceFolder(t, loc, fakeDirFolder)
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+		})
+
+		// Test fallback: Use invalid org slug "any" which will fail resolution
+		// But with OrgSetByUser=false, LDX-Sync should fallback to auto-determination
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+			FolderPath:                  fakeDirFolderPath,
+			AutoDeterminedOrg:           "placeholder",
+			PreferredOrg:                "any", // Invalid org slug - will trigger fallback
+			OrgMigratedFromGlobalConfig: true,
+			OrgSetByUser:                false, // Auto mode
+		}, c.Logger())
+		require.NoError(t, err)
+
+		// re-add folder - should fallback from "any" to auto-determination
+		addWorkSpaceFolder(t, loc, fakeDirFolder)
+
+		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+			repo: repoValidator,
+			fakeDirFolderPath: func(fc types.FolderConfig) {
+				require.False(t, fc.OrgSetByUser, "OrgSetByUser must be preserved")
+				require.Equal(t, "any", fc.PreferredOrg, "PreferredOrg must be preserved even though it's invalid")
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must be set via fallback")
+				require.NotEqual(t, "placeholder", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override placeholder")
+				require.Equal(t, expectedAutoDeterminedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be determined via fallback")
+				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+			},
+		})
+	})
+
 	t.Run("authenticated - user blanks folder-level org, so LS uses global org", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {

@@ -120,6 +120,24 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 				Interface("fullResult", cfgResult).
 				Msg("LDX-Sync API Response - full result")
 
+			// Fallback logic: If PreferredOrg fails, retry without it to allow auto-determination
+			if cfgResult.Error != nil && preferredOrg != "" {
+				logger.Warn().
+					Str("folder", string(f.Path())).
+					Str("preferredOrg", preferredOrg).
+					Err(cfgResult.Error).
+					Msg("PreferredOrg failed, retrying without it")
+
+				// Retry without PreferredOrg to allow full auto-determination
+				cfgResult = s.apiClient.GetUserConfigForProject(engine, string(f.Path()), "")
+
+				logger.Debug().
+					Str("projectPath", string(f.Path())).
+					Bool("hasError", cfgResult.Error != nil).
+					Bool("hasConfig", cfgResult.Config != nil).
+					Msg("LDX-Sync fallback response")
+			}
+
 			// Store result in temporary map (even if there's an error)
 			// This allows ResolveOrg to distinguish between "never attempted" and "attempted but failed"
 			resultsMutex.Lock()
