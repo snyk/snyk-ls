@@ -696,9 +696,12 @@ func (fc *FolderConfig) ResetToDefault(settingName string) {
 func (fc *FolderConfig) SanitizeForIDE() FolderConfig {
 	sanitized := *fc
 	sanitized.UserOverrides = nil
+	sanitized.ModifiedFields = nil
+
+	// TODO we might reinstate these when we fix IDE-1539, and have the IDEs use these instead of looking them up.
 	sanitized.FeatureFlags = nil
 	sanitized.SastSettings = nil
-	sanitized.ModifiedFields = nil
+
 	return sanitized
 }
 

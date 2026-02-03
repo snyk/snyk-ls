@@ -870,25 +870,31 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 // Deprecated use FolderOrganization(path) to get organization per folder
 func (c *Config) Organization() string {
 	// Check cache first to avoid GAF API calls
-	c.cachedDefaultOrgMutex.RLock()
-	if c.cachedDefaultOrg != "" {
-		cached := c.cachedDefaultOrg
-		c.cachedDefaultOrgMutex.RUnlock()
+	if cached := c.getCachedOrg(); cached != "" {
 		return cached
 	}
-	c.cachedDefaultOrgMutex.RUnlock()
 
 	// Get from GAF (may trigger API call if not set)
 	org := c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 
 	// Cache the result if non-empty
 	if org != "" {
-		c.cachedDefaultOrgMutex.Lock()
-		c.cachedDefaultOrg = org
-		c.cachedDefaultOrgMutex.Unlock()
+		c.setCachedOrg(org)
 	}
 
 	return org
+}
+
+func (c *Config) getCachedOrg() string {
+	c.cachedDefaultOrgMutex.RLock()
+	defer c.cachedDefaultOrgMutex.RUnlock()
+	return c.cachedDefaultOrg
+}
+
+func (c *Config) setCachedOrg(org string) {
+	c.cachedDefaultOrgMutex.Lock()
+	defer c.cachedDefaultOrgMutex.Unlock()
+	c.cachedDefaultOrg = org
 }
 
 func (c *Config) SetOrganization(organization string) {
@@ -900,9 +906,7 @@ func (c *Config) SetOrganization(organization string) {
 // ClearCachedGlobalOrg clears the cached global org.
 // Call this when org configuration changes (e.g., after LDX-Sync refresh or SetOrganization).
 func (c *Config) ClearCachedGlobalOrg() {
-	c.cachedDefaultOrgMutex.Lock()
-	defer c.cachedDefaultOrgMutex.Unlock()
-	c.cachedDefaultOrg = ""
+	c.setCachedOrg("")
 }
 
 func (c *Config) ManageBinariesAutomatically() bool {
