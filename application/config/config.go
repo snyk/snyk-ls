@@ -212,6 +212,8 @@ type Config struct {
 	ldxSyncConfigCache                  *types.LDXSyncConfigCache
 	ldxSyncConfigCacheMutex             sync.RWMutex
 	configResolver                      *types.ConfigResolver
+	cachedDefaultOrg                    string
+	cachedDefaultOrgMutex               sync.RWMutex
 }
 
 func CurrentConfig() *Config {
@@ -867,11 +869,40 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 
 // Deprecated use FolderOrganization(path) to get organization per folder
 func (c *Config) Organization() string {
-	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
+	// Check cache first to avoid GAF API calls
+	c.cachedDefaultOrgMutex.RLock()
+	if c.cachedDefaultOrg != "" {
+		cached := c.cachedDefaultOrg
+		c.cachedDefaultOrgMutex.RUnlock()
+		return cached
+	}
+	c.cachedDefaultOrgMutex.RUnlock()
+
+	// Get from GAF (may trigger API call if not set)
+	org := c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
+
+	// Cache the result if non-empty
+	if org != "" {
+		c.cachedDefaultOrgMutex.Lock()
+		c.cachedDefaultOrg = org
+		c.cachedDefaultOrgMutex.Unlock()
+	}
+
+	return org
 }
 
 func (c *Config) SetOrganization(organization string) {
 	c.engine.GetConfiguration().Set(configuration.ORGANIZATION, organization)
+	// Clear cache so next call picks up the new value
+	c.ClearCachedGlobalOrg()
+}
+
+// ClearCachedGlobalOrg clears the cached global org.
+// Call this when org configuration changes (e.g., after LDX-Sync refresh or SetOrganization).
+func (c *Config) ClearCachedGlobalOrg() {
+	c.cachedDefaultOrgMutex.Lock()
+	defer c.cachedDefaultOrgMutex.Unlock()
+	c.cachedDefaultOrg = ""
 }
 
 func (c *Config) ManageBinariesAutomatically() bool {
@@ -1547,7 +1578,7 @@ func (c *Config) InitLdxSyncOrgConfigCache() {
 	c.ldxSyncConfigCacheMutex.Lock()
 	defer c.ldxSyncConfigCacheMutex.Unlock()
 	c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
-	c.configResolver = types.NewConfigResolver(c.ldxSyncConfigCache, nil, c.FolderOrganization, c.logger)
+	c.configResolver = types.NewConfigResolver(c.ldxSyncConfigCache, nil, c, c.logger)
 }
 
 // GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache

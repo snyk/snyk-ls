@@ -125,6 +125,9 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 	// Update the org config cache (including folder-to-org mapping) and machine config
 	s.updateOrgConfigCache(c, results)
 	s.updateMachineConfig(c, results)
+
+	// Clear the cached global org since LDX-Sync may have changed org mappings
+	c.ClearCachedGlobalOrg()
 }
 
 // updateOrgConfigCache converts LDX-Sync results to org configs and updates the cache.
