@@ -1292,10 +1292,12 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: repoValidator,
 		})
 
+		// Use a real organization slug instead of "any" to avoid LDX-Sync resolution errors with error caching
+		// This tests that PreferredOrg is preserved and AutoDeterminedOrg is refreshed from LDX-Sync
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  fakeDirFolderPath,
-			AutoDeterminedOrg:           "any",
-			PreferredOrg:                "any",
+			AutoDeterminedOrg:           "placeholder",
+			PreferredOrg:                "devex_ide",
 			OrgMigratedFromGlobalConfig: true,
 			OrgSetByUser:                false,
 		}, c.Logger())
@@ -1308,9 +1310,9 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: repoValidator,
 			fakeDirFolderPath: func(fc types.FolderConfig) {
 				require.False(t, fc.OrgSetByUser, "OrgSetByUser must be preserved")
-				require.Equal(t, "any", fc.PreferredOrg, "PreferredOrg must be preserved")
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
-				require.NotEqual(t, "any", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
+				require.Equal(t, "devex_ide", fc.PreferredOrg, "PreferredOrg must be preserved")
+				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must be refreshed from LDX-Sync")
+				require.NotEqual(t, "placeholder", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override placeholder value")
 				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
 			},
 		})
@@ -1639,6 +1641,19 @@ func textDocumentDidSave(t *testing.T, loc *server.Local, testPath types.FilePat
 func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.WorkspaceFolder, types.FilePath) {
 	t.Helper()
 	fakeDirFolderPath := types.FilePath(t.TempDir())
+
+	// Initialize a git repository so LDX-Sync can detect it
+	cmd := exec.Command("git", "init")
+	cmd.Dir = string(fakeDirFolderPath)
+	_, err := cmd.CombinedOutput()
+	require.NoError(t, err)
+
+	// Add a remote so LDX-Sync can resolve organization
+	cmd = exec.Command("git", "remote", "add", "origin", "https://github.com/snyk-labs/python-goof")
+	cmd.Dir = string(fakeDirFolderPath)
+	_, err = cmd.CombinedOutput()
+	require.NoError(t, err)
+
 	fakeDirFolder := types.WorkspaceFolder{Uri: uri.PathToUri(fakeDirFolderPath), Name: "fake-dir"}
 
 	addWorkSpaceFolder(t, loc, fakeDirFolder)
