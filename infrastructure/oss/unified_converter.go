@@ -315,8 +315,9 @@ func buildRemediationAdvice(
 			return buildOutdatedDependencyMessage(problem.PackageName, actualVersion, ecosystemStr)
 		}
 		// Return upgrade message when available
-		// Note: if isUpgradable but upgradeMessage is empty, we return empty string
-		// but that case should be rare since upgradePath is built from InitiallyFixedInVersions
+		// Note: if isUpgradable but upgradeMessage is empty (fix exists but no upgrade path available),
+		// we return empty string. This is common for deep transitive dependencies where intermediate
+		// packages haven't consumed the fixed version yet.
 		return upgradeMessage
 	}
 
