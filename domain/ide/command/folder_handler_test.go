@@ -245,10 +245,16 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	require.True(t, ok, "Expected FolderConfigsParam notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 2)
 
-	// Verify each folder has its own AutoDeterminedOrg
-	for i, fc := range folderConfigsParam.FolderConfigs {
-		assert.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for each folder")
-		assert.Equal(t, fmt.Sprintf("org-id-for-folder-%d", i), fc.AutoDeterminedOrg, "AutoDeterminedOrg should be folder-specific")
+	// Verify each folder has its own AutoDeterminedOrg (order is not guaranteed due to map iteration)
+	expectedOrgs := map[types.FilePath]string{
+		folderPaths[0]: "org-id-for-folder-0",
+		folderPaths[1]: "org-id-for-folder-1",
+	}
+	for _, fc := range folderConfigsParam.FolderConfigs {
+		expectedOrg, found := expectedOrgs[fc.FolderPath]
+		require.True(t, found, "Unexpected folder path: %s", fc.FolderPath)
+		assert.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for folder %s", fc.FolderPath)
+		assert.Equal(t, expectedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be folder-specific for %s", fc.FolderPath)
 	}
 }
 

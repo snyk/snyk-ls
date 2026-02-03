@@ -1164,6 +1164,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 				require.NotEmpty(t, fc.AutoDeterminedOrg, "Should be set by auto-org resolution on initialized")
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
 				// Note: FeatureFlags are not sent to IDE (cleared by SanitizeForIDE) - they are LS-managed
+
+				// EffectiveConfig should be populated with org-scoped settings
+				require.NotNil(t, fc.EffectiveConfig, "EffectiveConfig should be set for IDE")
+				require.NotEmpty(t, fc.EffectiveConfig, "EffectiveConfig should contain settings")
 			},
 		})
 	})
