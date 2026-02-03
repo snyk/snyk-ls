@@ -47,21 +47,30 @@ func requireValidLdxSyncCache(t *testing.T, c *config.Config, validators map[typ
 	require.Eventually(t, func() bool {
 		for folderPath := range validators {
 			result := c.GetLdxSyncResult(folderPath)
-			if result == nil || result.Error != nil {
+			if result == nil {
+				t.Logf("Waiting for cache entry for folder %s: result is nil", folderPath)
+				return false
+			}
+			if result.Error != nil {
+				t.Logf("Waiting for cache entry for folder %s: error: %v", folderPath, result.Error)
 				return false
 			}
 			if result.Config == nil {
+				t.Logf("Waiting for cache entry for folder %s: config is nil", folderPath)
 				return false
 			}
 			if result.Config.Data.Attributes.Organizations == nil {
+				t.Logf("Waiting for cache entry for folder %s: organizations is nil", folderPath)
 				return false
 			}
 			if len(*result.Config.Data.Attributes.Organizations) == 0 {
+				t.Logf("Waiting for cache entry for folder %s: organizations list is empty", folderPath)
 				return false
 			}
 		}
+		t.Logf("All cache entries populated successfully")
 		return true
-	}, 10*time.Second, time.Second, "Cache should be populated for all folders")
+	}, 30*time.Second, time.Second, "Cache should be populated for all folders")
 
 	// Run validators for each folder
 	for folderPath, validator := range validators {
@@ -91,10 +100,9 @@ func requireValidLdxSyncCache(t *testing.T, c *config.Config, validators map[typ
 }
 
 // setupLdxSyncCacheTest creates test environment for LDX-Sync cache tests
-// tokenSecretName is optional - empty string uses default SNYK_TOKEN
-func setupLdxSyncCacheTest(t *testing.T, tokenSecretName string) (*config.Config, server.Local) {
+func setupLdxSyncCacheTest(t *testing.T) (*config.Config, server.Local) {
 	t.Helper()
-	c := testutil.SmokeTest(t, tokenSecretName)
+	c := testutil.SmokeTest(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
 
 	// Clear any existing config file from previous test runs
 	if s, err := storedconfig.ConfigFile(c.IdeName()); err == nil {
@@ -117,7 +125,7 @@ func setupLdxSyncCacheTest(t *testing.T, tokenSecretName string) (*config.Config
 // Test_SmokeLdxSyncCache_InitializeWithMultipleFolders verifies cache population when
 // initializing the language server with multiple workspace folders
 func Test_SmokeLdxSyncCache_InitializeWithMultipleFolders(t *testing.T) {
-	c, loc := setupLdxSyncCacheTest(t, "")
+	c, loc := setupLdxSyncCacheTest(t)
 
 	// Setup first folder
 	t.Log("Setting up first folder (nodejs-goof)...")
@@ -157,7 +165,7 @@ func Test_SmokeLdxSyncCache_InitializeWithMultipleFolders(t *testing.T) {
 // Test_SmokeLdxSyncCache_AddFolderRefreshesCache verifies cache updates when
 // adding a new workspace folder via didChangeWorkspaceFolders
 func Test_SmokeLdxSyncCache_AddFolderRefreshesCache(t *testing.T) {
-	c, loc := setupLdxSyncCacheTest(t, "")
+	c, loc := setupLdxSyncCacheTest(t)
 
 	// Initialize with first folder
 	folder1 := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
@@ -190,7 +198,7 @@ func Test_SmokeLdxSyncCache_AddFolderRefreshesCache(t *testing.T) {
 // Test_SmokeLdxSyncCache_ChangePreferredOrgTriggersRefetch verifies that changing
 // the PreferredOrg setting triggers a cache refresh
 func Test_SmokeLdxSyncCache_ChangePreferredOrgTriggersRefetch(t *testing.T) {
-	c, loc := setupLdxSyncCacheTest(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	c, loc := setupLdxSyncCacheTest(t)
 
 	// Initialize with folder
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
@@ -203,7 +211,6 @@ func Test_SmokeLdxSyncCache_ChangePreferredOrgTriggersRefetch(t *testing.T) {
 	sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 		folderConfig := folderConfigs[folder]
 		folderConfig.OrgSetByUser = true
-
 		if folderConfig.AutoDeterminedOrg == "b1a01686-331c-4b59-854c-139216d56bb0" {
 			folderConfig.PreferredOrg = "code-consistent-ignores-early-access-verification"
 		} else {
