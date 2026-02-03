@@ -184,8 +184,9 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 		})
 
 	// Expect ResolveOrg to be called during initialized handler for each folder
+	// Use gomock.Any() for path to handle platform-specific path separators
 	mockLdxSyncService.EXPECT().
-		ResolveOrg(c, folder.Path()).
+		ResolveOrg(c, gomock.Any()).
 		Return(ldx_sync_config.Organization{}, nil).
 		AnyTimes()
 

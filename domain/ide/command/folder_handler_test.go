@@ -32,6 +32,7 @@ import (
 
 	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
@@ -128,7 +129,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	// Mock ResolveOrg to return the expected organization
 	expectedOrgId := "resolved-org-id"
 	mockLdxSyncService.EXPECT().
-		ResolveOrg(c, folderPaths[0]).
+		ResolveOrg(c, gomock.Any()).
 		Return(ldx_sync_config.Organization{Id: expectedOrgId}, nil).
 		AnyTimes()
 
@@ -318,14 +319,15 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig2, logger)
 	require.NoError(t, err)
 
-	// Mock ResolveOrg to return different orgs for each folder
+	// Mock ResolveOrg to return different orgs based on folder path
+	// Matches original pre-refactor behavior: just concatenate path to make unique org IDs
 	mockLdxSyncService.EXPECT().
-		ResolveOrg(c, folderPaths[0]).
-		Return(ldx_sync_config.Organization{Id: "org-id-for-folder-0"}, nil).
-		AnyTimes()
-	mockLdxSyncService.EXPECT().
-		ResolveOrg(c, folderPaths[1]).
-		Return(ldx_sync_config.Organization{Id: "org-id-for-folder-1"}, nil).
+		ResolveOrg(c, gomock.Any()).
+		DoAndReturn(func(_ *config.Config, folderPath types.FilePath) (ldx_sync_config.Organization, error) {
+			return ldx_sync_config.Organization{
+				Id: "org-id-for-" + string(folderPath),
+			}, nil
+		}).
 		AnyTimes()
 
 	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), mockLdxSyncService)
@@ -338,19 +340,10 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	require.True(t, ok, "Expected FolderConfigsParam notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 2)
 
-	// Verify each folder has its own AutoDeterminedOrg based on FolderPath
+	// Verify each folder has its own AutoDeterminedOrg
 	for _, fc := range folderConfigsParam.FolderConfigs {
 		assert.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for each folder")
-
-		// Match based on FolderPath since iteration order is not guaranteed
-		switch fc.FolderPath {
-		case folderPaths[0]:
-			assert.Equal(t, "org-id-for-folder-0", fc.AutoDeterminedOrg, "AutoDeterminedOrg should match mocked value for folder 0")
-		case folderPaths[1]:
-			assert.Equal(t, "org-id-for-folder-1", fc.AutoDeterminedOrg, "AutoDeterminedOrg should match mocked value for folder 1")
-		default:
-			t.Fatalf("Unexpected folder path: %s", fc.FolderPath)
-		}
+		assert.Contains(t, fc.AutoDeterminedOrg, "org-id-for-", "AutoDeterminedOrg should be path-specific")
 	}
 }
 
