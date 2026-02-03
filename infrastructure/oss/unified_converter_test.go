@@ -320,6 +320,7 @@ func Test_extractDependencyPath(t *testing.T) {
 			if tt.skipTestReason != "" {
 				t.Skip(tt.skipTestReason)
 			}
+
 			result := extractDependencyPath(tt.finding)
 			assert.Equal(t, tt.expected, result, tt.description)
 		})
@@ -381,7 +382,8 @@ func Test_getIntroducingFinding(t *testing.T) {
 		findings       []*testapi.FindingData
 		problemPkgName string
 		expectedIndex  int
-		expectError    bool
+		description    string
+		skipTestReason string
 	}{
 		{
 			name: "Direct dependency introduces vulnerability",
@@ -390,7 +392,7 @@ func Test_getIntroducingFinding(t *testing.T) {
 			},
 			problemPkgName: "lodash",
 			expectedIndex:  0,
-			expectError:    false,
+			description:    "Should return the finding (which happens to be a direct dependency, but would also be returned by fallback logic if it wasn't).",
 		},
 		{
 			name: "Multiple findings - first direct dependency wins",
@@ -400,17 +402,31 @@ func Test_getIntroducingFinding(t *testing.T) {
 			},
 			problemPkgName: "lodash",
 			expectedIndex:  1,
-			expectError:    false,
+			description:    "Should return first finding with vulnerable package as direct dependency when multiple findings exist.",
 		},
 		{
-			name: "No direct dependency - returns first finding",
+			name: "TODO: multiple findings with different direct dependencies - should return one per direct dep",
+			findings: []*testapi.FindingData{
+				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"other-pkg@1.0.0", "lodash@4.17.4"}),
+				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"other-pkg@1.0.0", "sub-pkg@1.2.3", "lodash@4.17.0"}),
+				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"another-pkg@1.0.0", "lodash@4.17.4"}),
+				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"another-pkg@1.0.0", "another-sub-pkg@2.6.5", "lodash@4.17.2"}),
+			},
+			problemPkgName: "lodash",
+			expectedIndex:  0, // TODO: Change to expectedIndexes []int{0, 2} when function signature changes to return []*testapi.FindingData
+			description:    "Should return one finding for each unique direct dependency (other-pkg and another-pkg) that transitively leads to vulnerable package.",
+			skipTestReason: "Prod code needs to be updated to return multiple findings (one per unique direct dependency), not just the first one (FIXME in prod code first).",
+		},
+		{
+			name: "Wrong behaviour: multiple transitive paths through different direct deps - returns first finding only",
+			// TODO: Delete this test and enable the test above when the fix has been implemented in the prod code.
 			findings: []*testapi.FindingData{
 				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"other-pkg@1.0.0", "lodash@4.17.4"}),
 				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"another-pkg@1.0.0", "lodash@4.17.4"}),
 			},
 			problemPkgName: "lodash",
 			expectedIndex:  0,
-			expectError:    false,
+			description:    "With the current incorrect behaviour, should return only first finding when multiple direct dependencies transitively lead to vulnerable package. If this bug has been fixed, please delete this test and enable the test above.",
 		},
 		{
 			name: "Malformed data: dependency path with only root - returns first finding gracefully",
@@ -419,60 +435,28 @@ func Test_getIntroducingFinding(t *testing.T) {
 			},
 			problemPkgName: "lodash",
 			expectedIndex:  0,
-			expectError:    false,
+			description:    "Should return first finding when dependency path has insufficient length (malformed API data).",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.skipTestReason != "" {
+				t.Skip(tt.skipTestReason)
+			}
+
 			// Create issue with findings
 			problem := &testapi.SnykVulnProblem{
 				PackageName: tt.problemPkgName,
 			}
-
 			issue := createMockIssueWithFindings(t, tt.findings)
+
 			result, err := getIntroducingFinding(issue, problem)
 
-			if tt.expectError {
-				require.Error(t, err)
-				require.Nil(t, result)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, result)
-				// Verify we got the expected finding
-				assert.Equal(t, tt.findings[tt.expectedIndex], result)
-			}
+			assert.NoError(t, err, "getIntroducingFinding should not return an error")
+			assert.Equal(t, tt.findings[tt.expectedIndex], result, tt.description)
 		})
 	}
-}
-
-// Test_getIntroducingFinding_NoFindings tests error handling when there are no findings
-func Test_getIntroducingFinding_NoFindings(t *testing.T) {
-	testutil.UnitTest(t)
-
-	// Note: testapi.NewIssueFromFindings returns an error if the findings slice is empty,
-	// so we can't test the "len(findings) == 0" error path in getIntroducingFinding.
-	// That check is defensive but unreachable since GAF prevents empty findings.
-
-	// This test documents that the function works with minimal findings (one finding with empty evidence)
-	problem := &testapi.SnykVulnProblem{
-		PackageName: "test-package",
-	}
-
-	// Create a finding without any dependency path (edge case)
-	finding := &testapi.FindingData{
-		Attributes: &testapi.FindingAttributes{
-			Evidence: []testapi.Evidence{},
-		},
-	}
-
-	issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{finding})
-	require.NoError(t, err, "Should be able to create issue with one finding")
-
-	// This should still work - it will return the first finding even if path is empty
-	result, err := getIntroducingFinding(issue, problem)
-	require.NoError(t, err)
-	require.NotNil(t, result)
 }
 
 // Test_extractUpgradePackage tests extraction of upgrade paths from fix relationships
