@@ -46,7 +46,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
-	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -1164,11 +1163,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 				require.True(t, fc.OrgSetByUser)
 				require.NotEmpty(t, fc.AutoDeterminedOrg, "Should be set by auto-org resolution on initialized")
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
-
-				// Check for required feature flag keys
-				for _, key := range featureflag.Flags {
-					require.Contains(t, fc.FeatureFlags, key, "FeatureFlag map should contain %s key", key)
-				}
+				// Note: FeatureFlags are not sent to IDE (cleared by SanitizeForIDE) - they are LS-managed
 			},
 		})
 	})
