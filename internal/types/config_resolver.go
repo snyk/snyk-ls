@@ -69,18 +69,26 @@ func (r *ConfigResolver) SetGlobalSettings(settings *Settings) {
 	r.globalSettings = settings
 }
 
-// getEffectiveOrg returns the effective org for a folder path.
-// It first checks the LDX-Sync FolderToOrgMapping cache, then falls back to the orgResolver.
-func (r *ConfigResolver) getEffectiveOrg(folderPath FilePath) string {
-	// First check if LDX-Sync has already resolved the org for this folder
-	if r.ldxSyncCache != nil {
-		if org := r.ldxSyncCache.GetOrgIdForFolder(folderPath); org != "" {
+// getEffectiveOrg returns the effective org for a folder.
+// For auto-resolution (OrgSetByUser=false), checks LDX-Sync cache first to avoid
+// potential network calls in the fallback path. Otherwise delegates to orgResolver
+// (Config.FolderOrganization) to ensure consistency with scan operations.
+func (r *ConfigResolver) getEffectiveOrg(folderConfig *FolderConfig) string {
+	if folderConfig == nil {
+		return ""
+	}
+
+	// For auto-resolution, check LDX-Sync cache first to avoid network calls
+	// when AutoDeterminedOrg hasn't been persisted yet
+	if !folderConfig.OrgSetByUser && r.ldxSyncCache != nil {
+		if org := r.ldxSyncCache.GetOrgIdForFolder(folderConfig.FolderPath); org != "" {
 			return org
 		}
 	}
-	// Fall back to orgResolver (which includes global org fallback)
+
+	// Delegate to orgResolver for full resolution logic
 	if r.orgResolver != nil {
-		return r.orgResolver(folderPath)
+		return r.orgResolver(folderConfig.FolderPath)
 	}
 	return ""
 }
@@ -160,10 +168,7 @@ func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig *
 
 // resolveOrgSetting resolves an org-scoped setting with full precedence logic
 func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig *FolderConfig) (any, ConfigSource) {
-	effectiveOrg := ""
-	if folderConfig != nil {
-		effectiveOrg = r.getEffectiveOrg(folderConfig.FolderPath)
-	}
+	effectiveOrg := r.getEffectiveOrg(folderConfig)
 
 	var ldxField *LDXSyncField
 	if r.ldxSyncCache != nil && effectiveOrg != "" {
