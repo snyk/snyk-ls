@@ -37,9 +37,12 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
+
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -130,6 +133,31 @@ func cleanupChannels() {
 	disposeProgressListener()
 	progress.CleanupChannels()
 	di.HoverService().ClearAllHovers()
+}
+
+func setupMockLdxSyncResolveOrg(t *testing.T, orgId string) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+
+	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+	originalService := di.LdxSyncService()
+	di.SetLdxSyncService(mockLdxSyncService)
+
+	t.Cleanup(func() {
+		di.SetLdxSyncService(originalService)
+		ctrl.Finish()
+	})
+
+	// Mock ResolveOrg to return the specified org ID
+	mockLdxSyncService.EXPECT().
+		ResolveOrg(gomock.Any(), gomock.Any()).
+		Return(ldx_sync_config.Organization{Id: orgId}, nil).
+		AnyTimes()
+
+	// Mock RefreshConfigFromLdxSync to allow it to be called during initialization
+	mockLdxSyncService.EXPECT().
+		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any()).
+		AnyTimes()
 }
 
 type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
@@ -362,6 +390,7 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
+	setupMockLdxSyncResolveOrg(t, "auto-determined-org-id")
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -426,6 +455,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
+	setupMockLdxSyncResolveOrg(t, "auto-determined-org-id")
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -679,6 +709,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
+	setupMockLdxSyncResolveOrg(t, "auto-determined-org-id")
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -704,6 +735,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
+	setupMockLdxSyncResolveOrg(t, "auto-determined-org-id")
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		Token:                       "token",
@@ -734,6 +766,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
+	setupMockLdxSyncResolveOrg(t, "auto-determined-org-id")
 	initializationOptions := types.Settings{
 		EnableTrustedFoldersFeature: "true",
 		CliPath:                     filepath.Join(t.TempDir(), "cli"),
@@ -981,6 +1014,7 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
 	c := testutil.IntegTest(t)
 	loc, _ := setupServer(t, c)
+	setupMockLdxSyncResolveOrg(t, "auto-determined-org-id")
 	testutil.CreateDummyProgressListener(t)
 	file := testsupport.CreateTempFile(t, t.TempDir())
 	w := c.Workspace()
@@ -1039,6 +1073,12 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 	mockLdxSyncService.EXPECT().
 		RefreshConfigFromLdxSync(c, gomock.Any()).
 		Times(1)
+
+	// Expect ResolveOrg to be called for any folders (needed by sendFolderConfigs)
+	mockLdxSyncService.EXPECT().
+		ResolveOrg(gomock.Any(), gomock.Any()).
+		Return(ldx_sync_config.Organization{Id: "test-org-id"}, nil).
+		AnyTimes()
 
 	// Initialize server
 	_, err := loc.Client.Call(ctx, "initialize", nil)
@@ -1159,6 +1199,7 @@ func checkForSnykScan(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder
 func Test_IntegrationHoverResults(t *testing.T) {
 	c := testutil.IntegTest(t)
 	loc, _ := setupServer(t, c)
+	setupMockLdxSyncResolveOrg(t, "auto-determined-org-id")
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
