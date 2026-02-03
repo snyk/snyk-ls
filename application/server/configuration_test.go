@@ -1049,11 +1049,11 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	}
 	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
-	// Verify: AutoDeterminedOrg should be fetched and set by updateFolderConfigOrg
+	// Verify: AutoDeterminedOrg remains empty when LDX-Sync cache is empty
+	// AutoDeterminedOrg should only contain what LDX-Sync determined, not a fallback
+	// Fallback to global org happens at the point of use (in FolderOrganization)
 	updatedConfig := setup.getUpdatedConfig()
-	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be fetched and set")
-	// When LDX-Sync cache is empty, GetOrgFromCachedLdxSync falls back to global org
-	assert.Equal(t, "test-default-org-uuid", updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should fall back to global org when cache is empty")
+	assert.Empty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should remain empty when LDX-Sync cache is empty")
 }
 
 // Test: Migrated config where user changes org from auto to manual
