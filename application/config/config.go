@@ -1748,7 +1748,7 @@ func (c *Config) isProductEnabled(folderConfig *types.FolderConfig, productName 
 	}
 	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
 	if source != types.ConfigSourceDefault {
-		if products, ok := val.([]string); ok {
+		if products, ok := val.([]string); ok && len(products) > 0 {
 			for _, p := range products {
 				if p == productName {
 					return true
