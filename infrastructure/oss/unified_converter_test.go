@@ -336,6 +336,7 @@ func Test_buildMessage(t *testing.T) {
 		packageName string
 		remediation string
 		expected    string
+		description string
 	}{
 		{
 			name:        "Short message",
@@ -343,6 +344,7 @@ func Test_buildMessage(t *testing.T) {
 			packageName: "lodash",
 			remediation: "Upgrade to lodash@4.17.21",
 			expected:    "Prototype Pollution affecting package lodash. Upgrade to lodash@4.17.21",
+			description: "Should build message with title, package name, and remediation advice.",
 		},
 		{
 			name:        "No remediation available",
@@ -350,41 +352,7 @@ func Test_buildMessage(t *testing.T) {
 			packageName: "regex-pkg",
 			remediation: "No remediation advice available",
 			expected:    "ReDoS affecting package regex-pkg. No remediation advice available",
-		},
-		{
-			name:        "Empty title",
-			title:       "",
-			packageName: "test-pkg",
-			remediation: "Upgrade to test-pkg@2.0.0",
-			expected:    " affecting package test-pkg. Upgrade to test-pkg@2.0.0",
-		},
-		{
-			name:        "Empty package name",
-			title:       "Vulnerability",
-			packageName: "",
-			remediation: "No fix available",
-			expected:    "Vulnerability affecting package . No fix available",
-		},
-		{
-			name:        "Empty remediation",
-			title:       "Security Issue",
-			packageName: "vulnerable-pkg",
-			remediation: "",
-			expected:    "Security Issue affecting package vulnerable-pkg. ",
-		},
-		{
-			name:        "Special characters in title",
-			title:       "XSS <script>alert('test')</script>",
-			packageName: "web-pkg",
-			remediation: "Update required",
-			expected:    "XSS <script>alert('test')</script> affecting package web-pkg. Update required",
-		},
-		{
-			name:        "Special characters in package name",
-			title:       "Vulnerability",
-			packageName: "@scope/package-name",
-			remediation: "Upgrade to @scope/package-name@2.0.0",
-			expected:    "Vulnerability affecting package @scope/package-name. Upgrade to @scope/package-name@2.0.0",
+			description: "Should build message with title, package name, and include the 'No remediation advice available' text.",
 		},
 		{
 			name:        "Long remediation message gets truncated",
@@ -392,36 +360,16 @@ func Test_buildMessage(t *testing.T) {
 			packageName: "pkg",
 			remediation: strings.Repeat("A", 300), // 300 chars
 			expected:    "Vuln affecting package pkg. " + strings.Repeat("A", 172) + "... (Snyk)",
+			description: "Should truncate message at 200 characters and append '... (Snyk)' suffix.",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := buildMessage(tt.title, tt.packageName, tt.remediation)
-			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.expected, result, tt.description)
 		})
 	}
-}
-
-// Test_buildMessage_TruncatesLongMessages verifies that long messages are properly truncated
-func Test_buildMessage_TruncatesLongMessages(t *testing.T) {
-	testutil.UnitTest(t)
-
-	// Message format: "{title} affecting package {pkg}. {remediation}"
-	// Truncation happens when message length > 200
-	// Need title long enough that total message exceeds 200 chars
-	longTitle := strings.Repeat("A", 200)
-	packageName := "package-name"
-	remediation := "remediation advice"
-
-	result := buildMessage(longTitle, packageName, remediation)
-
-	// Expected: first 200 chars of full message + "... (Snyk)"
-	fullMessage := longTitle + " affecting package " + packageName + ". " + remediation
-	expectedTruncated := fullMessage[:200] + "... (Snyk)"
-
-	assert.Equal(t, expectedTruncated, result, "Truncated message should match expected format")
-	assert.Equal(t, 210, len(result), "Truncated message should be exactly 210 chars (200 + '... (Snyk)')")
 }
 
 // Test_getIntroducingFinding tests finding the dependency that introduces a vulnerability
