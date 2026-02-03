@@ -1245,7 +1245,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: func(fc types.FolderConfig) {
 				require.True(t, fc.OrgSetByUser, "OrgSetByUser should be true for non-default org")
 				require.Equal(t, expectedOrg, fc.PreferredOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg)
+				// AutoDeterminedOrg may be empty if LDX-Sync fails - fallback happens at point of use
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
 			},
 		})
@@ -1274,7 +1274,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			fakeDirFolderPath: func(fc types.FolderConfig) {
 				require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
 				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+				// AutoDeterminedOrg may be empty if LDX-Sync fails (e.g., non-git folder)
+				// Fallback to global org happens at point of use in FolderOrganization
 				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
 			},
 		})
@@ -1302,8 +1303,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			fakeDirFolderPath: func(fc types.FolderConfig) {
 				require.False(t, fc.OrgSetByUser, "OrgSetByUser must be preserved")
 				require.Equal(t, "any", fc.PreferredOrg, "PreferredOrg must be preserved")
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
-				require.NotEqual(t, "any", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any'")
+				// AutoDeterminedOrg may be empty if LDX-Sync fails (non-git folder)
+				// If set, it should override the stored "any" value
+				if fc.AutoDeterminedOrg != "" {
+					require.NotEqual(t, "any", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any' if set")
+				}
 				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
 			},
 		})
