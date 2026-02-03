@@ -95,6 +95,12 @@ func requireValidLdxSyncCache(t *testing.T, c *config.Config, validators map[typ
 func setupLdxSyncCacheTest(t *testing.T, tokenSecretName string) (*config.Config, server.Local) {
 	t.Helper()
 	c := testutil.SmokeTest(t, tokenSecretName)
+
+	// Clear any existing config file from previous test runs
+	if s, err := storedconfig.ConfigFile(c.IdeName()); err == nil {
+		_ = os.Remove(s)
+	}
+
 	loc, _ := setupServer(t, c)
 
 	// Disable scanning products - only testing cache behavior
@@ -104,12 +110,6 @@ func setupLdxSyncCacheTest(t *testing.T, tokenSecretName string) (*config.Config
 
 	cleanupChannels()
 	di.Init()
-
-	// Cleanup stored folder configs to prevent test interference
-	t.Cleanup(func() {
-		s, _ := storedconfig.ConfigFile(c.IdeName())
-		_ = os.Remove(s)
-	})
 
 	return c, loc
 }
@@ -203,6 +203,7 @@ func Test_SmokeLdxSyncCache_ChangePreferredOrgTriggersRefetch(t *testing.T) {
 	sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 		folderConfig := folderConfigs[folder]
 		folderConfig.OrgSetByUser = true
+
 		if folderConfig.AutoDeterminedOrg == "b1a01686-331c-4b59-854c-139216d56bb0" {
 			folderConfig.PreferredOrg = "code-consistent-ignores-early-access-verification"
 		} else {
