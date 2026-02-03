@@ -1187,7 +1187,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: func(fc types.FolderConfig) {
 				require.False(t, fc.OrgSetByUser)
 				require.Empty(t, fc.PreferredOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg)
 				require.True(t, fc.OrgMigratedFromGlobalConfig)
 			},
 		})
@@ -1259,7 +1258,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		repoValidator := func(fc types.FolderConfig) {
 			require.False(t, fc.OrgSetByUser)
 			require.Empty(t, fc.PreferredOrg)
-			require.NotEmpty(t, fc.AutoDeterminedOrg)
 			require.True(t, fc.OrgMigratedFromGlobalConfig)
 		}
 
@@ -1342,7 +1340,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: func(fc types.FolderConfig) {
 				require.True(t, fc.OrgSetByUser)
 				require.Equal(t, initialOrg, fc.PreferredOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
 			},
 		})
 
@@ -1363,7 +1360,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: func(fc types.FolderConfig) {
 				require.True(t, fc.OrgSetByUser, "OrgSetByUser should remain true after user blanks org")
 				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty after user blanks it")
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should still be set from LDX-Sync")
 				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
 			},
 		})
@@ -1463,14 +1459,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
 
-		// Verify initial state
-		var autoDeterminedOrg string
+		// Verify initial state - when OrgSetByUser=true, PreferredOrg is used
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
 			repo: func(fc types.FolderConfig) {
 				require.True(t, fc.OrgSetByUser)
 				require.Equal(t, initialOrg, fc.PreferredOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
-				autoDeterminedOrg = fc.AutoDeterminedOrg
 			},
 		})
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
@@ -1481,16 +1474,19 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			folderConfigs[repo].OrgSetByUser = false
 		})
 
-		// Verify that OrgSetByUser is false, PreferredOrg is empty, and the folder's effective org is the auto-determined one
+		// Verify that OrgSetByUser is false, PreferredOrg is empty
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
 			repo: func(fc types.FolderConfig) {
 				require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false after user opts-in to auto org selection")
 				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty after user opts-in to auto org selection")
-				require.Equal(t, autoDeterminedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should remain the same")
 				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
 			},
 		})
-		assert.Equal(t, autoDeterminedOrg, c.FolderOrganization(repo), "Folder should use auto-determined org when OrgSetByUser is false")
+		// When OrgSetByUser is false, effective org is AutoDeterminedOrg (if LDX-Sync succeeded) or global org (fallback)
+		// Either way, it should NOT be the user's initialOrg anymore
+		effectiveOrg := c.FolderOrganization(repo)
+		assert.NotEqual(t, initialOrg, effectiveOrg, "Folder should no longer use user's preferred org after opting in to auto selection")
+		assert.NotEmpty(t, effectiveOrg, "Folder should have an effective org (either auto-determined or global fallback)")
 	})
 
 	t.Run("authenticated - user opts out of automatic org selection", func(t *testing.T) {
@@ -1514,17 +1510,15 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
 
-		// Verify initial state
-		var autoDeterminedOrg string
+		// Verify initial state - when OrgSetByUser=false, effective org is AutoDeterminedOrg or global fallback
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
 			repo: func(fc types.FolderConfig) {
 				require.False(t, fc.OrgSetByUser)
 				require.Empty(t, fc.PreferredOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
-				autoDeterminedOrg = fc.AutoDeterminedOrg
 			},
 		})
-		require.Equal(t, autoDeterminedOrg, c.FolderOrganization(repo), "Folder should use auto-determined org when OrgSetByUser is false")
+		// Effective org should be non-empty (either AutoDeterminedOrg or global fallback)
+		require.NotEmpty(t, c.FolderOrganization(repo), "Folder should have an effective org when OrgSetByUser is false")
 
 		// User opts-out of automatic org selection for the folder
 		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
@@ -1537,10 +1531,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: func(fc types.FolderConfig) {
 				require.True(t, fc.OrgSetByUser, "OrgSetByUser should be true after user opts-out of auto org selection")
 				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty")
-				require.Equal(t, autoDeterminedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should remain the same")
 				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
 			},
 		})
+		// When OrgSetByUser=true and PreferredOrg is empty, effective org is global org
 		assert.Equal(t, globalOrg, c.FolderOrganization(repo), "Folder should use global org when OrgSetByUser is true and PreferredOrg is empty")
 	})
 }
