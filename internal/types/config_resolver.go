@@ -158,13 +158,18 @@ func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig *
 
 // resolveOrgSetting resolves an org-scoped setting with full precedence logic
 func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig *FolderConfig) (any, ConfigSource) {
-	effectiveOrg := r.getEffectiveOrg(folderConfig)
-
+	// Only look up org if we have an LDX-Sync cache to query
+	// This avoids triggering FolderOrganization() calls (which may call Organization() and trigger API calls)
+	// when there's no LDX-Sync data to look up anyway
+	var effectiveOrg string
 	var ldxField *LDXSyncField
-	if r.ldxSyncCache != nil && effectiveOrg != "" {
-		orgConfig := r.ldxSyncCache.GetOrgConfig(effectiveOrg)
-		if orgConfig != nil {
-			ldxField = orgConfig.GetField(settingName)
+	if r.ldxSyncCache != nil {
+		effectiveOrg = r.getEffectiveOrg(folderConfig)
+		if effectiveOrg != "" {
+			orgConfig := r.ldxSyncCache.GetOrgConfig(effectiveOrg)
+			if orgConfig != nil {
+				ldxField = orgConfig.GetField(settingName)
+			}
 		}
 	}
 
