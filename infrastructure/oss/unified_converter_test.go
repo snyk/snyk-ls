@@ -302,11 +302,18 @@ func Test_extractDependencyPath(t *testing.T) {
 			skipTestReason: "Prod code needs to be updated to return all dependency paths, not just the first one (FIXME in prod code first).",
 		},
 		{
+			name:           "TODO: vuln-pkg as both direct and transitive dependency - should return all paths",
+			finding:        createFindingWithMultipleDependencyPaths(t, "goof@1.0.0", []string{"vuln-pkg@1.0.0"}, []string{"other-pkg@1.0.0", "vuln-pkg@1.0.0"}, []string{"another-pkg@1.0.0", "vuln-pkg@1.0.0"}),
+			expected:       []string{"goof@1.0.0", "vuln-pkg@1.0.0" /* direct */, "goof@1.0.0", "other-pkg@1.0.0", "vuln-pkg@1.0.0" /* transitive via other-pkg */, "goof@1.0.0", "another-pkg@1.0.0", "vuln-pkg@1.0.0" /* transitive via another-pkg */}, // I would expect the output to be a 2D slice.
+			description:    "Should return all paths including when vulnerable package appears as BOTH a direct dependency AND transitive dependencies via other routes. All paths must be preserved independently.",
+			skipTestReason: "Prod code needs to be updated to return all dependency paths, not just the first one (FIXME in prod code first).",
+		},
+		{
 			name: "Wrong behavior: multiple dependency paths - returns first one only (FIXME in prod code)",
 			// TODO: Delete this test and enable the test above when the fix has been implemented in the prod code.
 			finding:     createFindingWithMultipleDependencyPaths(t, "goof@1.0.0", []string{"lodash@4.17.20"}, []string{"other-pkg@1.0.0"}),
 			expected:    []string{"goof@1.0.0", "lodash@4.17.20"}, // Wrong: should return both paths, but currently only returns first
-			description: "With the current incorrect behaviour, should return only the first path when multiple exist. If this bug has been fixed, please delete this test and enable the test above.",
+			description: "With the current incorrect behaviour, should return only the first path when multiple exist. If this bug has been fixed, please delete this test and enable the tests above.",
 		},
 		{
 			name:        "Malformed data: finding with empty evidence array",
@@ -425,6 +432,19 @@ func Test_getIntroducingFinding(t *testing.T) {
 			skipTestReason: "Prod code needs to be updated to return multiple findings (one per unique direct dependency), not just the first one (FIXME in prod code first).",
 		},
 		{
+			name: "TODO: vuln-pkg as both direct and transitive dependency - should return findings for all unique direct deps",
+			findings: []*testapi.FindingData{
+				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"vuln-pkg@1.0.0"}),                                // vuln-pkg is direct
+				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"other-pkg@1.0.0", "vuln-pkg@1.0.0"}),          // vuln-pkg via other-pkg
+				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"other-pkg@1.0.0", "sub-pkg@1.0.0", "vuln-pkg@1.0.0"}), // another path via other-pkg
+				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"another-pkg@1.0.0", "vuln-pkg@1.0.0"}),       // vuln-pkg via another-pkg
+			},
+			problemPkgName: "vuln-pkg",
+			expectedIndex:  0, // TODO: Change to expectedIndexes []int{0, 1, 3} when function signature changes - includes vuln-pkg as direct dep AND other-pkg AND another-pkg
+			description:    "Should return findings for all unique direct dependencies including when vulnerable package is BOTH a direct dependency AND a transitive dependency via other routes. All Issues should exist independently.",
+			skipTestReason: "Prod code needs to be updated to return multiple findings (one per unique direct dependency), not just the first one (FIXME in prod code first).",
+		},
+		{
 			name: "Wrong behaviour: multiple transitive paths through different direct deps - returns first finding only",
 			// TODO: Delete this test and enable the test above when the fix has been implemented in the prod code.
 			findings: []*testapi.FindingData{
@@ -433,7 +453,7 @@ func Test_getIntroducingFinding(t *testing.T) {
 			},
 			problemPkgName: "lodash",
 			expectedIndex:  0,
-			description:    "With the current incorrect behaviour, should return only first finding when multiple direct dependencies transitively lead to vulnerable package. If this bug has been fixed, please delete this test and enable the test above.",
+			description:    "With the current incorrect behaviour, should return only first finding when multiple direct dependencies transitively lead to vulnerable package. If this bug has been fixed, please delete this test and enable the tests above.",
 		},
 		{
 			name: "Malformed data: dependency path with only root - returns first finding gracefully",
@@ -1388,7 +1408,7 @@ func createFindingWithDependencyPath(t *testing.T, root string, path []string) *
 }
 
 // createFindingWithMultipleDependencyPaths creates a FindingData with multiple dependency path evidences
-func createFindingWithMultipleDependencyPaths(t *testing.T, root string, path1 []string, path2 []string) *testapi.FindingData {
+func createFindingWithMultipleDependencyPaths(t *testing.T, root string, paths ...[]string) *testapi.FindingData {
 	t.Helper()
 	finding := &testapi.FindingData{
 		Attributes: &testapi.FindingAttributes{
@@ -1396,30 +1416,21 @@ func createFindingWithMultipleDependencyPaths(t *testing.T, root string, path1 [
 		},
 	}
 
-	// Build first dependency path evidence
-	dependencyPkgs1 := make([]testapi.Package, len(path1)+1)
 	rootParts := strings.Split(root, "@")
-	dependencyPkgs1[0] = testapi.Package{Name: rootParts[0], Version: rootParts[1]}
-	for i, pkgStr := range path1 {
-		parts := strings.Split(pkgStr, "@")
-		dependencyPkgs1[i+1] = testapi.Package{Name: parts[0], Version: parts[1]}
-	}
-	var depEv1 testapi.Evidence
-	err := depEv1.FromDependencyPathEvidence(testapi.DependencyPathEvidence{Path: dependencyPkgs1})
-	require.NoError(t, err)
-	finding.Attributes.Evidence = append(finding.Attributes.Evidence, depEv1)
 
-	// Build second dependency path evidence
-	dependencyPkgs2 := make([]testapi.Package, len(path2)+1)
-	dependencyPkgs2[0] = testapi.Package{Name: rootParts[0], Version: rootParts[1]}
-	for i, pkgStr := range path2 {
-		parts := strings.Split(pkgStr, "@")
-		dependencyPkgs2[i+1] = testapi.Package{Name: parts[0], Version: parts[1]}
+	// Build dependency path evidence for each path
+	for _, path := range paths {
+		dependencyPkgs := make([]testapi.Package, len(path)+1)
+		dependencyPkgs[0] = testapi.Package{Name: rootParts[0], Version: rootParts[1]}
+		for i, pkgStr := range path {
+			parts := strings.Split(pkgStr, "@")
+			dependencyPkgs[i+1] = testapi.Package{Name: parts[0], Version: parts[1]}
+		}
+		var depEv testapi.Evidence
+		err := depEv.FromDependencyPathEvidence(testapi.DependencyPathEvidence{Path: dependencyPkgs})
+		require.NoError(t, err)
+		finding.Attributes.Evidence = append(finding.Attributes.Evidence, depEv)
 	}
-	var depEv2 testapi.Evidence
-	err = depEv2.FromDependencyPathEvidence(testapi.DependencyPathEvidence{Path: dependencyPkgs2})
-	require.NoError(t, err)
-	finding.Attributes.Evidence = append(finding.Attributes.Evidence, depEv2)
 
 	return finding
 }
