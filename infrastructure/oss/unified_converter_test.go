@@ -49,42 +49,49 @@ func Test_buildUpgradePath(t *testing.T) {
 		description     string
 	}{
 		{
-			name:            "Empty when no upgrade path and no fix relationships",
+			name:            "No upgrade path when no fix relationships exist - returns empty",
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			finding:         createFindingWithoutUpgradePath(t),
 			expectedUpgrade: []any{false},
-			description:     "Should return [false] when no upgrade information available.",
+			description:     "Should return [false] when no upgrade information is available.",
 		},
 		{
-			name:            "Single upgrade path",
+			name:            "Direct dependency with single upgrade path",
 			dependencyPath:  []string{"goof@1.0.0", "lodash@4.2.3"},
 			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false, "lodash@4.17.21"},
 			description:     "Should extract upgrade path from fix relationships.",
 		},
 		{
-			name:            "Multi-level dependency path",
+			name:            "Transitive dependency with upgrade path",
 			dependencyPath:  []string{"root@1.0.0", "direct-dependency@1.7.1", "lodash@4.2.3"},
 			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"root@1.0.0", "direct-dependency@2.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false, "direct-dependency@2.0.0", "lodash@4.17.21"},
 			description:     "Should handle multi-level transitive dependencies.",
 		},
 		{
-			name:            "Multiple upgrade paths - filters to correct direct dependency",
+			name:            "Multiple upgrade paths via different direct dependencies - filters to requested one",
 			dependencyPath:  []string{"goof@1.0.0", "direct-dependency@1.7.1", "lodash@4.2.3"},
 			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "another-direct-dependency@2.0.0", "lodash@4.17.22"}, {"goof@1.0.0", "direct-dependency@2.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false, "direct-dependency@2.0.0", "lodash@4.17.21"},
-			description:     "Should filter and return the upgrade path matching the dependency package name.",
+			description:     "Should filter finding's multiple upgrade paths and return the one matching the input dependency path's direct dependency (position [1]). Tests scenario where vuln is reached through different direct dependencies.",
 		},
 		{
-			name:            "Only an upgrade path for a different package",
+			name:            "Multiple upgrade paths via same direct dependency - returns first matching",
+			dependencyPath:  []string{"root@1.0.0", "dep-a@1.0.0", "dep-a1@1.0.0", "vuln-pkg@1.0.0"},
+			finding:         createFindingWithUpgradePaths(t, "vuln-pkg", [][]string{{"root@1.0.0", "dep-a@2.0.0", "dep-a1@2.0.0", "vuln-pkg@1.0.1"}, {"root@1.0.0", "dep-a@2.0.0", "dep-a2@2.0.0", "vuln-pkg@1.0.1"}}),
+			expectedUpgrade: []any{false, "dep-a@2.0.0", "dep-a1@2.0.0", "vuln-pkg@1.0.1"},
+			description:     "Should return first matching upgrade path when multiple paths exist through same direct dependency but different transitive paths. Tests scenario where vuln is reached through same direct dep via different transitive routes.",
+		},
+		{
+			name:            "Returns empty when the only upgrade path is for a dependency path other than the one we are focused on",
 			dependencyPath:  []string{"root@1.0.0", "lodash@4.2.3", "vuln-pkg@0.0.4"},
 			finding:         createFindingWithUpgradePaths(t, "vuln-pkg", [][]string{{"root@1.0.0", "other-pkg@2.0.0", "vuln-pkg@0.2.8"}}),
 			expectedUpgrade: []any{false},
-			description:     "Should return [false] when fixes only exist for a different dependency path (e.g., via other-pkg instead of lodash).",
+			description:     "Should return [false] when finding has upgrade paths but none match the input dependency path's direct dependency. Represents partial fix scenario where fix exists via different route (e.g., via other-pkg) but not via the route in question (lodash).",
 		},
 		{
-			name:            "Empty dependency path",
+			name:            "Defensive: empty dependency path",
 			dependencyPath:  []string{},
 			finding:         createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expectedUpgrade: []any{false},
@@ -154,7 +161,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.1"},
 			expectedMessage: "Upgrade to test-package@1.0.1",
-			description: "Should return upgrade message when fix is available.",
+			description: "Should return upgrade message for direct dependency when fix is available.",
 		},
 		{
 			name:        "Transitive dependency with fix and upgrade path available",
@@ -282,18 +289,6 @@ func Test_extractDependencyPath(t *testing.T) {
 			description: "Should extract dependency path from finding with valid dependency_path evidence.",
 		},
 		{
-			name:        "Empty path for finding without evidence",
-			finding:     &testapi.FindingData{Attributes: &testapi.FindingAttributes{}},
-			expected:    []string{},
-			description: "Should return empty slice when finding has attributes but no evidence.",
-		},
-		{
-			name:        "Empty path for nil attributes",
-			finding:     &testapi.FindingData{},
-			expected:    nil,
-			description: "Should return nil when finding has nil attributes.",
-		},
-		{
 			name:        "Defensive: non-dependency_path evidence - returns empty slice",
 			finding:     createFindingWithNonDependencyPathEvidence(t),
 			expected:    []string{},
@@ -311,7 +306,19 @@ func Test_extractDependencyPath(t *testing.T) {
 			// TODO: Delete this test and enable the test above when the fix has been implemented in the prod code.
 			finding:     createFindingWithMultipleDependencyPaths(t, "goof@1.0.0", []string{"lodash@4.17.20"}, []string{"other-pkg@1.0.0"}),
 			expected:    []string{"goof@1.0.0", "lodash@4.17.20"}, // Wrong: should return both paths, but currently only returns first
-			description: "With the current incorrect behaviour, should returns only first path when multiple exist. If this bug has been fixed, please delete this test and enable the test above.",
+			description: "With the current incorrect behaviour, should return only the first path when multiple exist. If this bug has been fixed, please delete this test and enable the test above.",
+		},
+		{
+			name:        "Malformed data: finding with empty evidence array",
+			finding:     &testapi.FindingData{Attributes: &testapi.FindingAttributes{}},
+			expected:    []string{},
+			description: "Should return empty slice when finding has attributes but no evidence.",
+		},
+		{
+			name:        "Malformed data: finding with nil attributes",
+			finding:     &testapi.FindingData{},
+			expected:    nil,
+			description: "Should return nil when finding has nil attributes.",
 		},
 	}
 
@@ -471,55 +478,69 @@ func Test_extractUpgradePackage(t *testing.T) {
 		description    string
 	}{
 		{
+			name:           "Fix relationship with upgrade path",
+			dependencyPath: []string{"goof@1.0.0", "lodash@4.17.4"},
+			finding:        createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
+			expected:       []string{"goof@1.0.0", "lodash@4.17.21"},
+			description:    "Should extract upgrade path from fix relationships.",
+		},
+		{
+			name:           "Multiple upgrade paths via different direct dependencies - returns the one for the direct dependency in question",
+			dependencyPath: []string{"goof@1.0.0", "express@4.12.4", "debug@2.2.0"},
+			finding:        createFindingWithUpgradePaths(t, "debug", [][]string{{"goof@1.0.0", "express@4.15.2", "debug@2.6.9"}, {"goof@1.0.0", "mongoose@5.0.0", "debug@2.6.9"}}),
+			expected:       []string{"goof@1.0.0", "express@4.15.2", "debug@2.6.9"},
+			description:    "Should filter finding's multiple upgrade paths and return the first one where direct dependency (position [1]) matches the input dependency path. Tests scenario where vulnerable package is reached through different direct dependencies.",
+		},
+		{
+			name:           "Multiple upgrade paths via same direct dependency - returns first matching",
+			dependencyPath: []string{"root@1.0.0", "dep-a@1.0.0", "dep-a1@1.0.0", "vuln-pkg@1.0.0"},
+			finding:        createFindingWithUpgradePaths(t, "vuln-pkg", [][]string{{"root@1.0.0", "dep-a@2.0.0", "dep-a1@2.0.0", "vuln-pkg@1.0.1"}, {"root@1.0.0", "dep-a@2.0.0", "dep-a2@2.0.0", "vuln-pkg@1.0.1"}}),
+			expected:       []string{"root@1.0.0", "dep-a@2.0.0", "dep-a1@2.0.0", "vuln-pkg@1.0.1"},
+			description:    "Should return first matching upgrade path when multiple paths exist through same direct dependency but different transitive paths. Tests scenario where vuln is reached through same direct dep via different transitive routes.",
+		},
+		{
 			name:           "No fix relationships",
 			dependencyPath: []string{"goof@1.0.0", "lodash@4.17.4"},
 			finding: &testapi.FindingData{
 				Relationships: nil,
 			},
 			expected:    nil,
-			description: "Should return nil when no fix relationships exist",
+			description: "Should return nil when no fix relationships exist.",
+		},
+		{
+			name:           "Returns empty when the only upgrade path is for a dependency path other than the one we are focused on",
+			dependencyPath: []string{"goof@1.0.0", "lodash@4.17.4"},
+			finding:        createFindingWithUpgradePaths(t, "other-pkg", [][]string{{"goof@1.0.0", "other-pkg@2.0.0"}}),
+			expected:       []string{},
+			description:    "Should return empty slice when finding has upgrade paths but none match the input dependency path's direct dependency. Represents partial fix scenario where fix exists via different route (other-pkg) but not via the route in question (lodash).",
+		},
+		{
+			name:           "Defensive: Empty dependency path",
+			dependencyPath: []string{},
+			finding:        createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
+			expected:       nil,
+			description:    "Should return nil when dependency path is empty.",
+		},
+		{
+			name:           "Defensive: Empty upgrade paths array",
+			dependencyPath: []string{"goof@1.0.0", "lodash@4.17.4"},
+			finding:        createFindingWithUpgradePaths(t, "lodash", [][]string{}),
+			expected:       nil,
+			description:    "Should return nil when UpgradePaths array is empty.",
 		},
 		{
 			name:           "Defensive: nil Action attribute - handles gracefully",
 			dependencyPath: []string{"goof@1.0.0", "lodash@4.17.4"},
 			finding:        createFindingWithNilAction(t),
 			expected:       nil,
-			description:    "Should return nil when Fix.Data.Attributes.Action is nil",
-		},
-		{
-			name:           "Fix relationship with upgrade path",
-			dependencyPath: []string{"goof@1.0.0", "lodash@4.17.4"},
-			finding:        createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
-			expected:       []string{"goof@1.0.0", "lodash@4.17.21"},
-			description:    "Should extract upgrade path from fix relationships",
-		},
-		{
-			name:           "Multiple upgrade paths - returns matching package",
-			dependencyPath: []string{"goof@1.0.0", "lodash@4.17.4"},
-			finding:        createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}, {"goof@1.0.0", "other-pkg@2.0.0"}}),
-			expected:       []string{"goof@1.0.0", "lodash@4.17.21"},
-			description:    "Should return the upgrade path matching the dependency package name",
-		},
-		{
-			name:           "Empty dependency path",
-			dependencyPath: []string{},
-			finding:        createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
-			expected:       nil,
-			description:    "Should return nil when dependency path is empty",
-		},
-		{
-			name:           "Wrong package name in upgrade path",
-			dependencyPath: []string{"goof@1.0.0", "lodash@4.17.4"},
-			finding:        createFindingWithUpgradePaths(t, "other-pkg", [][]string{{"goof@1.0.0", "other-pkg@2.0.0"}}),
-			expected:       []string{},
-			description:    "Should return empty when upgrade path doesn't match dependency package",
+			description:    "Should return nil when Fix.Data.Attributes.Action is nil.",
 		},
 		{
 			name:           "Malformed data: single element dependency path - handles gracefully",
 			dependencyPath: []string{"root@1.0.0"},
 			finding:        createFindingWithUpgradePaths(t, "lodash", [][]string{{"goof@1.0.0", "lodash@4.17.21"}}),
 			expected:       nil,
-			description:    "Should return nil when dependency path has only root (length 1, malformed) to avoid panic",
+			description:    "Should return nil when dependency path has only root (length 1, malformed) to avoid panic.",
 		},
 	}
 
