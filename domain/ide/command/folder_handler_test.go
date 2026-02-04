@@ -38,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // populateFolderOrgCache is a helper to populate the LDX-Sync org config cache for tests
@@ -45,7 +46,7 @@ func populateFolderOrgCache(c interface {
 	GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache
 }, folderPath types.FilePath, orgId string) {
 	cache := c.GetLdxSyncOrgConfigCache()
-	cache.SetFolderOrg(folderPath, orgId)
+	cache.SetFolderOrg(util.PathKey(folderPath), orgId)
 }
 
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {

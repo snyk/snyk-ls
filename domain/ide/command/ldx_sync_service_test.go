@@ -343,7 +343,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 
 	// Setup folder-to-org mapping so clearLockedOverridesFromFolderConfigs can find the org
 	cache := c.GetLdxSyncOrgConfigCache()
-	cache.SetFolderOrg(folderPath, orgId)
+	cache.SetFolderOrg(util.PathKey(folderPath), orgId)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)
@@ -390,7 +390,7 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 
 	// Setup folder-to-org mapping
 	cache := c.GetLdxSyncOrgConfigCache()
-	cache.SetFolderOrg(folderPath, orgId)
+	cache.SetFolderOrg(util.PathKey(folderPath), orgId)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders)

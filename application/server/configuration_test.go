@@ -44,6 +44,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var sampleSettings = types.Settings{
@@ -966,7 +967,7 @@ func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
 
 	// Populate FolderToOrgMapping so AutoDeterminedOrg can be looked up
 	cache := setup.c.GetLdxSyncOrgConfigCache()
-	cache.SetFolderOrg(setup.folderPath, "auto-determined-org")
+	cache.SetFolderOrg(util.PathKey(setup.folderPath), "auto-determined-org")
 
 	// Call updateFolderConfig with a different org
 	settings := types.Settings{
