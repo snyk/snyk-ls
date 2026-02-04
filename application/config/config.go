@@ -296,7 +296,6 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
 	c.hoverVerbosity = 3
-	c.InitLdxSyncOrgConfigCache()
 	return c
 }
 
@@ -1404,7 +1403,6 @@ func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfi
 // the folder, it returns the global organization (which if unset, GAF will return the default org).
 func (c *Config) FolderOrganization(path types.FilePath) string {
 	logger := c.Logger().With().Str("method", "FolderOrganization").Str("path", string(path)).Logger()
-
 	if path == "" {
 		globalOrg := c.Organization()
 		logger.Warn().Str("globalOrg", globalOrg).Msg("called with empty path, falling back to global organization")

@@ -98,8 +98,45 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 				preferredOrg = folderConfig.PreferredOrg
 			}
 
-			// Call GetUserConfigForProject with 3 params including preferredOrg
+			logger.Debug().
+				Str("projectPath", string(f.Path())).
+				Str("preferredOrg", preferredOrg).
+				Msg("LDX-Sync API Request - calling GetUserConfigForProject")
+
 			cfgResult := s.apiClient.GetUserConfigForProject(engine, string(f.Path()), preferredOrg)
+
+			logger.Debug().
+				Str("projectPath", string(f.Path())).
+				Bool("hasError", cfgResult.Error != nil).
+				Bool("hasConfig", cfgResult.Config != nil).
+				Str("remoteUrl", cfgResult.RemoteUrl).
+				Str("projectRoot", cfgResult.ProjectRoot).
+				Interface("fullResult", cfgResult).
+				Msg("LDX-Sync API Response - full result")
+
+			// Fallback logic: If PreferredOrg fails, retry without it to allow auto-determination
+			if cfgResult.Error != nil && preferredOrg != "" {
+				logger.Warn().
+					Str("folder", string(f.Path())).
+					Str("preferredOrg", preferredOrg).
+					Err(cfgResult.Error).
+					Msg("PreferredOrg failed, retrying without it")
+
+				// Retry without PreferredOrg to allow full auto-determination
+				cfgResult = s.apiClient.GetUserConfigForProject(engine, string(f.Path()), "")
+
+				logger.Debug().
+					Str("projectPath", string(f.Path())).
+					Bool("hasError", cfgResult.Error != nil).
+					Bool("hasConfig", cfgResult.Config != nil).
+					Msg("LDX-Sync fallback response")
+			}
+
+			// Store result in temporary map (even if there's an error)
+			// This allows ResolveOrg to distinguish between "never attempted" and "attempted but failed"
+			resultsMutex.Lock()
+			results[f.Path()] = &cfgResult
+			resultsMutex.Unlock()
 
 			if cfgResult.Error != nil {
 				logger.Err(cfgResult.Error).

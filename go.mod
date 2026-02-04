@@ -31,7 +31,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/cli-extension-os-flows v0.0.0-20251216105957-6fea9cc0c94b
 	github.com/snyk/code-client-go v1.25.0
-	github.com/snyk/go-application-framework v0.0.0-20260128131202-72ae858e7d08
+	github.com/snyk/go-application-framework v0.0.0-20260128110751-3ccad8764a27
 	github.com/snyk/studio-mcp v1.2.3
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.10

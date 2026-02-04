@@ -221,6 +221,7 @@ func main() {
 	}
 
 	// Add test script for dirty tracking demonstration
+	// All CSS styles are properly scoped under #test-panel to prevent conflicts with production styles
 	testScript := `
 	<style nonce="ideNonce">
 		#test-panel {
@@ -267,7 +268,7 @@ func main() {
 			font-weight: bold;
 			cursor: pointer;
 		}
-		#json-output {
+		#test-panel #json-output {
 			display: none;
 			margin-top: 10px;
 			padding: 10px;
@@ -277,37 +278,37 @@ func main() {
 			max-height: 400px;
 			overflow-y: auto;
 		}
-		#json-output pre {
+		#test-panel #json-output pre {
 			margin: 0;
 			font-size: 12px;
 			white-space: pre-wrap;
 			word-wrap: break-word;
 		}
-		#json-output .json-header {
+		#test-panel #json-output .json-header {
 			font-weight: bold;
 			margin-bottom: 5px;
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
 		}
-		#json-output .copy-btn {
+		#test-panel #json-output .copy-btn {
 			padding: 4px 8px;
 			font-size: 12px;
 			cursor: pointer;
 			margin: 0;
 		}
-		.toggle-switch {
+		#test-panel .toggle-switch {
 			position: relative;
 			display: inline-block;
 			width: 48px;
 			height: 24px;
 		}
-		.toggle-switch input {
+		#test-panel .toggle-switch input {
 			opacity: 0;
 			width: 0;
 			height: 0;
 		}
-		.toggle-slider {
+		#test-panel .toggle-slider {
 			position: absolute;
 			cursor: pointer;
 			top: 0;
@@ -318,7 +319,7 @@ func main() {
 			transition: 0.3s;
 			border-radius: 24px;
 		}
-		.toggle-slider:before {
+		#test-panel .toggle-slider:before {
 			position: absolute;
 			content: "";
 			height: 18px;
@@ -329,10 +330,10 @@ func main() {
 			transition: 0.3s;
 			border-radius: 50%;
 		}
-		input:checked + .toggle-slider {
+		#test-panel input:checked + .toggle-slider {
 			background-color: #28a745;
 		}
-		input:checked + .toggle-slider:before {
+		#test-panel input:checked + .toggle-slider:before {
 			transform: translateX(24px);
 		}
 	</style>
