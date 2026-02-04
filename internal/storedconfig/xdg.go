@@ -26,7 +26,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const (
@@ -46,7 +45,7 @@ func ConfigFile(ideName string) (string, error) {
 }
 
 func folderConfigFromStorage(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, createIfNotExist bool) (*types.FolderConfig, error) {
-	if err := util.ValidatePathForStorage(path); err != nil {
+	if err := types.ValidatePathForStorage(path); err != nil {
 		logger.Error().Err(err).Str("path", string(path)).Msg("invalid folder path")
 		return nil, err
 	}
@@ -57,7 +56,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 		return nil, err
 	}
 
-	normalizedPath := util.PathKey(path)
+	normalizedPath := types.PathKey(path)
 
 	fc := sc.FolderConfigs[normalizedPath]
 
@@ -124,7 +123,7 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, d
 				return sc, nil
 			}
 			for k, v := range sc.FolderConfigs {
-				nk := util.PathKey(k)
+				nk := types.PathKey(k)
 				normalized[nk] = v
 			}
 			sc.FolderConfigs = normalized
@@ -158,14 +157,14 @@ func createNewStoredConfig(conf configuration.Configuration, logger *zerolog.Log
 }
 
 func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig, logger *zerolog.Logger) error {
-	if err := util.ValidatePathForStorage(folderConfig.FolderPath); err != nil {
+	if err := types.ValidatePathForStorage(folderConfig.FolderPath); err != nil {
 		logger.Error().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("invalid folder path")
 		return err
 	}
 
 	// Validate the reference folder path for security and existence if provided
 	if folderConfig.ReferenceFolderPath != "" {
-		if err := util.ValidatePathStrict(folderConfig.ReferenceFolderPath); err != nil {
+		if err := types.ValidatePathStrict(folderConfig.ReferenceFolderPath); err != nil {
 			logger.Error().Err(err).Str("referencePath", string(folderConfig.ReferenceFolderPath)).Msg("invalid reference folder path")
 			return err
 		}
@@ -177,7 +176,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 	}
 
 	// Generate normalized key for consistent cross-platform storage
-	normalizedPath := util.PathKey(folderConfig.FolderPath)
+	normalizedPath := types.PathKey(folderConfig.FolderPath)
 
 	logger.Debug().
 		Str("normalizedPath", string(normalizedPath)).
@@ -190,7 +189,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 	normalizedFolderConfig := *folderConfig
 	normalizedFolderConfig.FolderPath = normalizedPath
 	if folderConfig.ReferenceFolderPath != "" {
-		normalizedFolderConfig.ReferenceFolderPath = util.PathKey(folderConfig.ReferenceFolderPath)
+		normalizedFolderConfig.ReferenceFolderPath = types.PathKey(folderConfig.ReferenceFolderPath)
 	}
 
 	sc.FolderConfigs[normalizedPath] = &normalizedFolderConfig

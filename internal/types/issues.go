@@ -166,6 +166,4 @@ func UpdateSeverityCount(sic SeverityIssueCounts, issue Issue) {
 	sic[issue.GetSeverity()] = ic
 }
 
-type FilePath string
-
 type IssuesByFile map[FilePath][]Issue

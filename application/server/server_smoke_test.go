@@ -562,7 +562,7 @@ func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Reques
 			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
 
 			// Normalize both paths for comparison since folder config paths are now normalized
-			normalizedCloneTargetDir := util.PathKey(cloneTargetDir)
+			normalizedCloneTargetDir := types.PathKey(cloneTargetDir)
 			if folderConfig.FolderPath == normalizedCloneTargetDir {
 				foundFolderConfig = true
 				break

@@ -32,7 +32,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.T) {
@@ -51,8 +50,8 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 	require.NoError(t, err)
 
 	// verify - expect normalized paths
-	expectedPath := util.PathKey(path)
-	expectedReferencePath := util.PathKey(types.FilePath(dir))
+	expectedPath := types.PathKey(path)
+	expectedReferencePath := types.PathKey(types.FilePath(dir))
 
 	// Get the updated config from storage to verify normalization was applied
 	updatedConfig, err := GetOrCreateFolderConfig(conf, path, &nop)
@@ -63,7 +62,7 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 	var sc StoredConfig
 	err = json.Unmarshal([]byte(scJson), &sc)
 	require.NoError(t, err)
-	require.Equal(t, updatedConfig, sc.FolderConfigs[util.PathKey(path)])
+	require.Equal(t, updatedConfig, sc.FolderConfigs[types.PathKey(path)])
 
 	bytes, err := os.ReadFile(storageFile)
 	require.NoError(t, err)
@@ -97,8 +96,8 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 	}
 	referenceDir := t.TempDir()
 	expected := &types.FolderConfig{
-		FolderPath:           util.PathKey(path),
-		ReferenceFolderPath:  util.PathKey(types.FilePath(referenceDir)),
+		FolderPath:           types.PathKey(path),
+		ReferenceFolderPath:  types.PathKey(types.FilePath(referenceDir)),
 		AdditionalParameters: []string{"--additional-param=asdf", "--additional-param2=add"},
 		LocalBranches:        []string{"main", "dev"},
 		BaseBranch:           "main",

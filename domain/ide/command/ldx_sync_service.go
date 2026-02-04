@@ -31,7 +31,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // LdxSyncApiClient abstracts the external LDX-Sync API calls for testability
@@ -194,8 +193,8 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 			continue
 		}
 
-		// Store folder → org mapping for callers to look up (normalize path for cross-platform consistency)
-		cache.SetFolderOrg(util.PathKey(folderPath), orgId)
+		// Store folder → org mapping for callers to look up (path normalization is handled internally by SetFolderOrg)
+		cache.SetFolderOrg(folderPath, orgId)
 
 		// Convert to our org config format (org-level settings only)
 		orgConfig := types.ConvertLDXSyncResponseToOrgConfig(orgId, result.Config)

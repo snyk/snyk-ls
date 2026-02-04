@@ -38,7 +38,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // populateFolderOrgCache is a helper to populate the LDX-Sync org config cache for tests
@@ -46,7 +45,7 @@ func populateFolderOrgCache(c interface {
 	GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache
 }, folderPath types.FilePath, orgId string) {
 	cache := c.GetLdxSyncOrgConfigCache()
-	cache.SetFolderOrg(util.PathKey(folderPath), orgId)
+	cache.SetFolderOrg(folderPath, orgId)
 }
 
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
@@ -249,11 +248,11 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	// Verify each folder has its own AutoDeterminedOrg (order is not guaranteed due to map iteration)
 	// Use PathKey to normalize paths for cross-platform consistency (Windows short paths vs full paths)
 	expectedOrgs := map[types.FilePath]string{
-		util.PathKey(folderPaths[0]): "org-id-for-folder-0",
-		util.PathKey(folderPaths[1]): "org-id-for-folder-1",
+		types.PathKey(folderPaths[0]): "org-id-for-folder-0",
+		types.PathKey(folderPaths[1]): "org-id-for-folder-1",
 	}
 	for _, fc := range folderConfigsParam.FolderConfigs {
-		expectedOrg, found := expectedOrgs[util.PathKey(fc.FolderPath)]
+		expectedOrg, found := expectedOrgs[types.PathKey(fc.FolderPath)]
 		require.True(t, found, "Unexpected folder path: %s", fc.FolderPath)
 		assert.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for folder %s", fc.FolderPath)
 		assert.Equal(t, expectedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be folder-specific for %s", fc.FolderPath)

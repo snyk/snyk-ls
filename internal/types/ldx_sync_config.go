@@ -161,23 +161,23 @@ func (c *LDXSyncConfigCache) RemoveOrgConfig(orgId string) {
 }
 
 // SetFolderOrg sets the org ID for a folder path.
-// The caller is responsible for normalizing the path (e.g., using util.PathKey).
+// The path is automatically normalized using PathKey for cross-platform consistency.
 func (c *LDXSyncConfigCache) SetFolderOrg(folderPath FilePath, orgId string) {
 	if c.FolderToOrgMapping == nil {
 		c.FolderToOrgMapping = make(map[FilePath]string)
 	}
-	c.FolderToOrgMapping[folderPath] = orgId
+	c.FolderToOrgMapping[PathKey(folderPath)] = orgId
 }
 
 // GetOrgIdForFolder returns the org ID for a folder path from the cache,
 // or empty string if not found. This only returns what LDX-Sync determined,
 // not a fallback value. Fallback logic should happen at the point of use.
-// The caller is responsible for normalizing the path (e.g., using util.PathKey).
+// The path is automatically normalized using PathKey for cross-platform consistency.
 func (c *LDXSyncConfigCache) GetOrgIdForFolder(folderPath FilePath) string {
 	if c == nil || c.FolderToOrgMapping == nil {
 		return ""
 	}
-	return c.FolderToOrgMapping[folderPath]
+	return c.FolderToOrgMapping[PathKey(folderPath)]
 }
 
 // ClearFolderOrgMapping clears all folder-to-org mappings
