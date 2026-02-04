@@ -132,6 +132,11 @@ func NewLDXSyncConfigCache() *LDXSyncConfigCache {
 	}
 }
 
+// IsEmpty returns true if the cache has no org configs
+func (c *LDXSyncConfigCache) IsEmpty() bool {
+	return c == nil || len(c.OrgConfigs) == 0
+}
+
 // GetOrgConfig returns the config for the given org, or nil if not found
 func (c *LDXSyncConfigCache) GetOrgConfig(orgId string) *LDXSyncOrgConfig {
 	if c == nil || c.OrgConfigs == nil {
