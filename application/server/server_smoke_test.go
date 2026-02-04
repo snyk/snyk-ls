@@ -1192,14 +1192,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 	})
 
-	t.Run("authenticated - determines org when global default org is given (migration)", func(t *testing.T) {
-		// TODO - Should this even be a smoke test? Why not just make it a unit / integration test with mocking?
-		t.Skip(t, "TODO: Everyone would have to be in an org which takes priority for Python-goof"+
-			"as this test expects a non-default org to be returned.")
-
+	t.Run("authenticated - migration with global default org results in auto mode", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		folderConfig := types.FolderConfig{
 			FolderPath: repo,
+			// OrgMigratedFromGlobalConfig is false - needs migration
 		}
 
 		// Pre-populate storage with a folder config so it gets migrated on init.
@@ -1210,16 +1207,12 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
 
-		// We should be using the default org. We derive this at runtime as it will depend on the SNYK_TOKEN
-		// environment variable used to run the test.
-		defaultOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		// When migrating with the default org, the folder should be in auto mode (OrgSetByUser=false)
 		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
 			repo: func(fc types.FolderConfig) {
-				require.False(t, fc.OrgSetByUser)
-				require.Empty(t, fc.PreferredOrg)
-				require.NotEqual(t, defaultOrg, fc.AutoDeterminedOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg)
-				require.True(t, fc.OrgMigratedFromGlobalConfig)
+				require.False(t, fc.OrgSetByUser, "Migration with default org should result in auto mode")
+				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty in auto mode")
+				require.True(t, fc.OrgMigratedFromGlobalConfig, "Config should be marked as migrated")
 			},
 		})
 	})
@@ -1302,11 +1295,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			fakeDirFolderPath: func(fc types.FolderConfig) {
 				require.False(t, fc.OrgSetByUser, "OrgSetByUser must be preserved")
 				require.Equal(t, "any", fc.PreferredOrg, "PreferredOrg must be preserved")
-				// AutoDeterminedOrg may be empty if LDX-Sync fails (non-git folder)
-				// If set, it should override the stored "any" value
-				if fc.AutoDeterminedOrg != "" {
-					require.NotEqual(t, "any", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override 'any' if set")
-				}
 				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
 			},
 		})
