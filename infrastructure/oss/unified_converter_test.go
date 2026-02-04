@@ -738,20 +738,7 @@ func Test_processIssue_WrongTypeInContextDeps(t *testing.T) {
 		types.FilePath(workDir),
 	)
 
-	// Issue should still be created even with wrong types in dependencies
-	require.NotNil(t, result, "processIssue should return an issue even with wrong type dependencies")
-	assert.Equal(t, "lodash-id", result.ID)
-	assert.Equal(t, types.High, result.Severity)
-
-	// Verify code actions are NOT generated when dependencies have wrong types
-	assert.Empty(t, result.GetCodeActions(), "Code actions should not be generated with wrong type dependencies")
-	assert.Empty(t, result.GetCodelensCommands(), "Code lens commands should not be generated with wrong type dependencies")
-
-	// But the issue should still have all the core data
-	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
-	require.True(t, ok)
-	assert.Equal(t, "lodash", additionalData.PackageName)
-	assert.NotEmpty(t, additionalData.UpgradePath, "Upgrade path should still be built")
+	assertProcessIssueGracefulDegradation(t, result, "lodash", types.High)
 }
 
 // Test_processIssue_MissingContextDeps verifies defensive behavior of processIssue to handle missing context dependencies gracefully
@@ -793,20 +780,7 @@ func Test_processIssue_MissingContextDeps(t *testing.T) {
 		types.FilePath(workDir),
 	)
 
-	// Issue should still be created even without context dependencies
-	require.NotNil(t, result, "processIssue should return an issue even without context dependencies")
-	assert.Equal(t, "lodash-id", result.ID)
-	assert.Equal(t, types.High, result.Severity)
-
-	// Verify code actions are NOT generated when dependencies are missing
-	assert.Empty(t, result.GetCodeActions(), "Code actions should not be generated without context dependencies")
-	assert.Empty(t, result.GetCodelensCommands(), "Code lens commands should not be generated without context dependencies")
-
-	// But the issue should still have all the core data
-	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
-	require.True(t, ok)
-	assert.Equal(t, "lodash", additionalData.PackageName)
-	assert.NotEmpty(t, additionalData.UpgradePath, "Upgrade path should still be built")
+	assertProcessIssueGracefulDegradation(t, result, "lodash", types.High)
 }
 
 // Test_processIssue_NilDependencyNode verifies defensive behavior when dependency node can't be found
@@ -828,6 +802,7 @@ func Test_processIssue_NilDependencyNode(t *testing.T) {
 	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
 	require.NoError(t, err)
 
+	// Act
 	result := processIssue(
 		setup.ctx,
 		trIssue,
@@ -836,25 +811,11 @@ func Test_processIssue_NilDependencyNode(t *testing.T) {
 		types.FilePath(setup.workDir),
 	)
 
-	require.NotNil(t, result, "processIssue should return an issue even with nil dependency node")
+	// Verify graceful degradation
+	assertProcessIssueGracefulDegradation(t, result, "vulnerable-pkg", types.High)
 
-	// Verify issue was created with basic data
-	assert.Equal(t, "vulnerable-pkg-id", result.ID)
-	assert.Equal(t, types.High, result.Severity)
-
-	// Verify range is empty when node is nil
+	// Verify range should be empty
 	assert.Equal(t, types.Range{}, result.Range, "Range should be empty when dependency node is nil")
-
-	// Verify code actions and code lenses are NOT generated when node is nil
-	// The production code skips adding actions when issueDepNode is empty
-	assert.Empty(t, result.GetCodeActions(), "Code actions should not be generated when dependency node is nil")
-	assert.Empty(t, result.GetCodelensCommands(), "Code lens commands should not be generated when dependency node is nil")
-
-	// But the issue should still have all the core vulnerability data
-	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
-	require.True(t, ok)
-	assert.Equal(t, "vulnerable-pkg", additionalData.PackageName)
-	assert.NotEmpty(t, additionalData.UpgradePath, "Upgrade path should still be built")
 }
 
 // Test_processIssue_DirectDependencyWithNoFixAvailable verifies basic issue conversion when no fix is available
@@ -1004,6 +965,27 @@ func setupProcessIssueTest(t *testing.T, quickFixEnabled *bool, manifestFile str
 		workDir:  workDir,
 		filePath: filePath,
 	}
+}
+
+// assertProcessIssueGracefulDegradation verifies that processIssue handles edge cases gracefully:
+// - Issue is created with basic data
+// - No code actions or code lenses are generated
+// - Core vulnerability data (package name, upgrade path) is preserved
+func assertProcessIssueGracefulDegradation(t *testing.T, result *snyk.Issue, expectedPkgName string, expectedSeverity types.Severity) {
+	t.Helper()
+
+	require.NotNil(t, result, "processIssue should return an issue")
+	// ID format matches createCompleteUnifiedFinding: pkgName + "-id"
+	assert.Equal(t, expectedPkgName+"-id", result.ID)
+	assert.Equal(t, expectedSeverity, result.Severity)
+
+	assert.Empty(t, result.GetCodeActions(), "Code actions should not be generated")
+	assert.Empty(t, result.GetCodelensCommands(), "Code lens commands should not be generated")
+
+	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
+	require.True(t, ok, "AdditionalData should be OssIssueData")
+	assert.Equal(t, expectedPkgName, additionalData.PackageName)
+	assert.NotEmpty(t, additionalData.UpgradePath, "Upgrade path should still be built")
 }
 
 // createCompleteUnifiedFinding builds a FindingData with all key fields populated so that
