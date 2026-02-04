@@ -575,9 +575,9 @@ func Test_extractUpgradePackage(t *testing.T) {
 	}
 }
 
-// Test_processIssue_WithUpgradePath_HasCodeActions verifies that issues with an upgrade path
-// have quick-fix code actions generated
-func Test_processIssue_WithUpgradePath_HasCodeActions(t *testing.T) {
+// Test_processIssue_WithUpgradePath_HasCodeActionsAndLenses verifies that issues with an upgrade path
+// have both quick-fix code actions and code lenses generated
+func Test_processIssue_WithUpgradePath_HasCodeActionsAndLenses(t *testing.T) {
 	setup := setupProcessIssueTest(t, util.Ptr(true), "package.json")
 
 	// Create a finding with an upgrade path matching real package.json
@@ -592,11 +592,10 @@ func Test_processIssue_WithUpgradePath_HasCodeActions(t *testing.T) {
 		"Prototype Pollution",
 	)
 
-	// Convert to Issue using GAF's helper
 	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
 	require.NoError(t, err)
 
-	// Process the issue through the unified converter
+	// Act
 	result := processIssue(
 		setup.ctx,
 		trIssue,
@@ -605,16 +604,17 @@ func Test_processIssue_WithUpgradePath_HasCodeActions(t *testing.T) {
 		types.FilePath(setup.workDir),
 	)
 
+	// Verify basic issue data
 	require.NotNil(t, result, "processIssue should return an issue")
 	assert.Equal(t, "lodash-id", result.ID, "Issue ID should match the problem ID")
 	assert.Equal(t, types.High, result.Severity, "Severity should be High")
-
-	// Verify basic issue properties
 	assert.Contains(t, result.Message, "lodash", "Message should mention the affected package")
 
-	// Verify upgrade path is available in additional data (prerequisite for code actions)
+	// Verify upgrade path is available in additional data
 	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
 	require.True(t, ok, "AdditionalData should be OssIssueData")
+	assert.Equal(t, "lodash", additionalData.PackageName)
+	assert.Equal(t, "4.17.4", additionalData.Version)
 	assert.NotEmpty(t, additionalData.UpgradePath, "Should have an upgrade path")
 	assert.True(t, additionalData.IsUpgradable, "Should be marked as upgradable")
 
@@ -622,7 +622,7 @@ func Test_processIssue_WithUpgradePath_HasCodeActions(t *testing.T) {
 	codeActions := result.GetCodeActions()
 	assert.NotEmpty(t, codeActions, "Code actions should be generated with fix relationships")
 
-	// Check for quick-fix action
+	// Verify the quick-fix actions
 	var hasQuickFix bool
 	for _, action := range codeActions {
 		title := action.GetTitle()
@@ -634,6 +634,22 @@ func Test_processIssue_WithUpgradePath_HasCodeActions(t *testing.T) {
 		}
 	}
 	assert.True(t, hasQuickFix, "Should have a quick-fix upgrade code action")
+
+	// Verify code lens commands are generated
+	codelensCommands := result.GetCodelensCommands()
+	assert.NotEmpty(t, codelensCommands, "Code lens commands should be generated with fix relationships")
+
+	var hasUpgradeCodeLens bool
+	for _, cmd := range codelensCommands {
+		if strings.Contains(cmd.Title, "Upgrade to") && strings.Contains(cmd.Title, "⚡️") {
+			hasUpgradeCodeLens = true
+			assert.Contains(t, cmd.Title, "lodash", "Code lens title should mention the package")
+			assert.Contains(t, cmd.Title, "4.17.21", "Code lens title should mention the target version")
+			assert.Equal(t, types.CodeFixCommand, cmd.CommandId, "Should use CodeFixCommand")
+			break
+		}
+	}
+	assert.True(t, hasUpgradeCodeLens, "Should have an upgrade code lens command")
 }
 
 // Test_processIssue_FeatureFlagDisabled verifies that code actions are not generated when feature flag is disabled
@@ -673,67 +689,9 @@ func Test_processIssue_FeatureFlagDisabled(t *testing.T) {
 	assert.NotEmpty(t, additionalData.UpgradePath, "Should have an upgrade path")
 	assert.True(t, additionalData.IsUpgradable, "Should be marked as upgradable")
 
-	// Verify code actions and codelenses are NOT generated when feature flag is disabled
+	// Verify code actions and code lenses are NOT generated when feature flag is disabled
 	assert.Empty(t, result.GetCodeActions(), "Code actions should not be generated when feature flag is disabled")
-	assert.Empty(t, result.GetCodelensCommands(), "Codelens commands should not be generated when feature flag is disabled")
-}
-
-// Test_processIssue_WithUpgradePath_HasCodeLens verifies that issues with upgrade code actions
-// also have corresponding code lens commands
-func Test_processIssue_WithUpgradePath_HasCodeLens(t *testing.T) {
-	setup := setupProcessIssueTest(t, util.Ptr(true), "package.json")
-
-	// Create a finding with an upgrade path matching real package.json
-	finding := createCompleteUnifiedFinding(
-		t,
-		"npm",
-		"goof@1.0.1",
-		[]string{"lodash@4.17.4"}, // matches testdata/package.json
-		[]string{"4.17.21"},
-		"lodash",
-		"4.17.4", // matches testdata/package.json
-		"Prototype Pollution",
-	)
-
-	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
-	require.NoError(t, err)
-
-	result := processIssue(
-		setup.ctx,
-		trIssue,
-		zerolog.Nop(),
-		types.FilePath(setup.filePath),
-		types.FilePath(setup.workDir),
-	)
-
-	require.NotNil(t, result, "processIssue should return an issue")
-
-	// Verify the issue has the expected additional data
-	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
-	require.True(t, ok, "AdditionalData should be OssIssueData")
-	assert.Equal(t, "lodash", additionalData.PackageName)
-	assert.Equal(t, "4.17.4", additionalData.Version)
-
-	// Verify there's a remediation path available
-	assert.NotEmpty(t, additionalData.UpgradePath, "Should have an upgrade path")
-	assert.True(t, additionalData.IsUpgradable, "Should be marked as upgradable")
-
-	// Verify codelens commands are generated
-	codelensCommands := result.GetCodelensCommands()
-	assert.NotEmpty(t, codelensCommands, "Codelens commands should be generated with fix relationships")
-
-	// Check that codelens command is derived from upgrade action
-	var hasUpgradeCodeLens bool
-	for _, cmd := range codelensCommands {
-		if strings.Contains(cmd.Title, "Upgrade to") && strings.Contains(cmd.Title, "⚡️") {
-			hasUpgradeCodeLens = true
-			assert.Contains(t, cmd.Title, "lodash", "Codelens title should mention the package")
-			assert.Contains(t, cmd.Title, "4.17.21", "Codelens title should mention the target version")
-			assert.Equal(t, types.CodeFixCommand, cmd.CommandId, "Should use CodeFixCommand")
-			break
-		}
-	}
-	assert.True(t, hasUpgradeCodeLens, "Should have an upgrade codelens command")
+	assert.Empty(t, result.GetCodelensCommands(), "Code lens commands should not be generated when feature flag is disabled")
 }
 
 // Test_processIssue_WrongTypeInContextDeps verifies defensive behavior when context deps have wrong types
@@ -787,7 +745,7 @@ func Test_processIssue_WrongTypeInContextDeps(t *testing.T) {
 
 	// Verify code actions are NOT generated when dependencies have wrong types
 	assert.Empty(t, result.GetCodeActions(), "Code actions should not be generated with wrong type dependencies")
-	assert.Empty(t, result.GetCodelensCommands(), "Codelens commands should not be generated with wrong type dependencies")
+	assert.Empty(t, result.GetCodelensCommands(), "Code lens commands should not be generated with wrong type dependencies")
 
 	// But the issue should still have all the core data
 	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
@@ -842,7 +800,7 @@ func Test_processIssue_MissingContextDeps(t *testing.T) {
 
 	// Verify code actions are NOT generated when dependencies are missing
 	assert.Empty(t, result.GetCodeActions(), "Code actions should not be generated without context dependencies")
-	assert.Empty(t, result.GetCodelensCommands(), "Codelens commands should not be generated without context dependencies")
+	assert.Empty(t, result.GetCodelensCommands(), "Code lens commands should not be generated without context dependencies")
 
 	// But the issue should still have all the core data
 	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
@@ -887,10 +845,10 @@ func Test_processIssue_NilDependencyNode(t *testing.T) {
 	// Verify range is empty when node is nil
 	assert.Equal(t, types.Range{}, result.Range, "Range should be empty when dependency node is nil")
 
-	// Verify code actions and codelenses are NOT generated when node is nil
+	// Verify code actions and code lenses are NOT generated when node is nil
 	// The production code skips adding actions when issueDepNode is empty
 	assert.Empty(t, result.GetCodeActions(), "Code actions should not be generated when dependency node is nil")
-	assert.Empty(t, result.GetCodelensCommands(), "Codelens commands should not be generated when dependency node is nil")
+	assert.Empty(t, result.GetCodelensCommands(), "Code lens commands should not be generated when dependency node is nil")
 
 	// But the issue should still have all the core vulnerability data
 	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
@@ -987,11 +945,11 @@ func Test_processIssue_NoFixRelationships_DepsCorrect(t *testing.T) {
 		assert.NotContains(t, title, "⚡️", "Should not have quick-fix lightning bolt emoji")
 	}
 
-	// Verify no upgrade codelens command
+	// Verify no upgrade code lens command
 	codelensCommands := result.GetCodelensCommands()
 	for _, cmd := range codelensCommands {
-		assert.NotContains(t, cmd.Title, "Upgrade to", "Should not have upgrade codelens")
-		assert.NotContains(t, cmd.Title, "⚡️", "Should not have quick-fix lightning bolt emoji in codelens")
+		assert.NotContains(t, cmd.Title, "Upgrade to", "Should not have upgrade code lens")
+		assert.NotContains(t, cmd.Title, "⚡️", "Should not have quick-fix lightning bolt emoji in code lens")
 	}
 }
 
