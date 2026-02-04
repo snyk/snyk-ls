@@ -695,6 +695,66 @@ func Test_processIssue_QuickFixFeatureFlagDisabled(t *testing.T) {
 	assert.Empty(t, result.GetCodelensCommands(), "Code lens commands should not be generated when feature flag is disabled")
 }
 
+// Test_processIssue_NoFixAvailable verifies issue conversion when no fix is available:
+// - Basic issue data is correct
+// - Remediation message indicates no fix
+// - No quick-fix code actions or code lenses (even with FF enabled)
+func Test_processIssue_NoFixAvailable(t *testing.T) {
+	setup := setupProcessIssueTest(t, util.Ptr(true), "package.json") // FF enabled to prove no quick-fix even then
+
+	finding := createCompleteUnifiedFinding(
+		t,
+		"npm",
+		"my-app@1.0.0",
+		[]string{"vulnerable-pkg@1.0.0"},
+		[]string{}, // no fix available
+		"vulnerable-pkg",
+		"1.0.0",
+		"Security Vulnerability",
+	)
+
+	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
+	require.NoError(t, err)
+
+	result := processIssue(
+		setup.ctx,
+		trIssue,
+		zerolog.Nop(),
+		types.FilePath(setup.filePath),
+		types.FilePath(setup.workDir),
+	)
+
+	// Verify basic issue data
+	require.NotNil(t, result, "processIssue should return an issue")
+	assert.Equal(t, "vulnerable-pkg-id", result.ID)
+	assert.Equal(t, types.High, result.Severity)
+	assert.Contains(t, result.Message, "vulnerable-pkg")
+	assert.Contains(t, result.Message, "Security Vulnerability")
+
+	// Verify additional data
+	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
+	require.True(t, ok)
+	assert.Equal(t, "vulnerable-pkg", additionalData.PackageName)
+	assert.Equal(t, "1.0.0", additionalData.Version)
+	assert.Equal(t, "No remediation advice available", additionalData.Remediation, "Remediation field should indicate no fix available")
+	assert.Equal(t, []any{false}, additionalData.UpgradePath, "Should have empty upgrade path [false]")
+
+	// Verify no quick-fix code actions (Snyk Learn actions might still be present)
+	codeActions := result.GetCodeActions()
+	for _, action := range codeActions {
+		title := action.GetTitle()
+		assert.NotContains(t, title, "Upgrade to", "Should not have upgrade quick-fix action")
+		assert.NotContains(t, title, "⚡️", "Should not have quick-fix lightning bolt emoji")
+	}
+
+	// Verify no quick-fix code lenses
+	codelensCommands := result.GetCodelensCommands()
+	for _, cmd := range codelensCommands {
+		assert.NotContains(t, cmd.Title, "Upgrade to", "Should not have upgrade code lens")
+		assert.NotContains(t, cmd.Title, "⚡️", "Should not have quick-fix lightning bolt emoji in code lens")
+	}
+}
+
 // Test_processIssue_Defensive_WrongTypeInContextDeps verifies graceful handling when context deps have wrong types
 func Test_processIssue_Defensive_WrongTypeInContextDeps(t *testing.T) {
 	testutil.UnitTest(t)
@@ -817,66 +877,6 @@ func Test_processIssue_Defensive_NilDependencyNode(t *testing.T) {
 
 	// Verify range should be empty
 	assert.Equal(t, types.Range{}, result.Range, "Range should be empty when dependency node is nil")
-}
-
-// Test_processIssue_NoFixAvailable verifies issue conversion when no fix is available:
-// - Basic issue data is correct
-// - Remediation message indicates no fix
-// - No quick-fix code actions or code lenses (even with FF enabled)
-func Test_processIssue_NoFixAvailable(t *testing.T) {
-	setup := setupProcessIssueTest(t, util.Ptr(true), "package.json") // FF enabled to prove no quick-fix even then
-
-	finding := createCompleteUnifiedFinding(
-		t,
-		"npm",
-		"my-app@1.0.0",
-		[]string{"vulnerable-pkg@1.0.0"},
-		[]string{}, // no fix available
-		"vulnerable-pkg",
-		"1.0.0",
-		"Security Vulnerability",
-	)
-
-	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
-	require.NoError(t, err)
-
-	result := processIssue(
-		setup.ctx,
-		trIssue,
-		zerolog.Nop(),
-		types.FilePath(setup.filePath),
-		types.FilePath(setup.workDir),
-	)
-
-	// Verify basic issue data
-	require.NotNil(t, result, "processIssue should return an issue")
-	assert.Equal(t, "vulnerable-pkg-id", result.ID)
-	assert.Equal(t, types.High, result.Severity)
-	assert.Contains(t, result.Message, "vulnerable-pkg")
-	assert.Contains(t, result.Message, "Security Vulnerability")
-
-	// Verify additional data
-	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
-	require.True(t, ok)
-	assert.Equal(t, "vulnerable-pkg", additionalData.PackageName)
-	assert.Equal(t, "1.0.0", additionalData.Version)
-	assert.Equal(t, "No remediation advice available", additionalData.Remediation, "Remediation field should indicate no fix available")
-	assert.Equal(t, []any{false}, additionalData.UpgradePath, "Should have empty upgrade path [false]")
-
-	// Verify no quick-fix code actions (Snyk Learn actions might still be present)
-	codeActions := result.GetCodeActions()
-	for _, action := range codeActions {
-		title := action.GetTitle()
-		assert.NotContains(t, title, "Upgrade to", "Should not have upgrade quick-fix action")
-		assert.NotContains(t, title, "⚡️", "Should not have quick-fix lightning bolt emoji")
-	}
-
-	// Verify no quick-fix code lenses
-	codelensCommands := result.GetCodelensCommands()
-	for _, cmd := range codelensCommands {
-		assert.NotContains(t, cmd.Title, "Upgrade to", "Should not have upgrade code lens")
-		assert.NotContains(t, cmd.Title, "⚡️", "Should not have quick-fix lightning bolt emoji in code lens")
-	}
 }
 
 // processIssueTestSetup holds the common setup for processIssue tests
