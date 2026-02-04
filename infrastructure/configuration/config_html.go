@@ -228,6 +228,12 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 	}, nil
 }
 
+// ConfigHtmlOptions contains optional settings for HTML rendering
+type ConfigHtmlOptions struct {
+	// EnableLdxSyncConfig shows the LDX-Sync config section in folder settings (hidden by default for backward compatibility)
+	EnableLdxSyncConfig bool
+}
+
 // GetConfigHtml renders the configuration dialog HTML using the provided settings.
 // The IDE extension must inject JavaScript functions on the window object:
 // - window.__saveIdeConfig__(jsonString): Save configuration
@@ -240,6 +246,11 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 // Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
 // Note: Settings should be populated using populateFolderConfigs which ensures only workspace folders are included.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
+	return r.GetConfigHtmlWithOptions(settings, ConfigHtmlOptions{})
+}
+
+// GetConfigHtmlWithOptions renders the configuration dialog HTML with additional options.
+func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, options ConfigHtmlOptions) string {
 	// Determine folder/solution/project label based on IDE
 	folderLabel := "Folder"
 	if isVisualStudio(settings.IntegrationName) {
@@ -280,6 +291,8 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		"Nonce":             "ideNonce", // Replaced by IDE extension
 		"FolderLabel":       folderLabel,
 		"CliReleaseChannel": cliReleaseChannel,
+		// Feature flags
+		"EnableLdxSyncConfig": options.EnableLdxSyncConfig,
 	}
 
 	var buffer bytes.Buffer

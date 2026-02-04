@@ -391,7 +391,7 @@
                     </div>
                 </div>
 
-                {{if $folder.EffectiveConfig}}
+                {{if and $folder.EffectiveConfig $.EnableLdxSyncConfig}}
                 <div class="form-group">
                     <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-overrides" aria-expanded="false" aria-controls="folder-{{$index}}-overrides">
                         <span data-toggle="tooltip" title="Override organization policy settings for this folder. Locked settings cannot be changed.">Policy Overrides</span>

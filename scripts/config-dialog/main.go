@@ -16,9 +16,11 @@
 
 // ABOUTME: Manual test script to generate configuration dialog HTML for visual inspection
 // ABOUTME: Run with: go run scripts/config-dialog/main.go > config_output.html
+// ABOUTME: Use -ldx-sync-config flag to enable the LDX-Sync config UI section
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -37,6 +39,10 @@ import (
 )
 
 func main() {
+	// Parse command line flags
+	enableLdxSyncConfig := flag.Bool("ldx-sync-config", false, "Enable the LDX-Sync config UI section (hidden by default for backward compatibility)")
+	flag.Parse()
+
 	// Initialize config
 	c := config.CurrentConfig()
 	c.SetToken("00000000-0000-0000-0000-000000000001")
@@ -213,8 +219,10 @@ func main() {
 		IgnoredIssues: false,
 	}
 
-	// Render HTML
-	html := renderer.GetConfigHtml(settings)
+	// Render HTML with configurable LDX-Sync config flag
+	html := renderer.GetConfigHtmlWithOptions(settings, configuration.ConfigHtmlOptions{
+		EnableLdxSyncConfig: *enableLdxSyncConfig,
+	})
 	if html == "" {
 		fmt.Fprintf(os.Stderr, "Error: Failed to generate HTML\n")
 		os.Exit(1)
