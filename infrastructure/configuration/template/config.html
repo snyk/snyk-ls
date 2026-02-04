@@ -410,8 +410,8 @@
                                     <span class="source-badge {{getSourceClass $folder.EffectiveConfig "scan_automatic"}}">{{getSourceLabel $folder.EffectiveConfig "scan_automatic"}}</span>
                                 </label>
                                 <select id="folder_{{$index}}_override_scan_automatic" name="folder_{{$index}}_override_scan_automatic" data-setting="scan_automatic" {{if isLocked $folder.EffectiveConfig "scan_automatic"}}disabled{{end}}>
-                                    <option value="auto" {{if eq .Value "auto"}}selected{{end}}>Auto</option>
-                                    <option value="manual" {{if eq .Value "manual"}}selected{{end}}>Manual</option>
+                                    <option value="auto" {{if isAutoScan .Value}}selected{{end}}>Auto</option>
+                                    <option value="manual" {{if not (isAutoScan .Value)}}selected{{end}}>Manual</option>
                                 </select>
                             </div>
                             {{end}}

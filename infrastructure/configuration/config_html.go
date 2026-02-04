@@ -187,6 +187,22 @@ func sourceToClass(source string) string {
 	}
 }
 
+// tmplIsAutoScan checks if the scan_automatic value represents "auto" mode.
+// Handles both string ("auto"/"manual") and boolean (true/false) values.
+func tmplIsAutoScan(value any) bool {
+	if value == nil {
+		return true // default to auto
+	}
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		return v == "auto" || v == ""
+	default:
+		return true
+	}
+}
+
 func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
@@ -197,6 +213,7 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 		"getSource":         tmplGetSource,
 		"getSourceLabel":    tmplGetSourceLabel,
 		"getSourceClass":    tmplGetSourceClass,
+		"isAutoScan":        tmplIsAutoScan,
 	}
 
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)
