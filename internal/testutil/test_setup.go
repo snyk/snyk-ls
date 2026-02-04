@@ -63,14 +63,6 @@ func UnitTest(t *testing.T) *config.Config {
 func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	t.Helper()
 	c := config.New(config.WithBinarySearchPaths([]string{}))
-
-	// Set default org values immediately after config creation to prevent repeated GAF API calls.
-	// GAF's default function checks if a value is already set and returns it without making an API call.
-	// Note: One API call may still happen during config.New() initialization, but subsequent calls are prevented.
-	engineConfig := c.Engine().GetConfiguration()
-	engineConfig.Set(configuration.ORGANIZATION, "00000000-0000-0000-0000-000000000000")
-	engineConfig.Set(configuration.ORGANIZATION_SLUG, "test-default-org-slug")
-
 	err := c.WaitForDefaultEnv(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -83,6 +75,12 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t, c)
+
+	// Set default org values to avoid API calls in tests
+	// Using Set() instead of AddDefaultValue() so tests can override with SetOrganization()
+	engineConfig := c.Engine().GetConfiguration()
+	engineConfig.Set(configuration.ORGANIZATION, "00000000-0000-0000-0000-000000000000")
+	engineConfig.Set(configuration.ORGANIZATION_SLUG, "test-default-org-slug")
 
 	engineConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
 		Enabled: false,
@@ -154,18 +152,14 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *con
 	}
 
 	c := config.New(config.WithBinarySearchPaths([]string{}))
-
-	// Set token IMMEDIATELY after config.New() so GAF API calls are authenticated.
-	// This allows GAF to successfully determine and cache the real org.
-	token := testsupport.GetEnvironmentToken(tokenSecretName)
-	c.SetToken(token)
-	c.SetAuthenticationMethod(types.TokenAuthentication)
-
 	err := c.WaitForDefaultEnv(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	c.ConfigureLogging(nil)
+	token := testsupport.GetEnvironmentToken(tokenSecretName)
+	c.SetToken(token)
+	c.SetAuthenticationMethod(types.TokenAuthentication)
 	c.SetAutomaticAuthentication(false)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
