@@ -212,8 +212,6 @@ type Config struct {
 	ldxSyncConfigCache                  *types.LDXSyncConfigCache
 	ldxSyncConfigCacheMutex             sync.RWMutex
 	configResolver                      *types.ConfigResolver
-	cachedDefaultOrg                    string
-	cachedDefaultOrgMutex               sync.RWMutex
 }
 
 func CurrentConfig() *Config {
@@ -868,44 +866,12 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 
 // Deprecated use FolderOrganization(path) to get organization per folder
 func (c *Config) Organization() string {
-	// Check cache first to avoid GAF API calls
-	if cached := c.getCachedOrg(); cached != "" {
-		return cached
-	}
-
 	// Get from GAF (may trigger API call if not set)
-	org := c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
-
-	// Cache the result if non-empty
-	if org != "" {
-		c.setCachedOrg(org)
-	}
-
-	return org
-}
-
-func (c *Config) getCachedOrg() string {
-	c.cachedDefaultOrgMutex.RLock()
-	defer c.cachedDefaultOrgMutex.RUnlock()
-	return c.cachedDefaultOrg
-}
-
-func (c *Config) setCachedOrg(org string) {
-	c.cachedDefaultOrgMutex.Lock()
-	defer c.cachedDefaultOrgMutex.Unlock()
-	c.cachedDefaultOrg = org
+	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
 
 func (c *Config) SetOrganization(organization string) {
 	c.engine.GetConfiguration().Set(configuration.ORGANIZATION, organization)
-	// Clear cache so next call picks up the new value
-	c.ClearCachedGlobalOrg()
-}
-
-// ClearCachedGlobalOrg clears the cached global org.
-// Call this when org configuration changes (e.g., after LDX-Sync refresh or SetOrganization).
-func (c *Config) ClearCachedGlobalOrg() {
-	c.setCachedOrg("")
 }
 
 func (c *Config) ManageBinariesAutomatically() bool {
@@ -1770,21 +1736,16 @@ func (c *Config) IsDeltaFindingsEnabledForFolder(folderConfig *types.FolderConfi
 	return c.IsDeltaFindingsEnabled() // fallback to global
 }
 
-// isProductEnabled is a private helper to check product enablement for a folder.
-func (c *Config) isProductEnabled(folderConfig *types.FolderConfig, productName string, fallback func() bool) bool {
+// isProductEnabledForFolder is a private helper to check product enablement for a folder.
+func (c *Config) isProductEnabledForFolder(folderConfig *types.FolderConfig, settingName string, fallback func() bool) bool {
 	resolver := c.GetConfigResolver()
 	if resolver == nil {
 		return fallback()
 	}
-	val, source := resolver.GetValue(types.SettingEnabledProducts, folderConfig)
+	val, source := resolver.GetValue(settingName, folderConfig)
 	if source != types.ConfigSourceDefault {
-		if products, ok := val.([]string); ok && len(products) > 0 {
-			for _, p := range products {
-				if p == productName {
-					return true
-				}
-			}
-			return false
+		if enabled, ok := val.(bool); ok {
+			return enabled
 		}
 	}
 	return fallback()
@@ -1793,23 +1754,23 @@ func (c *Config) isProductEnabled(folderConfig *types.FolderConfig, productName 
 // IsSnykCodeEnabledForFolder returns whether Snyk Code is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykCodeEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return c.isProductEnabled(folderConfig, "code", c.IsSnykCodeEnabled)
+	return c.isProductEnabledForFolder(folderConfig, types.SettingSnykCodeEnabled, c.IsSnykCodeEnabled)
 }
 
 // IsSnykOssEnabledForFolder returns whether Snyk OSS is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykOssEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return c.isProductEnabled(folderConfig, "oss", c.IsSnykOssEnabled)
+	return c.isProductEnabledForFolder(folderConfig, types.SettingSnykOssEnabled, c.IsSnykOssEnabled)
 }
 
 // IsSnykIacEnabledForFolder returns whether Snyk IaC is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykIacEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return c.isProductEnabled(folderConfig, "iac", c.IsSnykIacEnabled)
+	return c.isProductEnabledForFolder(folderConfig, types.SettingSnykIacEnabled, c.IsSnykIacEnabled)
 }
 
 // IsSnykCodeSecurityEnabledForFolder returns whether Snyk Code Security is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykCodeSecurityEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return c.isProductEnabled(folderConfig, "code_security", c.IsSnykCodeSecurityEnabled)
+	return c.isProductEnabledForFolder(folderConfig, types.SettingSnykCodeEnabled, c.IsSnykCodeSecurityEnabled)
 }

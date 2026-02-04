@@ -42,6 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -629,6 +630,9 @@ func updateAutoScan(c *config.Config, settings types.Settings) {
 
 	// TODO: Add getter method for AutomaticScanning to enable analytics
 	c.SetAutomaticScanning(autoScan)
+
+	// Propagate org-scoped setting to all FolderConfigs (unless locked)
+	propagateOrgScopedGlobalSettingsToFolderConfigs(c, types.SettingScanAutomatic, autoScan)
 }
 
 func updateSnykLearnCodeActions(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
@@ -659,9 +663,14 @@ func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSourc
 	oldValue := c.IsDeltaFindingsEnabled()
 
 	modified := c.SetDeltaFindingsEnabled(enable)
-	if modified && c.IsLSPInitialized() {
-		sendDiagnosticsForNewSettings(c)
-		analytics.SendConfigChangedAnalytics(c, configEnableDeltaFindings, oldValue, enable, triggerSource)
+	if modified {
+		// Propagate org-scoped setting to all FolderConfigs (unless locked)
+		propagateOrgScopedGlobalSettingsToFolderConfigs(c, types.SettingScanNetNew, enable)
+
+		if c.IsLSPInitialized() {
+			sendDiagnosticsForNewSettings(c)
+			analytics.SendConfigChangedAnalytics(c, configEnableDeltaFindings, oldValue, enable, triggerSource)
+		}
 	}
 }
 
@@ -818,8 +827,12 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 		oldValue := c.IsSnykCodeEnabled()
 		c.SetSnykCodeEnabled(parseBool)
 		c.EnableSnykCodeSecurity(parseBool)
-		if oldValue != parseBool && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, parseBool, triggerSource)
+		if oldValue != parseBool {
+			// Propagate individual product setting to all FolderConfigs (unless locked)
+			propagateOrgScopedGlobalSettingsToFolderConfigs(c, types.SettingSnykCodeEnabled, parseBool)
+			if c.IsLSPInitialized() {
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, parseBool, triggerSource)
+			}
 		}
 	}
 
@@ -830,8 +843,12 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 	} else {
 		oldValue := c.IsSnykOssEnabled()
 		c.SetSnykOssEnabled(parseBool)
-		if oldValue != parseBool && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configActivateSnykOpenSource, oldValue, parseBool, triggerSource)
+		if oldValue != parseBool {
+			// Propagate individual product setting to all FolderConfigs (unless locked)
+			propagateOrgScopedGlobalSettingsToFolderConfigs(c, types.SettingSnykOssEnabled, parseBool)
+			if c.IsLSPInitialized() {
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykOpenSource, oldValue, parseBool, triggerSource)
+			}
 		}
 	}
 
@@ -842,8 +859,12 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 	} else {
 		oldValue := c.IsSnykIacEnabled()
 		c.SetSnykIacEnabled(parseBool)
-		if oldValue != parseBool && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
+		if oldValue != parseBool {
+			// Propagate individual product setting to all FolderConfigs (unless locked)
+			propagateOrgScopedGlobalSettingsToFolderConfigs(c, types.SettingSnykIacEnabled, parseBool)
+			if c.IsLSPInitialized() {
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
+			}
 		}
 	}
 }
@@ -855,6 +876,12 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, trigger
 
 	if !modified {
 		return
+	}
+
+	// Propagate org-scoped settings to all FolderConfigs (unless locked)
+	if s != nil {
+		propagateOrgScopedGlobalSettingsToFolderConfigs(c, types.SettingIssueViewOpenIssues, s.OpenIssues)
+		propagateOrgScopedGlobalSettingsToFolderConfigs(c, types.SettingIssueViewIgnoredIssues, s.IgnoredIssues)
 	}
 
 	// Send UI update
@@ -878,6 +905,9 @@ func updateRiskScoreThreshold(c *config.Config, settings types.Settings, trigger
 		return
 	}
 
+	// Propagate org-scoped setting to all FolderConfigs (unless locked)
+	propagateOrgScopedGlobalSettingsToFolderConfigs(c, types.SettingRiskScoreThreshold, settings.RiskScoreThreshold)
+
 	// Send UI update
 	sendDiagnosticsForNewSettings(c)
 
@@ -895,6 +925,9 @@ func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSour
 	if !modified {
 		return
 	}
+
+	// Propagate org-scoped setting to all FolderConfigs (unless locked)
+	propagateOrgScopedGlobalSettingsToFolderConfigs(c, types.SettingEnabledSeverities, s)
 
 	// Send UI update
 	sendDiagnosticsForNewSettings(c)
@@ -966,7 +999,9 @@ func computeEffectiveConfigForFolder(resolver *types.ConfigResolver, fc *types.F
 		types.SettingIssueViewIgnoredIssues,
 		types.SettingScanAutomatic,
 		types.SettingScanNetNew,
-		types.SettingEnabledProducts,
+		types.SettingSnykCodeEnabled,
+		types.SettingSnykOssEnabled,
+		types.SettingSnykIacEnabled,
 		types.SettingRiskScoreThreshold,
 	}
 
@@ -975,4 +1010,64 @@ func computeEffectiveConfigForFolder(resolver *types.ConfigResolver, fc *types.F
 	}
 
 	return effectiveConfig
+}
+
+// propagateOrgScopedGlobalSettingsToFolderConfigs propagates org-scoped global setting changes
+// to all FolderConfigs' UserOverrides.
+// When user changes an org-scoped setting at global level, propagate to all folders
+// unless the field is Locked by LDX-Sync for that folder's org.
+func propagateOrgScopedGlobalSettingsToFolderConfigs(c *config.Config, settingName string, value any) {
+	if !types.IsOrgScopedSetting(settingName) {
+		return
+	}
+
+	logger := c.Logger().With().Str("method", "propagateOrgScopedGlobalSettingsToFolderConfigs").Str("setting", settingName).Logger()
+	gafConfig := c.Engine().GetConfiguration()
+
+	sc, err := storedconfig.GetStoredConfig(gafConfig, &logger, true)
+	if err != nil {
+		logger.Err(err).Msg("Failed to get stored config for propagating global setting")
+		return
+	}
+
+	cache := c.GetLdxSyncOrgConfigCache()
+	modified := false
+
+	for folderPath, fc := range sc.FolderConfigs {
+		if fc == nil {
+			continue
+		}
+
+		// Check if this field is locked for this folder's org
+		effectiveOrg := cache.GetOrgIdForFolder(folderPath)
+		if effectiveOrg != "" {
+			orgConfig := cache.GetOrgConfig(effectiveOrg)
+			if orgConfig != nil {
+				field := orgConfig.GetField(settingName)
+				if field != nil && field.IsLocked {
+					logger.Debug().
+						Str("folder", string(folderPath)).
+						Str("org", effectiveOrg).
+						Msg("Skipping propagation - field is locked by org policy")
+					continue
+				}
+			}
+		}
+
+		// Propagate the global setting to this folder's UserOverrides
+		fc.SetUserOverride(settingName, value)
+		modified = true
+		logger.Debug().
+			Str("folder", string(folderPath)).
+			Interface("value", value).
+			Msg("Propagated global setting to folder")
+	}
+
+	if modified {
+		if err := storedconfig.Save(gafConfig, sc); err != nil {
+			logger.Err(err).Msg("Failed to save stored config after propagating global setting")
+		} else {
+			logger.Debug().Msg("Saved stored config after propagating global setting")
+		}
+	}
 }

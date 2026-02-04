@@ -1251,7 +1251,7 @@ func Test_processModifiedFields_ResetAllOverrides(t *testing.T) {
 	folderConfig.SetUserOverride(types.SettingScanAutomatic, "manual")
 	folderConfig.SetUserOverride(types.SettingScanNetNew, true)
 	folderConfig.SetUserOverride(types.SettingEnabledSeverities, []string{"critical", "high"})
-	folderConfig.SetUserOverride(types.SettingEnabledProducts, []string{"code"})
+	folderConfig.SetUserOverride(types.SettingSnykCodeEnabled, true)
 
 	// Verify setup
 	assert.Equal(t, 4, len(folderConfig.UserOverrides))
@@ -1261,7 +1261,7 @@ func Test_processModifiedFields_ResetAllOverrides(t *testing.T) {
 		types.SettingScanAutomatic:     nil,
 		types.SettingScanNetNew:        nil,
 		types.SettingEnabledSeverities: nil,
-		types.SettingEnabledProducts:   nil,
+		types.SettingSnykCodeEnabled:   nil,
 	}
 
 	processModifiedFields(c, folderConfig, modifiedFields, logger)

@@ -284,7 +284,9 @@ var globalSettingGetters = map[string]globalSettingGetter{
 	SettingAutomaticDownload:      func(s *Settings) any { return s.ManageBinariesAutomatically },
 	SettingBinaryBaseUrl:          func(s *Settings) any { return s.CliBaseDownloadURL },
 	SettingCliPath:                func(s *Settings) any { return s.CliPath },
-	SettingEnabledProducts:        func(s *Settings) any { return getEnabledProductsFromSettings(s) },
+	SettingSnykCodeEnabled:        func(s *Settings) any { return s.ActivateSnykCode },
+	SettingSnykOssEnabled:         func(s *Settings) any { return s.ActivateSnykOpenSource },
+	SettingSnykIacEnabled:         func(s *Settings) any { return s.ActivateSnykIac },
 	SettingEnabledSeverities: func(s *Settings) any {
 		if s.FilterSeverity != nil {
 			return s.FilterSeverity
@@ -321,25 +323,6 @@ func (r *ConfigResolver) getGlobalSettingValue(settingName string) any {
 	}
 
 	return nil
-}
-
-// getEnabledProductsFromSettings returns a list of enabled products from the given settings
-func getEnabledProductsFromSettings(settings *Settings) []string {
-	if settings == nil {
-		return nil
-	}
-
-	var products []string
-	if settings.ActivateSnykOpenSource == "true" {
-		products = append(products, "oss")
-	}
-	if settings.ActivateSnykCode == "true" {
-		products = append(products, "code")
-	}
-	if settings.ActivateSnykIac == "true" {
-		products = append(products, "iac")
-	}
-	return products
 }
 
 // getFolderSettingValue returns the value for a folder-scoped setting

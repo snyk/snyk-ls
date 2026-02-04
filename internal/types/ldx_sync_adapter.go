@@ -41,7 +41,6 @@ var ldxSyncSettingKeyMap = map[string]string{
 	SettingCweIds:                          "cwe",
 	SettingCveIds:                          "cve",
 	SettingRuleIds:                         "rule",
-	SettingEnabledProducts:                 "products",
 	SettingScanAutomatic:                   "automatic",
 	SettingScanNetNew:                      "net_new",
 	SettingIssueViewOpenIssues:             "open_issues",
@@ -64,6 +63,12 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 	// Extract only org-scope settings from the response
 	if response.Data.Attributes.Settings != nil {
 		for settingName, metadata := range *response.Data.Attributes.Settings {
+			// Special handling for "products" - convert list to individual booleans
+			if settingName == "products" {
+				convertProductsToIndividualSettings(orgConfig, metadata)
+				continue
+			}
+
 			internalName := getInternalSettingName(settingName)
 			if internalName != "" && GetSettingScope(internalName) == SettingScopeOrg {
 				orgConfig.SetField(
@@ -78,6 +83,57 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 	}
 
 	return orgConfig
+}
+
+// convertProductsToIndividualSettings converts a "products" list from LDX-Sync
+// into individual boolean settings (snyk_code_enabled, snyk_oss_enabled, snyk_iac_enabled)
+func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v20241015.SettingMetadata) {
+	isLocked := ptrToBool(metadata.Locked)
+	isEnforced := ptrToBool(metadata.Enforced)
+	originScope := string(metadata.Origin)
+
+	// Parse the products list
+	productsList := parseProductsList(metadata.Value)
+
+	// Set individual boolean fields based on whether each product is in the list
+	orgConfig.SetField(SettingSnykCodeEnabled, containsProduct(productsList, "code"), isLocked, isEnforced, originScope)
+	orgConfig.SetField(SettingSnykOssEnabled, containsProduct(productsList, "oss"), isLocked, isEnforced, originScope)
+	orgConfig.SetField(SettingSnykIacEnabled, containsProduct(productsList, "iac"), isLocked, isEnforced, originScope)
+}
+
+// parseProductsList extracts a []string from the products value
+func parseProductsList(value any) []string {
+	if value == nil {
+		return nil
+	}
+
+	// Handle []interface{} (common from JSON unmarshaling)
+	if arr, ok := value.([]interface{}); ok {
+		result := make([]string, 0, len(arr))
+		for _, v := range arr {
+			if s, ok := v.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	}
+
+	// Handle []string directly
+	if arr, ok := value.([]string); ok {
+		return arr
+	}
+
+	return nil
+}
+
+// containsProduct checks if a product name is in the list
+func containsProduct(products []string, product string) bool {
+	for _, p := range products {
+		if p == product {
+			return true
+		}
+	}
+	return false
 }
 
 // ExtractMachineSettings extracts machine-scope settings from a UserConfigResponse

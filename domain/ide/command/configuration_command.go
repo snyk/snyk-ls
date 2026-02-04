@@ -194,7 +194,9 @@ func computeEffectiveConfig(resolver *types.ConfigResolver, fc *types.FolderConf
 		types.SettingIssueViewIgnoredIssues,
 		types.SettingScanAutomatic,
 		types.SettingScanNetNew,
-		types.SettingEnabledProducts,
+		types.SettingSnykCodeEnabled,
+		types.SettingSnykOssEnabled,
+		types.SettingSnykIacEnabled,
 		types.SettingRiskScoreThreshold,
 	}
 

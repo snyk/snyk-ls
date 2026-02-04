@@ -202,7 +202,9 @@ const (
 	SettingCweIds                 = "cwe_ids"
 	SettingCveIds                 = "cve_ids"
 	SettingRuleIds                = "rule_ids"
-	SettingEnabledProducts        = "enabled_products"
+	SettingSnykCodeEnabled        = "snyk_code_enabled"
+	SettingSnykOssEnabled         = "snyk_oss_enabled"
+	SettingSnykIacEnabled         = "snyk_iac_enabled"
 	SettingScanAutomatic          = "scan_automatic"
 	SettingScanNetNew             = "scan_net_new"
 	SettingIssueViewOpenIssues    = "issue_view_open_issues"
@@ -239,7 +241,9 @@ var settingScopeRegistry = map[string]SettingScope{
 	SettingCweIds:                 SettingScopeOrg,
 	SettingCveIds:                 SettingScopeOrg,
 	SettingRuleIds:                SettingScopeOrg,
-	SettingEnabledProducts:        SettingScopeOrg,
+	SettingSnykCodeEnabled:        SettingScopeOrg,
+	SettingSnykOssEnabled:         SettingScopeOrg,
+	SettingSnykIacEnabled:         SettingScopeOrg,
 	SettingScanAutomatic:          SettingScopeOrg,
 	SettingScanNetNew:             SettingScopeOrg,
 	SettingIssueViewOpenIssues:    SettingScopeOrg,

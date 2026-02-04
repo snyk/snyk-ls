@@ -304,3 +304,161 @@ func Test_GetOrgIdForFolder_EmptyFolderPath_ReturnsEmpty(t *testing.T) {
 	// Should return empty string when no mapping exists
 	assert.Empty(t, orgId)
 }
+
+func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	logger := c.Logger()
+
+	// Setup folder with user override
+	folderPath := types.FilePath("/test/folder")
+	workspaceutil.SetupWorkspace(t, c, folderPath)
+	folders := c.Workspace().Folders()
+
+	// Create folder config with user override for a setting that will become locked
+	folderConfig := &types.FolderConfig{
+		FolderPath:    folderPath,
+		UserOverrides: map[string]any{types.SettingEnabledSeverities: []string{"high", "critical"}},
+	}
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, logger)
+	require.NoError(t, err)
+
+	// Verify override exists before refresh
+	storedBefore, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetFolderConfigOptions{
+		CreateIfNotExist: false,
+		ReadOnly:         true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, storedBefore)
+	require.True(t, storedBefore.HasUserOverride(types.SettingEnabledSeverities), "User override should exist before refresh")
+
+	// Create LDX-Sync result with locked field (use LDX-Sync API field name "severities")
+	orgId := "test-org-id"
+	result := createLdxSyncResultWithLockedField(orgId, "severities")
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(c.Engine(), string(folderPath), "").
+		Return(result)
+
+	// Setup folder-to-org mapping so clearLockedOverridesFromFolderConfigs can find the org
+	cache := c.GetLdxSyncOrgConfigCache()
+	cache.SetFolderOrg(folderPath, orgId)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient)
+	service.RefreshConfigFromLdxSync(c, folders)
+
+	// Verify user override was cleared for the locked field
+	storedAfter, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetFolderConfigOptions{
+		CreateIfNotExist: false,
+		ReadOnly:         true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, storedAfter)
+	assert.False(t, storedAfter.HasUserOverride(types.SettingEnabledSeverities), "User override should be cleared for locked field")
+}
+
+func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	logger := c.Logger()
+
+	// Setup folder with user overrides
+	folderPath := types.FilePath("/test/folder2")
+	workspaceutil.SetupWorkspace(t, c, folderPath)
+	folders := c.Workspace().Folders()
+
+	// Create folder config with user overrides for both locked and non-locked settings
+	folderConfig := &types.FolderConfig{
+		FolderPath: folderPath,
+		UserOverrides: map[string]any{
+			types.SettingEnabledSeverities: []string{"high", "critical"}, // Will be locked
+			types.SettingScanAutomatic:     true,                         // Will NOT be locked
+		},
+	}
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, logger)
+	require.NoError(t, err)
+
+	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name "severities")
+	orgId := "test-org-id-2"
+	result := createLdxSyncResultWithLockedField(orgId, "severities")
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(c.Engine(), string(folderPath), "").
+		Return(result)
+
+	// Setup folder-to-org mapping
+	cache := c.GetLdxSyncOrgConfigCache()
+	cache.SetFolderOrg(folderPath, orgId)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient)
+	service.RefreshConfigFromLdxSync(c, folders)
+
+	// Verify locked override was cleared but non-locked override was preserved
+	storedAfter, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetFolderConfigOptions{
+		CreateIfNotExist: false,
+		ReadOnly:         true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, storedAfter)
+	assert.False(t, storedAfter.HasUserOverride(types.SettingEnabledSeverities), "Locked override should be cleared")
+	assert.True(t, storedAfter.HasUserOverride(types.SettingScanAutomatic), "Non-locked override should be preserved")
+}
+
+// createLdxSyncResultWithLockedField creates a LdxSyncConfigResult with a locked field
+func createLdxSyncResultWithLockedField(orgId string, lockedFieldName string) ldx_sync_config.LdxSyncConfigResult {
+	orgs := []v20241015.Organization{
+		{
+			Id:                   orgId,
+			Name:                 "Test Org",
+			Slug:                 "test-org",
+			IsDefault:            util.Ptr(true),
+			PreferredByAlgorithm: util.Ptr(true),
+		},
+	}
+
+	// Create settings with a locked field using the correct API field names
+	settings := map[string]v20241015.SettingMetadata{
+		lockedFieldName: {
+			Locked:   util.Ptr(true),
+			Enforced: util.Ptr(false),
+			Origin:   v20241015.SettingMetadataOriginOrg,
+			Value:    []string{"low", "medium", "high", "critical"},
+		},
+	}
+
+	configId := uuid.MustParse("00000000-0000-0000-0000-000000000002")
+
+	return ldx_sync_config.LdxSyncConfigResult{
+		Config: &v20241015.UserConfigResponse{
+			Data: struct {
+				Attributes struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				} `json:"attributes"`
+				Id   uuid.UUID                            `json:"id"`
+				Type v20241015.UserConfigResponseDataType `json:"type"`
+			}{
+				Attributes: struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				}{
+					Organizations: &orgs,
+					Settings:      &settings,
+				},
+				Id:   configId,
+				Type: "configuration",
+			},
+		},
+		Error: nil,
+	}
+}
