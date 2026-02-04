@@ -652,8 +652,9 @@ func Test_processIssue_WithUpgradePath_HasCodeActionsAndLenses(t *testing.T) {
 	assert.True(t, hasUpgradeCodeLens, "Should have an upgrade code lens command")
 }
 
-// Test_processIssue_FeatureFlagDisabled verifies that code actions are not generated when feature flag is disabled
-func Test_processIssue_FeatureFlagDisabled(t *testing.T) {
+// Test_processIssue_QuickFixFeatureFlagDisabled verifies that code actions and code lenses
+// are not generated when quick-fix feature flag is disabled
+func Test_processIssue_QuickFixFeatureFlagDisabled(t *testing.T) {
 	setup := setupProcessIssueTest(t, util.Ptr(false), "package.json")
 
 	// Create a finding with an upgrade path
@@ -694,8 +695,8 @@ func Test_processIssue_FeatureFlagDisabled(t *testing.T) {
 	assert.Empty(t, result.GetCodelensCommands(), "Code lens commands should not be generated when feature flag is disabled")
 }
 
-// Test_processIssue_WrongTypeInContextDeps verifies defensive behavior when context deps have wrong types
-func Test_processIssue_WrongTypeInContextDeps(t *testing.T) {
+// Test_processIssue_Defensive_WrongTypeInContextDeps verifies graceful handling when context deps have wrong types
+func Test_processIssue_Defensive_WrongTypeInContextDeps(t *testing.T) {
 	testutil.UnitTest(t)
 
 	ctx := t.Context()
@@ -741,8 +742,8 @@ func Test_processIssue_WrongTypeInContextDeps(t *testing.T) {
 	assertProcessIssueGracefulDegradation(t, result, "lodash", types.High)
 }
 
-// Test_processIssue_MissingContextDeps verifies defensive behavior of processIssue to handle missing context dependencies gracefully
-func Test_processIssue_MissingContextDeps(t *testing.T) {
+// Test_processIssue_Defensive_MissingContextDeps verifies graceful handling when context dependencies are missing
+func Test_processIssue_Defensive_MissingContextDeps(t *testing.T) {
 	testutil.UnitTest(t)
 
 	// Create a context WITHOUT dependencies to test error handling
@@ -783,8 +784,8 @@ func Test_processIssue_MissingContextDeps(t *testing.T) {
 	assertProcessIssueGracefulDegradation(t, result, "lodash", types.High)
 }
 
-// Test_processIssue_NilDependencyNode verifies defensive behavior when dependency node can't be found
-func Test_processIssue_NilDependencyNode(t *testing.T) {
+// Test_processIssue_Defensive_NilDependencyNode verifies graceful handling when dependency node can't be found
+func Test_processIssue_Defensive_NilDependencyNode(t *testing.T) {
 	// Use a non-existent file path so getDependencyNode returns nil
 	setup := setupProcessIssueTest(t, util.Ptr(true), "nonexistent.json")
 
@@ -818,9 +819,12 @@ func Test_processIssue_NilDependencyNode(t *testing.T) {
 	assert.Equal(t, types.Range{}, result.Range, "Range should be empty when dependency node is nil")
 }
 
-// Test_processIssue_DirectDependencyWithNoFixAvailable verifies basic issue conversion when no fix is available
-func Test_processIssue_DirectDependencyWithNoFixAvailable(t *testing.T) {
-	setup := setupProcessIssueTest(t, nil, "package.json")
+// Test_processIssue_NoFixAvailable verifies issue conversion when no fix is available:
+// - Basic issue data is correct
+// - Remediation message indicates no fix
+// - No quick-fix code actions or code lenses (even with FF enabled)
+func Test_processIssue_NoFixAvailable(t *testing.T) {
+	setup := setupProcessIssueTest(t, util.Ptr(true), "package.json") // FF enabled to prove no quick-fix even then
 
 	finding := createCompleteUnifiedFinding(
 		t,
@@ -844,61 +848,22 @@ func Test_processIssue_DirectDependencyWithNoFixAvailable(t *testing.T) {
 		types.FilePath(setup.workDir),
 	)
 
+	// Verify basic issue data
 	require.NotNil(t, result, "processIssue should return an issue")
 	assert.Equal(t, "vulnerable-pkg-id", result.ID)
 	assert.Equal(t, types.High, result.Severity)
 	assert.Contains(t, result.Message, "vulnerable-pkg")
 	assert.Contains(t, result.Message, "Security Vulnerability")
 
+	// Verify additional data
 	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
 	require.True(t, ok)
 	assert.Equal(t, "vulnerable-pkg", additionalData.PackageName)
 	assert.Equal(t, "1.0.0", additionalData.Version)
 	assert.Equal(t, "No remediation advice available", additionalData.Remediation, "Remediation field should indicate no fix available")
-}
-
-// Test_processIssue_NoFixRelationships_DepsCorrect verifies that quick-fix actions are not generated
-// when there are no fix relationships, even when deps are correct and feature flag is enabled
-func Test_processIssue_NoFixRelationships_DepsCorrect(t *testing.T) {
-	setup := setupProcessIssueTest(t, util.Ptr(true), "package.json")
-
-	// Create a finding WITHOUT fix relationships (no fixedIn versions)
-	finding := createCompleteUnifiedFinding(
-		t,
-		"npm",
-		"my-app@1.0.0",
-		[]string{"vulnerable-pkg@1.0.0"},
-		[]string{}, // no fix available - no fix relationships will be created
-		"vulnerable-pkg",
-		"1.0.0",
-		"Security Vulnerability",
-	)
-
-	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
-	require.NoError(t, err)
-
-	result := processIssue(
-		setup.ctx,
-		trIssue,
-		zerolog.Nop(),
-		types.FilePath(setup.filePath),
-		types.FilePath(setup.workDir),
-	)
-
-	require.NotNil(t, result, "processIssue should return an issue")
-	assert.Equal(t, "vulnerable-pkg-id", result.ID)
-	assert.Equal(t, types.High, result.Severity)
-
-	// Verify the issue has NO upgrade path (only [false])
-	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
-	require.True(t, ok)
 	assert.Equal(t, []any{false}, additionalData.UpgradePath, "Should have empty upgrade path [false]")
-	// Note: IsUpgradable is based on len(upgradePath) > 0, so [false] makes it true
-	// This is a quirk of the current implementation - might want to change to len(upgradePath) > 1
-	assert.True(t, additionalData.IsUpgradable, "Current behavior: marked as upgradable when upgradePath=[false]")
 
-	// Verify quick-fix code actions are NOT generated when no fix relationships exist
-	// (Snyk Learn actions might still be present, but no quick-fix)
+	// Verify no quick-fix code actions (Snyk Learn actions might still be present)
 	codeActions := result.GetCodeActions()
 	for _, action := range codeActions {
 		title := action.GetTitle()
@@ -906,7 +871,7 @@ func Test_processIssue_NoFixRelationships_DepsCorrect(t *testing.T) {
 		assert.NotContains(t, title, "⚡️", "Should not have quick-fix lightning bolt emoji")
 	}
 
-	// Verify no upgrade code lens command
+	// Verify no quick-fix code lenses
 	codelensCommands := result.GetCodelensCommands()
 	for _, cmd := range codelensCommands {
 		assert.NotContains(t, cmd.Title, "Upgrade to", "Should not have upgrade code lens")
