@@ -461,29 +461,37 @@
                             {{end}}
 
                             <!-- Enabled Products Override -->
-                            {{with getEffectiveValue $folder.EffectiveConfig "enabled_products"}}
-                            <div class="form-group {{if isLocked $folder.EffectiveConfig "enabled_products"}}field-locked{{end}}">
+                            <div class="form-group">
                                 <label>
                                     <span data-toggle="tooltip" title="Override enabled products for this folder">Enabled Products</span>
-                                    {{if isLocked $folder.EffectiveConfig "enabled_products"}}<span class="locked-indicator">Locked</span>{{end}}
-                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "enabled_products"}}">{{getSourceLabel $folder.EffectiveConfig "enabled_products"}}</span>
                                 </label>
                                 <div class="checkbox-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_override_product_oss" data-setting="enabled_products" data-product="oss" {{if isLocked $folder.EffectiveConfig "enabled_products"}}disabled{{end}}>
+                                    {{with getEffectiveValue $folder.EffectiveConfig "snyk_oss_enabled"}}
+                                    <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "snyk_oss_enabled"}}field-locked{{end}}">
+                                        <input type="checkbox" name="folder_{{$index}}_override_snyk_oss_enabled" data-setting="snyk_oss_enabled" {{if .Value}}checked{{end}} {{if isLocked $folder.EffectiveConfig "snyk_oss_enabled"}}disabled{{end}}>
                                         Snyk Open Source
+                                        {{if isLocked $folder.EffectiveConfig "snyk_oss_enabled"}}<span class="locked-indicator">Locked</span>{{end}}
+                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "snyk_oss_enabled"}}">{{getSourceLabel $folder.EffectiveConfig "snyk_oss_enabled"}}</span>
                                     </label>
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_override_product_code" data-setting="enabled_products" data-product="code" {{if isLocked $folder.EffectiveConfig "enabled_products"}}disabled{{end}}>
+                                    {{end}}
+                                    {{with getEffectiveValue $folder.EffectiveConfig "snyk_code_enabled"}}
+                                    <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "snyk_code_enabled"}}field-locked{{end}}">
+                                        <input type="checkbox" name="folder_{{$index}}_override_snyk_code_enabled" data-setting="snyk_code_enabled" {{if .Value}}checked{{end}} {{if isLocked $folder.EffectiveConfig "snyk_code_enabled"}}disabled{{end}}>
                                         Snyk Code
+                                        {{if isLocked $folder.EffectiveConfig "snyk_code_enabled"}}<span class="locked-indicator">Locked</span>{{end}}
+                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "snyk_code_enabled"}}">{{getSourceLabel $folder.EffectiveConfig "snyk_code_enabled"}}</span>
                                     </label>
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_override_product_iac" data-setting="enabled_products" data-product="iac" {{if isLocked $folder.EffectiveConfig "enabled_products"}}disabled{{end}}>
+                                    {{end}}
+                                    {{with getEffectiveValue $folder.EffectiveConfig "snyk_iac_enabled"}}
+                                    <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "snyk_iac_enabled"}}field-locked{{end}}">
+                                        <input type="checkbox" name="folder_{{$index}}_override_snyk_iac_enabled" data-setting="snyk_iac_enabled" {{if .Value}}checked{{end}} {{if isLocked $folder.EffectiveConfig "snyk_iac_enabled"}}disabled{{end}}>
                                         Snyk IaC
+                                        {{if isLocked $folder.EffectiveConfig "snyk_iac_enabled"}}<span class="locked-indicator">Locked</span>{{end}}
+                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "snyk_iac_enabled"}}">{{getSourceLabel $folder.EffectiveConfig "snyk_iac_enabled"}}</span>
                                     </label>
+                                    {{end}}
                                 </div>
                             </div>
-                            {{end}}
 
                             <!-- Issue View Options Override -->
                             {{with getEffectiveValue $folder.EffectiveConfig "issue_view_open_issues"}}
