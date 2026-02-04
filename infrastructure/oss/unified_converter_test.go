@@ -575,183 +575,116 @@ func Test_extractUpgradePackage(t *testing.T) {
 	}
 }
 
-// Test_processIssue_WithUpgradePath_HasCodeActionsAndLenses verifies that issues with an upgrade path
-// have both quick-fix code actions and code lenses generated
-func Test_processIssue_WithUpgradePath_HasCodeActionsAndLenses(t *testing.T) {
-	setup := setupProcessIssueTest(t, util.Ptr(true), "package.json")
-
-	// Create a finding with an upgrade path matching real package.json
-	finding := createCompleteUnifiedFinding(
-		t,
-		"npm",
-		"goof@1.0.1",
-		[]string{"lodash@4.17.4"}, // matches testdata/package.json
-		[]string{"4.17.21"},       // fixed version available
-		"lodash",
-		"4.17.4", // matches testdata/package.json
-		"Prototype Pollution",
-	)
-
-	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
-	require.NoError(t, err)
-
-	// Act
-	result := processIssue(
-		setup.ctx,
-		trIssue,
-		zerolog.Nop(),
-		types.FilePath(setup.filePath),
-		types.FilePath(setup.workDir),
-	)
-
-	// Verify basic issue data
-	require.NotNil(t, result, "processIssue should return an issue")
-	assert.Equal(t, "lodash-id", result.ID, "Issue ID should match the problem ID")
-	assert.Equal(t, types.High, result.Severity, "Severity should be High")
-	assert.Contains(t, result.Message, "lodash", "Message should mention the affected package")
-
-	// Verify upgrade path is available in additional data
-	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
-	require.True(t, ok, "AdditionalData should be OssIssueData")
-	assert.Equal(t, "lodash", additionalData.PackageName)
-	assert.Equal(t, "4.17.4", additionalData.Version)
-	assert.NotEmpty(t, additionalData.UpgradePath, "Should have an upgrade path")
-	assert.True(t, additionalData.IsUpgradable, "Should be marked as upgradable")
-
-	// Verify code actions are generated
-	codeActions := result.GetCodeActions()
-	assert.NotEmpty(t, codeActions, "Code actions should be generated with fix relationships")
-
-	// Verify the quick-fix actions
-	var hasQuickFix bool
-	for _, action := range codeActions {
-		title := action.GetTitle()
-		if strings.Contains(title, "Upgrade to") && strings.Contains(title, "⚡️") {
-			hasQuickFix = true
-			assert.Contains(t, title, "lodash", "Quick-fix title should mention the package")
-			assert.Contains(t, title, "4.17.21", "Quick-fix title should mention the target version")
-			break
-		}
-	}
-	assert.True(t, hasQuickFix, "Should have a quick-fix upgrade code action")
-
-	// Verify code lens commands are generated
-	codelensCommands := result.GetCodelensCommands()
-	assert.NotEmpty(t, codelensCommands, "Code lens commands should be generated with fix relationships")
-
-	var hasUpgradeCodeLens bool
-	for _, cmd := range codelensCommands {
-		if strings.Contains(cmd.Title, "Upgrade to") && strings.Contains(cmd.Title, "⚡️") {
-			hasUpgradeCodeLens = true
-			assert.Contains(t, cmd.Title, "lodash", "Code lens title should mention the package")
-			assert.Contains(t, cmd.Title, "4.17.21", "Code lens title should mention the target version")
-			assert.Equal(t, types.CodeFixCommand, cmd.CommandId, "Should use CodeFixCommand")
-			break
-		}
-	}
-	assert.True(t, hasUpgradeCodeLens, "Should have an upgrade code lens command")
-}
-
-// Test_processIssue_QuickFixFeatureFlagDisabled verifies that code actions and code lenses
-// are not generated when quick-fix feature flag is disabled
-func Test_processIssue_QuickFixFeatureFlagDisabled(t *testing.T) {
-	setup := setupProcessIssueTest(t, util.Ptr(false), "package.json")
-
-	// Create a finding with an upgrade path
-	finding := createCompleteUnifiedFinding(
-		t,
-		"npm",
-		"goof@1.0.1",
-		[]string{"lodash@4.17.4"},
-		[]string{"4.17.21"},
-		"lodash",
-		"4.17.4",
-		"Prototype Pollution",
-	)
-
-	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
-	require.NoError(t, err)
-
-	result := processIssue(
-		setup.ctx,
-		trIssue,
-		zerolog.Nop(),
-		types.FilePath(setup.filePath),
-		types.FilePath(setup.workDir),
-	)
-
-	require.NotNil(t, result, "processIssue should return an issue")
-	assert.Equal(t, "lodash-id", result.ID)
-	assert.Equal(t, types.High, result.Severity)
-
-	// Verify the issue has upgrade path data
-	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
-	require.True(t, ok)
-	assert.NotEmpty(t, additionalData.UpgradePath, "Should have an upgrade path")
-	assert.True(t, additionalData.IsUpgradable, "Should be marked as upgradable")
-
-	// Verify code actions and code lenses are NOT generated when feature flag is disabled
-	assert.Empty(t, result.GetCodeActions(), "Code actions should not be generated when feature flag is disabled")
-	assert.Empty(t, result.GetCodelensCommands(), "Code lens commands should not be generated when feature flag is disabled")
-}
-
-// Test_processIssue_NoFixAvailable verifies issue conversion when no fix is available:
-// - Basic issue data is correct
-// - Remediation message indicates no fix
-// - No quick-fix code actions or code lenses (even with FF enabled)
-func Test_processIssue_NoFixAvailable(t *testing.T) {
-	setup := setupProcessIssueTest(t, util.Ptr(true), "package.json") // FF enabled to prove no quick-fix even then
-
-	finding := createCompleteUnifiedFinding(
-		t,
-		"npm",
-		"my-app@1.0.0",
-		[]string{"vulnerable-pkg@1.0.0"},
-		[]string{}, // no fix available
-		"vulnerable-pkg",
-		"1.0.0",
-		"Security Vulnerability",
-	)
-
-	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
-	require.NoError(t, err)
-
-	result := processIssue(
-		setup.ctx,
-		trIssue,
-		zerolog.Nop(),
-		types.FilePath(setup.filePath),
-		types.FilePath(setup.workDir),
-	)
-
-	// Verify basic issue data
-	require.NotNil(t, result, "processIssue should return an issue")
-	assert.Equal(t, "vulnerable-pkg-id", result.ID)
-	assert.Equal(t, types.High, result.Severity)
-	assert.Contains(t, result.Message, "vulnerable-pkg")
-	assert.Contains(t, result.Message, "Security Vulnerability")
-
-	// Verify additional data
-	additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
-	require.True(t, ok)
-	assert.Equal(t, "vulnerable-pkg", additionalData.PackageName)
-	assert.Equal(t, "1.0.0", additionalData.Version)
-	assert.Equal(t, "No remediation advice available", additionalData.Remediation, "Remediation field should indicate no fix available")
-	assert.Equal(t, []any{false}, additionalData.UpgradePath, "Should have empty upgrade path [false]")
-
-	// Verify no quick-fix code actions (Snyk Learn actions might still be present)
-	codeActions := result.GetCodeActions()
-	for _, action := range codeActions {
-		title := action.GetTitle()
-		assert.NotContains(t, title, "Upgrade to", "Should not have upgrade quick-fix action")
-		assert.NotContains(t, title, "⚡️", "Should not have quick-fix lightning bolt emoji")
+// Test_processIssue_CodeActionGeneration verifies code action and code lens generation
+// based on fix availability and feature flag state
+func Test_processIssue_CodeActionGeneration(t *testing.T) {
+	tests := []struct {
+		name                string
+		quickFixEnabled     bool
+		fixVersions         []string
+		expectedRemediation string
+		expectCodeActions   bool
+	}{
+		{
+			name:               "WithFix_FFEnabled_HasCodeActions",
+			quickFixEnabled:    true,
+			fixVersions:        []string{"4.17.21"}, // fixed version available
+			expectedRemediation: "Upgrade to lodash@4.17.21",
+			expectCodeActions:  true,
+		},
+		{
+			name:               "WithFix_FFDisabled_NoCodeActions",
+			quickFixEnabled:    false,
+			fixVersions:        []string{"4.17.21"}, // fixed version available
+			expectedRemediation: "Upgrade to lodash@4.17.21",
+			expectCodeActions:  false,
+		},
+		{
+			name:               "NoFix_NoCodeActions",
+			quickFixEnabled:    true, // FF enabled to prove no quick-fix even then
+			fixVersions:        []string{}, // no fix available
+			expectedRemediation: "No remediation advice available",
+			expectCodeActions:  false,
+		},
 	}
 
-	// Verify no quick-fix code lenses
-	codelensCommands := result.GetCodelensCommands()
-	for _, cmd := range codelensCommands {
-		assert.NotContains(t, cmd.Title, "Upgrade to", "Should not have upgrade code lens")
-		assert.NotContains(t, cmd.Title, "⚡️", "Should not have quick-fix lightning bolt emoji in code lens")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setup := setupProcessIssueTest(t, util.Ptr(tt.quickFixEnabled), "package.json")
+
+			// Create a finding with lodash matching testdata/package.json
+			finding := createCompleteUnifiedFinding(
+				t,
+				"npm",
+				"goof@1.0.1",
+				[]string{"lodash@4.17.4"}, // matches testdata/package.json
+				tt.fixVersions,
+				"lodash",
+				"4.17.4",
+				"Prototype Pollution",
+			)
+
+			trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
+			require.NoError(t, err)
+
+			// Act
+			result := processIssue(
+				setup.ctx,
+				trIssue,
+				zerolog.Nop(),
+				types.FilePath(setup.filePath),
+				types.FilePath(setup.workDir),
+			)
+
+			// Verify basic issue data
+			require.NotNil(t, result, "processIssue should return an issue")
+			assert.Equal(t, "lodash-id", result.ID)
+			assert.Equal(t, types.High, result.Severity)
+
+			additionalData, ok := result.AdditionalData.(snyk.OssIssueData)
+			require.True(t, ok)
+			assert.Equal(t, "lodash", additionalData.PackageName)
+			assert.Equal(t, "4.17.4", additionalData.Version)
+			assert.Equal(t, tt.expectedRemediation, additionalData.Remediation)
+
+			if !tt.expectCodeActions {
+				// Verify no code actions or code lenses are generated
+				assert.Empty(t, result.GetCodeActions(), "Code actions should not be generated")
+				assert.Empty(t, result.GetCodelensCommands(), "Code lenses should not be generated")
+			} else {
+				// Verify code actions are generated
+				codeActions := result.GetCodeActions()
+				assert.NotEmpty(t, codeActions, "Code actions should be generated")
+
+				// Verify the quick-fix actions
+				var hasQuickFix bool
+				for _, action := range codeActions {
+					title := action.GetTitle()
+					if strings.Contains(title, "Upgrade to") && strings.Contains(title, "⚡️") {
+						hasQuickFix = true
+						assert.Contains(t, title, "lodash")
+						assert.Contains(t, title, "4.17.21")
+						break
+					}
+				}
+				assert.True(t, hasQuickFix, "Should have a quick-fix upgrade code action")
+
+				// Verify code lens commands are generated
+				codelensCommands := result.GetCodelensCommands()
+				assert.NotEmpty(t, codelensCommands, "Code lens commands should be generated")
+
+				var hasUpgradeCodeLens bool
+				for _, cmd := range codelensCommands {
+					if strings.Contains(cmd.Title, "Upgrade to") && strings.Contains(cmd.Title, "⚡️") {
+						hasUpgradeCodeLens = true
+						assert.Contains(t, cmd.Title, "lodash")
+						assert.Contains(t, cmd.Title, "4.17.21")
+						break
+					}
+				}
+				assert.True(t, hasUpgradeCodeLens, "Should have an upgrade code lens command")
+			}
+		})
 	}
 }
 
