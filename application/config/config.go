@@ -1583,17 +1583,45 @@ func (c *Config) InitLdxSyncOrgConfigCache() {
 	c.configResolver = types.NewConfigResolver(c.ldxSyncConfigCache, nil, c, c.logger)
 }
 
-// GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache
+// GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache, initializing it if needed
 func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
 	c.ldxSyncConfigCacheMutex.RLock()
-	defer c.ldxSyncConfigCacheMutex.RUnlock()
+	if c.ldxSyncConfigCache != nil {
+		defer c.ldxSyncConfigCacheMutex.RUnlock()
+		return c.ldxSyncConfigCache
+	}
+	c.ldxSyncConfigCacheMutex.RUnlock()
+
+	// Upgrade to write lock for initialization
+	c.ldxSyncConfigCacheMutex.Lock()
+	defer c.ldxSyncConfigCacheMutex.Unlock()
+	// Double-check after acquiring write lock
+	if c.ldxSyncConfigCache == nil {
+		c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
+		c.configResolver = types.NewConfigResolver(c.ldxSyncConfigCache, nil, c, c.logger)
+	}
 	return c.ldxSyncConfigCache
 }
 
-// GetConfigResolver returns the ConfigResolver for reading configuration values
+// GetConfigResolver returns the ConfigResolver for reading configuration values, initializing it if needed
 func (c *Config) GetConfigResolver() *types.ConfigResolver {
 	c.ldxSyncConfigCacheMutex.RLock()
-	defer c.ldxSyncConfigCacheMutex.RUnlock()
+	if c.configResolver != nil {
+		defer c.ldxSyncConfigCacheMutex.RUnlock()
+		return c.configResolver
+	}
+	c.ldxSyncConfigCacheMutex.RUnlock()
+
+	// Upgrade to write lock for initialization
+	c.ldxSyncConfigCacheMutex.Lock()
+	defer c.ldxSyncConfigCacheMutex.Unlock()
+	// Double-check after acquiring write lock
+	if c.configResolver == nil {
+		if c.ldxSyncConfigCache == nil {
+			c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
+		}
+		c.configResolver = types.NewConfigResolver(c.ldxSyncConfigCache, nil, c, c.logger)
+	}
 	return c.configResolver
 }
 

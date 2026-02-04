@@ -43,13 +43,8 @@ import (
 // populateFolderOrgCache is a helper to populate the LDX-Sync org config cache for tests
 func populateFolderOrgCache(c interface {
 	GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache
-	InitLdxSyncOrgConfigCache()
 }, folderPath types.FilePath, orgId string) {
 	cache := c.GetLdxSyncOrgConfigCache()
-	if cache == nil {
-		c.InitLdxSyncOrgConfigCache()
-		cache = c.GetLdxSyncOrgConfigCache()
-	}
 	cache.SetFolderOrg(folderPath, orgId)
 }
 

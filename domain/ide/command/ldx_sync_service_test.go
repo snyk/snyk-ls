@@ -297,7 +297,7 @@ func Test_RefreshConfigFromLdxSync_EmptyFolderPath(t *testing.T) {
 func Test_GetOrgIdForFolder_EmptyFolderPath_ReturnsEmpty(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	// Don't populate cache
+	// Cache is lazily initialized, don't populate it
 	cache := c.GetLdxSyncOrgConfigCache()
 	orgId := cache.GetOrgIdForFolder(types.FilePath(""))
 
