@@ -17,6 +17,7 @@
 package oss
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,12 +30,14 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // Test_buildUpgradePath tests the buildUpgradePath function
@@ -575,35 +578,7 @@ func Test_extractUpgradePackage(t *testing.T) {
 // Test_processIssue_WithUpgradePath_HasCodeActions verifies that issues with an upgrade path
 // have quick-fix code actions generated
 func Test_processIssue_WithUpgradePath_HasCodeActions(t *testing.T) {
-	c, ctx := testutil.UnitTestWithCtx(t)
-
-	// Enable OSS quick-fix code actions for this test
-	c.SetSnykOSSQuickFixCodeActionsEnabled(true)
-
-	workDir, err := filepath.Abs("testdata")
-	require.NoError(t, err)
-
-	filePath := filepath.Join(workDir, "package.json")
-	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(filePath))
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	learnService := mock_learn.NewMockService(ctrl)
-	errorReporter := error_reporting.NewTestErrorReporter()
-
-	// Expect GetLesson to be called for the vulnerability
-	learnService.EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), types.DependencyVulnerability).
-		Return(nil, nil).
-		AnyTimes()
-
-	deps := map[string]any{
-		ctx2.DepConfig:        c,
-		ctx2.DepLearnService:  learnService,
-		ctx2.DepErrorReporter: errorReporter,
-	}
-	ctx = ctx2.NewContextWithDependencies(ctx, deps)
+	setup := setupProcessIssueTest(t, util.Ptr(true), "package.json")
 
 	// Create a finding with an upgrade path matching real package.json
 	finding := createCompleteUnifiedFinding(
@@ -621,15 +596,13 @@ func Test_processIssue_WithUpgradePath_HasCodeActions(t *testing.T) {
 	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
 	require.NoError(t, err)
 
-	logger := zerolog.Nop()
-
 	// Process the issue through the unified converter
 	result := processIssue(
-		ctx,
+		setup.ctx,
 		trIssue,
-		logger,
-		types.FilePath(filePath),
-		types.FilePath(workDir),
+		zerolog.Nop(),
+		types.FilePath(setup.filePath),
+		types.FilePath(setup.workDir),
 	)
 
 	require.NotNil(t, result, "processIssue should return an issue")
@@ -665,35 +638,7 @@ func Test_processIssue_WithUpgradePath_HasCodeActions(t *testing.T) {
 
 // Test_processIssue_FeatureFlagDisabled verifies that code actions are not generated when feature flag is disabled
 func Test_processIssue_FeatureFlagDisabled(t *testing.T) {
-	c, ctx := testutil.UnitTestWithCtx(t)
-
-	// Explicitly disable OSS quick-fix code actions for this test
-	c.SetSnykOSSQuickFixCodeActionsEnabled(false)
-
-	workDir, err := filepath.Abs("testdata")
-	require.NoError(t, err)
-
-	filePath := filepath.Join(workDir, "package.json")
-	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(filePath))
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	learnService := mock_learn.NewMockService(ctrl)
-	errorReporter := error_reporting.NewTestErrorReporter()
-
-	learnService.EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), types.DependencyVulnerability).
-		Return(nil, nil).
-		AnyTimes()
-
-	// All dependencies are properly set up
-	deps := map[string]any{
-		ctx2.DepConfig:        c,
-		ctx2.DepLearnService:  learnService,
-		ctx2.DepErrorReporter: errorReporter,
-	}
-	ctx = ctx2.NewContextWithDependencies(ctx, deps)
+	setup := setupProcessIssueTest(t, util.Ptr(false), "package.json")
 
 	// Create a finding with an upgrade path
 	finding := createCompleteUnifiedFinding(
@@ -710,14 +655,12 @@ func Test_processIssue_FeatureFlagDisabled(t *testing.T) {
 	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
 	require.NoError(t, err)
 
-	logger := zerolog.Nop()
-
 	result := processIssue(
-		ctx,
+		setup.ctx,
 		trIssue,
-		logger,
-		types.FilePath(filePath),
-		types.FilePath(workDir),
+		zerolog.Nop(),
+		types.FilePath(setup.filePath),
+		types.FilePath(setup.workDir),
 	)
 
 	require.NotNil(t, result, "processIssue should return an issue")
@@ -738,34 +681,7 @@ func Test_processIssue_FeatureFlagDisabled(t *testing.T) {
 // Test_processIssue_WithUpgradePath_HasCodeLens verifies that issues with upgrade code actions
 // also have corresponding code lens commands
 func Test_processIssue_WithUpgradePath_HasCodeLens(t *testing.T) {
-	c, ctx := testutil.UnitTestWithCtx(t)
-
-	// Enable OSS quick-fix code actions for this test
-	c.SetSnykOSSQuickFixCodeActionsEnabled(true)
-
-	workDir, err := filepath.Abs("testdata")
-	require.NoError(t, err)
-
-	filePath := filepath.Join(workDir, "package.json")
-	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(filePath))
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	learnService := mock_learn.NewMockService(ctrl)
-	errorReporter := error_reporting.NewTestErrorReporter()
-
-	learnService.EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), types.DependencyVulnerability).
-		Return(nil, nil).
-		AnyTimes()
-
-	deps := map[string]any{
-		ctx2.DepConfig:        c,
-		ctx2.DepLearnService:  learnService,
-		ctx2.DepErrorReporter: errorReporter,
-	}
-	ctx = ctx2.NewContextWithDependencies(ctx, deps)
+	setup := setupProcessIssueTest(t, util.Ptr(true), "package.json")
 
 	// Create a finding with an upgrade path matching real package.json
 	finding := createCompleteUnifiedFinding(
@@ -782,14 +698,12 @@ func Test_processIssue_WithUpgradePath_HasCodeLens(t *testing.T) {
 	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
 	require.NoError(t, err)
 
-	logger := zerolog.Nop()
-
 	result := processIssue(
-		ctx,
+		setup.ctx,
 		trIssue,
-		logger,
-		types.FilePath(filePath),
-		types.FilePath(workDir),
+		zerolog.Nop(),
+		types.FilePath(setup.filePath),
+		types.FilePath(setup.workDir),
 	)
 
 	require.NotNil(t, result, "processIssue should return an issue")
@@ -822,7 +736,7 @@ func Test_processIssue_WithUpgradePath_HasCodeLens(t *testing.T) {
 	assert.True(t, hasUpgradeCodeLens, "Should have an upgrade codelens command")
 }
 
-// Test_processIssue_WrongTypeInContextDeps verifies behavior when context deps have wrong types
+// Test_processIssue_WrongTypeInContextDeps verifies defensive behavior when context deps have wrong types
 func Test_processIssue_WrongTypeInContextDeps(t *testing.T) {
 	testutil.UnitTest(t)
 
@@ -882,7 +796,7 @@ func Test_processIssue_WrongTypeInContextDeps(t *testing.T) {
 	assert.NotEmpty(t, additionalData.UpgradePath, "Upgrade path should still be built")
 }
 
-// Test_processIssue_MissingContextDeps verifies that processIssue handles missing context dependencies gracefully
+// Test_processIssue_MissingContextDeps verifies defensive behavior of processIssue to handle missing context dependencies gracefully
 func Test_processIssue_MissingContextDeps(t *testing.T) {
 	testutil.UnitTest(t)
 
@@ -937,35 +851,10 @@ func Test_processIssue_MissingContextDeps(t *testing.T) {
 	assert.NotEmpty(t, additionalData.UpgradePath, "Upgrade path should still be built")
 }
 
-// Test_processIssue_NilDependencyNode verifies behavior when dependency node can't be found
+// Test_processIssue_NilDependencyNode verifies defensive behavior when dependency node can't be found
 func Test_processIssue_NilDependencyNode(t *testing.T) {
-	c, ctx := testutil.UnitTestWithCtx(t)
-
 	// Use a non-existent file path so getDependencyNode returns nil
-	workDir, err := filepath.Abs("testdata")
-	require.NoError(t, err)
-
-	// Use a file path that doesn't exist or has no matching dependency
-	filePath := filepath.Join(workDir, "nonexistent.json")
-	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(filePath))
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	learnService := mock_learn.NewMockService(ctrl)
-	errorReporter := error_reporting.NewTestErrorReporter()
-
-	learnService.EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), types.DependencyVulnerability).
-		Return(nil, nil).
-		AnyTimes()
-
-	deps := map[string]any{
-		ctx2.DepConfig:        c,
-		ctx2.DepLearnService:  learnService,
-		ctx2.DepErrorReporter: errorReporter,
-	}
-	ctx = ctx2.NewContextWithDependencies(ctx, deps)
+	setup := setupProcessIssueTest(t, util.Ptr(true), "nonexistent.json")
 
 	finding := createCompleteUnifiedFinding(
 		t,
@@ -981,14 +870,12 @@ func Test_processIssue_NilDependencyNode(t *testing.T) {
 	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
 	require.NoError(t, err)
 
-	logger := zerolog.Nop()
-
 	result := processIssue(
-		ctx,
+		setup.ctx,
 		trIssue,
-		logger,
-		types.FilePath(filePath),
-		types.FilePath(workDir),
+		zerolog.Nop(),
+		types.FilePath(setup.filePath),
+		types.FilePath(setup.workDir),
 	)
 
 	require.NotNil(t, result, "processIssue should return an issue even with nil dependency node")
@@ -1012,32 +899,9 @@ func Test_processIssue_NilDependencyNode(t *testing.T) {
 	assert.NotEmpty(t, additionalData.UpgradePath, "Upgrade path should still be built")
 }
 
-// Test_processIssue_SingleVulnerability verifies basic issue conversion
-func Test_processIssue_SingleVulnerability(t *testing.T) {
-	c, ctx := testutil.UnitTestWithCtx(t)
-	workDir, err := filepath.Abs("testdata")
-	require.NoError(t, err)
-
-	filePath := filepath.Join(workDir, "package.json")
-	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(filePath))
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	learnService := mock_learn.NewMockService(ctrl)
-	errorReporter := error_reporting.NewTestErrorReporter()
-
-	learnService.EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), types.DependencyVulnerability).
-		Return(nil, nil).
-		AnyTimes()
-
-	deps := map[string]any{
-		ctx2.DepConfig:        c,
-		ctx2.DepLearnService:  learnService,
-		ctx2.DepErrorReporter: errorReporter,
-	}
-	ctx = ctx2.NewContextWithDependencies(ctx, deps)
+// Test_processIssue_DirectDependencyWithNoFixAvailable verifies basic issue conversion when no fix is available
+func Test_processIssue_DirectDependencyWithNoFixAvailable(t *testing.T) {
+	setup := setupProcessIssueTest(t, nil, "package.json")
 
 	finding := createCompleteUnifiedFinding(
 		t,
@@ -1053,14 +917,12 @@ func Test_processIssue_SingleVulnerability(t *testing.T) {
 	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
 	require.NoError(t, err)
 
-	logger := zerolog.Nop()
-
 	result := processIssue(
-		ctx,
+		setup.ctx,
 		trIssue,
-		logger,
-		types.FilePath(filePath),
-		types.FilePath(workDir),
+		zerolog.Nop(),
+		types.FilePath(setup.filePath),
+		types.FilePath(setup.workDir),
 	)
 
 	require.NotNil(t, result, "processIssue should return an issue")
@@ -1079,35 +941,7 @@ func Test_processIssue_SingleVulnerability(t *testing.T) {
 // Test_processIssue_NoFixRelationships_DepsCorrect verifies that quick-fix actions are not generated
 // when there are no fix relationships, even when deps are correct and feature flag is enabled
 func Test_processIssue_NoFixRelationships_DepsCorrect(t *testing.T) {
-	c, ctx := testutil.UnitTestWithCtx(t)
-
-	// Enable OSS quick-fix code actions
-	c.SetSnykOSSQuickFixCodeActionsEnabled(true)
-
-	workDir, err := filepath.Abs("testdata")
-	require.NoError(t, err)
-
-	filePath := filepath.Join(workDir, "package.json")
-	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(filePath))
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	learnService := mock_learn.NewMockService(ctrl)
-	errorReporter := error_reporting.NewTestErrorReporter()
-
-	learnService.EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), types.DependencyVulnerability).
-		Return(nil, nil).
-		AnyTimes()
-
-	// All dependencies are properly set up
-	deps := map[string]any{
-		ctx2.DepConfig:        c,
-		ctx2.DepLearnService:  learnService,
-		ctx2.DepErrorReporter: errorReporter,
-	}
-	ctx = ctx2.NewContextWithDependencies(ctx, deps)
+	setup := setupProcessIssueTest(t, util.Ptr(true), "package.json")
 
 	// Create a finding WITHOUT fix relationships (no fixedIn versions)
 	finding := createCompleteUnifiedFinding(
@@ -1124,14 +958,12 @@ func Test_processIssue_NoFixRelationships_DepsCorrect(t *testing.T) {
 	trIssue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{&finding})
 	require.NoError(t, err)
 
-	logger := zerolog.Nop()
-
 	result := processIssue(
-		ctx,
+		setup.ctx,
 		trIssue,
-		logger,
-		types.FilePath(filePath),
-		types.FilePath(workDir),
+		zerolog.Nop(),
+		types.FilePath(setup.filePath),
+		types.FilePath(setup.workDir),
 	)
 
 	require.NotNil(t, result, "processIssue should return an issue")
@@ -1160,6 +992,59 @@ func Test_processIssue_NoFixRelationships_DepsCorrect(t *testing.T) {
 	for _, cmd := range codelensCommands {
 		assert.NotContains(t, cmd.Title, "Upgrade to", "Should not have upgrade codelens")
 		assert.NotContains(t, cmd.Title, "⚡️", "Should not have quick-fix lightning bolt emoji in codelens")
+	}
+}
+
+// processIssueTestSetup holds the common setup for processIssue tests
+type processIssueTestSetup struct {
+	ctx      context.Context
+	config   *config.Config
+	workDir  string
+	filePath string
+}
+
+// setupProcessIssueTest creates common test setup for processIssue tests.
+// Parameters:
+//   - quickFixEnabled: nil=don't set (use default), util.Ptr(true)=enable, util.Ptr(false)=disable
+//   - manifestFile: the manifest file name (e.g., "package.json")
+func setupProcessIssueTest(t *testing.T, quickFixEnabled *bool, manifestFile string) processIssueTestSetup {
+	t.Helper()
+
+	c, ctx := testutil.UnitTestWithCtx(t)
+
+	if quickFixEnabled != nil {
+		c.SetSnykOSSQuickFixCodeActionsEnabled(*quickFixEnabled)
+	}
+
+	workDir, err := filepath.Abs("testdata")
+	require.NoError(t, err)
+
+	filePath := filepath.Join(workDir, manifestFile)
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, types.FilePath(workDir), types.FilePath(filePath))
+
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	learnService := mock_learn.NewMockService(ctrl)
+	errorReporter := error_reporting.NewTestErrorReporter()
+
+	learnService.EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), types.DependencyVulnerability).
+		Return(nil, nil).
+		AnyTimes()
+
+	deps := map[string]any{
+		ctx2.DepConfig:        c,
+		ctx2.DepLearnService:  learnService,
+		ctx2.DepErrorReporter: errorReporter,
+	}
+	ctx = ctx2.NewContextWithDependencies(ctx, deps)
+
+	return processIssueTestSetup{
+		ctx:      ctx,
+		config:   c,
+		workDir:  workDir,
+		filePath: filePath,
 	}
 }
 
