@@ -155,20 +155,17 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *con
 
 	c := config.New(config.WithBinarySearchPaths([]string{}))
 
-	// Set default org immediately after config creation to prevent repeated GAF API calls.
-	// GAF's default function checks if a value is already set and returns it without making an API call.
-	// Note: One API call may still happen during config.New() initialization, but subsequent calls are prevented.
-	engineConfig := c.Engine().GetConfiguration()
-	engineConfig.Set(configuration.ORGANIZATION, "00000000-0000-0000-0000-000000000000")
+	// Set token BEFORE WaitForDefaultEnv so that any GAF API calls during initialization
+	// will be authenticated. This allows GAF to successfully determine and cache the org.
+	token := testsupport.GetEnvironmentToken(tokenSecretName)
+	c.SetToken(token)
+	c.SetAuthenticationMethod(types.TokenAuthentication)
 
 	err := c.WaitForDefaultEnv(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	c.ConfigureLogging(nil)
-	token := testsupport.GetEnvironmentToken(tokenSecretName)
-	c.SetToken(token)
-	c.SetAuthenticationMethod(types.TokenAuthentication)
 	c.SetAutomaticAuthentication(false)
 	c.SetErrorReportingEnabled(false)
 	c.SetTrustedFolderFeatureEnabled(false)
