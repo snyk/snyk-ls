@@ -25,7 +25,6 @@ import (
 
 	"github.com/creachadair/jrpc2/server"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -38,33 +37,32 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// requireValidLdxSyncCache validates LDX-Sync cache entries for specified folders
-// validators is a map of folder path to validation function, call require/assert inside of them
-func requireValidLdxSyncCache(t *testing.T, c *config.Config, validators map[types.FilePath]func(*ldx_sync_config.LdxSyncConfigResult)) {
+// LdxSyncCacheValidation holds validation info for a folder's LDX-Sync cache entry
+type LdxSyncCacheValidation struct {
+	OrgId     string                  // The org ID resolved for this folder
+	OrgConfig *types.LDXSyncOrgConfig // The org config from cache
+}
+
+// requireValidLdxSyncCache validates LDX-Sync cache entries for specified folders.
+// The cache structure stores:
+// - FolderToOrgMapping: folder path -> org ID
+// - OrgConfigs: org ID -> LDXSyncOrgConfig (org-level settings)
+// validators is a map of folder path to validation function
+func requireValidLdxSyncCache(t *testing.T, c *config.Config, validators map[types.FilePath]func(*LdxSyncCacheValidation)) {
 	t.Helper()
 
 	// Wait for all cache entries to be populated
 	require.Eventually(t, func() bool {
+		cache := c.GetLdxSyncOrgConfigCache()
+		if cache == nil {
+			t.Logf("Waiting for cache: cache is nil")
+			return false
+		}
+
 		for folderPath := range validators {
-			result := c.GetLdxSyncResult(folderPath)
-			if result == nil {
-				t.Logf("Waiting for cache entry for folder %s: result is nil", folderPath)
-				return false
-			}
-			if result.Error != nil {
-				t.Logf("Waiting for cache entry for folder %s: error: %v", folderPath, result.Error)
-				return false
-			}
-			if result.Config == nil {
-				t.Logf("Waiting for cache entry for folder %s: config is nil", folderPath)
-				return false
-			}
-			if result.Config.Data.Attributes.Organizations == nil {
-				t.Logf("Waiting for cache entry for folder %s: organizations is nil", folderPath)
-				return false
-			}
-			if len(*result.Config.Data.Attributes.Organizations) == 0 {
-				t.Logf("Waiting for cache entry for folder %s: organizations list is empty", folderPath)
+			orgId := cache.GetOrgIdForFolder(folderPath)
+			if orgId == "" {
+				t.Logf("Waiting for cache entry for folder %s: org ID not yet resolved", folderPath)
 				return false
 			}
 		}
@@ -73,28 +71,24 @@ func requireValidLdxSyncCache(t *testing.T, c *config.Config, validators map[typ
 	}, 30*time.Second, time.Second, "Cache should be populated for all folders")
 
 	// Run validators for each folder
+	cache := c.GetLdxSyncOrgConfigCache()
+	require.NotNil(t, cache, "Cache should not be nil")
+
 	for folderPath, validator := range validators {
-		cachedResult := c.GetLdxSyncResult(folderPath)
-		require.NotNil(t, cachedResult, "Cache should have entry for folder %s", folderPath)
-		require.Nil(t, cachedResult.Error, "Cache entry should have no error for folder %s", folderPath)
-		require.NotNil(t, cachedResult.Config, "Config should be populated for folder %s", folderPath)
-		require.NotNil(t, cachedResult.Config.Data.Attributes.Organizations, "Organizations list should exist for folder %s", folderPath)
+		orgId := cache.GetOrgIdForFolder(folderPath)
+		require.NotEmpty(t, orgId, "Cache should have org ID for folder %s", folderPath)
 
-		orgs := *cachedResult.Config.Data.Attributes.Organizations
-		require.Greater(t, len(orgs), 0, "Should have at least one org for folder %s", folderPath)
-
-		// Validate organization data is actually valid
-		for i, org := range orgs {
-			require.NotEmpty(t, org.Id, "Org %d should have non-empty ID for folder %s", i, folderPath)
-			require.NotEmpty(t, org.Name, "Org %d should have non-empty Name for folder %s", i, folderPath)
-		}
-
-		require.NotEmpty(t, cachedResult.RemoteUrl, "RemoteUrl should be set from git remote for folder %s", folderPath)
-		require.Equal(t, string(folderPath), cachedResult.ProjectRoot, "ProjectRoot should match folder path for folder %s", folderPath)
+		orgConfig := cache.GetOrgConfig(orgId)
+		// Note: orgConfig may be nil if LDX-Sync didn't return org-level settings
+		// This is valid - the cache primarily stores folder-to-org mappings
 
 		// allowing empty validator for cases when we just care about cache being present
 		if validator != nil {
-			validator(cachedResult)
+			validation := &LdxSyncCacheValidation{
+				OrgId:     orgId,
+				OrgConfig: orgConfig,
+			}
+			validator(validation)
 		}
 	}
 }
@@ -148,18 +142,22 @@ func Test_SmokeLdxSyncCache_InitializeWithMultipleFolders(t *testing.T) {
 	addWorkSpaceFolder(t, loc, workspaceFolder2)
 	t.Log("Second workspace folder added")
 
-	// Verify entries are independent (different remotes)
-	var cache1RemoteUrl, cache2RemoteUrl string
-	requireValidLdxSyncCache(t, c, map[types.FilePath]func(*ldx_sync_config.LdxSyncConfigResult){
-		folder1: func(result *ldx_sync_config.LdxSyncConfigResult) {
-			cache1RemoteUrl = result.RemoteUrl
+	// Verify entries are independent (different org IDs possible, or same org but both resolved)
+	var cache1OrgId, cache2OrgId string
+	requireValidLdxSyncCache(t, c, map[types.FilePath]func(*LdxSyncCacheValidation){
+		folder1: func(v *LdxSyncCacheValidation) {
+			cache1OrgId = v.OrgId
+			assert.NotEmpty(t, v.OrgId, "Folder 1 should have resolved org ID")
 		},
-		folder2: func(result *ldx_sync_config.LdxSyncConfigResult) {
-			cache2RemoteUrl = result.RemoteUrl
+		folder2: func(v *LdxSyncCacheValidation) {
+			cache2OrgId = v.OrgId
+			assert.NotEmpty(t, v.OrgId, "Folder 2 should have resolved org ID")
 		},
 	})
 
-	assert.NotEqual(t, cache1RemoteUrl, cache2RemoteUrl, "Each folder should have its own git remote")
+	// Both folders should have org IDs resolved (they may be same or different depending on user's orgs)
+	assert.NotEmpty(t, cache1OrgId, "Folder 1 should have org ID in cache")
+	assert.NotEmpty(t, cache2OrgId, "Folder 2 should have org ID in cache")
 }
 
 // Test_SmokeLdxSyncCache_AddFolderRefreshesCache verifies cache updates when
@@ -170,7 +168,7 @@ func Test_SmokeLdxSyncCache_AddFolderRefreshesCache(t *testing.T) {
 	// Initialize with first folder
 	folder1 := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 
-	requireValidLdxSyncCache(t, c, map[types.FilePath]func(*ldx_sync_config.LdxSyncConfigResult){
+	requireValidLdxSyncCache(t, c, map[types.FilePath]func(*LdxSyncCacheValidation){
 		folder1: nil,
 	})
 
@@ -185,12 +183,11 @@ func Test_SmokeLdxSyncCache_AddFolderRefreshesCache(t *testing.T) {
 	}
 	addWorkSpaceFolder(t, loc, workspaceFolder2)
 
-	// Verify both folders' caches are valid and have populated Organizations
-	requireValidLdxSyncCache(t, c, map[types.FilePath]func(*ldx_sync_config.LdxSyncConfigResult){
+	// Verify both folders' caches are valid and have org IDs resolved
+	requireValidLdxSyncCache(t, c, map[types.FilePath]func(*LdxSyncCacheValidation){
 		folder1: nil,
-		folder2: func(result *ldx_sync_config.LdxSyncConfigResult) {
-			assert.NotNil(t, result.Config.Data.Attributes.Organizations)
-			assert.Greater(t, len(*result.Config.Data.Attributes.Organizations), 0)
+		folder2: func(v *LdxSyncCacheValidation) {
+			assert.NotEmpty(t, v.OrgId, "Folder 2 should have resolved org ID")
 		},
 	})
 }
@@ -203,8 +200,11 @@ func Test_SmokeLdxSyncCache_ChangePreferredOrgTriggersRefetch(t *testing.T) {
 	// Initialize with folder
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 
-	requireValidLdxSyncCache(t, c, map[types.FilePath]func(*ldx_sync_config.LdxSyncConfigResult){
-		folder: nil,
+	var initialOrgId string
+	requireValidLdxSyncCache(t, c, map[types.FilePath]func(*LdxSyncCacheValidation){
+		folder: func(v *LdxSyncCacheValidation) {
+			initialOrgId = v.OrgId
+		},
 	})
 
 	// Change PreferredOrg via didChangeConfiguration
@@ -218,9 +218,13 @@ func Test_SmokeLdxSyncCache_ChangePreferredOrgTriggersRefetch(t *testing.T) {
 		}
 	})
 
-	// Verify cache remains valid and error-free after config change
-	requireValidLdxSyncCache(t, c, map[types.FilePath]func(*ldx_sync_config.LdxSyncConfigResult){
-		folder: nil,
+	// Verify cache remains valid after config change - org ID should still be resolved
+	requireValidLdxSyncCache(t, c, map[types.FilePath]func(*LdxSyncCacheValidation){
+		folder: func(v *LdxSyncCacheValidation) {
+			assert.NotEmpty(t, v.OrgId, "Folder should still have resolved org ID after config change")
+			// Note: The org ID may change if PreferredOrg was set to a different org
+			t.Logf("Initial org ID: %s, Current org ID: %s", initialOrgId, v.OrgId)
+		},
 	})
 }
 
