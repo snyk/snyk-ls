@@ -294,6 +294,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
 	c.hoverVerbosity = 3
+	c.InitLdxSyncOrgConfigCache()
 	return c
 }
 
@@ -1549,45 +1550,17 @@ func (c *Config) InitLdxSyncOrgConfigCache() {
 	c.configResolver = types.NewConfigResolver(c.ldxSyncConfigCache, nil, c, c.logger)
 }
 
-// GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache, initializing it if needed
+// GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache
 func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
 	c.ldxSyncConfigCacheMutex.RLock()
-	if c.ldxSyncConfigCache != nil {
-		defer c.ldxSyncConfigCacheMutex.RUnlock()
-		return c.ldxSyncConfigCache
-	}
-	c.ldxSyncConfigCacheMutex.RUnlock()
-
-	// Upgrade to write lock for initialization
-	c.ldxSyncConfigCacheMutex.Lock()
-	defer c.ldxSyncConfigCacheMutex.Unlock()
-	// Double-check after acquiring write lock
-	if c.ldxSyncConfigCache == nil {
-		c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
-		c.configResolver = types.NewConfigResolver(c.ldxSyncConfigCache, nil, c, c.logger)
-	}
+	defer c.ldxSyncConfigCacheMutex.RUnlock()
 	return c.ldxSyncConfigCache
 }
 
-// GetConfigResolver returns the ConfigResolver for reading configuration values, initializing it if needed
+// GetConfigResolver returns the ConfigResolver for reading configuration values
 func (c *Config) GetConfigResolver() *types.ConfigResolver {
 	c.ldxSyncConfigCacheMutex.RLock()
-	if c.configResolver != nil {
-		defer c.ldxSyncConfigCacheMutex.RUnlock()
-		return c.configResolver
-	}
-	c.ldxSyncConfigCacheMutex.RUnlock()
-
-	// Upgrade to write lock for initialization
-	c.ldxSyncConfigCacheMutex.Lock()
-	defer c.ldxSyncConfigCacheMutex.Unlock()
-	// Double-check after acquiring write lock
-	if c.configResolver == nil {
-		if c.ldxSyncConfigCache == nil {
-			c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
-		}
-		c.configResolver = types.NewConfigResolver(c.ldxSyncConfigCache, nil, c, c.logger)
-	}
+	defer c.ldxSyncConfigCacheMutex.RUnlock()
 	return c.configResolver
 }
 
@@ -1595,17 +1568,7 @@ func (c *Config) GetConfigResolver() *types.ConfigResolver {
 func (c *Config) UpdateLdxSyncOrgConfig(orgConfig *types.LDXSyncOrgConfig) {
 	c.ldxSyncConfigCacheMutex.Lock()
 	defer c.ldxSyncConfigCacheMutex.Unlock()
-	if c.ldxSyncConfigCache == nil {
-		c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
-	}
 	c.ldxSyncConfigCache.SetOrgConfig(orgConfig)
-}
-
-// ClearLdxSyncConfigCache clears the LDX-Sync config cache (called on logout/cleanup)
-func (c *Config) ClearLdxSyncConfigCache() {
-	c.ldxSyncConfigCacheMutex.Lock()
-	defer c.ldxSyncConfigCacheMutex.Unlock()
-	c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
 }
 
 // UpdateLdxSyncMachineConfig updates the machine-wide LDX-Sync config in the ConfigResolver
