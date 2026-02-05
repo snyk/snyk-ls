@@ -17,7 +17,7 @@
 // Package persistence implements persistence functionality
 package persistence
 
-//go:generate mockgen -destination=mock_persistence/scan_snapshot_persister_mock.go -package=mock_persistence github.com/snyk/snyk-ls/domain/snyk/persistence ScanSnapshotPersister
+//go:generate go tool mockgen -destination=mock_persistence/scan_snapshot_persister_mock.go -package=mock_persistence github.com/snyk/snyk-ls/domain/snyk/persistence ScanSnapshotPersister
 
 import (
 	"encoding/json"
