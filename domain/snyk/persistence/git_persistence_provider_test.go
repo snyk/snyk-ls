@@ -821,6 +821,186 @@ func TestCleanupCorruptedSnapshot_DeletesFilesAndClearsCache(t *testing.T) {
 	assert.False(t, ok, "In-memory cache should be cleared after cleanup")
 }
 
+// TestCleanupCorruptedSnapshot_OnlyDeletesMatchingProduct verifies that cleanup only deletes
+// snapshot files for the specified product, leaving other products' snapshots intact.
+// This is critical to avoid wiping out valid snapshots when only one product is corrupted.
+func TestCleanupCorruptedSnapshot_OnlyDeletesMatchingProduct(t *testing.T) {
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
+	folderPath := types.FilePath(conf.GetString(constants.DataHome))
+	repo := initGitRepo(t, folderPath, false)
+
+	codeIssues := []types.Issue{
+		&snyk.Issue{
+			GlobalIdentity: uuid.New().String(),
+			Fingerprint:    "code-issue",
+		},
+	}
+	ossIssues := []types.Issue{
+		&snyk.Issue{
+			GlobalIdentity: uuid.New().String(),
+			Fingerprint:    "oss-issue",
+		},
+	}
+	iacIssues := []types.Issue{
+		&snyk.Issue{
+			GlobalIdentity: uuid.New().String(),
+			Fingerprint:    "iac-issue",
+		},
+	}
+
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+
+	provider := NewGitPersistenceProvider(c.Logger(), conf)
+	err = provider.Init([]types.FilePath{folderPath})
+	assert.NoError(t, err)
+
+	// Add snapshots for all three products
+	err = provider.Add(folderPath, commitHash, codeIssues, product.ProductCode)
+	assert.NoError(t, err)
+	err = provider.Add(folderPath, commitHash, ossIssues, product.ProductOpenSource)
+	assert.NoError(t, err)
+	err = provider.Add(folderPath, commitHash, iacIssues, product.ProductInfrastructureAsCode)
+	assert.NoError(t, err)
+
+	cacheDir := snykCacheDir(conf)
+	hash := getHashForFolderPath(folderPath)
+
+	// Verify all three snapshots exist
+	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductCode))
+	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductOpenSource))
+	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductInfrastructureAsCode))
+
+	// Act - cleanup ONLY Code product
+	provider.CleanupCorruptedSnapshot(folderPath, product.ProductCode)
+
+	// Assert - only Code snapshot deleted (regardless of hash), OSS and IaC remain
+	assert.False(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductCode),
+		"Code snapshot should be deleted")
+	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductOpenSource),
+		"OSS snapshot should NOT be deleted")
+	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductInfrastructureAsCode),
+		"IaC snapshot should NOT be deleted")
+}
+
+// TestCleanupCorruptedSnapshot_PreservesOtherProductsInCache verifies that cleanup only removes
+// the specified product from in-memory cache, preserving other products' cache entries
+func TestCleanupCorruptedSnapshot_PreservesOtherProductsInCache(t *testing.T) {
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
+	folderPath := types.FilePath(conf.GetString(constants.DataHome))
+	repo := initGitRepo(t, folderPath, false)
+
+	codeIssues := []types.Issue{
+		&snyk.Issue{GlobalIdentity: uuid.New().String()},
+	}
+	ossIssues := []types.Issue{
+		&snyk.Issue{GlobalIdentity: uuid.New().String()},
+	}
+
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+
+	provider := NewGitPersistenceProvider(c.Logger(), conf)
+	err = provider.Init([]types.FilePath{folderPath})
+	assert.NoError(t, err)
+
+	// Add snapshots for Code and OSS
+	err = provider.Add(folderPath, commitHash, codeIssues, product.ProductCode)
+	assert.NoError(t, err)
+	err = provider.Add(folderPath, commitHash, ossIssues, product.ProductOpenSource)
+	assert.NoError(t, err)
+
+	hash := getHashForFolderPath(folderPath)
+
+	// Verify both products in cache
+	assert.NotNil(t, provider.cache[hash])
+	assert.Equal(t, commitHash, provider.cache[hash][product.ProductCode])
+	assert.Equal(t, commitHash, provider.cache[hash][product.ProductOpenSource])
+
+	// Act - cleanup ONLY Code product
+	provider.CleanupCorruptedSnapshot(folderPath, product.ProductCode)
+
+	// Assert - Code removed from cache, OSS remains
+	assert.NotNil(t, provider.cache[hash], "Hash entry should still exist")
+	_, codeExists := provider.cache[hash][product.ProductCode]
+	assert.False(t, codeExists, "Code should be removed from cache")
+	ossCommitHash, ossExists := provider.cache[hash][product.ProductOpenSource]
+	assert.True(t, ossExists, "OSS should remain in cache")
+	assert.Equal(t, commitHash, ossCommitHash, "OSS commit hash should be unchanged")
+}
+
+// TestCleanupCorruptedSnapshot_DeletesMultipleFilesForSameProduct verifies that cleanup deletes
+// all snapshot files for the specified product, even if multiple commits exist
+func TestCleanupCorruptedSnapshot_DeletesMultipleFilesForSameProduct(t *testing.T) {
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
+	folderPath := types.FilePath(conf.GetString(constants.DataHome))
+	repo := initGitRepo(t, folderPath, true)
+
+	issues1 := []types.Issue{
+		&snyk.Issue{GlobalIdentity: uuid.New().String()},
+	}
+	issues2 := []types.Issue{
+		&snyk.Issue{GlobalIdentity: uuid.New().String()},
+	}
+
+	provider := NewGitPersistenceProvider(c.Logger(), conf)
+	err := provider.Init([]types.FilePath{folderPath})
+	assert.NoError(t, err)
+
+	// Create first Code snapshot
+	wt, err := repo.Worktree()
+	assert.NoError(t, err)
+	_, err = wt.Commit("commit1", &git.CommitOptions{
+		Author: &object.Signature{Name: t.Name()},
+	})
+	assert.NoError(t, err)
+	commitHash1, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+
+	err = provider.Add(folderPath, commitHash1, issues1, product.ProductCode)
+	assert.NoError(t, err)
+
+	// Create second Code snapshot with different commit
+	testFile := filepath.Join(string(folderPath), "newfile.txt")
+	err = os.WriteFile(testFile, []byte("data"), 0600)
+	assert.NoError(t, err)
+	_, err = wt.Add(filepath.Base(testFile))
+	assert.NoError(t, err)
+	_, err = wt.Commit("commit2", &git.CommitOptions{
+		Author: &object.Signature{Name: t.Name()},
+	})
+	assert.NoError(t, err)
+	commitHash2, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+
+	err = provider.Add(folderPath, commitHash2, issues2, product.ProductCode)
+	assert.NoError(t, err)
+
+	cacheDir := snykCacheDir(conf)
+	hash := getHashForFolderPath(folderPath)
+
+	// Verify both Code snapshots exist (old one should be deleted by Add, but we'll create it manually for this test)
+	// Manually create the old snapshot file to simulate multiple commits
+	oldFilePath := getLocalFilePath(cacheDir, hash, commitHash1, product.ProductCode)
+	err = os.WriteFile(oldFilePath, []byte("[]"), 0600)
+	assert.NoError(t, err)
+
+	assert.True(t, issuesFileExists(cacheDir, hash, commitHash1, product.ProductCode))
+	assert.True(t, issuesFileExists(cacheDir, hash, commitHash2, product.ProductCode))
+
+	// Act - cleanup Code product
+	provider.CleanupCorruptedSnapshot(folderPath, product.ProductCode)
+
+	// Assert - both Code snapshots deleted
+	assert.False(t, issuesFileExists(cacheDir, hash, commitHash1, product.ProductCode),
+		"Old Code snapshot should be deleted")
+	assert.False(t, issuesFileExists(cacheDir, hash, commitHash2, product.ProductCode),
+		"New Code snapshot should be deleted")
+}
+
 func TestSnapshotFileRegex(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -847,6 +1027,12 @@ func TestSnapshotFileRegex(t *testing.T) {
 			hash:     "1234567890abcdef",
 		},
 		{
+			name:     "valid - future product (alphanumeric)",
+			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.container.json",
+			valid:    true,
+			hash:     "97e3b0a21a604eae",
+		},
+		{
 			name:     "invalid - wrong schema version",
 			filename: "v2_0.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.code.json",
 			valid:    false,
@@ -862,8 +1048,13 @@ func TestSnapshotFileRegex(t *testing.T) {
 			valid:    false,
 		},
 		{
-			name:     "invalid - unknown product",
-			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.unknown.json",
+			name:     "invalid - product with uppercase",
+			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.Code.json",
+			valid:    false,
+		},
+		{
+			name:     "invalid - product with special chars",
+			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.snyk-code.json",
 			valid:    false,
 		},
 		{

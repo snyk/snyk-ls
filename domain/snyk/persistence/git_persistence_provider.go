@@ -52,10 +52,20 @@ var (
 	ErrCommitCacheDoesntExist                        = errors.New("commit doesn't exist in cache")
 	_                          ScanSnapshotPersister = (*GitPersistenceProvider)(nil)
 
-	// snapshotFileRegex validates snapshot filenames and captures the folder hash (group 1)
+	// snapshotFileRegex validates snapshot filenames and captures:
+	// - group 1: folder hash (16 hex chars)
+	// - group 2: commit hash (40 hex chars)
+	// - group 3: product (lowercase alphanumeric, e.g., code, oss, iac)
 	// Format: {schemaVersion}.{folderPathHash:16hex}.{commitHash:40hex}.{product}.json
-	snapshotFileRegex = regexp.MustCompile(`^v1_1\.([a-f0-9]{16})\.([a-f0-9]{40})\.(code|oss|iac)\.json$`)
+	snapshotFileRegex *regexp.Regexp
 )
+
+func init() {
+	// Build regex dynamically using SchemaVersion constant to avoid hardcoding
+	// Product name is captured as any sequence of lowercase letters/numbers to support future products
+	pattern := fmt.Sprintf(`^%s\.([a-f0-9]{16})\.([a-f0-9]{40})\.([a-z0-9]+)\.json$`, regexp.QuoteMeta(SchemaVersion))
+	snapshotFileRegex = regexp.MustCompile(pattern)
+}
 
 type hashedFolderPath string
 
@@ -184,7 +194,7 @@ func (g *GitPersistenceProvider) ClearFolder(folderPath types.FilePath) {
 	delete(g.cache, hash)
 }
 
-// CleanupCorruptedSnapshot removes all snapshot files for a folder path when delta cannot work
+// CleanupCorruptedSnapshot removes snapshot files for a specific product when delta cannot work
 // due to hash mismatches or corrupted cache. It logs all relevant information for debugging.
 func (g *GitPersistenceProvider) CleanupCorruptedSnapshot(folderPath types.FilePath, p product.Product) {
 	g.mutex.Lock()
@@ -192,12 +202,14 @@ func (g *GitPersistenceProvider) CleanupCorruptedSnapshot(folderPath types.FileP
 
 	hash := getHashForFolderPath(folderPath)
 	cacheDir := snykCacheDir(g.conf)
+	productCodename := p.ToProductCodename()
 
 	logger := g.logger.With().
 		Str("method", "CleanupCorruptedSnapshot").
 		Str("folderPath", string(folderPath)).
 		Str("folderPathHash", string(hash)).
 		Str("product", string(p)).
+		Str("productCodename", productCodename).
 		Str("cacheDir", cacheDir).
 		Logger()
 
@@ -226,15 +238,24 @@ func (g *GitPersistenceProvider) CleanupCorruptedSnapshot(folderPath types.FileP
 	var existingFiles []string
 
 	for _, fileName := range persistedFiles {
-		// Use regex to validate and extract folder hash from filename
+		// Use regex to validate and extract product from filename
 		match := snapshotFileRegex.FindStringSubmatch(fileName)
 		if match == nil {
 			continue
 		}
-		fileHash := match[1] // First capture group is the folder hash
-		if fileHash == string(hash) {
+		fileHash := match[1]    // First capture group is the folder hash (for logging)
+		fileProduct := match[3] // Third capture group is the product (code|oss|iac)
+
+		// Delete all files matching the product, regardless of hash
+		// This handles hash mismatch scenarios where the cached hash differs from the current hash
+		if fileProduct == productCodename {
 			existingFiles = append(existingFiles, fileName)
 			fullPath := filepath.Join(cacheDir, fileName)
+			logger.Debug().
+				Str("file", fileName).
+				Str("fileHash", fileHash).
+				Str("currentHash", string(hash)).
+				Msg("deleting snapshot file for product")
 			if err := os.Remove(fullPath); err != nil {
 				logger.Error().Err(err).Str("file", fileName).Msg("failed to delete snapshot file")
 			} else {
@@ -250,9 +271,19 @@ func (g *GitPersistenceProvider) CleanupCorruptedSnapshot(folderPath types.FileP
 		Int("totalExisting", len(existingFiles)).
 		Msg("snapshot cleanup completed")
 
-	// Clear in-memory cache for this folder
-	delete(g.cache, hash)
-	logger.Info().Msg("in-memory cache cleared for folder")
+	// Remove only the specific product from in-memory cache
+	if pchMap, exists := g.cache[hash]; exists {
+		delete(pchMap, p)
+		// If no products remain, clean up the hash entry entirely
+		if len(pchMap) == 0 {
+			delete(g.cache, hash)
+			logger.Info().Msg("in-memory cache cleared for folder (no products remaining)")
+		} else {
+			logger.Info().
+				Int("remainingProducts", len(pchMap)).
+				Msg("in-memory cache cleared for product only")
+		}
+	}
 }
 
 // findCommitHashOnDisk attempts to find a commit hash on disk when the in-memory cache misses.

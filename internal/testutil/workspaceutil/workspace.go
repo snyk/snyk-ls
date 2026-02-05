@@ -19,6 +19,7 @@
 package workspaceutil
 
 import (
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -65,9 +66,13 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 		if len(folderPaths) > 1 {
 			folderName = "test-folder-" + strconv.Itoa(i)
 		}
+		clean := filepath.Clean(string(folderPath))
+		if clean == "." {
+			clean = ""
+		}
 		folder := workspace.NewFolder(
 			c,
-			folderPath,
+			types.FilePath(clean),
 			folderName,
 			&scanner.TestScanner{},
 			nil,
