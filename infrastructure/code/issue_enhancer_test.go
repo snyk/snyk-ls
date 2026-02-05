@@ -101,7 +101,7 @@ func Test_addIssueActions(t *testing.T) {
 	var setupCodeSettings = func() {
 		c.SetSnykCodeEnabled(true)
 		c.SetSnykLearnCodeActionsEnabled(false)
-		issueEnhancer.folderConfig = &types.FolderConfig{
+		issueEnhancer.folderConfig = &types.StoredFolderConfig{
 			FolderPath:   "",
 			PreferredOrg: "test-org",
 			SastSettings: &sast_contract.SastResponse{

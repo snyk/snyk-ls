@@ -77,7 +77,7 @@ func (n *scanNotifier) SendError(product product.Product, folderPath types.FileP
 }
 
 // SendSuccessForAllProducts reports success for all enabled products
-func (n *scanNotifier) SendSuccessForAllProducts(folderConfig *types.FolderConfig) {
+func (n *scanNotifier) SendSuccessForAllProducts(folderConfig *types.StoredFolderConfig) {
 	for _, p := range n.supportedProducts() {
 		if n.c.IsProductEnabledForFolder(p, folderConfig) {
 			n.sendSuccess(p, folderConfig)
@@ -86,12 +86,12 @@ func (n *scanNotifier) SendSuccessForAllProducts(folderConfig *types.FolderConfi
 }
 
 // SendSuccess sends scan success message for a single enabled product
-func (n *scanNotifier) SendSuccess(pr product.Product, folderConfig *types.FolderConfig) {
+func (n *scanNotifier) SendSuccess(pr product.Product, folderConfig *types.StoredFolderConfig) {
 	// If no issues found, we still should send success message the reported product
 	n.sendSuccess(pr, folderConfig)
 }
 
-func (n *scanNotifier) sendSuccess(pr product.Product, folderConfig *types.FolderConfig) {
+func (n *scanNotifier) sendSuccess(pr product.Product, folderConfig *types.StoredFolderConfig) {
 	if !n.c.IsProductEnabledForFolder(pr, folderConfig) {
 		return
 	}
@@ -110,7 +110,7 @@ func (n *scanNotifier) sendSuccess(pr product.Product, folderConfig *types.Folde
 }
 
 // SendInProgress Notifies all snyk/scan enabled product messages
-func (n *scanNotifier) SendInProgress(folderConfig *types.FolderConfig) {
+func (n *scanNotifier) SendInProgress(folderConfig *types.StoredFolderConfig) {
 	products := n.supportedProducts()
 	for _, pr := range products {
 		if !n.c.IsProductEnabledForFolder(pr, folderConfig) {

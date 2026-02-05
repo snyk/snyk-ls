@@ -53,7 +53,7 @@ func main() {
 	c.SetIntegrationName("VISUAL_STUDIO")
 	c.SetIntegrationVersion("1.0.0")
 
-	// Create workspace with folders matching the FolderConfigs below
+	// Create workspace with folders matching the StoredFolderConfigs below
 	// This ensures folder settings are visible in the generated HTML
 	notifier := notification.NewNotifier()
 	instrumentor := performance.NewInstrumentor()
@@ -66,7 +66,7 @@ func main() {
 
 	w := workspace.New(c, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
 
-	// Add folders matching the FolderConfig paths
+	// Add folders matching the StoredFolderConfig paths
 	folder1 := workspace.NewFolder(c, "/Users/username/workspace/my-project", "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
 	folder2 := workspace.NewFolder(c, "/Users/username/workspace/your-project", "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
 	w.AddFolder(folder1)
@@ -100,7 +100,7 @@ func main() {
 			"/Users/username/workspace/my-project",
 			"/Users/username/trusted/folder",
 		},
-		FolderConfigs: []types.FolderConfig{
+		StoredFolderConfigs: []types.StoredFolderConfig{
 			{
 				FolderPath:           "/Users/username/workspace/my-project",
 				AdditionalParameters: []string{"--all-projects", "--detection-depth=3"},

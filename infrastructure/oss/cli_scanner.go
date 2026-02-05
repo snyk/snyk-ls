@@ -147,7 +147,7 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 	return &scanner
 }
 
-func (cliScanner *CLIScanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+func (cliScanner *CLIScanner) IsEnabledForFolder(folderConfig *types.StoredFolderConfig) bool {
 	return cliScanner.config.IsSnykOssEnabledForFolder(folderConfig)
 }
 
@@ -156,7 +156,7 @@ func (cliScanner *CLIScanner) Product() product.Product {
 }
 
 // TODO remove params from scan interface, once every scanner has these things in context and can extract it from there
-func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, workDir types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, workDir types.FilePath, folderConfig *types.StoredFolderConfig) (issues []types.Issue, err error) {
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
@@ -180,7 +180,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, wor
 		if !found {
 			deps = map[string]any{}
 		}
-		deps[ctx2.DepFolderConfig] = folderConfig
+		deps[ctx2.DepStoredFolderConfig] = folderConfig
 		ctx = ctx2.NewContextWithDependencies(ctx, deps)
 	}
 
@@ -205,7 +205,7 @@ func (cliScanner *CLIScanner) getLogger(ctx context.Context) zerolog.Logger {
 	return logger
 }
 
-func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) ([]string, gotenv.Env)) ([]types.Issue, error) {
+func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.StoredFolderConfig) ([]string, gotenv.Env)) ([]types.Issue, error) {
 	method := "cliScanner.Scan"
 	logger := cliScanner.getLogger(ctx).With().Str("method", method).Logger()
 
@@ -218,7 +218,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 		return []types.Issue{}, errors.New(msg)
 	}
 
-	folderConfig, ok := deps[ctx2.DepFolderConfig].(*types.FolderConfig)
+	folderConfig, ok := deps[ctx2.DepStoredFolderConfig].(*types.StoredFolderConfig)
 	if !ok {
 		const msg = "folderConfig not found in context"
 		logger.Error().Msg(msg)
@@ -341,9 +341,9 @@ func (cliScanner *CLIScanner) legacyScan(ctx context.Context, path types.FilePat
 	return res, nil
 }
 
-func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs []string, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {
+func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs []string, folderConfig *types.StoredFolderConfig) ([]string, gotenv.Env) {
 	if folderConfig == nil {
-		folderConfig = cliScanner.config.FolderConfig(workDir)
+		folderConfig = cliScanner.config.StoredFolderConfig(workDir)
 	}
 	folderConfigArgs := folderConfig.AdditionalParameters
 
@@ -382,7 +382,7 @@ func (cliScanner *CLIScanner) updateSDKs(workDir types.FilePath) ([]string, gote
 	return sdk.UpdateEnvironmentAndReturnAdditionalParams(cliScanner.config, sdks)
 }
 
-func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {
+func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.StoredFolderConfig) ([]string, gotenv.Env) {
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
@@ -607,7 +607,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 	go func() {
 		select {
 		case <-timer.C:
-			folderConfig := cliScanner.config.FolderConfig(path)
+			folderConfig := cliScanner.config.StoredFolderConfig(path)
 			if !cliScanner.IsEnabledForFolder(folderConfig) {
 				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
 				return

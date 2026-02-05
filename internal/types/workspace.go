@@ -70,10 +70,10 @@ type Folder interface {
 	Status() FolderStatus
 	IsTrusted() bool
 	ScanResultProcessor() ScanResultProcessor
-	// FolderConfigReadOnly returns the FolderConfig for this folder using read-only access
+	// StoredFolderConfigReadOnly returns the StoredFolderConfig for this folder using read-only access
 	// (no storage writes, no Git enrichment). For operations that need to create or update
-	// the config, use c.FolderConfig(folder.Path()) directly.
-	FolderConfigReadOnly() *FolderConfig
+	// the config, use c.StoredFolderConfig(folder.Path()) directly.
+	StoredFolderConfigReadOnly() *StoredFolderConfig
 	// IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
 	IsDeltaFindingsEnabled() bool
 	// IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.

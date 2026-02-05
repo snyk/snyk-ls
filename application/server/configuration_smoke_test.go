@@ -37,7 +37,7 @@ import (
 // 1. Can be triggered via workspace/executeCommand
 // 2. Returns response with URI and HTML content
 // 3. Generated HTML includes ALL settings fields from types.Settings
-// 4. Generated HTML includes ALL sub-fields from FolderConfig
+// 4. Generated HTML includes ALL sub-fields from StoredFolderConfig
 // 5. Includes authentication and logout triggers
 func Test_SmokeConfigurationDialog(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
@@ -58,7 +58,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	}
 
 	// Create folder config with scan command configuration
-	folderConfig := types.FolderConfig{
+	folderConfig := types.StoredFolderConfig{
 		FolderPath:        workspaceFolder,
 		ScanCommandConfig: make(map[product.Product]types.ScanCommandConfig),
 	}
@@ -90,7 +90,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
 			AuthenticationMethod:        types.TokenAuthentication,
-			FolderConfigs:               []types.FolderConfig{folderConfig},
+			StoredFolderConfigs:         []types.StoredFolderConfig{folderConfig},
 		},
 	}
 

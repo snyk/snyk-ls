@@ -613,7 +613,7 @@ func getIssuePerFileFromFlatList(issueList []types.Issue) snyk.IssuesByFile {
 }
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
-	folderConfig := f.FolderConfigReadOnly()
+	folderConfig := f.StoredFolderConfigReadOnly()
 	supportedIssueTypes := f.c.DisplayableIssueTypesForFolder(folderConfig)
 	filteredIssuesByFile := f.filterIssuesWithConfig(issues, supportedIssueTypes, folderConfig)
 	return filteredIssuesByFile
@@ -650,13 +650,13 @@ func (f *Folder) FilterIssues(
 	issues snyk.IssuesByFile,
 	supportedIssueTypes map[product.FilterableIssueType]bool,
 ) snyk.IssuesByFile {
-	return f.filterIssuesWithConfig(issues, supportedIssueTypes, f.FolderConfigReadOnly())
+	return f.filterIssuesWithConfig(issues, supportedIssueTypes, f.StoredFolderConfigReadOnly())
 }
 
 func (f *Folder) filterIssuesWithConfig(
 	issues snyk.IssuesByFile,
 	supportedIssueTypes map[product.FilterableIssueType]bool,
-	folderConfig *types.FolderConfig,
+	folderConfig *types.StoredFolderConfig,
 ) snyk.IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 	filteredIssues := snyk.IssuesByFile{}
@@ -692,7 +692,7 @@ func (f *Folder) filterIssuesWithConfig(
 	return filteredIssues
 }
 
-func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, folderConfig *types.FolderConfig) FilterReason {
+func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, folderConfig *types.StoredFolderConfig) FilterReason {
 	if !supportedIssueTypes[issue.GetFilterableIssueType()] {
 		return FilterReasonUnsupportedType
 	}
@@ -710,7 +710,7 @@ func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[produ
 	return FilterReasonNotFiltered
 }
 
-func (f *Folder) isVisibleSeverity(issue types.Issue, folderConfig *types.FolderConfig) bool {
+func (f *Folder) isVisibleSeverity(issue types.Issue, folderConfig *types.StoredFolderConfig) bool {
 	filter := f.c.FilterSeverityForFolder(folderConfig)
 	switch issue.GetSeverity() {
 	case types.Critical:
@@ -725,7 +725,7 @@ func (f *Folder) isVisibleSeverity(issue types.Issue, folderConfig *types.Folder
 	return false
 }
 
-func (f *Folder) isVisibleRiskScore(issue types.Issue, folderConfig *types.FolderConfig) bool {
+func (f *Folder) isVisibleRiskScore(issue types.Issue, folderConfig *types.StoredFolderConfig) bool {
 	riskScoreThreshold := f.c.RiskScoreThresholdForFolder(folderConfig)
 	switch {
 	case riskScoreThreshold == 0:
@@ -759,7 +759,7 @@ func (f *Folder) isVisibleRiskScore(issue types.Issue, folderConfig *types.Folde
 	return issueRiskScore >= uint16(riskScoreThreshold)
 }
 
-func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig *types.FolderConfig) bool {
+func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig *types.StoredFolderConfig) bool {
 	issueViewOptions := f.c.IssueViewOptionsForFolder(folderConfig)
 	if issue.GetIsIgnored() {
 		return issueViewOptions.IgnoredIssues
@@ -823,26 +823,26 @@ func (f *Folder) Name() string { return f.name }
 
 func (f *Folder) Status() types.FolderStatus { return f.status }
 
-// FolderConfigReadOnly returns the FolderConfig for this folder using read-only access
+// StoredFolderConfigReadOnly returns the StoredFolderConfig for this folder using read-only access
 // (no storage writes, no Git enrichment). For operations that need to create or update
-// the config, use c.FolderConfig(f.Path()) directly.
-func (f *Folder) FolderConfigReadOnly() *types.FolderConfig {
-	return f.c.FolderConfigReadOnly(f.path)
+// the config, use c.StoredFolderConfig(f.Path()) directly.
+func (f *Folder) StoredFolderConfigReadOnly() *types.StoredFolderConfig {
+	return f.c.StoredFolderConfigReadOnly(f.path)
 }
 
 // IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
 func (f *Folder) IsDeltaFindingsEnabled() bool {
-	return f.c.IsDeltaFindingsEnabledForFolder(f.FolderConfigReadOnly())
+	return f.c.IsDeltaFindingsEnabledForFolder(f.StoredFolderConfigReadOnly())
 }
 
 // IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
 func (f *Folder) IsAutoScanEnabled() bool {
-	return f.c.IsAutoScanEnabledForFolder(f.FolderConfigReadOnly())
+	return f.c.IsAutoScanEnabledForFolder(f.StoredFolderConfigReadOnly())
 }
 
 // DisplayableIssueTypes returns which issue types are enabled for this folder.
 func (f *Folder) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
-	return f.c.DisplayableIssueTypesForFolder(f.FolderConfigReadOnly())
+	return f.c.DisplayableIssueTypesForFolder(f.StoredFolderConfigReadOnly())
 }
 
 func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIssues []types.Issue) {
@@ -881,7 +881,7 @@ func (f *Folder) IsTrusted() bool {
 }
 
 func (f *Folder) sendSuccess(processedProduct product.Product) {
-	folderConfig := f.c.FolderConfig(f.path)
+	folderConfig := f.c.StoredFolderConfig(f.path)
 	if processedProduct != "" {
 		f.scanNotifier.SendSuccess(processedProduct, folderConfig)
 	} else {

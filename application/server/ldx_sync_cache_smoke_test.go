@@ -208,7 +208,7 @@ func Test_SmokeLdxSyncCache_ChangePreferredOrgTriggersRefetch(t *testing.T) {
 	})
 
 	// Change PreferredOrg via didChangeConfiguration
-	sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+	sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.StoredFolderConfig) {
 		folderConfig := folderConfigs[folder]
 		folderConfig.OrgSetByUser = true
 		if folderConfig.AutoDeterminedOrg == "b1a01686-331c-4b59-854c-139216d56bb0" {

@@ -125,7 +125,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 			contentRoot := folderPaths[0]
 
 			// Configure folder with org
-			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+			err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.StoredFolderConfig{
 				FolderPath:                  contentRoot,
 				PreferredOrg:                "test-org",
 				OrgSetByUser:                true,
@@ -411,13 +411,13 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 	folderPath := folderPaths[0]
 
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		FolderPath:                  folderPath,
 		PreferredOrg:                testFolderOrg,
 		OrgSetByUser:                true,
 		OrgMigratedFromGlobalConfig: true,
 	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(engineConfig, folderConfig, c.Logger())
 	require.NoError(t, err, "failed to configure folder org")
 
 	// Capture analytics WF's data and config to verify folder org

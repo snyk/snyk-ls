@@ -57,7 +57,7 @@ func (ch *CheckoutHandler) CleanupFunc() func() {
 	return ch.cleanupFunc
 }
 
-func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConfig *types.FolderConfig) error {
+func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConfig *types.StoredFolderConfig) error {
 	ch.mutex.Lock()
 	defer ch.mutex.Unlock()
 	folderPath := folderConfig.FolderPath

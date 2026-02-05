@@ -261,13 +261,13 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 	c.SetIssueViewOptions(&issueViewOptions)
 
 	folderPath := types.FilePath("dummy")
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		FolderPath: folderPath,
 		FeatureFlags: map[string]bool{
 			featureflag.SnykCodeConsistentIgnores: true,
 		},
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	require.NoError(t, err)
 
 	notifier := notification.NewNotifier()
@@ -474,13 +474,13 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 	// arrange
 	filePath, folderPath := types.FilePath("test/path"), types.FilePath("test")
 
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		FolderPath: folderPath,
 		FeatureFlags: map[string]bool{
 			featureflag.SnykCodeConsistentIgnores: true,
 		},
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	require.NoError(t, err)
 
 	openIssue1 := &snyk.Issue{
@@ -590,14 +590,14 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 
 	t.Run("shows all issues when threshold is zero", func(t *testing.T) {
 		// Set folder config with feature flag enabled
-		folderConfig := &types.FolderConfig{
+		folderConfig := &types.StoredFolderConfig{
 			FolderPath: folderPath,
 			FeatureFlags: map[string]bool{
 				featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
 				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
 			},
 		}
-		err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
+		err := storedconfig.UpdateStoredFolderConfig(engineConfig, folderConfig, logger)
 		require.NoError(t, err)
 
 		// Set global risk score threshold to 0 (show all)
@@ -611,14 +611,14 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 
 	t.Run("filters issues by threshold", func(t *testing.T) {
 		// Set folder config with feature flag enabled
-		folderConfig := &types.FolderConfig{
+		folderConfig := &types.StoredFolderConfig{
 			FolderPath: folderPath,
 			FeatureFlags: map[string]bool{
 				featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
 				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
 			},
 		}
-		err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
+		err := storedconfig.UpdateStoredFolderConfig(engineConfig, folderConfig, logger)
 		require.NoError(t, err)
 
 		// Set global risk score threshold of 400
@@ -643,7 +643,7 @@ func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 	logger := c.Logger()
 
 	// Set up folder config with feature flags enabled
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		FolderPath: folderPath,
 		FeatureFlags: map[string]bool{
 			featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
@@ -651,7 +651,7 @@ func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 			featureflag.SnykCodeConsistentIgnores: true,
 		},
 	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
+	err := storedconfig.UpdateStoredFolderConfig(engineConfig, folderConfig, logger)
 	require.NoError(t, err)
 
 	// Set global risk score threshold
@@ -849,7 +849,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	setupWorkspaceWithFolder(c, f, notifier)
 
 	const testFolderOrg = "test-org"
-	err := storedconfig.UpdateFolderConfig(gafConfig, &types.FolderConfig{
+	err := storedconfig.UpdateStoredFolderConfig(gafConfig, &types.StoredFolderConfig{
 		FolderPath:                  f.path,
 		PreferredOrg:                testFolderOrg,
 		OrgSetByUser:                true,
@@ -916,7 +916,7 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 	setupWorkspaceWithFolder(c, f, notifier)
 
 	const testFolderOrg = "test-org"
-	err := storedconfig.UpdateFolderConfig(gafConfig, &types.FolderConfig{
+	err := storedconfig.UpdateStoredFolderConfig(gafConfig, &types.StoredFolderConfig{
 		FolderPath:                  f.path,
 		PreferredOrg:                testFolderOrg,
 		OrgSetByUser:                true,
@@ -969,13 +969,13 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	// Configure folder-specific org
 	const testFolderOrg = "test-folder-org-uuid"
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		FolderPath:                  f.Path(),
 		PreferredOrg:                testFolderOrg,
 		OrgSetByUser:                true,
 		OrgMigratedFromGlobalConfig: true,
 	}
-	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(gafConfig, folderConfig, c.Logger())
 	require.NoError(t, err, "failed to configure folder org")
 
 	filePath := types.FilePath(filepath.Join(string(f.Path()), "dummy.java"))

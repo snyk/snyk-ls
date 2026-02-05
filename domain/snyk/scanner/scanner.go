@@ -208,7 +208,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 		return
 	}
 
-	folderConfig := sc.c.FolderConfig(folderPath)
+	folderConfig := sc.c.StoredFolderConfig(folderPath)
 	ctx, logger = sc.enrichContextAndLogger(ctx, logger, folderConfig, folderPath, path)
 
 	authenticated := sc.authService.IsAuthenticated()
@@ -346,7 +346,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 	}()
 }
 
-func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types.ProductScanner, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) ([]types.Issue, error) {
+func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types.ProductScanner, path types.FilePath, folderPath types.FilePath, folderConfig *types.StoredFolderConfig) ([]types.Issue, error) {
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
@@ -378,7 +378,7 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types
 func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(
 	ctx context.Context,
 	logger zerolog.Logger,
-	folderConfig *types.FolderConfig,
+	folderConfig *types.StoredFolderConfig,
 	workDir types.FilePath,
 	filePath types.FilePath,
 ) (context.Context, zerolog.Logger) {
@@ -417,7 +417,7 @@ func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(
 		ctx2.DepAuthService:         sc.authService,
 		ctx2.DepScanPersister:       sc.scanPersister,
 		ctx2.DepScanStateAggregator: sc.scanStateAggregator,
-		ctx2.DepFolderConfig:        folderConfig,
+		ctx2.DepStoredFolderConfig:  folderConfig,
 	})
 
 	// add work dir and file path to context

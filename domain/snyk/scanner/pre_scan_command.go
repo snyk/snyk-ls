@@ -29,7 +29,7 @@ func (sc *DelegatingConcurrentScanner) executePreScanCommand(
 	ctx context.Context,
 	c *config.Config,
 	p product.Product,
-	folderConfig *types.FolderConfig,
+	folderConfig *types.StoredFolderConfig,
 	scanDir types.FilePath,
 	isNotReferenceScan bool,
 ) error {

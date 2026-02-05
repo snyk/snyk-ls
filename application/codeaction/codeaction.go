@@ -87,14 +87,14 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	issues := c.IssuesProvider.IssuesForRange(path, r)
 	c.logger.Debug().Any("path", path).Any("range", r).Msgf("Found %d issues", len(issues))
 
-	codeConsistentIgnoresEnabled := c.featureFlagService.GetFromFolderConfig(folder.Path(), featureflag.SnykCodeConsistentIgnores)
+	codeConsistentIgnoresEnabled := c.featureFlagService.GetFromStoredFolderConfig(folder.Path(), featureflag.SnykCodeConsistentIgnores)
 
 	var filteredIssues []types.Issue
 	if !codeConsistentIgnoresEnabled {
 		filteredIssues = issues
 	} else {
 		// Issue view options can be set per-folder, so use the folderConfig to fetch the effective value.
-		folderConfig := c.c.FolderConfig(folder.Path())
+		folderConfig := c.c.StoredFolderConfig(folder.Path())
 		issueViewOptions := c.c.IssueViewOptionsForFolder(folderConfig)
 		isViewingOpenIssues := issueViewOptions.OpenIssues
 		isViewingIgnoredIssues := issueViewOptions.IgnoredIssues

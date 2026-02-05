@@ -461,7 +461,7 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		folderPath := types.FilePath("/test/folder")
 
 		// Get folder config for the path
-		folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, c.Logger(), storedconfig.GetFolderConfigOptions{
+		folderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
 			CreateIfNotExist: false,
 			ReadOnly:         true,
 			EnrichFromGit:    false,
@@ -488,7 +488,7 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		folderPath := types.FilePath("/test/folder")
 
 		// Get folder config for the path
-		folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, c.Logger(), storedconfig.GetFolderConfigOptions{
+		folderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
 			CreateIfNotExist: false,
 			ReadOnly:         true,
 			EnrichFromGit:    false,
@@ -509,7 +509,7 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		c.SetIssueViewOptions(&options)
 
 		// Create a folder config
-		folderConfig := &types.FolderConfig{FolderPath: "/test/folder"}
+		folderConfig := &types.StoredFolderConfig{FolderPath: "/test/folder"}
 
 		// Get options for folder - should return global options
 		result := c.IssueViewOptionsForFolder(folderConfig)
@@ -525,7 +525,7 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		c.SetDeltaFindingsEnabled(true)
 
 		// Create a folder config
-		folderConfig := &types.FolderConfig{FolderPath: "/test/folder"}
+		folderConfig := &types.StoredFolderConfig{FolderPath: "/test/folder"}
 
 		// Get delta findings for folder - should return global setting
 		result := c.IsDeltaFindingsEnabledForFolder(folderConfig)
@@ -552,12 +552,12 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 
 		// Create a folder path and folder config with the org
 		folderPath := types.FilePath("/test/folder")
-		folderConfig := c.FolderConfig(folderPath)
+		folderConfig := c.StoredFolderConfig(folderPath)
 		folderConfig.AutoDeterminedOrg = orgId
 
 		// Save the folder config back to storage so subsequent calls see the org
 		gafConfig := c.Engine().GetConfiguration()
-		err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
+		err := storedconfig.UpdateStoredFolderConfig(gafConfig, folderConfig, c.Logger())
 		require.NoError(t, err)
 
 		// Get filter for folder - should return LDX-Sync filter

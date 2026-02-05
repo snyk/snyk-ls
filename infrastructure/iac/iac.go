@@ -87,7 +87,7 @@ func New(c *config.Config, instrumentor performance.Instrumentor, errorReporter 
 	}
 }
 
-func (iac *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+func (iac *Scanner) IsEnabledForFolder(folderConfig *types.StoredFolderConfig) bool {
 	return config.CurrentConfig().IsSnykIacEnabledForFolder(folderConfig)
 }
 
@@ -99,7 +99,7 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{}
 }
 
-func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
+func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, _ *types.StoredFolderConfig) (issues []types.Issue, err error) {
 	c := config.CurrentConfig()
 
 	// Log scan type and paths

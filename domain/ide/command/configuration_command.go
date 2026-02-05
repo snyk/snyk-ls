@@ -99,8 +99,8 @@ func constructSettingsFromConfig(c *config.Config) types.Settings {
 		// Security Settings
 		Insecure: fmt.Sprintf("%v", insecure),
 
-		// Initialize FolderConfigs as empty slice
-		FolderConfigs: []types.FolderConfig{},
+		// Initialize StoredFolderConfigs as empty slice
+		StoredFolderConfigs: []types.StoredFolderConfig{},
 	}
 
 	populateProductSettings(&s, c)
@@ -109,7 +109,7 @@ func constructSettingsFromConfig(c *config.Config) types.Settings {
 	populateFeatureToggles(&s, c)
 	populateAdvancedSettings(&s, c)
 	populatePointerFields(&s, c)
-	populateFolderConfigs(&s, c)
+	populateStoredFolderConfigs(&s, c)
 
 	return s
 }
@@ -172,8 +172,8 @@ func populatePointerFields(s *types.Settings, c *config.Config) {
 	s.RiskScoreThreshold = &riskScoreThreshold
 }
 
-// populateFolderConfigs populates folder-specific configuration with effective values
-func populateFolderConfigs(s *types.Settings, c *config.Config) {
+// populateStoredFolderConfigs populates folder-specific configuration with effective values
+func populateStoredFolderConfigs(s *types.Settings, c *config.Config) {
 	if c.Workspace() == nil {
 		return
 	}
@@ -181,7 +181,7 @@ func populateFolderConfigs(s *types.Settings, c *config.Config) {
 	resolver := c.GetConfigResolver()
 
 	for _, f := range c.Workspace().Folders() {
-		storedFc := c.FolderConfig(f.Path())
+		storedFc := c.StoredFolderConfig(f.Path())
 		if storedFc == nil {
 			continue
 		}
@@ -194,13 +194,13 @@ func populateFolderConfigs(s *types.Settings, c *config.Config) {
 			fc.EffectiveConfig = computeEffectiveConfig(resolver, &fc)
 		}
 
-		s.FolderConfigs = append(s.FolderConfigs, fc)
+		s.StoredFolderConfigs = append(s.StoredFolderConfigs, fc)
 	}
 }
 
 // computeEffectiveConfig computes effective values for all org-scope settings
 // that can be displayed/edited in the HTML settings page
-func computeEffectiveConfig(resolver *types.ConfigResolver, fc *types.FolderConfig) map[string]types.EffectiveValue {
+func computeEffectiveConfig(resolver *types.ConfigResolver, fc *types.StoredFolderConfig) map[string]types.EffectiveValue {
 	effectiveConfig := make(map[string]types.EffectiveValue)
 
 	// Org-scope settings that can be overridden per-folder

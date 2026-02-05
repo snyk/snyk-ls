@@ -144,14 +144,14 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	command := "/bin/sh"
 
 	// setup folder config for prescan
-	folderConfig := c.FolderConfig(workDir)
+	folderConfig := c.StoredFolderConfig(workDir)
 	scanCommandConfigMap := make(map[product.Product]types.ScanCommandConfig)
 	scanCommandConfigMap[product.ProductOpenSource] = types.ScanCommandConfig{
 		PreScanCommand:             command,
 		PreScanOnlyReferenceFolder: false,
 	}
 	folderConfig.ScanCommandConfig = scanCommandConfigMap
-	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
+	require.NoError(t, storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
 
 	// trigger execute
 	err := delegatingScanner.executePreScanCommand(t.Context(), c, p, folderConfig, workDir, false)
@@ -165,7 +165,7 @@ func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *t
 		c: c,
 	}
 
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		ReferenceFolderPath: "",
 		BaseBranch:          "",
 	}

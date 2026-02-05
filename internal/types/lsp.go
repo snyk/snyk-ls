@@ -549,7 +549,7 @@ type ScanCommandConfig struct {
 	PostScanOnlyReferenceFolder bool   `json:"postScanOnlyReferenceFolder,omitempty"`
 }
 
-// FolderConfig is exchanged between IDE and LS
+// StoredFolderConfig is exchanged between IDE and LS
 // IDE sends this as part of the settings/initialization
 // EffectiveValue represents a computed configuration value with its source.
 // This is sent to the IDE so it can display the effective value.
@@ -561,7 +561,7 @@ type EffectiveValue struct {
 }
 
 // LS sends this via the $/snyk.folderConfig notification
-type FolderConfig struct {
+type StoredFolderConfig struct {
 	FolderPath                  FilePath                              `json:"folderPath"`
 	BaseBranch                  string                                `json:"baseBranch"`
 	LocalBranches               []string                              `json:"localBranches,omitempty"`
@@ -591,12 +591,12 @@ type FolderConfig struct {
 	ModifiedFields map[string]any `json:"modifiedFields,omitempty"`
 }
 
-func (fc *FolderConfig) Clone() *FolderConfig {
+func (fc *StoredFolderConfig) Clone() *StoredFolderConfig {
 	if fc == nil {
 		return nil
 	}
 
-	clone := &FolderConfig{
+	clone := &StoredFolderConfig{
 		FolderPath:                  fc.FolderPath,
 		BaseBranch:                  fc.BaseBranch,
 		AdditionalEnv:               fc.AdditionalEnv,
@@ -660,13 +660,13 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 }
 
 // HasUserOverride checks if the user has explicitly set a value for the given setting
-func (fc *FolderConfig) HasUserOverride(settingName string) bool {
+func (fc *StoredFolderConfig) HasUserOverride(settingName string) bool {
 	_, exists := fc.GetUserOverride(settingName)
 	return exists
 }
 
 // GetUserOverride returns the user override value for the given setting, or nil if not set
-func (fc *FolderConfig) GetUserOverride(settingName string) (any, bool) {
+func (fc *StoredFolderConfig) GetUserOverride(settingName string) (any, bool) {
 	if fc == nil || fc.UserOverrides == nil {
 		return nil, false
 	}
@@ -675,7 +675,7 @@ func (fc *FolderConfig) GetUserOverride(settingName string) (any, bool) {
 }
 
 // SetUserOverride explicitly sets a user override value for the given setting
-func (fc *FolderConfig) SetUserOverride(settingName string, value any) {
+func (fc *StoredFolderConfig) SetUserOverride(settingName string, value any) {
 	if fc.UserOverrides == nil {
 		fc.UserOverrides = make(map[string]any)
 	}
@@ -683,17 +683,17 @@ func (fc *FolderConfig) SetUserOverride(settingName string, value any) {
 }
 
 // ResetToDefault removes a user override, reverting to LDX-Sync or default value
-func (fc *FolderConfig) ResetToDefault(settingName string) {
+func (fc *StoredFolderConfig) ResetToDefault(settingName string) {
 	if fc.UserOverrides != nil {
 		delete(fc.UserOverrides, settingName)
 	}
 }
 
-// SanitizeForIDE returns a copy of the FolderConfig prepared for sending to the IDE.
+// SanitizeForIDE returns a copy of the StoredFolderConfig prepared for sending to the IDE.
 // - UserOverrides, FeatureFlags, SastSettings are cleared (LS-managed, not exposed to IDE)
 // - EffectiveConfig is kept (IDE needs this for display and behavior)
 // - ModifiedFields is cleared (only used for IDE → LS communication)
-func (fc *FolderConfig) SanitizeForIDE() FolderConfig {
+func (fc *StoredFolderConfig) SanitizeForIDE() StoredFolderConfig {
 	sanitized := *fc
 	sanitized.UserOverrides = nil
 	sanitized.ModifiedFields = nil
@@ -710,8 +710,8 @@ type Pair struct {
 	Second any `json:"second"`
 }
 
-type FolderConfigsParam struct {
-	FolderConfigs []FolderConfig `json:"folderConfigs"`
+type StoredFolderConfigsParam struct {
+	StoredFolderConfigs []StoredFolderConfig `json:"folderConfigs"`
 }
 
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
@@ -758,10 +758,10 @@ type Settings struct {
 	// Global settings end
 
 	// Folder specific settings start
-	AdditionalParams string         `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
-	AdditionalEnv    string         `json:"additionalEnv,omitempty"`    // Global fallback for backward compatibility; folder-specific values in FolderConfig.AdditionalEnv
-	TrustedFolders   []string       `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
-	FolderConfigs    []FolderConfig `json:"folderConfigs,omitempty"`
+	AdditionalParams    string               `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
+	AdditionalEnv       string               `json:"additionalEnv,omitempty"`    // Global fallback for backward compatibility; folder-specific values in StoredFolderConfig.AdditionalEnv
+	TrustedFolders      []string             `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
+	StoredFolderConfigs []StoredFolderConfig `json:"folderConfigs,omitempty"`
 	// Folder specific settings end
 }
 

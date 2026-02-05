@@ -250,11 +250,11 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 }
 
 func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
-	renderer.iawEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.IgnoreApprovalEnabled)
+	renderer.iawEnabled = renderer.featureFlagService.GetFromStoredFolderConfig(folder, featureflag.IgnoreApprovalEnabled)
 	renderer.inlineIgnoresEnabled = false
 
 	if renderer.c.IntegrationName() == "VS_CODE" {
-		renderer.inlineIgnoresEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeInlineIgnore)
+		renderer.inlineIgnoresEnabled = renderer.featureFlagService.GetFromStoredFolderConfig(folder, featureflag.SnykCodeInlineIgnore)
 	}
 }
 

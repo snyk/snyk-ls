@@ -44,10 +44,10 @@ type IssueEnhancer struct {
 	requestId     string
 	rootPath      types.FilePath
 	c             *config.Config
-	folderConfig  *types.FolderConfig
+	folderConfig  *types.StoredFolderConfig
 }
 
-func newIssueEnhancer(instrumentor performance.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, c *config.Config, folderConfig *types.FolderConfig) IssueEnhancer {
+func newIssueEnhancer(instrumentor performance.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, c *config.Config, folderConfig *types.StoredFolderConfig) IssueEnhancer {
 	return IssueEnhancer{
 		instrumentor:  instrumentor,
 		errorReporter: errorReporter,

@@ -23,7 +23,7 @@ import (
 
 // IsProductEnabledForFolder returns whether a product is enabled for a specific folder config,
 // considering LDX-Sync org config and user overrides.
-func (c *Config) IsProductEnabledForFolder(p product.Product, folderConfig *types.FolderConfig) bool {
+func (c *Config) IsProductEnabledForFolder(p product.Product, folderConfig *types.StoredFolderConfig) bool {
 	switch p {
 	case product.ProductCode:
 		return c.IsSnykCodeEnabledForFolder(folderConfig) || c.IsSnykCodeSecurityEnabledForFolder(folderConfig)
@@ -38,7 +38,7 @@ func (c *Config) IsProductEnabledForFolder(p product.Product, folderConfig *type
 
 // DisplayableIssueTypesForFolder returns which issue types are enabled for a specific folder config,
 // considering LDX-Sync org config and user overrides.
-func (c *Config) DisplayableIssueTypesForFolder(folderConfig *types.FolderConfig) map[product.FilterableIssueType]bool {
+func (c *Config) DisplayableIssueTypesForFolder(folderConfig *types.StoredFolderConfig) map[product.FilterableIssueType]bool {
 	enabled := make(map[product.FilterableIssueType]bool)
 	enabled[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabledForFolder(folderConfig)
 

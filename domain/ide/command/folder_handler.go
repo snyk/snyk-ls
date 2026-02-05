@@ -44,28 +44,28 @@ const (
 func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	sendFolderConfigs(c, notifier, featureFlagService)
+	sendStoredFolderConfigs(c, notifier, featureFlagService)
 
 	HandleUntrustedFolders(ctx, c, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
 }
 
-func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service) {
-	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
+func sendStoredFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service) {
+	logger := c.Logger().With().Str("method", "sendStoredFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
 	resolver := c.GetConfigResolver()
-	var folderConfigs []types.FolderConfig
+	var folderConfigs []types.StoredFolderConfig
 
 	for _, folder := range c.Workspace().Folders() {
-		storedFolderConfig, err2 := storedconfig.GetOrCreateFolderConfig(gafConfig, folder.Path(), &logger)
+		storedStoredFolderConfig, err2 := storedconfig.GetOrCreateStoredFolderConfig(gafConfig, folder.Path(), &logger)
 		if err2 != nil {
 			logger.Err(err2).Msg("unable to load stored config")
 			continue
 		}
 
-		folderConfig := storedFolderConfig.Clone()
+		folderConfig := storedStoredFolderConfig.Clone()
 
-		featureFlagService.PopulateFolderConfig(folderConfig)
+		featureFlagService.PopulateStoredFolderConfig(folderConfig)
 
 		// Always update AutoDeterminedOrg from LDX-Sync cache (even for folders where OrgSetByUser is true)
 		// This ensures we always know what LDX-Sync recommends, regardless of whether the user has opted out
@@ -78,12 +78,12 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 		// Trigger migration for folders that haven't been migrated yet
 		// This ensures that folders loaded from storage get migrated on initialization
 		if !folderConfig.OrgMigratedFromGlobalConfig {
-			MigrateFolderConfigOrgSettings(c, folderConfig)
+			MigrateStoredFolderConfigOrgSettings(c, folderConfig)
 		}
 
-		if !cmp.Equal(folderConfig, storedFolderConfig) {
+		if !cmp.Equal(folderConfig, storedStoredFolderConfig) {
 			// Save the migrated folder config back to storage
-			if err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, &logger); err != nil {
+			if err := storedconfig.UpdateStoredFolderConfig(gafConfig, folderConfig, &logger); err != nil {
 				logger.Err(err).Msg("unable to save folder config")
 			}
 		}
@@ -99,13 +99,13 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 	if folderConfigs == nil {
 		return
 	}
-	notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
+	notifier.Send(types.StoredFolderConfigsParam{StoredFolderConfigs: folderConfigs})
 }
 
-// MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration
+// MigrateStoredFolderConfigOrgSettings applies the organization settings to a folder config during migration
 // based on the global organization setting and the LDX-Sync result.
-func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.FolderConfig) {
-	logger := c.Logger().With().Str("method", "MigrateFolderConfigOrgSettings").Str("FolderPath", string(folderConfig.FolderPath)).Logger()
+func MigrateStoredFolderConfigOrgSettings(c *config.Config, folderConfig *types.StoredFolderConfig) {
+	logger := c.Logger().With().Str("method", "MigrateStoredFolderConfigOrgSettings").Str("FolderPath", string(folderConfig.FolderPath)).Logger()
 
 	// Edge case when user provided folder config on initialize params or
 	// the user is changing settings while unauthenticated

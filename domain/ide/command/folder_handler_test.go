@@ -48,7 +48,7 @@ func populateFolderOrgCache(c interface {
 	cache.SetFolderOrg(folderPath, orgId)
 }
 
-func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
+func Test_sendStoredFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	engineConfig := c.Engine().GetConfiguration()
 
@@ -57,41 +57,41 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 	logger := c.Logger()
-	storedConfig := &types.FolderConfig{
+	storedConfig := &types.StoredFolderConfig{
 		FolderPath:                  folderPaths[0],
 		PreferredOrg:                "test-org",
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	// Populate cache with LDX-Sync result
 	expectedOrgId := "resolved-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify notification was sent
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
 
-	folderConfigsParam, ok := messages[0].(types.FolderConfigsParam)
-	require.True(t, ok, "Expected FolderConfigsParam notification")
-	require.Len(t, folderConfigsParam.FolderConfigs, 1)
-	assert.Equal(t, "test-org", folderConfigsParam.FolderConfigs[0].PreferredOrg, "Notification should contain correct organization")
-	assert.True(t, folderConfigsParam.FolderConfigs[0].OrgSetByUser, "Notification should reflect OrgSetByUser flag")
-	assert.Equal(t, expectedOrgId, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
+	folderConfigsParam, ok := messages[0].(types.StoredFolderConfigsParam)
+	require.True(t, ok, "Expected StoredFolderConfigsParam notification")
+	require.Len(t, folderConfigsParam.StoredFolderConfigs, 1)
+	assert.Equal(t, "test-org", folderConfigsParam.StoredFolderConfigs[0].PreferredOrg, "Notification should contain correct organization")
+	assert.True(t, folderConfigsParam.StoredFolderConfigs[0].OrgSetByUser, "Notification should reflect OrgSetByUser flag")
+	assert.Equal(t, expectedOrgId, folderConfigsParam.StoredFolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
-func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
+func Test_sendStoredFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, _ = testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with no folders
 	_, notifier := workspaceutil.SetupWorkspace(t, c)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
@@ -131,7 +131,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 }
 
 // Test cache lookup when cache is empty - AutoDeterminedOrg should remain empty
-func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
+func Test_sendStoredFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
@@ -140,31 +140,31 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 	logger := c.Logger()
-	storedConfig := &types.FolderConfig{
+	storedConfig := &types.StoredFolderConfig{
 		FolderPath:                  folderPaths[0],
 		PreferredOrg:                "test-org",
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify notification was sent
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
 
-	folderConfigsParam, ok := messages[0].(types.FolderConfigsParam)
-	require.True(t, ok, "Expected FolderConfigsParam notification")
-	require.Len(t, folderConfigsParam.FolderConfigs, 1)
+	folderConfigsParam, ok := messages[0].(types.StoredFolderConfigsParam)
+	require.True(t, ok, "Expected StoredFolderConfigsParam notification")
+	require.Len(t, folderConfigsParam.StoredFolderConfigs, 1)
 	// AutoDeterminedOrg should be empty when cache is empty
-	assert.Empty(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be empty when cache is empty")
+	assert.Empty(t, folderConfigsParam.StoredFolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be empty when cache is empty")
 }
 
-// Test sendFolderConfigs when cache has org ID
-func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
+// Test sendStoredFolderConfigs when cache has org ID
+func Test_sendStoredFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
@@ -173,33 +173,33 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 	logger := c.Logger()
-	storedConfig := &types.FolderConfig{
+	storedConfig := &types.StoredFolderConfig{
 		FolderPath:                  folderPaths[0],
 		PreferredOrg:                "test-org",
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	// Populate cache with org ID
 	expectedOrgId := "cached-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify notification was sent
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
 
-	folderConfigsParam, ok := messages[0].(types.FolderConfigsParam)
-	require.True(t, ok, "Expected FolderConfigsParam notification")
-	require.Len(t, folderConfigsParam.FolderConfigs, 1)
-	assert.Equal(t, expectedOrgId, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
+	folderConfigsParam, ok := messages[0].(types.StoredFolderConfigsParam)
+	require.True(t, ok, "Expected StoredFolderConfigsParam notification")
+	require.Len(t, folderConfigsParam.StoredFolderConfigs, 1)
+	assert.Equal(t, expectedOrgId, folderConfigsParam.StoredFolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
-// Test sendFolderConfigs with multiple folders and different org configurations
-func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
+// Test sendStoredFolderConfigs with multiple folders and different org configurations
+func Test_sendStoredFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
 	engineConfig := c.Engine().GetConfiguration()
 
@@ -213,37 +213,37 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	logger := c.Logger()
 
 	// Setup different org configs for each folder - both already migrated to avoid migration path
-	storedConfig1 := &types.FolderConfig{
+	storedConfig1 := &types.StoredFolderConfig{
 		FolderPath:                  folderPaths[0],
 		PreferredOrg:                "user-org-1",
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig1, logger)
+	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig1, logger)
 	require.NoError(t, err)
 
-	storedConfig2 := &types.FolderConfig{
+	storedConfig2 := &types.StoredFolderConfig{
 		FolderPath:                  folderPaths[1],
 		PreferredOrg:                "",
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                false,
 	}
-	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig2, logger)
+	err = storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig2, logger)
 	require.NoError(t, err)
 
 	// Populate cache with different orgs for each folder
 	populateFolderOrgCache(c, folderPaths[0], "org-id-for-folder-0")
 	populateFolderOrgCache(c, folderPaths[1], "org-id-for-folder-1")
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService())
+	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
 
 	// Verify notification was sent with both folders
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
 
-	folderConfigsParam, ok := messages[0].(types.FolderConfigsParam)
-	require.True(t, ok, "Expected FolderConfigsParam notification")
-	require.Len(t, folderConfigsParam.FolderConfigs, 2)
+	folderConfigsParam, ok := messages[0].(types.StoredFolderConfigsParam)
+	require.True(t, ok, "Expected StoredFolderConfigsParam notification")
+	require.Len(t, folderConfigsParam.StoredFolderConfigs, 2)
 
 	// Verify each folder has its own AutoDeterminedOrg (order is not guaranteed due to map iteration)
 	// Use PathKey to normalize paths for cross-platform consistency (Windows short paths vs full paths)
@@ -251,7 +251,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 		types.PathKey(folderPaths[0]): "org-id-for-folder-0",
 		types.PathKey(folderPaths[1]): "org-id-for-folder-1",
 	}
-	for _, fc := range folderConfigsParam.FolderConfigs {
+	for _, fc := range folderConfigsParam.StoredFolderConfigs {
 		expectedOrg, found := expectedOrgs[types.PathKey(fc.FolderPath)]
 		require.True(t, found, "Unexpected folder path: %s", fc.FolderPath)
 		assert.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for folder %s", fc.FolderPath)
@@ -335,7 +335,7 @@ func Test_isOrgDefault(t *testing.T) {
 	}
 }
 
-func Test_MigrateFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
+func Test_MigrateStoredFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup: Use immutable defaults so isOrgDefault() can clone config, set org="", and still retrieve the default org
@@ -343,7 +343,7 @@ func Test_MigrateFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
 	gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("default-org-uuid"))
 	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("default-org-slug"))
 
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		FolderPath:                  types.FilePath(t.TempDir()),
 		OrgSetByUser:                false,
 		OrgMigratedFromGlobalConfig: false,
@@ -351,7 +351,7 @@ func Test_MigrateFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
 	}
 
 	// Action
-	MigrateFolderConfigOrgSettings(c, folderConfig)
+	MigrateStoredFolderConfigOrgSettings(c, folderConfig)
 
 	// Assert: User is using default org, should opt into auto-org
 	assert.False(t, folderConfig.OrgSetByUser, "OrgSetByUser should be false (opt into auto-org)")
@@ -359,7 +359,7 @@ func Test_MigrateFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
 	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
 }
 
-func Test_MigrateFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
+func Test_MigrateStoredFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup: Use a regular (mutable) DefaultValueFunction so Set() can override it
@@ -377,7 +377,7 @@ func Test_MigrateFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
 	// Set the user's non-default org
 	c.SetOrganization("non-default-org-id")
 
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		FolderPath:                  types.FilePath(t.TempDir()),
 		OrgSetByUser:                false,
 		OrgMigratedFromGlobalConfig: false,
@@ -385,7 +385,7 @@ func Test_MigrateFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
 	}
 
 	// Action
-	MigrateFolderConfigOrgSettings(c, folderConfig)
+	MigrateStoredFolderConfigOrgSettings(c, folderConfig)
 
 	// Assert: User explicitly set non-default org, should opt out and copy org
 	assert.True(t, folderConfig.OrgSetByUser, "OrgSetByUser should be true (user explicitly set)")
@@ -393,7 +393,7 @@ func Test_MigrateFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
 	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
 }
 
-func Test_MigrateFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(t *testing.T) {
+func Test_MigrateStoredFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup: Unauthenticated state - using default value functions that return errors where API calls would be
@@ -415,12 +415,12 @@ func Test_MigrateFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(t *tes
 	gafConfig.Set(configuration.ORGANIZATION, "custom-org-id")
 
 	// Setup: Pre-feature folder with zero-value fields (never read during EA)
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		FolderPath: types.FilePath(t.TempDir()),
 	}
 
 	// Action
-	MigrateFolderConfigOrgSettings(c, folderConfig)
+	MigrateStoredFolderConfigOrgSettings(c, folderConfig)
 
 	// Assert: Migration should be skipped when isOrgDefault fails (line 191 in folder_handler.go)
 	assert.False(t, folderConfig.OrgMigratedFromGlobalConfig, "Should remain unmigrated (migration skipped)")

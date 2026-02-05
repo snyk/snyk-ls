@@ -227,13 +227,13 @@ func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
 
 	// Create and store folder config with specific org UUID
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
-	storedCfg := &types.FolderConfig{
+	storedCfg := &types.StoredFolderConfig{
 		FolderPath:                  folderPath,
 		PreferredOrg:                folderOrgUUID,
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
 	require.NoError(t, err)
 
 	// Test
@@ -288,13 +288,13 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 
 	// Create and store folder config with specific org UUID
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
-	storedCfg := &types.FolderConfig{
+	storedCfg := &types.StoredFolderConfig{
 		FolderPath:                  folderPath,
 		PreferredOrg:                folderOrgUUID,
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
 	require.NoError(t, err)
 
 	// Capture the command args passed to the workflow
@@ -330,13 +330,13 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 	// Create and store folder config with a slug that will need resolution
 	// Using a slug format that would require API resolution
 	folderOrgSlug := "my-test-org-slug"
-	storedCfg := &types.FolderConfig{
+	storedCfg := &types.StoredFolderConfig{
 		FolderPath:                  folderPath,
 		PreferredOrg:                folderOrgSlug,
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
 	require.NoError(t, err)
 
 	// Test - the resolution will fail because we don't have a real API connection

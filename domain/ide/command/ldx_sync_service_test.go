@@ -138,11 +138,11 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 
 	// Set up folder config with PreferredOrg
 	preferredOrg := "test-org-123"
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		FolderPath:   folderPath,
 		PreferredOrg: preferredOrg,
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	require.NoError(t, err)
 
 	expectedOrgId := "resolved-org-id"
@@ -305,7 +305,7 @@ func Test_GetOrgIdForFolder_EmptyFolderPath_ReturnsEmpty(t *testing.T) {
 	assert.Empty(t, orgId)
 }
 
-func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *testing.T) {
+func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromStoredFolderConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
@@ -317,15 +317,15 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	folders := c.Workspace().Folders()
 
 	// Create folder config with user override for a setting that will become locked
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		FolderPath:    folderPath,
 		UserOverrides: map[string]any{types.SettingEnabledSeverities: []string{"high", "critical"}},
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, logger)
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, logger)
 	require.NoError(t, err)
 
 	// Verify override exists before refresh
-	storedBefore, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetFolderConfigOptions{
+	storedBefore, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetStoredFolderConfigOptions{
 		CreateIfNotExist: false,
 		ReadOnly:         true,
 	})
@@ -341,7 +341,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 		GetUserConfigForProject(c.Engine(), string(folderPath), "").
 		Return(result)
 
-	// Setup folder-to-org mapping so clearLockedOverridesFromFolderConfigs can find the org
+	// Setup folder-to-org mapping so clearLockedOverridesFromStoredFolderConfigs can find the org
 	cache := c.GetLdxSyncOrgConfigCache()
 	cache.SetFolderOrg(folderPath, orgId)
 
@@ -349,7 +349,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	service.RefreshConfigFromLdxSync(c, folders)
 
 	// Verify user override was cleared for the locked field
-	storedAfter, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetFolderConfigOptions{
+	storedAfter, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetStoredFolderConfigOptions{
 		CreateIfNotExist: false,
 		ReadOnly:         true,
 	})
@@ -370,14 +370,14 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	folders := c.Workspace().Folders()
 
 	// Create folder config with user overrides for both locked and non-locked settings
-	folderConfig := &types.FolderConfig{
+	folderConfig := &types.StoredFolderConfig{
 		FolderPath: folderPath,
 		UserOverrides: map[string]any{
 			types.SettingEnabledSeverities: []string{"high", "critical"}, // Will be locked
 			types.SettingScanAutomatic:     true,                         // Will NOT be locked
 		},
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, logger)
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, logger)
 	require.NoError(t, err)
 
 	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name "severities")
@@ -396,7 +396,7 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	service.RefreshConfigFromLdxSync(c, folders)
 
 	// Verify locked override was cleared but non-locked override was preserved
-	storedAfter, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetFolderConfigOptions{
+	storedAfter, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetStoredFolderConfigOptions{
 		CreateIfNotExist: false,
 		ReadOnly:         true,
 	})

@@ -89,7 +89,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 			defer wg.Done()
 
 			// Get PreferredOrg from folder config (or empty string if missing)
-			folderConfig, err := storedconfig.GetFolderConfigWithOptions(gafConfig, f.Path(), &logger, storedconfig.GetFolderConfigOptions{
+			folderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(gafConfig, f.Path(), &logger, storedconfig.GetStoredFolderConfigOptions{
 				CreateIfNotExist: false,
 				ReadOnly:         true,
 				EnrichFromGit:    false,
@@ -171,7 +171,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 // - OrgConfigs: org ID → org-level settings (for ConfigResolver to read settings)
 //
 // When a field from LDX-Sync is Locked or Enforced, we clear any user overrides for that field
-// from FolderConfigs using that org. This ensures org policy takes precedence.
+// from StoredFolderConfigs using that org. This ensures org policy takes precedence.
 func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
 	logger := c.Logger().With().Str("method", "updateOrgConfigCache").Logger()
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -222,8 +222,8 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 			Msg("Updated org config cache from LDX-Sync")
 	}
 
-	// Clear user overrides for locked/enforced fields from FolderConfigs
-	s.clearLockedOverridesFromFolderConfigs(c, orgLockedFields, &logger)
+	// Clear user overrides for locked/enforced fields from StoredFolderConfigs
+	s.clearLockedOverridesFromStoredFolderConfigs(c, orgLockedFields, &logger)
 }
 
 // updateMachineConfig extracts machine-scope settings from LDX-Sync results and applies them to Config.
@@ -340,11 +340,11 @@ func (s *DefaultLdxSyncService) applyBoolSettingIfNeeded(field *types.LDXSyncFie
 	return false
 }
 
-// clearLockedOverridesFromFolderConfigs clears user overrides for locked/enforced fields
-// from all FolderConfigs that use the affected orgs.
+// clearLockedOverridesFromStoredFolderConfigs clears user overrides for locked/enforced fields
+// from all StoredFolderConfigs that use the affected orgs.
 // When LDX-Sync returns Enforced/Locked fields, we clear any user overrides
-// from FolderConfigs that use that org. This ensures org policy takes precedence.
-func (s *DefaultLdxSyncService) clearLockedOverridesFromFolderConfigs(c *config.Config, orgLockedFields map[string][]string, logger *zerolog.Logger) {
+// from StoredFolderConfigs that use that org. This ensures org policy takes precedence.
+func (s *DefaultLdxSyncService) clearLockedOverridesFromStoredFolderConfigs(c *config.Config, orgLockedFields map[string][]string, logger *zerolog.Logger) {
 	if len(orgLockedFields) == 0 {
 		return
 	}
@@ -361,7 +361,7 @@ func (s *DefaultLdxSyncService) clearLockedOverridesFromFolderConfigs(c *config.
 	cache := c.GetLdxSyncOrgConfigCache()
 
 	modified := false
-	for folderPath, fc := range sc.FolderConfigs {
+	for folderPath, fc := range sc.StoredFolderConfigs {
 		if fc == nil || fc.UserOverrides == nil || len(fc.UserOverrides) == 0 {
 			continue
 		}

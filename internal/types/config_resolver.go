@@ -1,5 +1,5 @@
 /*
- * © 2026 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -318,45 +318,17 @@ var globalSettingGetters = map[string]globalSettingGetter{
 	SettingTrustEnabled:       func(s *Settings) any { return s.EnableTrustedFoldersFeature },
 }
 
-// getGlobalSettingValue returns the value for a setting from global settings.
-// Returns nil if the setting is not set (empty string, nil pointer, etc.). This is distinct from Config; by comparing
-// the two, we can distinguish between "value set equal to the default" and "value not set, so inheriting from default"
+// getGlobalSettingValue returns the value for a setting from global settings
 func (r *ConfigResolver) getGlobalSettingValue(settingName string) any {
 	if r.globalSettings == nil {
 		return nil
 	}
 
 	if getter, exists := globalSettingGetters[settingName]; exists {
-		value := getter(r.globalSettings)
-		if isUnset(value) {
-			return nil
-		}
-		return value
+		return getter(r.globalSettings)
 	}
 
 	return nil
-}
-
-// isUnset returns true if the value represents an unset/empty setting (meaning we should fall back to the default)
-func isUnset(value any) bool {
-	if value == nil {
-		return true
-	}
-	switch v := value.(type) {
-	case string:
-		return v == ""
-	case *string:
-		return v == nil || *v == ""
-	case *int:
-		return v == nil
-	case *bool:
-		return v == nil
-	case *SeverityFilter:
-		return v == nil
-	case *IssueViewOptions:
-		return v == nil
-	}
-	return false
 }
 
 // getFolderSettingValue returns the value for a folder-scoped setting
