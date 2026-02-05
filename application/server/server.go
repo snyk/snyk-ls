@@ -531,7 +531,7 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 
 			f := workspace.NewFolder(
 				c,
-				uri.PathFromUri(workspaceFolder.Uri),
+				util.PathKey(uri.PathFromUri(workspaceFolder.Uri)),
 				workspaceFolder.Name,
 				di.Scanner(),
 				di.HoverService(),
