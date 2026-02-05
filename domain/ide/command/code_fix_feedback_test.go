@@ -17,6 +17,7 @@
 package command
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -96,7 +97,9 @@ func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
+	folderPath1 := types.FilePath(filepath.Clean("/workspace/folder1"))
+	folderPath2 := types.FilePath(filepath.Clean("/workspace/folder2"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -121,7 +124,7 @@ func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
 
 	// Should correctly determine folder from fix results
 	require.NoError(t, err)
-	assert.Equal(t, types.FilePath("/workspace/folder2"), result)
+	assert.Equal(t, folderPath2, result)
 }
 
 func Test_getFolderFromFixId_ReturnsErrorWhenFileNotInAnyFolder(t *testing.T) {
