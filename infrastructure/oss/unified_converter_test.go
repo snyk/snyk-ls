@@ -139,8 +139,8 @@ func Test_buildRemediationAdvice(t *testing.T) {
 		description     string
 	}{
 		{
-			name:        "No remediation when no fixed versions",
-			finding:     createFindingWithoutUpgradePath(t),
+			name:    "No remediation when no fixed versions",
+			finding: createFindingWithoutUpgradePath(t),
 			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
@@ -150,11 +150,11 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false},
 			expectedMessage: "No remediation advice available",
-			description: "Should return no remediation message when no fix available.",
+			description:     "Should return no remediation message when no fix available.",
 		},
 		{
-			name:        "Direct dependency with fix available",
-			finding:     createFindingWithoutUpgradePath(t),
+			name:    "Direct dependency with fix available",
+			finding: createFindingWithoutUpgradePath(t),
 			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
@@ -164,11 +164,11 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.1"},
 			expectedMessage: "Upgrade to test-package@1.0.1",
-			description: "Should return upgrade message for direct dependency when fix is available.",
+			description:     "Should return upgrade message for direct dependency when fix is available.",
 		},
 		{
-			name:        "Transitive dependency with fix and upgrade path available",
-			finding:     createFindingWithoutUpgradePath(t),
+			name:    "Transitive dependency with fix and upgrade path available",
+			finding: createFindingWithoutUpgradePath(t),
 			problem: &testapi.SnykVulnProblem{
 				PackageName:              "vuln-pkg",
 				PackageVersion:           "1.0.0",
@@ -178,11 +178,11 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "intermediate@1.0.0", "vuln-pkg@1.0.0"},
 			upgradePath:     []any{false, "intermediate@2.0.0", "vuln-pkg@1.0.1"},
 			expectedMessage: "Upgrade to intermediate@2.0.0",
-			description: "Should return upgrade message showing intermediate package to upgrade for transitive dependency fixes.",
+			description:     "Should return upgrade message showing intermediate package to upgrade for transitive dependency fixes.",
 		},
 		{
-			name:        "Deep transitive dependency with fix available but no upgrade path",
-			finding:     createFindingWithoutUpgradePath(t),
+			name:    "Deep transitive dependency with fix available but no upgrade path",
+			finding: createFindingWithoutUpgradePath(t),
 			problem: &testapi.SnykVulnProblem{
 				PackageName:              "vuln-pkg",
 				PackageVersion:           "1.0.0",
@@ -190,13 +190,13 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			},
 			ecosystem:       "pip",
 			dependencyPath:  []string{"root@1.0.0", "pkg-a@1.0.0", "pkg-b@1.0.0", "vuln-pkg@1.0.0"}, // Deep transitive
-			upgradePath:     []any{false}, // No upgrade path because intermediate deps haven't updated to consume the fix
-			expectedMessage: "",           // Returns empty when fix exists but no upgrade path available through dependency chain
-			description: "Should return empty when fix exists but intermediate dependencies haven't consumed it yet (common with deep transitive dependencies).",
+			upgradePath:     []any{false},                                                           // No upgrade path because intermediate deps haven't updated to consume the fix
+			expectedMessage: "",                                                                     // Returns empty when fix exists but no upgrade path available through dependency chain
+			description:     "Should return empty when fix exists but intermediate dependencies haven't consumed it yet (common with deep transitive dependencies).",
 		},
 		{
-			name:        "Malformed data: upgrade path suggests same vulnerable version - npm",
-			finding:     createFindingWithoutUpgradePath(t),
+			name:    "Malformed data: upgrade path suggests same vulnerable version - npm",
+			finding: createFindingWithoutUpgradePath(t),
 			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
@@ -206,11 +206,11 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.0"}, // Same as dependencyPath[1] - unrealistic but handled defensively
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try relocking your lockfile or deleting node_modules and reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description: "Should return outdated dependency message when upgradePath[1] == dependencyPath[1] (defensive handling - shouldn't occur with real API data).",
+			description:     "Should return outdated dependency message when upgradePath[1] == dependencyPath[1] (defensive handling - shouldn't occur with real API data).",
 		},
 		{
-			name:        "Malformed data: upgrade path suggests same vulnerable version - yarn",
-			finding:     createFindingWithoutUpgradePath(t),
+			name:    "Malformed data: upgrade path suggests same vulnerable version - yarn",
+			finding: createFindingWithoutUpgradePath(t),
 			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
@@ -220,11 +220,11 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.0"}, // Same as dependencyPath[1] - unrealistic but handled defensively
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try relocking your lockfile or deleting node_modules and reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description: "Should return outdated dependency message for yarn (same behavior as npm for this edge case).",
+			description:     "Should return outdated dependency message for yarn (same behavior as npm for this edge case).",
 		},
 		{
-			name:        "Malformed data: upgrade path suggests same vulnerable version - maven",
-			finding:     createFindingWithoutUpgradePath(t),
+			name:    "Malformed data: upgrade path suggests same vulnerable version - maven",
+			finding: createFindingWithoutUpgradePath(t),
 			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
@@ -234,11 +234,11 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.0"}, // Same as dependencyPath[1] - unrealistic but handled defensively
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description: "Should return outdated dependency message for maven (different remediation steps than npm/yarn).",
+			description:     "Should return outdated dependency message for maven (different remediation steps than npm/yarn).",
 		},
 		{
-			name:        "Malformed data: upgrade path suggests same vulnerable version - pip",
-			finding:     createFindingWithoutUpgradePath(t),
+			name:    "Malformed data: upgrade path suggests same vulnerable version - pip",
+			finding: createFindingWithoutUpgradePath(t),
 			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
@@ -248,11 +248,11 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "test-package@1.0.0"}, // Same as dependencyPath[1] - unrealistic but handled defensively
 			expectedMessage: "Your dependencies are out of date, otherwise you would be using a newer test-package than test-package@1.0.0. Try reinstalling your dependencies. If the problem persists, one of your dependencies may be bundling outdated modules.",
-			description: "Should return outdated dependency message for pip (different remediation steps than npm/yarn).",
+			description:     "Should return outdated dependency message for pip (different remediation steps than npm/yarn).",
 		},
 		{
-			name:        "Malformed data: upgrade path for different package than vulnerable one",
-			finding:     createFindingWithUpgradePaths(t, "other-pkg", [][]string{{"root@1.0.0", "other-pkg@2.0.0"}}),
+			name:    "Malformed data: upgrade path for different package than vulnerable one",
+			finding: createFindingWithUpgradePaths(t, "other-pkg", [][]string{{"root@1.0.0", "other-pkg@2.0.0"}}),
 			problem: &testapi.SnykVulnProblem{
 				PackageName:              "test-package",
 				PackageVersion:           "1.0.0",
@@ -262,7 +262,7 @@ func Test_buildRemediationAdvice(t *testing.T) {
 			dependencyPath:  []string{"root@1.0.0", "test-package@1.0.0"},
 			upgradePath:     []any{false, "other-pkg@2.0.0"}, // Wrong package - unrealistic but handled defensively
 			expectedMessage: "Upgrade to other-pkg@2.0.0",    // Still returns upgrade message for defensive handling
-			description: "Should return upgrade message even when upgrade path targets wrong package (defensive handling of malformed API data).",
+			description:     "Should return upgrade message even when upgrade path targets wrong package (defensive handling of malformed API data).",
 		},
 	}
 
@@ -316,7 +316,7 @@ func Test_extractDependencyPath(t *testing.T) {
 			// TODO: Delete this test and enable the test above when the fix has been implemented in the prod code.
 			finding:     createFindingWithMultipleDependencyPaths(t, "goof@1.0.0", []string{"lodash@4.17.20"}, []string{"other-pkg@1.0.0"}),
 			expected:    []string{"goof@1.0.0", "lodash@4.17.20"}, // Wrong: should return both paths, but currently only returns first
-			description: "With the current incorrect behaviour, should return only the first path when multiple exist. If this bug has been fixed, please delete this test and enable the tests above.",
+			description: "With the current incorrect behavior, should return only the first path when multiple exist. If this bug has been fixed, please delete this test and enable the tests above.",
 		},
 		{
 			name:        "Malformed data: finding with empty evidence array",
@@ -437,10 +437,10 @@ func Test_getIntroducingFinding(t *testing.T) {
 		{
 			name: "TODO: vuln-pkg as both direct and transitive dependency - should return findings for all unique direct deps",
 			findings: []*testapi.FindingData{
-				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"vuln-pkg@1.0.0"}),                                // vuln-pkg is direct
-				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"other-pkg@1.0.0", "vuln-pkg@1.0.0"}),          // vuln-pkg via other-pkg
+				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"vuln-pkg@1.0.0"}),                                     // vuln-pkg is direct
+				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"other-pkg@1.0.0", "vuln-pkg@1.0.0"}),                  // vuln-pkg via other-pkg
 				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"other-pkg@1.0.0", "sub-pkg@1.0.0", "vuln-pkg@1.0.0"}), // another path via other-pkg
-				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"another-pkg@1.0.0", "vuln-pkg@1.0.0"}),       // vuln-pkg via another-pkg
+				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"another-pkg@1.0.0", "vuln-pkg@1.0.0"}),                // vuln-pkg via another-pkg
 			},
 			problemPkgName: "vuln-pkg",
 			expectedIndex:  0, // TODO: Change to expectedIndexes []int{0, 1, 3} when function signature changes - includes vuln-pkg as direct dep AND other-pkg AND another-pkg
@@ -448,7 +448,7 @@ func Test_getIntroducingFinding(t *testing.T) {
 			skipTestReason: "Prod code needs to be updated to return multiple findings (one per unique direct dependency), not just the first one (FIXME in prod code first).",
 		},
 		{
-			name: "Wrong behaviour: multiple transitive paths through different direct deps - returns first finding only",
+			name: "Wrong behavior: multiple transitive paths through different direct deps - returns first finding only",
 			// TODO: Delete this test and enable the test above when the fix has been implemented in the prod code.
 			findings: []*testapi.FindingData{
 				createFindingWithDependencyPath(t, "goof@1.0.0", []string{"other-pkg@1.0.0", "lodash@4.17.4"}),
@@ -456,7 +456,7 @@ func Test_getIntroducingFinding(t *testing.T) {
 			},
 			problemPkgName: "lodash",
 			expectedIndex:  0,
-			description:    "With the current incorrect behaviour, should return only first finding when multiple direct dependencies transitively lead to vulnerable package. If this bug has been fixed, please delete this test and enable the tests above.",
+			description:    "With the current incorrect behavior, should return only first finding when multiple direct dependencies transitively lead to vulnerable package. If this bug has been fixed, please delete this test and enable the tests above.",
 		},
 		{
 			name: "Malformed data: dependency path with only root - returns first finding gracefully",
@@ -586,25 +586,25 @@ func Test_processIssue_CodeActionGeneration(t *testing.T) {
 		expectCodeActions   bool
 	}{
 		{
-			name:               "WithFix_FFEnabled_HasCodeActions",
-			quickFixEnabled:    true,
-			fixVersions:        []string{"4.17.21"}, // fixed version available
+			name:                "WithFix_FFEnabled_HasCodeActions",
+			quickFixEnabled:     true,
+			fixVersions:         []string{"4.17.21"}, // fixed version available
 			expectedRemediation: "Upgrade to lodash@4.17.21",
-			expectCodeActions:  true,
+			expectCodeActions:   true,
 		},
 		{
-			name:               "WithFix_FFDisabled_NoCodeActions",
-			quickFixEnabled:    false,
-			fixVersions:        []string{"4.17.21"}, // fixed version available
+			name:                "WithFix_FFDisabled_NoCodeActions",
+			quickFixEnabled:     false,
+			fixVersions:         []string{"4.17.21"}, // fixed version available
 			expectedRemediation: "Upgrade to lodash@4.17.21",
-			expectCodeActions:  false,
+			expectCodeActions:   false,
 		},
 		{
-			name:               "NoFix_NoCodeActions",
-			quickFixEnabled:    true, // FF enabled to prove no quick-fix even then
-			fixVersions:        []string{}, // no fix available
+			name:                "NoFix_NoCodeActions",
+			quickFixEnabled:     true,       // FF enabled to prove no quick-fix even then
+			fixVersions:         []string{}, // no fix available
 			expectedRemediation: "No remediation advice available",
-			expectCodeActions:  false,
+			expectCodeActions:   false,
 		},
 	}
 
