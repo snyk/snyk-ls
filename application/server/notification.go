@@ -97,6 +97,9 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		case types.LspFolderConfigsParam:
 			notifier(c, srv, "$/snyk.folderConfigs", params)
 			logger.Debug().Any("folderConfig", params).Msg("sending folderConfig to client")
+		case types.LspConfiguration:
+			notifier(c, srv, "$/snyk.configuration", params)
+			logger.Debug().Msg("sending global configuration to client")
 		case types.AuthenticationParams:
 			notifier(c, srv, "$/snyk.hasAuthenticated", params)
 			logger.Debug().Msg("sending token")

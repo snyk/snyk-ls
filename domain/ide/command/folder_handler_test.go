@@ -72,12 +72,24 @@ func Test_sendStoredFolderConfigs_SendsNotification(t *testing.T) {
 
 	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
 
-	// Verify notification was sent
+	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
-	folderConfigsParam, ok := messages[0].(types.LspFolderConfigsParam)
-	require.True(t, ok, "Expected LspFolderConfigsParam notification")
+	// Find the folder configs notification (order not guaranteed)
+	var folderConfigsParam *types.LspFolderConfigsParam
+	var hasGlobalConfig bool
+	for _, msg := range messages {
+		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
+			folderConfigsParam = &fc
+		}
+		if _, ok := msg.(types.LspConfiguration); ok {
+			hasGlobalConfig = true
+		}
+	}
+
+	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfiguration notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
 	require.NotNil(t, folderConfigsParam.FolderConfigs[0].PreferredOrg)
 	assert.Equal(t, "test-org", *folderConfigsParam.FolderConfigs[0].PreferredOrg, "Notification should contain correct organization")
@@ -153,12 +165,24 @@ func Test_sendStoredFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T
 	// Don't populate cache - AutoDeterminedOrg should remain empty
 	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
 
-	// Verify notification was sent
+	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
-	folderConfigsParam, ok := messages[0].(types.LspFolderConfigsParam)
-	require.True(t, ok, "Expected LspFolderConfigsParam notification")
+	// Find the folder configs notification (order not guaranteed)
+	var folderConfigsParam *types.LspFolderConfigsParam
+	var hasGlobalConfig bool
+	for _, msg := range messages {
+		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
+			folderConfigsParam = &fc
+		}
+		if _, ok := msg.(types.LspConfiguration); ok {
+			hasGlobalConfig = true
+		}
+	}
+
+	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfiguration notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
 	// AutoDeterminedOrg should be nil when cache is empty
 	assert.Nil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be nil when cache is empty")
@@ -189,12 +213,24 @@ func Test_sendStoredFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing
 
 	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
 
-	// Verify notification was sent
+	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
-	folderConfigsParam, ok := messages[0].(types.LspFolderConfigsParam)
-	require.True(t, ok, "Expected LspFolderConfigsParam notification")
+	// Find the folder configs notification (order not guaranteed)
+	var folderConfigsParam *types.LspFolderConfigsParam
+	var hasGlobalConfig bool
+	for _, msg := range messages {
+		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
+			folderConfigsParam = &fc
+		}
+		if _, ok := msg.(types.LspConfiguration); ok {
+			hasGlobalConfig = true
+		}
+	}
+
+	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfiguration notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
 	require.NotNil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg)
 	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
@@ -239,12 +275,24 @@ func Test_sendStoredFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing
 
 	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
 
-	// Verify notification was sent with both folders
+	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
-	folderConfigsParam, ok := messages[0].(types.LspFolderConfigsParam)
-	require.True(t, ok, "Expected LspFolderConfigsParam notification")
+	// Find the folder configs notification (order not guaranteed)
+	var folderConfigsParam *types.LspFolderConfigsParam
+	var hasGlobalConfig bool
+	for _, msg := range messages {
+		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
+			folderConfigsParam = &fc
+		}
+		if _, ok := msg.(types.LspConfiguration); ok {
+			hasGlobalConfig = true
+		}
+	}
+
+	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfiguration notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 2)
 
 	// Verify each folder has its own AutoDeterminedOrg (order is not guaranteed due to map iteration)

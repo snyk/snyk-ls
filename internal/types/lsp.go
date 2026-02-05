@@ -600,6 +600,48 @@ type LspFolderConfigsParam struct {
 	FolderConfigs []LspFolderConfig `json:"folderConfigs"`
 }
 
+// LspConfiguration is the payload for $/snyk.configuration notification.
+// Contains global/machine-wide settings with effective values.
+// This mirrors what IDE sends during initialization (Settings struct),
+// allowing IDE to persist settings that may have been updated by LDX-Sync.
+// Only includes fields that IDEs send and would want to persist.
+type LspConfiguration struct {
+	// Authentication & API
+	Token                   string               `json:"token,omitempty"`
+	Endpoint                string               `json:"endpoint,omitempty"`
+	Organization            string               `json:"organization,omitempty"`
+	AuthenticationMethod    AuthenticationMethod `json:"authenticationMethod,omitempty"`
+	AutomaticAuthentication string               `json:"automaticAuthentication,omitempty"`
+	Insecure                string               `json:"insecure,omitempty"`
+
+	// CLI settings
+	CliPath                     string `json:"cliPath,omitempty"`
+	ManageBinariesAutomatically string `json:"manageBinariesAutomatically,omitempty"`
+
+	// Product enablement (global defaults)
+	ActivateSnykOpenSource   string `json:"activateSnykOpenSource,omitempty"`
+	ActivateSnykCode         string `json:"activateSnykCode,omitempty"`
+	ActivateSnykIac          string `json:"activateSnykIac,omitempty"`
+	ActivateSnykCodeSecurity string `json:"activateSnykCodeSecurity,omitempty"`
+	ActivateSnykCodeQuality  string `json:"activateSnykCodeQuality,omitempty"`
+
+	// Scan & filtering settings
+	ScanningMode        string            `json:"scanningMode,omitempty"`
+	EnableDeltaFindings string            `json:"enableDeltaFindings,omitempty"`
+	FilterSeverity      *SeverityFilter   `json:"filterSeverity,omitempty"`
+	RiskScoreThreshold  *int              `json:"riskScoreThreshold,omitempty"`
+	IssueViewOptions    *IssueViewOptions `json:"issueViewOptions,omitempty"`
+
+	// Feature flags
+	EnableTrustedFoldersFeature      string `json:"enableTrustedFoldersFeature,omitempty"`
+	SendErrorReports                 string `json:"sendErrorReports,omitempty"`
+	EnableSnykLearnCodeActions       string `json:"enableSnykLearnCodeActions,omitempty"`
+	EnableSnykOSSQuickFixCodeActions string `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
+	EnableSnykOpenBrowserActions     string `json:"enableSnykOpenBrowserActions,omitempty"`
+
+	// NOTE: FolderConfigs is NOT included - sent via $/snyk.folderConfigs
+}
+
 type Pair struct {
 	First  any `json:"first"`
 	Second any `json:"second"`

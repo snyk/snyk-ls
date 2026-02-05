@@ -99,6 +99,61 @@ func sendStoredFolderConfigs(c *config.Config, notifier noti.Notifier, featureFl
 		return
 	}
 	notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspFolderConfigs})
+
+	// Also send global configuration via $/snyk.configuration
+	lspConfig := buildLspConfiguration(c)
+	notifier.Send(lspConfig)
+}
+
+// buildLspConfiguration creates an LspConfiguration from the current config settings.
+// This is sent via $/snyk.configuration to allow IDEs to persist global settings.
+func buildLspConfiguration(c *config.Config) types.LspConfiguration {
+	// Get values from config getters
+	filterSeverity := c.FilterSeverity()
+	riskScoreThreshold := c.RiskScoreThreshold()
+	issueViewOptions := c.IssueViewOptions()
+
+	lspConfig := types.LspConfiguration{
+		// Authentication & API
+		Token:                   c.Token(),
+		Endpoint:                c.Endpoint(),
+		Organization:            c.Organization(),
+		AuthenticationMethod:    c.AuthenticationMethod(),
+		AutomaticAuthentication: boolToString(c.AutomaticAuthentication()),
+
+		// CLI settings
+		CliPath:                     c.CliSettings().Path(),
+		ManageBinariesAutomatically: boolToString(c.ManageBinariesAutomatically()),
+
+		// Product enablement (global defaults)
+		ActivateSnykOpenSource:   boolToString(c.IsSnykOssEnabled()),
+		ActivateSnykCode:         boolToString(c.IsSnykCodeEnabled()),
+		ActivateSnykIac:          boolToString(c.IsSnykIacEnabled()),
+		ActivateSnykCodeSecurity: boolToString(c.IsSnykCodeSecurityEnabled()),
+
+		// Scan & filtering settings
+		ScanningMode:       boolToString(c.IsAutoScanEnabled()),
+		FilterSeverity:     &filterSeverity,
+		RiskScoreThreshold: &riskScoreThreshold,
+		IssueViewOptions:   &issueViewOptions,
+
+		// Feature flags
+		EnableTrustedFoldersFeature:      boolToString(c.IsTrustedFolderFeatureEnabled()),
+		SendErrorReports:                 boolToString(c.IsErrorReportingEnabled()),
+		EnableSnykLearnCodeActions:       boolToString(c.IsSnykLearnCodeActionsEnabled()),
+		EnableSnykOSSQuickFixCodeActions: boolToString(c.IsSnykOSSQuickFixCodeActionsEnabled()),
+		EnableSnykOpenBrowserActions:     boolToString(c.IsSnykOpenBrowserActionEnabled()),
+	}
+
+	return lspConfig
+}
+
+// boolToString converts a boolean to "true" or "false" string
+func boolToString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // MigrateStoredFolderConfigOrgSettings applies the organization settings to a folder config during migration
