@@ -30,6 +30,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+var (
+	getTestResultsFromWorkflowData = ufm.GetTestResultsFromWorkflowData
+	convertTestResultToIssuesFn    = convertTestResultToIssues
+)
+
 func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath, cmd []string, workDir types.FilePath, env gotenv.Env) ([]workflow.Data, error) {
 	c := cliScanner.config
 	logger := c.Logger().With().
@@ -102,12 +107,14 @@ func processOsTestWorkFlowData(
 	var issues []types.Issue
 	var err error
 	for _, data := range scanOutput {
-		testResults := ufm.GetTestResultsFromWorkflowData(data)
+		testResults := getTestResultsFromWorkflowData(data)
 		for _, testResult := range testResults {
-			issues, err = convertTestResultToIssues(ctx, testResult, packageIssueCache)
+			var testIssues []types.Issue
+			testIssues, err = convertTestResultToIssuesFn(ctx, testResult, packageIssueCache)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't convert test result to issues: %w", err)
 			}
+			issues = append(issues, testIssues...)
 		}
 	}
 	return issues, nil

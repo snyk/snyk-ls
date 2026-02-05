@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
@@ -486,6 +487,38 @@ func TestCLIScanner_ostestScan_SetsSubprocessEnvironment(t *testing.T) {
 	capturedEnv := capturedConfig.GetStringSlice(configuration.SUBPROCESS_ENVIRONMENT)
 	assert.Contains(t, capturedEnv, "SIMPLE=x")
 	assert.Contains(t, capturedEnv, "MULTI=line1\nline2")
+}
+
+func Test_processOsTestWorkFlowData_AggregatesIssues(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctx := ctx2.NewContextWithLogger(t.Context(), c.Logger())
+
+	originalGet := getTestResultsFromWorkflowData
+	originalConvert := convertTestResultToIssuesFn
+	t.Cleanup(func() {
+		getTestResultsFromWorkflowData = originalGet
+		convertTestResultToIssuesFn = originalConvert
+	})
+
+	getTestResultsFromWorkflowData = func(_ workflow.Data) []testapi.TestResult {
+		return []testapi.TestResult{nil, nil}
+	}
+
+	issue1 := testutil.NewMockIssue("id1", types.FilePath("path1"))
+	issue2 := testutil.NewMockIssue("id2", types.FilePath("path2"))
+	callCount := 0
+	convertTestResultToIssuesFn = func(_ context.Context, _ testapi.TestResult, _ map[string][]types.Issue) ([]types.Issue, error) {
+		callCount++
+		if callCount == 1 {
+			return []types.Issue{issue1}, nil
+		}
+		return []types.Issue{issue2}, nil
+	}
+
+	data := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "payload"), "application/json", []byte("{}"))
+	issues, err := processOsTestWorkFlowData(ctx, []workflow.Data{data}, map[string][]types.Issue{})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []types.Issue{issue1, issue2}, issues)
 }
 
 func getLearnMock(t *testing.T) learn.Service {

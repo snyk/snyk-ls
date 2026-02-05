@@ -25,7 +25,6 @@ import (
 
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -42,15 +41,16 @@ const (
 	DontTrust = "Don't trust folders"
 )
 
-func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service) {
+func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, ldxSyncService LdxSyncService) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	sendFolderConfigs(c, notifier, featureFlagService)
+	sendFolderConfigs(c, notifier, featureFlagService, ldxSyncService)
+
 	HandleUntrustedFolders(ctx, c, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
 }
 
-func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service) {
+func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, ldxSyncService LdxSyncService) {
 	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
 	var folderConfigs []types.FolderConfig
@@ -68,7 +68,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 
 		// Always update AutoDeterminedOrg from LDX-Sync (even for folders where OrgSetByUser is true)
 		// This ensures we always know what LDX-Sync recommends, regardless of whether the user has opted out
-		org, err := GetBestOrgFromLdxSync(c, folderConfig)
+		org, err := ldxSyncService.ResolveOrg(c, folderConfig.FolderPath)
 		if err != nil {
 			logger.Err(err).Msg("unable to resolve organization, continuing...")
 		} else {
@@ -96,18 +96,6 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 		return
 	}
 	notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
-}
-
-func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (ldx_sync_config.Organization, error) {
-	engine := c.Engine()
-	gafConfig := engine.GetConfiguration()
-
-	resolver := Service().GetOrgResolver()
-	if resolver != nil {
-		return resolver.ResolveOrganization(gafConfig, engine, c.Logger(), string(folderConfig.FolderPath))
-	}
-	fallbackOrg := gafConfig.GetString(configuration.ORGANIZATION)
-	return ldx_sync_config.Organization{Id: fallbackOrg}, nil
 }
 
 // MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration

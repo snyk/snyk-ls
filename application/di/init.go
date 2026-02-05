@@ -77,7 +77,7 @@ var (
 	scanStateAggregator         scanstates.Aggregator
 	scanStateChangeEmitter      scanstates.ScanStateChangeEmitter
 	snykCli                     cli.Executor
-	orgResolver                 types.OrgResolver
+	ldxSyncService              command.LdxSyncService
 )
 
 func Init() {
@@ -92,6 +92,7 @@ func Init() {
 func initDomain(c *config.Config) {
 	hoverService = hover.NewDefaultService(c)
 	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	ldxSyncService = command.NewLdxSyncService()
 }
 
 func initInfrastructure(c *config.Config) {
@@ -141,8 +142,7 @@ func initApplication(c *config.Config) {
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService)
-	orgResolver = command.NewLDXSyncOrgResolver()
-	command.SetService(command.NewService(authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, orgResolver))
+	command.SetService(command.NewService(authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService))
 }
 
 /*
@@ -232,4 +232,16 @@ func FeatureFlagService() featureflag.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return featureFlagService
+}
+
+func LdxSyncService() command.LdxSyncService {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return ldxSyncService
+}
+
+func SetLdxSyncService(service command.LdxSyncService) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	ldxSyncService = service
 }
