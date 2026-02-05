@@ -1054,13 +1054,23 @@ func Test_NewFolder_NormalizesPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.windowsOnly {
 				testsupport.OnlyOnWindows(t, "Windows-specific path normalization test")
+			} else {
+				testsupport.NotOnWindows(t, "Unix-specific path normalization test")
 			}
 			c := testutil.UnitTest(t)
 
-			f := NewFolder(c, tt.inputPath, "test", scanner.NewTestScanner(),
-				hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
-				notification.NewMockNotifier(), persistence.NewNopScanPersister(),
-				scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+			f := NewFolder(
+				c,
+				tt.inputPath,
+				"test",
+				scanner.NewTestScanner(),
+				hover.NewFakeHoverService(),
+				scanner.NewMockScanNotifier(),
+				notification.NewMockNotifier(),
+				persistence.NewNopScanPersister(),
+				scanstates.NewNoopStateAggregator(),
+				featureflag.NewFakeService(),
+			)
 
 			assert.Equal(t, tt.expected, f.Path())
 		})
