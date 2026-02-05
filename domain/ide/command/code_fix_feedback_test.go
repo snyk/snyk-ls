@@ -163,7 +163,8 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with multiple folders
-	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/project1"), types.FilePath("/workspace/project2"), types.FilePath("/workspace/project3"))
+	project3Path := types.FilePath(filepath.Clean("/workspace/project3"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/project1"), types.FilePath("/workspace/project2"), project3Path)
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -203,5 +204,5 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 
 	result3, err := cmd.getFolderFromFixId(c, testFixId3)
 	require.NoError(t, err)
-	assert.Equal(t, types.FilePath("/workspace/project3"), result3)
+	assert.Equal(t, project3Path, result3)
 }
