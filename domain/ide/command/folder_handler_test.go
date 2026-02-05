@@ -76,12 +76,13 @@ func Test_sendStoredFolderConfigs_SendsNotification(t *testing.T) {
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
 
-	folderConfigsParam, ok := messages[0].(types.StoredFolderConfigsParam)
-	require.True(t, ok, "Expected StoredFolderConfigsParam notification")
-	require.Len(t, folderConfigsParam.StoredFolderConfigs, 1)
-	assert.Equal(t, "test-org", folderConfigsParam.StoredFolderConfigs[0].PreferredOrg, "Notification should contain correct organization")
-	assert.True(t, folderConfigsParam.StoredFolderConfigs[0].OrgSetByUser, "Notification should reflect OrgSetByUser flag")
-	assert.Equal(t, expectedOrgId, folderConfigsParam.StoredFolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
+	folderConfigsParam, ok := messages[0].(types.LspFolderConfigsParam)
+	require.True(t, ok, "Expected LspFolderConfigsParam notification")
+	require.Len(t, folderConfigsParam.FolderConfigs, 1)
+	require.NotNil(t, folderConfigsParam.FolderConfigs[0].PreferredOrg)
+	assert.Equal(t, "test-org", *folderConfigsParam.FolderConfigs[0].PreferredOrg, "Notification should contain correct organization")
+	require.NotNil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg)
+	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
 func Test_sendStoredFolderConfigs_NoFolders_NoNotification(t *testing.T) {
@@ -156,11 +157,11 @@ func Test_sendStoredFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
 
-	folderConfigsParam, ok := messages[0].(types.StoredFolderConfigsParam)
-	require.True(t, ok, "Expected StoredFolderConfigsParam notification")
-	require.Len(t, folderConfigsParam.StoredFolderConfigs, 1)
-	// AutoDeterminedOrg should be empty when cache is empty
-	assert.Empty(t, folderConfigsParam.StoredFolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be empty when cache is empty")
+	folderConfigsParam, ok := messages[0].(types.LspFolderConfigsParam)
+	require.True(t, ok, "Expected LspFolderConfigsParam notification")
+	require.Len(t, folderConfigsParam.FolderConfigs, 1)
+	// AutoDeterminedOrg should be nil when cache is empty
+	assert.Nil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be nil when cache is empty")
 }
 
 // Test sendStoredFolderConfigs when cache has org ID
@@ -192,10 +193,11 @@ func Test_sendStoredFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
 
-	folderConfigsParam, ok := messages[0].(types.StoredFolderConfigsParam)
-	require.True(t, ok, "Expected StoredFolderConfigsParam notification")
-	require.Len(t, folderConfigsParam.StoredFolderConfigs, 1)
-	assert.Equal(t, expectedOrgId, folderConfigsParam.StoredFolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
+	folderConfigsParam, ok := messages[0].(types.LspFolderConfigsParam)
+	require.True(t, ok, "Expected LspFolderConfigsParam notification")
+	require.Len(t, folderConfigsParam.FolderConfigs, 1)
+	require.NotNil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg)
+	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
 // Test sendStoredFolderConfigs with multiple folders and different org configurations
@@ -241,9 +243,9 @@ func Test_sendStoredFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
 
-	folderConfigsParam, ok := messages[0].(types.StoredFolderConfigsParam)
-	require.True(t, ok, "Expected StoredFolderConfigsParam notification")
-	require.Len(t, folderConfigsParam.StoredFolderConfigs, 2)
+	folderConfigsParam, ok := messages[0].(types.LspFolderConfigsParam)
+	require.True(t, ok, "Expected LspFolderConfigsParam notification")
+	require.Len(t, folderConfigsParam.FolderConfigs, 2)
 
 	// Verify each folder has its own AutoDeterminedOrg (order is not guaranteed due to map iteration)
 	// Use PathKey to normalize paths for cross-platform consistency (Windows short paths vs full paths)
@@ -251,11 +253,11 @@ func Test_sendStoredFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing
 		types.PathKey(folderPaths[0]): "org-id-for-folder-0",
 		types.PathKey(folderPaths[1]): "org-id-for-folder-1",
 	}
-	for _, fc := range folderConfigsParam.StoredFolderConfigs {
+	for _, fc := range folderConfigsParam.FolderConfigs {
 		expectedOrg, found := expectedOrgs[types.PathKey(fc.FolderPath)]
 		require.True(t, found, "Unexpected folder path: %s", fc.FolderPath)
-		assert.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for folder %s", fc.FolderPath)
-		assert.Equal(t, expectedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be folder-specific for %s", fc.FolderPath)
+		require.NotNil(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for folder %s", fc.FolderPath)
+		assert.Equal(t, expectedOrg, *fc.AutoDeterminedOrg, "AutoDeterminedOrg should be folder-specific for %s", fc.FolderPath)
 	}
 }
 

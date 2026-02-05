@@ -54,7 +54,7 @@ func sendStoredFolderConfigs(c *config.Config, notifier noti.Notifier, featureFl
 	logger := c.Logger().With().Str("method", "sendStoredFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
 	resolver := c.GetConfigResolver()
-	var folderConfigs []types.StoredFolderConfig
+	var lspFolderConfigs []types.LspFolderConfig
 
 	for _, folder := range c.Workspace().Folders() {
 		storedStoredFolderConfig, err2 := storedconfig.GetOrCreateStoredFolderConfig(gafConfig, folder.Path(), &logger)
@@ -88,18 +88,17 @@ func sendStoredFolderConfigs(c *config.Config, notifier noti.Notifier, featureFl
 			}
 		}
 
-		// Compute EffectiveConfig for org-scope settings so IDE knows current effective values
-		if resolver != nil {
-			folderConfig.EffectiveConfig = computeEffectiveConfig(resolver, folderConfig)
+		// Convert to LspFolderConfig with effective values computed by resolver
+		lspConfig := folderConfig.ToLspFolderConfig(resolver)
+		if lspConfig != nil {
+			lspFolderConfigs = append(lspFolderConfigs, *lspConfig)
 		}
-
-		folderConfigs = append(folderConfigs, folderConfig.SanitizeForIDE())
 	}
 
-	if folderConfigs == nil {
+	if lspFolderConfigs == nil {
 		return
 	}
-	notifier.Send(types.StoredFolderConfigsParam{StoredFolderConfigs: folderConfigs})
+	notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspFolderConfigs})
 }
 
 // MigrateStoredFolderConfigOrgSettings applies the organization settings to a folder config during migration

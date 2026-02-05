@@ -437,15 +437,15 @@ func sendStoredFolderConfigUpdateIfNeeded(c *config.Config, notifier notificatio
 	// Don't send folder configs on initialize, since initialized will always send them.
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
 		resolver := c.GetConfigResolver()
-		configsForIDE := make([]types.StoredFolderConfig, len(folderConfigs))
-		for i, fc := range folderConfigs {
-			// Compute EffectiveConfig for org-scope settings so IDE knows current effective values
-			if resolver != nil {
-				fc.EffectiveConfig = computeEffectiveConfigForFolder(resolver, &fc)
+		lspConfigs := make([]types.LspFolderConfig, 0, len(folderConfigs))
+		for _, fc := range folderConfigs {
+			// Convert to LspFolderConfig with effective values computed by resolver
+			lspConfig := fc.ToLspFolderConfig(resolver)
+			if lspConfig != nil {
+				lspConfigs = append(lspConfigs, *lspConfig)
 			}
-			configsForIDE[i] = fc.SanitizeForIDE()
 		}
-		notifier.Send(types.StoredFolderConfigsParam{StoredFolderConfigs: configsForIDE})
+		notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspConfigs})
 	}
 }
 
@@ -984,31 +984,6 @@ func updateMcpConfiguration(c *config.Config, settings types.Settings, triggerSo
 			mcpWorkflow.CallMcpConfigWorkflow(c, n, false, true)
 		}
 	}
-}
-
-// computeEffectiveConfigForFolder computes effective values for all org-scope settings
-// that can be displayed/edited in the HTML settings page
-func computeEffectiveConfigForFolder(resolver *types.ConfigResolver, fc *types.StoredFolderConfig) map[string]types.EffectiveValue {
-	effectiveConfig := make(map[string]types.EffectiveValue)
-
-	// Org-scope settings that can be overridden per-folder
-	orgScopeSettings := []string{
-		types.SettingEnabledSeverities,
-		types.SettingIssueViewOpenIssues,
-		types.SettingIssueViewIgnoredIssues,
-		types.SettingScanAutomatic,
-		types.SettingScanNetNew,
-		types.SettingSnykCodeEnabled,
-		types.SettingSnykOssEnabled,
-		types.SettingSnykIacEnabled,
-		types.SettingRiskScoreThreshold,
-	}
-
-	for _, settingName := range orgScopeSettings {
-		effectiveConfig[settingName] = resolver.GetEffectiveValue(settingName, fc)
-	}
-
-	return effectiveConfig
 }
 
 // propagateOrgScopedGlobalSettingsToStoredFolderConfigs propagates org-scoped global setting changes
