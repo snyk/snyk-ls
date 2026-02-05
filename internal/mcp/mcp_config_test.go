@@ -29,8 +29,8 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 	c.SetIdeName("test-ide")
 	cleanA := filepath.Clean("/trusted/a")
 	filePathA := types.FilePath(cleanA)
-	cleanB := "/trusted/b"
-	filePathB := types.FilePath(filepath.Clean(cleanB))
+	cleanB := filepath.Clean("/trusted/b")
+	filePathB := types.FilePath(cleanB)
 	c.SetTrustedFolders([]types.FilePath{filePathA, filePathB})
 	c.SetAutoConfigureMcpEnabled(true)
 	c.SetSecureAtInceptionExecutionFrequency(SecureAtInceptionSmartScan)
