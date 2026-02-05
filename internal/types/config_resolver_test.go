@@ -1,5 +1,5 @@
 /*
- * © 2022-2026 Snyk Limited
+ * © 2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,6 +61,30 @@ func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
 		assert.Nil(t, value)
 		assert.Equal(t, ConfigSourceDefault, source)
 	})
+
+	t.Run("returns default source when global string value is empty", func(t *testing.T) {
+		// Create settings with empty string for ActivateSnykCode (not set by user)
+		emptySettings := &Settings{
+			ActivateSnykCode: "", // Empty string should be treated as "not set"
+		}
+		emptyResolver := NewConfigResolver(nil, emptySettings, nil, &logger)
+
+		value, source := emptyResolver.GetValue(SettingSnykCodeEnabled, nil)
+		assert.Nil(t, value)
+		assert.Equal(t, ConfigSourceDefault, source, "empty string should return ConfigSourceDefault, not ConfigSourceGlobal")
+	})
+
+	t.Run("returns global source when global string value is explicitly set", func(t *testing.T) {
+		// Create settings with explicit value
+		explicitSettings := &Settings{
+			ActivateSnykCode: "true",
+		}
+		explicitResolver := NewConfigResolver(nil, explicitSettings, nil, &logger)
+
+		value, source := explicitResolver.GetValue(SettingSnykCodeEnabled, nil)
+		assert.Equal(t, "true", value)
+		assert.Equal(t, ConfigSourceGlobal, source)
+	})
 }
 
 func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
@@ -108,9 +132,8 @@ func TestConfigResolver_GetValue_OrgScope_NoLDXSync(t *testing.T) {
 	resolver := NewConfigResolver(nil, globalSettings, configProvider, &logger)
 
 	t.Run("returns global value when no LDX-Sync cache", func(t *testing.T) {
-		value, source := resolver.GetValue(SettingEnabledProducts, folderConfig)
-		products := value.([]string)
-		assert.Contains(t, products, "code")
+		value, source := resolver.GetValue(SettingSnykCodeEnabled, folderConfig)
+		assert.Equal(t, "true", value)
 		assert.Equal(t, ConfigSourceGlobal, source)
 	})
 
@@ -256,7 +279,7 @@ func TestConfigResolver_IsLocked(t *testing.T) {
 	ldxCache := NewLDXSyncConfigCache()
 	orgConfig := NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(SettingEnabledSeverities, []string{"critical"}, true, false, "group")
-	orgConfig.SetField(SettingEnabledProducts, []string{"code"}, false, false, "org")
+	orgConfig.SetField(SettingSnykCodeEnabled, true, false, false, "org")
 	ldxCache.SetOrgConfig(orgConfig)
 
 	folderConfig := &FolderConfig{
@@ -272,7 +295,7 @@ func TestConfigResolver_IsLocked(t *testing.T) {
 	})
 
 	t.Run("returns false for unlocked setting", func(t *testing.T) {
-		assert.False(t, resolver.IsLocked(SettingEnabledProducts, folderConfig))
+		assert.False(t, resolver.IsLocked(SettingSnykCodeEnabled, folderConfig))
 	})
 
 	t.Run("returns false for missing setting", func(t *testing.T) {
@@ -290,7 +313,7 @@ func TestConfigResolver_IsEnforced(t *testing.T) {
 	ldxCache := NewLDXSyncConfigCache()
 	orgConfig := NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(SettingEnabledSeverities, []string{"critical"}, false, true, "group")
-	orgConfig.SetField(SettingEnabledProducts, []string{"code"}, false, false, "org")
+	orgConfig.SetField(SettingSnykCodeEnabled, true, false, false, "org")
 	ldxCache.SetOrgConfig(orgConfig)
 
 	folderConfig := &FolderConfig{
@@ -306,7 +329,7 @@ func TestConfigResolver_IsEnforced(t *testing.T) {
 	})
 
 	t.Run("returns false for non-enforced setting", func(t *testing.T) {
-		assert.False(t, resolver.IsEnforced(SettingEnabledProducts, folderConfig))
+		assert.False(t, resolver.IsEnforced(SettingSnykCodeEnabled, folderConfig))
 	})
 }
 
@@ -402,7 +425,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 	ldxCache := NewLDXSyncConfigCache()
 	orgConfig := NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(SettingEnabledSeverities, []string{"critical"}, false, false, "tenant")
-	orgConfig.SetField(SettingEnabledProducts, []string{"code"}, true, false, "group")
+	orgConfig.SetField(SettingSnykCodeEnabled, true, true, false, "group")
 	ldxCache.SetOrgConfig(orgConfig)
 
 	folderConfig := &FolderConfig{
@@ -422,9 +445,9 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 	})
 
 	t.Run("includes OriginScope for locked LDX-Sync value", func(t *testing.T) {
-		effectiveValue := resolver.GetEffectiveValue(SettingEnabledProducts, folderConfig)
+		effectiveValue := resolver.GetEffectiveValue(SettingSnykCodeEnabled, folderConfig)
 
-		assert.Equal(t, []string{"code"}, effectiveValue.Value)
+		assert.Equal(t, true, effectiveValue.Value)
 		assert.Equal(t, "ldx-sync-locked", effectiveValue.Source)
 		assert.Equal(t, "group", effectiveValue.OriginScope)
 	})
