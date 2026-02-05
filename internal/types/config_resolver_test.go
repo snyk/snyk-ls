@@ -1,5 +1,5 @@
 /*
- * © 2022-2026 Snyk Limited
+ * © 2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,6 +60,30 @@ func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
 		value, source := resolver.GetValue(SettingCodeEndpoint, nil)
 		assert.Nil(t, value)
 		assert.Equal(t, ConfigSourceDefault, source)
+	})
+
+	t.Run("returns default source when global string value is empty", func(t *testing.T) {
+		// Create settings with empty string for ActivateSnykCode (not set by user)
+		emptySettings := &Settings{
+			ActivateSnykCode: "", // Empty string should be treated as "not set"
+		}
+		emptyResolver := NewConfigResolver(nil, emptySettings, nil, &logger)
+
+		value, source := emptyResolver.GetValue(SettingSnykCodeEnabled, nil)
+		assert.Nil(t, value)
+		assert.Equal(t, ConfigSourceDefault, source, "empty string should return ConfigSourceDefault, not ConfigSourceGlobal")
+	})
+
+	t.Run("returns global source when global string value is explicitly set", func(t *testing.T) {
+		// Create settings with explicit value
+		explicitSettings := &Settings{
+			ActivateSnykCode: "true",
+		}
+		explicitResolver := NewConfigResolver(nil, explicitSettings, nil, &logger)
+
+		value, source := explicitResolver.GetValue(SettingSnykCodeEnabled, nil)
+		assert.Equal(t, "true", value)
+		assert.Equal(t, ConfigSourceGlobal, source)
 	})
 }
 

@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2026 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -307,8 +307,7 @@ func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMa
 		folderConfig = types.FolderConfig{FolderPath: path}
 	}
 
-	// Never trust the IDE for LS-managed fields - always use stored values
-	// These are managed by the LS and should not be overwritten by IDE
+	// These fields are managed by the LS and should not be overwritten by IDE
 	if storedConfig != nil {
 		folderConfig.FeatureFlags = storedConfig.FeatureFlags
 		folderConfig.SastSettings = storedConfig.SastSettings

@@ -1,5 +1,5 @@
 /*
- * © 2022-2025 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -867,7 +867,6 @@ func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
 
 // Deprecated use FolderOrganization(path) to get organization per folder
 func (c *Config) Organization() string {
-	// Get from GAF (may trigger API call if not set)
 	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
 }
 
@@ -1312,7 +1311,8 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 }
 
 // FolderConfig gets or creates a new folder config for the given folder path.
-// Will cause a rewrite to storage, for read-only operations, use FolderConfigReadOnly instead.
+// Can cause a rewrite to storage, for read-only operations where we know the stored data is complete, use
+// FolderConfigReadOnly instead.
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	folderConfig, err := storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
 	if err != nil {
@@ -1322,10 +1322,9 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	return folderConfig
 }
 
-// FolderConfigReadOnly returns the folder config for a path without writing to storage
-// or enriching from Git. This is suitable for read-only configuration checks.
-// If no config exists in storage, creates one in-memory with proper default initialization
-// (OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
+// FolderConfigReadOnly returns the folder config for a path without writing to storage or enriching from Git.
+// This is suitable for read-only configuration checks. If no config exists in storage, this creates one with default
+// values (OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
 func (c *Config) FolderConfigReadOnly(path types.FilePath) *types.FolderConfig {
 	folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
 		CreateIfNotExist: true,
@@ -1642,65 +1641,30 @@ func (c *Config) RiskScoreThresholdForFolder(folderConfig *types.FolderConfig) i
 // IssueViewOptionsForFolder returns the effective issue view options for a folder,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IssueViewOptionsForFolder(folderConfig *types.FolderConfig) types.IssueViewOptions {
+	result := c.IssueViewOptions() // base/fallback
+
 	resolver := c.GetConfigResolver()
 	if resolver == nil {
-		return c.IssueViewOptions() // fallback to global
+		return result
 	}
 
-	openIssues, openSource := resolver.GetValue(types.SettingIssueViewOpenIssues, folderConfig)
-	ignoredIssues, ignoredSource := resolver.GetValue(types.SettingIssueViewIgnoredIssues, folderConfig)
-
-	// Start with global config values as base
-	result := c.IssueViewOptions()
-
-	// Only override if resolver returned a non-default value (i.e., from LDX-Sync or user override)
-	if openSource != types.ConfigSourceDefault {
-		if open, ok := openIssues.(bool); ok {
+	// Only override if resolver returned a non-default value (i.e., from LDX-Sync or user override).
+	// Each field (Open/Ignored issues) can be independently overridden.
+	if val, source := resolver.GetValue(types.SettingIssueViewOpenIssues, folderConfig); source != types.ConfigSourceDefault {
+		if open, ok := val.(bool); ok {
 			result.OpenIssues = open
 		}
 	}
-	if ignoredSource != types.ConfigSourceDefault {
-		if ignored, ok := ignoredIssues.(bool); ok {
+	if val, source := resolver.GetValue(types.SettingIssueViewIgnoredIssues, folderConfig); source != types.ConfigSourceDefault {
+		if ignored, ok := val.(bool); ok {
 			result.IgnoredIssues = ignored
 		}
 	}
 	return result
 }
 
-// IsAutoScanEnabledForFolder returns whether automatic scanning is enabled for a folder,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) IsAutoScanEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	resolver := c.GetConfigResolver()
-	if resolver == nil {
-		return c.IsAutoScanEnabled() // fallback to global
-	}
-	val, source := resolver.GetValue(types.SettingScanAutomatic, folderConfig)
-	if source != types.ConfigSourceDefault {
-		if enabled, ok := val.(bool); ok {
-			return enabled
-		}
-	}
-	return c.IsAutoScanEnabled() // fallback to global
-}
-
-// IsDeltaFindingsEnabledForFolder returns whether delta findings is enabled for a folder,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) IsDeltaFindingsEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	resolver := c.GetConfigResolver()
-	if resolver == nil {
-		return c.IsDeltaFindingsEnabled() // fallback to global
-	}
-	val, source := resolver.GetValue(types.SettingScanNetNew, folderConfig)
-	if source != types.ConfigSourceDefault {
-		if enabled, ok := val.(bool); ok {
-			return enabled
-		}
-	}
-	return c.IsDeltaFindingsEnabled() // fallback to global
-}
-
-// isProductEnabledForFolder is a private helper to check product enablement for a folder.
-func (c *Config) isProductEnabledForFolder(folderConfig *types.FolderConfig, settingName string, fallback func() bool) bool {
+// isSettingEnabledForFolder is a private helper to resolve a boolean setting for a folder.
+func (c *Config) isSettingEnabledForFolder(folderConfig *types.FolderConfig, settingName string, fallback func() bool) bool {
 	resolver := c.GetConfigResolver()
 	if resolver == nil {
 		return fallback()
@@ -1714,26 +1678,38 @@ func (c *Config) isProductEnabledForFolder(folderConfig *types.FolderConfig, set
 	return fallback()
 }
 
+// IsAutoScanEnabledForFolder returns whether automatic scanning is enabled for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsAutoScanEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	return c.isSettingEnabledForFolder(folderConfig, types.SettingScanAutomatic, c.IsAutoScanEnabled)
+}
+
+// IsDeltaFindingsEnabledForFolder returns whether delta findings is enabled for a folder,
+// considering LDX-Sync org config and user overrides.
+func (c *Config) IsDeltaFindingsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	return c.isSettingEnabledForFolder(folderConfig, types.SettingScanNetNew, c.IsDeltaFindingsEnabled)
+}
+
 // IsSnykCodeEnabledForFolder returns whether Snyk Code is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykCodeEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return c.isProductEnabledForFolder(folderConfig, types.SettingSnykCodeEnabled, c.IsSnykCodeEnabled)
+	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykCodeEnabled, c.IsSnykCodeEnabled)
 }
 
 // IsSnykOssEnabledForFolder returns whether Snyk OSS is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykOssEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return c.isProductEnabledForFolder(folderConfig, types.SettingSnykOssEnabled, c.IsSnykOssEnabled)
+	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykOssEnabled, c.IsSnykOssEnabled)
 }
 
 // IsSnykIacEnabledForFolder returns whether Snyk IaC is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykIacEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return c.isProductEnabledForFolder(folderConfig, types.SettingSnykIacEnabled, c.IsSnykIacEnabled)
+	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykIacEnabled, c.IsSnykIacEnabled)
 }
 
 // IsSnykCodeSecurityEnabledForFolder returns whether Snyk Code Security is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykCodeSecurityEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return c.isProductEnabledForFolder(folderConfig, types.SettingSnykCodeEnabled, c.IsSnykCodeSecurityEnabled)
+	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykCodeEnabled, c.IsSnykCodeSecurityEnabled)
 }
