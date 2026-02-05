@@ -121,9 +121,9 @@ func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
 
-	folder1Path := types.FilePath("/test/folder1")
-	folder2Path := types.FilePath("/test/folder2")
-	folder3Path := types.FilePath("/test/folder3")
+	folder1Path := types.FilePath(filepath.Clean("/test/folder1"))
+	folder2Path := types.FilePath(filepath.Clean("/test/folder2"))
+	folder3Path := types.FilePath(filepath.Clean("/test/folder3"))
 
 	workspaceutil.SetupWorkspace(t, c, folder1Path, folder2Path, folder3Path)
 	folders := c.Workspace().Folders()
