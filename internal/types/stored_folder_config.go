@@ -210,43 +210,126 @@ func (fc *StoredFolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface
 	}
 
 	// Org-scope settings (computed via resolver)
+	// When sending to IDE, we set Present=true and Value to the effective value
 	if resolver != nil {
 		// Severity filter
 		if val := resolver.GetSeverityFilter(SettingEnabledSeverities, fc); val != nil {
-			lspConfig.EnabledSeverities = val
+			lspConfig.EnabledSeverities = NullableField[SeverityFilter]{Value: *val, Present: true}
 		}
 
 		// Risk score threshold
-		if threshold := resolver.GetInt(SettingRiskScoreThreshold, fc); threshold != 0 {
-			lspConfig.RiskScoreThreshold = &threshold
-		}
+		threshold := resolver.GetInt(SettingRiskScoreThreshold, fc)
+		lspConfig.RiskScoreThreshold = NullableField[int]{Value: threshold, Present: true}
 
 		// Scan settings
-		scanAuto := resolver.GetBool(SettingScanAutomatic, fc)
-		lspConfig.ScanAutomatic = &scanAuto
-
-		scanNetNew := resolver.GetBool(SettingScanNetNew, fc)
-		lspConfig.ScanNetNew = &scanNetNew
+		lspConfig.ScanAutomatic = NullableField[bool]{Value: resolver.GetBool(SettingScanAutomatic, fc), Present: true}
+		lspConfig.ScanNetNew = NullableField[bool]{Value: resolver.GetBool(SettingScanNetNew, fc), Present: true}
 
 		// Product enablement
-		codeEnabled := resolver.GetBool(SettingSnykCodeEnabled, fc)
-		lspConfig.SnykCodeEnabled = &codeEnabled
-
-		ossEnabled := resolver.GetBool(SettingSnykOssEnabled, fc)
-		lspConfig.SnykOssEnabled = &ossEnabled
-
-		iacEnabled := resolver.GetBool(SettingSnykIacEnabled, fc)
-		lspConfig.SnykIacEnabled = &iacEnabled
+		lspConfig.SnykCodeEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykCodeEnabled, fc), Present: true}
+		lspConfig.SnykOssEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykOssEnabled, fc), Present: true}
+		lspConfig.SnykIacEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykIacEnabled, fc), Present: true}
 
 		// Issue view options
-		openIssues := resolver.GetBool(SettingIssueViewOpenIssues, fc)
-		lspConfig.IssueViewOpenIssues = &openIssues
-
-		ignoredIssues := resolver.GetBool(SettingIssueViewIgnoredIssues, fc)
-		lspConfig.IssueViewIgnoredIssues = &ignoredIssues
+		lspConfig.IssueViewOpenIssues = NullableField[bool]{Value: resolver.GetBool(SettingIssueViewOpenIssues, fc), Present: true}
+		lspConfig.IssueViewIgnoredIssues = NullableField[bool]{Value: resolver.GetBool(SettingIssueViewIgnoredIssues, fc), Present: true}
 	}
 
 	return lspConfig
+}
+
+// ApplyLspUpdate applies changes from an LspFolderConfig using PATCH semantics.
+// For NullableField org-scope settings:
+// - Omitted (not present in JSON) = don't change
+// - Null (explicit null in JSON) = clear override (reset to default)
+// - Value (explicit value in JSON) = set override
+// For pointer fields (folder-scope):
+// - nil = don't change
+// - non-nil = set value
+// Returns true if any changes were made.
+func (fc *StoredFolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
+	if fc == nil || update == nil {
+		return false
+	}
+
+	changed := fc.applyFolderScopeUpdates(update)
+	changed = fc.applyOrgScopeUpdates(update) || changed
+
+	return changed
+}
+
+// applyFolderScopeUpdates applies folder-scope field updates (direct fields, not user overrides)
+func (fc *StoredFolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
+	changed := false
+
+	if update.BaseBranch != nil && *update.BaseBranch != fc.BaseBranch {
+		fc.BaseBranch = *update.BaseBranch
+		changed = true
+	}
+	if update.LocalBranches != nil {
+		fc.LocalBranches = update.LocalBranches
+		changed = true
+	}
+	if update.AdditionalParameters != nil {
+		fc.AdditionalParameters = update.AdditionalParameters
+		changed = true
+	}
+	if update.AdditionalEnv != nil && *update.AdditionalEnv != fc.AdditionalEnv {
+		fc.AdditionalEnv = *update.AdditionalEnv
+		changed = true
+	}
+	if update.ReferenceFolderPath != nil && *update.ReferenceFolderPath != fc.ReferenceFolderPath {
+		fc.ReferenceFolderPath = *update.ReferenceFolderPath
+		changed = true
+	}
+	if update.PreferredOrg != nil && *update.PreferredOrg != fc.PreferredOrg {
+		fc.PreferredOrg = *update.PreferredOrg
+		fc.OrgSetByUser = true
+		changed = true
+	}
+
+	return changed
+}
+
+// applyOrgScopeUpdates applies org-scope setting updates using NullableField PATCH semantics:
+// - Omitted = don't change
+// - Null = clear override (reset to default)
+// - Value = set override
+func (fc *StoredFolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
+	changed := false
+
+	// Helper to apply a NullableField update
+	applyNullable := func(field interface {
+		IsOmitted() bool
+		IsNull() bool
+		HasValue() bool
+	}, settingName string, getValue func() any) bool {
+		if field.IsOmitted() {
+			return false
+		}
+		if field.IsNull() {
+			if fc.HasUserOverride(settingName) {
+				fc.ResetToDefault(settingName)
+				return true
+			}
+			return false
+		}
+		// HasValue
+		fc.SetUserOverride(settingName, getValue())
+		return true
+	}
+
+	changed = applyNullable(&update.EnabledSeverities, SettingEnabledSeverities, func() any { return update.EnabledSeverities.Value }) || changed
+	changed = applyNullable(&update.RiskScoreThreshold, SettingRiskScoreThreshold, func() any { return update.RiskScoreThreshold.Value }) || changed
+	changed = applyNullable(&update.ScanAutomatic, SettingScanAutomatic, func() any { return update.ScanAutomatic.Value }) || changed
+	changed = applyNullable(&update.ScanNetNew, SettingScanNetNew, func() any { return update.ScanNetNew.Value }) || changed
+	changed = applyNullable(&update.SnykCodeEnabled, SettingSnykCodeEnabled, func() any { return update.SnykCodeEnabled.Value }) || changed
+	changed = applyNullable(&update.SnykOssEnabled, SettingSnykOssEnabled, func() any { return update.SnykOssEnabled.Value }) || changed
+	changed = applyNullable(&update.SnykIacEnabled, SettingSnykIacEnabled, func() any { return update.SnykIacEnabled.Value }) || changed
+	changed = applyNullable(&update.IssueViewOpenIssues, SettingIssueViewOpenIssues, func() any { return update.IssueViewOpenIssues.Value }) || changed
+	changed = applyNullable(&update.IssueViewIgnoredIssues, SettingIssueViewIgnoredIssues, func() any { return update.IssueViewIgnoredIssues.Value }) || changed
+
+	return changed
 }
 
 // StoredFolderConfigsParam is used internally for storage operations.

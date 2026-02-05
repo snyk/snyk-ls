@@ -244,14 +244,14 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 
 func updateStoredFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
 	notifier := di.Notifier()
-	incomingMap := buildIncomingConfigMap(settings.StoredFolderConfigs)
-	allPaths := gatherAllFolderPaths(incomingMap, c.Workspace())
+	incomingMap := buildIncomingLspConfigMap(settings.FolderConfigs)
+	allPaths := gatherAllFolderPathsFromLspConfigs(incomingMap, c.Workspace())
 
 	var folderConfigs []types.StoredFolderConfig
 	needsToSendUpdateToClient := false
 
 	for path := range allPaths {
-		folderConfig, configChanged := processSingleStoredFolderConfig(c, path, incomingMap, notifier)
+		folderConfig, configChanged := processSingleLspFolderConfig(c, path, incomingMap, notifier)
 
 		if configChanged {
 			needsToSendUpdateToClient = true
@@ -264,15 +264,15 @@ func updateStoredFolderConfig(c *config.Config, settings types.Settings, logger 
 	sendStoredFolderConfigUpdateIfNeeded(c, notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
 }
 
-func buildIncomingConfigMap(folderConfigs []types.StoredFolderConfig) map[types.FilePath]types.StoredFolderConfig {
-	incomingMap := make(map[types.FilePath]types.StoredFolderConfig)
+func buildIncomingLspConfigMap(folderConfigs []types.LspFolderConfig) map[types.FilePath]types.LspFolderConfig {
+	incomingMap := make(map[types.FilePath]types.LspFolderConfig)
 	for _, fc := range folderConfigs {
 		incomingMap[fc.FolderPath] = fc
 	}
 	return incomingMap
 }
 
-func gatherAllFolderPaths(incomingMap map[types.FilePath]types.StoredFolderConfig, workspace types.Workspace) map[types.FilePath]bool {
+func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.LspFolderConfig, workspace types.Workspace) map[types.FilePath]bool {
 	allPaths := make(map[types.FilePath]bool)
 
 	// Add incoming paths
@@ -290,44 +290,34 @@ func gatherAllFolderPaths(incomingMap map[types.FilePath]types.StoredFolderConfi
 	return allPaths
 }
 
-func processSingleStoredFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.StoredFolderConfig, notifier notification.Notifier) (types.StoredFolderConfig, bool) {
+// processSingleLspFolderConfig processes an incoming LspFolderConfig from the IDE using PATCH semantics.
+// It loads the existing StoredFolderConfig, applies the LspFolderConfig updates, and persists changes.
+func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.StoredFolderConfig, bool) {
 	storedConfig := c.StoredFolderConfig(path)
-	logger := c.Logger().With().Str("method", "processSingleStoredFolderConfig").Str("path", string(path)).Logger()
+	logger := c.Logger().With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
 
+	// Start with existing stored config or create new
 	var folderConfig types.StoredFolderConfig
-	var incoming types.StoredFolderConfig
-	var hasIncoming bool
-
-	// Use incoming config if present, otherwise use stored config or create new
-	if incoming, hasIncoming = incomingMap[path]; hasIncoming {
-		folderConfig = incoming
-	} else if storedConfig != nil {
+	if storedConfig != nil {
 		folderConfig = *storedConfig
 	} else {
 		folderConfig = types.StoredFolderConfig{FolderPath: path}
 	}
 
-	// These fields are managed by the LS and should not be overwritten by IDE
-	if storedConfig != nil {
-		folderConfig.FeatureFlags = storedConfig.FeatureFlags
-		folderConfig.SastSettings = storedConfig.SastSettings
-		folderConfig.UserOverrides = storedConfig.UserOverrides
-	}
-
-	// Process ModifiedFields from IDE to update UserOverrides
-	// This is how the IDE communicates user changes to org-scope settings
-	if hasIncoming && incoming.ModifiedFields != nil && len(incoming.ModifiedFields) > 0 {
-		hasLockedFieldRejections := processModifiedFields(c, &folderConfig, incoming.ModifiedFields, &logger)
+	// Apply incoming LspFolderConfig updates using PATCH semantics
+	// nil fields = don't change, non-nil fields = set value
+	if incoming, hasIncoming := incomingMap[path]; hasIncoming {
+		// Validate locked fields before applying
+		hasLockedFieldRejections := validateLockedFields(c, &folderConfig, &incoming, &logger)
 		if hasLockedFieldRejections {
 			projectName := filepath.Base(string(folderConfig.FolderPath))
 			notifier.SendShowMessage(sglsp.MTWarning,
 				fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", projectName))
 		}
-	}
 
-	// Clear transient fields that shouldn't be stored
-	folderConfig.EffectiveConfig = nil
-	folderConfig.ModifiedFields = nil
+		// Apply the PATCH update
+		folderConfig.ApplyLspUpdate(&incoming)
+	}
 
 	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
 	di.FeatureFlagService().PopulateStoredFolderConfig(&folderConfig)
@@ -342,6 +332,72 @@ func processSingleStoredFolderConfig(c *config.Config, path types.FilePath, inco
 	}
 
 	return folderConfig, configChanged
+}
+
+// validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.
+// Returns true if any fields were rejected due to being locked.
+func validateLockedFields(c *config.Config, folderConfig *types.StoredFolderConfig, incoming *types.LspFolderConfig, logger *zerolog.Logger) bool {
+	resolver := c.GetConfigResolver()
+	if resolver == nil {
+		return false
+	}
+
+	updatesRejected := false
+
+	// Check each org-scope setting that might be locked (only if field is present in update)
+	fieldsToCheck := map[string]bool{
+		types.SettingEnabledSeverities:      incoming.EnabledSeverities.Present,
+		types.SettingRiskScoreThreshold:     incoming.RiskScoreThreshold.Present,
+		types.SettingScanAutomatic:          incoming.ScanAutomatic.Present,
+		types.SettingScanNetNew:             incoming.ScanNetNew.Present,
+		types.SettingSnykCodeEnabled:        incoming.SnykCodeEnabled.Present,
+		types.SettingSnykOssEnabled:         incoming.SnykOssEnabled.Present,
+		types.SettingSnykIacEnabled:         incoming.SnykIacEnabled.Present,
+		types.SettingIssueViewOpenIssues:    incoming.IssueViewOpenIssues.Present,
+		types.SettingIssueViewIgnoredIssues: incoming.IssueViewIgnoredIssues.Present,
+	}
+
+	for settingName, hasUpdate := range fieldsToCheck {
+		if !hasUpdate {
+			continue
+		}
+		_, source := resolver.GetValue(settingName, folderConfig)
+		if source == types.ConfigSourceLDXSyncLocked {
+			logger.Warn().
+				Str("setting", settingName).
+				Msg("Rejecting change to locked setting - enforced by organization policy")
+			updatesRejected = true
+			// Clear the field in incoming so ApplyLspUpdate won't apply it
+			clearLockedField(incoming, settingName)
+		}
+	}
+
+	return updatesRejected
+}
+
+// clearLockedField marks a locked field as omitted so ApplyLspUpdate won't apply it
+func clearLockedField(incoming *types.LspFolderConfig, settingName string) {
+	// Set Present=false to mark as omitted (don't change)
+	switch settingName {
+	case types.SettingEnabledSeverities:
+		incoming.EnabledSeverities.Present = false
+	case types.SettingRiskScoreThreshold:
+		incoming.RiskScoreThreshold.Present = false
+	case types.SettingScanAutomatic:
+		incoming.ScanAutomatic.Present = false
+	case types.SettingScanNetNew:
+		incoming.ScanNetNew.Present = false
+	case types.SettingSnykCodeEnabled:
+		incoming.SnykCodeEnabled.Present = false
+	case types.SettingSnykOssEnabled:
+		incoming.SnykOssEnabled.Present = false
+	case types.SettingSnykIacEnabled:
+		incoming.SnykIacEnabled.Present = false
+	case types.SettingIssueViewOpenIssues:
+		incoming.IssueViewOpenIssues.Present = false
+	case types.SettingIssueViewIgnoredIssues:
+		incoming.IssueViewIgnoredIssues.Present = false
+	}
 }
 
 // processModifiedFields processes user changes from the IDE and updates UserOverrides accordingly.

@@ -46,6 +46,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// strPtr is a helper to create a pointer to a string literal
+func strPtr(s string) *string {
+	return &s
+}
+
 var sampleSettings = types.Settings{
 	ActivateSnykOpenSource:     "false",
 	ActivateSnykCode:           "false",
@@ -212,15 +217,15 @@ func Test_UpdateSettings(t *testing.T) {
 			EnableSnykOpenBrowserActions: "true",
 			HoverVerbosity:               &hoverVerbosity, // default is 3
 			OutputFormat:                 &outputFormat,   // default is markdown
-			StoredFolderConfigs: []types.StoredFolderConfig{
+			FolderConfigs: []types.LspFolderConfig{
 				{
 					FolderPath:           types.FilePath(tempDir1),
-					BaseBranch:           "testBaseBranch1",
+					BaseBranch:           strPtr("testBaseBranch1"),
 					AdditionalParameters: []string{"--file=asdf"},
 				},
 				{
 					FolderPath: types.FilePath(tempDir2),
-					BaseBranch: "testBaseBranch2",
+					BaseBranch: strPtr("testBaseBranch2"),
 				},
 			},
 		}
@@ -264,7 +269,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.NotEmpty(t, folderConfig1.BaseBranch)
 		// AdditionalParameters are preserved through the update
 		if len(folderConfig1.AdditionalParameters) > 0 {
-			assert.Equal(t, settings.StoredFolderConfigs[0].AdditionalParameters[0],
+			assert.Equal(t, settings.FolderConfigs[0].AdditionalParameters[0],
 				folderConfig1.AdditionalParameters[0])
 		}
 		// Since the incoming folderConfig doesn't have OrgSetByUser/OrgMigratedFromGlobalConfig set,
@@ -514,10 +519,10 @@ func (s *folderConfigTestSetup) createStoredConfig(org string, migrated bool, us
 
 func (s *folderConfigTestSetup) callUpdateStoredFolderConfig(org string) {
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
 				FolderPath:   s.folderPath,
-				PreferredOrg: org,
+				PreferredOrg: &org,
 			},
 		},
 	}
@@ -587,14 +592,13 @@ func Test_updateStoredFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *test
 	c.SetOrganization("global-org-id")
 
 	// Call updateStoredFolderConfig with the folder config
+	userOrgID := "user-org-id"
 	settings := types.Settings{
 		Organization: "global-org-id", // Include settings.Organization for the condition check
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:                  folderPath,
-				OrgSetByUser:                true,
-				PreferredOrg:                "user-org-id",
-				OrgMigratedFromGlobalConfig: true,
+				FolderPath:   folderPath,
+				PreferredOrg: &userOrgID,
 			},
 		},
 	}
@@ -616,11 +620,12 @@ func Test_updateStoredFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *t
 	setup.setupMigratedConfigInheritingFromBlankGlobal()
 
 	// Create settings and call updateStoredFolderConfig
+	emptyOrg := ""
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
 				FolderPath:   setup.folderPath,
-				PreferredOrg: "",
+				PreferredOrg: &emptyOrg,
 			},
 		},
 	}
@@ -644,11 +649,12 @@ func Test_updateStoredFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
 	// folderConfigsOrgSettingsEqual will return false, triggering UpdateStoredFolderConfigOrg
 	setup.callUpdateStoredFolderConfig("")
+	emptyOrg := ""
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
 				FolderPath:   folderPath,
-				PreferredOrg: "",
+				PreferredOrg: &emptyOrg,
 			},
 		},
 	}
@@ -669,11 +675,12 @@ func Test_updateStoredFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *tes
 	// Call updateStoredFolderConfig
 	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
 	// folderConfigsOrgSettingsEqual will return false, triggering UpdateStoredFolderConfigOrg
+	initialOrg := "initial-org"
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
 				FolderPath:   setup.folderPath,
-				PreferredOrg: "initial-org",
+				PreferredOrg: &initialOrg,
 			},
 		},
 	}
@@ -691,11 +698,12 @@ func Test_updateStoredFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(
 	setup.setupMigratedConfigUserSetButInheritingFromBlank()
 
 	// Call updateStoredFolderConfig with empty org settings
+	emptyOrg := ""
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
 				FolderPath:   setup.folderPath,
-				PreferredOrg: "",
+				PreferredOrg: &emptyOrg,
 			},
 		},
 	}
@@ -733,14 +741,13 @@ func Test_updateStoredFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) 
 
 	// Call updateStoredFolderConfig with exact same config and same global org
 	// DeepEqual should return true, so UpdateStoredFolderConfigOrg should be skipped
+	testOrg := "test-org"
 	settings := types.Settings{
 		Organization: "test-org",
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:                  folderPath,
-				PreferredOrg:                "test-org",
-				OrgMigratedFromGlobalConfig: true,
-				OrgSetByUser:                true,
+				FolderPath:   folderPath,
+				PreferredOrg: &testOrg,
 			},
 		},
 	}
@@ -764,12 +771,13 @@ func Test_updateStoredFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	c.SetOrganization("test-org")
 
 	// Call updateStoredFolderConfig with a folder that doesn't exist
+	testOrg := "test-org"
 	settings := types.Settings{
 		Organization: "test-org",
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
 				FolderPath:   folderPath,
-				PreferredOrg: "test-org",
+				PreferredOrg: &testOrg,
 			},
 		},
 	}
@@ -869,13 +877,12 @@ func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T
 
 	// Call updateStoredFolderConfig with empty org (should stay in auto mode)
 	// Since org settings are equal, updateStoredFolderConfigOrg won't be called
+	emptyOrg := ""
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:                  setup.folderPath,
-				PreferredOrg:                "",
-				OrgMigratedFromGlobalConfig: true,
-				OrgSetByUser:                false,
+				FolderPath:   setup.folderPath,
+				PreferredOrg: &emptyOrg,
 			},
 		},
 	}
@@ -907,13 +914,12 @@ func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testin
 
 	setup.c.SetOrganization("global-org-id")
 
+	differentOrg := "different-org"
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:                  setup.folderPath,
-				PreferredOrg:                "different-org", // Different from stored
-				OrgMigratedFromGlobalConfig: true,
-				OrgSetByUser:                false,
+				FolderPath:   setup.folderPath,
+				PreferredOrg: &differentOrg, // Different from stored
 			},
 		},
 	}
@@ -969,13 +975,12 @@ func Test_updateStoredFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.
 	cache.SetFolderOrg(setup.folderPath, "auto-determined-org")
 
 	// Call updateStoredFolderConfig with a different org
+	newUserOrg := "new-user-org"
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:                  setup.folderPath,
-				PreferredOrg:                "new-user-org",
-				OrgMigratedFromGlobalConfig: true,
-				OrgSetByUser:                true,
+				FolderPath:   setup.folderPath,
+				PreferredOrg: &newUserOrg,
 			},
 		},
 	}
@@ -998,12 +1003,12 @@ func Test_updateStoredFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
 	setup.c.SetOrganization("global-org-id")
 
 	// Call updateStoredFolderConfig
+	userChosenOrg := "user-chosen-org"
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
 				FolderPath:   setup.folderPath,
-				PreferredOrg: "user-chosen-org",
-				OrgSetByUser: true,
+				PreferredOrg: &userChosenOrg,
 			},
 		},
 	}
@@ -1036,14 +1041,12 @@ func Test_updateStoredFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	setup.c.SetOrganization("global-org-id")
 
 	// Call updateStoredFolderConfig with DIFFERENT org to trigger updateStoredFolderConfigOrg
+	differentTestOrg := "different-test-org"
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:                  setup.folderPath,
-				PreferredOrg:                "different-test-org", // Different to trigger update
-				OrgMigratedFromGlobalConfig: true,
-				OrgSetByUser:                true,
-				AutoDeterminedOrg:           "", // Missing
+				FolderPath:   setup.folderPath,
+				PreferredOrg: &differentTestOrg, // Different to trigger update
 			},
 		},
 	}
@@ -1065,13 +1068,12 @@ func Test_updateStoredFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *test
 	setup.c.SetOrganization("global-org-id")
 
 	// Call updateStoredFolderConfig with user now setting an org
+	userManualOrg := "user-manual-org"
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:                  setup.folderPath,
-				PreferredOrg:                "user-manual-org",
-				OrgMigratedFromGlobalConfig: true,
-				OrgSetByUser:                false, // IDE still sends false, LS fixes
+				FolderPath:   setup.folderPath,
+				PreferredOrg: &userManualOrg,
 			},
 		},
 	}
@@ -1101,13 +1103,12 @@ func Test_updateStoredFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOr
 	c.SetOrganization("") // Empty org, no auth
 
 	// Action: User sets a preferred org while unauthenticated
+	userChosenOrg := "user-chosen-org"
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:                  folderPath,
-				PreferredOrg:                "user-chosen-org",
-				OrgSetByUser:                false, // IDE sends false, LS should fix it
-				OrgMigratedFromGlobalConfig: false,
+				FolderPath:   folderPath,
+				PreferredOrg: &userChosenOrg,
 			},
 		},
 	}
@@ -1270,24 +1271,20 @@ func Test_processModifiedFields_ResetAllOverrides(t *testing.T) {
 	assert.Equal(t, 0, len(folderConfig.UserOverrides), "All overrides should be cleared")
 }
 
-func Test_updateStoredFolderConfig_ProcessesModifiedFields(t *testing.T) {
+func Test_updateStoredFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T) {
 	setup := setupStoredFolderConfigTest(t)
 
 	// Setup stored config
 	setup.createStoredConfig("test-org", true, true)
 
-	// Call updateStoredFolderConfig with ModifiedFields
+	// Call updateStoredFolderConfig with LspFolderConfig updates (PATCH semantics)
+	// Present=true with Value indicates setting the value
 	settings := types.Settings{
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:                  setup.folderPath,
-				PreferredOrg:                "test-org",
-				OrgSetByUser:                true,
-				OrgMigratedFromGlobalConfig: true,
-				ModifiedFields: map[string]any{
-					types.SettingScanAutomatic: "manual",
-					types.SettingScanNetNew:    true,
-				},
+				FolderPath:    setup.folderPath,
+				ScanAutomatic: types.NullableField[bool]{Value: false, Present: true},
+				ScanNetNew:    types.NullableField[bool]{Value: true, Present: true},
 			},
 		},
 	}

@@ -480,6 +480,163 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 	})
 }
 
+func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
+	t.Run("returns false for nil receiver", func(t *testing.T) {
+		var fc *StoredFolderConfig
+		update := &LspFolderConfig{FolderPath: "/path"}
+		assert.False(t, fc.ApplyLspUpdate(update))
+	})
+
+	t.Run("returns false for nil update", func(t *testing.T) {
+		fc := &StoredFolderConfig{FolderPath: "/path"}
+		assert.False(t, fc.ApplyLspUpdate(nil))
+	})
+
+	t.Run("applies folder-scope updates", func(t *testing.T) {
+		fc := &StoredFolderConfig{
+			FolderPath: "/path/to/folder",
+			BaseBranch: "main",
+		}
+
+		newBranch := "develop"
+		newEnv := "DEBUG=1"
+		update := &LspFolderConfig{
+			FolderPath:    "/path/to/folder",
+			BaseBranch:    &newBranch,
+			AdditionalEnv: &newEnv,
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.True(t, changed)
+		assert.Equal(t, "develop", fc.BaseBranch)
+		assert.Equal(t, "DEBUG=1", fc.AdditionalEnv)
+	})
+
+	t.Run("does not change fields when nil in update", func(t *testing.T) {
+		fc := &StoredFolderConfig{
+			FolderPath: "/path/to/folder",
+			BaseBranch: "main",
+		}
+
+		update := &LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			// BaseBranch is nil - should not change
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.False(t, changed)
+		assert.Equal(t, "main", fc.BaseBranch)
+	})
+
+	t.Run("applies org-scope updates as user overrides", func(t *testing.T) {
+		fc := &StoredFolderConfig{
+			FolderPath: "/path/to/folder",
+		}
+
+		update := &LspFolderConfig{
+			FolderPath:    "/path/to/folder",
+			ScanAutomatic: NullableField[bool]{Value: true, Present: true},
+			ScanNetNew:    NullableField[bool]{Value: false, Present: true},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.True(t, changed)
+		assert.True(t, fc.HasUserOverride(SettingScanAutomatic))
+		assert.True(t, fc.HasUserOverride(SettingScanNetNew))
+		scanAutoVal, _ := fc.GetUserOverride(SettingScanAutomatic)
+		scanNetNewVal, _ := fc.GetUserOverride(SettingScanNetNew)
+		assert.Equal(t, true, scanAutoVal)
+		assert.Equal(t, false, scanNetNewVal)
+	})
+
+	t.Run("sets OrgSetByUser when PreferredOrg is updated", func(t *testing.T) {
+		fc := &StoredFolderConfig{
+			FolderPath:   "/path/to/folder",
+			OrgSetByUser: false,
+		}
+
+		newOrg := "my-org"
+		update := &LspFolderConfig{
+			FolderPath:   "/path/to/folder",
+			PreferredOrg: &newOrg,
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.True(t, changed)
+		assert.Equal(t, "my-org", fc.PreferredOrg)
+		assert.True(t, fc.OrgSetByUser)
+	})
+
+	t.Run("clears user overrides via explicit null", func(t *testing.T) {
+		fc := &StoredFolderConfig{
+			FolderPath: "/path/to/folder",
+		}
+		// Set some user overrides first
+		fc.SetUserOverride(SettingScanAutomatic, true)
+		fc.SetUserOverride(SettingScanNetNew, false)
+		fc.SetUserOverride(SettingSnykCodeEnabled, true)
+
+		// Clear only some of them using explicit null
+		update := &LspFolderConfig{
+			FolderPath:      "/path/to/folder",
+			ScanAutomatic:   NullableField[bool]{Present: true, Null: true}, // explicit null = clear
+			SnykCodeEnabled: NullableField[bool]{Present: true, Null: true}, // explicit null = clear
+			// ScanNetNew is omitted (Present: false) = don't change
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.True(t, changed)
+		assert.False(t, fc.HasUserOverride(SettingScanAutomatic), "ScanAutomatic should be cleared")
+		assert.False(t, fc.HasUserOverride(SettingSnykCodeEnabled), "SnykCodeEnabled should be cleared")
+		assert.True(t, fc.HasUserOverride(SettingScanNetNew), "ScanNetNew should remain")
+	})
+
+	t.Run("null clears and value sets in same update", func(t *testing.T) {
+		fc := &StoredFolderConfig{
+			FolderPath: "/path/to/folder",
+		}
+		fc.SetUserOverride(SettingScanAutomatic, true)
+
+		// Clear one setting (null) and set another (value)
+		update := &LspFolderConfig{
+			FolderPath:    "/path/to/folder",
+			ScanAutomatic: NullableField[bool]{Present: true, Null: true},  // null = clear
+			ScanNetNew:    NullableField[bool]{Value: true, Present: true}, // value = set
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.True(t, changed)
+		assert.False(t, fc.HasUserOverride(SettingScanAutomatic), "ScanAutomatic should be cleared")
+		assert.True(t, fc.HasUserOverride(SettingScanNetNew), "ScanNetNew should be set")
+	})
+
+	t.Run("omitted fields are not changed", func(t *testing.T) {
+		fc := &StoredFolderConfig{
+			FolderPath: "/path/to/folder",
+		}
+		fc.SetUserOverride(SettingScanAutomatic, true)
+		fc.SetUserOverride(SettingScanNetNew, false)
+
+		// Update with all fields omitted (Present: false)
+		update := &LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			// All NullableField fields are zero value (Present: false) = omitted
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.False(t, changed, "No changes should be made when all fields are omitted")
+		assert.True(t, fc.HasUserOverride(SettingScanAutomatic), "ScanAutomatic should remain")
+		assert.True(t, fc.HasUserOverride(SettingScanNetNew), "ScanNetNew should remain")
+	})
+}
+
 func TestStoredFolderConfig_ToLspFolderConfig(t *testing.T) {
 	t.Run("returns nil for nil config", func(t *testing.T) {
 		var fc *StoredFolderConfig
@@ -510,10 +667,10 @@ func TestStoredFolderConfig_ToLspFolderConfig(t *testing.T) {
 		assert.Equal(t, "org1", *result.PreferredOrg)
 		assert.Equal(t, "auto-org", *result.AutoDeterminedOrg)
 
-		// Org-scope settings should be nil without resolver
-		assert.Nil(t, result.EnabledSeverities)
-		assert.Nil(t, result.RiskScoreThreshold)
-		assert.Nil(t, result.ScanAutomatic)
+		// Org-scope settings should be omitted (not present) without resolver
+		assert.True(t, result.EnabledSeverities.IsOmitted(), "EnabledSeverities should be omitted without resolver")
+		assert.True(t, result.RiskScoreThreshold.IsOmitted(), "RiskScoreThreshold should be omitted without resolver")
+		assert.True(t, result.ScanAutomatic.IsOmitted(), "ScanAutomatic should be omitted without resolver")
 	})
 
 	t.Run("omits empty folder-scope settings", func(t *testing.T) {
@@ -555,15 +712,15 @@ func TestStoredFolderConfig_ToLspFolderConfig(t *testing.T) {
 		result := fc.ToLspFolderConfig(resolver)
 
 		assert.Equal(t, FilePath("/path/to/folder"), result.FolderPath)
-		assert.NotNil(t, result.ScanAutomatic)
-		assert.True(t, *result.ScanAutomatic)
-		assert.NotNil(t, result.ScanNetNew)
-		assert.True(t, *result.ScanNetNew)
-		assert.NotNil(t, result.SnykCodeEnabled)
-		assert.True(t, *result.SnykCodeEnabled)
-		assert.NotNil(t, result.SnykOssEnabled)
-		assert.True(t, *result.SnykOssEnabled)
-		assert.NotNil(t, result.SnykIacEnabled)
-		assert.False(t, *result.SnykIacEnabled)
+		assert.True(t, result.ScanAutomatic.HasValue())
+		assert.True(t, result.ScanAutomatic.Value)
+		assert.True(t, result.ScanNetNew.HasValue())
+		assert.True(t, result.ScanNetNew.Value)
+		assert.True(t, result.SnykCodeEnabled.HasValue())
+		assert.True(t, result.SnykCodeEnabled.Value)
+		assert.True(t, result.SnykOssEnabled.HasValue())
+		assert.True(t, result.SnykOssEnabled.Value)
+		assert.True(t, result.SnykIacEnabled.HasValue())
+		assert.False(t, result.SnykIacEnabled.Value)
 	})
 }

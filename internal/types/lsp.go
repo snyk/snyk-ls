@@ -17,6 +17,7 @@
 package types
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +26,51 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
+
+// NullableField represents a field that can be omitted, null, or have a value.
+// This is used for PATCH semantics where:
+// - Omitted (not present in JSON) = don't change
+// - Null (explicit null in JSON) = clear/reset to default
+// - Value (explicit value in JSON) = set to this value
+type NullableField[T any] struct {
+	Value   T    // The actual value
+	Present bool // True if the field was present in JSON (even if null)
+	Null    bool // True if the field was explicitly null
+}
+
+// IsOmitted returns true if the field was not present in JSON
+func (n NullableField[T]) IsOmitted() bool {
+	return !n.Present
+}
+
+// IsNull returns true if the field was explicitly null in JSON
+func (n NullableField[T]) IsNull() bool {
+	return n.Present && n.Null
+}
+
+// HasValue returns true if the field has an explicit non-null value
+func (n NullableField[T]) HasValue() bool {
+	return n.Present && !n.Null
+}
+
+// UnmarshalJSON implements custom JSON unmarshalling to distinguish omitted vs null vs value
+func (n *NullableField[T]) UnmarshalJSON(data []byte) error {
+	n.Present = true
+	if string(data) == "null" {
+		n.Null = true
+		return nil
+	}
+	n.Null = false
+	return json.Unmarshal(data, &n.Value)
+}
+
+// MarshalJSON implements custom JSON marshaling
+func (n NullableField[T]) MarshalJSON() ([]byte, error) {
+	if n.Null {
+		return []byte("null"), nil
+	}
+	return json.Marshal(n.Value)
+}
 
 const (
 	Manual     TextDocumentSaveReason = 0
@@ -560,9 +606,11 @@ type EffectiveValue struct {
 
 // LspFolderConfig is the public-facing struct for $/snyk.folderConfigs notification.
 // Used bidirectionally: LS → IDE (with effective values) and IDE → LS (with user changes).
-// All modifiable fields are pointers to support PATCH semantics:
-// - nil means "don't change" (when IDE → LS) or "not set" (when LS → IDE)
-// - explicit value means "set to this value"
+// For IDE → LS (PATCH semantics), org-scope fields use NullableField to distinguish:
+// - Omitted = don't change
+// - Null = clear override (reset to default)
+// - Value = set override
+// For LS → IDE, the Value field contains the effective value.
 type LspFolderConfig struct {
 	// Required: identifies which folder
 	FolderPath FilePath `json:"folderPath"`
@@ -578,21 +626,21 @@ type LspFolderConfig struct {
 	PreferredOrg      *string `json:"preferredOrg,omitempty"`
 	AutoDeterminedOrg *string `json:"autoDeterminedOrg,omitempty"`
 
-	// Org-scope settings (effective values when LS → IDE, user changes when IDE → LS)
+	// Org-scope settings with full PATCH semantics (omitted/null/value)
 	// These are computed by ConfigResolver when sending to IDE
-	EnabledSeverities  *SeverityFilter `json:"enabledSeverities,omitempty"`
-	RiskScoreThreshold *int            `json:"riskScoreThreshold,omitempty"`
-	ScanAutomatic      *bool           `json:"scanAutomatic,omitempty"`
-	ScanNetNew         *bool           `json:"scanNetNew,omitempty"`
+	EnabledSeverities  NullableField[SeverityFilter] `json:"enabledSeverities,omitempty"`
+	RiskScoreThreshold NullableField[int]            `json:"riskScoreThreshold,omitempty"`
+	ScanAutomatic      NullableField[bool]           `json:"scanAutomatic,omitempty"`
+	ScanNetNew         NullableField[bool]           `json:"scanNetNew,omitempty"`
 
-	// Product enablement (effective values)
-	SnykCodeEnabled *bool `json:"snykCodeEnabled,omitempty"`
-	SnykOssEnabled  *bool `json:"snykOssEnabled,omitempty"`
-	SnykIacEnabled  *bool `json:"snykIacEnabled,omitempty"`
+	// Product enablement with full PATCH semantics
+	SnykCodeEnabled NullableField[bool] `json:"snykCodeEnabled,omitempty"`
+	SnykOssEnabled  NullableField[bool] `json:"snykOssEnabled,omitempty"`
+	SnykIacEnabled  NullableField[bool] `json:"snykIacEnabled,omitempty"`
 
-	// Issue view options (effective values)
-	IssueViewOpenIssues    *bool `json:"issueViewOpenIssues,omitempty"`
-	IssueViewIgnoredIssues *bool `json:"issueViewIgnoredIssues,omitempty"`
+	// Issue view options with full PATCH semantics
+	IssueViewOpenIssues    NullableField[bool] `json:"issueViewOpenIssues,omitempty"`
+	IssueViewIgnoredIssues NullableField[bool] `json:"issueViewIgnoredIssues,omitempty"`
 }
 
 // LspFolderConfigsParam is the payload for $/snyk.folderConfigs notification
@@ -691,11 +739,14 @@ type Settings struct {
 	// Global settings end
 
 	// Folder specific settings start
-	AdditionalParams    string               `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
-	AdditionalEnv       string               `json:"additionalEnv,omitempty"`    // Global fallback for backward compatibility; folder-specific values in StoredFolderConfig.AdditionalEnv
-	TrustedFolders      []string             `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
-	StoredFolderConfigs []StoredFolderConfig `json:"folderConfigs,omitempty"`
+	AdditionalParams string            `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
+	AdditionalEnv    string            `json:"additionalEnv,omitempty"`    // Global fallback for backward compatibility; folder-specific values in StoredFolderConfig.AdditionalEnv
+	TrustedFolders   []string          `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
+	FolderConfigs    []LspFolderConfig `json:"folderConfigs,omitempty"`    // IDE ↔ LS communication uses LspFolderConfig with PATCH semantics
 	// Folder specific settings end
+
+	// Internal fields (not serialized to JSON, used for HTML rendering only)
+	StoredFolderConfigs []StoredFolderConfig `json:"-"`
 }
 
 type AuthenticationMethod string
