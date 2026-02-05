@@ -28,6 +28,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -35,6 +36,58 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
+
+func TestGetPersistedIssueList_BaselineMissingVsSnapshotMissing(t *testing.T) {
+	tests := []struct {
+		name        string
+		setup       func(t *testing.T, c *config.Config) (types.FilePath, *GitPersistenceProvider)
+		expectedErr error
+	}{
+		{
+			name: "baseline missing returns ErrBaselineDoesntExist",
+			setup: func(t *testing.T, c *config.Config) (types.FilePath, *GitPersistenceProvider) {
+				t.Helper()
+				conf := c.Engine().GetConfiguration()
+				folderPath := types.FilePath(conf.GetString(constants.DataHome))
+				initGitRepo(t, folderPath, false)
+				provider := NewGitPersistenceProvider(c.Logger(), conf)
+				return folderPath, provider
+			},
+			expectedErr: ErrBaselineDoesntExist,
+		},
+		{
+			name: "snapshot missing but expected returns ErrSnapshotCorrupted",
+			setup: func(t *testing.T, c *config.Config) (types.FilePath, *GitPersistenceProvider) {
+				t.Helper()
+				conf := c.Engine().GetConfiguration()
+				folderPath := types.FilePath(conf.GetString(constants.DataHome))
+				repo := initGitRepo(t, folderPath, false)
+
+				commitHash, err := vcs.HeadRefHashForRepo(repo)
+				assert.NoError(t, err)
+
+				provider := NewGitPersistenceProvider(c.Logger(), conf)
+				err = provider.Init([]types.FilePath{folderPath})
+				assert.NoError(t, err)
+
+				hash := getHashForFolderPath(folderPath)
+				provider.createOrAppendToCache(hash, commitHash, product.ProductCode)
+				return folderPath, provider
+			},
+			expectedErr: ErrSnapshotCorrupted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			folderPath, provider := tt.setup(t, c)
+			issues, err := provider.GetPersistedIssueList(folderPath, product.ProductCode)
+			assert.ErrorIs(t, err, tt.expectedErr)
+			assert.Nil(t, issues)
+		})
+	}
+}
 
 func TestInit_Empty(t *testing.T) {
 	c := testutil.UnitTest(t)
@@ -776,313 +829,4 @@ func TestGetPersistedIssueList_AfterRestart(t *testing.T) {
 	assert.Equal(t, expectedIssue.GetGlobalIdentity(), loadedIssues[0].GetGlobalIdentity())
 	assert.Equal(t, expectedIssue.GetFingerprint(), loadedIssues[0].GetFingerprint())
 	assert.Equal(t, expectedIssue.GetContentRoot(), loadedIssues[0].GetContentRoot())
-}
-
-// TestCleanupCorruptedSnapshot_DeletesFilesAndClearsCache verifies that
-// CleanupCorruptedSnapshot removes all snapshot files for a folder and clears the in-memory cache
-func TestCleanupCorruptedSnapshot_DeletesFilesAndClearsCache(t *testing.T) {
-	c := testutil.UnitTest(t)
-	conf := c.Engine().GetConfiguration()
-	folderPath := types.FilePath(conf.GetString(constants.DataHome))
-	repo := initGitRepo(t, folderPath, false)
-
-	expectedIssue := &snyk.Issue{
-		GlobalIdentity:   uuid.New().String(),
-		Fingerprint:      "test-fingerprint-cleanup",
-		ContentRoot:      folderPath,
-		AffectedFilePath: types.FilePath(filepath.Join(string(folderPath), "test.js")),
-	}
-	existingIssues := []types.Issue{expectedIssue}
-
-	commitHash, err := vcs.HeadRefHashForRepo(repo)
-	assert.NoError(t, err)
-	pc := product.ProductCode
-
-	// Persist some data
-	provider := NewGitPersistenceProvider(c.Logger(), conf)
-	err = provider.Init([]types.FilePath{folderPath})
-	assert.NoError(t, err)
-	err = provider.Add(folderPath, commitHash, existingIssues, pc)
-	assert.NoError(t, err)
-
-	// Verify data exists before cleanup
-	cacheDir := snykCacheDir(conf)
-	hash := getHashForFolderPath(folderPath)
-	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, pc), "Snapshot file should exist before cleanup")
-	_, ok := provider.cache[hash]
-	assert.True(t, ok, "In-memory cache should have entry before cleanup")
-
-	// Act - cleanup corrupted snapshot
-	provider.CleanupCorruptedSnapshot(folderPath, pc)
-
-	// Assert - verify file is deleted and cache is cleared
-	assert.False(t, issuesFileExists(cacheDir, hash, commitHash, pc), "Snapshot file should be deleted after cleanup")
-	_, ok = provider.cache[hash]
-	assert.False(t, ok, "In-memory cache should be cleared after cleanup")
-}
-
-// TestCleanupCorruptedSnapshot_OnlyDeletesMatchingProduct verifies that cleanup only deletes
-// snapshot files for the specified product, leaving other products' snapshots intact.
-// This is critical to avoid wiping out valid snapshots when only one product is corrupted.
-func TestCleanupCorruptedSnapshot_OnlyDeletesMatchingProduct(t *testing.T) {
-	c := testutil.UnitTest(t)
-	conf := c.Engine().GetConfiguration()
-	folderPath := types.FilePath(conf.GetString(constants.DataHome))
-	repo := initGitRepo(t, folderPath, false)
-
-	codeIssues := []types.Issue{
-		&snyk.Issue{
-			GlobalIdentity: uuid.New().String(),
-			Fingerprint:    "code-issue",
-		},
-	}
-	ossIssues := []types.Issue{
-		&snyk.Issue{
-			GlobalIdentity: uuid.New().String(),
-			Fingerprint:    "oss-issue",
-		},
-	}
-	iacIssues := []types.Issue{
-		&snyk.Issue{
-			GlobalIdentity: uuid.New().String(),
-			Fingerprint:    "iac-issue",
-		},
-	}
-
-	commitHash, err := vcs.HeadRefHashForRepo(repo)
-	assert.NoError(t, err)
-
-	provider := NewGitPersistenceProvider(c.Logger(), conf)
-	err = provider.Init([]types.FilePath{folderPath})
-	assert.NoError(t, err)
-
-	// Add snapshots for all three products
-	err = provider.Add(folderPath, commitHash, codeIssues, product.ProductCode)
-	assert.NoError(t, err)
-	err = provider.Add(folderPath, commitHash, ossIssues, product.ProductOpenSource)
-	assert.NoError(t, err)
-	err = provider.Add(folderPath, commitHash, iacIssues, product.ProductInfrastructureAsCode)
-	assert.NoError(t, err)
-
-	cacheDir := snykCacheDir(conf)
-	hash := getHashForFolderPath(folderPath)
-
-	// Verify all three snapshots exist
-	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductCode))
-	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductOpenSource))
-	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductInfrastructureAsCode))
-
-	// Act - cleanup ONLY Code product
-	provider.CleanupCorruptedSnapshot(folderPath, product.ProductCode)
-
-	// Assert - only Code snapshot deleted (regardless of hash), OSS and IaC remain
-	assert.False(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductCode),
-		"Code snapshot should be deleted")
-	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductOpenSource),
-		"OSS snapshot should NOT be deleted")
-	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, product.ProductInfrastructureAsCode),
-		"IaC snapshot should NOT be deleted")
-}
-
-// TestCleanupCorruptedSnapshot_PreservesOtherProductsInCache verifies that cleanup only removes
-// the specified product from in-memory cache, preserving other products' cache entries
-func TestCleanupCorruptedSnapshot_PreservesOtherProductsInCache(t *testing.T) {
-	c := testutil.UnitTest(t)
-	conf := c.Engine().GetConfiguration()
-	folderPath := types.FilePath(conf.GetString(constants.DataHome))
-	repo := initGitRepo(t, folderPath, false)
-
-	codeIssues := []types.Issue{
-		&snyk.Issue{GlobalIdentity: uuid.New().String()},
-	}
-	ossIssues := []types.Issue{
-		&snyk.Issue{GlobalIdentity: uuid.New().String()},
-	}
-
-	commitHash, err := vcs.HeadRefHashForRepo(repo)
-	assert.NoError(t, err)
-
-	provider := NewGitPersistenceProvider(c.Logger(), conf)
-	err = provider.Init([]types.FilePath{folderPath})
-	assert.NoError(t, err)
-
-	// Add snapshots for Code and OSS
-	err = provider.Add(folderPath, commitHash, codeIssues, product.ProductCode)
-	assert.NoError(t, err)
-	err = provider.Add(folderPath, commitHash, ossIssues, product.ProductOpenSource)
-	assert.NoError(t, err)
-
-	hash := getHashForFolderPath(folderPath)
-
-	// Verify both products in cache
-	assert.NotNil(t, provider.cache[hash])
-	assert.Equal(t, commitHash, provider.cache[hash][product.ProductCode])
-	assert.Equal(t, commitHash, provider.cache[hash][product.ProductOpenSource])
-
-	// Act - cleanup ONLY Code product
-	provider.CleanupCorruptedSnapshot(folderPath, product.ProductCode)
-
-	// Assert - Code removed from cache, OSS remains
-	assert.NotNil(t, provider.cache[hash], "Hash entry should still exist")
-	_, codeExists := provider.cache[hash][product.ProductCode]
-	assert.False(t, codeExists, "Code should be removed from cache")
-	ossCommitHash, ossExists := provider.cache[hash][product.ProductOpenSource]
-	assert.True(t, ossExists, "OSS should remain in cache")
-	assert.Equal(t, commitHash, ossCommitHash, "OSS commit hash should be unchanged")
-}
-
-// TestCleanupCorruptedSnapshot_DeletesMultipleFilesForSameProduct verifies that cleanup deletes
-// all snapshot files for the specified product, even if multiple commits exist
-func TestCleanupCorruptedSnapshot_DeletesMultipleFilesForSameProduct(t *testing.T) {
-	c := testutil.UnitTest(t)
-	conf := c.Engine().GetConfiguration()
-	folderPath := types.FilePath(conf.GetString(constants.DataHome))
-	repo := initGitRepo(t, folderPath, true)
-
-	issues1 := []types.Issue{
-		&snyk.Issue{GlobalIdentity: uuid.New().String()},
-	}
-	issues2 := []types.Issue{
-		&snyk.Issue{GlobalIdentity: uuid.New().String()},
-	}
-
-	provider := NewGitPersistenceProvider(c.Logger(), conf)
-	err := provider.Init([]types.FilePath{folderPath})
-	assert.NoError(t, err)
-
-	// Create first Code snapshot
-	wt, err := repo.Worktree()
-	assert.NoError(t, err)
-	_, err = wt.Commit("commit1", &git.CommitOptions{
-		Author: &object.Signature{Name: t.Name()},
-	})
-	assert.NoError(t, err)
-	commitHash1, err := vcs.HeadRefHashForRepo(repo)
-	assert.NoError(t, err)
-
-	err = provider.Add(folderPath, commitHash1, issues1, product.ProductCode)
-	assert.NoError(t, err)
-
-	// Create second Code snapshot with different commit
-	testFile := filepath.Join(string(folderPath), "newfile.txt")
-	err = os.WriteFile(testFile, []byte("data"), 0600)
-	assert.NoError(t, err)
-	_, err = wt.Add(filepath.Base(testFile))
-	assert.NoError(t, err)
-	_, err = wt.Commit("commit2", &git.CommitOptions{
-		Author: &object.Signature{Name: t.Name()},
-	})
-	assert.NoError(t, err)
-	commitHash2, err := vcs.HeadRefHashForRepo(repo)
-	assert.NoError(t, err)
-
-	err = provider.Add(folderPath, commitHash2, issues2, product.ProductCode)
-	assert.NoError(t, err)
-
-	cacheDir := snykCacheDir(conf)
-	hash := getHashForFolderPath(folderPath)
-
-	// Verify both Code snapshots exist (old one should be deleted by Add, but we'll create it manually for this test)
-	// Manually create the old snapshot file to simulate multiple commits
-	oldFilePath := getLocalFilePath(cacheDir, hash, commitHash1, product.ProductCode)
-	err = os.WriteFile(oldFilePath, []byte("[]"), 0600)
-	assert.NoError(t, err)
-
-	assert.True(t, issuesFileExists(cacheDir, hash, commitHash1, product.ProductCode))
-	assert.True(t, issuesFileExists(cacheDir, hash, commitHash2, product.ProductCode))
-
-	// Act - cleanup Code product
-	provider.CleanupCorruptedSnapshot(folderPath, product.ProductCode)
-
-	// Assert - both Code snapshots deleted
-	assert.False(t, issuesFileExists(cacheDir, hash, commitHash1, product.ProductCode),
-		"Old Code snapshot should be deleted")
-	assert.False(t, issuesFileExists(cacheDir, hash, commitHash2, product.ProductCode),
-		"New Code snapshot should be deleted")
-}
-
-func TestSnapshotFileRegex(t *testing.T) {
-	tests := []struct {
-		name     string
-		filename string
-		valid    bool
-		hash     string
-	}{
-		{
-			name:     "valid code snapshot",
-			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.code.json",
-			valid:    true,
-			hash:     "97e3b0a21a604eae",
-		},
-		{
-			name:     "valid oss snapshot",
-			filename: "v1_1.abcdef1234567890.deadbeefdeadbeefdeadbeefdeadbeefdeadbeef.oss.json",
-			valid:    true,
-			hash:     "abcdef1234567890",
-		},
-		{
-			name:     "valid iac snapshot",
-			filename: "v1_1.1234567890abcdef.0123456789abcdef0123456789abcdef01234567.iac.json",
-			valid:    true,
-			hash:     "1234567890abcdef",
-		},
-		{
-			name:     "valid - future product (alphanumeric)",
-			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.container.json",
-			valid:    true,
-			hash:     "97e3b0a21a604eae",
-		},
-		{
-			name:     "invalid - wrong schema version",
-			filename: "v2_0.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.code.json",
-			valid:    false,
-		},
-		{
-			name:     "invalid - short folder hash",
-			filename: "v1_1.97e3b0a.73f59b5dd75199e8e669063733cf193b6f1544c1.code.json",
-			valid:    false,
-		},
-		{
-			name:     "invalid - short commit hash",
-			filename: "v1_1.97e3b0a21a604eae.73f59b5dd7519.code.json",
-			valid:    false,
-		},
-		{
-			name:     "invalid - product with uppercase",
-			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.Code.json",
-			valid:    false,
-		},
-		{
-			name:     "invalid - product with special chars",
-			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.snyk-code.json",
-			valid:    false,
-		},
-		{
-			name:     "invalid - not json",
-			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.code.txt",
-			valid:    false,
-		},
-		{
-			name:     "invalid - random file",
-			filename: "some_random_file.json",
-			valid:    false,
-		},
-		{
-			name:     "invalid - empty",
-			filename: "",
-			valid:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			match := snapshotFileRegex.FindStringSubmatch(tt.filename)
-			if tt.valid {
-				assert.NotNil(t, match, "Expected filename to match regex")
-				assert.Equal(t, tt.hash, match[1], "Folder hash should be captured")
-			} else {
-				assert.Nil(t, match, "Expected filename to NOT match regex")
-			}
-		})
-	}
 }

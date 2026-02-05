@@ -49,18 +49,6 @@ func (mr *MockScanSnapshotPersisterMockRecorder) Add(arg0, arg1, arg2, arg3 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockScanSnapshotPersister)(nil).Add), arg0, arg1, arg2, arg3)
 }
 
-// CleanupCorruptedSnapshot mocks base method.
-func (m *MockScanSnapshotPersister) CleanupCorruptedSnapshot(arg0 types.FilePath, arg1 product.Product) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "CleanupCorruptedSnapshot", arg0, arg1)
-}
-
-// CleanupCorruptedSnapshot indicates an expected call of CleanupCorruptedSnapshot.
-func (mr *MockScanSnapshotPersisterMockRecorder) CleanupCorruptedSnapshot(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CleanupCorruptedSnapshot", reflect.TypeOf((*MockScanSnapshotPersister)(nil).CleanupCorruptedSnapshot), arg0, arg1)
-}
-
 // Clear mocks base method.
 func (m *MockScanSnapshotPersister) Clear(arg0 []types.FilePath, arg1 bool) {
 	m.ctrl.T.Helper()

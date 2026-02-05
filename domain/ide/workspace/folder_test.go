@@ -1067,51 +1067,62 @@ func Test_NewFolder_NormalizesPath(t *testing.T) {
 	}
 }
 
-func Test_GetDelta_WhenSnapshotCorrupted_CleansUpAndReturnsError(t *testing.T) {
-	c := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-
-	// Create a real temp folder for the test
-	folderPath := types.FilePath(t.TempDir())
-	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
-
-	// Create a mock scan persister that returns ErrPathHashDoesntExist
-	// and expects CleanupCorruptedSnapshot to be called
-	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
-	mockPersister.EXPECT().
-		GetPersistedIssueList(gomock.Any(), product.ProductCode).
-		Return(nil, persistence.ErrPathHashDoesntExist).
-		Times(1)
-	mockPersister.EXPECT().
-		CleanupCorruptedSnapshot(folderPath, product.ProductCode).
-		Times(1)
-
-	// Create folder with mock persister
-	sc := scanner.NewTestScanner()
-	sc.Issues = []types.Issue{
-		&snyk.Issue{
-			ID:               "issue-1",
-			AffectedFilePath: filePath,
-			Severity:         types.High,
-			Product:          product.ProductCode,
-			AdditionalData:   snyk.CodeIssueData{Key: "key-1"},
+func Test_GetDelta_BaselineMissingVsSnapshotCorrupted(t *testing.T) {
+	tests := []struct {
+		name                string
+		persistedListErr    error
+		expectedReturnedErr error
+	}{
+		{
+			name:                "baseline missing does not cleanup",
+			persistedListErr:    persistence.ErrBaselineDoesntExist,
+			expectedReturnedErr: persistence.ErrBaselineDoesntExist,
+		},
+		{
+			name:                "snapshot corrupted returns error",
+			persistedListErr:    persistence.ErrSnapshotCorrupted,
+			expectedReturnedErr: persistence.ErrSnapshotCorrupted,
 		},
 	}
 
-	f := NewFolder(c, folderPath, "test", sc,
-		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
-		notification.NewMockNotifier(), mockPersister,
-		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			ctrl := gomock.NewController(t)
 
-	// Add issues to the folder cache so GetDelta has something to work with
-	f.documentDiagnosticCache.Store(filePath, sc.Issues)
+			folderPath := types.FilePath(t.TempDir())
+			filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
 
-	// Act
-	result, err := f.GetDelta(product.ProductCode)
+			mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+			mockPersister.EXPECT().
+				GetPersistedIssueList(gomock.Any(), product.ProductCode).
+				Return(nil, tt.persistedListErr).
+				Times(1)
 
-	// Assert - should clean up corrupted snapshot and return error (not fake delta)
-	assert.ErrorIs(t, err, persistence.ErrPathHashDoesntExist, "GetDelta should return the error after cleanup")
-	assert.Nil(t, result, "GetDelta should not return issues when delta cannot be computed")
+			sc := scanner.NewTestScanner()
+			sc.Issues = []types.Issue{
+				&snyk.Issue{
+					ID:               "issue-1",
+					AffectedFilePath: filePath,
+					Severity:         types.High,
+					Product:          product.ProductCode,
+					AdditionalData:   snyk.CodeIssueData{Key: "key-1"},
+				},
+			}
+
+			f := NewFolder(c, folderPath, "test", sc,
+				hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+				notification.NewMockNotifier(), mockPersister,
+				scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+
+			f.documentDiagnosticCache.Store(filePath, sc.Issues)
+
+			result, err := f.GetDelta(product.ProductCode)
+
+			assert.ErrorIs(t, err, tt.expectedReturnedErr)
+			assert.Nil(t, result)
+		})
+	}
 }
 
 // setupWorkspaceWithFolder creates a workspace and adds the given folder to it

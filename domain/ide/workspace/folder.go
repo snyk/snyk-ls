@@ -548,11 +548,9 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
 	if err != nil {
 		logger.Debug().Err(err).Msg("GetPersistedIssueList returned error")
-		// If the snapshot doesn't exist (e.g., hash mismatch, cache miss), clean up
-		// corrupted snapshot files and return error - caller must handle delta unavailable
-		if errors.Is(err, persistence.ErrPathHashDoesntExist) {
-			logger.Warn().Msg("delta findings unavailable - cleaning up corrupted snapshot")
-			f.scanPersister.CleanupCorruptedSnapshot(f.path, p)
+		if errors.Is(err, persistence.ErrBaselineDoesntExist) {
+			logger.Debug().Msg("delta findings unavailable - no baseline exists yet")
+			return nil, err
 		}
 		return nil, err
 	}
