@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -25,11 +27,16 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 	c.SetIdeName("test-ide")
-	c.SetTrustedFolders([]types.FilePath{"/trusted/a", "/trusted/b"})
+	cleanA := filepath.Clean("/trusted/a")
+	filePathA := types.FilePath(cleanA)
+	cleanB := "/trusted/b"
+	filePathB := types.FilePath(filepath.Clean(cleanB))
+	c.SetTrustedFolders([]types.FilePath{filePathA, filePathB})
 	c.SetAutoConfigureMcpEnabled(true)
 	c.SetSecureAtInceptionExecutionFrequency(SecureAtInceptionSmartScan)
 
-	_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/one")
+	cleanWorkspaceOne := filepath.Clean("/workspace/one")
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath(cleanWorkspaceOne))
 
 	notifier := notification.NewMockNotifier()
 	called := make(chan configuration.Configuration, 1)
@@ -47,10 +54,10 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 		require.NotNil(t, cfg)
 		assert.Equal(t, "test-ide", cfg.GetString(mcpTypes.ToolNameParam))
 		assert.Equal(t, "test-ide", cfg.GetString(mcpTypes.IdeConfigPathParam))
-		assert.Equal(t, "/trusted/a;/trusted/b", cfg.GetString(mcpTypes.TrustedFoldersParam))
+		assert.Equal(t, fmt.Sprintf("%s;%s", cleanA, cleanB), cfg.GetString(mcpTypes.TrustedFoldersParam))
 		assert.Equal(t, mcpTypes.RuleTypeSmart, cfg.GetString(mcpTypes.RuleTypeParam))
 		assert.Equal(t, mcpTypes.RulesWorkspaceScope, cfg.GetString(mcpTypes.RulesScopeParam))
-		assert.Equal(t, "/workspace/one", cfg.GetString(mcpTypes.WorkspacePathParam))
+		assert.Equal(t, cleanWorkspaceOne, cfg.GetString(mcpTypes.WorkspacePathParam))
 		assert.True(t, cfg.GetBool(mcpTypes.ConfigureMcpParam))
 		assert.True(t, cfg.GetBool(mcpTypes.ConfigureRulesParam))
 		assert.NotNil(t, cfg.Get(mcpTypes.McpRegisterCallbackParam))
