@@ -547,10 +547,10 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
 	if err != nil {
-		logger.Debug().Err(err).Msg("GetPersistedIssueList returned error")
 		if errors.Is(err, persistence.ErrBaselineDoesntExist) {
 			logger.Debug().Msg("delta findings unavailable - no baseline exists yet")
-			return nil, err
+		} else {
+			logger.Warn().Err(err).Msg("failed to get persisted issue list, snapshot may be corrupted")
 		}
 		return nil, err
 	}
@@ -635,8 +635,8 @@ func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.Filterab
 			continue
 		}
 		p := filterableIssueType.ToProduct()
-		deltaIssueByFile, err := f.GetDelta(p)
-		if err == nil {
+		deltaIssueByFile, _ := f.GetDelta(p)
+		if len(deltaIssueByFile) > 0 {
 			deltaList = append(deltaList, getFlatIssueList(deltaIssueByFile)...)
 		}
 	}

@@ -1016,10 +1016,6 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
 
-// ============================================================================
-// IDE-1514: Path Normalization and Recovery Tests
-// ============================================================================
-
 func Test_NewFolder_NormalizesPath(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1084,7 +1080,7 @@ func Test_GetDelta_BaselineMissingVsSnapshotCorrupted(t *testing.T) {
 		expectedReturnedErr error
 	}{
 		{
-			name:                "baseline missing does not cleanup",
+			name:                "baseline missing returns error",
 			persistedListErr:    persistence.ErrBaselineDoesntExist,
 			expectedReturnedErr: persistence.ErrBaselineDoesntExist,
 		},

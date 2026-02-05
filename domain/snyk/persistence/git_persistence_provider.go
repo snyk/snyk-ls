@@ -316,6 +316,16 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 	var snykIssues []snyk.Issue
 	err = json.Unmarshal(content, &snykIssues)
 	if err != nil {
+		logger.Warn().Err(err).Msg("failed to unmarshal snapshot, deleting")
+		err = g.deleteFromCache(hash, commitHash, p)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to remove file from cache: " + filePath)
+		}
+
+		deletionErr := os.Remove(filePath)
+		if deletionErr != nil {
+			logger.Error().Err(deletionErr).Msg("failed to remove file from disk: " + filePath)
+		}
 		return nil, ErrSnapshotCorrupted
 	}
 
