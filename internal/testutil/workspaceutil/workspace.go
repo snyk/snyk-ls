@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // SetupWorkspace creates a minimal workspace if it doesn't exist and adds the given folder paths to it.
@@ -65,9 +66,10 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 		if len(folderPaths) > 1 {
 			folderName = "test-folder-" + strconv.Itoa(i)
 		}
+		clean := util.PathKey(folderPath)
 		folder := workspace.NewFolder(
 			c,
-			folderPath,
+			clean,
 			folderName,
 			&scanner.TestScanner{},
 			nil,

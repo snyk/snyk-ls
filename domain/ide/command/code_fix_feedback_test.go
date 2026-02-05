@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -77,7 +79,7 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFixIdNotFound(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/folder1", "/workspace/folder2")
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -96,7 +98,9 @@ func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
+	folderPath1 := util.PathKey("/workspace/folder1")
+	folderPath2 := util.PathKey("/workspace/folder2")
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -121,14 +125,14 @@ func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
 
 	// Should correctly determine folder from fix results
 	require.NoError(t, err)
-	assert.Equal(t, types.FilePath("/workspace/folder2"), result)
+	assert.Equal(t, folderPath2, result)
 }
 
 func Test_getFolderFromFixId_ReturnsErrorWhenFileNotInAnyFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/folder1", "/workspace/folder2")
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -160,7 +164,10 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with multiple folders
-	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/project1"), types.FilePath("/workspace/project2"), types.FilePath("/workspace/project3"))
+	project1Path := util.PathKey("/workspace/project1")
+	project2Path := util.PathKey("/workspace/project2")
+	project3Path := util.PathKey("/workspace/project3")
+	_, _ = workspaceutil.SetupWorkspace(t, c, project1Path, project2Path, project3Path)
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -183,7 +190,7 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 	cmd := &codeFixFeedback{}
 	result1, err := cmd.getFolderFromFixId(c, testFixId1)
 	require.NoError(t, err)
-	assert.Equal(t, types.FilePath("/workspace/project1"), result1)
+	assert.Equal(t, project1Path, result1)
 
 	// Test fix in third folder
 	testFixId3 := "fix-in-project3"
@@ -200,5 +207,5 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 
 	result3, err := cmd.getFolderFromFixId(c, testFixId3)
 	require.NoError(t, err)
-	assert.Equal(t, types.FilePath("/workspace/project3"), result3)
+	assert.Equal(t, project3Path, result3)
 }
