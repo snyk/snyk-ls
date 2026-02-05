@@ -17,12 +17,15 @@
 // Package persistence implements persistence functionality
 package persistence
 
+//go:generate mockgen -destination=mock_persistence/scan_snapshot_persister_mock.go -package=mock_persistence github.com/snyk/snyk-ls/domain/snyk/persistence ScanSnapshotPersister
+
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -48,6 +51,10 @@ var (
 	ErrProductCacheDoesntExist                       = errors.New("product doesn't exist in cache")
 	ErrCommitCacheDoesntExist                        = errors.New("commit doesn't exist in cache")
 	_                          ScanSnapshotPersister = (*GitPersistenceProvider)(nil)
+
+	// snapshotFileRegex validates snapshot filenames and captures the folder hash (group 1)
+	// Format: {schemaVersion}.{folderPathHash:16hex}.{commitHash:40hex}.{product}.json
+	snapshotFileRegex = regexp.MustCompile(`^v1_1\.([a-f0-9]{16})\.([a-f0-9]{40})\.(code|oss|iac)\.json$`)
 )
 
 type hashedFolderPath string
@@ -56,6 +63,9 @@ type ScanSnapshotPersister interface {
 	types.ScanSnapshotClearerExister
 	Add(folderPath types.FilePath, commitHash string, issueList []types.Issue, p product.Product) error
 	GetPersistedIssueList(folderPath types.FilePath, p product.Product) ([]types.Issue, error)
+	// CleanupCorruptedSnapshot removes all snapshot files for a folder path when delta cannot work
+	// due to hash mismatches or corrupted cache. It logs all relevant information for debugging.
+	CleanupCorruptedSnapshot(folderPath types.FilePath, p product.Product)
 }
 
 type productCommitHashMap map[product.Product]string
@@ -174,6 +184,77 @@ func (g *GitPersistenceProvider) ClearFolder(folderPath types.FilePath) {
 	delete(g.cache, hash)
 }
 
+// CleanupCorruptedSnapshot removes all snapshot files for a folder path when delta cannot work
+// due to hash mismatches or corrupted cache. It logs all relevant information for debugging.
+func (g *GitPersistenceProvider) CleanupCorruptedSnapshot(folderPath types.FilePath, p product.Product) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+
+	hash := getHashForFolderPath(folderPath)
+	cacheDir := snykCacheDir(g.conf)
+
+	logger := g.logger.With().
+		Str("method", "CleanupCorruptedSnapshot").
+		Str("folderPath", string(folderPath)).
+		Str("folderPathHash", string(hash)).
+		Str("product", string(p)).
+		Str("cacheDir", cacheDir).
+		Logger()
+
+	logger.Warn().Msg("delta findings unavailable due to corrupted or mismatched snapshot cache - cleaning up")
+
+	// Log in-memory cache state
+	if pchMap, exists := g.cache[hash]; exists {
+		for prod, commitHash := range pchMap {
+			logger.Info().
+				Str("cachedProduct", string(prod)).
+				Str("cachedCommitHash", commitHash).
+				Msg("in-memory cache entry found")
+		}
+	} else {
+		logger.Info().Msg("no in-memory cache entry found for folder hash")
+	}
+
+	// Find and log all disk files for this folder hash
+	persistedFiles, err := g.getPersistedFiles(cacheDir)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to list persisted files during cleanup")
+		return
+	}
+
+	var deletedFiles []string
+	var existingFiles []string
+
+	for _, fileName := range persistedFiles {
+		// Use regex to validate and extract folder hash from filename
+		match := snapshotFileRegex.FindStringSubmatch(fileName)
+		if match == nil {
+			continue
+		}
+		fileHash := match[1] // First capture group is the folder hash
+		if fileHash == string(hash) {
+			existingFiles = append(existingFiles, fileName)
+			fullPath := filepath.Join(cacheDir, fileName)
+			if err := os.Remove(fullPath); err != nil {
+				logger.Error().Err(err).Str("file", fileName).Msg("failed to delete snapshot file")
+			} else {
+				deletedFiles = append(deletedFiles, fileName)
+			}
+		}
+	}
+
+	logger.Info().
+		Strs("existingFiles", existingFiles).
+		Strs("deletedFiles", deletedFiles).
+		Int("totalDeleted", len(deletedFiles)).
+		Int("totalExisting", len(existingFiles)).
+		Msg("snapshot cleanup completed")
+
+	// Clear in-memory cache for this folder
+	delete(g.cache, hash)
+	logger.Info().Msg("in-memory cache cleared for folder")
+}
+
 // findCommitHashOnDisk attempts to find a commit hash on disk when the in-memory cache misses.
 // This fixes IDE-1514: GetPersistedIssueList fails when cache is not initialized.
 // Returns the commit hash if found, or empty string if not found.
@@ -282,6 +363,7 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 			logger.Debug().
 				Err(err).
 				Str("cacheDir", cacheDir).
+				Str("folderPathHash", string(hash)).
 				Msg("fallback to disk failed, returning error")
 			return nil, err
 		}

@@ -777,3 +777,121 @@ func TestGetPersistedIssueList_AfterRestart(t *testing.T) {
 	assert.Equal(t, expectedIssue.GetFingerprint(), loadedIssues[0].GetFingerprint())
 	assert.Equal(t, expectedIssue.GetContentRoot(), loadedIssues[0].GetContentRoot())
 }
+
+// TestCleanupCorruptedSnapshot_DeletesFilesAndClearsCache verifies that
+// CleanupCorruptedSnapshot removes all snapshot files for a folder and clears the in-memory cache
+func TestCleanupCorruptedSnapshot_DeletesFilesAndClearsCache(t *testing.T) {
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
+	folderPath := types.FilePath(conf.GetString(constants.DataHome))
+	repo := initGitRepo(t, folderPath, false)
+
+	expectedIssue := &snyk.Issue{
+		GlobalIdentity:   uuid.New().String(),
+		Fingerprint:      "test-fingerprint-cleanup",
+		ContentRoot:      folderPath,
+		AffectedFilePath: types.FilePath(filepath.Join(string(folderPath), "test.js")),
+	}
+	existingIssues := []types.Issue{expectedIssue}
+
+	commitHash, err := vcs.HeadRefHashForRepo(repo)
+	assert.NoError(t, err)
+	pc := product.ProductCode
+
+	// Persist some data
+	provider := NewGitPersistenceProvider(c.Logger(), conf)
+	err = provider.Init([]types.FilePath{folderPath})
+	assert.NoError(t, err)
+	err = provider.Add(folderPath, commitHash, existingIssues, pc)
+	assert.NoError(t, err)
+
+	// Verify data exists before cleanup
+	cacheDir := snykCacheDir(conf)
+	hash := getHashForFolderPath(folderPath)
+	assert.True(t, issuesFileExists(cacheDir, hash, commitHash, pc), "Snapshot file should exist before cleanup")
+	_, ok := provider.cache[hash]
+	assert.True(t, ok, "In-memory cache should have entry before cleanup")
+
+	// Act - cleanup corrupted snapshot
+	provider.CleanupCorruptedSnapshot(folderPath, pc)
+
+	// Assert - verify file is deleted and cache is cleared
+	assert.False(t, issuesFileExists(cacheDir, hash, commitHash, pc), "Snapshot file should be deleted after cleanup")
+	_, ok = provider.cache[hash]
+	assert.False(t, ok, "In-memory cache should be cleared after cleanup")
+}
+
+func TestSnapshotFileRegex(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		valid    bool
+		hash     string
+	}{
+		{
+			name:     "valid code snapshot",
+			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.code.json",
+			valid:    true,
+			hash:     "97e3b0a21a604eae",
+		},
+		{
+			name:     "valid oss snapshot",
+			filename: "v1_1.abcdef1234567890.deadbeefdeadbeefdeadbeefdeadbeefdeadbeef.oss.json",
+			valid:    true,
+			hash:     "abcdef1234567890",
+		},
+		{
+			name:     "valid iac snapshot",
+			filename: "v1_1.1234567890abcdef.0123456789abcdef0123456789abcdef01234567.iac.json",
+			valid:    true,
+			hash:     "1234567890abcdef",
+		},
+		{
+			name:     "invalid - wrong schema version",
+			filename: "v2_0.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.code.json",
+			valid:    false,
+		},
+		{
+			name:     "invalid - short folder hash",
+			filename: "v1_1.97e3b0a.73f59b5dd75199e8e669063733cf193b6f1544c1.code.json",
+			valid:    false,
+		},
+		{
+			name:     "invalid - short commit hash",
+			filename: "v1_1.97e3b0a21a604eae.73f59b5dd7519.code.json",
+			valid:    false,
+		},
+		{
+			name:     "invalid - unknown product",
+			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.unknown.json",
+			valid:    false,
+		},
+		{
+			name:     "invalid - not json",
+			filename: "v1_1.97e3b0a21a604eae.73f59b5dd75199e8e669063733cf193b6f1544c1.code.txt",
+			valid:    false,
+		},
+		{
+			name:     "invalid - random file",
+			filename: "some_random_file.json",
+			valid:    false,
+		},
+		{
+			name:     "invalid - empty",
+			filename: "",
+			valid:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			match := snapshotFileRegex.FindStringSubmatch(tt.filename)
+			if tt.valid {
+				assert.NotNil(t, match, "Expected filename to match regex")
+				assert.Equal(t, tt.hash, match[1], "Folder hash should be captured")
+			} else {
+				assert.Nil(t, match, "Expected filename to NOT match regex")
+			}
+		})
+	}
+}

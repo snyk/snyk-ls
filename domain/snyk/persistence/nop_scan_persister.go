@@ -51,3 +51,6 @@ func (n NopScanPersister) Add(_ types.FilePath, _ string, _ []types.Issue, _ pro
 func (n NopScanPersister) GetPersistedIssueList(_ types.FilePath, _ product.Product) ([]types.Issue, error) {
 	return nil, nil
 }
+
+func (n NopScanPersister) CleanupCorruptedSnapshot(_ types.FilePath, _ product.Product) {
+}

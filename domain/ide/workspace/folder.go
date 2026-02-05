@@ -20,8 +20,8 @@ package workspace
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/samber/lo"
@@ -52,6 +52,7 @@ import (
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var _ snyk.CacheProvider = (*Folder)(nil)
@@ -259,7 +260,7 @@ func NewFolder(
 ) *Folder {
 	folder := Folder{
 		scanner:             scanner,
-		path:                types.FilePath(strings.TrimSuffix(string(path), "/")),
+		path:                util.PathKey(path),
 		name:                name,
 		status:              Unscanned,
 		hoverService:        hoverService,
@@ -529,8 +530,12 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
-	logger.Debug().Msgf("getting delta for product %s, folderPath %s", p, f.path)
+	logger := f.c.Logger().With().
+		Str("method", "getDelta").
+		Str("folderPath", string(f.path)).
+		Str("product", string(p)).
+		Logger()
+	logger.Debug().Msg("getting delta")
 
 	issueByFile := f.IssuesByProduct()[p]
 
@@ -542,7 +547,13 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
 	if err != nil {
-		logger.Debug().Msgf("GetPersistedIssueList returned error: %v", err)
+		logger.Debug().Err(err).Msg("GetPersistedIssueList returned error")
+		// If the snapshot doesn't exist (e.g., hash mismatch, cache miss), clean up
+		// corrupted snapshot files and return error - caller must handle delta unavailable
+		if errors.Is(err, persistence.ErrPathHashDoesntExist) {
+			logger.Warn().Msg("delta findings unavailable - cleaning up corrupted snapshot")
+			f.scanPersister.CleanupCorruptedSnapshot(f.path, p)
+		}
 		return nil, err
 	}
 
