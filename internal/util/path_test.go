@@ -51,7 +51,7 @@ func TestPathKey(t *testing.T) {
 		{
 			name:     "Root path Unix",
 			input:    "/",
-			expected: types.FilePath(filepath.Clean("/")),
+			expected: PathKey("/"),
 		},
 		{
 			name:     "Root path Windows",
@@ -61,22 +61,22 @@ func TestPathKey(t *testing.T) {
 		{
 			name:     "Path with parent directory normalized",
 			input:    "/Users/foo/../bar",
-			expected: types.FilePath(filepath.Clean("/Users/foo/../bar")),
+			expected: PathKey("/Users/foo/../bar"),
 		},
 		{
 			name:     "Path with current and parent directory normalized",
 			input:    "/Users/foo/./../bar",
-			expected: types.FilePath(filepath.Clean("/Users/foo/./../bar")),
+			expected: PathKey("/Users/foo/./../bar"),
 		},
 		{
 			name:     "Path with semicolon (normalized)",
 			input:    "/Users/foo; rm -rf /",
-			expected: types.FilePath(filepath.Clean("/Users/foo; rm -rf /")),
+			expected: PathKey("/Users/foo; rm -rf /"),
 		},
 		{
 			name:     "Relative path",
 			input:    "Users/foo/project",
-			expected: types.FilePath(filepath.Clean("Users/foo/project")),
+			expected: PathKey("Users/foo/project"),
 		},
 	}
 
@@ -187,37 +187,37 @@ func Test_PathKey_PathNormalization(t *testing.T) {
 		{
 			name:     "Unix path without trailing slash",
 			input:    "/Users/test/project",
-			expected: types.FilePath(filepath.Clean("/Users/test/project")),
+			expected: PathKey("/Users/test/project"),
 		},
 		{
 			name:     "Unix path with trailing slash",
 			input:    "/Users/test/project/",
-			expected: types.FilePath(filepath.Clean("/Users/test/project/")),
+			expected: PathKey("/Users/test/project/"),
 		},
 		{
 			name:     "Path with whitespace",
 			input:    "  /Users/test/project  ",
-			expected: types.FilePath(filepath.Clean("/Users/test/project")),
+			expected: PathKey("/Users/test/project"),
 		},
 		{
 			name:     "Root path Unix",
 			input:    "/",
-			expected: types.FilePath(filepath.Clean("/")),
+			expected: PathKey("/"),
 		},
 		{
 			name:     "Windows path with backslashes",
 			input:    "C:\\Users\\test\\project",
-			expected: types.FilePath(filepath.Clean("C:\\Users\\test\\project")),
+			expected: PathKey("C:\\Users\\test\\project"),
 		},
 		{
 			name:     "Windows path with mixed separators",
 			input:    "C:\\Users/test\\project/",
-			expected: types.FilePath(filepath.Clean("C:\\Users/test\\project/")),
+			expected: PathKey("C:\\Users/test\\project/"),
 		},
 		{
 			name:     "Root path Windows",
 			input:    "C:\\",
-			expected: types.FilePath(filepath.Clean("C:\\")),
+			expected: PathKey("C:\\"),
 		},
 	}
 

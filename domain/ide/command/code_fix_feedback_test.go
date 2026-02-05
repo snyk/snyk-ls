@@ -17,11 +17,12 @@
 package command
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/snyk/code-client-go/llm"
 
@@ -78,7 +79,7 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFixIdNotFound(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/folder1", "/workspace/folder2")
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -97,8 +98,8 @@ func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	folderPath1 := types.FilePath(filepath.Clean("/workspace/folder1"))
-	folderPath2 := types.FilePath(filepath.Clean("/workspace/folder2"))
+	folderPath1 := util.PathKey("/workspace/folder1")
+	folderPath2 := util.PathKey("/workspace/folder2")
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Initialize HtmlRenderer
@@ -131,7 +132,7 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFileNotInAnyFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/folder1"), types.FilePath("/workspace/folder2"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/folder1", "/workspace/folder2")
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
@@ -163,9 +164,9 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with multiple folders
-	project1Path := types.FilePath(filepath.Clean("/workspace/project1"))
-	project2Path := types.FilePath(filepath.Clean("/workspace/project2"))
-	project3Path := types.FilePath(filepath.Clean("/workspace/project3"))
+	project1Path := util.PathKey("/workspace/project1")
+	project2Path := util.PathKey("/workspace/project2")
+	project3Path := util.PathKey("/workspace/project3")
 	_, _ = workspaceutil.SetupWorkspace(t, c, project1Path, project2Path, project3Path)
 
 	// Initialize HtmlRenderer

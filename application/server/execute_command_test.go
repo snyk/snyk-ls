@@ -19,7 +19,6 @@ package server
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -33,7 +32,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
-	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
+	mockcommand "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -157,7 +156,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+	mockLdxSyncService := mockcommand.NewMockLdxSyncService(ctrl)
 	originalLdxService := di.LdxSyncService()
 	di.SetLdxSyncService(mockLdxSyncService)
 	defer di.SetLdxSyncService(originalLdxService)
@@ -237,8 +236,8 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 }
 
 func Test_TrustWorkspaceFolders(t *testing.T) {
-	folderPath1 := types.FilePath(filepath.Clean("/path/to/folder1"))
-	folderPath2 := types.FilePath(filepath.Clean("/path/to/folder2"))
+	folderPath1 := util.PathKey("/path/to/folder1")
+	folderPath2 := util.PathKey("/path/to/folder2")
 
 	t.Run("Doesn't mutate trusted folders, if trusted folders disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
