@@ -456,7 +456,7 @@ func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.StoredFolderC
 		if orgSettingsChanged {
 			folder := c.Workspace().GetFolderContaining(folderConfig.FolderPath)
 			if folder != nil {
-				di.LdxSyncService().RefreshConfigFromLdxSync(c, []types.Folder{folder})
+				di.LdxSyncService().RefreshConfigFromLdxSync(c, []types.Folder{folder}, notifier)
 			}
 		}
 	}

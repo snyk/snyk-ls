@@ -11,6 +11,7 @@ import (
 	ldx_sync_config "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	workflow "github.com/snyk/go-application-framework/pkg/workflow"
 	config "github.com/snyk/snyk-ls/application/config"
+	notification "github.com/snyk/snyk-ls/internal/notification"
 	types "github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -75,13 +76,13 @@ func (m *MockLdxSyncService) EXPECT() *MockLdxSyncServiceMockRecorder {
 }
 
 // RefreshConfigFromLdxSync mocks base method.
-func (m *MockLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder) {
+func (m *MockLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RefreshConfigFromLdxSync", c, workspaceFolders)
+	m.ctrl.Call(m, "RefreshConfigFromLdxSync", c, workspaceFolders, notifier)
 }
 
 // RefreshConfigFromLdxSync indicates an expected call of RefreshConfigFromLdxSync.
-func (mr *MockLdxSyncServiceMockRecorder) RefreshConfigFromLdxSync(c, workspaceFolders interface{}) *gomock.Call {
+func (mr *MockLdxSyncServiceMockRecorder) RefreshConfigFromLdxSync(c, workspaceFolders, notifier interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshConfigFromLdxSync", reflect.TypeOf((*MockLdxSyncService)(nil).RefreshConfigFromLdxSync), c, workspaceFolders)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshConfigFromLdxSync", reflect.TypeOf((*MockLdxSyncService)(nil).RefreshConfigFromLdxSync), c, workspaceFolders, notifier)
 }

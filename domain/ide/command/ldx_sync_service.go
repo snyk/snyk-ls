@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -48,7 +49,7 @@ func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(engine workflow.Engine
 
 // LdxSyncService provides LDX-Sync configuration refresh functionality
 type LdxSyncService interface {
-	RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder)
+	RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier)
 }
 
 // DefaultLdxSyncService is the default implementation of LdxSyncService
@@ -74,7 +75,8 @@ func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient) LdxSyncService {
 // Results are stored in the LDXSyncConfigCache:
 // - FolderToOrgMapping: maps folder paths to their resolved org IDs
 // - OrgConfigs: maps org IDs to their org-level settings
-func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder) {
+// The notifier is used to send $/snyk.configuration when machine config is updated.
+func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier) {
 	logger := c.Logger().With().Str("method", "RefreshConfigFromLdxSync").Logger()
 	engine := c.Engine()
 	gafConfig := engine.GetConfiguration()
@@ -146,11 +148,6 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 				return
 			}
 
-			// Store result in temporary map
-			resultsMutex.Lock()
-			results[f.Path()] = &cfgResult
-			resultsMutex.Unlock()
-
 			logger.Debug().
 				Str("folder", string(f.Path())).
 				Msg("Retrieved user config from LDX-Sync")
@@ -160,9 +157,9 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 	// Wait for all goroutines to complete
 	wg.Wait()
 
-	// Update the org config cache (including folder-to-org mapping) and machine config
+	// Update the org config cache (including folder-to-org mapping) and global config
 	s.updateOrgConfigCache(c, results)
-	s.updateMachineConfig(c, results)
+	s.updateGlobalConfig(c, results, notifier)
 }
 
 // updateOrgConfigCache converts LDX-Sync results to org configs and updates the cache.
@@ -226,14 +223,15 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 	s.clearLockedOverridesFromStoredFolderConfigs(c, orgLockedFields, &logger)
 }
 
-// updateMachineConfig extracts machine-scope settings from LDX-Sync results and applies them to Config.
-// Machine settings are global and don't vary by org, so we take the first available result.
+// updateGlobalConfig extracts global/machine-scope settings from LDX-Sync results and applies them to Config.
+// Global settings don't vary by org, so we take the first available result.
 // For each setting:
 // - If locked: always use LDX-Sync value (user cannot override)
 // - If enforced: use LDX-Sync value (user can temporarily override between LDX-Sync runs)
 // - Otherwise: use LDX-Sync value only if user hasn't set a non-default value
-func (s *DefaultLdxSyncService) updateMachineConfig(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
-	logger := c.Logger().With().Str("method", "updateMachineConfig").Logger()
+// After updating, sends $/snyk.configuration notification so IDE can persist the changes.
+func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult, notifier notification.Notifier) {
+	logger := c.Logger().With().Str("method", "updateGlobalConfig").Logger()
 
 	var configUpdated = false
 	for folderPath, result := range results {
@@ -241,41 +239,48 @@ func (s *DefaultLdxSyncService) updateMachineConfig(c *config.Config, results ma
 			continue
 		}
 
-		// Extract machine-scope settings from the first valid response
+		// Extract global settings from the first valid response
 		if !configUpdated {
-			machineConfig := types.ExtractMachineSettings(result.Config)
-			if len(machineConfig) > 0 {
+			globalConfig := types.ExtractMachineSettings(result.Config)
+			if len(globalConfig) > 0 {
 				// Store metadata (locked/enforced status) for ConfigResolver
-				c.UpdateLdxSyncMachineConfig(machineConfig)
+				c.UpdateLdxSyncMachineConfig(globalConfig)
 
 				// Apply actual values to Config
-				s.applyMachineConfigValues(c, machineConfig)
+				s.applyGlobalConfigValues(c, globalConfig)
 
 				logger.Debug().
 					Str("folder", string(folderPath)).
-					Int("fieldCount", len(machineConfig)).
-					Msg("Updated machine config from LDX-Sync")
+					Int("fieldCount", len(globalConfig)).
+					Msg("Updated global config from LDX-Sync")
 				configUpdated = true
 			} else {
 				logger.Debug().
 					Str("folder", string(folderPath)).
-					Msg("No machine config found in LDX-Sync response, skipping machine config update")
+					Msg("No global config found in LDX-Sync response, skipping global config update")
 			}
 		} else {
 			logger.Debug().
 				Str("folder", string(folderPath)).
-				Msg("Machine config already applied from another folder, skipping")
+				Msg("Global config already applied from another folder, skipping")
 		}
+	}
+
+	// Send $/snyk.configuration notification so IDE can persist the updated global config
+	if configUpdated && notifier != nil {
+		lspConfig := BuildLspConfiguration(c)
+		notifier.Send(lspConfig)
+		logger.Debug().Msg("Sent $/snyk.configuration notification after global config update")
 	}
 }
 
-// applyMachineConfigValues applies machine-scope setting values from LDX-Sync to Config.
+// applyGlobalConfigValues applies global/machine-scope setting values from LDX-Sync to Config.
 // For locked/enforced settings, the LDX-Sync value is always applied.
 // For non-locked/non-enforced settings, the value is only applied if the user hasn't set a custom value.
-func (s *DefaultLdxSyncService) applyMachineConfigValues(c *config.Config, machineConfig map[string]*types.LDXSyncField) {
-	logger := c.Logger().With().Str("method", "applyMachineConfigValues").Logger()
+func (s *DefaultLdxSyncService) applyGlobalConfigValues(c *config.Config, globalConfig map[string]*types.LDXSyncField) {
+	logger := c.Logger().With().Str("method", "applyGlobalConfigValues").Logger()
 
-	for settingName, field := range machineConfig {
+	for settingName, field := range globalConfig {
 		if field == nil || field.Value == nil {
 			continue
 		}

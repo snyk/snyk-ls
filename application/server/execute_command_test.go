@@ -173,9 +173,9 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization with the workspace folder
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(c, gomock.Any()).
+		RefreshConfigFromLdxSync(c, gomock.Any(), gomock.Any()).
 		Times(1).
-		Do(func(_ interface{}, folders []types.Folder) {
+		Do(func(_ interface{}, folders []types.Folder, _ interface{}) {
 			// Verify that we received the workspace folder during initialization
 			assert.Len(t, folders, 1)
 			assert.Equal(t, folder.Path(), folders[0].Path())
@@ -196,9 +196,9 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 
 	// Expect RefreshConfigFromLdxSync to be called again after successful login
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(c, gomock.Any()).
+		RefreshConfigFromLdxSync(c, gomock.Any(), gomock.Any()).
 		Times(1).
-		Do(func(_ interface{}, folders []types.Folder) {
+		Do(func(_ interface{}, folders []types.Folder, _ interface{}) {
 			// Verify that we received the workspace folder after login
 			assert.Len(t, folders, 1)
 			assert.Equal(t, folder.Path(), folders[0].Path())

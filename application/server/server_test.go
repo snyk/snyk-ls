@@ -1030,7 +1030,7 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization (with empty folders)
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(c, gomock.Any()).
+		RefreshConfigFromLdxSync(c, gomock.Any(), gomock.Any()).
 		Times(1)
 
 	// Initialize server
@@ -1047,9 +1047,9 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 	// Expect RefreshConfigFromLdxSync to be called with the added folder
 	// The call will happen with the actual folder object created by the workspace
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(c, gomock.Any()).
+		RefreshConfigFromLdxSync(c, gomock.Any(), gomock.Any()).
 		Times(1).
-		Do(func(_ *config.Config, folders []types.Folder) {
+		Do(func(_ *config.Config, folders []types.Folder, _ interface{}) {
 			// Verify that we received exactly one folder
 			assert.Len(t, folders, 1)
 			// Verify the folder path matches what we added
@@ -1096,9 +1096,9 @@ func Test_initialized_CallsRefreshConfigFromLdxSync(t *testing.T) {
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization with all workspace folders
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(c, gomock.Any()).
+		RefreshConfigFromLdxSync(c, gomock.Any(), gomock.Any()).
 		Times(1).
-		Do(func(_ *config.Config, folders []types.Folder) {
+		Do(func(_ *config.Config, folders []types.Folder, _ interface{}) {
 			// Verify that we received two folders
 			assert.Len(t, folders, 2)
 			// Verify the folder paths match

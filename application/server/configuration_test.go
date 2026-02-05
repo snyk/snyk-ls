@@ -967,7 +967,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.
 
 	// Expect RefreshConfigFromLdxSync to be called once with the specific folder
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(setup.c, gomock.Eq([]types.Folder{folder})).
+		RefreshConfigFromLdxSync(setup.c, gomock.Eq([]types.Folder{folder}), gomock.Any()).
 		Times(1)
 
 	// Populate FolderToOrgMapping so AutoDeterminedOrg can be looked up

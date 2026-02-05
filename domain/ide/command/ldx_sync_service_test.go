@@ -93,7 +93,7 @@ func Test_RefreshConfigFromLdxSync_NoFolders(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 
 	// No API calls should be made for empty folder list
-	service.RefreshConfigFromLdxSync(c, []types.Folder{})
+	service.RefreshConfigFromLdxSync(c, []types.Folder{}, nil)
 
 	// Verify FolderToOrgMapping is empty
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -119,7 +119,7 @@ func Test_RefreshConfigFromLdxSync_SingleFolder_Success(t *testing.T) {
 		Return(expectedResult)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders)
+	service.RefreshConfigFromLdxSync(c, folders, nil)
 
 	// Verify FolderToOrgMapping was populated
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -154,7 +154,7 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 		Return(expectedResult)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders)
+	service.RefreshConfigFromLdxSync(c, folders, nil)
 
 	// Verify FolderToOrgMapping was populated
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -190,7 +190,7 @@ func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 		Return(result3)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders)
+	service.RefreshConfigFromLdxSync(c, folders, nil)
 
 	// Verify all FolderOrgMappings were populated
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -217,7 +217,7 @@ func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
 		Return(errorResult)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders)
+	service.RefreshConfigFromLdxSync(c, folders, nil)
 
 	// Verify FolderToOrgMapping was NOT populated for error result
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -286,7 +286,7 @@ func Test_RefreshConfigFromLdxSync_EmptyFolderPath(t *testing.T) {
 		Return(expectedResult)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders)
+	service.RefreshConfigFromLdxSync(c, folders, nil)
 
 	// Should populate FolderToOrgMapping even with empty path
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -346,7 +346,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromStoredFolderConfigs(
 	cache.SetFolderOrg(folderPath, orgId)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders)
+	service.RefreshConfigFromLdxSync(c, folders, nil)
 
 	// Verify user override was cleared for the locked field
 	storedAfter, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetStoredFolderConfigOptions{
@@ -393,7 +393,7 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	cache.SetFolderOrg(folderPath, orgId)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders)
+	service.RefreshConfigFromLdxSync(c, folders, nil)
 
 	// Verify locked override was cleared but non-locked override was preserved
 	storedAfter, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetStoredFolderConfigOptions{
