@@ -145,7 +145,7 @@ func workspaceWillDeleteFilesHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.DeleteFilesParams) (any, error) {
 		ws := c.Workspace()
 		for _, file := range params.Files {
-			pathFromUri := uri.PathFromUri(file.Uri)
+			pathFromUri := util.PathKey(uri.PathFromUri(file.Uri))
 
 			// Instead of branching whether it's a file or a folder, we'll attempt to remove both and the redundant case
 			// will be a no-op
