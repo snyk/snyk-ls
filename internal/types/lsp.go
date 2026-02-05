@@ -17,12 +17,10 @@
 package types
 
 import (
-	"maps"
 	"time"
 
 	"github.com/google/uuid"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/product"
@@ -560,158 +558,51 @@ type EffectiveValue struct {
 	OriginScope string `json:"originScope,omitempty"` // Server-side hierarchy where the config was set (e.g., "tenant", "group", "organization")
 }
 
-// LS sends this via the $/snyk.folderConfig notification
-type StoredFolderConfig struct {
-	FolderPath                  FilePath                              `json:"folderPath"`
-	BaseBranch                  string                                `json:"baseBranch"`
-	LocalBranches               []string                              `json:"localBranches,omitempty"`
-	AdditionalParameters        []string                              `json:"additionalParameters,omitempty"`
-	AdditionalEnv               string                                `json:"additionalEnv,omitempty"`
-	ReferenceFolderPath         FilePath                              `json:"referenceFolderPath,omitempty"`
-	ScanCommandConfig           map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
-	PreferredOrg                string                                `json:"preferredOrg"`
-	AutoDeterminedOrg           string                                `json:"autoDeterminedOrg"`
-	OrgMigratedFromGlobalConfig bool                                  `json:"orgMigratedFromGlobalConfig"`
-	OrgSetByUser                bool                                  `json:"orgSetByUser"`
-	FeatureFlags                map[string]bool                       `json:"featureFlags"`
-	SastSettings                *sast_contract.SastResponse           `json:"sastSettings"`
-	// UserOverrides stores user-specified overrides for org-scope settings.
-	// Key presence indicates the user has explicitly set this value (even if it matches the default).
-	// Key absence means we should use LDX-Sync or default value.
-	// This is LS-managed and should not be directly set by the IDE.
-	UserOverrides map[string]any `json:"userOverrides,omitempty"`
-	// EffectiveConfig contains computed effective values for org-scope settings.
-	// Sent to IDE for display and to drive IDE behavior. Read-only from IDE perspective.
-	// Key is the setting name (e.g., SettingEnabledSeverities), value is EffectiveValue.
-	EffectiveConfig map[string]EffectiveValue `json:"effectiveConfig,omitempty"`
-	// ModifiedFields is sent from IDE to LS when user changes settings.
-	// Key is the setting name, value is the new value (or null to clear/reset override).
-	// Only fields the user actually modified should be included.
-	// This field is ignored when LS sends to IDE.
-	ModifiedFields map[string]any `json:"modifiedFields,omitempty"`
+// LspFolderConfig is the public-facing struct for $/snyk.folderConfigs notification.
+// Used bidirectionally: LS → IDE (with effective values) and IDE → LS (with user changes).
+// All modifiable fields are pointers to support PATCH semantics:
+// - nil means "don't change" (when IDE → LS) or "not set" (when LS → IDE)
+// - explicit value means "set to this value"
+type LspFolderConfig struct {
+	// Required: identifies which folder
+	FolderPath FilePath `json:"folderPath"`
+
+	// Folder-scope settings (pointers for PATCH semantics)
+	BaseBranch           *string   `json:"baseBranch,omitempty"`
+	LocalBranches        []string  `json:"localBranches,omitempty"`
+	AdditionalParameters []string  `json:"additionalParameters,omitempty"`
+	AdditionalEnv        *string   `json:"additionalEnv,omitempty"`
+	ReferenceFolderPath  *FilePath `json:"referenceFolderPath,omitempty"`
+
+	// Org info (read-only from IDE perspective when LS → IDE)
+	PreferredOrg      *string `json:"preferredOrg,omitempty"`
+	AutoDeterminedOrg *string `json:"autoDeterminedOrg,omitempty"`
+
+	// Org-scope settings (effective values when LS → IDE, user changes when IDE → LS)
+	// These are computed by ConfigResolver when sending to IDE
+	EnabledSeverities  *SeverityFilter `json:"enabledSeverities,omitempty"`
+	RiskScoreThreshold *int            `json:"riskScoreThreshold,omitempty"`
+	ScanAutomatic      *bool           `json:"scanAutomatic,omitempty"`
+	ScanNetNew         *bool           `json:"scanNetNew,omitempty"`
+
+	// Product enablement (effective values)
+	SnykCodeEnabled *bool `json:"snykCodeEnabled,omitempty"`
+	SnykOssEnabled  *bool `json:"snykOssEnabled,omitempty"`
+	SnykIacEnabled  *bool `json:"snykIacEnabled,omitempty"`
+
+	// Issue view options (effective values)
+	IssueViewOpenIssues    *bool `json:"issueViewOpenIssues,omitempty"`
+	IssueViewIgnoredIssues *bool `json:"issueViewIgnoredIssues,omitempty"`
 }
 
-func (fc *StoredFolderConfig) Clone() *StoredFolderConfig {
-	if fc == nil {
-		return nil
-	}
-
-	clone := &StoredFolderConfig{
-		FolderPath:                  fc.FolderPath,
-		BaseBranch:                  fc.BaseBranch,
-		AdditionalEnv:               fc.AdditionalEnv,
-		ReferenceFolderPath:         fc.ReferenceFolderPath,
-		PreferredOrg:                fc.PreferredOrg,
-		AutoDeterminedOrg:           fc.AutoDeterminedOrg,
-		OrgMigratedFromGlobalConfig: fc.OrgMigratedFromGlobalConfig,
-		OrgSetByUser:                fc.OrgSetByUser,
-	}
-
-	if fc.LocalBranches != nil {
-		clone.LocalBranches = make([]string, len(fc.LocalBranches))
-		copy(clone.LocalBranches, fc.LocalBranches)
-	}
-
-	if fc.AdditionalParameters != nil {
-		clone.AdditionalParameters = make([]string, len(fc.AdditionalParameters))
-		copy(clone.AdditionalParameters, fc.AdditionalParameters)
-	}
-
-	if fc.ScanCommandConfig != nil {
-		clone.ScanCommandConfig = make(map[product.Product]ScanCommandConfig, len(fc.ScanCommandConfig))
-		maps.Copy(clone.ScanCommandConfig, fc.ScanCommandConfig)
-	}
-
-	if fc.FeatureFlags != nil {
-		clone.FeatureFlags = make(map[string]bool, len(fc.FeatureFlags))
-		maps.Copy(clone.FeatureFlags, fc.FeatureFlags)
-	}
-
-	if fc.SastSettings != nil {
-		clone.SastSettings = &sast_contract.SastResponse{
-			SastEnabled:                 fc.SastSettings.SastEnabled,
-			LocalCodeEngine:             fc.SastSettings.LocalCodeEngine,
-			Org:                         fc.SastSettings.Org,
-			ReportFalsePositivesEnabled: fc.SastSettings.ReportFalsePositivesEnabled,
-			AutofixEnabled:              fc.SastSettings.AutofixEnabled,
-		}
-		if fc.SastSettings.SupportedLanguages != nil {
-			clone.SastSettings.SupportedLanguages = make([]string, len(fc.SastSettings.SupportedLanguages))
-			copy(clone.SastSettings.SupportedLanguages, fc.SastSettings.SupportedLanguages)
-		}
-	}
-
-	if fc.UserOverrides != nil {
-		clone.UserOverrides = make(map[string]any, len(fc.UserOverrides))
-		maps.Copy(clone.UserOverrides, fc.UserOverrides)
-	}
-
-	if fc.EffectiveConfig != nil {
-		clone.EffectiveConfig = make(map[string]EffectiveValue, len(fc.EffectiveConfig))
-		maps.Copy(clone.EffectiveConfig, fc.EffectiveConfig)
-	}
-
-	if fc.ModifiedFields != nil {
-		clone.ModifiedFields = make(map[string]any, len(fc.ModifiedFields))
-		maps.Copy(clone.ModifiedFields, fc.ModifiedFields)
-	}
-
-	return clone
-}
-
-// HasUserOverride checks if the user has explicitly set a value for the given setting
-func (fc *StoredFolderConfig) HasUserOverride(settingName string) bool {
-	_, exists := fc.GetUserOverride(settingName)
-	return exists
-}
-
-// GetUserOverride returns the user override value for the given setting, or nil if not set
-func (fc *StoredFolderConfig) GetUserOverride(settingName string) (any, bool) {
-	if fc == nil || fc.UserOverrides == nil {
-		return nil, false
-	}
-	val, exists := fc.UserOverrides[settingName]
-	return val, exists
-}
-
-// SetUserOverride explicitly sets a user override value for the given setting
-func (fc *StoredFolderConfig) SetUserOverride(settingName string, value any) {
-	if fc.UserOverrides == nil {
-		fc.UserOverrides = make(map[string]any)
-	}
-	fc.UserOverrides[settingName] = value
-}
-
-// ResetToDefault removes a user override, reverting to LDX-Sync or default value
-func (fc *StoredFolderConfig) ResetToDefault(settingName string) {
-	if fc.UserOverrides != nil {
-		delete(fc.UserOverrides, settingName)
-	}
-}
-
-// SanitizeForIDE returns a copy of the StoredFolderConfig prepared for sending to the IDE.
-// - UserOverrides, FeatureFlags, SastSettings are cleared (LS-managed, not exposed to IDE)
-// - EffectiveConfig is kept (IDE needs this for display and behavior)
-// - ModifiedFields is cleared (only used for IDE → LS communication)
-func (fc *StoredFolderConfig) SanitizeForIDE() StoredFolderConfig {
-	sanitized := *fc
-	sanitized.UserOverrides = nil
-	sanitized.ModifiedFields = nil
-
-	// TODO we might reinstate these when we fix IDE-1539, and have the IDEs use these instead of looking them up.
-	sanitized.FeatureFlags = nil
-	sanitized.SastSettings = nil
-
-	return sanitized
+// LspFolderConfigsParam is the payload for $/snyk.folderConfigs notification
+type LspFolderConfigsParam struct {
+	FolderConfigs []LspFolderConfig `json:"folderConfigs"`
 }
 
 type Pair struct {
 	First  any `json:"first"`
 	Second any `json:"second"`
-}
-
-type StoredFolderConfigsParam struct {
-	StoredFolderConfigs []StoredFolderConfig `json:"folderConfigs"`
 }
 
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field

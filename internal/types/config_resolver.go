@@ -27,10 +27,19 @@ type ConfigProvider interface {
 	FolderOrganization(path FilePath) string
 }
 
+// ConfigResolverInterface defines the methods needed for config resolution.
+// This interface allows StoredFolderConfig.ToLspFolderConfig to work with ConfigResolver
+// without creating a circular dependency.
+type ConfigResolverInterface interface {
+	GetBool(settingName string, folderConfig *StoredFolderConfig) bool
+	GetInt(settingName string, folderConfig *StoredFolderConfig) int
+	GetSeverityFilter(settingName string, folderConfig *StoredFolderConfig) *SeverityFilter
+}
+
 // ConfigResolver is the single entry point for reading configuration values.
 // It encapsulates the resolution logic and ensures correct precedence:
 // 1. Machine-wide settings → Locked LDX-Sync > Global Config > LDX-Sync > Default
-// 2. Folder-scoped settings → FolderConfig (with LDX-Sync folder settings)
+// 2. Folder-scoped settings → StoredFolderConfig (with LDX-Sync folder settings)
 // 3. Org-scoped settings → Locked LDX-Sync > User Override > LDX-Sync > Global Default
 type ConfigResolver struct {
 	ldxSyncCache         *LDXSyncConfigCache
@@ -76,7 +85,7 @@ func (r *ConfigResolver) SetGlobalSettings(settings *Settings) {
 // Delegates to c.FolderOrganization which is the single source of truth.
 // FolderOrganization handles all resolution logic including user preferences, AutoDeterminedOrg,
 // and global fallback (with caching to avoid repeated API calls).
-func (r *ConfigResolver) getEffectiveOrg(folderConfig *FolderConfig) string {
+func (r *ConfigResolver) getEffectiveOrg(folderConfig *StoredFolderConfig) string {
 	if folderConfig == nil || r.c == nil {
 		return ""
 	}
@@ -85,7 +94,7 @@ func (r *ConfigResolver) getEffectiveOrg(folderConfig *FolderConfig) string {
 
 // GetValue resolves a configuration value for the given setting and folder.
 // Returns the resolved value and the source it came from.
-func (r *ConfigResolver) GetValue(settingName string, folderConfig *FolderConfig) (any, ConfigSource) {
+func (r *ConfigResolver) GetValue(settingName string, folderConfig *StoredFolderConfig) (any, ConfigSource) {
 	scope := GetSettingScope(settingName)
 
 	switch scope {
@@ -147,8 +156,8 @@ func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigS
 	return value, source
 }
 
-// resolveFolderSetting resolves a folder-scoped setting from FolderConfig
-func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig *FolderConfig) (any, ConfigSource) {
+// resolveFolderSetting resolves a folder-scoped setting from StoredFolderConfig
+func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig *StoredFolderConfig) (any, ConfigSource) {
 	value := r.getFolderSettingValue(settingName, folderConfig)
 	source := ConfigSourceFolder
 
@@ -157,7 +166,7 @@ func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig *
 }
 
 // resolveOrgSetting resolves an org-scoped setting with full precedence logic
-func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig *FolderConfig) (any, ConfigSource) {
+func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig *StoredFolderConfig) (any, ConfigSource) {
 	// Only look up org if we have an LDX-Sync cache with actual data to query.
 	// This avoids triggering FolderOrganization() calls (which may call Organization() and trigger API calls)
 	// when there's no LDX-Sync data to look up anyway.
@@ -217,7 +226,7 @@ func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig *Fol
 
 // GetEffectiveValue resolves a configuration value and returns it as an EffectiveValue
 // with source information for display to the IDE.
-func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig *FolderConfig) EffectiveValue {
+func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig *StoredFolderConfig) EffectiveValue {
 	value, source := r.GetValue(settingName, folderConfig)
 
 	originScope := ""
@@ -233,7 +242,7 @@ func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig *Fol
 }
 
 // getOriginScope retrieves the server-side origin scope for a setting from LDX-Sync
-func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *FolderConfig) string {
+func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *StoredFolderConfig) string {
 	scope := GetSettingScope(settingName)
 
 	switch scope {
@@ -318,21 +327,49 @@ var globalSettingGetters = map[string]globalSettingGetter{
 	SettingTrustEnabled:       func(s *Settings) any { return s.EnableTrustedFoldersFeature },
 }
 
-// getGlobalSettingValue returns the value for a setting from global settings
+// getGlobalSettingValue returns the value for a setting from global settings.
+// Returns nil if the setting is not set (empty string, nil pointer, etc.). This is distinct from Config; by comparing
+// the two, we can distinguish between "value set equal to the default" and "value not set, so inheriting from default"
 func (r *ConfigResolver) getGlobalSettingValue(settingName string) any {
 	if r.globalSettings == nil {
 		return nil
 	}
 
 	if getter, exists := globalSettingGetters[settingName]; exists {
-		return getter(r.globalSettings)
+		value := getter(r.globalSettings)
+		if isUnset(value) {
+			return nil
+		}
+		return value
 	}
 
 	return nil
 }
 
+// isUnset returns true if the value represents an unset/empty setting (meaning we should fall back to the default)
+func isUnset(value any) bool {
+	if value == nil {
+		return true
+	}
+	switch v := value.(type) {
+	case string:
+		return v == ""
+	case *string:
+		return v == nil || *v == ""
+	case *int:
+		return v == nil
+	case *bool:
+		return v == nil
+	case *SeverityFilter:
+		return v == nil
+	case *IssueViewOptions:
+		return v == nil
+	}
+	return false
+}
+
 // getFolderSettingValue returns the value for a folder-scoped setting
-func (r *ConfigResolver) getFolderSettingValue(settingName string, folderConfig *FolderConfig) any {
+func (r *ConfigResolver) getFolderSettingValue(settingName string, folderConfig *StoredFolderConfig) any {
 	if folderConfig == nil {
 		return nil
 	}
@@ -354,7 +391,7 @@ func (r *ConfigResolver) getFolderSettingValue(settingName string, folderConfig 
 // Typed accessor methods for convenience
 
 // GetBool returns a boolean value for the given setting
-func (r *ConfigResolver) GetBool(settingName string, folderConfig *FolderConfig) bool {
+func (r *ConfigResolver) GetBool(settingName string, folderConfig *StoredFolderConfig) bool {
 	val, _ := r.GetValue(settingName, folderConfig)
 	switch v := val.(type) {
 	case bool:
@@ -367,7 +404,7 @@ func (r *ConfigResolver) GetBool(settingName string, folderConfig *FolderConfig)
 }
 
 // GetString returns a string value for the given setting
-func (r *ConfigResolver) GetString(settingName string, folderConfig *FolderConfig) string {
+func (r *ConfigResolver) GetString(settingName string, folderConfig *StoredFolderConfig) string {
 	val, _ := r.GetValue(settingName, folderConfig)
 	switch v := val.(type) {
 	case string:
@@ -378,7 +415,7 @@ func (r *ConfigResolver) GetString(settingName string, folderConfig *FolderConfi
 }
 
 // GetStringSlice returns a string slice value for the given setting
-func (r *ConfigResolver) GetStringSlice(settingName string, folderConfig *FolderConfig) []string {
+func (r *ConfigResolver) GetStringSlice(settingName string, folderConfig *StoredFolderConfig) []string {
 	val, _ := r.GetValue(settingName, folderConfig)
 	switch v := val.(type) {
 	case []string:
@@ -397,7 +434,7 @@ func (r *ConfigResolver) GetStringSlice(settingName string, folderConfig *Folder
 }
 
 // GetInt returns an integer value for the given setting
-func (r *ConfigResolver) GetInt(settingName string, folderConfig *FolderConfig) int {
+func (r *ConfigResolver) GetInt(settingName string, folderConfig *StoredFolderConfig) int {
 	val, _ := r.GetValue(settingName, folderConfig)
 	switch v := val.(type) {
 	case int:
@@ -415,13 +452,26 @@ func (r *ConfigResolver) GetInt(settingName string, folderConfig *FolderConfig) 
 }
 
 // GetSource returns only the source for a given setting (useful for UI display)
-func (r *ConfigResolver) GetSource(settingName string, folderConfig *FolderConfig) ConfigSource {
+func (r *ConfigResolver) GetSource(settingName string, folderConfig *StoredFolderConfig) ConfigSource {
 	_, source := r.GetValue(settingName, folderConfig)
 	return source
 }
 
+// GetSeverityFilter returns a SeverityFilter value for the given setting
+func (r *ConfigResolver) GetSeverityFilter(settingName string, folderConfig *StoredFolderConfig) *SeverityFilter {
+	val, _ := r.GetValue(settingName, folderConfig)
+	switch v := val.(type) {
+	case *SeverityFilter:
+		return v
+	case SeverityFilter:
+		return &v
+	default:
+		return nil
+	}
+}
+
 // IsLocked returns true if the setting is locked by LDX-Sync for the folder's org
-func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig) bool {
+func (r *ConfigResolver) IsLocked(settingName string, folderConfig *StoredFolderConfig) bool {
 	if folderConfig == nil || r.ldxSyncCache == nil || r.c == nil {
 		return false
 	}
@@ -441,7 +491,7 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig
 }
 
 // IsEnforced returns true if the setting is enforced by LDX-Sync for the folder's org
-func (r *ConfigResolver) IsEnforced(settingName string, folderConfig *FolderConfig) bool {
+func (r *ConfigResolver) IsEnforced(settingName string, folderConfig *StoredFolderConfig) bool {
 	if folderConfig == nil || r.ldxSyncCache == nil || r.c == nil {
 		return false
 	}
