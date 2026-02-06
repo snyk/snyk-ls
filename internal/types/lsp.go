@@ -616,15 +616,18 @@ type LspFolderConfig struct {
 	FolderPath FilePath `json:"folderPath"`
 
 	// Folder-scope settings (pointers for PATCH semantics)
-	BaseBranch           *string   `json:"baseBranch,omitempty"`
-	LocalBranches        []string  `json:"localBranches,omitempty"`
-	AdditionalParameters []string  `json:"additionalParameters,omitempty"`
-	AdditionalEnv        *string   `json:"additionalEnv,omitempty"`
-	ReferenceFolderPath  *FilePath `json:"referenceFolderPath,omitempty"`
+	BaseBranch           *string                               `json:"baseBranch,omitempty"`
+	LocalBranches        []string                              `json:"localBranches,omitempty"`
+	AdditionalParameters []string                              `json:"additionalParameters,omitempty"`
+	AdditionalEnv        *string                               `json:"additionalEnv,omitempty"`
+	ReferenceFolderPath  *FilePath                             `json:"referenceFolderPath,omitempty"`
+	ScanCommandConfig    map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
 
 	// Org info (read-only from IDE perspective when LS → IDE)
-	PreferredOrg      *string `json:"preferredOrg,omitempty"`
-	AutoDeterminedOrg *string `json:"autoDeterminedOrg,omitempty"`
+	PreferredOrg                *string `json:"preferredOrg,omitempty"`
+	AutoDeterminedOrg           *string `json:"autoDeterminedOrg,omitempty"`
+	OrgSetByUser                *bool   `json:"orgSetByUser,omitempty"`
+	OrgMigratedFromGlobalConfig *bool   `json:"orgMigratedFromGlobalConfig,omitempty"`
 
 	// Org-scope settings with full PATCH semantics (omitted/null/value)
 	// These are computed by ConfigResolver when sending to IDE

@@ -200,6 +200,9 @@ func (fc *StoredFolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface
 	if fc.ReferenceFolderPath != "" {
 		lspConfig.ReferenceFolderPath = &fc.ReferenceFolderPath
 	}
+	if len(fc.ScanCommandConfig) > 0 {
+		lspConfig.ScanCommandConfig = fc.ScanCommandConfig
+	}
 
 	// Org info
 	if fc.PreferredOrg != "" {
@@ -208,6 +211,8 @@ func (fc *StoredFolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface
 	if fc.AutoDeterminedOrg != "" {
 		lspConfig.AutoDeterminedOrg = &fc.AutoDeterminedOrg
 	}
+	lspConfig.OrgSetByUser = &fc.OrgSetByUser
+	lspConfig.OrgMigratedFromGlobalConfig = &fc.OrgMigratedFromGlobalConfig
 
 	// Org-scope settings (computed via resolver)
 	// When sending to IDE, we set Present=true and Value to the effective value
@@ -260,8 +265,19 @@ func (fc *StoredFolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 
 // applyFolderScopeUpdates applies folder-scope field updates (direct fields, not user overrides)
 func (fc *StoredFolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
-	changed := false
+	changed := fc.applyBasicFolderFields(update)
+	preferredOrgUpdated := fc.applyPreferredOrg(update)
+	if preferredOrgUpdated {
+		changed = true
+	}
+	if fc.applyOrgFlags(update, preferredOrgUpdated) {
+		changed = true
+	}
+	return changed
+}
 
+func (fc *StoredFolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
+	changed := false
 	if update.BaseBranch != nil && *update.BaseBranch != fc.BaseBranch {
 		fc.BaseBranch = *update.BaseBranch
 		changed = true
@@ -282,12 +298,35 @@ func (fc *StoredFolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) b
 		fc.ReferenceFolderPath = *update.ReferenceFolderPath
 		changed = true
 	}
+	if len(update.ScanCommandConfig) > 0 {
+		fc.ScanCommandConfig = update.ScanCommandConfig
+		changed = true
+	}
+	return changed
+}
+
+func (fc *StoredFolderConfig) applyPreferredOrg(update *LspFolderConfig) bool {
 	if update.PreferredOrg != nil && *update.PreferredOrg != fc.PreferredOrg {
 		fc.PreferredOrg = *update.PreferredOrg
 		fc.OrgSetByUser = true
+		return true
+	}
+	return false
+}
+
+func (fc *StoredFolderConfig) applyOrgFlags(update *LspFolderConfig, preferredOrgUpdated bool) bool {
+	changed := false
+	// Apply OrgSetByUser only if explicitly set (pointer is non-nil) and PreferredOrg was NOT updated
+	// (updating PreferredOrg already sets OrgSetByUser=true as a side effect)
+	if !preferredOrgUpdated && update.OrgSetByUser != nil && *update.OrgSetByUser != fc.OrgSetByUser {
+		fc.OrgSetByUser = *update.OrgSetByUser
 		changed = true
 	}
-
+	// Apply OrgMigratedFromGlobalConfig only if explicitly set (pointer is non-nil)
+	if update.OrgMigratedFromGlobalConfig != nil && *update.OrgMigratedFromGlobalConfig != fc.OrgMigratedFromGlobalConfig {
+		fc.OrgMigratedFromGlobalConfig = *update.OrgMigratedFromGlobalConfig
+		changed = true
+	}
 	return changed
 }
 
