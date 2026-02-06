@@ -212,11 +212,13 @@ func (w *Workspace) ScanWorkspace(ctx context.Context) {
 // and starts an automatic scan if auto-scans are enabled.
 func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFoldersParams) []types.Folder {
 	for _, folder := range params.Event.Removed {
-		w.RemoveFolder(uri.PathFromUri(folder.Uri))
+		pathFromUri := types.PathKey(uri.PathFromUri(folder.Uri))
+		w.RemoveFolder(pathFromUri)
 	}
 	var changedWorkspaceFolders []types.Folder
 	for _, folder := range params.Event.Added {
-		f := NewFolder(w.c, uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator, w.featureFlagService)
+		pathFromUri := types.PathKey(uri.PathFromUri(folder.Uri))
+		f := NewFolder(w.c, pathFromUri, folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator, w.featureFlagService)
 		w.AddFolder(f)
 		changedWorkspaceFolders = append(changedWorkspaceFolders, f)
 	}

@@ -31,7 +31,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 
-	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
+	mockcommand "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
@@ -88,7 +88,7 @@ func createLdxSyncResultWithOrg(orgId string) ldx_sync_config.LdxSyncConfigResul
 func Test_RefreshConfigFromLdxSync_NoFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 
@@ -104,9 +104,9 @@ func Test_RefreshConfigFromLdxSync_NoFolders(t *testing.T) {
 func Test_RefreshConfigFromLdxSync_SingleFolder_Success(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
-	folderPath := types.FilePath("/test/folder")
+	folderPath := types.PathKey("/test/folder")
 	workspaceutil.SetupWorkspace(t, c, folderPath)
 	folders := c.Workspace().Folders()
 
@@ -130,9 +130,9 @@ func Test_RefreshConfigFromLdxSync_SingleFolder_Success(t *testing.T) {
 func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
-	folderPath := types.FilePath("/test/folder")
+	folderPath := types.PathKey("/test/folder")
 	workspaceutil.SetupWorkspace(t, c, folderPath)
 	folders := c.Workspace().Folders()
 
@@ -149,8 +149,9 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 	expectedResult := createLdxSyncResultWithOrg(expectedOrgId)
 
 	// Expect API call with preferredOrg from folder config
+	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folderPath), preferredOrg).
+		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), preferredOrg).
 		Return(expectedResult)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
@@ -165,11 +166,11 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
-	folder1Path := types.FilePath("/test/folder1")
-	folder2Path := types.FilePath("/test/folder2")
-	folder3Path := types.FilePath("/test/folder3")
+	folder1Path := types.PathKey("/test/folder1")
+	folder2Path := types.PathKey("/test/folder2")
+	folder3Path := types.PathKey("/test/folder3")
 
 	workspaceutil.SetupWorkspace(t, c, folder1Path, folder2Path, folder3Path)
 	folders := c.Workspace().Folders()
@@ -179,14 +180,15 @@ func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 	result3 := createLdxSyncResultWithOrg("org-3")
 
 	// Expect API calls for all folders (order may vary due to parallel execution)
+	// Use normalized paths from Folder objects since NewFolder normalizes paths
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folder1Path), "").
+		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
 		Return(result1)
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folder2Path), "").
+		GetUserConfigForProject(c.Engine(), string(folders[1].Path()), "").
 		Return(result2)
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folder3Path), "").
+		GetUserConfigForProject(c.Engine(), string(folders[2].Path()), "").
 		Return(result3)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
@@ -202,9 +204,9 @@ func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
-	folderPath := types.FilePath("/test/folder")
+	folderPath := types.PathKey("/test/folder")
 	workspaceutil.SetupWorkspace(t, c, folderPath)
 	folders := c.Workspace().Folders()
 
@@ -212,8 +214,9 @@ func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
 		Error: assert.AnError,
 	}
 
+	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folderPath), "").
+		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
 		Return(errorResult)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
@@ -254,7 +257,7 @@ func Test_NewLdxSyncService_UsesDefaultApiClient(t *testing.T) {
 
 func Test_NewLdxSyncServiceWithApiClient_UsesProvidedClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 
@@ -271,7 +274,7 @@ func Test_NewLdxSyncServiceWithApiClient_UsesProvidedClient(t *testing.T) {
 func Test_RefreshConfigFromLdxSync_EmptyFolderPath(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
 	emptyPath := types.FilePath("")
 	workspaceutil.SetupWorkspace(t, c, emptyPath)
@@ -308,7 +311,7 @@ func Test_GetOrgIdForFolder_EmptyFolderPath_ReturnsEmpty(t *testing.T) {
 func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromStoredFolderConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 	logger := c.Logger()
 
 	// Setup folder with user override
@@ -361,7 +364,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromStoredFolderConfigs(
 func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
-	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 	logger := c.Logger()
 
 	// Setup folder with user overrides

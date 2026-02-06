@@ -30,7 +30,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
-	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
+	mockcommand "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -154,7 +154,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+	mockLdxSyncService := mockcommand.NewMockLdxSyncService(ctrl)
 	originalLdxService := di.LdxSyncService()
 	di.SetLdxSyncService(mockLdxSyncService)
 	defer di.SetLdxSyncService(originalLdxService)
@@ -227,11 +227,14 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 }
 
 func Test_TrustWorkspaceFolders(t *testing.T) {
+	folderPath1 := types.PathKey("/path/to/folder1")
+	folderPath2 := types.PathKey("/path/to/folder2")
+
 	t.Run("Doesn't mutate trusted folders, if trusted folders disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		loc, _ := setupServerWithCustomDI(t, c, false)
 
-		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService()))
+		c.Workspace().AddFolder(workspace.NewFolder(c, folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService()))
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -246,8 +249,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c := testutil.UnitTest(t)
 		loc, _ := setupServerWithCustomDI(t, c, false)
 
-		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService()))
-		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder2", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService()))
+		c.Workspace().AddFolder(workspace.NewFolder(c, folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService()))
+		c.Workspace().AddFolder(workspace.NewFolder(c, folderPath2, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService()))
 		c.SetTrustedFolderFeatureEnabled(true)
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
@@ -257,17 +260,17 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		}
 
 		assert.Len(t, c.TrustedFolders(), 2)
-		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder1"))
-		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder2"))
+		assert.Contains(t, c.TrustedFolders(), folderPath1)
+		assert.Contains(t, c.TrustedFolders(), folderPath2)
 	})
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		loc, _ := setupServerWithCustomDI(t, c, false)
 
-		c.Workspace().AddFolder(workspace.NewFolder(c, "/path/to/folder1", "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService()))
+		c.Workspace().AddFolder(workspace.NewFolder(c, folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService()))
 		c.SetTrustedFolderFeatureEnabled(true)
-		c.SetTrustedFolders([]types.FilePath{"/path/to/folder2"})
+		c.SetTrustedFolders([]types.FilePath{folderPath2})
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
@@ -276,8 +279,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		}
 
 		assert.Len(t, c.TrustedFolders(), 2)
-		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder1"))
-		assert.Contains(t, c.TrustedFolders(), types.FilePath("/path/to/folder2"))
+		assert.Contains(t, c.TrustedFolders(), folderPath1)
+		assert.Contains(t, c.TrustedFolders(), folderPath2)
 	})
 }
 

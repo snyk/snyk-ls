@@ -65,9 +65,10 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 		if len(folderPaths) > 1 {
 			folderName = "test-folder-" + strconv.Itoa(i)
 		}
+		clean := types.PathKey(folderPath)
 		folder := workspace.NewFolder(
 			c,
-			folderPath,
+			clean,
 			folderName,
 			&scanner.TestScanner{},
 			nil,

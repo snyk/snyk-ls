@@ -20,8 +20,8 @@ package workspace
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/samber/lo"
@@ -259,7 +259,7 @@ func NewFolder(
 ) *Folder {
 	folder := Folder{
 		scanner:             scanner,
-		path:                types.FilePath(strings.TrimSuffix(string(path), "/")),
+		path:                types.PathKey(path),
 		name:                name,
 		status:              Unscanned,
 		hoverService:        hoverService,
@@ -529,8 +529,12 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
-	logger.Debug().Msgf("getting delta for product %s, folderPath %s", p, f.path)
+	logger := f.c.Logger().With().
+		Str("method", "getDelta").
+		Str("folderPath", string(f.path)).
+		Str("product", string(p)).
+		Logger()
+	logger.Debug().Msg("getting delta")
 
 	issueByFile := f.IssuesByProduct()[p]
 
@@ -542,7 +546,11 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
 	if err != nil {
-		logger.Debug().Msgf("GetPersistedIssueList returned error: %v", err)
+		if errors.Is(err, persistence.ErrBaselineDoesntExist) {
+			logger.Debug().Msg("delta findings unavailable - no baseline exists yet")
+		} else {
+			logger.Warn().Err(err).Msg("failed to get persisted issue list, snapshot may be corrupted")
+		}
 		return nil, err
 	}
 
@@ -627,8 +635,8 @@ func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.Filterab
 			continue
 		}
 		p := filterableIssueType.ToProduct()
-		deltaIssueByFile, err := f.GetDelta(p)
-		if err == nil {
+		deltaIssueByFile, _ := f.GetDelta(p)
+		if len(deltaIssueByFile) > 0 {
 			deltaList = append(deltaList, getFlatIssueList(deltaIssueByFile)...)
 		}
 	}
