@@ -28,6 +28,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -35,6 +36,58 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
+
+func TestGetPersistedIssueList_BaselineMissingVsSnapshotMissing(t *testing.T) {
+	tests := []struct {
+		name        string
+		setup       func(t *testing.T, c *config.Config) (types.FilePath, *GitPersistenceProvider)
+		expectedErr error
+	}{
+		{
+			name: "baseline missing returns ErrBaselineDoesntExist",
+			setup: func(t *testing.T, c *config.Config) (types.FilePath, *GitPersistenceProvider) {
+				t.Helper()
+				conf := c.Engine().GetConfiguration()
+				folderPath := types.FilePath(conf.GetString(constants.DataHome))
+				initGitRepo(t, folderPath, false)
+				provider := NewGitPersistenceProvider(c.Logger(), conf)
+				return folderPath, provider
+			},
+			expectedErr: ErrBaselineDoesntExist,
+		},
+		{
+			name: "snapshot missing but expected returns ErrSnapshotCorrupted",
+			setup: func(t *testing.T, c *config.Config) (types.FilePath, *GitPersistenceProvider) {
+				t.Helper()
+				conf := c.Engine().GetConfiguration()
+				folderPath := types.FilePath(conf.GetString(constants.DataHome))
+				repo := initGitRepo(t, folderPath, false)
+
+				commitHash, err := vcs.HeadRefHashForRepo(repo)
+				assert.NoError(t, err)
+
+				provider := NewGitPersistenceProvider(c.Logger(), conf)
+				err = provider.Init([]types.FilePath{folderPath})
+				assert.NoError(t, err)
+
+				hash := getHashForFolderPath(folderPath)
+				provider.createOrAppendToCache(hash, commitHash, product.ProductCode)
+				return folderPath, provider
+			},
+			expectedErr: ErrSnapshotCorrupted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			folderPath, provider := tt.setup(t, c)
+			issues, err := provider.GetPersistedIssueList(folderPath, product.ProductCode)
+			assert.ErrorIs(t, err, tt.expectedErr)
+			assert.Nil(t, issues)
+		})
+	}
+}
 
 func TestInit_Empty(t *testing.T) {
 	c := testutil.UnitTest(t)

@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_GetCodeLensFromCommand(t *testing.T) {
@@ -48,6 +49,10 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	// this is using the real progress channel, so we need to listen to it
 	dummyProgressListeners(t)
 
+	// Configure fake authentication to avoid real API calls
+	c.SetAuthenticationMethod(types.FakeAuthentication)
+	c.SetToken("00000000-0000-0000-0000-000000000001")
+	di.AuthenticationService().ConfigureProviders(c)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
