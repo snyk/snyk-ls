@@ -62,3 +62,9 @@ config_output.html
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .cursor/rules/snyk_rules.mdc
+
+# gomock-generated reflection helpers
+*/gomock_reflect*/
+
+*_implementation_plan*
+*IDE-*

@@ -324,12 +324,14 @@ func Test_IsAuthenticated(t *testing.T) {
 
 func Test_Logout(t *testing.T) {
 	c := testutil.IntegTest(t)
+	// Ensure a token is set so that Logout will trigger a notification when clearing it
+	c.SetToken("test-token-for-logout")
 	provider := FakeAuthenticationProvider{IsAuthenticated: true}
 	notifier := notification.NewNotifier()
 	service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notifier)
 
-	// act
-	service.Logout(t.Context())
+	// Set up listener BEFORE calling Logout to ensure we catch the notification
+	// CreateListener spawns its own goroutine internally, no need for `go`
 	mu := sync.RWMutex{}
 	tokenResetReceived := false
 	callback := func(params any) {
@@ -341,7 +343,11 @@ func Test_Logout(t *testing.T) {
 			mu.Unlock()
 		}
 	}
-	go notifier.CreateListener(callback)
+	notifier.CreateListener(callback)
+	t.Cleanup(func() { notifier.DisposeListener() })
+
+	// act
+	service.Logout(t.Context())
 
 	// assert
 	assert.False(t, provider.IsAuthenticated)

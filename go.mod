@@ -4,6 +4,8 @@ go 1.24.0
 
 toolchain go1.24.6
 
+tool github.com/golang/mock/mockgen
+
 require (
 	github.com/adrg/strutil v0.3.1
 	github.com/adrg/xdg v0.5.3
@@ -132,8 +134,6 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-tool github.com/golang/mock/mockgen
 
 //replace github.com/snyk/go-application-framework => ../go-application-framework
 

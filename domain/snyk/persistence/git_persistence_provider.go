@@ -17,6 +17,8 @@
 // Package persistence implements persistence functionality
 package persistence
 
+//go:generate go tool mockgen -destination=mock_persistence/scan_snapshot_persister_mock.go -package=mock_persistence github.com/snyk/snyk-ls/domain/snyk/persistence ScanSnapshotPersister
+
 import (
 	"encoding/json"
 	"errors"
@@ -45,6 +47,8 @@ var (
 
 var (
 	ErrPathHashDoesntExist                           = errors.New("hashed folder path doesn't exist in cache")
+	ErrBaselineDoesntExist                           = errors.New("baseline doesn't exist in cache")
+	ErrSnapshotCorrupted                             = errors.New("snapshot is corrupted")
 	ErrProductCacheDoesntExist                       = errors.New("product doesn't exist in cache")
 	ErrCommitCacheDoesntExist                        = errors.New("commit doesn't exist in cache")
 	_                          ScanSnapshotPersister = (*GitPersistenceProvider)(nil)
@@ -282,13 +286,14 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 			logger.Debug().
 				Err(err).
 				Str("cacheDir", cacheDir).
+				Str("folderPathHash", string(hash)).
 				Msg("fallback to disk failed, returning error")
-			return nil, err
+			return nil, ErrBaselineDoesntExist
 		}
 	}
 
 	if commitHash == "" {
-		return nil, errors.New("no commit hash found in cache")
+		return nil, ErrBaselineDoesntExist
 	}
 	filePath := getLocalFilePath(cacheDir, hash, commitHash, p)
 	content, err := os.ReadFile(filePath)
@@ -303,6 +308,7 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 			if err != nil {
 				logger.Error().Err(err).Msg("failed to remove file from cache: " + filePath)
 			}
+			return nil, ErrSnapshotCorrupted
 		}
 		return nil, err
 	}
@@ -310,7 +316,17 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 	var snykIssues []snyk.Issue
 	err = json.Unmarshal(content, &snykIssues)
 	if err != nil {
-		return nil, err
+		logger.Warn().Err(err).Msg("failed to unmarshal snapshot, deleting")
+		err = g.deleteFromCache(hash, commitHash, p)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to remove file from cache: " + filePath)
+		}
+
+		deletionErr := os.Remove(filePath)
+		if deletionErr != nil {
+			logger.Error().Err(deletionErr).Msg("failed to remove file from disk: " + filePath)
+		}
+		return nil, ErrSnapshotCorrupted
 	}
 
 	var results []types.Issue
