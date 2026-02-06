@@ -247,6 +247,12 @@ func updateStoredFolderConfig(c *config.Config, settings types.Settings, logger 
 	incomingMap := buildIncomingLspConfigMap(settings.FolderConfigs)
 	allPaths := gatherAllFolderPathsFromLspConfigs(incomingMap, c.Workspace())
 
+	logger.Debug().
+		Int("incomingFolderConfigCount", len(settings.FolderConfigs)).
+		Int("incomingMapCount", len(incomingMap)).
+		Int("allPathsCount", len(allPaths)).
+		Msg("updateStoredFolderConfig - processing folder configs")
+
 	var folderConfigs []types.StoredFolderConfig
 	needsToSendUpdateToClient := false
 
@@ -267,7 +273,9 @@ func updateStoredFolderConfig(c *config.Config, settings types.Settings, logger 
 func buildIncomingLspConfigMap(folderConfigs []types.LspFolderConfig) map[types.FilePath]types.LspFolderConfig {
 	incomingMap := make(map[types.FilePath]types.LspFolderConfig)
 	for _, fc := range folderConfigs {
-		incomingMap[fc.FolderPath] = fc
+		// Normalize the path to ensure consistent lookup
+		normalizedPath := types.PathKey(fc.FolderPath)
+		incomingMap[normalizedPath] = fc
 	}
 	return incomingMap
 }
@@ -306,7 +314,8 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 
 	// Apply incoming LspFolderConfig updates using PATCH semantics
 	// nil fields = don't change, non-nil fields = set value
-	if incoming, hasIncoming := incomingMap[path]; hasIncoming {
+	normalizedPath := types.PathKey(path)
+	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
 		// Validate locked fields before applying
 		hasLockedFieldRejections := validateLockedFields(c, &folderConfig, &incoming, &logger)
 		if hasLockedFieldRejections {
