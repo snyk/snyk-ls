@@ -115,8 +115,9 @@ func Test_RefreshConfigFromLdxSync_SingleFolder_Success(t *testing.T) {
 	expectedResult := createLdxSyncResultWithOrg(expectedOrgId)
 
 	// Expect API call with empty preferredOrg (no folder config exists)
+	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folderPath), "").
+		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
 		Return(expectedResult)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
@@ -387,13 +388,14 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	orgId := "test-org-id-2"
 	result := createLdxSyncResultWithLockedField(orgId, "severities")
 
+	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folderPath), "").
+		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
 		Return(result)
 
 	// Setup folder-to-org mapping
 	cache := c.GetLdxSyncOrgConfigCache()
-	cache.SetFolderOrg(folderPath, orgId)
+	cache.SetFolderOrg(folders[0].Path(), orgId)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders, nil)
