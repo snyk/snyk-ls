@@ -20,6 +20,7 @@
 package command
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -175,30 +176,28 @@ func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 	workspaceutil.SetupWorkspace(t, c, folder1Path, folder2Path, folder3Path)
 	folders := c.Workspace().Folders()
 
-	result1 := createLdxSyncResultWithOrg("org-1")
-	result2 := createLdxSyncResultWithOrg("org-2")
-	result3 := createLdxSyncResultWithOrg("org-3")
-
-	// Expect API calls for all folders (order may vary due to parallel execution)
-	// Use normalized paths from Folder objects since NewFolder normalizes paths
-	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
-		Return(result1)
-	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folders[1].Path()), "").
-		Return(result2)
-	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folders[2].Path()), "").
-		Return(result3)
+	// Create a map of folder path to expected org ID for consistent verification
+	// Use the actual folder paths from the workspace (which may be in any order)
+	folderOrgMap := make(map[types.FilePath]string)
+	for i, folder := range folders {
+		orgId := fmt.Sprintf("org-%d", i+1)
+		folderOrgMap[folder.Path()] = orgId
+		result := createLdxSyncResultWithOrg(orgId)
+		mockApiClient.EXPECT().
+			GetUserConfigForProject(c.Engine(), string(folder.Path()), "").
+			Return(result)
+	}
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders, nil)
 
-	// Verify all FolderOrgMappings were populated
+	// Verify all FolderOrgMappings were populated with the expected org IDs
 	cache := c.GetLdxSyncOrgConfigCache()
-	assert.Equal(t, "org-1", cache.GetOrgIdForFolder(folder1Path))
-	assert.Equal(t, "org-2", cache.GetOrgIdForFolder(folder2Path))
-	assert.Equal(t, "org-3", cache.GetOrgIdForFolder(folder3Path))
+	for _, folder := range folders {
+		expectedOrgId := folderOrgMap[folder.Path()]
+		actualOrgId := cache.GetOrgIdForFolder(folder.Path())
+		assert.Equal(t, expectedOrgId, actualOrgId, "Org ID mismatch for folder %s", folder.Path())
+	}
 }
 
 func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
@@ -340,13 +339,14 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromStoredFolderConfigs(
 	orgId := "test-org-id"
 	result := createLdxSyncResultWithLockedField(orgId, "severities")
 
+	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folderPath), "").
+		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
 		Return(result)
 
 	// Setup folder-to-org mapping so clearLockedOverridesFromStoredFolderConfigs can find the org
 	cache := c.GetLdxSyncOrgConfigCache()
-	cache.SetFolderOrg(folderPath, orgId)
+	cache.SetFolderOrg(folders[0].Path(), orgId)
 
 	service := NewLdxSyncServiceWithApiClient(mockApiClient)
 	service.RefreshConfigFromLdxSync(c, folders, nil)
