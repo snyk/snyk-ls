@@ -298,11 +298,13 @@ func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.Lsp
 	return allPaths
 }
 
-// processSingleLspFolderConfig processes an incoming LspFolderConfig from the IDE using PATCH semantics.
+// processSingleLspFolderConfig processes an incoming LspFolderConfig from the IDE using PATCH semantics:
+// - For pointer fields: nil = don't change, non-nil = set value
+// - For NullableField[T]: omitted = don't change, null = reset to default, value = set override
 // It loads the existing StoredFolderConfig, applies the LspFolderConfig updates, and persists changes.
 func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.StoredFolderConfig, bool) {
-	storedConfig := c.StoredFolderConfig(path)
 	logger := c.Logger().With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
+	storedConfig := c.StoredFolderConfig(path)
 
 	// Start with existing stored config or create new
 	var folderConfig types.StoredFolderConfig
@@ -312,8 +314,7 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 		folderConfig = types.StoredFolderConfig{FolderPath: path}
 	}
 
-	// Apply incoming LspFolderConfig updates using PATCH semantics
-	// nil fields = don't change, non-nil fields = set value
+	// Validate that the changes are allowed, then apply the new config.
 	normalizedPath := types.PathKey(path)
 	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
 		// Validate locked fields before applying

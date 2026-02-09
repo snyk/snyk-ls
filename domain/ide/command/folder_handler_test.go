@@ -83,13 +83,13 @@ func Test_sendStoredFolderConfigs_SendsNotification(t *testing.T) {
 		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
 			folderConfigsParam = &fc
 		}
-		if _, ok := msg.(types.LspConfiguration); ok {
+		if _, ok := msg.(types.LspConfigurationParam); ok {
 			hasGlobalConfig = true
 		}
 	}
 
 	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
-	require.True(t, hasGlobalConfig, "Expected LspConfiguration notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
 	require.NotNil(t, folderConfigsParam.FolderConfigs[0].PreferredOrg)
 	assert.Equal(t, "test-org", *folderConfigsParam.FolderConfigs[0].PreferredOrg, "Notification should contain correct organization")
@@ -176,13 +176,13 @@ func Test_sendStoredFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T
 		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
 			folderConfigsParam = &fc
 		}
-		if _, ok := msg.(types.LspConfiguration); ok {
+		if _, ok := msg.(types.LspConfigurationParam); ok {
 			hasGlobalConfig = true
 		}
 	}
 
 	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
-	require.True(t, hasGlobalConfig, "Expected LspConfiguration notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
 	// AutoDeterminedOrg should be nil when cache is empty
 	assert.Nil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be nil when cache is empty")
@@ -224,13 +224,13 @@ func Test_sendStoredFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing
 		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
 			folderConfigsParam = &fc
 		}
-		if _, ok := msg.(types.LspConfiguration); ok {
+		if _, ok := msg.(types.LspConfigurationParam); ok {
 			hasGlobalConfig = true
 		}
 	}
 
 	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
-	require.True(t, hasGlobalConfig, "Expected LspConfiguration notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 1)
 	require.NotNil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg)
 	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
@@ -286,13 +286,13 @@ func Test_sendStoredFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing
 		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
 			folderConfigsParam = &fc
 		}
-		if _, ok := msg.(types.LspConfiguration); ok {
+		if _, ok := msg.(types.LspConfigurationParam); ok {
 			hasGlobalConfig = true
 		}
 	}
 
 	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
-	require.True(t, hasGlobalConfig, "Expected LspConfiguration notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
 	require.Len(t, folderConfigsParam.FolderConfigs, 2)
 
 	// Verify each folder has its own AutoDeterminedOrg (order is not guaranteed due to map iteration)

@@ -1311,7 +1311,7 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 }
 
 // StoredFolderConfig gets or creates a new folder config for the given folder path.
-// Can cause a rewrite to storage, for read-only operations where we know the stored data is complete, use
+// Can cause a rewrite to storage. For read-only operations where we know the stored data is complete, use
 // StoredFolderConfigReadOnly instead.
 func (c *Config) StoredFolderConfig(path types.FilePath) *types.StoredFolderConfig {
 	folderConfig, err := storedconfig.GetOrCreateStoredFolderConfig(c.engine.GetConfiguration(), path, c.Logger())

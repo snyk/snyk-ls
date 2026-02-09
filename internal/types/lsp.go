@@ -651,12 +651,12 @@ type LspFolderConfigsParam struct {
 	FolderConfigs []LspFolderConfig `json:"folderConfigs"`
 }
 
-// LspConfiguration is the payload for $/snyk.configuration notification.
+// LspConfigurationParam is the payload for $/snyk.configuration notification.
 // Contains global/machine-wide settings with effective values.
 // This mirrors what IDE sends during initialization (Settings struct),
 // allowing IDE to persist settings that may have been updated by LDX-Sync.
 // Only includes fields that IDEs send and would want to persist.
-type LspConfiguration struct {
+type LspConfigurationParam struct {
 	// Authentication & API
 	Token                   string               `json:"token,omitempty"`
 	Endpoint                string               `json:"endpoint,omitempty"`

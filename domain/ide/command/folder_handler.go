@@ -105,15 +105,15 @@ func sendStoredFolderConfigs(c *config.Config, notifier noti.Notifier, featureFl
 	notifier.Send(lspConfig)
 }
 
-// BuildLspConfiguration creates an LspConfiguration from the current config settings.
+// BuildLspConfiguration creates an LspConfigurationParam from the current config settings.
 // This is sent via $/snyk.configuration to allow IDEs to persist global settings.
-func BuildLspConfiguration(c *config.Config) types.LspConfiguration {
+func BuildLspConfiguration(c *config.Config) types.LspConfigurationParam {
 	// Get values from config getters
 	filterSeverity := c.FilterSeverity()
 	riskScoreThreshold := c.RiskScoreThreshold()
 	issueViewOptions := c.IssueViewOptions()
 
-	lspConfig := types.LspConfiguration{
+	lspConfig := types.LspConfigurationParam{
 		// Authentication & API
 		Token:                   c.Token(),
 		Endpoint:                c.Endpoint(),
