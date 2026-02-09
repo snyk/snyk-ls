@@ -1225,18 +1225,17 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		expectedOrg := "00000000-0000-0000-0000-000000000001"
 
-		// Set global org before initialization
-		c.SetOrganization(expectedOrg)
-
-		// Pass folder config via initParams - simulating IDE sending config that needs migration
-		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
-			{
-				FolderPath:                  repo,
-				OrgMigratedFromGlobalConfig: util.Ptr(false), // needs migration
-			},
+		// Pre-populate storage with a folder config to simulate migration
+		setupFunc := func(c *config.Config) {
+			c.SetOrganization(expectedOrg)
+			folderConfig := &types.StoredFolderConfig{
+				FolderPath: repo,
+			}
+			err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+			require.NoError(t, err)
 		}
 
-		ensureInitialized(t, c, loc, initParams, nil)
+		ensureInitialized(t, c, loc, initParams, setupFunc)
 
 		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
 			repo: func(fc types.LspFolderConfig) {
