@@ -50,11 +50,6 @@ type StoredFolderConfig struct {
 	// Sent to IDE for display and to drive IDE behavior. Read-only from IDE perspective.
 	// Key is the setting name (e.g., SettingEnabledSeverities), value is EffectiveValue.
 	EffectiveConfig map[string]EffectiveValue `json:"effectiveConfig,omitempty"`
-	// ModifiedFields is sent from IDE to LS when user changes settings.
-	// Key is the setting name, value is the new value (or null to clear/reset override).
-	// Only fields the user actually modified should be included.
-	// This field is ignored when LS sends to IDE.
-	ModifiedFields map[string]any `json:"modifiedFields,omitempty"`
 }
 
 func (fc *StoredFolderConfig) Clone() *StoredFolderConfig {
@@ -117,11 +112,6 @@ func (fc *StoredFolderConfig) Clone() *StoredFolderConfig {
 		maps.Copy(clone.EffectiveConfig, fc.EffectiveConfig)
 	}
 
-	if fc.ModifiedFields != nil {
-		clone.ModifiedFields = make(map[string]any, len(fc.ModifiedFields))
-		maps.Copy(clone.ModifiedFields, fc.ModifiedFields)
-	}
-
 	return clone
 }
 
@@ -158,12 +148,10 @@ func (fc *StoredFolderConfig) ResetToDefault(settingName string) {
 // SanitizeForIDE returns a copy of the StoredFolderConfig prepared for sending to the IDE.
 // - UserOverrides, FeatureFlags, SastSettings are cleared (LS-managed, not exposed to IDE)
 // - EffectiveConfig is kept (IDE needs this for display and behavior)
-// - ModifiedFields is cleared (only used for IDE → LS communication)
 // Deprecated: Use ToLspFolderConfig instead for the new LSP contract.
 func (fc *StoredFolderConfig) SanitizeForIDE() StoredFolderConfig {
 	sanitized := *fc
 	sanitized.UserOverrides = nil
-	sanitized.ModifiedFields = nil
 
 	// TODO we might reinstate these when we fix IDE-1539, and have the IDEs use these instead of looking them up.
 	sanitized.FeatureFlags = nil

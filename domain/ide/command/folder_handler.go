@@ -132,7 +132,7 @@ func BuildLspConfiguration(c *config.Config) types.LspConfigurationParam {
 		ActivateSnykCodeSecurity: boolToString(c.IsSnykCodeSecurityEnabled()),
 
 		// Scan & filtering settings
-		ScanningMode:       boolToString(c.IsAutoScanEnabled()),
+		ScanningMode:       scanModeString(c.IsAutoScanEnabled()),
 		FilterSeverity:     &filterSeverity,
 		RiskScoreThreshold: &riskScoreThreshold,
 		IssueViewOptions:   &issueViewOptions,
@@ -154,6 +154,15 @@ func boolToString(b bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+// scanModeString converts a boolean auto-scan flag to "auto" or "manual",
+// matching the format IDEs send via Settings.ScanningMode.
+func scanModeString(autoScan bool) string {
+	if autoScan {
+		return "auto"
+	}
+	return "manual"
 }
 
 // MigrateStoredFolderConfigOrgSettings applies the organization settings to a folder config during migration

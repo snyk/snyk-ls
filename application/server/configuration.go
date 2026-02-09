@@ -410,46 +410,6 @@ func clearLockedField(incoming *types.LspFolderConfig, settingName string) {
 	}
 }
 
-// processModifiedFields processes user changes from the IDE and updates UserOverrides accordingly.
-// - If a field has a non-nil value, it's added/updated as a user override
-// - If a field has a nil value, the user override is removed (reset to default/LDX-Sync)
-// - Locked fields are rejected with a warning log
-// Returns true if any updates were rejected (e.g, because the field was locked)
-func processModifiedFields(c *config.Config, folderConfig *types.StoredFolderConfig, modifiedFields map[string]any, logger *zerolog.Logger) (updatesRejected bool) {
-	resolver := c.GetConfigResolver()
-
-	for settingName, newValue := range modifiedFields {
-		// Validate that the field is not locked
-		if resolver != nil {
-			_, source := resolver.GetValue(settingName, folderConfig)
-			if source == types.ConfigSourceLDXSyncLocked {
-				logger.Warn().
-					Str("setting", settingName).
-					Msg("Rejecting change to locked setting - enforced by organization policy")
-				updatesRejected = true
-				continue
-			}
-		}
-
-		if newValue == nil {
-			// User wants to reset/clear the override
-			folderConfig.ResetToDefault(settingName)
-			logger.Debug().
-				Str("setting", settingName).
-				Msg("User override cleared, reverting to LDX-Sync or default")
-		} else {
-			// User is setting/updating an override
-			folderConfig.SetUserOverride(settingName, newValue)
-			logger.Debug().
-				Str("setting", settingName).
-				Interface("value", newValue).
-				Msg("User override set")
-		}
-	}
-
-	return updatesRejected
-}
-
 func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.StoredFolderConfig, folderConfig *types.StoredFolderConfig, notifier notification.Notifier) {
 	needsMigration := storedConfig != nil && !storedConfig.OrgMigratedFromGlobalConfig
 	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(*folderConfig, storedConfig)

@@ -135,53 +135,16 @@
 		}
 	}
 
-	// Reset folder overrides - sets all override fields to null in modifiedFields
+	// Reset folder overrides - marks the folder so all org-scope fields are set to null on save
 	function resetFolderOverrides(folderIndex) {
-		var prefix = "folder_" + folderIndex + "_override_";
-
-		// List of override settings to reset
-		var overrideSettings = [
-			"scan_automatic",
-			"scan_net_new",
-			"severity_critical",
-			"severity_high",
-			"severity_medium",
-			"severity_low",
-			"product_oss",
-			"product_code",
-			"product_iac",
-			"issueViewOpenIssues",
-			"issueViewIgnoredIssues",
-			"riskScoreThreshold"
-		];
-
-		// Mark each setting for reset by storing null in the tracking
-		for (var i = 0; i < overrideSettings.length; i++) {
-			var settingName = overrideSettings[i];
-			var elementId = prefix + settingName;
-			var element = dom.get(elementId) || dom.getByName(prefix + settingName)[0];
-
-			if (element && !element.disabled) {
-				// Store the reset marker
-				markFieldForReset(folderIndex, settingName);
-			}
-		}
-
-		// Update the folder tracking to indicate all fields should be reset
+		// Mark the folder for reset — on save, formHandler.applyFolderResets() will
+		// set all org-scope LspFolderConfig fields to null (clear overrides)
 		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markFolderForReset) {
 			window.ConfigApp.formHandler.markFolderForReset(folderIndex);
 		}
 
 		// Visual feedback - update source badges to show they will be reset
 		updateSourceBadgesForReset(folderIndex);
-	}
-
-	// Mark a field for reset (will send null in modifiedFields)
-	function markFieldForReset(folderIndex, settingName) {
-		// Store in a global tracking object
-		window.ConfigApp.pendingResets = window.ConfigApp.pendingResets || {};
-		window.ConfigApp.pendingResets[folderIndex] = window.ConfigApp.pendingResets[folderIndex] || {};
-		window.ConfigApp.pendingResets[folderIndex][settingName] = null;
 	}
 
 	// Update source badges to show pending reset
@@ -223,17 +186,6 @@
 		}
 		element.dispatchEvent(event);
 	}
-
-	// Get pending resets for a folder (used by form-handler when collecting data)
-	resetHandler.getPendingResets = function (folderIndex) {
-		if (!window.ConfigApp.pendingResets) return null;
-		return window.ConfigApp.pendingResets[folderIndex] || null;
-	};
-
-	// Clear pending resets after save
-	resetHandler.clearPendingResets = function () {
-		window.ConfigApp.pendingResets = {};
-	};
 
 	window.ConfigApp.resetHandler = resetHandler;
 })();

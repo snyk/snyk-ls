@@ -507,3 +507,21 @@ func Test_GetOrgIdForFolder_WithoutCache_ReturnsEmpty(t *testing.T) {
 
 	assert.Empty(t, orgId, "Should return empty string when cache is empty")
 }
+
+func Test_BuildLspConfiguration_ScanningMode_Auto(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetAutomaticScanning(true)
+
+	lspConfig := BuildLspConfiguration(c)
+
+	assert.Equal(t, "auto", lspConfig.ScanningMode, "ScanningMode should be 'auto' when auto-scan is enabled")
+}
+
+func Test_BuildLspConfiguration_ScanningMode_Manual(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetAutomaticScanning(false)
+
+	lspConfig := BuildLspConfiguration(c)
+
+	assert.Equal(t, "manual", lspConfig.ScanningMode, "ScanningMode should be 'manual' when auto-scan is disabled")
+}
