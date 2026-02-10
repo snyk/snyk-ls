@@ -17,6 +17,9 @@
 package vcs
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -35,18 +38,24 @@ var (
 )
 
 // GitRepoRoot resolves the git repository root directory from any path within
-// the repository (including subfolders). It uses DetectDotGit to walk up parent
-// directories until a .git directory is found.
+// the repository (including subfolders). It walks up parent directories until
+// a .git entry (directory or file) is found, without opening the repository.
+// This avoids holding git packfile handles that can cause cleanup failures on Windows.
 func GitRepoRoot(path types.FilePath) (types.FilePath, error) {
-	repo, err := git.PlainOpenWithOptions(string(path), &git.PlainOpenOptions{DetectDotGit: true})
+	p, err := filepath.Abs(string(path))
 	if err != nil {
 		return "", err
 	}
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return "", err
+	for {
+		if _, err := os.Stat(filepath.Join(p, ".git")); err == nil {
+			return types.FilePath(p), nil
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return "", fmt.Errorf("repository does not exist")
+		}
+		p = parent
 	}
-	return types.FilePath(worktree.Filesystem.Root()), nil
 }
 
 func HeadRefHashForRepo(repo *git.Repository) (string, error) {
