@@ -136,13 +136,7 @@ func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath types.FilePath, des
 		logger.Debug().Msgf("Branch %s does not exist in repo %s. Exiting", targetBranchReferenceName.Short(), srcRepoPath)
 		return nil
 	}
-	// Resolve the git root since srcRepoPath may be a subfolder
-	resolvedRoot, err := GitRepoRoot(srcRepoPath)
-	if err != nil {
-		logger.Debug().Err(err).Msgf("Could not resolve git root for %s. Exiting", srcRepoPath)
-		return nil
-	}
-	var gitSrcRepoPath = filepath.Join(string(resolvedRoot), ".git")
+	var gitSrcRepoPath = filepath.Join(string(srcRepoPath), ".git")
 	gitDestRepoPath := filepath.Join(string(destinationRepoPath), ".git")
 	logger.Debug().Msgf("Attemping to copy repo .git folder from: %s to: %s ", gitSrcRepoPath, gitDestRepoPath)
 	err = copy.Copy(gitSrcRepoPath, gitDestRepoPath)
