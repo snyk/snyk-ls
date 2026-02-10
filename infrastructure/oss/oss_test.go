@@ -28,6 +28,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -515,8 +516,8 @@ func Test_processOsTestWorkFlowData_AggregatesIssues(t *testing.T) {
 		return []types.Issue{issue2}, nil
 	}
 
-	data := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "payload"), "application/json", []byte("{}"))
-	issues, err := processOsTestWorkFlowData(ctx, []workflow.Data{data}, map[string][]types.Issue{})
+	data := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "payload"), content_type.UFM_RESULT, []byte("{}"))
+	issues, err := processOsTestWorkFlowData(ctx, []workflow.Data{data}, map[string][]types.Issue{}, c, "", "", false, nil, nil, "")
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []types.Issue{issue1, issue2}, issues)
 }

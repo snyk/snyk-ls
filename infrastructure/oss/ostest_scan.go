@@ -21,12 +21,17 @@ import (
 	"fmt"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/subosito/gotenv"
 
 	"github.com/snyk/cli-extension-os-flows/pkg/flags"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -103,18 +108,46 @@ func processOsTestWorkFlowData(
 	ctx context.Context,
 	scanOutput []workflow.Data,
 	packageIssueCache map[string][]types.Issue,
+	c *config.Config,
+	workDir types.FilePath,
+	filePath types.FilePath,
+	readFiles bool,
+	learnService learn.Service,
+	errorReporter error_reporting.ErrorReporter,
+	format string,
 ) ([]types.Issue, error) {
 	var issues []types.Issue
-	var err error
+	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "processOsTestWorkFlowData").Logger()
 	for _, data := range scanOutput {
-		testResults := getTestResultsFromWorkflowData(data)
-		for _, testResult := range testResults {
-			var testIssues []types.Issue
-			testIssues, err = convertTestResultToIssuesFn(ctx, testResult, packageIssueCache)
-			if err != nil {
-				return nil, fmt.Errorf("couldn't convert test result to issues: %w", err)
+		if data.GetContentType() == content_type.UFM_RESULT {
+			testResults := getTestResultsFromWorkflowData(data)
+			for _, testResult := range testResults {
+				testIssues, err := convertTestResultToIssuesFn(ctx, testResult, packageIssueCache)
+				if err != nil {
+					return nil, fmt.Errorf("couldn't convert test result to issues: %w", err)
+				}
+				issues = append(issues, testIssues...)
 			}
-			issues = append(issues, testIssues...)
+			continue
+		}
+
+		if data.GetContentType() != content_type.LEGACY_CLI_STDOUT {
+			continue
+		}
+
+		// Legacy CLI stdout workflow.Data: payload is raw stdout bytes (JSON for snyk test --json).
+		payload, ok := data.GetPayload().([]byte)
+		if !ok {
+			continue
+		}
+		legacyResults, err := UnmarshallOssJson(payload)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't unmarshal legacy json: %w", err)
+		}
+		for _, legacyResult := range legacyResults {
+			targetFilePath := getAbsTargetFilePath(&logger, legacyResult.Path, legacyResult.DisplayTargetFile, workDir, filePath)
+			fileContent := getFileContent(targetFilePath, readFiles, logger)
+			issues = append(issues, convertScanResultToIssues(c, &legacyResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format)...)
 		}
 	}
 	return issues, nil

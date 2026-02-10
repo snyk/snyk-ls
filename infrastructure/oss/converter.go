@@ -67,7 +67,7 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 
 	// new ostest workflow result processing
 	if output, ok := scanOutput.([]workflow.Data); ok {
-		return processOsTestWorkFlowData(ctx, output, packageIssueCache)
+		return processOsTestWorkFlowData(ctx, output, packageIssueCache, c, workDir, filePath, readFiles, learnService, errorReporter, format)
 	}
 
 	// unchanged legacy workflow
