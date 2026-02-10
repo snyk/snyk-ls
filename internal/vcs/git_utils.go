@@ -44,7 +44,7 @@ func HeadRefHashForRepo(repo *git.Repository) (string, error) {
 }
 
 func HeadRefHashForBranch(logger *zerolog.Logger, repoPath types.FilePath, branchName string) (string, error) {
-	repo, err := git.PlainOpen(string(repoPath))
+	repo, err := git.PlainOpenWithOptions(string(repoPath), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open repository")
 		return "", err
@@ -117,7 +117,7 @@ func targetBranchExists(branchName plumbing.ReferenceName, repo *git.Repository)
 }
 
 func resetAndCheckoutRepo(repoPath string, branchName plumbing.ReferenceName) (*git.Repository, error) {
-	repo, err := git.PlainOpen(repoPath)
+	repo, err := git.PlainOpenWithOptions(repoPath, &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		return nil, err
 	}

@@ -1670,7 +1670,7 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 
 func getCurrentCommitHash(t *testing.T, workDir types.FilePath) string {
 	t.Helper()
-	r, err := git.PlainOpen(string(workDir))
+	r, err := git.PlainOpenWithOptions(string(workDir), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		t.Fatal(err)
 	}

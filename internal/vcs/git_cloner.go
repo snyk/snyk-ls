@@ -69,7 +69,7 @@ func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath t
 }
 
 func patchClonedRepoRemoteOrigin(logger *zerolog.Logger, srcRepoPath types.FilePath, clonedRepo *git.Repository) error {
-	srcRepo, err := git.PlainOpen(string(srcRepoPath))
+	srcRepo, err := git.PlainOpenWithOptions(string(srcRepoPath), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		logger.Error().Err(err).Msgf("Could not open source repo: %s", srcRepoPath)
 		return err
@@ -114,7 +114,7 @@ func patchClonedRepoRemoteOrigin(logger *zerolog.Logger, srcRepoPath types.FileP
 }
 
 func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationRepoPath types.FilePath, targetBranchReferenceName plumbing.ReferenceName) *git.Repository {
-	repo, err := git.PlainOpen(string(srcRepoPath))
+	repo, err := git.PlainOpenWithOptions(string(srcRepoPath), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		return nil
 	}
@@ -146,7 +146,7 @@ func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath types.FilePath, des
 }
 
 func LocalRepoHasChanges(conf configuration.Configuration, logger *zerolog.Logger, repoPath types.FilePath) (bool, error) {
-	currentRepo, err := git.PlainOpen(string(repoPath))
+	currentRepo, err := git.PlainOpenWithOptions(string(repoPath), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		logger.Error().Err(err).Msg(string("Failed to open current repo " + repoPath))
 		return false, err
