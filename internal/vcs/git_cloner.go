@@ -31,9 +31,22 @@ import (
 )
 
 func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath types.FilePath, targetBranchName string) (*git.Repository, error) {
+	// Resolve the git root in case srcRepoPath is a subfolder of the actual repository
+	resolvedRoot, err := GitRepoRoot(srcRepoPath)
+	if err != nil {
+		logger.Error().Err(err).Msgf("Could not resolve git root for: %s", srcRepoPath)
+		return nil, err
+	}
+	if resolvedRoot != srcRepoPath {
+		logger.Debug().
+			Str("srcRepoPath", string(srcRepoPath)).
+			Str("resolvedRoot", string(resolvedRoot)).
+			Msg("resolved git root from subfolder path")
+	}
+
 	targetBranchReferenceName := plumbing.NewBranchReferenceName(targetBranchName)
 	clonedRepo, err := git.PlainClone(string(destinationPath), false, &git.CloneOptions{
-		URL:           string(srcRepoPath),
+		URL:           string(resolvedRoot),
 		ReferenceName: targetBranchReferenceName,
 		SingleBranch:  true,
 	})
@@ -46,7 +59,7 @@ func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath t
 		}
 		// Repository might be in a detached head state.
 		logger.Debug().Msg("Clone operation failed. Maybe repo is in detached HEAD state?")
-		targetRepo := cloneRepoWithFsCopy(logger, srcRepoPath, destinationPath, targetBranchReferenceName)
+		targetRepo := cloneRepoWithFsCopy(logger, resolvedRoot, destinationPath, targetBranchReferenceName)
 		if targetRepo == nil {
 			return nil, err
 		}
@@ -54,7 +67,7 @@ func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath t
 	}
 
 	// Patch Origin Remote for the cloned repo. This is only necessary if we use checkout since the remote origin URL will be the srcRepoPath
-	err = patchClonedRepoRemoteOrigin(logger, srcRepoPath, clonedRepo)
+	err = patchClonedRepoRemoteOrigin(logger, resolvedRoot, clonedRepo)
 	if err != nil {
 		logger.Error().Err(err).Msgf("Could not patch origin remote url in cloned repo %s", destinationPath)
 	}
@@ -123,7 +136,13 @@ func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath types.FilePath, des
 		logger.Debug().Msgf("Branch %s does not exist in repo %s. Exiting", targetBranchReferenceName.Short(), srcRepoPath)
 		return nil
 	}
-	var gitSrcRepoPath = filepath.Join(string(srcRepoPath), ".git")
+	// Resolve the git root since srcRepoPath may be a subfolder
+	resolvedRoot, err := GitRepoRoot(srcRepoPath)
+	if err != nil {
+		logger.Debug().Err(err).Msgf("Could not resolve git root for %s. Exiting", srcRepoPath)
+		return nil
+	}
+	var gitSrcRepoPath = filepath.Join(string(resolvedRoot), ".git")
 	gitDestRepoPath := filepath.Join(string(destinationRepoPath), ".git")
 	logger.Debug().Msgf("Attemping to copy repo .git folder from: %s to: %s ", gitSrcRepoPath, gitDestRepoPath)
 	err = copy.Copy(gitSrcRepoPath, gitDestRepoPath)

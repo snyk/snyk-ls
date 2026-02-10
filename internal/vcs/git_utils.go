@@ -34,6 +34,21 @@ var (
 	InvalidBranchNameRegex, _ = regexp.Compile(`[^a-z0-9_\-]+`)
 )
 
+// GitRepoRoot resolves the git repository root directory from any path within
+// the repository (including subfolders). It uses DetectDotGit to walk up parent
+// directories until a .git directory is found.
+func GitRepoRoot(path types.FilePath) (types.FilePath, error) {
+	repo, err := git.PlainOpenWithOptions(string(path), &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		return "", err
+	}
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return "", err
+	}
+	return types.FilePath(worktree.Filesystem.Root()), nil
+}
+
 func HeadRefHashForRepo(repo *git.Repository) (string, error) {
 	head, err := repo.Head()
 	if err != nil {

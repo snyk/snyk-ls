@@ -797,6 +797,25 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 	return issueList
 }
 
+// assertDeltaNewIssuesInFile waits for delta issues to be published and asserts that
+// new issues are only reported for the expected file path.
+func assertDeltaNewIssuesInFile(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, folderPath types.FilePath, expectedNewIssuePath string) {
+	t.Helper()
+	var issueList []types.ScanIssue
+	assert.Eventually(t, func() bool {
+		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, folderPath)
+		return len(issueList) > 0
+	}, maxIntegTestDuration, 5*time.Second)
+
+	assert.True(t, len(issueList) > 0)
+	for _, issue := range issueList {
+		if issue.IsNew {
+			issuePath := filepath.Clean(string(issue.FilePath))
+			assert.Equal(t, expectedNewIssuePath, issuePath, "new issue should only be from the expected file: %s", string(issue.FilePath))
+		}
+	}
+}
+
 func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, recorder *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	if isNotStandardRegion(c) {
@@ -991,20 +1010,8 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 	waitForDeltaScan(t, scanAggregator)
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
-	var issueList []types.ScanIssue
-	assert.Eventually(t, func() bool {
-		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
-		return len(issueList) > 0
-	}, maxIntegTestDuration, 5*time.Second)
-
-	assert.True(t, len(issueList) > 0)
-	for _, issue := range issueList {
-		issuePath := filepath.Clean(string(issue.FilePath))
-		newVulnFilePath := filepath.Clean(filepath.Join(cloneTargetDirString, fileWithNewVulns))
-		if issue.IsNew {
-			assert.Equal(t, newVulnFilePath, issuePath, "should not be in delta list: %s", string(issue.FilePath))
-		}
-	}
+	newVulnFilePath := filepath.Clean(filepath.Join(cloneTargetDirString, fileWithNewVulns))
+	assertDeltaNewIssuesInFile(t, jsonRPCRecorder, cloneTargetDir, newVulnFilePath)
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
@@ -1062,6 +1069,58 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 	assert.Equal(t, 0, len(issueList), "no issues expected, as delta and no new change")
+}
+
+// Test_SmokeSnykCodeDelta_SubfolderWorkspace verifies that delta findings work correctly
+// when the workspace folder is a subfolder of the git repository root.
+// This reproduces the bug where git.PlainOpen fails for subfolders because it doesn't
+// walk up parent directories to find .git. The fix uses PlainOpenWithOptions with DetectDotGit.
+func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
+	c := testutil.SmokeTest(t, "")
+	loc, jsonRPCRecorder := setupServer(t, c)
+	testutil.OnlyEnableCode(t, c)
+	testutil.EnableSastAndAutoFix(c)
+	c.SetDeltaFindingsEnabled(true)
+	cleanupChannels()
+	di.Init()
+	scanAggregator := di.ScanStateAggregator()
+
+	// Clone a repo — this is the git root
+	gitRoot, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger(), false)
+	require.NoError(t, err)
+	gitRootString := string(gitRoot)
+
+	// Create a subfolder inside the git repo — this will be our workspace folder,
+	// simulating how IntelliJ sends a content root that is a subdirectory of the git repo
+	subfolder := filepath.Join(gitRootString, "subproject")
+	require.NoError(t, os.MkdirAll(subfolder, 0o755))
+
+	// Create a file with unique vulnerable content to ensure delta identifies it as new.
+	// Using unique content avoids false negatives from fingerprint matching with baseline files.
+	newFileInCurrentDir(t, subfolder, "vulns.js", `
+var express = require('express');
+var app = express();
+app.get('/unique_subfolder_test', function(req, res) {
+   var input = req.query.userInput;
+   res.send(input);
+});
+`)
+
+	// Use the SUBFOLDER as the workspace folder (not the git root)
+	subfolderPath := types.FilePath(subfolder)
+	initParams := prepareInitParams(t, subfolderPath, c)
+
+	ensureInitialized(t, c, loc, initParams, nil)
+
+	waitForScan(t, subfolder, c)
+	waitForDeltaScan(t, scanAggregator)
+
+	// Verify scan completed successfully — before the fix, this would fail with
+	// "repository not found" or "must specify reference for delta scans"
+	checkForScanParams(t, jsonRPCRecorder, subfolder, product.ProductCode)
+
+	newVulnFilePath := filepath.Clean(filepath.Join(subfolder, "vulns.js"))
+	assertDeltaNewIssuesInFile(t, jsonRPCRecorder, subfolderPath, newVulnFilePath)
 }
 
 func Test_SmokeScanUnmanaged(t *testing.T) {
