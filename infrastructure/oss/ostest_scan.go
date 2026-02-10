@@ -131,11 +131,13 @@ func processOsTestWorkFlowData(
 			continue
 		}
 
-		if data.GetContentType() != content_type.LEGACY_CLI_STDOUT {
+		// Legacy CLI stdout: identify by data type id (legacycli/stdout). Content type is application/json or text/plain.
+		legacyCliStdoutID := workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("legacycli"), "stdout")
+		if data.GetIdentifier().String() != legacyCliStdoutID.String() {
 			continue
 		}
 
-		// Legacy CLI stdout workflow.Data: payload is raw stdout bytes (JSON for snyk test --json).
+		// Payload is raw stdout bytes (JSON for snyk test --json).
 		payload, ok := data.GetPayload().([]byte)
 		if !ok {
 			continue
