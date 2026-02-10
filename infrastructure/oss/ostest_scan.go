@@ -19,6 +19,7 @@ package oss
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
@@ -39,6 +40,17 @@ var (
 	getTestResultsFromWorkflowData = ufm.GetTestResultsFromWorkflowData
 	convertTestResultToIssuesFn    = convertTestResultToIssues
 )
+
+// isLegacyCliStdoutData returns true if data is legacy CLI stdout (type id legacycli/stdout).
+// Compares identifier URL components so we match regardless of url.URL.String() formatting.
+func isLegacyCliStdoutData(data workflow.Data) bool {
+	id := data.GetIdentifier()
+	if id == nil {
+		return false
+	}
+	path := strings.TrimPrefix(id.Path, "/")
+	return id.Scheme == "tpe" && id.Host == "legacycli" && path == "stdout"
+}
 
 func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath, cmd []string, workDir types.FilePath, env gotenv.Env) ([]workflow.Data, error) {
 	c := cliScanner.config
@@ -131,9 +143,9 @@ func processOsTestWorkFlowData(
 			continue
 		}
 
-		// Legacy CLI stdout: identify by data type id (legacycli/stdout). Content type is application/json or text/plain.
-		legacyCliStdoutID := workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("legacycli"), "stdout")
-		if data.GetIdentifier().String() != legacyCliStdoutID.String() {
+		// Legacy CLI stdout: identify by data type id (legacycli/stdout). Compare by URL components so we match
+		// regardless of String() formatting (e.g. path with or without leading slash).
+		if !isLegacyCliStdoutData(data) {
 			continue
 		}
 
