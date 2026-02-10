@@ -807,7 +807,6 @@ func assertDeltaNewIssuesInFile(t *testing.T, jsonRPCRecorder *testsupport.JsonR
 		return len(issueList) > 0
 	}, maxIntegTestDuration, 5*time.Second)
 
-	assert.True(t, len(issueList) > 0)
 	for _, issue := range issueList {
 		if issue.IsNew {
 			issuePath := filepath.Clean(string(issue.FilePath))

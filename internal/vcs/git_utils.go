@@ -17,7 +17,6 @@
 package vcs
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -52,7 +51,7 @@ func GitRepoRoot(path types.FilePath) (types.FilePath, error) {
 		}
 		parent := filepath.Dir(p)
 		if parent == p {
-			return "", fmt.Errorf("repository does not exist")
+			return "", git.ErrRepositoryNotExists
 		}
 		p = parent
 	}
