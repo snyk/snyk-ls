@@ -42,14 +42,14 @@ var (
 )
 
 // isLegacyCliStdoutData returns true if data is legacy CLI stdout (type id legacycli/stdout).
-// Compares identifier URL components so we match regardless of url.URL.String() formatting.
+// Data identifiers use Scheme "did" (workflow.NewData overwrites the type id scheme to "did").
 func isLegacyCliStdoutData(data workflow.Data) bool {
 	id := data.GetIdentifier()
 	if id == nil {
 		return false
 	}
 	path := strings.TrimPrefix(id.Path, "/")
-	return id.Scheme == "tpe" && id.Host == "legacycli" && path == "stdout"
+	return id.Scheme == "did" && id.Host == "legacycli" && path == "stdout"
 }
 
 func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath, cmd []string, workDir types.FilePath, env gotenv.Env) ([]workflow.Data, error) {
