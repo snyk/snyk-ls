@@ -18,105 +18,17 @@
 package ls_extension
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"time"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
-
-	"github.com/snyk/snyk-ls/internal/progress"
-
-	"github.com/snyk/snyk-ls/internal/user_interface"
-
-	"github.com/snyk/snyk-ls/application/entrypoint"
-	"github.com/snyk/snyk-ls/application/server"
-	"github.com/snyk/snyk-ls/infrastructure/cli"
-	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
-
-	"github.com/rs/zerolog"
-
-	"github.com/spf13/pflag"
-
 	"github.com/snyk/go-application-framework/pkg/workflow"
-
-	"github.com/snyk/snyk-ls/application/config"
 )
 
-var WORKFLOWID_LS = workflow.NewWorkflowIdentifier("language-server")
-
-const configCacheTTL = 30 * time.Second
-
+// Init registers all workflows provided by the language server extension.
+// This includes the language server itself and diagnostic tools.
 func Init(engine workflow.Engine) error {
-	flags := pflag.NewFlagSet("language-server", pflag.ContinueOnError)
-	flags.BoolP("v", "v", false, "prints the version")
-	flags.StringP("logLevelFlag", "l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
-	flags.StringP("logPathFlag", "f", "", "sets the log file for the language server")
-	flags.StringP(
-		"formatFlag",
-		"o",
-		config.FormatMd,
-		"sets format of diagnostics. Accepted values \""+config.FormatMd+"\" and \""+config.FormatHtml+"\"")
-	flags.StringP(
-		"configfile",
-		"c",
-		"",
-		"provide the full path of a cfg file to use. format VARIABLENAME=VARIABLEVALUE")
-	flags.Bool(
-		"licenses",
-		false,
-		"displays license information")
-
-	cfg := workflow.ConfigurationOptionsFromFlagset(flags)
-	entry, _ := engine.Register(WORKFLOWID_LS, cfg, lsWorkflow)
-	entry.SetVisibility(false)
-
-	return nil
-}
-
-func lsWorkflow(
-	invocation workflow.InvocationContext,
-	_ []workflow.Data,
-) (output []workflow.Data, err error) {
-	defer entrypoint.OnPanicRecover()
-
-	output = []workflow.Data{}
-
-	logger := invocation.GetEnhancedLogger()
-	extensionConfig := invocation.GetConfiguration()
-
-	logger.Info().Msgf("LS Version: %s", config.Version)
-
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	engine := invocation.GetEngine()
-	defaultConfig := engine.GetConfiguration()
-	defaultConfig.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
-	defaultConfig.Set(configuration.CONFIG_CACHE_TTL, configCacheTTL)
-	defaultConfig.Set(configuration.CONFIG_CACHE_DISABLED, false)
-
-	c := config.NewFromExtension(engine)
-	c.SetConfigFile(extensionConfig.GetString("configfile"))
-	c.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
-	c.SetLogPath(extensionConfig.GetString("logPathFlag"))
-	c.SetFormat(extensionConfig.GetString("formatFlag"))
-	config.SetCurrentConfig(c)
-
-	engine.SetUserInterface(user_interface.NewLsUserInterface(
-		user_interface.WithLogger(c.Logger()),
-		user_interface.WithProgressBar(progress.NewTracker(true))))
-
-	if extensionConfig.GetBool("v") {
-		fmt.Println(config.Version) //nolint:forbidigo // we want to output the version to stdout here
-		return output, err
-	} else if extensionConfig.GetBool("licenses") {
-		about, err := cli.NewExtensionExecutor(c).Execute(context.Background(), []string{"snyk", "--about"}, "", nil)
-		fmt.Println(string(about)) //nolint:forbidigo // we want to output licenses to stdout here
-
-		return output, err
-	} else {
-		c.Logger().Trace().Interface("environment", os.Environ()).Msg("start environment")
-		server.Start(c)
+	if err := initLanguageServer(engine); err != nil {
+		return err
 	}
-
-	return output, nil
+	if err := initToolsIDEDirectoryCheck(engine); err != nil {
+		return err
+	}
+	return nil
 }
