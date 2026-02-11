@@ -541,7 +541,7 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		c.SetSeverityFilter(globalFilter)
 
 		// Initialize LDX-Sync cache
-		c.InitLdxSyncOrgConfigCache()
+		c.initLdxSyncOrgConfigCache()
 
 		// Create org config with different severity filter
 		orgId := "test-org-id"

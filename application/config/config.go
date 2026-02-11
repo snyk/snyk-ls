@@ -292,7 +292,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
 	c.hoverVerbosity = 3
-	c.InitLdxSyncOrgConfigCache()
+	c.initLdxSyncOrgConfigCache()
 	return c
 }
 
@@ -1526,8 +1526,8 @@ func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
 	c.secureAtInceptionExecutionFrequency = frequency
 }
 
-// InitLdxSyncOrgConfigCache initializes the LDX-Sync org config cache and ConfigResolver
-func (c *Config) InitLdxSyncOrgConfigCache() {
+// initLdxSyncOrgConfigCache initializes the LDX-Sync org config cache and ConfigResolver
+func (c *Config) initLdxSyncOrgConfigCache() {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
