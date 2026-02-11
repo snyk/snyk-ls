@@ -17,6 +17,7 @@
 package types
 
 import (
+	"sync"
 	"time"
 )
 
@@ -118,8 +119,10 @@ func (c *LDXSyncOrgConfig) SetField(settingName string, value any, isLocked, isE
 	}
 }
 
-// LDXSyncConfigCache holds cached LDX-Sync configurations for all organizations
+// LDXSyncConfigCache holds cached LDX-Sync configurations for all organizations.
+// All methods are safe for concurrent use.
 type LDXSyncConfigCache struct {
+	mu                 sync.RWMutex
 	OrgConfigs         map[string]*LDXSyncOrgConfig `json:"orgconfigs"`
 	FolderToOrgMapping map[FilePath]string          `json:"folderToOrgMapping"`
 }
@@ -134,12 +137,22 @@ func NewLDXSyncConfigCache() *LDXSyncConfigCache {
 
 // IsEmpty returns true if the cache has no org configs
 func (c *LDXSyncConfigCache) IsEmpty() bool {
-	return c == nil || len(c.OrgConfigs) == 0
+	if c == nil {
+		return true
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.OrgConfigs) == 0
 }
 
 // GetOrgConfig returns the config for the given org, or nil if not found
 func (c *LDXSyncConfigCache) GetOrgConfig(orgId string) *LDXSyncOrgConfig {
-	if c == nil || c.OrgConfigs == nil {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.OrgConfigs == nil {
 		return nil
 	}
 	return c.OrgConfigs[orgId]
@@ -147,6 +160,8 @@ func (c *LDXSyncConfigCache) GetOrgConfig(orgId string) *LDXSyncOrgConfig {
 
 // SetOrgConfig sets the config for the given org
 func (c *LDXSyncConfigCache) SetOrgConfig(orgConfig *LDXSyncOrgConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.OrgConfigs == nil {
 		c.OrgConfigs = make(map[string]*LDXSyncOrgConfig)
 	}
@@ -155,6 +170,8 @@ func (c *LDXSyncConfigCache) SetOrgConfig(orgConfig *LDXSyncOrgConfig) {
 
 // RemoveOrgConfig removes the config for the given org
 func (c *LDXSyncConfigCache) RemoveOrgConfig(orgId string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.OrgConfigs != nil {
 		delete(c.OrgConfigs, orgId)
 	}
@@ -163,6 +180,8 @@ func (c *LDXSyncConfigCache) RemoveOrgConfig(orgId string) {
 // SetFolderOrg sets the org ID for a folder path.
 // The path is automatically normalized using PathKey for cross-platform consistency.
 func (c *LDXSyncConfigCache) SetFolderOrg(folderPath FilePath, orgId string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.FolderToOrgMapping == nil {
 		c.FolderToOrgMapping = make(map[FilePath]string)
 	}
@@ -174,7 +193,12 @@ func (c *LDXSyncConfigCache) SetFolderOrg(folderPath FilePath, orgId string) {
 // not a fallback value. Fallback logic should happen at the point of use.
 // The path is automatically normalized using PathKey for cross-platform consistency.
 func (c *LDXSyncConfigCache) GetOrgIdForFolder(folderPath FilePath) string {
-	if c == nil || c.FolderToOrgMapping == nil {
+	if c == nil {
+		return ""
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.FolderToOrgMapping == nil {
 		return ""
 	}
 	return c.FolderToOrgMapping[PathKey(folderPath)]
@@ -182,6 +206,8 @@ func (c *LDXSyncConfigCache) GetOrgIdForFolder(folderPath FilePath) string {
 
 // ClearFolderOrgMapping clears all folder-to-org mappings
 func (c *LDXSyncConfigCache) ClearFolderOrgMapping() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.FolderToOrgMapping = make(map[FilePath]string)
 }
 

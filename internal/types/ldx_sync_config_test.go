@@ -148,6 +148,76 @@ func TestLDXSyncConfigCache_RemoveOrgConfig(t *testing.T) {
 	})
 }
 
+func TestLDXSyncConfigCache_ConcurrentAccess(t *testing.T) {
+	cache := NewLDXSyncConfigCache()
+	done := make(chan bool, 10)
+
+	// Concurrent writers for org configs
+	for i := 0; i < 5; i++ {
+		go func(id int) {
+			orgId := "org-" + string(rune('A'+id))
+			orgConfig := NewLDXSyncOrgConfig(orgId)
+			orgConfig.SetField("test", true, false, false, "")
+			cache.SetOrgConfig(orgConfig)
+			_ = cache.GetOrgConfig(orgId)
+			_ = cache.IsEmpty()
+			done <- true
+		}(i)
+	}
+
+	// Concurrent writers for folder mappings
+	for i := 0; i < 5; i++ {
+		go func(id int) {
+			folder := FilePath("/folder-" + string(rune('A'+id)))
+			cache.SetFolderOrg(folder, "org-"+string(rune('A'+id)))
+			_ = cache.GetOrgIdForFolder(folder)
+			done <- true
+		}(i)
+	}
+
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// Verify no panics occurred and data is consistent
+	assert.False(t, cache.IsEmpty())
+}
+
+func TestConfigResolver_ConcurrentAccess(t *testing.T) {
+	cache := NewLDXSyncConfigCache()
+	orgConfig := NewLDXSyncOrgConfig("org1")
+	orgConfig.SetField(SettingSnykCodeEnabled, true, false, false, "")
+	cache.SetOrgConfig(orgConfig)
+	cache.SetFolderOrg("/folder", "org1")
+
+	resolver := NewConfigResolver(cache, nil, nil, nil)
+	done := make(chan bool, 10)
+
+	// Concurrent readers
+	for i := 0; i < 5; i++ {
+		go func() {
+			_ = resolver.GetBool(SettingSnykCodeEnabled, &StoredFolderConfig{FolderPath: "/folder"})
+			done <- true
+		}()
+	}
+
+	// Concurrent writers
+	for i := 0; i < 5; i++ {
+		go func(id int) {
+			newMachine := map[string]*LDXSyncField{
+				SettingApiEndpoint: {Value: "https://api.snyk.io", IsLocked: false},
+			}
+			resolver.SetLDXSyncMachineConfig(newMachine)
+			_ = resolver.GetLDXSyncMachineConfig()
+			done <- true
+		}(i)
+	}
+
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
+
 func TestGetSettingScope(t *testing.T) {
 	t.Run("machine-scope settings", func(t *testing.T) {
 		machineSettings := []string{

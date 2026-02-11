@@ -17,6 +17,8 @@
 package types
 
 import (
+	"sync"
+
 	"github.com/rs/zerolog"
 )
 
@@ -41,7 +43,9 @@ type ConfigResolverInterface interface {
 // 1. Machine-wide settings → Locked LDX-Sync > Global Config > LDX-Sync > Default
 // 2. Folder-scoped settings → StoredFolderConfig (with LDX-Sync folder settings)
 // 3. Org-scoped settings → Locked LDX-Sync > User Override > LDX-Sync > Global Default
+// All methods are safe for concurrent use.
 type ConfigResolver struct {
+	mu                   sync.RWMutex
 	ldxSyncCache         *LDXSyncConfigCache
 	ldxSyncMachineConfig map[string]*LDXSyncField
 	globalSettings       *Settings
@@ -63,21 +67,29 @@ func NewConfigResolver(ldxSyncCache *LDXSyncConfigCache, globalSettings *Setting
 
 // SetLDXSyncCache updates the LDX-Sync org config cache reference
 func (r *ConfigResolver) SetLDXSyncCache(cache *LDXSyncConfigCache) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.ldxSyncCache = cache
 }
 
 // SetLDXSyncMachineConfig updates the LDX-Sync machine-wide config
 func (r *ConfigResolver) SetLDXSyncMachineConfig(config map[string]*LDXSyncField) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.ldxSyncMachineConfig = config
 }
 
 // GetLDXSyncMachineConfig returns the current LDX-Sync machine-wide config
 func (r *ConfigResolver) GetLDXSyncMachineConfig() map[string]*LDXSyncField {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.ldxSyncMachineConfig
 }
 
 // SetGlobalSettings updates the global settings reference
 func (r *ConfigResolver) SetGlobalSettings(settings *Settings) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.globalSettings = settings
 }
 
@@ -95,6 +107,13 @@ func (r *ConfigResolver) getEffectiveOrg(folderConfig *StoredFolderConfig) strin
 // GetValue resolves a configuration value for the given setting and folder.
 // Returns the resolved value and the source it came from.
 func (r *ConfigResolver) GetValue(settingName string, folderConfig *StoredFolderConfig) (any, ConfigSource) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.getValueLocked(settingName, folderConfig)
+}
+
+// getValueLocked is the internal implementation of GetValue; caller must hold at least r.mu.RLock.
+func (r *ConfigResolver) getValueLocked(settingName string, folderConfig *StoredFolderConfig) (any, ConfigSource) {
 	scope := GetSettingScope(settingName)
 
 	switch scope {
@@ -227,7 +246,9 @@ func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig *Sto
 // GetEffectiveValue resolves a configuration value and returns it as an EffectiveValue
 // with source information for display to the IDE.
 func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig *StoredFolderConfig) EffectiveValue {
-	value, source := r.GetValue(settingName, folderConfig)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	value, source := r.getValueLocked(settingName, folderConfig)
 
 	originScope := ""
 	if source == ConfigSourceLDXSync || source == ConfigSourceLDXSyncLocked {
@@ -392,7 +413,9 @@ func (r *ConfigResolver) getFolderSettingValue(settingName string, folderConfig 
 
 // GetBool returns a boolean value for the given setting
 func (r *ConfigResolver) GetBool(settingName string, folderConfig *StoredFolderConfig) bool {
-	val, _ := r.GetValue(settingName, folderConfig)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	val, _ := r.getValueLocked(settingName, folderConfig)
 	switch v := val.(type) {
 	case bool:
 		return v
@@ -405,7 +428,9 @@ func (r *ConfigResolver) GetBool(settingName string, folderConfig *StoredFolderC
 
 // GetString returns a string value for the given setting
 func (r *ConfigResolver) GetString(settingName string, folderConfig *StoredFolderConfig) string {
-	val, _ := r.GetValue(settingName, folderConfig)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	val, _ := r.getValueLocked(settingName, folderConfig)
 	switch v := val.(type) {
 	case string:
 		return v
@@ -416,7 +441,9 @@ func (r *ConfigResolver) GetString(settingName string, folderConfig *StoredFolde
 
 // GetStringSlice returns a string slice value for the given setting
 func (r *ConfigResolver) GetStringSlice(settingName string, folderConfig *StoredFolderConfig) []string {
-	val, _ := r.GetValue(settingName, folderConfig)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	val, _ := r.getValueLocked(settingName, folderConfig)
 	switch v := val.(type) {
 	case []string:
 		return v
@@ -435,7 +462,9 @@ func (r *ConfigResolver) GetStringSlice(settingName string, folderConfig *Stored
 
 // GetInt returns an integer value for the given setting
 func (r *ConfigResolver) GetInt(settingName string, folderConfig *StoredFolderConfig) int {
-	val, _ := r.GetValue(settingName, folderConfig)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	val, _ := r.getValueLocked(settingName, folderConfig)
 	switch v := val.(type) {
 	case int:
 		return v
@@ -453,13 +482,17 @@ func (r *ConfigResolver) GetInt(settingName string, folderConfig *StoredFolderCo
 
 // GetSource returns only the source for a given setting (useful for UI display)
 func (r *ConfigResolver) GetSource(settingName string, folderConfig *StoredFolderConfig) ConfigSource {
-	_, source := r.GetValue(settingName, folderConfig)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, source := r.getValueLocked(settingName, folderConfig)
 	return source
 }
 
 // GetSeverityFilter returns a SeverityFilter value for the given setting
 func (r *ConfigResolver) GetSeverityFilter(settingName string, folderConfig *StoredFolderConfig) *SeverityFilter {
-	val, _ := r.GetValue(settingName, folderConfig)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	val, _ := r.getValueLocked(settingName, folderConfig)
 	switch v := val.(type) {
 	case *SeverityFilter:
 		return v
@@ -472,6 +505,8 @@ func (r *ConfigResolver) GetSeverityFilter(settingName string, folderConfig *Sto
 
 // IsLocked returns true if the setting is locked by LDX-Sync for the folder's org
 func (r *ConfigResolver) IsLocked(settingName string, folderConfig *StoredFolderConfig) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	if folderConfig == nil || r.ldxSyncCache == nil || r.c == nil {
 		return false
 	}
@@ -492,6 +527,8 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig *StoredFolder
 
 // IsEnforced returns true if the setting is enforced by LDX-Sync for the folder's org
 func (r *ConfigResolver) IsEnforced(settingName string, folderConfig *StoredFolderConfig) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	if folderConfig == nil || r.ldxSyncCache == nil || r.c == nil {
 		return false
 	}
