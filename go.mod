@@ -135,8 +135,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/snyk/go-application-framework => ../go-application-framework
+//replace github.com/snyk/go-application-framework => ../go-application-framework
 
 //replace github.com/snyk/code-client-go => ../code-client-go
 
-replace github.com/snyk/cli-extension-os-flows => ../cli-extension-os-flows
+//replace github.com/snyk/cli-extension-os-flows => ../cli-extension-os-flows
