@@ -17,6 +17,8 @@
 package types
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -288,4 +290,30 @@ func TestGetSettingScope(t *testing.T) {
 	t.Run("unknown settings default to org scope", func(t *testing.T) {
 		assert.Equal(t, SettingScopeOrg, GetSettingScope("unknown_setting"))
 	})
+}
+
+func Test_LDXSyncCache_ConcurrentAccess_NoRace(t *testing.T) {
+	cache := NewLDXSyncConfigCache()
+	var wg sync.WaitGroup
+
+	// 100 goroutines concurrently accessing cache
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			folderPath := FilePath(fmt.Sprintf("/folder%d", id))
+			orgId := fmt.Sprintf("org-%d", id)
+			
+			cache.SetFolderOrg(folderPath, orgId)
+			_ = cache.GetOrgIdForFolder(folderPath)
+		}(i)
+	}
+	wg.Wait()
+
+	// Verify all mappings exist
+	for i := 0; i < 100; i++ {
+		folderPath := FilePath(fmt.Sprintf("/folder%d", i))
+		orgId := cache.GetOrgIdForFolder(folderPath)
+		assert.Equal(t, fmt.Sprintf("org-%d", i), orgId, "Org ID should match for folder %d", i)
+	}
 }

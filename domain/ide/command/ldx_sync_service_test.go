@@ -467,3 +467,118 @@ func createLdxSyncResultWithLockedField(orgId string, lockedFieldName string) ld
 		Error: nil,
 	}
 }
+
+// createLdxSyncResultWithMachineSettings creates a result with machine-scope settings
+func createLdxSyncResultWithMachineSettings(orgId string, apiEndpoint string) ldx_sync_config.LdxSyncConfigResult {
+	orgs := []v20241015.Organization{
+		{
+			Id:                   orgId,
+			Name:                 "Test Org",
+			Slug:                 "test-org",
+			IsDefault:            util.Ptr(true),
+			PreferredByAlgorithm: util.Ptr(true),
+		},
+	}
+
+	// Create machine-scope settings (use LDX-Sync API field names with underscores)
+	settings := map[string]v20241015.SettingMetadata{
+		"api_endpoint": {
+			Locked:   util.Ptr(true),
+			Enforced: util.Ptr(false),
+			Origin:   v20241015.SettingMetadataOriginOrg,
+			Value:    apiEndpoint,
+		},
+	}
+
+	configId := uuid.MustParse("00000000-0000-0000-0000-000000000003")
+
+	return ldx_sync_config.LdxSyncConfigResult{
+		Config: &v20241015.UserConfigResponse{
+			Data: struct {
+				Attributes struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				} `json:"attributes"`
+				Id   uuid.UUID                            `json:"id"`
+				Type v20241015.UserConfigResponseDataType `json:"type"`
+			}{
+				Attributes: struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				}{
+					Organizations: &orgs,
+					Settings:      &settings,
+				},
+				Id:   configId,
+				Type: "configuration",
+			},
+		},
+		Error: nil,
+	}
+}
+
+func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSettings(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/folder")
+	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPath)
+	folders := c.Workspace().Folders()
+
+	expectedOrgId := "test-org-id-123"
+	expectedEndpoint := "https://custom.endpoint.com"
+	expectedResult := createLdxSyncResultWithMachineSettings(expectedOrgId, expectedEndpoint)
+
+	// Mock the API call
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
+		Return(expectedResult)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient)
+	service.RefreshConfigFromLdxSync(c, folders, notifier)
+
+	// Verify $/snyk.configuration notification was sent with machine settings from LDX-Sync
+	messages := notifier.SentMessages()
+	require.Len(t, messages, 1, "Expected $/snyk.configuration notification to be sent")
+
+	lspConfig, ok := messages[0].(types.LspConfigurationParam)
+	require.True(t, ok, "Expected message to be LspConfigurationParam")
+	assert.Equal(t, expectedEndpoint, lspConfig.Endpoint, "Endpoint from LDX-Sync machine settings should be applied to notification")
+}
+
+func Test_RefreshConfigFromLdxSync_NoNotificationWhenNoChanges(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/folder")
+	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPath)
+	folders := c.Workspace().Folders()
+
+	// Return empty result (no machine config)
+	emptyResult := ldx_sync_config.LdxSyncConfigResult{
+		Config: nil,
+		Error:  assert.AnError,
+	}
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
+		Return(emptyResult)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient)
+	service.RefreshConfigFromLdxSync(c, folders, notifier)
+
+	// Verify NO notification was sent when config wasn't updated
+	messages := notifier.SentMessages()
+	assert.Empty(t, messages, "No notification should be sent when config is not updated")
+}
+
