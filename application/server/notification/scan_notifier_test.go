@@ -219,11 +219,10 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 		// Assert
 		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
 	})
-	t.Run("snyk code enabled via security", func(t *testing.T) {
+	t.Run("snyk code disabled", func(t *testing.T) {
 		c.SetSnykIacEnabled(true)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykCodeEnabled(false)
-		c.EnableSnykCodeSecurity(true)
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
@@ -233,7 +232,7 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 		scanNotifier.SendInProgress(folderConfig)
 
 		// Assert
-		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
+		assert.Equal(t, 2, len(mockNotifier.SentMessages()))
 	})
 }
 

@@ -126,10 +126,9 @@ func BuildLspConfiguration(c *config.Config) types.LspConfigurationParam {
 		ManageBinariesAutomatically: boolToString(c.ManageBinariesAutomatically()),
 
 		// Product enablement (global defaults)
-		ActivateSnykOpenSource:   boolToString(c.IsSnykOssEnabled()),
-		ActivateSnykCode:         boolToString(c.IsSnykCodeEnabled()),
-		ActivateSnykIac:          boolToString(c.IsSnykIacEnabled()),
-		ActivateSnykCodeSecurity: boolToString(c.IsSnykCodeSecurityEnabled()),
+		ActivateSnykOpenSource: boolToString(c.IsSnykOssEnabled()),
+		ActivateSnykCode:       boolToString(c.IsSnykCodeEnabled()),
+		ActivateSnykIac:        boolToString(c.IsSnykIacEnabled()),
 
 		// Scan & filtering settings
 		ScanningMode:       scanModeString(c.IsAutoScanEnabled()),

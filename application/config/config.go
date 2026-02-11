@@ -185,7 +185,6 @@ type Config struct {
 	issueViewOptions                    types.IssueViewOptions
 	trustedFolders                      []types.FilePath
 	trustedFoldersFeatureEnabled        bool
-	activateSnykCodeSecurity            bool
 	osPlatform                          string
 	osArch                              string
 	runtimeName                         string
@@ -436,7 +435,7 @@ func (c *Config) IsSnykCodeEnabled() bool {
 	c.m.RLock()
 	defer c.m.RUnlock()
 
-	return c.isSnykCodeEnabled || c.activateSnykCodeSecurity
+	return c.isSnykCodeEnabled
 }
 
 func (c *Config) IsSnykIacEnabled() bool {
@@ -609,7 +608,6 @@ func (c *Config) SetSnykCodeEnabled(enabled bool) {
 	defer c.m.Unlock()
 
 	c.isSnykCodeEnabled = enabled
-	c.activateSnykCodeSecurity = enabled
 }
 
 func (c *Config) SetSnykIacEnabled(enabled bool) {
@@ -1010,18 +1008,6 @@ func (c *Config) SetTrustedFolders(folderPaths []types.FilePath) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.trustedFolders = folderPaths
-}
-
-func (c *Config) IsSnykCodeSecurityEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.activateSnykCodeSecurity
-}
-
-func (c *Config) EnableSnykCodeSecurity(activate bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.activateSnykCodeSecurity = activate
 }
 
 func (c *Config) OsPlatform() string {
@@ -1706,10 +1692,4 @@ func (c *Config) IsSnykOssEnabledForFolder(folderConfig *types.StoredFolderConfi
 // considering LDX-Sync org config and user overrides.
 func (c *Config) IsSnykIacEnabledForFolder(folderConfig *types.StoredFolderConfig) bool {
 	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykIacEnabled, c.IsSnykIacEnabled)
-}
-
-// IsSnykCodeSecurityEnabledForFolder returns whether Snyk Code Security is enabled for a folder config,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) IsSnykCodeSecurityEnabledForFolder(folderConfig *types.StoredFolderConfig) bool {
-	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykCodeEnabled, c.IsSnykCodeSecurityEnabled)
 }

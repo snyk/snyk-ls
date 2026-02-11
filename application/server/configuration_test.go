@@ -373,35 +373,41 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 	})
 
-	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
+	t.Run("activateSnykCodeSecurity enables SnykCode via OR", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		UpdateSettings(c, types.Settings{ActivateSnykCodeSecurity: "true"}, analytics.TriggerSourceTest)
 
-		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
+		assert.True(t, c.IsSnykCodeEnabled(), "ActivateSnykCodeSecurity should enable Snyk Code")
 	})
-	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
+	t.Run("activateSnykCode and activateSnykCodeSecurity are ORed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{}, analytics.TriggerSourceTest)
+		UpdateSettings(c, types.Settings{
+			ActivateSnykCode:         "false",
+			ActivateSnykCodeSecurity: "true",
+		}, analytics.TriggerSourceTest)
 
-		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
-
-		c.EnableSnykCodeSecurity(true)
-
-		UpdateSettings(c, types.Settings{}, analytics.TriggerSourceTest)
-
-		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
+		assert.True(t, c.IsSnykCodeEnabled(), "Should be enabled when either flag is true")
 	})
-	t.Run("activateSnykCode sets SnykCodeSecurity", func(t *testing.T) {
+	t.Run("activateSnykCode alone enables SnykCode", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		UpdateSettings(c, types.Settings{
 			ActivateSnykCode: "true",
 		}, analytics.TriggerSourceTest)
 
-		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
-		assert.Equal(t, true, c.IsSnykCodeEnabled())
+		assert.True(t, c.IsSnykCodeEnabled())
+	})
+	t.Run("neither activateSnykCode nor activateSnykCodeSecurity disables SnykCode", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+
+		UpdateSettings(c, types.Settings{
+			ActivateSnykCode:         "false",
+			ActivateSnykCodeSecurity: "false",
+		}, analytics.TriggerSourceTest)
+
+		assert.False(t, c.IsSnykCodeEnabled())
 	})
 
 	t.Run("severity filter", func(t *testing.T) {
@@ -808,25 +814,19 @@ func Test_InitializeSettings(t *testing.T) {
 		assert.Equal(t, deviceId, c.DeviceID())
 	})
 
-	t.Run("activateSnykCodeSecurity is passed", func(t *testing.T) {
+	t.Run("activateSnykCodeSecurity enables SnykCode via OR on init", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		InitializeSettings(c, types.Settings{ActivateSnykCodeSecurity: "true"})
 
-		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
+		assert.True(t, c.IsSnykCodeEnabled(), "ActivateSnykCodeSecurity should enable Snyk Code on init")
 	})
-	t.Run("activateSnykCodeSecurity is not passed", func(t *testing.T) {
+	t.Run("activateSnykCodeSecurity not passed does not enable SnykCode on init", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		InitializeSettings(c, types.Settings{})
 
-		assert.Equal(t, false, c.IsSnykCodeSecurityEnabled())
-
-		c.EnableSnykCodeSecurity(true)
-
-		InitializeSettings(c, types.Settings{})
-
-		assert.Equal(t, true, c.IsSnykCodeSecurityEnabled())
+		assert.False(t, c.IsSnykCodeEnabled())
 	})
 
 	t.Run("custom path configuration", func(t *testing.T) {

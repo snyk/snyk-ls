@@ -161,7 +161,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
 		c := testutil.SmokeTest(t, "")
 		loc, jsonRpcRecorder := setupServer(t, c)
-		c.EnableSnykCodeSecurity(false)
+		c.SetSnykCodeEnabled(false)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
@@ -217,7 +217,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
 		c := testutil.SmokeTest(t, "")
 		loc, jsonRPCRecorder := setupServer(t, c)
-		c.EnableSnykCodeSecurity(true)
+		c.SetSnykCodeEnabled(true)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
@@ -292,7 +292,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		c := testutil.SmokeTest(t, "")
 		loc, jsonRPCRecorder := setupServer(t, c)
-		c.EnableSnykCodeSecurity(true)
+		c.SetSnykCodeEnabled(true)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
@@ -359,7 +359,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 func Test_SmokeExecuteCLICommand(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
 	loc, _ := setupServer(t, c)
-	c.EnableSnykCodeSecurity(false)
+	c.SetSnykCodeEnabled(false)
 	c.SetSnykIacEnabled(false)
 	c.SetSnykOssEnabled(true)
 	di.Init()
@@ -874,7 +874,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
 			ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
 			ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
-			ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeSecurityEnabled()),
+			ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeEnabled()),
 			CliPath:                     c.CliSettings().Path(),
 		},
 	}
@@ -1133,7 +1133,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		t.Helper()
 		c := testutil.SmokeTest(t, "")
 		loc, jsonRpcRecorder := setupServer(t, c)
-		c.EnableSnykCodeSecurity(false)
+		c.SetSnykCodeEnabled(false)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()

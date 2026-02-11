@@ -429,18 +429,9 @@ func Test_IsEnabledForFolder(t *testing.T) {
 		},
 	)
 	t.Run(
-		"should return true if Snyk Code Security is enabled", func(t *testing.T) {
-			c.SetSnykCodeEnabled(false)
-			c.EnableSnykCodeSecurity(true)
-			enabled := scanner.IsEnabledForFolder(folderConfig)
-			assert.True(t, enabled)
-		},
-	)
-	t.Run(
-		"should return false if Snyk Code is disabled and Security is not enabled",
+		"should return false if Snyk Code is disabled",
 		func(t *testing.T) {
 			c.SetSnykCodeEnabled(false)
-			c.EnableSnykCodeSecurity(false)
 			enabled := scanner.IsEnabledForFolder(folderConfig)
 			assert.False(t, enabled)
 		},

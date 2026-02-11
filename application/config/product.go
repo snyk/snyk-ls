@@ -26,7 +26,7 @@ import (
 func (c *Config) IsProductEnabledForFolder(p product.Product, folderConfig *types.StoredFolderConfig) bool {
 	switch p {
 	case product.ProductCode:
-		return c.IsSnykCodeEnabledForFolder(folderConfig) || c.IsSnykCodeSecurityEnabledForFolder(folderConfig)
+		return c.IsSnykCodeEnabledForFolder(folderConfig)
 	case product.ProductOpenSource:
 		return c.IsSnykOssEnabledForFolder(folderConfig)
 	case product.ProductInfrastructureAsCode:
@@ -43,7 +43,7 @@ func (c *Config) DisplayableIssueTypesForFolder(folderConfig *types.StoredFolder
 	enabled[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabledForFolder(folderConfig)
 
 	// Handle backwards compatibility.
-	enabled[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabledForFolder(folderConfig) || c.IsSnykCodeSecurityEnabledForFolder(folderConfig)
+	enabled[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabledForFolder(folderConfig)
 	enabled[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabledForFolder(folderConfig)
 
 	return enabled

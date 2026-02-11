@@ -525,3 +525,13 @@ func Test_BuildLspConfiguration_ScanningMode_Manual(t *testing.T) {
 
 	assert.Equal(t, "manual", lspConfig.ScanningMode, "ScanningMode should be 'manual' when auto-scan is disabled")
 }
+
+func Test_BuildLspConfiguration_DoesNotIncludeActivateSnykCodeSecurity(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+
+	lspConfig := BuildLspConfiguration(c)
+
+	assert.Equal(t, "true", lspConfig.ActivateSnykCode, "ActivateSnykCode should be set")
+	assert.Empty(t, lspConfig.ActivateSnykCodeSecurity, "ActivateSnykCodeSecurity should not be set in new notification")
+}

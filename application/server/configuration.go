@@ -210,7 +210,6 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateOrganization(c, settings, triggerSource)
 	manageBinariesAutomatically(c, settings, triggerSource)
 	updateTrustedFolders(c, settings, triggerSource)
-	updateSnykCodeSecurity(c, settings)
 	updateRuntimeInfo(c, settings)
 	updateAutoScan(c, settings)
 	updateSnykLearnCodeActions(c, settings, triggerSource)
@@ -773,15 +772,6 @@ func manageBinariesAutomatically(c *config.Config, settings types.Settings, trig
 	}
 }
 
-func updateSnykCodeSecurity(c *config.Config, settings types.Settings) {
-	parseBool, err := strconv.ParseBool(settings.ActivateSnykCodeSecurity)
-	if err != nil {
-		c.Logger().Debug().Msgf("couldn't read IsSnykCodeSecurityEnabled %s", settings.ActivateSnykCodeSecurity)
-	} else {
-		c.EnableSnykCodeSecurity(parseBool)
-	}
-}
-
 // TODO stop using os env, move parsing to CLI
 func updatePathFromSettings(c *config.Config, settings types.Settings) {
 	logger := c.Logger().With().Str("method", "updatePathFromSettings").Logger()
@@ -844,25 +834,25 @@ func updateCliConfig(c *config.Config, settings types.Settings) {
 }
 
 func updateProductEnablement(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	// Snyk Code
-	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
-	if err != nil {
-		c.Logger().Debug().Msg("couldn't parse code setting")
-	} else {
+	// Snyk Code is enabled if activateSnykCode or activateSnykCodeSecurity are enabled. activateSnykCodeSecurity is a
+	// legacy field but might be reported by the IDEs if set by MDM.
+	codeEnabled, codeErr := strconv.ParseBool(settings.ActivateSnykCode)
+	codeSecurityEnabled, codeSecErr := strconv.ParseBool(settings.ActivateSnykCodeSecurity)
+	if codeErr == nil || codeSecErr == nil {
+		resolved := codeEnabled || codeSecurityEnabled
 		oldValue := c.IsSnykCodeEnabled()
-		c.SetSnykCodeEnabled(parseBool)
-		c.EnableSnykCodeSecurity(parseBool)
-		if oldValue != parseBool {
+		c.SetSnykCodeEnabled(resolved)
+		if oldValue != resolved {
 			// Propagate individual product setting to all StoredFolderConfigs (unless locked)
-			propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c, types.SettingSnykCodeEnabled, parseBool)
+			propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c, types.SettingSnykCodeEnabled, resolved)
 			if c.IsLSPInitialized() {
-				analytics.SendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, parseBool, triggerSource)
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, resolved, triggerSource)
 			}
 		}
 	}
 
 	// Snyk Open Source
-	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
+	parseBool, err := strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {
 		c.Logger().Debug().Msg("couldn't parse open source setting")
 	} else {
