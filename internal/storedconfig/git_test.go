@@ -84,7 +84,7 @@ func Test_enrichFromGit_ReturnsLocalBranchesEvenWithoutMainOrMaster(t *testing.T
 
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
-	folderConfig := &types.StoredFolderConfig{
+	folderConfig := &types.FolderConfig{
 		FolderPath: types.FilePath(tempDir),
 	}
 

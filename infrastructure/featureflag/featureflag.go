@@ -52,8 +52,12 @@ var Flags = []string{
 	UseOsTest,
 }
 
-func UseOsTestWorkflow(folderConfig *types.StoredFolderConfig) bool {
+func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {
 	return folderConfig.FeatureFlags[UseExperimentalRiskScoreInCLI] || folderConfig.FeatureFlags[UseOsTest]
+}
+
+func UseOsTestWorkflowFromReader(folderConfig types.ImmutableFolderConfig) bool {
+	return folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI) || folderConfig.GetFeatureFlag(UseOsTest)
 }
 
 // ExternalCallsProvider abstracts configuration and API calls for testability
@@ -66,7 +70,7 @@ type ExternalCallsProvider interface {
 
 type Service interface {
 	GetFromStoredFolderConfig(folderPath types.FilePath, flag string) bool
-	PopulateStoredFolderConfig(folderConfig *types.StoredFolderConfig)
+	PopulateStoredFolderConfig(folderConfig *types.FolderConfig)
 	FlushCache()
 }
 
@@ -224,7 +228,7 @@ func (s *serviceImpl) FlushCache() {
 }
 
 func (s *serviceImpl) GetFromStoredFolderConfig(folderPath types.FilePath, flag string) bool {
-	folderConfig := s.c.StoredFolderConfig(folderPath)
+	folderConfig := s.c.FolderConfig(folderPath)
 	v, ok := folderConfig.FeatureFlags[flag]
 	if !ok {
 		s.c.Logger().Warn().Str("method", "GetFromStoredFolderConfig").Msgf("feature flag %s not found in folder config for path %s", flag, folderPath)
@@ -234,7 +238,7 @@ func (s *serviceImpl) GetFromStoredFolderConfig(folderPath types.FilePath, flag 
 	return v
 }
 
-func (s *serviceImpl) PopulateStoredFolderConfig(folderConfig *types.StoredFolderConfig) {
+func (s *serviceImpl) PopulateStoredFolderConfig(folderConfig *types.FolderConfig) {
 	logger := s.c.Logger().With().Str("method", "PopulateStoredFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
 	org := s.provider.folderOrganization(folderConfig.FolderPath)
 

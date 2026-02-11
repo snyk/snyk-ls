@@ -40,7 +40,7 @@ func Test_SendMessage(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 
 	const folderPath = types.FilePath("/test/folderPath")
-	folderConfig := &types.StoredFolderConfig{FolderPath: folderPath}
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	tests := []sendMessageTestCase{
 		{
@@ -93,7 +93,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
-	folderConfig := &types.StoredFolderConfig{FolderPath: folderPath}
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	// Act - run the test
 	scanNotifier.SendSuccessForAllProducts(folderConfig)
@@ -113,7 +113,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = types.FilePath("/test/oss/folderPath")
-	folderConfig := &types.StoredFolderConfig{FolderPath: folderPath}
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	// Act - run the test
 	scanNotifier.SendSuccess(product.ProductOpenSource, folderConfig)
@@ -137,7 +137,7 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
-	folderConfig := &types.StoredFolderConfig{FolderPath: folderPath}
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	// Act - run the test
 	scanNotifier.SendSuccess(product.ProductCode, folderConfig)
@@ -158,7 +158,7 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
-	folderConfig := &types.StoredFolderConfig{FolderPath: folderPath}
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	// Act - run the test
 	scanNotifier.SendSuccess(product.ProductCode, folderConfig)
@@ -179,7 +179,7 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
-	folderConfig := &types.StoredFolderConfig{FolderPath: folderPath}
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	// Act - run the test
 	scanNotifier.SendSuccess(product.ProductInfrastructureAsCode, folderConfig)
@@ -203,7 +203,7 @@ func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
 
 func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 	c := testutil.UnitTest(t)
-	folderConfig := &types.StoredFolderConfig{FolderPath: types.FilePath("/test/folderPath")}
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath("/test/folderPath")}
 	t.Run("snyk code enabled via general flag", func(t *testing.T) {
 		c.SetSnykIacEnabled(true)
 		c.SetSnykOssEnabled(true)

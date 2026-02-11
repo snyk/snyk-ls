@@ -509,7 +509,7 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		c.SetIssueViewOptions(&options)
 
 		// Create a folder config
-		folderConfig := &types.StoredFolderConfig{FolderPath: "/test/folder"}
+		folderConfig := &types.FolderConfig{FolderPath: "/test/folder"}
 
 		// Get options for folder - should return global options
 		result := c.IssueViewOptionsForFolder(folderConfig)
@@ -525,7 +525,7 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 		c.SetDeltaFindingsEnabled(true)
 
 		// Create a folder config
-		folderConfig := &types.StoredFolderConfig{FolderPath: "/test/folder"}
+		folderConfig := &types.FolderConfig{FolderPath: "/test/folder"}
 
 		// Get delta findings for folder - should return global setting
 		result := c.IsDeltaFindingsEnabledForFolder(folderConfig)
@@ -552,7 +552,7 @@ func TestFolderAwareConfigAccessors(t *testing.T) {
 
 		// Create a folder path and folder config with the org
 		folderPath := types.FilePath("/test/folder")
-		folderConfig := c.StoredFolderConfig(folderPath)
+		folderConfig := c.FolderConfig(folderPath)
 		folderConfig.AutoDeterminedOrg = orgId
 
 		// Save the folder config back to storage so subsequent calls see the org

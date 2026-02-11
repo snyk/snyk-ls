@@ -312,7 +312,7 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 		folderPath := types.FilePath("/test/folder")
 
 		// Setup folder config with specific feature flags
-		folderConfig := &types.StoredFolderConfig{
+		folderConfig := &types.FolderConfig{
 			FolderPath: folderPath,
 			FeatureFlags: map[string]bool{
 				SnykCodeConsistentIgnores: true,
@@ -334,7 +334,7 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
-		folderConfig := &types.StoredFolderConfig{
+		folderConfig := &types.FolderConfig{
 			FolderPath: folderPath,
 			FeatureFlags: map[string]bool{
 				SnykCodeConsistentIgnores: true,
@@ -355,13 +355,13 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 		folder2 := types.FilePath("/folder2")
 
 		// Setup different flags for each folder
-		config1 := &types.StoredFolderConfig{
+		config1 := &types.FolderConfig{
 			FolderPath: folder1,
 			FeatureFlags: map[string]bool{
 				SnykCodeConsistentIgnores: true,
 			},
 		}
-		config2 := &types.StoredFolderConfig{
+		config2 := &types.FolderConfig{
 			FolderPath: folder2,
 			FeatureFlags: map[string]bool{
 				SnykCodeConsistentIgnores: false,
@@ -383,7 +383,7 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test")
-		folderConfig := &types.StoredFolderConfig{
+		folderConfig := &types.FolderConfig{
 			FolderPath:   folderPath,
 			FeatureFlags: nil, // nil map
 		}
@@ -410,7 +410,7 @@ func TestPopulateStoredFolderConfig(t *testing.T) {
 		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
-		folderConfig := &types.StoredFolderConfig{
+		folderConfig := &types.FolderConfig{
 			FolderPath: folderPath,
 		}
 
@@ -425,8 +425,8 @@ func TestPopulateStoredFolderConfig(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
 		service := New(c, WithProvider(mockProvider))
 
-		folder1 := &types.StoredFolderConfig{FolderPath: "/folder1"}
-		folder2 := &types.StoredFolderConfig{FolderPath: "/folder2"}
+		folder1 := &types.FolderConfig{FolderPath: "/folder1"}
+		folder2 := &types.FolderConfig{FolderPath: "/folder2"}
 
 		// Populate both folders
 		service.PopulateStoredFolderConfig(folder1)
@@ -441,7 +441,7 @@ func TestPopulateStoredFolderConfig(t *testing.T) {
 		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
-		folderConfig := &types.StoredFolderConfig{
+		folderConfig := &types.FolderConfig{
 			FolderPath: folderPath,
 		}
 
@@ -458,7 +458,7 @@ func TestPopulateStoredFolderConfig(t *testing.T) {
 		service := New(c, WithProvider(mockProviderWithError))
 
 		folderPath := types.FilePath("/test/folder")
-		folderConfig := &types.StoredFolderConfig{
+		folderConfig := &types.FolderConfig{
 			FolderPath: folderPath,
 		}
 
@@ -474,14 +474,14 @@ func TestPopulateStoredFolderConfig(t *testing.T) {
 
 		var wg sync.WaitGroup
 		numFolders := 10
-		configs := make([]*types.StoredFolderConfig, numFolders)
+		configs := make([]*types.FolderConfig, numFolders)
 
 		for i := range numFolders {
-			configs[i] = &types.StoredFolderConfig{
+			configs[i] = &types.FolderConfig{
 				FolderPath: types.FilePath("/folder" + string(rune(i))),
 			}
 			wg.Add(1)
-			go func(cfg *types.StoredFolderConfig) {
+			go func(cfg *types.FolderConfig) {
 				defer wg.Done()
 				service.PopulateStoredFolderConfig(cfg)
 			}(configs[i])
@@ -627,7 +627,7 @@ func Test_PopulateStoredFolderConfig_UsesFolderOrganization(t *testing.T) {
 	}
 
 	// Populate folder config for folder 1
-	folderConfig1 := &types.StoredFolderConfig{
+	folderConfig1 := &types.FolderConfig{
 		FolderPath: folderPath1,
 	}
 	service.PopulateStoredFolderConfig(folderConfig1)
@@ -646,7 +646,7 @@ func Test_PopulateStoredFolderConfig_UsesFolderOrganization(t *testing.T) {
 	assert.False(t, org1Flags[SnykCodeInlineIgnore], "Service should have cached SnykCodeInlineIgnore=false for folderOrg1")
 
 	// Populate folder config for folder 2
-	folderConfig2 := &types.StoredFolderConfig{
+	folderConfig2 := &types.FolderConfig{
 		FolderPath: folderPath2,
 	}
 	service.PopulateStoredFolderConfig(folderConfig2)

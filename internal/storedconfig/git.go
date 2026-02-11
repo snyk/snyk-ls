@@ -73,7 +73,7 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 	return localBranches, nil
 }
 
-func enrichFromGit(logger *zerolog.Logger, folderConfig *types.StoredFolderConfig) *types.StoredFolderConfig {
+func enrichFromGit(logger *zerolog.Logger, folderConfig *types.FolderConfig) *types.FolderConfig {
 	l := logger.With().Str("method", "enrichFromGit").Logger()
 
 	repository, err := git.PlainOpen(string(folderConfig.FolderPath))

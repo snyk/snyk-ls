@@ -34,7 +34,7 @@ import (
 
 var ErrMissingDeltaReference = errors.New(utils.ErrNoReferenceBranch)
 
-func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s types.ProductScanner, folderConfig *types.StoredFolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
+func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s types.ProductScanner, folderConfig *types.FolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
 	logger := sc.c.Logger().With().
 		Str("method", "scanBaseBranch").
 		Str("product", string(s.Product())).
@@ -123,7 +123,7 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 // the org settings from the working directory folder config.
 // In delta scans, base branches might not have a folderConfig in storage, so the base scan would run using the default
 // org. This ensures we use the same org as for the working directory scans so that we can compare the results.
-func (sc *DelegatingConcurrentScanner) populateOrgForScannedStoredFolderConfig(path types.FilePath, folderConfig *types.StoredFolderConfig) {
+func (sc *DelegatingConcurrentScanner) populateOrgForScannedStoredFolderConfig(path types.FilePath, folderConfig *types.FolderConfig) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "populateOrgForScannedStoredFolderConfig").Str("path", string(path)).Logger()
 	scannedStoredFolderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), path, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
@@ -153,7 +153,7 @@ func (sc *DelegatingConcurrentScanner) populateOrgForScannedStoredFolderConfig(p
 }
 
 func (sc *DelegatingConcurrentScanner) persistScanResults(
-	folderConfig *types.StoredFolderConfig,
+	folderConfig *types.FolderConfig,
 	results []types.Issue,
 	s types.ProductScanner,
 ) {
@@ -173,7 +173,7 @@ func (sc *DelegatingConcurrentScanner) persistScanResults(
 	}
 }
 
-func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.StoredFolderConfig) (string, error) {
+func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.FolderConfig) (string, error) {
 	logger := sc.c.Logger().With().Str("method", "getPersistHash").Logger()
 	var persistHash string
 	var err error
@@ -201,7 +201,7 @@ func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.Stored
 	return persistHash, err
 }
 
-func (sc *DelegatingConcurrentScanner) cloneForBaseScan(folderConfig *types.StoredFolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
+func (sc *DelegatingConcurrentScanner) cloneForBaseScan(folderConfig *types.FolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
 	logger := sc.c.Logger().With().Str("method", "cloneForBaseScan").Logger()
 	folderPath := folderConfig.FolderPath
 

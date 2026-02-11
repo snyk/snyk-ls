@@ -166,7 +166,7 @@ func scanModeString(autoScan bool) string {
 
 // MigrateStoredFolderConfigOrgSettings applies the organization settings to a folder config during migration
 // based on the global organization setting and the LDX-Sync result.
-func MigrateStoredFolderConfigOrgSettings(c *config.Config, folderConfig *types.StoredFolderConfig) {
+func MigrateStoredFolderConfigOrgSettings(c *config.Config, folderConfig *types.FolderConfig) {
 	logger := c.Logger().With().Str("method", "MigrateStoredFolderConfigOrgSettings").Str("FolderPath", string(folderConfig.FolderPath)).Logger()
 
 	// Edge case when user provided folder config on initialize params or

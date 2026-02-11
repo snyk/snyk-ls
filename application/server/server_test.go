@@ -939,7 +939,7 @@ func sendFileSavedMessage(t *testing.T, c *config.Config, filePath types.FilePat
 		featureflag.NewFakeService()))
 
 	// Populate folder config with SAST settings after adding the folder
-	folderConfig := c.StoredFolderConfig(fileDir)
+	folderConfig := c.FolderConfig(fileDir)
 	di.FeatureFlagService().PopulateStoredFolderConfig(folderConfig)
 	_ = c.UpdateStoredFolderConfig(folderConfig)
 

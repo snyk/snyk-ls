@@ -227,7 +227,7 @@ func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
 
 	// Create and store folder config with specific org UUID
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
-	storedCfg := &types.StoredFolderConfig{
+	storedCfg := &types.FolderConfig{
 		FolderPath:                  folderPath,
 		PreferredOrg:                folderOrgUUID,
 		OrgMigratedFromGlobalConfig: true,
@@ -288,7 +288,7 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 
 	// Create and store folder config with specific org UUID
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
-	storedCfg := &types.StoredFolderConfig{
+	storedCfg := &types.FolderConfig{
 		FolderPath:                  folderPath,
 		PreferredOrg:                folderOrgUUID,
 		OrgMigratedFromGlobalConfig: true,
@@ -330,7 +330,7 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 	// Create and store folder config with a slug that will need resolution
 	// Using a slug format that would require API resolution
 	folderOrgSlug := "my-test-org-slug"
-	storedCfg := &types.StoredFolderConfig{
+	storedCfg := &types.FolderConfig{
 		FolderPath:                  folderPath,
 		PreferredOrg:                folderOrgSlug,
 		OrgMigratedFromGlobalConfig: true,

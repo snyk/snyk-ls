@@ -140,7 +140,7 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 
 	// Set up folder config with PreferredOrg
 	preferredOrg := "test-org-123"
-	folderConfig := &types.StoredFolderConfig{
+	folderConfig := &types.FolderConfig{
 		FolderPath:   folderPath,
 		PreferredOrg: preferredOrg,
 	}
@@ -320,7 +320,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromStoredFolderConfigs(
 	folders := c.Workspace().Folders()
 
 	// Create folder config with user override for a setting that will become locked
-	folderConfig := &types.StoredFolderConfig{
+	folderConfig := &types.FolderConfig{
 		FolderPath:    folderPath,
 		UserOverrides: map[string]any{types.SettingEnabledSeverities: []string{"high", "critical"}},
 	}
@@ -374,7 +374,7 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	folders := c.Workspace().Folders()
 
 	// Create folder config with user overrides for both locked and non-locked settings
-	folderConfig := &types.StoredFolderConfig{
+	folderConfig := &types.FolderConfig{
 		FolderPath: folderPath,
 		UserOverrides: map[string]any{
 			types.SettingEnabledSeverities: []string{"high", "critical"}, // Will be locked
@@ -581,4 +581,3 @@ func Test_RefreshConfigFromLdxSync_NoNotificationWhenNoChanges(t *testing.T) {
 	messages := notifier.SentMessages()
 	assert.Empty(t, messages, "No notification should be sent when config is not updated")
 }
-

@@ -40,7 +40,7 @@ type GetStoredFolderConfigOptions struct {
 }
 
 // GetStoredFolderConfigWithOptions retrieves folder config from storage with specified behaviors
-func GetStoredFolderConfigWithOptions(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, opts GetStoredFolderConfigOptions) (*types.StoredFolderConfig, error) {
+func GetStoredFolderConfigWithOptions(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, opts GetStoredFolderConfigOptions) (*types.FolderConfig, error) {
 	l := logger.With().Str("method", "GetStoredFolderConfigWithOptions").Logger()
 
 	folderConfig, err := folderConfigFromStorage(conf, path, &l, opts.CreateIfNotExist)
@@ -71,7 +71,7 @@ func GetStoredFolderConfigWithOptions(conf configuration.Configuration, path typ
 
 // GetOrCreateStoredFolderConfig gets folder config from storage and merges it with Git data.
 // Creates the config if it doesn't exist and writes back to storage.
-func GetOrCreateStoredFolderConfig(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.StoredFolderConfig, error) {
+func GetOrCreateStoredFolderConfig(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
 	return GetStoredFolderConfigWithOptions(conf, path, logger, GetStoredFolderConfigOptions{
 		CreateIfNotExist: true,
 		ReadOnly:         false,

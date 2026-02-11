@@ -24,22 +24,22 @@ import (
 var _ ScanNotifier = &MockScanNotifier{}
 
 type MockScanNotifier struct {
-	inProgressCalls []*types.StoredFolderConfig
-	successCalls    []*types.StoredFolderConfig
+	inProgressCalls []*types.FolderConfig
+	successCalls    []*types.FolderConfig
 	errorCalls      []types.FilePath
 }
 
 func NewMockScanNotifier() *MockScanNotifier { return &MockScanNotifier{} }
 
-func (m *MockScanNotifier) SendInProgress(folderConfig *types.StoredFolderConfig) {
+func (m *MockScanNotifier) SendInProgress(folderConfig *types.FolderConfig) {
 	m.inProgressCalls = append(m.inProgressCalls, folderConfig)
 }
 
-func (m *MockScanNotifier) SendSuccessForAllProducts(folderConfig *types.StoredFolderConfig) {
+func (m *MockScanNotifier) SendSuccessForAllProducts(folderConfig *types.FolderConfig) {
 	m.successCalls = append(m.successCalls, folderConfig)
 }
 
-func (m *MockScanNotifier) SendSuccess(_ product.Product, folderConfig *types.StoredFolderConfig) {
+func (m *MockScanNotifier) SendSuccess(_ product.Product, folderConfig *types.FolderConfig) {
 	m.successCalls = append(m.successCalls, folderConfig)
 }
 
@@ -47,11 +47,11 @@ func (m *MockScanNotifier) SendError(_ product.Product, folderPath types.FilePat
 	m.errorCalls = append(m.errorCalls, folderPath)
 }
 
-func (m *MockScanNotifier) InProgressCalls() []*types.StoredFolderConfig {
+func (m *MockScanNotifier) InProgressCalls() []*types.FolderConfig {
 	return m.inProgressCalls
 }
 
-func (m *MockScanNotifier) SuccessCalls() []*types.StoredFolderConfig {
+func (m *MockScanNotifier) SuccessCalls() []*types.FolderConfig {
 	return m.successCalls
 }
 

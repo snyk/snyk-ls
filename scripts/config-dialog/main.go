@@ -66,7 +66,7 @@ func main() {
 
 	w := workspace.New(c, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
 
-	// Add folders matching the StoredFolderConfig paths
+	// Add folders matching the FolderConfig paths
 	folder1 := workspace.NewFolder(c, "/Users/username/workspace/my-project", "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
 	folder2 := workspace.NewFolder(c, "/Users/username/workspace/your-project", "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
 	w.AddFolder(folder1)
@@ -100,7 +100,7 @@ func main() {
 			"/Users/username/workspace/my-project",
 			"/Users/username/trusted/folder",
 		},
-		StoredFolderConfigs: []types.StoredFolderConfig{
+		StoredFolderConfigs: []types.FolderConfig{
 			{
 				FolderPath:           "/Users/username/workspace/my-project",
 				AdditionalParameters: []string{"--all-projects", "--detection-depth=3"},

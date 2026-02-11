@@ -79,8 +79,8 @@ func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 	ch.CleanupFunc()()
 }
 
-func getStoredFolderConfig(path types.FilePath) *types.StoredFolderConfig {
-	return &types.StoredFolderConfig{
+func getStoredFolderConfig(path types.FilePath) *types.FolderConfig {
+	return &types.FolderConfig{
 		FolderPath: path,
 	}
 }

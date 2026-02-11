@@ -1295,10 +1295,10 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 	c.isOpenBrowserActionEnabled = enable
 }
 
-// StoredFolderConfig gets or creates a new folder config for the given folder path.
+// FolderConfig gets or creates a new folder config for the given folder path.
 // Can cause a rewrite to storage. For read-only operations where we know the stored data is complete, use
-// StoredFolderConfigReadOnly instead.
-func (c *Config) StoredFolderConfig(path types.FilePath) *types.StoredFolderConfig {
+// ImmutableFolderConfig instead.
+func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 	folderConfig, err := storedconfig.GetOrCreateStoredFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
 	if err != nil {
 		c.logger.Err(err).Msg("unable to get or create folder config")
@@ -1307,14 +1307,14 @@ func (c *Config) StoredFolderConfig(path types.FilePath) *types.StoredFolderConf
 	return folderConfig
 }
 
-// StoredFolderConfigReadOnly returns the folder config for a path without writing to storage or enriching from Git.
+// ImmutableFolderConfig returns the folder config for a path without writing to storage or enriching from Git.
 // This is suitable for read-only configuration checks. If no config exists in storage, this creates one with default
 // values (OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
-func (c *Config) StoredFolderConfigReadOnly(path types.FilePath) *types.StoredFolderConfig {
+func (c *Config) ImmutableFolderConfig(path types.FilePath) types.ImmutableFolderConfig {
 	folderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
 		CreateIfNotExist: true,
 		ReadOnly:         true,
-		EnrichFromGit:    false,
+		EnrichFromGit:    true,
 	})
 	if err != nil {
 		c.logger.Err(err).Msg("unable to get or create folder config")
@@ -1325,18 +1325,18 @@ func (c *Config) StoredFolderConfigReadOnly(path types.FilePath) *types.StoredFo
 
 // getMinimalStoredFolderConfig returns a folder config with only the path set, and no other fields. Used as a fallback
 // when a folder config cannot be retrieved from storage.
-func (c *Config) getMinimalStoredFolderConfig(path types.FilePath) *types.StoredFolderConfig {
-	return &types.StoredFolderConfig{FolderPath: path}
+func (c *Config) getMinimalStoredFolderConfig(path types.FilePath) *types.FolderConfig {
+	return &types.FolderConfig{FolderPath: path}
 }
 
-func (c *Config) UpdateStoredFolderConfig(folderConfig *types.StoredFolderConfig) error {
+func (c *Config) UpdateStoredFolderConfig(folderConfig *types.FolderConfig) error {
 	return storedconfig.UpdateStoredFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
 }
 
 // StoredFolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
 // The path parameter can be a subdirectory or file within a workspace folder.
 // Returns an error if the workspace is nil or if no workspace folder contains the path.
-func (c *Config) StoredFolderConfigForSubPath(path types.FilePath) (*types.StoredFolderConfig, error) {
+func (c *Config) StoredFolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
 	if c.Workspace() == nil {
 		return nil, fmt.Errorf("workspace is nil, so cannot determine folder config for path: %s", path)
 	}
@@ -1346,7 +1346,7 @@ func (c *Config) StoredFolderConfigForSubPath(path types.FilePath) (*types.Store
 		return nil, fmt.Errorf("no workspace folder found for path: %s", path)
 	}
 
-	folderConfig := c.StoredFolderConfig(workspaceFolder.Path())
+	folderConfig := c.FolderConfig(workspaceFolder.Path())
 	return folderConfig, nil
 }
 
@@ -1594,7 +1594,7 @@ func (c *Config) UpdateGlobalSettingsInResolver(settings *types.Settings) {
 
 // FilterSeverityForFolder returns the effective severity filter for a folder,
 // considering LDX-Sync org config and user overrides.
-func (c *Config) FilterSeverityForFolder(folderConfig *types.StoredFolderConfig) types.SeverityFilter {
+func (c *Config) FilterSeverityForFolder(folderConfig types.ImmutableFolderConfig) types.SeverityFilter {
 	resolver := c.GetConfigResolver()
 	if resolver == nil {
 		return c.FilterSeverity() // fallback to global
@@ -1611,7 +1611,7 @@ func (c *Config) FilterSeverityForFolder(folderConfig *types.StoredFolderConfig)
 
 // RiskScoreThresholdForFolder returns the effective risk score threshold for a folder,
 // considering LDX-Sync org config and user overrides.
-func (c *Config) RiskScoreThresholdForFolder(folderConfig *types.StoredFolderConfig) int {
+func (c *Config) RiskScoreThresholdForFolder(folderConfig types.ImmutableFolderConfig) int {
 	resolver := c.GetConfigResolver()
 	if resolver == nil {
 		return c.RiskScoreThreshold() // fallback to global
@@ -1628,7 +1628,7 @@ func (c *Config) RiskScoreThresholdForFolder(folderConfig *types.StoredFolderCon
 
 // IssueViewOptionsForFolder returns the effective issue view options for a folder,
 // considering LDX-Sync org config and user overrides.
-func (c *Config) IssueViewOptionsForFolder(folderConfig *types.StoredFolderConfig) types.IssueViewOptions {
+func (c *Config) IssueViewOptionsForFolder(folderConfig types.ImmutableFolderConfig) types.IssueViewOptions {
 	result := c.IssueViewOptions() // base/fallback
 
 	resolver := c.GetConfigResolver()
@@ -1652,7 +1652,7 @@ func (c *Config) IssueViewOptionsForFolder(folderConfig *types.StoredFolderConfi
 }
 
 // isSettingEnabledForFolder is a private helper to resolve a boolean setting for a folder.
-func (c *Config) isSettingEnabledForFolder(folderConfig *types.StoredFolderConfig, settingName string, fallback func() bool) bool {
+func (c *Config) isSettingEnabledForFolder(folderConfig types.ImmutableFolderConfig, settingName string, fallback func() bool) bool {
 	resolver := c.GetConfigResolver()
 	if resolver == nil {
 		return fallback()
@@ -1668,30 +1668,30 @@ func (c *Config) isSettingEnabledForFolder(folderConfig *types.StoredFolderConfi
 
 // IsAutoScanEnabledForFolder returns whether automatic scanning is enabled for a folder,
 // considering LDX-Sync org config and user overrides.
-func (c *Config) IsAutoScanEnabledForFolder(folderConfig *types.StoredFolderConfig) bool {
+func (c *Config) IsAutoScanEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
 	return c.isSettingEnabledForFolder(folderConfig, types.SettingScanAutomatic, c.IsAutoScanEnabled)
 }
 
 // IsDeltaFindingsEnabledForFolder returns whether delta findings is enabled for a folder,
 // considering LDX-Sync org config and user overrides.
-func (c *Config) IsDeltaFindingsEnabledForFolder(folderConfig *types.StoredFolderConfig) bool {
+func (c *Config) IsDeltaFindingsEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
 	return c.isSettingEnabledForFolder(folderConfig, types.SettingScanNetNew, c.IsDeltaFindingsEnabled)
 }
 
 // IsSnykCodeEnabledForFolder returns whether Snyk Code is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
-func (c *Config) IsSnykCodeEnabledForFolder(folderConfig *types.StoredFolderConfig) bool {
+func (c *Config) IsSnykCodeEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
 	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykCodeEnabled, c.IsSnykCodeEnabled)
 }
 
 // IsSnykOssEnabledForFolder returns whether Snyk OSS is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
-func (c *Config) IsSnykOssEnabledForFolder(folderConfig *types.StoredFolderConfig) bool {
+func (c *Config) IsSnykOssEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
 	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykOssEnabled, c.IsSnykOssEnabled)
 }
 
 // IsSnykIacEnabledForFolder returns whether Snyk IaC is enabled for a folder config,
 // considering LDX-Sync org config and user overrides.
-func (c *Config) IsSnykIacEnabledForFolder(folderConfig *types.StoredFolderConfig) bool {
+func (c *Config) IsSnykIacEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
 	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykIacEnabled, c.IsSnykIacEnabled)
 }

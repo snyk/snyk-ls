@@ -191,7 +191,7 @@ func OnlyEnableCode(t *testing.T, c *config.Config) {
 	c.SetSnykOssEnabled(false)
 	c.SetSnykCodeEnabled(true)
 	for _, folder := range c.Workspace().Folders() {
-		folderConfig := c.StoredFolderConfig(folder.Path())
+		folderConfig := c.FolderConfig(folder.Path())
 		folderConfig.SastSettings = &sast_contract.SastResponse{
 			SastEnabled: true,
 			LocalCodeEngine: sast_contract.LocalCodeEngine{
@@ -310,7 +310,7 @@ func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPa
 	folderPath2 = types.FilePath(t.TempDir())
 
 	// Configure folder 1 with its own org
-	folderConfig1 := &types.StoredFolderConfig{
+	folderConfig1 := &types.FolderConfig{
 		FolderPath:                  folderPath1,
 		PreferredOrg:                folderOrg1,
 		OrgMigratedFromGlobalConfig: true,
@@ -320,7 +320,7 @@ func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPa
 	require.NoError(t, err)
 
 	// Configure folder 2 with a different org
-	folderConfig2 := &types.StoredFolderConfig{
+	folderConfig2 := &types.FolderConfig{
 		FolderPath:                  folderPath2,
 		PreferredOrg:                folderOrg2,
 		OrgMigratedFromGlobalConfig: true,
@@ -339,7 +339,7 @@ func SetupFolderWithOrg(t *testing.T, c *config.Config, orgUUID string) types.Fi
 
 	folderPath := types.FilePath(t.TempDir())
 
-	folderConfig := &types.StoredFolderConfig{
+	folderConfig := &types.FolderConfig{
 		FolderPath:                  folderPath,
 		PreferredOrg:                orgUUID,
 		OrgMigratedFromGlobalConfig: true,

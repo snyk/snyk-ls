@@ -664,7 +664,7 @@ func (f *Folder) FilterIssues(
 func (f *Folder) filterIssuesWithConfig(
 	issues snyk.IssuesByFile,
 	supportedIssueTypes map[product.FilterableIssueType]bool,
-	folderConfig *types.StoredFolderConfig,
+	folderConfig types.ImmutableFolderConfig,
 ) snyk.IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 	filteredIssues := snyk.IssuesByFile{}
@@ -700,25 +700,25 @@ func (f *Folder) filterIssuesWithConfig(
 	return filteredIssues
 }
 
-func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, folderConfig *types.StoredFolderConfig) FilterReason {
+func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, folderConfig types.ImmutableFolderConfig) FilterReason {
 	if !supportedIssueTypes[issue.GetFilterableIssueType()] {
 		return FilterReasonUnsupportedType
 	}
 	if !f.isVisibleSeverity(issue, folderConfig) {
 		return FilterReasonSeverity
 	}
-	riskScoreInCLIEnabled := featureflag.UseOsTestWorkflow(folderConfig)
+	riskScoreInCLIEnabled := featureflag.UseOsTestWorkflowFromReader(folderConfig)
 	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue, folderConfig) {
 		return FilterReasonRiskScore
 	}
-	codeConsistentIgnoresEnabled := folderConfig.FeatureFlags[featureflag.SnykCodeConsistentIgnores]
+	codeConsistentIgnoresEnabled := folderConfig.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
 	if codeConsistentIgnoresEnabled && !f.isVisibleForIssueViewOptions(issue, folderConfig) {
 		return FilterReasonIssueViewOptions
 	}
 	return FilterReasonNotFiltered
 }
 
-func (f *Folder) isVisibleSeverity(issue types.Issue, folderConfig *types.StoredFolderConfig) bool {
+func (f *Folder) isVisibleSeverity(issue types.Issue, folderConfig types.ImmutableFolderConfig) bool {
 	filter := f.c.FilterSeverityForFolder(folderConfig)
 	switch issue.GetSeverity() {
 	case types.Critical:
@@ -733,7 +733,7 @@ func (f *Folder) isVisibleSeverity(issue types.Issue, folderConfig *types.Stored
 	return false
 }
 
-func (f *Folder) isVisibleRiskScore(issue types.Issue, folderConfig *types.StoredFolderConfig) bool {
+func (f *Folder) isVisibleRiskScore(issue types.Issue, folderConfig types.ImmutableFolderConfig) bool {
 	riskScoreThreshold := f.c.RiskScoreThresholdForFolder(folderConfig)
 	switch {
 	case riskScoreThreshold == 0:
@@ -767,7 +767,7 @@ func (f *Folder) isVisibleRiskScore(issue types.Issue, folderConfig *types.Store
 	return issueRiskScore >= uint16(riskScoreThreshold)
 }
 
-func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig *types.StoredFolderConfig) bool {
+func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig types.ImmutableFolderConfig) bool {
 	issueViewOptions := f.c.IssueViewOptionsForFolder(folderConfig)
 	if issue.GetIsIgnored() {
 		return issueViewOptions.IgnoredIssues
@@ -831,11 +831,11 @@ func (f *Folder) Name() string { return f.name }
 
 func (f *Folder) Status() types.FolderStatus { return f.status }
 
-// StoredFolderConfigReadOnly returns the StoredFolderConfig for this folder using read-only access
+// StoredFolderConfigReadOnly returns the FolderConfig for this folder using read-only access
 // (no storage writes, no Git enrichment). For operations that need to create or update
-// the config, use c.StoredFolderConfig(f.Path()) directly.
-func (f *Folder) StoredFolderConfigReadOnly() *types.StoredFolderConfig {
-	return f.c.StoredFolderConfigReadOnly(f.path)
+// the config, use c.FolderConfig(f.Path()) directly.
+func (f *Folder) StoredFolderConfigReadOnly() types.ImmutableFolderConfig {
+	return f.c.ImmutableFolderConfig(f.path)
 }
 
 // IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
@@ -889,7 +889,7 @@ func (f *Folder) IsTrusted() bool {
 }
 
 func (f *Folder) sendSuccess(processedProduct product.Product) {
-	folderConfig := f.c.StoredFolderConfig(f.path)
+	folderConfig := f.c.FolderConfig(f.path)
 	if processedProduct != "" {
 		f.scanNotifier.SendSuccess(processedProduct, folderConfig)
 	} else {

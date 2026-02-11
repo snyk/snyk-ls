@@ -80,14 +80,14 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 	)
 
 	// Create folder configs with SAST enabled
-	folderConfig1 := &types.StoredFolderConfig{
+	folderConfig1 := &types.FolderConfig{
 		FolderPath: folderPath1,
 		SastSettings: &sast_contract.SastResponse{
 			SastEnabled: true,
 		},
 	}
 
-	folderConfig2 := &types.StoredFolderConfig{
+	folderConfig2 := &types.FolderConfig{
 		FolderPath: folderPath2,
 		SastSettings: &sast_contract.SastResponse{
 			SastEnabled: true,
@@ -98,7 +98,7 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 	t.Run("folder 1", func(t *testing.T) {
 		// Capture the org used when creating the scanner
 		var capturedOrg string
-		factoryWithOrgCapture := func(sc *Scanner, fc *types.StoredFolderConfig) (codeClient.CodeScanner, error) {
+		factoryWithOrgCapture := func(sc *Scanner, fc *types.FolderConfig) (codeClient.CodeScanner, error) {
 			fakeClient, err := NewFakeCodeScannerClient(sc, fc)
 			if err == nil {
 				capturedOrg = fakeClient.(*FakeCodeScannerClient).Organization
@@ -126,7 +126,7 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 	t.Run("folder 2", func(t *testing.T) {
 		// Capture the org used when creating the scanner
 		var capturedOrg string
-		factoryWithOrgCapture := func(sc *Scanner, fc *types.StoredFolderConfig) (codeClient.CodeScanner, error) {
+		factoryWithOrgCapture := func(sc *Scanner, fc *types.FolderConfig) (codeClient.CodeScanner, error) {
 			fakeClient, err := NewFakeCodeScannerClient(sc, fc)
 			if err == nil {
 				capturedOrg = fakeClient.(*FakeCodeScannerClient).Organization

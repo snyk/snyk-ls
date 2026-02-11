@@ -35,7 +35,7 @@ const (
 )
 
 type StoredConfig struct {
-	StoredFolderConfigs map[types.FilePath]*types.StoredFolderConfig `json:"folderConfigs"`
+	StoredFolderConfigs map[types.FilePath]*types.FolderConfig `json:"folderConfigs"`
 }
 
 func ConfigFile(ideName string) (string, error) {
@@ -44,7 +44,7 @@ func ConfigFile(ideName string) (string, error) {
 	return xdg.ConfigFile(path)
 }
 
-func folderConfigFromStorage(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, createIfNotExist bool) (*types.StoredFolderConfig, error) {
+func folderConfigFromStorage(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, createIfNotExist bool) (*types.FolderConfig, error) {
 	if err := types.ValidatePathForStorage(path); err != nil {
 		logger.Error().Err(err).Str("path", string(path)).Msg("invalid folder path")
 		return nil, err
@@ -74,7 +74,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 			Str("originalPath", string(path)).
 			Int("existingFolderCount", len(sc.StoredFolderConfigs)).
 			Msg("Folder fc not found in storage, creating new one with OrgMigratedFromGlobalConfig=true")
-		fc = &types.StoredFolderConfig{
+		fc = &types.FolderConfig{
 			// New folder configs should never go through org migration; we treat them as migrated.
 			OrgMigratedFromGlobalConfig: true,
 			// New folder configs should have their org determined via LDX-Sync.
@@ -117,7 +117,7 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, d
 
 		// Normalize existing keys loaded from storage to ensure consistency
 		if sc != nil {
-			normalized := make(map[types.FilePath]*types.StoredFolderConfig, len(sc.StoredFolderConfigs))
+			normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.StoredFolderConfigs))
 			if sc.StoredFolderConfigs == nil {
 				sc.StoredFolderConfigs = normalized
 				return sc, nil
@@ -147,7 +147,7 @@ func Save(conf configuration.Configuration, sc *StoredConfig) error {
 
 func createNewStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, dontSave bool) *StoredConfig {
 	logger.Debug().Bool("dontSave", dontSave).Msg("createNewStoredConfig: Creating new stored config")
-	config := StoredConfig{StoredFolderConfigs: map[types.FilePath]*types.StoredFolderConfig{}}
+	config := StoredConfig{StoredFolderConfigs: map[types.FilePath]*types.FolderConfig{}}
 	if !dontSave {
 		if err := Save(conf, &config); err != nil {
 			logger.Err(err).Msg("Failed to save new stored config")
@@ -156,7 +156,7 @@ func createNewStoredConfig(conf configuration.Configuration, logger *zerolog.Log
 	return &config
 }
 
-func UpdateStoredFolderConfig(conf configuration.Configuration, folderConfig *types.StoredFolderConfig, logger *zerolog.Logger) error {
+func UpdateStoredFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig, logger *zerolog.Logger) error {
 	if err := types.ValidatePathForStorage(folderConfig.FolderPath); err != nil {
 		logger.Error().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("invalid folder path")
 		return err

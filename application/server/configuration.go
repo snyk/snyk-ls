@@ -252,7 +252,7 @@ func updateStoredFolderConfig(c *config.Config, settings types.Settings, logger 
 		Int("allPathsCount", len(allPaths)).
 		Msg("updateStoredFolderConfig - processing folder configs")
 
-	var folderConfigs []types.StoredFolderConfig
+	var folderConfigs []types.FolderConfig
 	needsToSendUpdateToClient := false
 
 	for path := range allPaths {
@@ -300,17 +300,17 @@ func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.Lsp
 // processSingleLspFolderConfig processes an incoming LspFolderConfig from the IDE using PATCH semantics:
 // - For pointer fields: nil = don't change, non-nil = set value
 // - For NullableField[T]: omitted = don't change, null = reset to default, value = set override
-// It loads the existing StoredFolderConfig, applies the LspFolderConfig updates, and persists changes.
-func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.StoredFolderConfig, bool) {
+// It loads the existing FolderConfig, applies the LspFolderConfig updates, and persists changes.
+func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, bool) {
 	logger := c.Logger().With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
-	storedConfig := c.StoredFolderConfig(path)
+	storedConfig := c.FolderConfig(path)
 
 	// Start with existing stored config or create new
-	var folderConfig types.StoredFolderConfig
+	var folderConfig types.FolderConfig
 	if storedConfig != nil {
 		folderConfig = *storedConfig
 	} else {
-		folderConfig = types.StoredFolderConfig{FolderPath: path}
+		folderConfig = types.FolderConfig{FolderPath: path}
 	}
 
 	// Validate that the changes are allowed, then apply the new config.
@@ -345,7 +345,7 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 
 // validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.
 // Returns true if any fields were rejected due to being locked.
-func validateLockedFields(c *config.Config, folderConfig *types.StoredFolderConfig, incoming *types.LspFolderConfig, logger *zerolog.Logger) bool {
+func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig, logger *zerolog.Logger) bool {
 	resolver := c.GetConfigResolver()
 	if resolver == nil {
 		return false
@@ -409,7 +409,7 @@ func clearLockedField(incoming *types.LspFolderConfig, settingName string) {
 	}
 }
 
-func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.StoredFolderConfig, folderConfig *types.StoredFolderConfig, notifier notification.Notifier) {
+func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {
 	needsMigration := storedConfig != nil && !storedConfig.OrgMigratedFromGlobalConfig
 	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(*folderConfig, storedConfig)
 
@@ -431,8 +431,8 @@ func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.StoredFolderC
 	}
 }
 
-func handleFolderCacheClearing(c *config.Config, path types.FilePath, folderConfig types.StoredFolderConfig, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
-	storedConfig := c.StoredFolderConfig(path)
+func handleFolderCacheClearing(c *config.Config, path types.FilePath, folderConfig types.FolderConfig, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
+	storedConfig := c.FolderConfig(path)
 	if storedConfig == nil {
 		return
 	}
@@ -458,7 +458,7 @@ func handleFolderCacheClearing(c *config.Config, path types.FilePath, folderConf
 	sendStoredFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
 }
 
-func sendStoredFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Notifier, folderConfigs []types.StoredFolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
+func sendStoredFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
 	// Don't send folder configs on initialize, since initialized will always send them.
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
 		resolver := c.GetConfigResolver()
@@ -474,7 +474,7 @@ func sendStoredFolderConfigUpdateIfNeeded(c *config.Config, notifier notificatio
 	}
 }
 
-func sendStoredFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource analytics.TriggerSource, oldStoredConfig, newStoredConfig types.StoredFolderConfig) {
+func sendStoredFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource analytics.TriggerSource, oldStoredConfig, newStoredConfig types.FolderConfig) {
 	// FolderPath change
 	if oldStoredConfig.FolderPath != newStoredConfig.FolderPath {
 		go analytics.SendConfigChangedAnalyticsEvent(c, configFolderPath, oldStoredConfig.FolderPath, newStoredConfig.FolderPath, path, triggerSource)
@@ -523,14 +523,14 @@ func sendStoredFolderConfigAnalytics(c *config.Config, path types.FilePath, trig
 	}
 }
 
-func folderConfigsOrgSettingsEqual(folderConfig types.StoredFolderConfig, storedConfig *types.StoredFolderConfig) bool {
+func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig *types.FolderConfig) bool {
 	return folderConfig.PreferredOrg == storedConfig.PreferredOrg &&
 		folderConfig.OrgSetByUser == storedConfig.OrgSetByUser &&
 		folderConfig.OrgMigratedFromGlobalConfig == storedConfig.OrgMigratedFromGlobalConfig &&
 		folderConfig.AutoDeterminedOrg == storedConfig.AutoDeterminedOrg
 }
 
-func updateStoredFolderConfigOrg(c *config.Config, storedConfig *types.StoredFolderConfig, folderConfig *types.StoredFolderConfig) {
+func updateStoredFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
 	// As a safety net, ensure the folder config has the AutoDeterminedOrg.
 	if folderConfig.AutoDeterminedOrg == "" {
 		// Folder configs should always save the AutoDeterminedOrg, regardless of if the user needs it.

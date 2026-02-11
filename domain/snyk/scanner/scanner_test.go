@@ -144,7 +144,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	command := "/bin/sh"
 
 	// setup folder config for prescan
-	folderConfig := c.StoredFolderConfig(workDir)
+	folderConfig := c.FolderConfig(workDir)
 	scanCommandConfigMap := make(map[product.Product]types.ScanCommandConfig)
 	scanCommandConfigMap[product.ProductOpenSource] = types.ScanCommandConfig{
 		PreScanCommand:             command,
@@ -165,7 +165,7 @@ func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *t
 		c: c,
 	}
 
-	folderConfig := &types.StoredFolderConfig{
+	folderConfig := &types.FolderConfig{
 		ReferenceFolderPath: "",
 		BaseBranch:          "",
 	}

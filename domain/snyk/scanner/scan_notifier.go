@@ -22,8 +22,8 @@ import (
 )
 
 type ScanNotifier interface {
-	SendInProgress(folderConfig *types.StoredFolderConfig)
-	SendSuccess(product product.Product, folderConfig *types.StoredFolderConfig)
-	SendSuccessForAllProducts(folderConfig *types.StoredFolderConfig)
+	SendInProgress(folderConfig *types.FolderConfig)
+	SendSuccess(product product.Product, folderConfig *types.FolderConfig)
+	SendSuccessForAllProducts(folderConfig *types.FolderConfig)
 	SendError(product product.Product, folderPath types.FilePath, errorMessage string)
 }

@@ -100,7 +100,7 @@ func constructSettingsFromConfig(c *config.Config) types.Settings {
 		Insecure: fmt.Sprintf("%v", insecure),
 
 		// Initialize StoredFolderConfigs as empty slice
-		StoredFolderConfigs: []types.StoredFolderConfig{},
+		StoredFolderConfigs: []types.FolderConfig{},
 	}
 
 	populateProductSettings(&s, c)
@@ -181,7 +181,7 @@ func populateStoredFolderConfigs(s *types.Settings, c *config.Config) {
 	resolver := c.GetConfigResolver()
 
 	for _, f := range c.Workspace().Folders() {
-		storedFc := c.StoredFolderConfig(f.Path())
+		storedFc := c.FolderConfig(f.Path())
 		if storedFc == nil {
 			continue
 		}
@@ -200,7 +200,7 @@ func populateStoredFolderConfigs(s *types.Settings, c *config.Config) {
 
 // computeEffectiveConfig computes effective values for all org-scope settings
 // that can be displayed/edited in the HTML settings page
-func computeEffectiveConfig(resolver *types.ConfigResolver, fc *types.StoredFolderConfig) map[string]types.EffectiveValue {
+func computeEffectiveConfig(resolver *types.ConfigResolver, fc *types.FolderConfig) map[string]types.EffectiveValue {
 	effectiveConfig := make(map[string]types.EffectiveValue)
 
 	// Org-scope settings that can be overridden per-folder

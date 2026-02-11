@@ -322,7 +322,7 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) sc
 	scanStateMapWithEnabledProducts := make(scanStateMap)
 
 	for key, st := range stateMap {
-		folderConfig := agg.c.StoredFolderConfig(key.FolderPath)
+		folderConfig := agg.c.FolderConfig(key.FolderPath)
 		issueTypes := agg.c.DisplayableIssueTypesForFolder(folderConfig)
 		for displayableIssueType, enabled := range issueTypes {
 			p := displayableIssueType.ToProduct()

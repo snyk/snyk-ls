@@ -125,7 +125,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 			contentRoot := folderPaths[0]
 
 			// Configure folder with org
-			err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.StoredFolderConfig{
+			err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 				FolderPath:                  contentRoot,
 				PreferredOrg:                "test-org",
 				OrgSetByUser:                true,
@@ -411,7 +411,7 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 	folderPath := folderPaths[0]
 
-	folderConfig := &types.StoredFolderConfig{
+	folderConfig := &types.FolderConfig{
 		FolderPath:                  folderPath,
 		PreferredOrg:                testFolderOrg,
 		OrgSetByUser:                true,

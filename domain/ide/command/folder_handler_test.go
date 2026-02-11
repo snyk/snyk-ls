@@ -57,7 +57,7 @@ func Test_sendStoredFolderConfigs_SendsNotification(t *testing.T) {
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 	logger := c.Logger()
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath:                  folderPaths[0],
 		PreferredOrg:                "test-org",
 		OrgMigratedFromGlobalConfig: true,
@@ -153,7 +153,7 @@ func Test_sendStoredFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 	logger := c.Logger()
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath:                  folderPaths[0],
 		PreferredOrg:                "test-org",
 		OrgMigratedFromGlobalConfig: true,
@@ -198,7 +198,7 @@ func Test_sendStoredFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 	logger := c.Logger()
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath:                  folderPaths[0],
 		PreferredOrg:                "test-org",
 		OrgMigratedFromGlobalConfig: true,
@@ -251,7 +251,7 @@ func Test_sendStoredFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing
 	logger := c.Logger()
 
 	// Setup different org configs for each folder - both already migrated to avoid migration path
-	storedConfig1 := &types.StoredFolderConfig{
+	storedConfig1 := &types.FolderConfig{
 		FolderPath:                  folderPaths[0],
 		PreferredOrg:                "user-org-1",
 		OrgMigratedFromGlobalConfig: true,
@@ -260,7 +260,7 @@ func Test_sendStoredFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing
 	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig1, logger)
 	require.NoError(t, err)
 
-	storedConfig2 := &types.StoredFolderConfig{
+	storedConfig2 := &types.FolderConfig{
 		FolderPath:                  folderPaths[1],
 		PreferredOrg:                "",
 		OrgMigratedFromGlobalConfig: true,
@@ -393,7 +393,7 @@ func Test_MigrateStoredFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
 	gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("default-org-uuid"))
 	gafConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("default-org-slug"))
 
-	folderConfig := &types.StoredFolderConfig{
+	folderConfig := &types.FolderConfig{
 		FolderPath:                  types.FilePath(t.TempDir()),
 		OrgSetByUser:                false,
 		OrgMigratedFromGlobalConfig: false,
@@ -427,7 +427,7 @@ func Test_MigrateStoredFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
 	// Set the user's non-default org
 	c.SetOrganization("non-default-org-id")
 
-	folderConfig := &types.StoredFolderConfig{
+	folderConfig := &types.FolderConfig{
 		FolderPath:                  types.FilePath(t.TempDir()),
 		OrgSetByUser:                false,
 		OrgMigratedFromGlobalConfig: false,
@@ -465,7 +465,7 @@ func Test_MigrateStoredFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(
 	gafConfig.Set(configuration.ORGANIZATION, "custom-org-id")
 
 	// Setup: Pre-feature folder with zero-value fields (never read during EA)
-	folderConfig := &types.StoredFolderConfig{
+	folderConfig := &types.FolderConfig{
 		FolderPath: types.FilePath(t.TempDir()),
 	}
 

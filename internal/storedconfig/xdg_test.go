@@ -96,7 +96,7 @@ func Test_UpdateStoredFolderConfig_PersistsUserOverrides(t *testing.T) {
 	path := types.FilePath(tempDir)
 
 	// Create a folder config with user overrides
-	folderConfig := &types.StoredFolderConfig{
+	folderConfig := &types.FolderConfig{
 		FolderPath: path,
 	}
 	folderConfig.SetUserOverride(types.SettingEnabledSeverities, []string{"critical", "high"})

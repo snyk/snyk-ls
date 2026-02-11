@@ -593,7 +593,7 @@ type ScanCommandConfig struct {
 	PostScanOnlyReferenceFolder bool   `json:"postScanOnlyReferenceFolder,omitempty"`
 }
 
-// StoredFolderConfig is exchanged between IDE and LS
+// FolderConfig is exchanged between IDE and LS
 // IDE sends this as part of the settings/initialization
 // EffectiveValue represents a computed configuration value with its source.
 // This is sent to the IDE so it can display the effective value.
@@ -743,13 +743,13 @@ type Settings struct {
 
 	// Folder specific settings start
 	AdditionalParams string            `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
-	AdditionalEnv    string            `json:"additionalEnv,omitempty"`    // Global fallback for backward compatibility; folder-specific values in StoredFolderConfig.AdditionalEnv
+	AdditionalEnv    string            `json:"additionalEnv,omitempty"`    // Global fallback for backward compatibility; folder-specific values in FolderConfig.AdditionalEnv
 	TrustedFolders   []string          `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
 	FolderConfigs    []LspFolderConfig `json:"folderConfigs,omitempty"`    // IDE ↔ LS communication uses LspFolderConfig with PATCH semantics
 	// Folder specific settings end
 
 	// Internal fields (not serialized to JSON, used for HTML rendering only)
-	StoredFolderConfigs []StoredFolderConfig `json:"-"`
+	StoredFolderConfigs []FolderConfig `json:"-"`
 }
 
 type AuthenticationMethod string

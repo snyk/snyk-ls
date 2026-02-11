@@ -95,7 +95,7 @@ func Test_GetOrCreateStoredFolderConfig_shouldReturnExistingStoredFolderConfig(t
 		PostScanOnlyReferenceFolder: false,
 	}
 	referenceDir := t.TempDir()
-	expected := &types.StoredFolderConfig{
+	expected := &types.FolderConfig{
 		FolderPath:           types.PathKey(path),
 		ReferenceFolderPath:  types.PathKey(types.FilePath(referenceDir)),
 		AdditionalParameters: []string{"--additional-param=asdf", "--additional-param2=add"},
@@ -110,7 +110,7 @@ func Test_GetOrCreateStoredFolderConfig_shouldReturnExistingStoredFolderConfig(t
 
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 	// Create config with original paths for UpdateStoredFolderConfig
-	configToUpdate := &types.StoredFolderConfig{
+	configToUpdate := &types.FolderConfig{
 		FolderPath:           path,
 		ReferenceFolderPath:  types.FilePath(referenceDir),
 		AdditionalParameters: []string{"--additional-param=asdf", "--additional-param2=add"},
@@ -164,7 +164,7 @@ func Test_GetOrCreateStoredFolderConfig_GitLocalBranchesTakePriorityOverStoredCo
 
 	// Create a stored config with outdated branch info
 	conf, _ := SetupConfigurationWithStorage(t)
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath:    types.FilePath(tempDir),
 		LocalBranches: []string{"old-main", "old-feature"},
 		BaseBranch:    "old-main",
@@ -196,7 +196,7 @@ func Test_GetOrCreateStoredFolderConfig_StoredConfigBaseBranchNotOverwrittenByGi
 	// Create stored config with a different base branch than Git default
 	conf, _ := SetupConfigurationWithStorage(t)
 	storedBaseBranch := "some-stored-base-branch"
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath: types.FilePath(tempDir),
 		BaseBranch: storedBaseBranch,
 	}
@@ -237,7 +237,7 @@ func Test_GetOrCreateStoredFolderConfig_ExistingFolderWithZeroValues(t *testing.
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	// Create a folder config with zero-values
-	preExistingConfig := &types.StoredFolderConfig{
+	preExistingConfig := &types.FolderConfig{
 		FolderPath: path,
 		// Remaining fields will get their respective default "zero" values
 	}
@@ -261,7 +261,7 @@ func Test_GetOrCreateStoredFolderConfig_AlreadyMigratedFolder(t *testing.T) {
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	// Create an already-migrated folder config
-	migratedConfig := &types.StoredFolderConfig{
+	migratedConfig := &types.FolderConfig{
 		FolderPath:                  path,
 		OrgSetByUser:                true,
 		OrgMigratedFromGlobalConfig: true,

@@ -45,7 +45,7 @@ func (f *FakeFeatureFlagService) GetSastSettingsFromStoredFolderConfig(folderPat
 	return f.SastSettings
 }
 
-func (f *FakeFeatureFlagService) PopulateStoredFolderConfig(folderConfig *types.StoredFolderConfig) {
+func (f *FakeFeatureFlagService) PopulateStoredFolderConfig(folderConfig *types.FolderConfig) {
 	folderConfig.FeatureFlags = f.Flags
 	folderConfig.SastSettings = f.SastSettings
 }

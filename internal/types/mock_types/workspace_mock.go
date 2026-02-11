@@ -466,17 +466,17 @@ func (mr *MockFolderMockRecorder) Status() *gomock.Call {
 }
 
 // StoredFolderConfigReadOnly mocks base method.
-func (m *MockFolder) StoredFolderConfigReadOnly() *types.StoredFolderConfig {
+func (m *MockFolder) StoredFolderConfigReadOnly() types.ImmutableFolderConfig {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StoredFolderConfigReadOnly")
-	ret0, _ := ret[0].(*types.StoredFolderConfig)
+	ret := m.ctrl.Call(m, "ImmutableFolderConfig")
+	ret0, _ := ret[0].(types.ImmutableFolderConfig)
 	return ret0
 }
 
 // StoredFolderConfigReadOnly indicates an expected call of StoredFolderConfigReadOnly.
 func (mr *MockFolderMockRecorder) StoredFolderConfigReadOnly() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoredFolderConfigReadOnly", reflect.TypeOf((*MockFolder)(nil).StoredFolderConfigReadOnly))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImmutableFolderConfig", reflect.TypeOf((*MockFolder)(nil).StoredFolderConfigReadOnly))
 }
 
 // Uri mocks base method.

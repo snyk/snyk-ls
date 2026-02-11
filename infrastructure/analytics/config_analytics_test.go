@@ -166,12 +166,12 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 				folder1Path := types.FilePath("/fake/folder1")
 				folder2Path := types.FilePath("/fake/folder2")
 
-				folder1Config := &types.StoredFolderConfig{
+				folder1Config := &types.FolderConfig{
 					FolderPath:   folder1Path,
 					PreferredOrg: testFolderOrg,
 					OrgSetByUser: true,
 				}
-				folder2Config := &types.StoredFolderConfig{
+				folder2Config := &types.FolderConfig{
 					FolderPath:   folder2Path,
 					PreferredOrg: testFolderOrg,
 					OrgSetByUser: true,

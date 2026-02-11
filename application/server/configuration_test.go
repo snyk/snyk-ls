@@ -265,7 +265,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, *settings.HoverVerbosity, c.HoverVerbosity())
 		assert.Equal(t, *settings.OutputFormat, c.Format())
 
-		folderConfig1 := c.StoredFolderConfig(types.FilePath(tempDir1))
+		folderConfig1 := c.FolderConfig(types.FilePath(tempDir1))
 		assert.NotEmpty(t, folderConfig1.BaseBranch)
 		// AdditionalParameters are preserved through the update
 		if len(folderConfig1.AdditionalParameters) > 0 {
@@ -278,7 +278,7 @@ func Test_UpdateSettings(t *testing.T) {
 		// The migration flag should be set after the update.
 		assert.True(t, folderConfig1.OrgMigratedFromGlobalConfig, "Should be migrated after update")
 
-		folderConfig2 := c.StoredFolderConfig(types.FilePath(tempDir2))
+		folderConfig2 := c.FolderConfig(types.FilePath(tempDir2))
 		assert.NotEmpty(t, folderConfig2.BaseBranch)
 		assert.Empty(t, folderConfig2.AdditionalParameters)
 		// Same logic applies to folder2
@@ -513,7 +513,7 @@ func setupStoredFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 }
 
 func (s *folderConfigTestSetup) createStoredConfig(org string, migrated bool, userSet bool) {
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath:                  s.folderPath,
 		PreferredOrg:                org,
 		OrgMigratedFromGlobalConfig: migrated,
@@ -535,7 +535,7 @@ func (s *folderConfigTestSetup) callUpdateStoredFolderConfig(org string) {
 	updateStoredFolderConfig(s.c, settings, s.logger, analytics.TriggerSourceTest)
 }
 
-func (s *folderConfigTestSetup) getUpdatedConfig() *types.StoredFolderConfig {
+func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
 	updatedConfig, err := storedconfig.GetOrCreateStoredFolderConfig(s.engineConfig, s.folderPath, s.logger)
 	require.NoError(s.t, err)
 	return updatedConfig
@@ -586,7 +586,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *test
 	// Setup stored config with user-set org
 	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath:                  folderPath,
 		PreferredOrg:                "user-org-id",
 		OrgMigratedFromGlobalConfig: true,
@@ -734,7 +734,7 @@ func Test_updateStoredFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) 
 	// Setup stored config
 	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath:                  folderPath,
 		PreferredOrg:                "test-org",
 		OrgMigratedFromGlobalConfig: true,
@@ -863,7 +863,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T
 
 	// Setup stored config with migration flag set, userSet false, empty org, and AutoDeterminedOrg set
 	engineConfig := setup.c.Engine().GetConfiguration()
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath:                  setup.folderPath,
 		PreferredOrg:                "",
 		OrgMigratedFromGlobalConfig: true,
@@ -902,7 +902,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testin
 
 	// Setup stored config with migration flag set, userSet false, but has an org
 	engineConfig := setup.c.Engine().GetConfiguration()
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath:                  setup.folderPath,
 		PreferredOrg:                "old-auto-org",
 		OrgMigratedFromGlobalConfig: true,
@@ -1028,7 +1028,7 @@ func Test_updateStoredFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 
 	// Setup stored config WITHOUT AutoDeterminedOrg (simulating old config)
 	engineConfig := setup.c.Engine().GetConfiguration()
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath:                  setup.folderPath,
 		PreferredOrg:                "test-org",
 		OrgMigratedFromGlobalConfig: true,
@@ -1094,7 +1094,7 @@ func Test_updateStoredFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOr
 	folderPath := types.FilePath(t.TempDir())
 
 	// Setup: Pre-feature folder with zero-value fields (never read during EA)
-	storedConfig := &types.StoredFolderConfig{
+	storedConfig := &types.FolderConfig{
 		FolderPath: folderPath,
 	}
 	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, c.Logger())

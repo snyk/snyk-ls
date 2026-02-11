@@ -95,7 +95,7 @@ type Scanner struct {
 	C                   *config.Config
 	codeInstrumentor    codeClientObservability.Instrumentor
 	codeErrorReporter   codeClientObservability.ErrorReporter
-	codeScanner         func(sc *Scanner, folderConfig *types.StoredFolderConfig) (codeClient.CodeScanner, error)
+	codeScanner         func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)
 }
 
 func (sc *Scanner) BundleHashes() map[types.FilePath]string {
@@ -113,7 +113,7 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.StoredFolderConfig) (codeClient.CodeScanner, error)) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)) *Scanner {
 	sc := &Scanner{
 		SnykApiClient:      apiClient,
 		errorReporter:      reporter,
@@ -136,7 +136,7 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 	return sc
 }
 
-func (sc *Scanner) IsEnabledForFolder(folderConfig *types.StoredFolderConfig) bool {
+func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
 	return sc.C.IsSnykCodeEnabledForFolder(folderConfig)
 }
 
@@ -148,7 +148,7 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, folderConfig *types.StoredFolderConfig) (issues []types.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
@@ -229,7 +229,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	return results, err
 }
 
-func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, folderConfig *types.StoredFolderConfig, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {
+func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, folderConfig *types.FolderConfig, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {
 	span := sc.Instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.Instrumentor.Finish(span)
 	ctx, cancel := context.WithCancel(span.Context())
@@ -377,7 +377,7 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.
 	return false
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, folderConfig *types.StoredFolderConfig, files <-chan string, changedFiles map[types.FilePath]bool, codeConsistentIgnores bool, t *progress.Tracker) (issues []types.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig, files <-chan string, changedFiles map[types.FilePath]bool, codeConsistentIgnores bool, t *progress.Tracker) (issues []types.Issue, err error) {
 	method := "code.UploadAndAnalyze"
 	logger := sc.C.Logger().With().Str("method", method).Logger()
 
@@ -472,7 +472,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 
 // createCodeConfig creates a new codeConfig with Organization populated from folder configuration
 // and delegates other values to the language server config
-func (sc *Scanner) createCodeConfig(folderConfig *types.StoredFolderConfig) (codeClientConfig.Config, error) {
+func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClientConfig.Config, error) {
 	logger := sc.C.Logger().With().Str("method", "code.createCodeConfig").Logger()
 
 	if folderConfig == nil {
@@ -509,7 +509,7 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.StoredFolderConfig) (cod
 }
 
 // CreateCodeScanner creates a real code scanner with Organization populated from folder configuration
-func CreateCodeScanner(scanner *Scanner, folderConfig *types.StoredFolderConfig) (codeClient.CodeScanner, error) {
+func CreateCodeScanner(scanner *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error) {
 	// Create a new codeConfig with Organization populated from folder configuration
 	codeConfig, err := scanner.createCodeConfig(folderConfig)
 	if err != nil {

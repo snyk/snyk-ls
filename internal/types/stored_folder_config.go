@@ -24,10 +24,25 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
-// StoredFolderConfig is the internal storage representation of folder configuration.
+// ImmutableFolderConfig provides read-only access to stored folder configuration.
+// Use this interface for consumers that only need to read config values,
+// enforcing immutability at the type level.
+type ImmutableFolderConfig interface {
+	GetFolderPath() FilePath
+	GetPreferredOrg() string
+	GetBaseBranch() string
+	GetAdditionalParameters() []string
+	GetAdditionalEnv() string
+	GetReferenceFolderPath() FilePath
+	GetFeatureFlag(flag string) bool
+	HasUserOverride(settingName string) bool
+	GetUserOverride(settingName string) (any, bool)
+}
+
+// FolderConfig is the internal storage representation of folder configuration.
 // This is persisted to disk and contains all folder-specific settings including user overrides.
 // For the public LSP contract, see LspFolderConfig in lsp.go.
-type StoredFolderConfig struct {
+type FolderConfig struct {
 	FolderPath                  FilePath                              `json:"folderPath"`
 	BaseBranch                  string                                `json:"baseBranch"`
 	LocalBranches               []string                              `json:"localBranches,omitempty"`
@@ -52,12 +67,12 @@ type StoredFolderConfig struct {
 	EffectiveConfig map[string]EffectiveValue `json:"effectiveConfig,omitempty"`
 }
 
-func (fc *StoredFolderConfig) Clone() *StoredFolderConfig {
+func (fc *FolderConfig) Clone() *FolderConfig {
 	if fc == nil {
 		return nil
 	}
 
-	clone := &StoredFolderConfig{
+	clone := &FolderConfig{
 		FolderPath:                  fc.FolderPath,
 		BaseBranch:                  fc.BaseBranch,
 		AdditionalEnv:               fc.AdditionalEnv,
@@ -116,13 +131,13 @@ func (fc *StoredFolderConfig) Clone() *StoredFolderConfig {
 }
 
 // HasUserOverride checks if the user has explicitly set a value for the given setting
-func (fc *StoredFolderConfig) HasUserOverride(settingName string) bool {
+func (fc *FolderConfig) HasUserOverride(settingName string) bool {
 	_, exists := fc.GetUserOverride(settingName)
 	return exists
 }
 
 // GetUserOverride returns the user override value for the given setting, or nil if not set
-func (fc *StoredFolderConfig) GetUserOverride(settingName string) (any, bool) {
+func (fc *FolderConfig) GetUserOverride(settingName string) (any, bool) {
 	if fc == nil || fc.UserOverrides == nil {
 		return nil, false
 	}
@@ -130,8 +145,64 @@ func (fc *StoredFolderConfig) GetUserOverride(settingName string) (any, bool) {
 	return val, exists
 }
 
+// GetFolderPath returns the folder path
+func (fc *FolderConfig) GetFolderPath() FilePath {
+	if fc == nil {
+		return ""
+	}
+	return fc.FolderPath
+}
+
+// GetPreferredOrg returns the preferred org
+func (fc *FolderConfig) GetPreferredOrg() string {
+	if fc == nil {
+		return ""
+	}
+	return fc.PreferredOrg
+}
+
+// GetBaseBranch returns the base branch
+func (fc *FolderConfig) GetBaseBranch() string {
+	if fc == nil {
+		return ""
+	}
+	return fc.BaseBranch
+}
+
+// GetAdditionalParameters returns the additional CLI parameters
+func (fc *FolderConfig) GetAdditionalParameters() []string {
+	if fc == nil {
+		return nil
+	}
+	return fc.AdditionalParameters
+}
+
+// GetAdditionalEnv returns the additional environment variables
+func (fc *FolderConfig) GetAdditionalEnv() string {
+	if fc == nil {
+		return ""
+	}
+	return fc.AdditionalEnv
+}
+
+// GetReferenceFolderPath returns the reference folder path
+func (fc *FolderConfig) GetReferenceFolderPath() FilePath {
+	if fc == nil {
+		return ""
+	}
+	return fc.ReferenceFolderPath
+}
+
+// GetFeatureFlag returns the value of a feature flag, defaulting to false
+func (fc *FolderConfig) GetFeatureFlag(flag string) bool {
+	if fc == nil || fc.FeatureFlags == nil {
+		return false
+	}
+	return fc.FeatureFlags[flag]
+}
+
 // SetUserOverride explicitly sets a user override value for the given setting
-func (fc *StoredFolderConfig) SetUserOverride(settingName string, value any) {
+func (fc *FolderConfig) SetUserOverride(settingName string, value any) {
 	if fc.UserOverrides == nil {
 		fc.UserOverrides = make(map[string]any)
 	}
@@ -139,17 +210,17 @@ func (fc *StoredFolderConfig) SetUserOverride(settingName string, value any) {
 }
 
 // ResetToDefault removes a user override, reverting to LDX-Sync or default value
-func (fc *StoredFolderConfig) ResetToDefault(settingName string) {
+func (fc *FolderConfig) ResetToDefault(settingName string) {
 	if fc.UserOverrides != nil {
 		delete(fc.UserOverrides, settingName)
 	}
 }
 
-// SanitizeForIDE returns a copy of the StoredFolderConfig prepared for sending to the IDE.
+// SanitizeForIDE returns a copy of the FolderConfig prepared for sending to the IDE.
 // - UserOverrides, FeatureFlags, SastSettings are cleared (LS-managed, not exposed to IDE)
 // - EffectiveConfig is kept (IDE needs this for display and behavior)
 // Deprecated: Use ToLspFolderConfig instead for the new LSP contract.
-func (fc *StoredFolderConfig) SanitizeForIDE() StoredFolderConfig {
+func (fc *FolderConfig) SanitizeForIDE() FolderConfig {
 	sanitized := *fc
 	sanitized.UserOverrides = nil
 
@@ -160,10 +231,10 @@ func (fc *StoredFolderConfig) SanitizeForIDE() StoredFolderConfig {
 	return sanitized
 }
 
-// ToLspFolderConfig converts a StoredFolderConfig to LspFolderConfig for sending to IDE.
+// ToLspFolderConfig converts a FolderConfig to LspFolderConfig for sending to IDE.
 // The resolver is used to compute effective values for org-scope settings.
 // If resolver is nil, org-scope settings will not be populated.
-func (fc *StoredFolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface) *LspFolderConfig {
+func (fc *FolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface) *LspFolderConfig {
 	if fc == nil {
 		return nil
 	}
@@ -240,7 +311,7 @@ func (fc *StoredFolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface
 // - nil = don't change
 // - non-nil = set value
 // Returns true if any changes were made.
-func (fc *StoredFolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
+func (fc *FolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 	if fc == nil || update == nil {
 		return false
 	}
@@ -252,7 +323,7 @@ func (fc *StoredFolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 }
 
 // applyFolderScopeUpdates applies folder-scope field updates (direct fields, not user overrides)
-func (fc *StoredFolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
+func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
 	changed := fc.applyBasicFolderFields(update)
 	preferredOrgUpdated := fc.applyPreferredOrg(update)
 	if preferredOrgUpdated {
@@ -264,7 +335,7 @@ func (fc *StoredFolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) b
 	return changed
 }
 
-func (fc *StoredFolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
+func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
 	changed := false
 	if update.BaseBranch != nil && *update.BaseBranch != fc.BaseBranch {
 		fc.BaseBranch = *update.BaseBranch
@@ -293,7 +364,7 @@ func (fc *StoredFolderConfig) applyBasicFolderFields(update *LspFolderConfig) bo
 	return changed
 }
 
-func (fc *StoredFolderConfig) applyPreferredOrg(update *LspFolderConfig) bool {
+func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig) bool {
 	if update.PreferredOrg != nil && *update.PreferredOrg != fc.PreferredOrg {
 		fc.PreferredOrg = *update.PreferredOrg
 		fc.OrgSetByUser = true
@@ -302,7 +373,7 @@ func (fc *StoredFolderConfig) applyPreferredOrg(update *LspFolderConfig) bool {
 	return false
 }
 
-func (fc *StoredFolderConfig) applyOrgFlags(update *LspFolderConfig, preferredOrgUpdated bool) bool {
+func (fc *FolderConfig) applyOrgFlags(update *LspFolderConfig, preferredOrgUpdated bool) bool {
 	changed := false
 	// Apply OrgSetByUser only if explicitly set (pointer is non-nil) and PreferredOrg was NOT updated
 	// (updating PreferredOrg already sets OrgSetByUser=true as a side effect)
@@ -322,7 +393,7 @@ func (fc *StoredFolderConfig) applyOrgFlags(update *LspFolderConfig, preferredOr
 // - Omitted = don't change
 // - Null = clear override (reset to default)
 // - Value = set override
-func (fc *StoredFolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
+func (fc *FolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
 	changed := false
 
 	// Helper to apply a NullableField update
@@ -362,5 +433,5 @@ func (fc *StoredFolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool
 // StoredFolderConfigsParam is used internally for storage operations.
 // For LSP notifications, use LspFolderConfigsParam instead.
 type StoredFolderConfigsParam struct {
-	StoredFolderConfigs []StoredFolderConfig `json:"folderConfigs"`
+	StoredFolderConfigs []FolderConfig `json:"folderConfigs"`
 }

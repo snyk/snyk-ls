@@ -1081,7 +1081,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 
 	// AdditionalParameters is internal-only (not transmitted via LSP), so we must persist it
 	// directly to storage before initialization triggers the scan.
-	folderConfig := c.StoredFolderConfig(cloneTargetDir)
+	folderConfig := c.FolderConfig(cloneTargetDir)
 	folderConfig.AdditionalParameters = []string{"--unmanaged"}
 	err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	require.NoError(t, err)
@@ -1228,7 +1228,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		// Pre-populate storage with a folder config to simulate migration
 		setupFunc := func(c *config.Config) {
 			c.SetOrganization(expectedOrg)
-			folderConfig := &types.StoredFolderConfig{
+			folderConfig := &types.FolderConfig{
 				FolderPath: repo,
 			}
 			err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
@@ -1285,7 +1285,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: repoValidator,
 		})
 
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.StoredFolderConfig{
+		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  fakeDirFolderPath,
 			AutoDeterminedOrg:           "any",
 			PreferredOrg:                "any",
@@ -1348,7 +1348,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User blanks the folder-level org via configuration change
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.StoredFolderConfig) {
+		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].PreferredOrg = ""
 		})
@@ -1425,7 +1425,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 
 		// simulate settings change from the IDE
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.StoredFolderConfig) {
+		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			folderConfigs[fakeDirFolderPath].PreferredOrg = "any"
 		})
 
@@ -1476,7 +1476,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User opts-in to automatic org selection for the folder
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.StoredFolderConfig) {
+		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].OrgSetByUser = false
 		})
@@ -1524,7 +1524,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.NotEmpty(t, c.FolderOrganization(repo), "Folder should have an effective org when OrgSetByUser is false")
 
 		// User opts-out of automatic org selection for the folder
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.StoredFolderConfig) {
+		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].OrgSetByUser = true
 		})
@@ -1632,7 +1632,7 @@ func sendModifiedStoredFolderConfiguration(
 	t *testing.T,
 	c *config.Config,
 	loc server.Local,
-	modification func(folderConfigs map[types.FilePath]*types.StoredFolderConfig),
+	modification func(folderConfigs map[types.FilePath]*types.FolderConfig),
 ) {
 	t.Helper()
 	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)

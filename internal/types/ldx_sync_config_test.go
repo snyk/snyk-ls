@@ -198,7 +198,7 @@ func TestConfigResolver_ConcurrentAccess(t *testing.T) {
 	// Concurrent readers
 	for i := 0; i < 5; i++ {
 		go func() {
-			_ = resolver.GetBool(SettingSnykCodeEnabled, &StoredFolderConfig{FolderPath: "/folder"})
+			_ = resolver.GetBool(SettingSnykCodeEnabled, &FolderConfig{FolderPath: "/folder"})
 			done <- true
 		}()
 	}
@@ -303,7 +303,7 @@ func Test_LDXSyncCache_ConcurrentAccess_NoRace(t *testing.T) {
 			defer wg.Done()
 			folderPath := FilePath(fmt.Sprintf("/folder%d", id))
 			orgId := fmt.Sprintf("org-%d", id)
-			
+
 			cache.SetFolderOrg(folderPath, orgId)
 			_ = cache.GetOrgIdForFolder(folderPath)
 		}(i)
