@@ -30,8 +30,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	codeClient "github.com/snyk/code-client-go"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	"github.com/snyk/code-client-go/pkg/code"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -250,10 +250,10 @@ func Test_Scan(t *testing.T) {
 		clonedConfig := mocks.NewMockConfiguration(ctrl)
 		clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 		clonedConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
-		clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).AnyTimes()
+		clonedConfig.EXPECT().GetWithError(code.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).AnyTimes()
 		mockConfig.EXPECT().Clone().Return(clonedConfig).AnyTimes()
 
-		mockConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
+		mockConfig.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
 
 		folderConfig := getTestFolderConfig(tempDir)
 		folderConfig.SastSettings.SastEnabled = false
@@ -293,7 +293,7 @@ func Test_Scan(t *testing.T) {
 			clonedConfig := mocks.NewMockConfiguration(ctrl)
 			clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 			clonedConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
-			clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
+			clonedConfig.EXPECT().GetWithError(code.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
 			mockConfiguration.EXPECT().Clone().Return(clonedConfig).AnyTimes()
 
 			fakeFeatureFlagService := featureflag.NewFakeService()

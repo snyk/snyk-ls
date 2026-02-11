@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/product"
