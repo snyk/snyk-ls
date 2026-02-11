@@ -115,16 +115,20 @@ func processOsTestWorkFlowData(
 	ctx context.Context,
 	scanOutput []workflow.Data,
 	packageIssueCache map[string][]types.Issue,
-	c *config.Config,
-	workDir types.FilePath,
-	filePath types.FilePath,
 	readFiles bool,
-	learnService learn.Service,
-	errorReporter error_reporting.ErrorReporter,
-	format string,
 ) ([]types.Issue, error) {
 	var issues []types.Issue
 	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "processOsTestWorkFlowData").Logger()
+	deps, _ := ctx2.DependenciesFromContext(ctx)
+	c := config.CurrentConfig()
+	if ctxConfig, ok := deps[ctx2.DepConfig].(*config.Config); ok {
+		c = ctxConfig
+	}
+	workDir := ctx2.WorkDirFromContext(ctx)
+	filePath := ctx2.FilePathFromContext(ctx)
+	learnService, _ := deps[ctx2.DepLearnService].(learn.Service)
+	errorReporter, _ := deps[ctx2.DepErrorReporter].(error_reporting.ErrorReporter)
+
 	for _, data := range scanOutput {
 		if data.GetContentType() == content_type.UFM_RESULT {
 			testResults := getTestResultsFromWorkflowData(data)
@@ -138,27 +142,24 @@ func processOsTestWorkFlowData(
 			continue
 		}
 
-		// Legacy flow: accept type id legacycli/stdout (actual JSON) or content type LegacyCLIContentType (marker or payload from extension).
-		if data.GetContentType() != content_type.LegacyCLIContentType && !isLegacyCliStdoutData(data) {
-			continue
-		}
-
-		// Payload is raw stdout bytes (JSON for snyk test --json).
-		payload, ok := data.GetPayload().([]byte)
-		if !ok {
-			continue
-		}
-		if len(payload) == 0 {
-			continue
-		}
-		legacyResults, err := UnmarshallOssJson(payload)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't unmarshal legacy json: %w", err)
-		}
-		for _, legacyResult := range legacyResults {
-			targetFilePath := getAbsTargetFilePath(&logger, legacyResult.Path, legacyResult.DisplayTargetFile, workDir, filePath)
-			fileContent := getFileContent(targetFilePath, readFiles, logger)
-			issues = append(issues, convertScanResultToIssues(c, &legacyResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format)...)
+		// Legacy flow: accept content type LegacyCLIContentType or type id legacycli/stdout.
+		if data.GetContentType() == content_type.LegacyCLIContentType || isLegacyCliStdoutData(data) {
+			payload, ok := data.GetPayload().([]byte)
+			if !ok {
+				continue
+			}
+			if len(payload) == 0 {
+				continue
+			}
+			legacyResults, err := UnmarshallOssJson(payload)
+			if err != nil {
+				return nil, fmt.Errorf("couldn't unmarshal legacy json: %w", err)
+			}
+			for _, legacyResult := range legacyResults {
+				targetFilePath := getAbsTargetFilePath(&logger, legacyResult.Path, legacyResult.DisplayTargetFile, workDir, filePath)
+				fileContent := getFileContent(targetFilePath, readFiles, logger)
+				issues = append(issues, convertScanResultToIssues(c, &legacyResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache)...)
+			}
 		}
 	}
 	return issues, nil

@@ -36,19 +36,24 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// ConvertJSONToIssues converts OSS JSON output to Issue objects with optional learn service
-// This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
+// ConvertJSONToIssues converts OSS JSON output to Issue objects with optional learn service.
+// This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis; it builds a context with the given deps.
 func ConvertJSONToIssues(logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
-	issues, err := ProcessScanResults(context.Background(), jsonData, error_reporting.NewTestErrorReporter(), learnService, make(map[string][]types.Issue), false, config.FormatMd)
-
-	return issues, err
+	ctx := ctx2.NewContextWithWorkDirAndFilePath(context.Background(), types.FilePath(workDir), "")
+	ctx = ctx2.NewContextWithDependencies(ctx, map[string]any{
+		ctx2.DepLearnService:  learnService,
+		ctx2.DepErrorReporter: error_reporting.NewTestErrorReporter(),
+		ctx2.DepConfig:        config.CurrentConfig(),
+	})
+	return ProcessScanResults(ctx, jsonData, make(map[string][]types.Issue), false)
 }
 
 // ProcessScanResults takes the results from the scanner and transforms them into
 // our internal issue format. It also populates the given package cache with the
 // found problems per package.
+// Config, workDir, filePath, learnService and errorReporter are taken from context (see internal/context/context.go).
 //   - scanOutput: the output of the scan (can be either a []byte or []workflow.Data)
-func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error_reporting.ErrorReporter, learnService learn.Service, packageIssueCache map[string][]types.Issue, readFiles bool, format string) ([]types.Issue, error) {
+func ProcessScanResults(ctx context.Context, scanOutput any, packageIssueCache map[string][]types.Issue, readFiles bool) ([]types.Issue, error) {
 	if ctx.Err() != nil {
 		return nil, nil
 	}
@@ -56,21 +61,25 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 	deps, found := ctx2.DependenciesFromContext(ctx)
 	c := config.CurrentConfig()
 	if found {
-		ctxConfig, ok := deps[ctx2.DepConfig].(*config.Config)
-		if !ok {
-			return nil, errors.New("failed to get config from context")
+		if ctxConfig, ok := deps[ctx2.DepConfig].(*config.Config); ok {
+			c = ctxConfig
 		}
-		c = ctxConfig
 	}
 	workDir := ctx2.WorkDirFromContext(ctx)
 	filePath := ctx2.FilePathFromContext(ctx)
+	var learnService learn.Service
+	var errorReporter error_reporting.ErrorReporter
+	if found {
+		learnService, _ = deps[ctx2.DepLearnService].(learn.Service)
+		errorReporter, _ = deps[ctx2.DepErrorReporter].(error_reporting.ErrorReporter)
+	}
 
 	// new ostest workflow result processing
 	if output, ok := scanOutput.([]workflow.Data); ok {
-		return processOsTestWorkFlowData(ctx, output, packageIssueCache, c, workDir, filePath, readFiles, learnService, errorReporter, format)
+		return processOsTestWorkFlowData(ctx, output, packageIssueCache, readFiles)
 	}
 
-	// unchanged legacy workflow
+	// legacy workflow ([]byte)
 	var allIssues []types.Issue
 	scanOutputBytes, ok := scanOutput.([]byte)
 	if !ok || len(scanOutputBytes) == 0 {
@@ -79,7 +88,9 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 
 	scanResults, err := UnmarshallOssJson(scanOutputBytes)
 	if err != nil {
-		errorReporter.CaptureErrorAndReportAsIssue(filePath, err)
+		if errorReporter != nil {
+			errorReporter.CaptureErrorAndReportAsIssue(filePath, err)
+		}
 		return nil, nil
 	}
 
@@ -88,7 +99,7 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 
 		fileContent := getFileContent(targetFilePath, readFiles, logger)
 
-		issues := convertScanResultToIssues(c, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format)
+		issues := convertScanResultToIssues(c, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache)
 		allIssues = append(allIssues, issues...)
 	}
 
