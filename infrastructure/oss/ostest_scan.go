@@ -19,7 +19,6 @@ package oss
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
@@ -41,16 +40,12 @@ var (
 	convertTestResultToIssuesFn    = convertTestResultToIssues
 )
 
-// isLegacyCliStdoutData returns true if data is legacy CLI stdout (type id legacycli/stdout).
-// Data identifiers use Scheme "did" (workflow.NewData overwrites the type id scheme to "did").
+// isLegacyCliStdoutData returns true when data is legacy CLI stdout (type id legacycli/stdout from cliv2).
 func isLegacyCliStdoutData(data workflow.Data) bool {
 	id := data.GetIdentifier()
-	if id == nil {
-		return false
-	}
-	path := strings.TrimPrefix(id.Path, "/")
-	return id.Scheme == "did" && id.Host == "legacycli" && path == "stdout"
+	return id != nil && id.Scheme == "did" && id.Host == "legacycli" && id.Path == "stdout"
 }
+
 
 func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath, cmd []string, workDir types.FilePath, env gotenv.Env) ([]workflow.Data, error) {
 	c := cliScanner.config
@@ -143,15 +138,17 @@ func processOsTestWorkFlowData(
 			continue
 		}
 
-		// Legacy CLI stdout: identify by data type id (legacycli/stdout). Compare by URL components so we match
-		// regardless of String() formatting (e.g. path with or without leading slash).
-		if !isLegacyCliStdoutData(data) {
+		// Legacy flow: accept type id legacycli/stdout (actual JSON) or content type LegacyCLIContentType (marker or payload from extension).
+		if data.GetContentType() != content_type.LegacyCLIContentType && !isLegacyCliStdoutData(data) {
 			continue
 		}
 
 		// Payload is raw stdout bytes (JSON for snyk test --json).
 		payload, ok := data.GetPayload().([]byte)
 		if !ok {
+			continue
+		}
+		if len(payload) == 0 {
 			continue
 		}
 		legacyResults, err := UnmarshallOssJson(payload)
