@@ -319,9 +319,9 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 		// Validate locked fields before applying
 		hasLockedFieldRejections := validateLockedFields(c, &folderConfig, &incoming, &logger)
 		if hasLockedFieldRejections {
-			projectName := filepath.Base(string(folderConfig.FolderPath))
+			folderName := filepath.Base(string(folderConfig.FolderPath))
 			notifier.SendShowMessage(sglsp.MTWarning,
-				fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", projectName))
+				fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", folderName))
 		}
 
 		// Apply the PATCH update
@@ -372,7 +372,7 @@ func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, in
 		}
 		_, source := resolver.GetValue(settingName, folderConfig)
 		if source == types.ConfigSourceLDXSyncLocked {
-			logger.Warn().
+			logger.Info().
 				Str("setting", settingName).
 				Msg("Rejecting change to locked setting - enforced by organization policy")
 			updatesRejected = true
