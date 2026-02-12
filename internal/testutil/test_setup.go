@@ -26,9 +26,9 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/code-client-go/pkg/code"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -75,7 +75,7 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t, c)
-	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
+	c.Engine().GetConfiguration().Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
 		Enabled: false,
 	},
 	})
@@ -270,7 +270,7 @@ func MockAndCaptureWorkflowInvocation(
 // enable AutoFix in order for the issues to get enhanced with commands (see code.addIssueActions).
 func EnableSastAndAutoFix(c *config.Config) {
 	c.Engine().GetConfiguration().Set(
-		code_workflow.ConfigurationSastSettings,
+		code.ConfigurationSastSettings,
 		&sast_contract.SastResponse{SastEnabled: true, AutofixEnabled: true},
 	)
 }
