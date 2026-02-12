@@ -49,6 +49,9 @@ const (
 	CodeFixApplyEditCommand = "snyk.code.fixApplyEdit"
 	CodeSubmitFixFeedback   = "snyk.code.submitFixFeedback"
 
+	// Tree view commands
+	GetTreeViewCommand = "snyk.getTreeView"
+
 	// bridging commands
 	ExecuteCLICommand = "snyk.executeCLI"
 )

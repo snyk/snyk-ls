@@ -54,6 +54,7 @@ infrastructure/oss/testdata/go.sum
 application/server/diagnostic_comparison.csv
 application/server/diagnostic_comparison.md
 config_output.html
+tree_view_output.html
 
 .qodo
 

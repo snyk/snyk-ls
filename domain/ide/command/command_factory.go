@@ -120,6 +120,8 @@ func CreateFromCommandData(
 		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, c: c}, nil
 	case types.WorkspaceConfigurationCommand:
 		return &configurationCommand{command: commandData, srv: srv, logger: c.Logger(), c: c}, nil
+	case types.GetTreeViewCommand:
+		return &getTreeViewCommand{command: commandData, c: c}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)
