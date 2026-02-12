@@ -17,8 +17,9 @@
 package types
 
 import (
-	"sync"
 	"time"
+
+	"github.com/erni27/imcache"
 )
 
 // ConfigSource indicates where a configuration value came from
@@ -120,18 +121,18 @@ func (c *LDXSyncOrgConfig) SetField(settingName string, value any, isLocked, isE
 }
 
 // LDXSyncConfigCache holds cached LDX-Sync configurations for all organizations.
-// All methods are safe for concurrent use.
+// All methods are safe for concurrent use (imcache is internally thread-safe).
+// Currently no expiry is set; when needed, use imcache.WithExpiration on Set calls.
 type LDXSyncConfigCache struct {
-	mu                 sync.RWMutex
-	OrgConfigs         map[string]*LDXSyncOrgConfig `json:"orgconfigs"`
-	FolderToOrgMapping map[FilePath]string          `json:"folderToOrgMapping"`
+	orgConfigs         *imcache.Cache[string, *LDXSyncOrgConfig]
+	folderToOrgMapping *imcache.Cache[FilePath, string]
 }
 
 // NewLDXSyncConfigCache creates a new empty LDXSyncConfigCache
 func NewLDXSyncConfigCache() *LDXSyncConfigCache {
 	return &LDXSyncConfigCache{
-		OrgConfigs:         make(map[string]*LDXSyncOrgConfig),
-		FolderToOrgMapping: make(map[FilePath]string),
+		orgConfigs:         imcache.New[string, *LDXSyncOrgConfig](),
+		folderToOrgMapping: imcache.New[FilePath, string](),
 	}
 }
 
@@ -140,9 +141,7 @@ func (c *LDXSyncConfigCache) IsEmpty() bool {
 	if c == nil {
 		return true
 	}
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return len(c.OrgConfigs) == 0
+	return len(c.orgConfigs.GetAll()) == 0
 }
 
 // GetOrgConfig returns the config for the given org, or nil if not found
@@ -150,42 +149,27 @@ func (c *LDXSyncConfigCache) GetOrgConfig(orgId string) *LDXSyncOrgConfig {
 	if c == nil {
 		return nil
 	}
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if c.OrgConfigs == nil {
+	val, found := c.orgConfigs.Get(orgId)
+	if !found {
 		return nil
 	}
-	return c.OrgConfigs[orgId]
+	return val
 }
 
 // SetOrgConfig sets the config for the given org
 func (c *LDXSyncConfigCache) SetOrgConfig(orgConfig *LDXSyncOrgConfig) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.OrgConfigs == nil {
-		c.OrgConfigs = make(map[string]*LDXSyncOrgConfig)
-	}
-	c.OrgConfigs[orgConfig.OrgId] = orgConfig
+	c.orgConfigs.Set(orgConfig.OrgId, orgConfig, imcache.WithNoExpiration())
 }
 
 // RemoveOrgConfig removes the config for the given org
 func (c *LDXSyncConfigCache) RemoveOrgConfig(orgId string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.OrgConfigs != nil {
-		delete(c.OrgConfigs, orgId)
-	}
+	c.orgConfigs.Remove(orgId)
 }
 
 // SetFolderOrg sets the org ID for a folder path.
 // The path is automatically normalized using PathKey for cross-platform consistency.
 func (c *LDXSyncConfigCache) SetFolderOrg(folderPath FilePath, orgId string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.FolderToOrgMapping == nil {
-		c.FolderToOrgMapping = make(map[FilePath]string)
-	}
-	c.FolderToOrgMapping[PathKey(folderPath)] = orgId
+	c.folderToOrgMapping.Set(PathKey(folderPath), orgId, imcache.WithNoExpiration())
 }
 
 // GetOrgIdForFolder returns the org ID for a folder path from the cache,
@@ -196,19 +180,16 @@ func (c *LDXSyncConfigCache) GetOrgIdForFolder(folderPath FilePath) string {
 	if c == nil {
 		return ""
 	}
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if c.FolderToOrgMapping == nil {
+	val, found := c.folderToOrgMapping.Get(PathKey(folderPath))
+	if !found {
 		return ""
 	}
-	return c.FolderToOrgMapping[PathKey(folderPath)]
+	return val
 }
 
 // ClearFolderOrgMapping clears all folder-to-org mappings
 func (c *LDXSyncConfigCache) ClearFolderOrgMapping() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.FolderToOrgMapping = make(map[FilePath]string)
+	c.folderToOrgMapping.RemoveAll()
 }
 
 // Setting name constants for all LDX-Sync settings

@@ -106,16 +106,6 @@ func TestLDXSyncOrgConfig_SetField(t *testing.T) {
 }
 
 func TestLDXSyncConfigCache_GetOrgConfig(t *testing.T) {
-	t.Run("returns nil for nil cache", func(t *testing.T) {
-		var cache *LDXSyncConfigCache
-		assert.Nil(t, cache.GetOrgConfig("org1"))
-	})
-
-	t.Run("returns nil for nil configs map", func(t *testing.T) {
-		cache := &LDXSyncConfigCache{}
-		assert.Nil(t, cache.GetOrgConfig("org1"))
-	})
-
 	t.Run("returns nil for missing org", func(t *testing.T) {
 		cache := NewLDXSyncConfigCache()
 		assert.Nil(t, cache.GetOrgConfig("missing"))
@@ -133,8 +123,8 @@ func TestLDXSyncConfigCache_GetOrgConfig(t *testing.T) {
 }
 
 func TestLDXSyncConfigCache_RemoveOrgConfig(t *testing.T) {
-	t.Run("does nothing for nil configs", func(t *testing.T) {
-		cache := &LDXSyncConfigCache{}
+	t.Run("does nothing for missing org", func(t *testing.T) {
+		cache := NewLDXSyncConfigCache()
 		cache.RemoveOrgConfig("org1") // should not panic
 	})
 

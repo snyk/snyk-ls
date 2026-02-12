@@ -208,7 +208,7 @@ type Config struct {
 	userSettingsPath                    string
 	autoConfigureMcpEnabled             bool
 	secureAtInceptionExecutionFrequency string
-	ldxSyncConfigCache                  *types.LDXSyncConfigCache
+	ldxSyncConfigCache                  types.LDXSyncConfigCache
 	configResolver                      *types.ConfigResolver
 }
 
@@ -1530,8 +1530,8 @@ func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
 func (c *Config) initLdxSyncOrgConfigCache() {
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.ldxSyncConfigCache = types.NewLDXSyncConfigCache()
-	c.configResolver = types.NewConfigResolver(c.ldxSyncConfigCache, nil, c, c.logger)
+	c.ldxSyncConfigCache = *types.NewLDXSyncConfigCache()
+	c.configResolver = types.NewConfigResolver(&c.ldxSyncConfigCache, nil, c, c.logger)
 }
 
 // GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache.
@@ -1539,7 +1539,7 @@ func (c *Config) initLdxSyncOrgConfigCache() {
 func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
 	c.m.RLock()
 	defer c.m.RUnlock()
-	return c.ldxSyncConfigCache
+	return &c.ldxSyncConfigCache
 }
 
 // GetConfigResolver returns the ConfigResolver for reading configuration values.
