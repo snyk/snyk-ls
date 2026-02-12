@@ -45,7 +45,6 @@ func NewTreeHtmlRenderer(c *config.Config) (*TreeHtmlRenderer, error) {
 	funcMap := template.FuncMap{
 		"severityClass":  severityClass,
 		"severityLetter": severityLetter,
-		"indentLevel":    indentLevel,
 	}
 
 	globalTemplate, err := template.New("treeView").Funcs(funcMap).Parse(treeHtmlTemplate)
@@ -97,22 +96,5 @@ func severityLetter(s types.Severity) string {
 		return "L"
 	default:
 		return "?"
-	}
-}
-
-func indentLevel(nodeType NodeType) int {
-	switch nodeType {
-	case NodeTypeFolder:
-		return 0
-	case NodeTypeProduct:
-		return 0
-	case NodeTypeFile:
-		return 1
-	case NodeTypeIssue:
-		return 2
-	case NodeTypeInfo:
-		return 1
-	default:
-		return 0
 	}
 }

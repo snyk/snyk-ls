@@ -98,7 +98,7 @@
 {{define "treeNode"}}
   {{if eq .Type "folder"}}
     <div class="tree-node expanded" data-node-id="{{.ID}}">
-      <div class="tree-node-row tree-indent-0">
+      <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="tree-label">{{.Label}}</span>
         {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
@@ -109,7 +109,7 @@
     </div>
   {{else if eq .Type "product"}}
     <div class="tree-node expanded" data-node-id="{{.ID}}">
-      <div class="tree-node-row tree-indent-{{indentLevel .Type}}">
+      <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="tree-label">{{.Label}}</span>
         {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
@@ -120,7 +120,7 @@
     </div>
   {{else if eq .Type "file"}}
     <div class="tree-node" data-node-id="{{.ID}}">
-      <div class="tree-node-row tree-indent-{{indentLevel .Type}}">
+      <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="file-icon">📄</span>
         <span class="tree-label">{{.Label}}</span>
@@ -132,7 +132,7 @@
     </div>
   {{else if eq .Type "issue"}}
     <div class="tree-node tree-node-issue" data-node-id="{{.ID}}">
-      <div class="tree-node-row tree-indent-{{indentLevel .Type}}"
+      <div class="tree-node-row"
            data-file-path="{{.FilePath}}"
            data-start-line="{{.IssueRange.Start.Line}}"
            data-end-line="{{.IssueRange.End.Line}}"
@@ -148,7 +148,7 @@
     </div>
   {{else if eq .Type "info"}}
     <div class="tree-node" data-node-id="{{.ID}}">
-      <div class="tree-node-row tree-indent-1">
+      <div class="tree-node-row">
         <span class="tree-label">{{.Label}}</span>
       </div>
     </div>

@@ -37,11 +37,22 @@
   background-color: rgba(128, 128, 128, 0.1);
 }
 
-/* Indentation levels */
-.tree-indent-0 { padding-left: 4px; }
-.tree-indent-1 { padding-left: 20px; }
-.tree-indent-2 { padding-left: 36px; }
-.tree-indent-3 { padding-left: 52px; }
+/* Nesting-based indentation: each level of children adds left padding */
+.tree-node-row {
+  padding-left: 4px;
+}
+
+.tree-node-children .tree-node-row {
+  padding-left: 20px;
+}
+
+.tree-node-children .tree-node-children .tree-node-row {
+  padding-left: 36px;
+}
+
+.tree-node-children .tree-node-children .tree-node-children .tree-node-row {
+  padding-left: 52px;
+}
 
 /* Expand/collapse chevron */
 .tree-chevron {
