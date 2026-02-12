@@ -46,6 +46,14 @@ func IsEmptyValue(value any) bool {
 	}
 }
 
+// BoolToString converts a boolean to "true" or "false" string
+func BoolToString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
 // AreValuesEqual safely compares two values, handling slices and other uncomparable types
 func AreValuesEqual(a, b any) bool {
 	// Handle nil cases
