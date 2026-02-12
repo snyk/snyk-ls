@@ -196,7 +196,7 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 	jsonRpcRecorder.ClearNotifications()
 
 	// Change PreferredOrg via didChangeConfiguration to trigger LDX-Sync refresh
-	sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.StoredFolderConfig) {
+	sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 		folderConfig := folderConfigs[folder]
 		folderConfig.OrgSetByUser = true
 		if folderConfig.AutoDeterminedOrg == "b1a01686-331c-4b59-854c-139216d56bb0" {
