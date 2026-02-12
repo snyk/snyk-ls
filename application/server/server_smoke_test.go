@@ -849,6 +849,27 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 	return cloneTargetDir
 }
 
+// buildSmokeTestSettings creates a complete settings object from config
+// This ensures all critical fields (token, endpoint, etc.) are preserved
+func buildSmokeTestSettings(c *config.Config) types.Settings {
+	return types.Settings{
+		Endpoint:                    c.Endpoint(),
+		Token:                       c.Token(),
+		Organization:                c.Organization(),
+		EnableTrustedFoldersFeature: "false",
+		FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+		IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
+		AuthenticationMethod:        c.AuthenticationMethod(),
+		AutomaticAuthentication:     "false",
+		EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
+		ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
+		ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
+		ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
+		ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeEnabled()),
+		CliPath:                     c.CliSettings().Path(),
+	}
+}
+
 func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Config) types.InitializeParams {
 	t.Helper()
 
@@ -1097,7 +1118,8 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 
 // requireLspFolderConfigNotification is a helper to check folder config notifications
 // validators is a map of folder path to validation function, call require/assert inside of them
-func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.LspFolderConfig)) {
+// clearNotifications controls whether to clear notifications after validation (default: true)
+func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.LspFolderConfig), clearNotifications ...bool) {
 	t.Helper()
 
 	var notifications []jrpc2.Request
@@ -1125,7 +1147,14 @@ func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsuppo
 
 	require.Equal(t, len(param.FolderConfigs), validationsCount, "Not all folder configs were validated")
 
-	jsonRpcRecorder.ClearNotifications()
+	// Clear notifications by default unless explicitly disabled
+	shouldClear := true
+	if len(clearNotifications) > 0 {
+		shouldClear = clearNotifications[0]
+	}
+	if shouldClear {
+		jsonRpcRecorder.ClearNotifications()
+	}
 }
 
 func Test_SmokeOrgSelection(t *testing.T) {
@@ -1651,9 +1680,9 @@ func sendModifiedStoredFolderConfiguration(
 			lspConfigs = append(lspConfigs, *lspConfig)
 		}
 	}
-	sendConfigurationDidChange(t, loc, types.Settings{
-		FolderConfigs: lspConfigs,
-	})
+	settings := buildSmokeTestSettings(c)
+	settings.FolderConfigs = lspConfigs
+	sendConfigurationDidChange(t, loc, settings)
 }
 
 func sendConfigurationDidChange(t *testing.T, loc server.Local, s types.Settings) {
