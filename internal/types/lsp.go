@@ -798,6 +798,12 @@ type ScanSummary struct {
 	ScanSummary string `json:"scanSummary"`
 }
 
+// TreeView is the payload for the $/snyk.treeView notification,
+// containing the server-rendered HTML tree view of scan results.
+type TreeView struct {
+	TreeViewHtml string `json:"treeViewHtml"`
+}
+
 type ProgressToken string
 
 type ProgressParams struct {

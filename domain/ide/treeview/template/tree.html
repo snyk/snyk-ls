@@ -1,0 +1,156 @@
+<!--
+  ~ © 2026 Snyk Limited
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv='Content-Type' content='text/html; charset=unicode' />
+  <meta http-equiv='X-UA-Compatible' content='IE=edge' />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style nonce="${nonce}">
+    {{.Styles}}
+  </style>
+  ${ideStyle}
+</head>
+<body>
+  {{if .ScanInProgress}}
+  <div class="tree-status" id="scanStatus">scanning...</div>
+  {{end}}
+
+  <div class="tree-container" id="treeContainer">
+    {{range .Nodes}}
+      {{template "treeNode" .}}
+    {{end}}
+  </div>
+
+  <script nonce="${nonce}">
+    // ES5 compatible — expand/collapse logic
+    (function() {
+      var container = document.getElementById('treeContainer');
+      if (!container) return;
+
+      container.addEventListener('click', function(e) {
+        var row = null;
+        var el = e.target;
+        // Walk up to find the tree-node-row
+        while (el && el !== container) {
+          if (el.className && el.className.indexOf('tree-node-row') !== -1) {
+            row = el;
+            break;
+          }
+          el = el.parentElement;
+        }
+        if (!row) return;
+
+        var node = row.parentElement;
+        if (!node) return;
+
+        // Handle issue node click — navigate to file
+        if (node.className.indexOf('tree-node-issue') !== -1) {
+          var filePath = row.getAttribute('data-file-path');
+          var startLine = row.getAttribute('data-start-line');
+          var endLine = row.getAttribute('data-end-line');
+          var startChar = row.getAttribute('data-start-char');
+          var endChar = row.getAttribute('data-end-char');
+          if (filePath && typeof window.__ideTreeNavigateToFile__ === 'function') {
+            window.__ideTreeNavigateToFile__(filePath, startLine, endLine, startChar, endChar);
+          }
+          return;
+        }
+
+        // Toggle expand/collapse for non-leaf nodes
+        var children = null;
+        var childElements = node.childNodes;
+        for (var i = 0; i < childElements.length; i++) {
+          if (childElements[i].className && childElements[i].className.indexOf('tree-node-children') !== -1) {
+            children = childElements[i];
+            break;
+          }
+        }
+        if (!children) return;
+
+        if (node.className.indexOf('expanded') !== -1) {
+          node.className = node.className.replace(/\s*expanded/g, '');
+        } else {
+          node.className = node.className + ' expanded';
+        }
+      });
+    })();
+  </script>
+  ${ideScript}
+</body>
+</html>
+
+{{define "treeNode"}}
+  {{if eq .Type "folder"}}
+    <div class="tree-node expanded" data-node-id="{{.ID}}">
+      <div class="tree-node-row tree-indent-0">
+        <span class="tree-chevron"></span>
+        <span class="tree-label">{{.Label}}</span>
+        {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
+      </div>
+      <div class="tree-node-children">
+        {{range .Children}}{{template "treeNode" .}}{{end}}
+      </div>
+    </div>
+  {{else if eq .Type "product"}}
+    <div class="tree-node expanded" data-node-id="{{.ID}}">
+      <div class="tree-node-row tree-indent-{{indentLevel .Type}}">
+        <span class="tree-chevron"></span>
+        <span class="tree-label">{{.Label}}</span>
+        {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
+      </div>
+      <div class="tree-node-children">
+        {{range .Children}}{{template "treeNode" .}}{{end}}
+      </div>
+    </div>
+  {{else if eq .Type "file"}}
+    <div class="tree-node" data-node-id="{{.ID}}">
+      <div class="tree-node-row tree-indent-{{indentLevel .Type}}">
+        <span class="tree-chevron"></span>
+        <span class="file-icon">📄</span>
+        <span class="tree-label">{{.Label}}</span>
+        {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
+      </div>
+      <div class="tree-node-children">
+        {{range .Children}}{{template "treeNode" .}}{{end}}
+      </div>
+    </div>
+  {{else if eq .Type "issue"}}
+    <div class="tree-node tree-node-issue" data-node-id="{{.ID}}">
+      <div class="tree-node-row tree-indent-{{indentLevel .Type}}"
+           data-file-path="{{.FilePath}}"
+           data-start-line="{{.IssueRange.Start.Line}}"
+           data-end-line="{{.IssueRange.End.Line}}"
+           data-start-char="{{.IssueRange.Start.Character}}"
+           data-end-char="{{.IssueRange.End.Character}}"
+           data-issue-id="{{.IssueID}}">
+        <span class="severity-icon severity-{{severityClass .Severity}}">{{severityLetter .Severity}}</span>
+        <span class="tree-label">{{.Label}}</span>
+        {{if .IsIgnored}}<span class="badge badge-ignored">ignored</span>{{end}}
+        {{if .IsNew}}<span class="badge badge-new">new</span>{{end}}
+        {{if .IsFixable}}<span class="badge-fixable">⚡</span>{{end}}
+      </div>
+    </div>
+  {{else if eq .Type "info"}}
+    <div class="tree-node" data-node-id="{{.ID}}">
+      <div class="tree-node-row tree-indent-1">
+        <span class="tree-label">{{.Label}}</span>
+      </div>
+    </div>
+  {{end}}
+{{end}}

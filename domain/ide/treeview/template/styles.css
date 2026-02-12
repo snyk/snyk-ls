@@ -1,0 +1,156 @@
+/* Tree View Styles — IE11 compatible (no CSS variables, no grid, no :focus-visible) */
+
+.tree-container {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+}
+
+.tree-status {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #888;
+}
+
+/* Tree node base */
+.tree-node {
+  cursor: default;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.tree-node-row {
+  display: block;
+  padding: 3px 4px 3px 0;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-node-row:hover {
+  background-color: rgba(128, 128, 128, 0.1);
+}
+
+/* Indentation levels */
+.tree-indent-0 { padding-left: 4px; }
+.tree-indent-1 { padding-left: 20px; }
+.tree-indent-2 { padding-left: 36px; }
+.tree-indent-3 { padding-left: 52px; }
+
+/* Expand/collapse chevron */
+.tree-chevron {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  text-align: center;
+  font-size: 10px;
+  line-height: 16px;
+  color: #888;
+  -webkit-transition: -webkit-transform 0.1s ease;
+  transition: transform 0.1s ease;
+}
+
+.tree-chevron:before {
+  content: "\25B6"; /* right-pointing triangle */
+}
+
+.tree-node.expanded > .tree-node-row .tree-chevron:before {
+  content: "\25BC"; /* down-pointing triangle */
+}
+
+.tree-node-children {
+  display: none;
+}
+
+.tree-node.expanded > .tree-node-children {
+  display: block;
+}
+
+/* Node label */
+.tree-label {
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.tree-description {
+  vertical-align: middle;
+  margin-left: 6px;
+  color: #888;
+  font-size: 12px;
+}
+
+/* Severity icons */
+.severity-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  vertical-align: middle;
+  text-align: center;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 16px;
+  color: #fff;
+}
+
+.severity-critical { background-color: #AB1A1A; }
+.severity-high { background-color: #D93600; }
+.severity-medium { background-color: #D68000; }
+.severity-low { background-color: #88879E; }
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.badge-ignored {
+  background-color: #e8e8e8;
+  color: #666;
+}
+
+.badge-new {
+  background-color: #e6f3ff;
+  color: #0066cc;
+}
+
+.badge-fixable {
+  color: #d68000;
+}
+
+/* Product icon */
+.product-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+}
+
+/* File icon */
+.file-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  color: #888;
+}
+
+/* Issue row — clickable */
+.tree-node-issue .tree-node-row {
+  cursor: pointer;
+}
+
+.tree-node-issue .tree-node-row:hover {
+  background-color: rgba(0, 102, 204, 0.08);
+}
