@@ -22,6 +22,7 @@ package command
 //go:generate go tool github.com/golang/mock/mockgen -source=ldx_sync_service.go -destination mock/ldx_sync_service_mock.go -package mock_command
 
 import (
+	"context"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -36,20 +37,22 @@ import (
 
 // LdxSyncApiClient abstracts the external LDX-Sync API calls for testability
 type LdxSyncApiClient interface {
-	GetUserConfigForProject(engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult
+	GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult
 }
 
 // DefaultLdxSyncApiClient wraps the real GAF LDX-Sync functions
 type DefaultLdxSyncApiClient struct{}
 
 // GetUserConfigForProject calls the GAF ldx_sync_config package
-func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
+func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
+	// TODO: pass ctx to GAF GetUserConfigForProject once it supports context
+	_ = ctx
 	return ldx_sync_config.GetUserConfigForProject(engine, projectPath, preferredOrg)
 }
 
 // LdxSyncService provides LDX-Sync configuration refresh functionality
 type LdxSyncService interface {
-	RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier)
+	RefreshConfigFromLdxSync(ctx context.Context, c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier)
 }
 
 // DefaultLdxSyncService is the default implementation of LdxSyncService
@@ -76,7 +79,7 @@ func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient) LdxSyncService {
 // - FolderToOrgMapping: maps folder paths to their resolved org IDs
 // - OrgConfigs: maps org IDs to their org-level settings
 // The notifier is used to send $/snyk.configuration when machine config is updated.
-func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier) {
+func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier) {
 	logger := c.Logger().With().Str("method", "RefreshConfigFromLdxSync").Logger()
 	engine := c.Engine()
 	gafConfig := engine.GetConfiguration()
@@ -86,9 +89,17 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 	resultsMutex := sync.Mutex{}
 
 	for _, folder := range workspaceFolders {
+		if ctx.Err() != nil {
+			logger.Info().Msg("Context canceled, skipping remaining folders")
+			break
+		}
 		wg.Add(1)
 		go func(f types.Folder) {
 			defer wg.Done()
+
+			if ctx.Err() != nil {
+				return
+			}
 
 			// Get PreferredOrg from folder config (or empty string if missing)
 			folderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(gafConfig, f.Path(), &logger, storedconfig.GetStoredFolderConfigOptions{
@@ -106,7 +117,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 				Str("preferredOrg", preferredOrg).
 				Msg("LDX-Sync API Request - calling GetUserConfigForProject")
 
-			cfgResult := s.apiClient.GetUserConfigForProject(engine, string(f.Path()), preferredOrg)
+			cfgResult := s.apiClient.GetUserConfigForProject(ctx, engine, string(f.Path()), preferredOrg)
 
 			logger.Debug().
 				Str("projectPath", string(f.Path())).
@@ -126,7 +137,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 					Msg("PreferredOrg failed, retrying without it")
 
 				// Retry without PreferredOrg to allow full auto-determination
-				cfgResult = s.apiClient.GetUserConfigForProject(engine, string(f.Path()), "")
+				cfgResult = s.apiClient.GetUserConfigForProject(ctx, engine, string(f.Path()), "")
 
 				logger.Debug().
 					Str("projectPath", string(f.Path())).
@@ -156,6 +167,11 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 
 	// Wait for all goroutines to complete
 	wg.Wait()
+
+	if ctx.Err() != nil {
+		logger.Info().Msg("Context canceled after waiting for LDX-Sync results, skipping config update")
+		return
+	}
 
 	// Update the org config cache (including folder-to-org mapping) and global config
 	s.updateOrgConfigCache(c, results)

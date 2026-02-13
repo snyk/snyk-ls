@@ -191,7 +191,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Serv
 		changedFolders := c.Workspace().ChangeWorkspaceFolders(params)
 
 		if di.AuthenticationService().IsAuthenticated() {
-			di.LdxSyncService().RefreshConfigFromLdxSync(c, changedFolders, di.Notifier())
+			di.LdxSyncService().RefreshConfigFromLdxSync(bgCtx, c, changedFolders, di.Notifier())
 		}
 
 		command.HandleFolders(c, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService())
@@ -237,7 +237,7 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 		c.SetStorage(storage)
 
 		addWorkspaceFolders(c, params)
-		di.LdxSyncService().RefreshConfigFromLdxSync(c, c.Workspace().Folders(), nil)
+		di.LdxSyncService().RefreshConfigFromLdxSync(ctx, c, c.Workspace().Folders(), nil)
 		InitializeSettings(c, params.InitializationOptions)
 
 		startClientMonitor(params, logger)

@@ -5,6 +5,7 @@
 package mock_command
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -39,17 +40,17 @@ func (m *MockLdxSyncApiClient) EXPECT() *MockLdxSyncApiClientMockRecorder {
 }
 
 // GetUserConfigForProject mocks base method.
-func (m *MockLdxSyncApiClient) GetUserConfigForProject(engine workflow.Engine, projectPath, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
+func (m *MockLdxSyncApiClient) GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUserConfigForProject", engine, projectPath, preferredOrg)
+	ret := m.ctrl.Call(m, "GetUserConfigForProject", ctx, engine, projectPath, preferredOrg)
 	ret0, _ := ret[0].(ldx_sync_config.LdxSyncConfigResult)
 	return ret0
 }
 
 // GetUserConfigForProject indicates an expected call of GetUserConfigForProject.
-func (mr *MockLdxSyncApiClientMockRecorder) GetUserConfigForProject(engine, projectPath, preferredOrg interface{}) *gomock.Call {
+func (mr *MockLdxSyncApiClientMockRecorder) GetUserConfigForProject(ctx, engine, projectPath, preferredOrg interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserConfigForProject", reflect.TypeOf((*MockLdxSyncApiClient)(nil).GetUserConfigForProject), engine, projectPath, preferredOrg)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserConfigForProject", reflect.TypeOf((*MockLdxSyncApiClient)(nil).GetUserConfigForProject), ctx, engine, projectPath, preferredOrg)
 }
 
 // MockLdxSyncService is a mock of LdxSyncService interface.
@@ -76,13 +77,13 @@ func (m *MockLdxSyncService) EXPECT() *MockLdxSyncServiceMockRecorder {
 }
 
 // RefreshConfigFromLdxSync mocks base method.
-func (m *MockLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier) {
+func (m *MockLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RefreshConfigFromLdxSync", c, workspaceFolders, notifier)
+	m.ctrl.Call(m, "RefreshConfigFromLdxSync", ctx, c, workspaceFolders, notifier)
 }
 
 // RefreshConfigFromLdxSync indicates an expected call of RefreshConfigFromLdxSync.
-func (mr *MockLdxSyncServiceMockRecorder) RefreshConfigFromLdxSync(c, workspaceFolders, notifier interface{}) *gomock.Call {
+func (mr *MockLdxSyncServiceMockRecorder) RefreshConfigFromLdxSync(ctx, c, workspaceFolders, notifier interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshConfigFromLdxSync", reflect.TypeOf((*MockLdxSyncService)(nil).RefreshConfigFromLdxSync), c, workspaceFolders, notifier)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshConfigFromLdxSync", reflect.TypeOf((*MockLdxSyncService)(nil).RefreshConfigFromLdxSync), ctx, c, workspaceFolders, notifier)
 }
