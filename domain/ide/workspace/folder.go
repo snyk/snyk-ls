@@ -710,7 +710,7 @@ func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[produ
 	if !f.isVisibleSeverity(issue, folderConfig) {
 		return FilterReasonSeverity
 	}
-	riskScoreInCLIEnabled := featureflag.UseOsTestWorkflowFromReader(folderConfig)
+	riskScoreInCLIEnabled := featureflag.UseOsTestWorkflow(folderConfig)
 	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue, folderConfig) {
 		return FilterReasonRiskScore
 	}

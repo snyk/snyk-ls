@@ -52,11 +52,7 @@ var Flags = []string{
 	UseOsTest,
 }
 
-func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {
-	return folderConfig.FeatureFlags[UseExperimentalRiskScoreInCLI] || folderConfig.FeatureFlags[UseOsTest]
-}
-
-func UseOsTestWorkflowFromReader(folderConfig types.ImmutableFolderConfig) bool {
+func UseOsTestWorkflow(folderConfig types.ImmutableFolderConfig) bool {
 	return folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI) || folderConfig.GetFeatureFlag(UseOsTest)
 }
 
