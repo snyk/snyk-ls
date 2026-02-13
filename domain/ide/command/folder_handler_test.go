@@ -53,7 +53,7 @@ func Test_sendStoredFolderConfigs_SendsNotification(t *testing.T) {
 	engineConfig := c.Engine().GetConfiguration()
 
 	// Setup workspace with a folder
-	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
+	folderPaths := []types.FilePath{types.PathKey("/fake/test-folder-0")}
 	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 	logger := c.Logger()
@@ -131,7 +131,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 			return nil, nil
 		}).Times(1)
 
-	_, n := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
+	_, n := workspaceutil.SetupWorkspace(t, c, types.PathKey("/workspace/one"))
 
 	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 

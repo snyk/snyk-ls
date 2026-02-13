@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"github.com/snyk/snyk-ls/internal/util"
 
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
@@ -119,19 +120,19 @@ func BuildLspConfiguration(c *config.Config) types.LspConfigurationParam {
 		Endpoint:                c.Endpoint(),
 		Organization:            c.Organization(),
 		AuthenticationMethod:    c.AuthenticationMethod(),
-		AutomaticAuthentication: boolToString(c.AutomaticAuthentication()),
-		Insecure:                boolToString(c.IsProxyInsecure()),
+		AutomaticAuthentication: util.BoolToString(c.AutomaticAuthentication()),
+		Insecure:                util.BoolToString(c.IsProxyInsecure()),
 
 		// CLI settings
 		CliPath:                     c.CliSettings().Path(),
-		ManageBinariesAutomatically: boolToString(c.ManageBinariesAutomatically()),
+		ManageBinariesAutomatically: util.BoolToString(c.ManageBinariesAutomatically()),
 		CliBaseDownloadURL:          c.CliBaseDownloadURL(),
 		CliReleaseChannel:           c.CliReleaseChannel(),
 
 		// Product enablement (global defaults)
-		ActivateSnykOpenSource: boolToString(c.IsSnykOssEnabled()),
-		ActivateSnykCode:       boolToString(c.IsSnykCodeEnabled()),
-		ActivateSnykIac:        boolToString(c.IsSnykIacEnabled()),
+		ActivateSnykOpenSource: util.BoolToString(c.IsSnykOssEnabled()),
+		ActivateSnykCode:       util.BoolToString(c.IsSnykCodeEnabled()),
+		ActivateSnykIac:        util.BoolToString(c.IsSnykIacEnabled()),
 
 		// Scan & filtering settings
 		ScanningMode:       scanModeString(c.IsAutoScanEnabled()),
@@ -148,24 +149,16 @@ func BuildLspConfiguration(c *config.Config) types.LspConfigurationParam {
 		SnykCodeApi: c.CodeEndpoint(),
 
 		// Feature flags
-		EnableTrustedFoldersFeature:      boolToString(c.IsTrustedFolderFeatureEnabled()),
-		SendErrorReports:                 boolToString(c.IsErrorReportingEnabled()),
-		EnableSnykLearnCodeActions:       boolToString(c.IsSnykLearnCodeActionsEnabled()),
-		EnableSnykOSSQuickFixCodeActions: boolToString(c.IsSnykOSSQuickFixCodeActionsEnabled()),
-		EnableSnykOpenBrowserActions:     boolToString(c.IsSnykOpenBrowserActionEnabled()),
-		AutoConfigureSnykMcpServer:       boolToString(c.IsAutoConfigureMcpEnabled()),
-		PublishSecurityAtInceptionRules:  boolToString(c.IsPublishSecurityAtInceptionRulesEnabled()),
+		EnableTrustedFoldersFeature:      util.BoolToString(c.IsTrustedFolderFeatureEnabled()),
+		SendErrorReports:                 util.BoolToString(c.IsErrorReportingEnabled()),
+		EnableSnykLearnCodeActions:       util.BoolToString(c.IsSnykLearnCodeActionsEnabled()),
+		EnableSnykOSSQuickFixCodeActions: util.BoolToString(c.IsSnykOSSQuickFixCodeActionsEnabled()),
+		EnableSnykOpenBrowserActions:     util.BoolToString(c.IsSnykOpenBrowserActionEnabled()),
+		AutoConfigureSnykMcpServer:       util.BoolToString(c.IsAutoConfigureMcpEnabled()),
+		PublishSecurityAtInceptionRules:  util.BoolToString(c.IsPublishSecurityAtInceptionRulesEnabled()),
 	}
 
 	return lspConfig
-}
-
-// boolToString converts a boolean to "true" or "false" string
-func boolToString(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
 }
 
 // scanModeString converts a boolean auto-scan flag to "auto" or "manual",
