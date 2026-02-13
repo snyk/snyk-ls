@@ -44,12 +44,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
-
-// strPtr is a helper to create a pointer to a string literal
-func strPtr(s string) *string {
-	return &s
-}
 
 var sampleSettings = types.Settings{
 	ActivateSnykOpenSource:     "false",
@@ -220,12 +216,12 @@ func Test_UpdateSettings(t *testing.T) {
 			FolderConfigs: []types.LspFolderConfig{
 				{
 					FolderPath:           types.FilePath(tempDir1),
-					BaseBranch:           strPtr("testBaseBranch1"),
+					BaseBranch:           util.Ptr("testBaseBranch1"),
 					AdditionalParameters: []string{"--file=asdf"},
 				},
 				{
 					FolderPath: types.FilePath(tempDir2),
-					BaseBranch: strPtr("testBaseBranch2"),
+					BaseBranch: util.Ptr("testBaseBranch2"),
 				},
 			},
 		}
